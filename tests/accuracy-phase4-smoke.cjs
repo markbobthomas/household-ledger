@@ -31,8 +31,12 @@ assert.ok(report.score.cash[2].mae>report.score.cash[0].mae,
  'Longer-range balance drift is visible instead of hiding poor performance');
 assert.ok(report.score.byCadence.some(x=>x.name==='annual'&&x.missedRecurring>0),
  'Limited annual bill history honestly reduces recall');
-assert.ok(report.score.byConfidence.some(x=>x.name==='High'&&x.precision<100),
- 'High confidence is not treated as perfect calibrated certainty');
+const Holdout=require('../accuracy-fixture-holdout.js');
+const holdout=Lab.runFixture(Holdout,Forecast,Ledger,Model);
+assert.ok(holdout.score.byConfidence.some(x=>x.name==='High'&&x.precision<100),
+ 'An independent scenario demonstrates that High confidence is not a calibrated probability');
+assert.ok(report.score.recurring.recall>80&&holdout.score.recurring.recall>80,
+ 'Both fictional households benefit from longer schedules');
 assert.equal(JSON.stringify(rows),startSnapshot,'Accuracy runs never edit test transactions');
 const guardrails=require('./accuracy-regression-baseline.json').regressionGuardrails;
 assert.ok(report.score.recurring.precision>=guardrails.minimumPrecisionPct,
