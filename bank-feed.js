@@ -1,9 +1,12 @@
 /* Simulated bank connector. Replace with a secure authenticated backend; never store Plaid tokens here. */
 (function (root) {
   'use strict';
+  let localSandboxSnapshot=null;
   const provider = {
     mode: 'demo',
+    setSandboxSnapshot(snapshot){localSandboxSnapshot=snapshot||null},
     getSnapshot(today) {
+      if(localSandboxSnapshot)return {...localSandboxSnapshot,asOf:/^\d{4}-\d{2}-\d{2}$/.test(String(today||''))?today:localSandboxSnapshot.asOf};
       const asOf = /^\d{4}-\d{2}-\d{2}$/.test(String(today || '')) ? today : new Date().toLocaleDateString('en-CA');
       return {
         source: 'Simulated bank feed — not connected to any institution',

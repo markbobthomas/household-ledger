@@ -295,7 +295,7 @@ function applyPlaidSync(state,change){
    type:amount>=0?'expense':'income',category:defaultCategory,
    accountId:String(t.account_id),account:String(meta?.name||t.account_name||t.account_id),
    pending:Boolean(t.pending),source:{provider:'plaid',providerTransactionId:String(t.transaction_id),
-    accountId:String(t.account_id),itemId:itemId||null,plaidAmount:amount,
+    accountId:String(t.account_id),itemId:itemId||null,plaidAmount:amount,simulated:change.simulated===true,
     pendingTransactionId:t.pending_transaction_id||null,verified:true}};
   const previous=t.pending_transaction_id?providerId(t.pending_transaction_id):null;
   if(previous&&staged.categoryOverrides?.[previous]&&!staged.categoryOverrides[id])

@@ -1152,3 +1152,19 @@ html { scroll-behavior:auto; }
 select.recurring-value{appearance:none;-webkit-appearance:none;cursor:pointer;white-space:nowrap;text-align:left;min-width:0;max-width:100%;font-family:inherit;font-weight:650;font-size:13px}
 select.recurring-value:hover{border-bottom-style:solid}
 @media(max-width:700px){select.recurring-value{font-size:14px;max-width:100%;text-align:right}}
+
+/* Phase D local-only Sandbox test controls in Settings. */
+.sandbox-panel{align-self:start}
+.sandbox-panel .sandbox-label{display:block;font-size:12px;font-weight:650;margin:14px 0 6px}
+.sandbox-panel select{display:block;width:100%;min-height:40px;max-width:400px;
+ border:1px solid var(--line);border-radius:5px;background:#fff;
+ color:var(--ink);padding:8px 10px;font:inherit;font-size:13px}
+.sandbox-panel #sandbox-status{font-size:12px;margin:12px 0;line-height:1.6;color:var(--muted)}
+.sandbox-actions{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}
+.sandbox-item{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+ border-top:1px solid var(--line);padding:12px 0;font-size:13px}
+.sandbox-item small{display:block;margin-top:3px;color:var(--muted);font-size:11px;line-height:1.5}
+.sandbox-item-actions{display:flex;gap:6px;flex-wrap:wrap}
+@media(max-width:700px){.sandbox-panel select{max-width:100%;font-size:16px;min-height:44px}
+ .sandbox-item{align-items:flex-start}
+ .sandbox-actions button,.sandbox-item-actions button{min-height:38px}}
