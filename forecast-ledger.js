@@ -47,6 +47,9 @@ function calcUndatedRisk(rows,asOf,events,state){
   const at=p*(spending.length-1),i=Math.floor(at),weight=at-i;
   return spending[i]*(1-weight)+spending[Math.min(spending.length-1,i+1)]*weight;
  };
+ if(Math.max(...spending)<=0)return {method:'No meaningful historical non-scheduled spending',historyMonths:months.length,
+   dailyEstimated:0,dailyLow:0,dailyHigh:0,available:false,confidence:'Unavailable',
+   includedInDatedEvents:false};
  const perDay=n=>round(Math.max(0,n)/30.44);
  return {method:'Historical unscheduled expense range, not a dated payment',
   historyMonths:months.length,dailyEstimated:perDay(median),dailyLow:perDay(percentile(.2)),
