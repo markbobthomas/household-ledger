@@ -93,13 +93,9 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   assert.equal(stored.predictions.monthlyBudgets.Groceries,999);
   assert.equal(stored.predictions.categoryForecasts['2026-10|Groceries'],undefined,'No aggregate spending projection written');
   await page.locator('.forecast-editor > summary').click();
-  const daily=page.locator('[data-daily-prediction]').first();
-  await daily.click();
-  await page.locator('#entry [name="amount"]').fill('20');
-  await page.locator('#entry button[type="submit"]').click();
+  assert.equal(await page.locator('[data-daily-prediction]').count(),0,'No separate daily phantom transaction assumptions in unified forecast');
   const afterDaily=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
-  assert.equal(afterDaily.predictions.dailyVariable,20,'Daily cash spending is a prediction');
-  assert.deepEqual(afterDaily.transactions,before.transactions,'Daily prediction never changes source rows');
+  assert.deepEqual(afterDaily.transactions,before.transactions,'Shared forecast does not change source rows');
   await page.locator('.forecast-editor > summary').click();
   await page.locator('[data-add-event]').click();
   await page.locator('#entry [name="date"]').fill('2026-10-21');
