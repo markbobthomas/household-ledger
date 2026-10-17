@@ -47,6 +47,12 @@ assert.ok(report.score.recurring.matched>=guardrails.minimumRecurringMatched,
   'Warn if significantly fewer recurring charges are anticipated');
 assert.ok(report.score.cash.find(x=>x.days===90).mae<=guardrails.maximum90DayCashMAE,
   'Warn if 90-day cash error worsens significantly on fictional fixture');
+assert.ok(report.score.cash.find(x=>x.days===90).scenarioMAE<=guardrails.maximum90DayScenarioMAE,
+  'Warn if statistical irregular-spend scenario regresses on primary household');
+assert.ok(holdout.score.recurring.precision>=guardrails.holdoutMinimumPrecisionPct);
+assert.ok(holdout.score.recurring.recall>=guardrails.holdoutMinimumRecallPct);
+assert.ok(holdout.score.cash.find(x=>x.days===90).mae<=guardrails.holdoutMaximum90DayMAE);
+assert.ok(holdout.score.cash.find(x=>x.days===90).scenarioMAE<=guardrails.holdoutMaximum90DayScenarioMAE);
 
 
 const match=Lab.matchEvents(
