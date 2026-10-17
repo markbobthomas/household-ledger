@@ -101,7 +101,7 @@ assert.equal(bills.predictions.patternRules[k],undefined,'Can restore automatic 
   assert.ok(!await page.locator('.review-task[data-review-task="'+firstId+'"]').count(),'Explicit original review remains confirmed');
   // Activity corrections also offer an optional merchant learning action.
   await page.locator('aside [data-page=transactions]').click();
-  await page.locator('.ledger-table [data-category]').first().click();
+  await page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first().locator('[data-category]').click();
   assert.equal(await page.locator('#entry [name=remember]').count(),1,'Activity category editor can teach reusable rules');
   assert.equal(await page.locator('#entry [name=amount]').count(),0,'No actual expense amount editing');
   await page.locator('#cancel').click();
