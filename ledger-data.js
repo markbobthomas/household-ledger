@@ -21,6 +21,7 @@ function migrate(input){
  // Kept for migration only: former undated aggregate overrides never alter dated transaction predictions.
  predictions.expectedTransactionOverrides=predictions.expectedTransactionOverrides&&typeof predictions.expectedTransactionOverrides==='object'?predictions.expectedTransactionOverrides:{};
  predictions.manualExpectedTransactions=Array.isArray(predictions.manualExpectedTransactions)?predictions.manualExpectedTransactions:[];
+ predictions.patternRules=predictions.patternRules&&typeof predictions.patternRules==='object'&&!Array.isArray(predictions.patternRules)?predictions.patternRules:{};
  predictions.cashFlowStreams=predictions.cashFlowStreams&&typeof predictions.cashFlowStreams==='object'?predictions.cashFlowStreams:{};
  predictions.cashFlowEvents=Array.isArray(predictions.cashFlowEvents)?predictions.cashFlowEvents:[];
  predictions.dailyVariable=predictions.dailyVariable===null||predictions.dailyVariable===undefined?null:Number(predictions.dailyVariable);
@@ -94,6 +95,16 @@ function expectedForCategory(state,detected,month,category,today){
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
 }
 
+function setPatternRule(state,key,rule){
+ if(typeof key!=='string'||!key||key.length>600)throw Error('Invalid pattern key');
+ state.predictions.patternRules??={};
+ if(rule===null){delete state.predictions.patternRules[key];return}
+ if(!rule||!['none','monthly'].includes(rule.mode))throw Error('Invalid recurrence decision');
+ if(rule.mode==='none'){state.predictions.patternRules[key]={mode:'none'};return}
+ if(!Number.isInteger(Number(rule.day))||Number(rule.day)<1||Number(rule.day)>31||
+   !Number.isFinite(Number(rule.amount))||Number(rule.amount)<=0)throw Error('Invalid recurring amount or date');
+ state.predictions.patternRules[key]={mode:'monthly',day:Number(rule.day),amount:round(rule.amount)};
+}
 function setStreamOverride(state,key,override){
  if(typeof key!=='string'||!key||key.length>256)throw Error('Invalid forecast stream');
  if(override===null){delete state.predictions.cashFlowStreams[key];return}
@@ -145,7 +156,7 @@ function applyPlaidSync(state,change){
  if(typeof change.nextCursor==='string')state.sync.plaidCursor=change.nextCursor;
  return state;
 }
-const api={VERSION,migrate,records,categoryFor,setCategory,setMonthlyBudget,setCategoryForecast,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
+const api={VERSION,migrate,records,categoryFor,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
