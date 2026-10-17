@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=20261017-compact-chart"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phase2-recurrence"></script><script src="bank-feed.js"></script><script src="cashflow.js?v=unified2"></script><script src="forecast-ledger.js?v=unified2"></script><script src="recurring.js"></script><script src="ledger-data.js?v=phase2-patterns"></script><script src="reviews.js?v=20261017-reviews"></script><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=phase3-review-learning"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phase3-pattern-learning"></script><script src="bank-feed.js"></script><script src="cashflow.js?v=unified2"></script><script src="forecast-ledger.js?v=unified2"></script><script src="recurring.js"></script><script src="ledger-data.js?v=phase3-learning"></script><script src="reviews.js?v=phase3-learning"></script><script>
 (()=>{
 'use strict';const KEY='household-ledger-v1',CATS=['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other'],BANDS=[['Under $10',0,10],['$10–$25',10,25],['$25–$50',25,50],['$50–$100',50,100],['$100–$200',100,200],['$200–$500',200,500],['$500+',500,Infinity]],money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c])),el=x=>document.getElementById(x),id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2),today=()=>new Date().toLocaleDateString('en-CA');const Model=window.HouseholdLedgerData,initialStorage=localStorage.getItem(KEY);let initial;try{initial=initialStorage?JSON.parse(initialStorage):null}catch{initial=null}
 if(!initial)initial=initialStorage===null&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[],budgets:{}};
@@ -179,6 +179,33 @@ function refreshCategory(category){
 }
 
 
+function learnedRulesMarkup(){
+ const cats=Object.entries(data.learning?.categoryRules||{}),patterns=Object.entries(data.predictions?.patternRules||{});
+ const categoryRows=cats.map(([key,r])=>'<div class="learning-rule" data-learned-category="'+esc(key)+'"><span><strong>'+esc(r.merchant)+'</strong>'+
+  '<small>'+esc(r.account)+' · '+esc(r.mode==='auto'?'Automatic for uncategorized/low-confidence expenses':'Suggest only: confirm each ambiguous purchase')+
+  ' · '+esc(r.reason||'Your correction')+'</small></span><strong>'+esc(r.category)+'</strong><button class="btn" type="button" data-forget-category="'+esc(key)+'">Remove rule</button></div>').join('');
+ const patternRows=patterns.map(([key,r])=>{
+  const parts=key.split('|').map(p=>{try{return decodeURIComponent(p)}catch{return p}});
+  const label=parts[3]||'Merchant',cadence=r.mode==='none'?'Not recurring':r.mode==='monthly'?'Confirmed monthly':r.mode==='trust'?'Confirmed '+(r.cadence||'pattern'):r.mode;
+  return '<div class="learning-rule" data-learned-pattern="'+esc(key)+'"><span><strong>'+esc(label)+'</strong><small>'+esc(parts[2]||'Account')+' · '+esc(cadence)+
+   (r.mode==='trust'?' · Amount and date still learn from history':'')+'</small></span><button class="btn" type="button" data-forget-pattern="'+esc(key)+'">Restore automatic</button></div>';
+ }).join('');
+ return '<details class="learned-rules"><summary>Learned rules <span>'+String(cats.length+patterns.length)+'</span></summary>'+
+ '<p class="prediction-note">Review decisions can carry forward to similar transactions and future predictions. All rules stay separate from the bank ledger. Removing a rule never deletes the original review decision or changes bank records.</p>'+
+ '<div class="section-top"><h3>Category rules</h3></div>'+(categoryRows||'<p class="prediction-note">No learned category rules yet.</p>')+
+ '<div class="section-top"><h3>Recurring-payment rules</h3></div>'+(patternRows||'<p class="prediction-note">No confirmed recurrence rules yet.</p>')+
+ '</details>';
+}
+function learnReviewedPrediction(task,modified){
+ if(task.kind!=='prediction'||!task.cadence||!task.account)return;
+ const key=window.HouseholdForecast.patternKey('expense',task.category,task.account,task.merchant);
+ if(modified&&task.cadence==='monthly'){
+  Model.setPatternRule(data,key,{mode:'monthly',day:Number(modified.date.slice(8,10)),amount:Number(modified.amount)});
+ }else if(!modified){
+  Model.setPatternRule(data,key,{mode:'trust',cadence:task.cadence,day:Number(task.date.slice(8,10)),amount:Number(task.amount)});
+ }
+}
+
 function reviewsPage(){
  const report=window.HouseholdReviews.build(data,window.HouseholdForecast,today(),sharedForecast());
  reviewTasks=report.tasks;
@@ -191,11 +218,14 @@ function reviewsPage(){
   const options=CATS.map(c=>'<option value="'+esc(c)+'" '+(c===t.category?'selected':'')+'>'+esc(c)+'</option>').join('');
   const form=isCategory?'<form class="review-form" data-review-category="'+esc(t.id)+'"><p class="prediction-note">Confirm the existing category, or choose a better one. The original merchant, date and amount stay read-only.</p>'+
    '<label>Category<select name="category">'+options+'</select></label>'+
+   '<label class="learn-checkbox"><input type="checkbox" name="remember" checked> Remember this decision for similar transactions</label>'+
+   '<p class="prediction-note">Automatic rules apply only to unclassified or low-confidence charges from a consistent merchant. Multi-purpose merchants become suggestions to review.</p>'+
    (t.suggested&&t.suggested!==t.category?'<p class="review-suggestion">Possible alternative: '+esc(t.suggested)+'</p>':'')+
    '<div class="review-actions"><button type="submit" class="btn primary">Save category</button><button type="button" class="btn" data-review-confirm="'+esc(t.id)+'">Confirm current category</button></div></form>':
    '<form class="review-form" data-review-prediction="'+esc(t.id)+'"><p class="prediction-note">This is an estimated charge, not a bank transaction. Confirm it or change its expected date and amount.</p>'+
    '<div class="review-inputs"><label>Expected date<input name="date" type="date" required value="'+esc(t.date)+'"></label>'+
    '<label>Expected amount ($)<input name="amount" type="number" min="0" step=".01" required value="'+esc(t.amount)+'"></label></div>'+
+   (t.cadence==='monthly'?'<label class="learn-checkbox"><input type="checkbox" name="remember"> Use this edited date and amount for future monthly payments</label>':'')+
    '<div class="review-actions"><button type="submit" class="btn primary">Save prediction</button>'+
    '<button type="button" class="btn" data-review-confirm="'+esc(t.id)+'">Confirm estimate</button>'+
    '<button type="button" class="btn" data-review-exclude="'+esc(t.id)+'">Exclude</button></div></form>';
@@ -210,7 +240,8 @@ function reviewsPage(){
  '<div class="review-stats"><span><strong>'+report.categoryCount+'</strong> categories</span><span><strong>'+report.predictionCount+'</strong> predictions</span>'+
  (report.demoCount?'<span><strong>'+report.demoCount+'</strong> demo items</span>':'')+'</div>'+filterMarkup+
  '<div class="review-list">'+(rows||'<div class="review-empty"><strong>All caught up.</strong><p>No '+(reviewFilter==='all'?'pending reviews':reviewFilter+' reviews')+' at the moment. New source records and prediction changes will be checked automatically.</p></div>')+'</div>'+
- '<p class="prediction-note review-footnote">Uncategorized or uncertain transactions from the last 90 days and low-confidence future predictions appear here. Review is an aid, not proof of accuracy. Confirmations can reopen if source details or the estimate change.</p>';
+ learnedRulesMarkup()+
+ '<p class="prediction-note review-footnote">Confirmed decisions can be reused cautiously. New conflicting transactions or changed bill patterns can reopen Reviews. Rule predictions remain estimates, not verified bank charges.</p>';
 }
 function taskById(id){return reviewTasks.find(x=>x.id===id)}
 function finishReview(){save();render();window.scrollTo({top:0,left:0,behavior:'instant'})}
@@ -286,6 +317,13 @@ if(page==='settings'){
  '<div class="panel settings-block"><h3>Your adjustments</h3><p>Change transaction categories without rewriting source data, or adjust monthly budgets and future payment predictions.</p><p>Amounts, dates, merchants, and bank balances cannot be edited in the ledger. Direct transaction imports and restores are disabled.</p></div></div>';
 }
 el('view').innerHTML=html;
+document.querySelectorAll('[data-forget-category]').forEach(button=>button.onclick=()=>{
+ Model.removeCategoryRule(data,button.dataset.forgetCategory);finishReview();
+});
+document.querySelectorAll('[data-forget-pattern]').forEach(button=>button.onclick=()=>{
+ Model.setPatternRule(data,button.dataset.forgetPattern,null);finishReview();
+});
+
 document.querySelectorAll('[data-insight]').forEach(b=>b.onclick=()=>{insightMode=b.dataset.insight;render()});
 
 document.querySelectorAll('[data-review-filter]').forEach(b=>b.onclick=()=>{reviewFilter=b.dataset.reviewFilter;render()});
@@ -293,8 +331,9 @@ document.querySelectorAll('[data-review-category]').forEach(form=>form.onsubmit=
  e.preventDefault();
  const task=taskById(form.dataset.reviewCategory);if(!task)return;
  try{
-  const choice=String(new FormData(form).get('category'));
+  const fields=new FormData(form),choice=String(fields.get('category'));
   Model.setCategory(data,task.targetId,choice);
+  if(fields.has('remember')&&choice!=='Other')Model.learnCategory(data,task.targetId,choice);
   window.HouseholdReviews.confirm(data,task);
   finishReview();
  }catch(err){alert(err.message)}
@@ -305,13 +344,22 @@ document.querySelectorAll('[data-review-prediction]').forEach(form=>form.onsubmi
   const fields=new FormData(form),date=String(fields.get('date'));
   if(date<=today()||date.slice(0,7)!==today().slice(0,7))throw Error('Choose a future date this month');
   Model.updateExpectedTransaction(data,task.targetId,{date,amount:fields.get('amount'),enabled:true});
+  if(fields.has('remember'))learnReviewedPrediction(task,{date,amount:fields.get('amount')});
   window.HouseholdReviews.confirm(data,task);
   finishReview();
  }catch(err){alert(err.message)}
 });
 document.querySelectorAll('[data-review-confirm]').forEach(button=>button.onclick=()=>{
  const task=taskById(button.dataset.reviewConfirm);if(!task)return;
- window.HouseholdReviews.confirm(data,task);finishReview();
+ try{
+  if(task.kind==='category'){
+   const form=button.closest('[data-review-category]'),choice=String(new FormData(form).get('category'));
+   // Confirming the current choice saves a reusable rule if requested.
+   if(choice!==task.category){Model.setCategory(data,task.targetId,choice);}
+   if(form.querySelector('[name=remember]')?.checked&&choice!=='Other')Model.learnCategory(data,task.targetId,choice);
+  }else if(task.kind==='prediction'){learnReviewedPrediction(task,null)}
+  window.HouseholdReviews.confirm(data,task);finishReview();
+ }catch(err){alert(err.message)}
 });
 document.querySelectorAll('[data-review-exclude]').forEach(button=>button.onclick=()=>{
  const task=taskById(button.dataset.reviewExclude);if(!task||task.kind!=='prediction')return;
@@ -398,11 +446,21 @@ function showEditor(content){
 function bindCancel(){el('cancel').onclick=()=>el('flash').innerHTML=''}
 function categoryForm(id){
  const record=data.transactions.find(t=>t.id===id);if(!record)return;
- const current=Model.categoryFor(data,id);
+ const current=Model.categoryFor(data,id),safety=Model.categoryRuleSafety(data,record),prior=Model.resolution(data,record);
  const options=CATS.map(c=>'<option value="'+esc(c)+'" '+(c===current?'selected':'')+'>'+esc(c)+'</option>').join('');
- showEditor('<h3>Change category</h3><div class="readonly-transaction"><strong>'+esc(record.merchant)+'</strong> · '+money(record.amount)+' · '+esc(record.date)+'<div class="transaction-source">Source transaction is read-only.</div></div>'+
- '<form id="entry"><label>Category<select name="category">'+options+'</select></label><div class="editor-actions"><button class="btn primary" type="submit">Save category</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
- el('entry').onsubmit=e=>{e.preventDefault();try{Model.setCategory(data,id,new FormData(e.target).get('category'));save();render();alertMsg('Category updated. Source record unchanged.')}catch(err){alert(err.message)}};
+ showEditor('<h3>Change category</h3><div class="readonly-transaction"><strong>'+esc(record.merchant)+'</strong> · '+money(record.amount)+' · '+esc(record.date)+
+ '<div class="transaction-source">Source transaction is read-only.'+(prior.method==='learned'?' Category supplied by a learned rule.':'')+'</div></div>'+
+ '<form id="entry"><label>Category<select name="category">'+options+'</select></label>'+
+ '<label class="learn-checkbox"><input type="checkbox" name="remember" '+(safety.mixed?'':'checked')+'> Remember this merchant for future purchases</label>'+
+ '<p class="prediction-note">'+esc(safety.mixed?'Multi-purpose or conflicting merchant: saving a rule will suggest categories for review, not force every purchase.':
+ 'Consistent merchant: saved rules apply automatically to new unclassified or low-confidence expenses from the same account.')+'</p>'+
+ '<div class="editor-actions"><button class="btn primary" type="submit">Save category</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
+ el('entry').onsubmit=e=>{e.preventDefault();try{
+  const fields=new FormData(e.target),category=String(fields.get('category'));
+  Model.setCategory(data,id,category);
+  if(fields.has('remember')&&category!=='Other')Model.learnCategory(data,id,category);
+  save();render();alertMsg('Category saved. Original bank record unchanged.');
+ }catch(err){alert(err.message)}};
  bindCancel();
 }
 function budgetPredictionForm(category,month){
