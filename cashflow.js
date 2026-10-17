@@ -18,7 +18,51 @@ function isPredictable(t){
   if(['Utilities','Subscriptions','Insurance'].includes(t.category))return true;
   return /car payment|auto loan|student loan|loan payment/i.test(name);
 }
+function cashFlowFromExpected(input){
+ const account=input.account,asOf=input.asOf,days=input.days??90;
+ if(!account||!validDate(asOf))throw Error('A balance snapshot and date are required');
+ if(!Number.isInteger(days)||days<1||days>366)throw Error('Invalid forecast horizon');
+ const opening=Number.isFinite(account.available)?account.available:account.current;
+ if(!Number.isFinite(opening))throw Error('Bank balance is unavailable');
+ const all=Array.isArray(input.expectedEvents)?input.expectedEvents:[];
+ const eventsByDate=new Map();
+ for(const e of all){
+  if(!validDate(e.date)||e.date<=asOf||!Number.isFinite(Number(e.amount))||Number(e.amount)<=0||
+    !['income','expense'].includes(e.type))continue;
+  if(e.accountId&&e.accountId!==account.id)continue;
+  if(e.account&&!e.accountId&&e.account!==account.transactionAccount&&e.account!==account.id)continue;
+  if(!eventsByDate.has(e.date))eventsByDate.set(e.date,[]);
+  eventsByDate.get(e.date).push(e);
+ }
+ // The opening balance already reflects every posted transaction at asOf.
+ // Do not emit historical deposits, transfers or purchases into future cash.
+ let balance=round(opening),minimum=Infinity,lowestDate='',expectedIncome=0,expectedOutflow=0;
+ const series=[{date:asOf,balance,starting:true,income:0,outflow:0,events:[]}];
+ for(let i=1;i<=days;i++){
+  const date=addDays(asOf,i);
+  const events=(eventsByDate.get(date)||[]).map(e=>({
+   id:e.id,merchant:e.merchant,amount:round(e.amount),type:e.type,
+   category:e.category,description:e.description||'Dated expected transaction'
+  }));
+  const income=round(events.filter(e=>e.type==='income').reduce((n,e)=>n+e.amount,0));
+  const outflow=round(events.filter(e=>e.type==='expense').reduce((n,e)=>n+e.amount,0));
+  balance=round(balance+income-outflow);
+  expectedIncome=round(expectedIncome+income);expectedOutflow=round(expectedOutflow+outflow);
+  series.push({date,balance,income,outflow,events});
+  if(balance<minimum){minimum=balance;lowestDate=date}
+ }
+ return {source:input.source||'Forecast ledger',accountId:account.id,accountName:account.name,
+  balanceBasis:Number.isFinite(account.available)?'available':'current',asOf,opening:round(opening),
+  minimum:round(minimum),lowestDate,closing:balance,days,through:addDays(asOf,days),
+  series,expectedIncome,expectedOutflow,dailyVariable:0,
+  streams:all.filter(e=>e.source==='historical'||e.manualRule),
+  historyMonths:input.historyMonths||[],
+  method:'Unified dated expense and income forecast; irregular spending shown separately',
+  estimated:true,unified:true};
+}
+
 function cashFlow90(input){
+  if(Array.isArray(input?.expectedEvents))return cashFlowFromExpected(input);
   const account=input?.account, asOf=input?.asOf, days=input?.days??90, rows=input?.transactions||[], predictionOverrides=input?.predictionOverrides||{};
   const streamAdjustments=predictionOverrides.streams||{};
   const additionalEvents=Array.isArray(predictionOverrides.events)?predictionOverrides.events:[];
