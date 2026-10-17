@@ -17,7 +17,7 @@ function build(state,records,asOf,days,forecast,dataModel){
  // A manually reviewed transfer direction is a forecasting assumption only.
  // Keep the posted source record unchanged, even when its direction is unknown.
  const transferProjectionRows=(records||[]).map(t=>{
-  if(t.type!=='transfer')return t;
+  if(t.type!=='transfer'||typeof forecast.patternKey!=='function')return t;
   const key=forecast.patternKey('transfer','Income',t.accountId||t.account||'Unknown',t.merchant);
   const directive=rules[key];
   return directive?.mode==='schedule'&&['in','out'].includes(directive.cashDirection)?
