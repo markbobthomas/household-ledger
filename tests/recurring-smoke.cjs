@@ -28,7 +28,7 @@ assert.equal(unconfirmed.monthlyTotal,0,'Unconfirmed charge should not inflate m
  try{
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   await page.locator('aside [data-page="insights"]').click();
-  assert.equal(await page.locator('[data-insight]').count(),4,'Insights has four tabs');
+  assert.equal(await page.locator('[data-insight]').count(),5,'Insights has five tabs including the separate accuracy lab');
   await page.locator('[data-insight="recurring"]').click();
   assert.equal(await page.locator('[data-insight="recurring"]').getAttribute('aria-selected'),'true');
   assert.match(await page.locator('.recurring-stats').innerText(),/Subscriptions \/ month/);
@@ -62,6 +62,6 @@ assert.equal(unconfirmed.monthlyTotal,0,'Unconfirmed charge should not inflate m
   await page.locator('[data-insight="bands"]').click();
   assert.equal(await page.locator('details.band-detail').count(),7,'Previous price-band analysis remains reachable');
   assert.deepEqual(errors,[],'No runtime errors');
-  console.log('PASS: Four Insights tabs, subscriptions, recurring bills, category-only histories, date filter, review confidence and mobile layout');
+  console.log('PASS: Five Insights tabs, subscriptions, recurring bills, category-only histories, date filter, review confidence and mobile layout');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exit(1)});
