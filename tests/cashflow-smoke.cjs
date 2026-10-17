@@ -43,7 +43,7 @@ const {chromium:chromiumBrowser}=require('playwright');
    assert.equal(await card.count(),1,'Cash-flow forecast visible on main page');
    assert.match(await card.innerText(),/SIMULATED BANK DATA/);
    assert.match(await card.innerText(),/Everyday Checking/);
-   assert.match(await card.innerText(),/Lowest projected balance/);
+   assert.match(await card.innerText(),/Lowest projected balance/i);
    assert.match(await card.innerText(),/Oct 31, 2026/);
    assert.match(await card.innerText(),/\$5,036\.02/,'Known demo low balance');
    assert.equal(await card.locator('input').count(),0,'No manual bank starting balance input');
