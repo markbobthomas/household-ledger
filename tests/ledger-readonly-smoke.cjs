@@ -91,6 +91,7 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   assert.deepEqual(stored.transactions,before.transactions,'Adjusting a category forecast never writes to ledger');
   assert.equal(stored.predictions.monthlyBudgets.Groceries,999);
   assert.equal(stored.predictions.categoryForecasts['2026-10|Groceries'],undefined,'No aggregate spending projection written');
+  await page.locator('aside [data-page="overview"]').click();
   await page.locator('.forecast-editor > summary').click();
   assert.equal(await page.locator('[data-daily-prediction]').count(),0,'No separate daily phantom transaction assumptions in unified forecast');
   const afterDaily=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
