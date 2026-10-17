@@ -36,6 +36,24 @@ const assert=require('node:assert/strict');
   const asideBg=await page.locator('aside').evaluate(e=>getComputedStyle(e).backgroundColor);
   assert.equal(bodyBg,'rgb(255, 255, 255)','White workspace background active');
   assert.equal(asideBg,'rgb(17, 20, 24)','Near-black navigation active');
+  // Switching between a long Budget page and short Settings page must not
+  // shift the overall workspace as the browser scrollbar appears/disappears.
+  const geometry=()=>page.evaluate(()=>{
+    const r=document.querySelector('.page-top').getBoundingClientRect(),
+      c=document.querySelector('.content').getBoundingClientRect();
+    return {left:r.left,width:r.width,contentLeft:c.left,contentWidth:c.width};
+  });
+  const beforeSettings=await geometry();
+  await page.locator('aside [data-page="settings"]').click();
+  const settingsGeometry=await geometry();
+  for(const key of Object.keys(beforeSettings)){
+    assert.ok(Math.abs(beforeSettings[key]-settingsGeometry[key])<=1,
+      'Settings layout should not shift '+key+': '+JSON.stringify({beforeSettings,settingsGeometry}));
+  }
+  await page.locator('aside [data-page="insights"]').click();
+  assert.equal(await page.locator('[data-insight="recurring"]').innerText(),'Recurring',
+    'Recurring tab has short label');
+  await page.locator('aside [data-page="budgets"]').click();
   await page.setViewportSize({width:390,height:844});
   await page.reload({waitUntil:'load'});
   assert.equal(await page.locator('#title').isVisible(),true);
@@ -53,8 +71,21 @@ const assert=require('node:assert/strict');
   assert.equal(topTabs.position,'sticky','Section tabs remain handy when scrolling');
   assert.ok(topTabs.top>=0&&topTabs.top<190,'Tabs are at top of phone screen: '+JSON.stringify(topTabs));
   assert.ok(topTabs.clickable,'Navigation buttons are unobstructed');
+  const mobileSize=()=>page.evaluate(()=>({
+    viewport:window.innerWidth,
+    scrollWidth:document.documentElement.scrollWidth,
+    mainWidth:document.querySelector('main').getBoundingClientRect().width
+  }));
+  const budgetSize=await mobileSize();
+  await page.locator('.mobile-top-nav [data-page="settings"]').click();
+  const settingsSize=await mobileSize();
+  assert.ok(Math.abs(settingsSize.mainWidth-budgetSize.mainWidth)<=1,
+    'Phone workspace does not resize on Settings: '+JSON.stringify({budgetSize,settingsSize}));
+  assert.ok(settingsSize.scrollWidth<=settingsSize.viewport+1,'No Settings horizontal overflow');
   await page.locator('.mobile-top-nav [data-page="insights"]').click();
   assert.equal(await page.locator('#title').innerText(),'Insights','Top section tabs navigate');
+  assert.equal(await page.locator('[data-insight="recurring"]').innerText(),'Recurring',
+    'Short Recurring tab appears on phone');
   await page.locator('.mobile-top-nav [data-page="budgets"]').click();
   await page.evaluate(()=>window.scrollTo(0,Math.floor(document.body.scrollHeight/2)));
   const stickyTop=await page.locator('.mobile-top-nav').evaluate(e=>e.getBoundingClientRect().top);
