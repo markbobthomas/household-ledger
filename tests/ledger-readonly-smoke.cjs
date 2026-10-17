@@ -83,7 +83,7 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   assert.equal(await page.locator('.ledger-table tbody tr').first().locator('td').nth(2).innerText(),'Shopping','Categorization survives reload');
   await page.locator('aside [data-page="budgets"]').click();
   const category=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
-  await category.locator('summary').click();
+  await category.locator(':scope > details > summary').click();
   await category.locator('[data-budget]').click();
   assert.equal(await page.locator('#entry [name="budget"]').count(),1,'Monthly budget can be edited separately');
   await page.locator('#entry [name="budget"]').fill('999');
