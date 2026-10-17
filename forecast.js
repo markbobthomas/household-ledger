@@ -53,6 +53,38 @@ function infer(transactions,month,category,asOf){
   if(latest.length>=3&&!used.includes(latest[latest.length-1]))continue; // stale merchants
   const sorted=used.map(m=>byMonth.get(m).sort((a,b)=>a.date.localeCompare(b.date)));
   const n=sorted[0].length;
+  // When a charge happens every 7/14 days, months may have 4 vs 5
+  // occurrences. Detect calendar intervals rather than forcing fixed
+  // monthly slots; require consistent posting gaps and charge amounts.
+  if(sorted.some(a=>a.length!==n)){
+   const observed=all.filter(t=>t.type==='expense'&&t.category===category&&!t.pending&&
+      validDate(t.date)&&t.date<=today&&t.date.slice(0,7)>=latest[0]&&
+      accountKey(t)===accountKey(rows[0])&&normalize(t.merchant)===normalize(rows[0].merchant))
+     .sort((a,b)=>a.date.localeCompare(b.date));
+   const amounts=observed.map(t=>Number(t.amount));
+   const medAmount=median(amounts);
+   const dists=observed.slice(1).map((t,i)=>(dateUTC(t.date)-dateUTC(observed[i].date))/86400000);
+   const interval=[7,14].find(d=>dists.length>=4&&dists.filter(gap=>Math.abs(gap-d)<=(d===7?1:2)).length/dists.length>=.85);
+   const amountsStable=amounts.length>=5&&medAmount>0&&
+      Math.max(...amounts.map(v=>Math.abs(v-medAmount)/medAmount))<=(bills?.35:.27);
+   const last=observed[observed.length-1];
+   if(interval&&amountsStable&&last&&((dateUTC(today)-dateUTC(last.date))/86400000)<interval*2+4){
+    const confidence=used.length>=3?'High':'Medium';
+    const merchant=last.merchant,account=accountKey(last);
+    let cursor=dateUTC(last.date),slot=0;
+    while(true){
+     cursor=new Date(cursor.getTime()+interval*86400000);
+     const date=iso(cursor);
+     if(date.slice(0,7)>month)break;
+     if(date<=today)continue;
+     const id=['hist',month,category,encodeURIComponent(account),encodeURIComponent(normalize(merchant)),'interval'+interval+'-'+slot].join('|');
+     candidates.push({id,merchant,account,category,date,amount:round(medAmount),cadence:interval===7?'weekly':'every 2 weeks',
+       confidence,evidence:used.length,source:'historical',pattern:{day:Number(date.slice(8,10)),amount:round(medAmount)},slot,groupKey});
+     slot++;
+    }
+   }
+   continue;
+  }
   if(n<1||n>(bills?3:6)||sorted.some(a=>a.length!==n))continue;
   // Non-bills require at least three distinct months of consistent behavior.
   if(!bills&&used.length<3)continue;
