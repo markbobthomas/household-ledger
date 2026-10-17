@@ -54,15 +54,22 @@ function cashFlowCard(){
   if(!account)return'<div class="cash-panel cash-error">No bank account snapshots are available.</div>';
   // Demo bank amounts and transactions are exclusively fictional; never blend with private browser transactions.
   const transactions=snapshot.mode==='demo'&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo().transactions:entries();
-  const f=engine.cashFlow90({account,asOf:snapshot.asOf,days:90,transactions,source:snapshot.source,predictionOverrides:{streams:data.predictions.cashFlowStreams,events:data.predictions.cashFlowEvents}});
+  const f=engine.cashFlow90({account,asOf:snapshot.asOf,days:90,transactions,source:snapshot.source,predictionOverrides:{streams:data.predictions.cashFlowStreams,events:data.predictions.cashFlowEvents,dailyVariable:data.predictions.dailyVariable}});
   const metric=(name,value,meta,extra)=>'<div class="cash-metric '+(extra||'')+'"><div class="sub">'+esc(name)+'</div><div class="num">'+esc(money(value))+'</div><div class="sub">'+esc(meta)+'</div></div>';
   const days=f.series.slice(1);
   const rows=days.map(p=>'<tr><td><details class="cash-day-detail"><summary>'+esc(cashDateLabel(p.date,true))+'</summary><div class="cash-events">'+p.events.map(e=>'<div class="cash-event">'+esc(e.merchant)+' — '+esc(e.description)+': '+esc(money(e.amount))+'</div>').join('')+'</div></details></td><td>'+money(p.income)+'</td><td>'+money(p.outflow)+'</td><td><strong>'+money(p.balance)+'</strong></td></tr>').join('');
   const recurring=f.streams.map(v=>'<tr><td>'+esc(v.merchant)+'</td><td>'+esc(v.type)+'</td><td>Day '+v.day+'</td><td>'+money(v.amount)+'</td></tr>').join('');
+  const predictedStreams=f.streams.map(v=>'<div class="row forecast-row"><span>'+esc(v.merchant)+' <small>· '+esc(v.type)+' · day '+v.day+(v.enabled?'':' · skipped')+'</small></span><strong>'+money(v.amount)+'</strong><button class="btn" data-stream="'+esc(v.key)+'">Adjust</button></div>').join('');
+  const predictedEvents=data.predictions.cashFlowEvents.filter(e=>!e.accountId||e.accountId===account.id).map(e=>'<div class="row forecast-row"><span>'+esc(e.description)+' <small>· '+esc(e.date)+' · '+esc(e.type)+'</small></span><strong>'+money(e.amount)+'</strong><button class="btn" data-event="'+esc(e.id)+'">Adjust</button></div>').join('');
+  const forecastControls='<details class="cash-detail forecast-editor"><summary>Edit predictions · not bank records</summary><div class="section-top"><h3>Daily spending · '+money(f.dailyVariable)+'/day</h3><button class="btn" data-daily-prediction="1">Adjust</button></div>'+
+    '<div class="section-top"><h3>Recurring predicted payments</h3></div>'+predictedStreams+
+    '<div class="section-top"><h3>One-time projected events</h3><button class="btn" data-add-event="1">Add prediction</button></div>'+
+    (predictedEvents||'<div class="empty">No additional forecast events.</div>')+
+    '<p class="prediction-note">Changes here affect forecasts only, never bank transactions or available balance.</p></details>';
   return'<div class="cash-panel" id="cashflow"><div class="cash-head"><div><h3>Lowest projected balance · next 90 days</h3><div class="cash-sub">'+esc(account.name)+' · '+esc(f.balanceBasis)+' balance</div></div><span class="cash-demo">SIMULATED BANK DATA</span></div>'+
   '<div class="cash-hero"><div><div class="cash-primary-amount">'+money(f.minimum)+'</div><div class="cash-primary-date">Lowest on '+esc(cashDateLabel(f.lowestDate,true))+'</div></div>'+
   '<div class="cash-secondary"><div><span class="sub">Available now</span><strong>'+money(f.opening)+'</strong></div><div><span class="sub">In 90 days</span><strong>'+money(f.closing)+'</strong></div></div></div>'+
-  cashChart(f.series,f.lowestDate)+
+  cashChart(f.series,f.lowestDate)+forecastControls+
   '<div class="cash-status">Estimated from '+esc(f.historyMonths.length)+' months of sample activity. Future bills and deposits may differ.</div>'+
   '<details class="cash-detail"><summary>Explore 90-day cash flow</summary><div class="cash-table-wrap cash-days-wrap"><table class="cash-table daily-cash-table"><thead><tr><th>Date / expected items</th><th>Income</th><th>Outflow</th><th>End-of-day balance</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
   '<details class="cash-detail"><summary>Prediction assumptions</summary><p class="sub">'+esc(f.method)+'. Historical months: '+(f.historyMonths.length?esc(f.historyMonths.join(', ')):'none')+'. Estimated everyday spending: '+money(f.dailyVariable)+'/day.</p>'+
