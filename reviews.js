@@ -28,7 +28,7 @@ function categoryReason(t,distribution){
   return {reason:'Sample review: home improvement or shopping?',priority:1,suggested:'Shopping',confidence:'Low'};
  return null;
 }
-function build(state,forecast,asOf){
+function build(state,forecast,asOf,shared){
  ensure(state);
  const current=String(asOf||new Date().toLocaleDateString('en-CA')).slice(0,10);
  const cutoffDate=new Date(current+'T12:00:00Z');cutoffDate.setUTCDate(cutoffDate.getUTCDate()-90);
@@ -54,9 +54,9 @@ function build(state,forecast,asOf){
  const month=current.slice(0,7);
  if(forecast&&typeof forecast.forecast==='function'){
   for(const category of categoryNames){
-   const prediction=forecast.forecast(effective,month,category,current);
+   const prediction=shared?.categoryViews?.[month+'|'+category]||forecast.forecast(effective,month,category,current,state.predictions?.patternRules);
    for(const item of prediction.expected||[]){
-    if(item.confidence==='High'||item.date<=current||state.predictions?.expectedTransactionOverrides?.[item.id])continue;
+    if(['High','Confirmed'].includes(item.confidence)||item.source==='manual'||item.date<=current||state.predictions?.expectedTransactionOverrides?.[item.id])continue;
     if(state.reviews.predictionConfirmed[item.id]?.fingerprint===predictionFingerprint(item))continue;
     tasks.push({id:'prediction|'+item.id,kind:'prediction',targetId:item.id,merchant:item.merchant,
       date:item.date,amount:Number(item.amount),category,confidence:item.confidence||'Low',
