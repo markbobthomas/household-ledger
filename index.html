@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=phaseB1"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phaseA1"></script><script src="bank-feed.js?v=phaseB1"></script><script src="feed-health.js?v=phase43"></script><script src="cashflow.js?v=phase41"></script><script src="forecast-ledger.js?v=phaseA1"></script><script src="recurring.js"></script><script src="accounting.js?v=phaseA1"></script><script src="ledger-data.js?v=phaseB1"></script><script src="account-forecast.js?v=phaseB1"></script><script src="reviews.js?v=phase42"></script><script src="accuracy-fixture.js?v=phase4"></script><script src="accuracy-fixture-holdout.js?v=phase41"></script><script src="accuracy-lab.js?v=phase41"></script><script src="stress-lab.js?v=phase42"></script><script src="accuracy-fixture-seasonal.js?v=phase43"></script><script src="readiness-lab.js?v=phase43"></script><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=phaseC1"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phaseA1"></script><script src="bank-feed.js?v=phaseB1"></script><script src="feed-health.js?v=phase43"></script><script src="cashflow.js?v=phase41"></script><script src="forecast-ledger.js?v=phaseA1"></script><script src="recurring.js"></script><script src="accounting.js?v=phaseA1"></script><script src="ledger-data.js?v=phaseC1"></script><script src="account-forecast.js?v=phaseC1"></script><script src="reviews.js?v=phase42"></script><script src="accuracy-fixture.js?v=phase4"></script><script src="accuracy-fixture-holdout.js?v=phase41"></script><script src="accuracy-lab.js?v=phase41"></script><script src="stress-lab.js?v=phase42"></script><script src="accuracy-fixture-seasonal.js?v=phase43"></script><script src="readiness-lab.js?v=phase43"></script><script>
 (()=>{
 'use strict';const KEY='household-ledger-v1',CATS=['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other'],BANDS=[['Under $10',0,10],['$10–$25',10,25],['$25–$50',25,50],['$50–$100',50,100],['$100–$200',100,200],['$200–$500',200,500],['$500+',500,Infinity]],money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c])),el=x=>document.getElementById(x),id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2),today=()=>new Date().toLocaleDateString('en-CA');const Model=window.HouseholdLedgerData,initialStorage=localStorage.getItem(KEY);let initial;try{initial=initialStorage?JSON.parse(initialStorage):null}catch{initial=null}
 if(!initial)initial=initialStorage===null&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[],budgets:{}};
@@ -144,13 +144,35 @@ function accountForecastMarkup(snapshot,multi){
   const to=snapshot.accounts.find(x=>x.id===item.toAccountId);
   return '<div class="account-movement-row"><span><strong>'+money(item.amount)+'</strong> · '+
    esc(from?.name||item.fromAccountId)+' → '+esc(to?.name||item.toAccountId)+
-   '<small>'+esc(item.frequency==='once'?'One-time':item.frequency)+' · '+esc(item.anchorDate)+'</small></span>'+
+   '<small>'+esc(item.frequency==='once'?'One-time':item.frequency)+' · '+esc(item.anchorDate)+
+  (item.status==='returned'?' · Returned '+item.reversalDate:item.status==='cancelled'?' · Cancelled':'')+'</small></span>'+
    '<button type="button" class="editable-value" data-remove-account-movement="'+esc(item.id)+'" aria-label="Remove planned transfer">Remove</button></div>';
  }).join('');
  const notes=[];
  if(multi.diagnostics.unassigned.length)notes.push(multi.diagnostics.unassigned.length+' unassigned expected item(s) excluded');
  if(multi.diagnostics.unmatchedTransfers.length)notes.push(multi.diagnostics.unmatchedTransfers.length+' single-sided expected transfer(s)');
  if(multi.diagnostics.unverifiedAccounts.length)notes.push(multi.diagnostics.unverifiedAccounts.length+' account(s) missing verified balance or type');
+ if(multi.diagnostics.staleSnapshots.length)notes.push(multi.diagnostics.staleSnapshots.length+' stale or disconnected account balance(s)');
+ if(multi.diagnostics.missingTimestamps.length)notes.push(multi.diagnostics.missingTimestamps.length+' unverified balance timestamp(s)');
+ if(multi.diagnostics.ambiguousMovements.length)notes.push(multi.diagnostics.ambiguousMovements.length+' overlapping payment(s) need review');
+ if(multi.diagnostics.duplicateEvents.length)notes.push(multi.diagnostics.duplicateEvents.length+' repeated event ID(s) suppressed');
+ if(multi.diagnostics.statementWarnings.length)notes.push(multi.diagnostics.statementWarnings.length+' card minimum/due-date alert(s)');
+ const auditRows=[
+ ...multi.accounts.filter(a=>a.balanceStatus!=='simulated').map(a=>a.name+': balance '+a.balanceStatus+
+   (a.balanceAgeDays!==null?' ('+a.balanceAgeDays+' days old)':'')),
+ ...multi.diagnostics.statementChecks.map(c=>{
+   const account=snapshot.accounts.find(a=>a.id===c.accountId);
+   return (account?.name||c.accountId)+': '+(c.status==='unknown'?'No statement minimum/due date provided':
+     'Minimum '+money(c.minimum)+' due '+c.dueDate+'; '+money(c.planned)+' scheduled · '+c.status);
+ }),
+ ...multi.diagnostics.returnedPayments.map(p=>'Returned payment '+money(p.amount)+
+   ' · '+p.paymentDate+' → '+p.reversalDate),
+ ...multi.diagnostics.unassigned.map(e=>'Excluded future item: '+(e.merchant||e.id||'Unknown')+' · '+e.reason),
+ ...multi.diagnostics.ambiguousMovements.map(e=>'Ambiguous payment '+(e.id||'')+' · '+e.reason)
+ ];
+ const auditDetails=auditRows.length?'<details class="account-reliability"><summary>Reconciliation checks · '+
+  (notes.length?notes.length+' warnings':'Details')+'</summary>'+
+  '<div class="account-reliability-lines">'+auditRows.map(t=>'<p>'+esc(t)+'</p>').join('')+'</div></details>':'';
  const household=multi.household;
  return '<section class="account-forecast" aria-label="Account-level forecast"><div class="section-top"><h3>Account balances · next 90 days</h3><span class="budget-summary-meta">Scheduled events only</span></div>'+
  '<div class="account-total-strip"><span>Cash <strong>'+money(household.closingCash)+'</strong></span>'+
@@ -159,6 +181,7 @@ function accountForecastMarkup(snapshot,multi){
  '<div class="account-projection-list"><div class="account-projection-heading"><span>Account</span><span>Today</span><span></span><span>90 days</span></div>'+
  rows+'</div>'+
  (notes.length?'<p class="account-forecast-warning">'+esc(notes.join(' · '))+'. These projections may be incomplete.</p>':'')+
+ auditDetails+
  '<p class="prediction-note">Changes are forecasts, not bank balances. Credit-card purchases increase debt; payments lower checking and card debt equally. Cash excludes unknown future account assignments.</p>'+
  '<details class="account-plan-detail"><summary>Plan a credit-card payment or account transfer</summary>'+
  '<form id="account-movement-form" class="account-movement-form"><div class="account-plan-grid">'+
@@ -170,6 +193,9 @@ function accountForecastMarkup(snapshot,multi){
  '<option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option>'+
  '<option value="quarterly">Every 3 months</option><option value="semiannual">Every 6 months</option>'+
  '<option value="annual">Yearly</option></select></label>'+
+ '<label>Payment status<select name="status"><option value="scheduled">Scheduled</option>'+
+ '<option value="returned">Returned / reversed</option><option value="cancelled">Cancelled</option></select></label>'+
+ '<label class="account-return-field" hidden>Return date<input type="date" name="reversalDate"></label>'+
  '</div><button class="btn primary" type="submit">Save planned movement</button>'+
  '<p class="prediction-note">A repeating payment uses this fixed estimated amount until changed. Card statement balances and minimum payments are not connected.</p></form>'+
  (listed?'<div class="account-movement-list"><h4>Saved planned movements</h4>'+listed+'</div>':'')+
@@ -644,6 +670,18 @@ document.querySelectorAll('[data-daily-prediction]').forEach(b=>b.onclick=()=>da
 const movementForm=document.getElementById('account-movement-form');
 if(movementForm){
  const snapshot=window.HouseholdBankFeed.getSnapshot(today());
+ const statusField=movementForm.querySelector('[name=status]'),returnField=movementForm.querySelector('.account-return-field');
+ const updateReturn=()=>{
+  const returned=statusField.value==='returned';
+  returnField.hidden=!returned;
+  returnField.querySelector('input').required=returned;
+  if(returned)movementForm.querySelector('[name=frequency]').value='once';
+ };
+ statusField.onchange=updateReturn;
+ movementForm.querySelector('[name=frequency]').onchange=()=>{
+  if(statusField.value==='returned')movementForm.querySelector('[name=frequency]').value='once';
+ };
+ updateReturn();
  const check=snapshot.accounts.find(a=>['checking','savings'].includes(a.accountType));
  const card=snapshot.accounts.find(a=>a.accountType==='credit');
  if(check)movementForm.querySelector('[name=fromAccountId]').value=check.id;
@@ -654,7 +692,8 @@ if(movementForm){
    const f=new FormData(movementForm);
    Model.saveAccountMovement(data,{fromAccountId:f.get('fromAccountId'),
     toAccountId:f.get('toAccountId'),anchorDate:f.get('anchorDate'),
-    amount:f.get('amount'),frequency:f.get('frequency')});
+    amount:f.get('amount'),frequency:f.get('frequency'),status:f.get('status'),
+    reversalDate:f.get('reversalDate')});
    save();render();
   }catch(err){alert(err.message)}
  };

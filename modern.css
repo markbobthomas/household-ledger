@@ -1115,3 +1115,10 @@ html { scroll-behavior:auto; }
  .account-plan-grid{grid-template-columns:1fr}
  .account-plan-grid input,.account-plan-grid select{font-size:16px;min-height:44px}
 }
+
+/* Phase C: compact disclosure for multi-account forecast confidence. */
+.account-reliability{margin:10px 0 12px;padding:8px 0;border-top:1px solid var(--line)}
+.account-reliability>summary{cursor:pointer;font-size:12px;font-weight:650;color:var(--muted);padding:6px 0}
+.account-reliability-lines{padding:4px 0 0}
+.account-reliability-lines p{margin:5px 0;font-size:12px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.account-return-field[hidden]{display:none}

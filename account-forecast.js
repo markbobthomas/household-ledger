@@ -56,6 +56,10 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
  if(!Array.isArray(snapshot.accounts)||!snapshot.accounts.length)throw Error('Account snapshots are required');
  const through=addDays(asOf,days);
  const accounts=[],byId=new Map(),aliases=new Map();
+ const sourceIsLive=snapshot.connected===true||snapshot.mode==='connected'||snapshot.mode==='plaid';
+ const diagnostics={unassigned:[],unmatchedTransfers:[],unverifiedAccounts:[],suppressedDuplicates:[],
+  pairedMovements:[],staleSnapshots:[],missingTimestamps:[],ambiguousMovements:[],
+  returnedPayments:[],duplicateEvents:[],statementWarnings:[],statementChecks:[]};
  for(const a of snapshot.accounts){
   const id=String(a.id||a.account_id||'');
   if(!id||byId.has(id))throw Error('Every account needs a unique stable ID');
@@ -63,8 +67,20 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const hasCurrent=Number.isFinite(current)&&a.current!==null&&a.current!==undefined;
   // A credit card's current balance is money owed, never cash available.
   const initial=hasCurrent?current:(type!=='credit'&&Number.isFinite(available)&&a.available!=null?available:null);
-  const valid=type!=='unsupported'&&initial!==null;
-  const state={id,name:String(a.name||id),type,valid,opening:valid?round(initial):null,
+  const disconnected=a.disconnected===true||a.status==='disconnected';
+  const valid=type!=='unsupported'&&initial!==null&&!disconnected;
+  const live=sourceIsLive||a.provider==='plaid'||a.source?.provider==='plaid';
+  const observedRaw=a.balanceAsOf||a.observedAt||a.balanceObservedAt||a.asOf||null;
+  const observedDate=observedRaw?String(observedRaw).slice(0,10):null;
+  const age=observedDate&&iso(observedDate)?deltaDays(asOf,observedDate):null;
+  const simulated=snapshot.mode==='demo'||a.simulated===true;
+  const balanceStatus=disconnected?'disconnected':!valid?'unavailable':simulated?'simulated':
+   !live?'unverified':age===null?'unknown-age':age<0?'future-dated':age>2?'stale':'fresh';
+  if(['stale','future-dated','disconnected'].includes(balanceStatus))
+   diagnostics.staleSnapshots.push({accountId:id,name:a.name||id,status:balanceStatus,ageDays:age});
+  if(live&&balanceStatus==='unknown-age')
+   diagnostics.missingTimestamps.push({accountId:id,name:a.name||id});
+  const state={id,name:String(a.name||id),type,valid,balanceStatus,balanceAgeDays:age,opening:valid?round(initial):null,
    openingAvailable:valid&&type!=='credit'&&Number.isFinite(available)&&a.available!=null?round(available):null,
    openingCurrent:hasCurrent?round(current):null,
    balance:valid?round(initial):null,availableBalance:valid&&type!=='credit'&&Number.isFinite(available)&&a.available!=null?round(available):null,
@@ -82,7 +98,7 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const matches=aliases.get(k);
   return matches?.size===1?[...matches][0]:null;
  };
- const postings=new Map(),diagnostics={unassigned:[],unmatchedTransfers:[],unverifiedAccounts:[],suppressedDuplicates:[],pairedMovements:[]};
+ const postings=new Map();
  const householdEvents=[],movementSignatures=new Set();
  const post=(accountId,date,kind,amount,original,groupId=null)=>{
   const a=byId.get(accountId);
@@ -106,9 +122,17 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   if(!historicalPartners.has(lookup))historicalPartners.set(lookup,new Set());
   historicalPartners.get(lookup).add(other);
  }
+ const seenEventIds=new Map();
  const projected=(Array.isArray(expectedEvents)?expectedEvents:[]).filter(e=>
   e&&iso(e.date)&&e.date>asOf&&e.date<=through&&Number.isFinite(Number(e.amount))&&Number(e.amount)>0&&e.enabled!==false)
-  .map((e,i)=>({...e,_accountId:resolve(e.accountId||e.account),_eventIndex:i}));
+  .map((e,i)=>({...e,_accountId:resolve(e.accountId||e.account),_eventIndex:i}))
+  .filter(e=>{
+   if(e.id===undefined||e.id===null||e.id==='')return true;
+   const id=String(e.id),signature=[e.date,e._accountId,e.type,e.cashDirection,e.amount].join('|');
+   if(!seenEventIds.has(id)){seenEventIds.set(id,signature);return true}
+   diagnostics.duplicateEvents.push({id,reason:seenEventIds.get(id)===signature?'Repeat event ID':'Conflicting event ID'});
+   return false;
+  });
  const candidates=projected.filter(e=>e.type==='transfer'&&['in','out'].includes(e.cashDirection));
  const coveredEvents=new Set();
  const movements=[];
@@ -123,8 +147,15 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const inverse=candidates.filter(q=>q!==e&&!coveredEvents.has(q._eventIndex)&&q._accountId===other&&
     q.cashDirection!==e.cashDirection&&Math.abs(Number(q.amount)-Number(e.amount))<.011&&
     Math.abs(deltaDays(q.date,e.date))<=3);
-  // Multiple equally plausible counterparts are ambiguous; don't synthesize.
-  if(inverse.length>1)continue;
+  const competitors=candidates.filter(q=>q!==e&&!coveredEvents.has(q._eventIndex)&&
+    q._accountId===e._accountId&&q.cashDirection===e.cashDirection&&
+    Math.abs(Number(q.amount)-Number(e.amount))<.011&&Math.abs(deltaDays(q.date,e.date))<=3);
+  // Repeated identical ACH debits or credits must not be arbitrarily attached to
+  // one of several possible peers (including a missing bank-side posting).
+  if(inverse.length>1||competitors.length){
+   diagnostics.ambiguousMovements.push({id:e.id,accountId:e._accountId,reason:'Multiple plausible payment counterparts'});
+   continue;
+  }
   const groupId='matched|'+[String(e.id||e._eventIndex),String(inverse[0]?.id||'')].sort().join('|');
   coveredEvents.add(e._eventIndex);
   if(inverse.length)coveredEvents.add(inverse[0]._eventIndex);
@@ -136,13 +167,51 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   if(!byId.has(from)||!byId.has(to)||from===to||!(amount>0)||!Number.isFinite(amount)){
    diagnostics.unassigned.push({id:p?.id||null,reason:'Invalid planned account movement'});continue;
   }
+  const status=p.status||'scheduled';
+  if(!['scheduled','cancelled','returned'].includes(status)){
+   diagnostics.unassigned.push({id:p.id||null,reason:'Unknown payment status'});continue;
+  }
+  if(status==='cancelled')continue;
+  if(status==='returned'&&(p.frequency||'once')!=='once'){
+   diagnostics.unassigned.push({id:p.id||null,reason:'Returned payments must be one-time; schedule retries separately'});continue;
+  }
+  // If a payment already posted before this snapshot but will be returned
+  // afterward, its original leg is already in the opening balances. Only
+  // project the future reversal; never subtract that payment twice.
+  const anchor=String(p.anchorDate||p.date||''),returnAt=String(p.reversalDate||'');
+  if(status==='returned'&&iso(anchor)&&anchor<=asOf&&iso(returnAt)&&returnAt>asOf&&returnAt<=through){
+   movements.push({id:'return|'+String(p.id)+'|'+returnAt,date:returnAt,amount,
+    fromAccountId:to,toAccountId:from,source:'user plan',status:'reversal',
+    reverses:'posted|'+String(p.id)+'|'+anchor});
+   diagnostics.returnedPayments.push({id:p.id,paymentDate:anchor,reversalDate:returnAt,
+    amount:round(amount),withinHorizon:true,originalIncludedInSnapshot:true});
+  }
   for(const when of occurrences(p,asOf,through)){
    // A reviewed explicit plan takes precedence over inferred matching movement
    // or single source leg of same amount/date/accounts; never double-pay a card.
    const exists=movements.find(m=>m.fromAccountId===from&&m.toAccountId===to&&
     Math.abs(m.amount-amount)<.011&&Math.abs(deltaDays(m.date,when))<=2);
-   if(exists){diagnostics.suppressedDuplicates.push({id:p.id,matching:exists.id});continue}
-   movements.push({id:'plan|'+String(p.id)+'|'+when,date:when,amount,fromAccountId:from,toAccountId:to,source:'user plan'});
+   if(exists){
+    diagnostics.suppressedDuplicates.push({id:p.id,matching:exists.id,reason:'Overlapping payment amount/date/accounts'});
+    diagnostics.ambiguousMovements.push({id:p.id,matching:exists.id,reason:'Duplicate or competing planned payment'});
+    continue;
+   }
+   const movement={id:'plan|'+String(p.id)+'|'+when,date:when,amount,
+    fromAccountId:from,toAccountId:to,source:'user plan',status};
+   movements.push(movement);
+   if(status==='returned'){
+    const reversalDate=String(p.reversalDate||'');
+    if(!iso(reversalDate)||reversalDate<when){
+     diagnostics.unassigned.push({id:p.id,reason:'Returned payment needs a valid reversal date on or after its payment date'});
+     movements.pop();continue;
+    }
+    const reversal={...movement,id:'return|'+String(p.id)+'|'+reversalDate,date:reversalDate,
+     fromAccountId:to,toAccountId:from,status:'reversal',reverses:movement.id};
+    // A return beyond the horizon remains a pending exposure; do not invent an earlier credit.
+    if(reversalDate<=through)movements.push(reversal);
+    diagnostics.returnedPayments.push({id:p.id,paymentDate:when,reversalDate,amount:round(amount),
+     withinHorizon:reversalDate<=through});
+   }
   }
  }
  // Explicit movement replaces a standalone inferred leg that describes the
@@ -234,6 +303,30 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
  const openingCash=round(accounts.filter(a=>a.valid&&a.type!=='credit').reduce((n,a)=>n+a.opening,0));
  const openingDebt=round(accounts.filter(a=>a.valid&&a.type==='credit').reduce((n,a)=>n+a.opening,0));
  const openingNet=round(openingCash-openingDebt);
+ // Statement metadata comes from liabilities, not transaction frequency. It
+ // never fabricates a future charge; check only verified/scheduled payments.
+ for(const a of accounts.filter(x=>x.type==='credit')){
+  const li=a.source.liabilities||a.source.statement||{};
+  const due=String(li.next_payment_due_date||li.nextPaymentDueDate||'');
+  const minRaw=li.minimum_payment_amount??li.minimumPaymentAmount;
+  const minimum=minRaw==null?null:Number(minRaw);
+  const statementRaw=li.last_statement_balance??li.lastStatementBalance;
+  const statementBalance=statementRaw==null?null:Number(statementRaw);
+  const issued=String(li.last_statement_issue_date||li.lastStatementIssueDate||'');
+  if(!iso(due)||minimum===null||!Number.isFinite(minimum)){
+   diagnostics.statementChecks.push({accountId:a.id,status:'unknown',reason:'Due date or minimum payment unavailable'});
+   continue;
+  }
+  const payments=diagnostics.pairedMovements.filter(m=>m.toAccountId===a.id&&m.kind==='card_payment'&&
+   m.status!=='reversal'&&m.date>=asOf&&m.date<=due&&
+   !diagnostics.returnedPayments.some(x=>String(m.id).includes(String(x.id)))).reduce((n,m)=>n+m.amount,0);
+  const status=due<asOf?'past-due':minimum>payments+.009?'shortfall':'covered';
+  const check={accountId:a.id,dueDate:due,minimum:round(minimum),planned:round(payments),
+   shortfall:round(Math.max(0,minimum-payments)),statementBalance:Number.isFinite(statementBalance)?round(statementBalance):null,
+   statementIssued:iso(issued)?issued:null,status};
+  diagnostics.statementChecks.push(check);
+  if(status==='shortfall'||status==='past-due')diagnostics.statementWarnings.push(check);
+ }
  const household={openingCash,closingCash:daysSeries.at(-1).cash,openingDebt,
   closingDebt:daysSeries.at(-1).debt,openingNet,closingNet:daysSeries.at(-1).net,
   expectedSpending:round(householdSpending),expectedIncome:round(householdIncome),
@@ -241,7 +334,13 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   explainedChange:round(householdIncome-householdSpending),
   conservationDifference:round(daysSeries.at(-1).net-openingNet-(householdIncome-householdSpending)),
   complete:accounts.every(a=>a.valid)&&diagnostics.unassigned.length===0&&
-   diagnostics.unverifiedAccounts.length===0&&diagnostics.unmatchedTransfers.length===0};
+   diagnostics.unverifiedAccounts.length===0&&diagnostics.unmatchedTransfers.length===0&&
+   diagnostics.staleSnapshots.length===0&&diagnostics.missingTimestamps.length===0&&
+   diagnostics.ambiguousMovements.length===0&&diagnostics.duplicateEvents.length===0&&
+   diagnostics.returnedPayments.every(x=>x.withinHorizon)};
+ household.readyForLive=sourceIsLive&&household.complete&&
+  accounts.every(a=>a.balanceStatus==='fresh')&&diagnostics.statementWarnings.length===0&&
+  diagnostics.statementChecks.every(c=>c.status!=='unknown');
  return {asOf,through,days,accounts,series:daysSeries,household,diagnostics,
   events:householdEvents,plans:diagnostics.pairedMovements};
 }

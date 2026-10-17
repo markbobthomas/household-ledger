@@ -72,3 +72,80 @@ and cross-bank transfers; statement-cycle/minimum-due logic; and reconciliation
 between changing credit-card current balance and posted transaction cutoffs.
 Never claim future bank-safe available funds or a complete household position
 until actual account snapshots are fresh and reconciled.
+
+
+## Phase C — multi-account reliability gate (October 17, 2026)
+
+**No Plaid access token, real bank connection, or authenticated backend has been created.**
+Phase C expands fictional stress and reconciliation checks while preserving existing
+user categories, forecasts and read-only provider transaction facts.
+
+### Integrity rules now enforced
+
+1. **Snapshot freshness and coverage:** Each live account snapshot may supply
+   \`balanceAsOf\`, \`observedAt\`, or \`asOf\`. A snapshot is flagged stale if
+   more than two calendar days old; a future-dated, missing-timestamp,
+   disconnected, unsupported or missing-balance account is not reported as
+   a trustworthy complete forecast. Demo balances remain explicitly simulated.
+   A credit balance is always money owed, not spendable bank cash.
+2. **Statement timing without inventing a bill:** Optional Plaid Liabilities-shaped
+   credit metadata (\`next_payment_due_date\`, \`minimum_payment_amount\`,
+   \`last_statement_balance\`, \`last_statement_issue_date\`) is checked against
+   explicitly scheduled or historically verified future payments. Known
+   minimum-payment shortfalls and overdue dates raise warnings. If metadata is
+   absent, statement coverage remains **unknown**—the engine does not
+   automatically fabricate a payment amount or guarantee a statement payoff.
+   Plaid Liabilities data and account balances can be unavailable or cached.
+3. **Returned or cancelled payments:** Forecast-only \`accountMovements[]\`
+   accepts \`status:'scheduled'|'cancelled'|'returned'\`; returned one-time
+   payments also require a \`reversalDate\`. A return posts equal-and-opposite
+   cash and debt legs. A retry is a separate scheduled payment. A reversal after
+   the starting snapshot never replays an original payment already reflected
+   in opening bank balances.
+4. **Duplicate suppression and ambiguity:** Duplicate forecast event identities
+   cannot increase projected account totals twice. Equivalent overlapping
+   account payment plans are suppressed and flagged for review. Multiple
+   indistinguishable candidate bank-side transfer matches are never assigned
+   arbitrarily; unmatched/ambiguous movements keep the projection marked
+   incomplete. A known transfer has exactly two equal-and-opposite legs.
+5. **Atomic multi-Item sync contract:** \`applyPlaidSyncPages()\` requires a
+   complete paginated \`/transactions/sync\` result for one Plaid Item.
+   Added/modified/removed changes and the completed Item cursor commit
+   atomically; malformed or incomplete pages leave the entire persisted
+   source state untouched. The existing single-page normalizer also stages
+   all writes, and refuses to commit an explicitly incomplete Item update.
+   Account IDs cannot silently transfer ownership between Items.
+   Pending-to-posted replacements retain manual category overrides.
+6. **Conservation:** Household net position uses current checking/savings
+   balances minus positive credit-card balances owed. Matched card payments,
+   checking-to-savings transfers and their reversals produce a zero change in
+   household net position. Purchases, true income and refunds change net
+   position exactly once. Available balances are shown independently and
+   can differ from current balances because of pending holds.
+
+### Test scenarios
+
+\`tests/account-reliability-phaseC-smoke.cjs\` uses six fictional accounts
+(two checking, savings and three cards), overlapping/partial/returned/
+cancelled/retried payments, after-snapshot reversals, minimum and statement
+dates, duplicate/ambiguous forecast IDs, disconnected/stale/missing bank
+snapshots, two distinct Plaid Items with multiple sync pages, fail-atomic
+rollback, ID conflicts, 80 deterministic randomized conservation cases and
+desktop/iPhone Safari UI checks. It is added to the existing browser workflow
+without weakening Phase A/B regression coverage.
+
+### Still required before live Plaid
+
+Plaid Sandbox verification with real \`/transactions/sync\` pagination and
+webhook replay, authenticated household backend and token encryption,
+institution rate/error behavior, multiple-timezone transaction posting cutoffs,
+currency and cross-currency handling, account deletion/relink audit, real
+statement reconciliation and legally appropriate consent/data deletion.
+A mathematically balanced synthetic forecast does **not** prove that its
+prediction dates and payment amounts are accurate.
+
+Official provider references:
+- https://plaid.com/docs/api/accounts/
+- https://plaid.com/docs/api/products/liabilities/
+- https://plaid.com/docs/transactions/webhooks/
+- https://plaid.com/docs/transactions/sync-migration/

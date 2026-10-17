@@ -239,9 +239,14 @@ function saveAccountMovement(state,item){
   !validDate(anchorDate)||!['once','weekly','biweekly','monthly','quarterly','semiannual','annual'].includes(frequency)||
   !(amount>0)||!Number.isFinite(amount)||amount>999999999||!Number.isInteger(day)||day<1||day>31)
   throw Error('Choose two different accounts, valid date, frequency and positive amount');
+ const status=String(item.status||'scheduled'),reversalDate=String(item.reversalDate||'');
+ if(!['scheduled','cancelled','returned'].includes(status)||
+   status==='returned'&&(frequency!=='once'||!validDate(reversalDate)||reversalDate<anchorDate))
+  throw Error('A returned payment needs one payment and its reversal date');
  const id=item.id&&String(item.id).startsWith('movement|')?String(item.id):
   'movement|'+Date.now().toString(36)+Math.random().toString(36).slice(2);
- const record={id,fromAccountId:from,toAccountId:to,anchorDate,frequency,day,amount:round(amount)};
+ const record={id,fromAccountId:from,toAccountId:to,anchorDate,frequency,day,amount:round(amount),
+  status,...(status==='returned'?{reversalDate}:{})};
  state.predictions.accountMovements??=[];
  const i=state.predictions.accountMovements.findIndex(m=>m.id===id);
  if(i<0)state.predictions.accountMovements.push(record);else state.predictions.accountMovements[i]=record;
@@ -255,25 +260,46 @@ function removeAccountMovement(state,id){
  * Upsert replaces provider records on /transactions/sync updates and applies removals.
  */
 function applyPlaidSync(state,change){
- if(!change||!Array.isArray(change.added)||!Array.isArray(change.modified)||!Array.isArray(change.removed))throw Error('Invalid Plaid sync batch');
- const byId=new Map((state.transactions||[]).map(t=>[t.id,t]));
- if(Array.isArray(change.accounts))Accounting.registerAccounts(state,change.accounts);
- const itemId=String(change.itemId||'');
+ if(!change||!Array.isArray(change.added)||!Array.isArray(change.modified)||!Array.isArray(change.removed))
+  throw Error('Invalid Plaid sync batch');
+ // Stage the entire provider mutation, including account metadata and the
+ // next cursor. A failed page must leave the committed ledger bit-for-bit intact.
+ const staged=copy(state),itemId=String(change.itemId||'');
+ if(itemId&&change.hasMore===true&&!change.__pageBatch)
+  throw Error('Incomplete Plaid Item updates must use applyPlaidSyncPages');
+ // Never reassign an institution's account ID to a different Plaid Item.
+ if(itemId&&Array.isArray(change.accounts))
+  for(const raw of change.accounts){
+   const id=String(raw.account_id||raw.id||'');
+   const original=(state.accounts||[]).find(a=>a.id===id);
+   if(original?.itemId&&original.itemId!==itemId)
+    throw Error('Duplicate account ID across Plaid Items');
+  }
+ staged.sync??={plaidCursor:null,itemCursors:{}};
+ staged.sync.itemCursors??={};
+ if(Array.isArray(change.accounts))
+  Accounting.registerAccounts(staged,change.accounts.map(a=>({...a,itemId:a.itemId||a.item_id||itemId})));
+ const byId=new Map((staged.transactions||[]).map(t=>[t.id,t]));
  const providerId=id=>'plaid:'+(itemId?itemId+':':'')+String(id);
  const read=t=>{
-  if(!t||!t.transaction_id||!t.account_id||!validDate(t.date)||!Number.isFinite(Number(t.amount)))throw Error('Invalid provider transaction');
-  const amount=Number(t.amount);
-  const id=providerId(t.transaction_id);
-  const current=byId.get(id);
-  const defaultCategory=current?.category||'Other';
-  const meta=(state.accounts||[]).find(a=>a.id===String(t.account_id));
-  const next={id,date:t.date,merchant:String(t.merchant_name||t.name||'Unknown'),description:String(t.name||''),amount:round(Math.abs(amount)),type:amount>=0?'expense':'income',category:defaultCategory,
-    accountId:String(t.account_id),account:String(meta?.name||t.account_name||t.account_id),pending:Boolean(t.pending),
-    source:{provider:'plaid',providerTransactionId:String(t.transaction_id),accountId:String(t.account_id),itemId:itemId||null,
-      plaidAmount:amount,pendingTransactionId:t.pending_transaction_id||null,verified:true}};
-  // Pending->posted often changes the transaction ID; carry a category correction forward.
+  if(!t||!t.transaction_id||!t.account_id||!validDate(t.date)||
+   t.amount===null||t.amount===undefined||!Number.isFinite(Number(t.amount)))
+   throw Error('Invalid provider transaction');
+  const amount=Number(t.amount),id=providerId(t.transaction_id);
+  const current=byId.get(id),defaultCategory=current?.category||'Other';
+  const meta=(staged.accounts||[]).find(a=>a.id===String(t.account_id));
+  if(itemId&&meta?.itemId&&meta.itemId!==itemId)
+   throw Error('Account belongs to a different Plaid Item');
+  const next={id,date:t.date,merchant:String(t.merchant_name||t.name||'Unknown'),
+   description:String(t.name||''),amount:round(Math.abs(amount)),
+   type:amount>=0?'expense':'income',category:defaultCategory,
+   accountId:String(t.account_id),account:String(meta?.name||t.account_name||t.account_id),
+   pending:Boolean(t.pending),source:{provider:'plaid',providerTransactionId:String(t.transaction_id),
+    accountId:String(t.account_id),itemId:itemId||null,plaidAmount:amount,
+    pendingTransactionId:t.pending_transaction_id||null,verified:true}};
   const previous=t.pending_transaction_id?providerId(t.pending_transaction_id):null;
-  if(previous&&state.categoryOverrides[previous]&&!state.categoryOverrides[id])state.categoryOverrides[id]=state.categoryOverrides[previous];
+  if(previous&&staged.categoryOverrides?.[previous]&&!staged.categoryOverrides[id])
+   staged.categoryOverrides[id]=staged.categoryOverrides[previous];
   if(previous)byId.delete(previous);
   byId.set(id,next);
  };
@@ -282,15 +308,35 @@ function applyPlaidSync(state,change){
   if(!r||!r.transaction_id)throw Error('Invalid provider deletion');
   byId.delete(providerId(r.transaction_id));
  }
- state.transactions=[...byId.values()];
+ staged.transactions=[...byId.values()];
  if(typeof change.nextCursor==='string'){
-  state.sync.itemCursors??={};
-  if(itemId)state.sync.itemCursors[itemId]=change.nextCursor;
-  else state.sync.plaidCursor=change.nextCursor;
+  if(itemId)staged.sync.itemCursors[itemId]=change.nextCursor;
+  else staged.sync.plaidCursor=change.nextCursor;
  }
+ Object.assign(state,staged);
  return state;
 }
-const api={VERSION,migrate,records,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,applyPlaidSync};
+/* Atomic, fully paginated /transactions/sync handoff. The server must fetch
+ * every page before persisting a completed Item cursor; never publish partial
+ * provider updates after a failed page, interrupted sync or malformed cursor.
+ */
+function applyPlaidSyncPages(state,batch){
+ if(!batch||!String(batch.itemId||'')||!Array.isArray(batch.pages)||!batch.pages.length)
+  throw Error('Completed Plaid Item sync requires an Item ID and pages');
+ const staged=copy(state);
+ batch.pages.forEach((page,i)=>{
+  if(!page||typeof page.nextCursor!=='string'||!page.nextCursor)
+   throw Error('Plaid sync page is missing its cursor');
+  const last=i===batch.pages.length-1;
+  if(last&&page.hasMore!==false||!last&&page.hasMore!==true)
+   throw Error('Plaid Item update is incomplete or pages are inconsistent');
+  applyPlaidSync(staged,{...page,itemId:batch.itemId,__pageBatch:true,
+   ...(i===0&&Array.isArray(batch.accounts)?{accounts:batch.accounts}:{})});
+ });
+ Object.assign(state,staged);
+ return state;
+}
+const api={VERSION,migrate,records,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
