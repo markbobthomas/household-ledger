@@ -98,11 +98,21 @@ function expectedForCategory(state,detected,month,category,today){
 function setPatternRule(state,key,rule){
  if(typeof key!=='string'||!key||key.length>600)throw Error('Invalid pattern key');
  state.predictions.patternRules??={};
- if(rule===null){delete state.predictions.patternRules[key];return}
+ const clearForecastEdits=()=>{
+  const parts=key.split('|');
+  if(parts.length!==4)return;
+  for(const id of Object.keys(state.predictions.expectedTransactionOverrides||{})){
+   const p=id.split('|');
+   if(p[0]==='hist'&&p.length>=6&&p[2]===parts[1]&&p[3]===parts[2]&&p[4]===parts[3])
+    delete state.predictions.expectedTransactionOverrides[id];
+  }
+ };
+ if(rule===null){clearForecastEdits();delete state.predictions.patternRules[key];return}
  if(!rule||!['none','monthly'].includes(rule.mode))throw Error('Invalid recurrence decision');
  if(rule.mode==='none'){state.predictions.patternRules[key]={mode:'none'};return}
  if(!Number.isInteger(Number(rule.day))||Number(rule.day)<1||Number(rule.day)>31||
    !Number.isFinite(Number(rule.amount))||Number(rule.amount)<=0)throw Error('Invalid recurring amount or date');
+ clearForecastEdits();
  state.predictions.patternRules[key]={mode:'monthly',day:Number(rule.day),amount:round(rule.amount)};
 }
 function setStreamOverride(state,key,override){
