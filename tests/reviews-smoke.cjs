@@ -1,0 +1,102 @@
+const assert=require('node:assert/strict');
+const {chromium,webkit,devices}=require('playwright');
+const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const Model=require('../ledger-data.js'),Forecast=require('../forecast.js'),Reviews=require('../reviews.js');
+const context={window:{}};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../demo-data.js'),'utf8'),context);
+const raw=context.window.createHouseholdLedgerDemo();
+const state=Model.migrate(raw),actual=JSON.stringify(state.transactions);
+const a=Reviews.build(state,Forecast,'2026-10-17');
+assert.ok(a.categoryCount>=1,'Demo category ambiguities create review tasks');
+assert.ok(a.predictionCount>=1,'Uncertain dated forecast creates review tasks');
+assert.ok(a.demoCount>=2,'Sample reviews populated from fictional demo data');
+const category=a.tasks.find(t=>t.kind==='category');
+const forecast=a.tasks.find(t=>t.kind==='prediction');
+assert.ok(category.id.startsWith('category|')&&forecast.id.startsWith('prediction|'));
+Reviews.confirm(state,category);
+assert.ok(!Reviews.build(state,Forecast,'2026-10-17').tasks.some(t=>t.id===category.id),'Confirming category resolves task');
+const same=Model.migrate(state);
+assert.ok(!Reviews.build(same,Forecast,'2026-10-17').tasks.some(t=>t.id===category.id),'Confirmation survives migration and reload');
+Reviews.confirm(state,forecast);
+assert.ok(!Reviews.build(state,Forecast,'2026-10-17').tasks.some(t=>t.id===forecast.id),'Confirming expected payment resolves task');
+Model.updateExpectedTransaction(state,forecast.targetId,{date:forecast.date,amount:forecast.amount,enabled:false});
+assert.ok(!Reviews.build(state,Forecast,'2026-10-17').tasks.some(t=>t.id===forecast.id),'Prediction edit keeps task resolved');
+assert.equal(JSON.stringify(state.transactions),actual,'Reviews never modify source transaction fields');
+const missing=Model.migrate({transactions:[{id:'unknown',type:'expense',date:'2026-10-16',merchant:'Mystery charge',category:'Other',amount:18.14}],items:[]});
+assert.equal(Reviews.build(missing,Forecast,'2026-10-17').categoryCount,1,'Uncategorized actual creates task');
+Model.setCategory(missing,'unknown','Groceries');
+assert.equal(Reviews.build(missing,Forecast,'2026-10-17').categoryCount,0,'Category correction resolves task');
+const uncertain=Model.migrate({transactions:[{id:'low',type:'expense',date:'2026-10-16',merchant:'Corner market',category:'Groceries',categoryConfidence:0.45,amount:20}],items:[]});
+assert.equal(Reviews.build(uncertain,Forecast,'2026-10-17').categoryCount,1,'Imported low-confidence category creates task');
+const newFact=Model.migrate(raw),oldTask=Reviews.build(newFact,Forecast,'2026-10-17').tasks.find(t=>t.kind==='category');
+Reviews.confirm(newFact,oldTask);newFact.transactions.find(t=>t.id===oldTask.targetId).amount+=1;
+assert.ok(Reviews.build(newFact,Forecast,'2026-10-17').tasks.some(t=>t.id===oldTask.id),'Bank data changes reopen old confirmation');
+
+(async()=>{
+ const browser=await chromium.launch({headless:true});
+ const page=await browser.newPage({viewport:{width:1280,height:850}});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{
+  const Base=Date;class Fixed extends Base{constructor(...v){if(v.length)super(...v);else super('2026-10-17T12:00:00Z')}static now(){return new Base('2026-10-17T12:00:00Z').getTime()}}window.Date=Fixed;
+ });
+ try{
+  await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
+  assert.equal(await page.locator('aside [data-page=reviews]').count(),1,'Reviews main tab visible');
+  await page.locator('aside [data-page=reviews]').click();
+  assert.equal(await page.locator('#title').innerText(),'Reviews');
+  assert.equal(await page.locator('.review-filters button').count(),3);
+  assert.ok(await page.locator('.review-task').count()>=2,'Simulated review tasks visible');
+  assert.ok(await page.locator('.review-task-kind:text-is("Category")').count()>0);
+  assert.ok(await page.locator('.review-task-kind:text-is("Prediction")').count()>0);
+  const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  // Category confirmation
+  await page.locator('[data-review-filter=category]').click();
+  const first=page.locator('.review-task').first();
+  const categoryID=await first.getAttribute('data-review-task');
+  await first.locator('summary').click();
+  await first.locator('[data-review-confirm]').click();
+  const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  assert.deepEqual(after.transactions,before.transactions,'Confirm category does not change immutable source');
+  assert.ok(!await page.locator('.review-task[data-review-task="'+categoryID+'"]').count(),'Confirmation removes task from queue');
+  await page.reload({waitUntil:'load'});
+  await page.locator('aside [data-page=reviews]').click();
+  assert.ok(!await page.locator('.review-task[data-review-task="'+categoryID+'"]').count(),'Confirmation remains after reload');
+  await page.locator('[data-review-filter=category]').click();
+  const second=page.locator('.review-task').first();
+  await second.locator('summary').click();
+  await second.locator('[data-review-category] select').selectOption('Shopping');
+  await second.locator('[data-review-category] button[type=submit]').click();
+  const corrected=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  assert.deepEqual(corrected.transactions,before.transactions,'Category correction is a separate overlay');
+  assert.ok(Object.keys(corrected.categoryOverrides).length>0,'Category correction persisted');
+  // A forecast confirmation and edit, no ledger mutation
+  await page.locator('[data-review-filter=prediction]').click();
+  const p=page.locator('.review-task').first();
+  assert.ok(await p.count(),'Uncertain predictions shown separately');
+  const predID=await p.getAttribute('data-review-task');
+  await p.locator('summary').click();
+  await p.locator('[data-review-prediction] input[name=amount]').fill('91.23');
+  await p.locator('[data-review-prediction] button[type=submit]').click();
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  assert.deepEqual(saved.transactions,before.transactions,'Prediction editor cannot change bank record');
+  assert.ok(Object.values(saved.predictions.expectedTransactionOverrides).some(v=>v.amount===91.23),'Review saves dated expected-payment override');
+  assert.ok(!await page.locator('.review-task[data-review-task="'+predID+'"]').count(),'Prediction editing resolves task');
+  await page.locator('[data-review-filter=all]').click();
+  await page.setViewportSize({width:320,height:740});
+  const mobile=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth,tabs:getComputedStyle(document.querySelector('aside')).gridTemplateColumns.split(' ').length,topTabs:getComputedStyle(document.querySelector('.mobile-top-nav')).gridTemplateColumns.split(' ').length}));
+  assert.ok(mobile.scroll<=mobile.viewport+1,'No narrow phone overflow: '+JSON.stringify(mobile));
+  assert.equal(mobile.tabs,5);
+  assert.equal(mobile.topTabs,5);
+  assert.deepEqual(errors,[],'No browser errors');
+ }finally{await browser.close()}
+ const safari=await webkit.launch({headless:true});
+ try{
+  const p=await safari.newPage({...devices['iPhone 13']});
+  await p.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
+  await p.locator('.mobile-top-nav [data-page=reviews]').click();
+  assert.equal(await p.locator('#title').innerText(),'Reviews','Reviews accessible on iPhone Safari');
+  assert.ok(await p.locator('.review-task').count()>=2,'iPhone Safari shows sample tasks');
+  assert.ok(await p.locator('.mobile-top-nav [data-page=reviews]').isVisible());
+ }finally{await safari.close()}
+ console.log('PASS: Reviews categories, predictions, confirmations, persistence, source immutability and iPhone/mobile');
+})().catch(e=>{console.error(e);process.exit(1)});
