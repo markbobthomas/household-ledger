@@ -7,7 +7,7 @@ const assert=require('node:assert/strict');
  try{
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   const nav=page.locator('aside button[data-page]');
-  assert.deepEqual(await nav.allInnerTexts(),['Budget','Activity','Insights','Settings']);
+  assert.deepEqual(await nav.allInnerTexts(),['Budget','Activity','Insights','Reviews','Settings']);
   assert.equal(await page.locator('link[href^="modern.css?v="]').count(),1,'Versioned core style sheet loaded');
   assert.equal(await page.locator('style').count(),0,'Legacy inline CSS removed');
   assert.equal(await page.locator('.eyebrow').count(),0,'Decorative eyebrow removed');
@@ -61,7 +61,7 @@ const assert=require('node:assert/strict');
   const sizes=await page.evaluate(()=>({body:document.documentElement.scrollWidth,window:innerWidth,canvas:document.body.scrollWidth}));
   assert.ok(sizes.body<=sizes.window+1,'No phone-width horizontal document overflow: '+JSON.stringify(sizes));
   assert.equal(await page.locator('.mobile-top-nav').isVisible(),true,'Section tabs visible near top on phones');
-  assert.deepEqual(await page.locator('.mobile-top-nav button').allInnerTexts(),['Budget','Activity','Insights','Settings']);
+  assert.deepEqual(await page.locator('.mobile-top-nav button').allInnerTexts(),['Budget','Activity','Insights','Reviews','Settings']);
   const topTabs=await page.evaluate(()=>{
     const n=document.querySelector('.mobile-top-nav'),r=n.getBoundingClientRect(),b=n.querySelector('button');
     const br=b.getBoundingClientRect(),target=document.elementFromPoint(br.left+br.width/2,br.top+br.height/2);
@@ -106,8 +106,8 @@ const assert=require('node:assert/strict');
   });
   assert.equal(mobile.navPosition,'fixed','Phone navigation should be docked');
   assert.ok(Math.abs(mobile.navBottom-mobile.viewportHeight)<=2,'Bottom navigation should touch screen bottom');
-  assert.equal(mobile.navColumns,4,'Four phone navigation destinations');
-  assert.equal(mobile.iconCount,4,'Phone navigation shows four icons');
+  assert.equal(mobile.navColumns,5,'Five phone navigation destinations');
+  assert.equal(mobile.iconCount,5,'Phone navigation shows five icons');
   assert.ok(mobile.smallestTarget>=44,'Navigation has touch-sized buttons');
   assert.ok(mobile.budgetBarHeight>=16,'Budget bars are prominent on mobile');
   assert.ok(mobile.chartViewBox.includes('560 260'),'Bank chart uses phone-readable axis labels');
