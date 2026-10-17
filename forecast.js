@@ -130,7 +130,11 @@ function infer(transactions,month,category,asOf,mode='expense'){
   const count=byMonth.get(recentMonths[0]).length;
   if(!count||count>5||recentMonths.some(m=>byMonth.get(m).length!==count))return;
   for(let slot=0;slot<count;slot++){
-   const rows=recentMonths.map(m=>byMonth.get(m)[slot]);
+   const stableMonths=!bill&&observed.length>=5?observed.slice(-6):recentMonths;
+   if(!bill&&observed.length>=5&&(
+      monthIndex(stableMonths[stableMonths.length-1])-monthIndex(stableMonths[0])>6||
+      stableMonths.some(m=>byMonth.get(m).length!==count)))continue;
+   const rows=stableMonths.map(m=>byMonth.get(m)[slot]);
    const days=rows.map(t=>Number(t.date.slice(8,10)));
    const amounts=rows.map(t=>Number(t.amount)),mid=median(amounts);
    const dateSpread=Math.max(...days)-Math.min(...days);
@@ -177,7 +181,19 @@ function infer(transactions,month,category,asOf,mode='expense'){
   group.sort((a,b)=>a.date.localeCompare(b.date));
   const key=normalize(group[0].merchant);
   if(!key||group.length<2)continue;
-  // Interval detection takes precedence even when 4/4/4 monthly counts align.
+  // A genuine two-paydays-per-month schedule stays anchored to calendar days;
+  // a true biweekly schedule drifts across months and uses 14-day intervals.
+  const recentThree=[...new Set(group.filter(t=>t.date>=shiftMonth(month,-3)).map(t=>t.date.slice(0,7)))].sort();
+  const anchoredTwice=recentThree.length===3&&recentThree.every(m=>group.filter(t=>t.date.slice(0,7)===m).length===2)&&
+    [0,1].every(slot=>{
+      const days=recentThree.map(m=>group.filter(t=>t.date.slice(0,7)===m).sort((a,b)=>a.date.localeCompare(b.date))[slot]).map(t=>Number(t.date.slice(8,10)));
+      return Math.max(...days)-Math.min(...days)<=2;
+    });
+  if(anchoredTwice){
+   const before=candidates.length;detectMonthly(group);
+   if(candidates.length>before)continue;
+  }
+  // For 4/5 weekly occurrences, interval detection must precede monthly slots.
   if(detectInterval(group))continue;
   const countBefore=candidates.length;
   detectMonthly(group);
