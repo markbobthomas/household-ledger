@@ -48,7 +48,7 @@ const {chromium:chromiumBrowser}=require('playwright');
    assert.match(await card.innerText(),/\$5,036\.02/,'Known demo low balance');
    assert.equal(await card.locator('input').count(),0,'No manual bank starting balance input');
    assert.equal(await card.locator('svg.cash-chart').count(),1,'Forecast chart visible');
-   const details=card.locator('details.cash-detail').first();
+   const details=card.locator('details.cash-detail').filter({has:page.locator('.cash-days-wrap')}).first();
    await details.locator('summary').first().click();
    assert.equal(await details.evaluate(el=>el.open),true,'90-day detail expands');
    assert.equal(await details.locator(':scope > .cash-table-wrap tbody tr').count(),90,'Shows each day of the forecast');
