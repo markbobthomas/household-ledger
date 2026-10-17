@@ -183,8 +183,12 @@ function setPatternRule(state,key,rule){
      !Number.isFinite(amount)||amount<=0||amount>999999999)
     throw Error('Choose a valid recurring frequency, starting date, day and amount');
   clearForecastEdits();
+  const isTransfer=key.split('|')[0]==='transfer';
+  const cashDirection=isTransfer?rule.cashDirection:null;
+  if(isTransfer&&!['in','out'].includes(cashDirection))
+   throw Error('Choose whether the recurring transfer moves money into or out of this account');
   state.predictions.patternRules[key]={mode:'schedule',frequency:rule.frequency,anchorDate,
-   day,amount:round(amount),source:'activity'};
+   day,amount:round(amount),...(isTransfer?{cashDirection}:{}),source:'activity'};
   return;
  }
  if(rule.mode==='trust'){

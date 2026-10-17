@@ -1066,3 +1066,9 @@ html { scroll-behavior:auto; }
  .recurring-inline-form{width:100%}
  .recurring-inline-form input,.recurring-inline-form select{font-size:16px;min-height:44px}
 }
+
+/* Empty recurrence states must look actionable rather than like missing data. */
+.recurring-value.needs-recurrence{color:#1855cb;border-bottom-color:#5b83cd}
+.recurring-value.needs-recurrence:hover{color:#103f9d;border-bottom-style:solid}
+.recurring-inline-form .recurring-direction-field[hidden]{display:none}
+.recurring-inline-form .recurring-direction-field select{width:100%}

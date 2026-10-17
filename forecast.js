@@ -82,11 +82,11 @@ function seasonalAmount(rows,month,baseline,variable){
  if(ratio<.4||ratio>2.5)return {amount:baseline,seasonal:false};
  return {amount:round(.6*seasonValue+.4*baseline),seasonal:true};
 }
-function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
+function infer(transactions,month,category,asOf,mode='expense',patternRules={},flow='out'){
  const today=String(asOf||new Date().toLocaleDateString('en-CA')).slice(0,10);
  const all=(Array.isArray(transactions)?transactions:[]).filter(t=>!skip(t)&&t.date<=today);
  const expenseMode=mode==='expense';
- const match=t=>t.type===mode&&(expenseMode?t.category===category:mode==='transfer'?t.cashDirection==='out':true);
+ const match=t=>t.type===mode&&(expenseMode?t.category===category:mode==='transfer'?t.cashDirection===flow:true);
  const actualRows=all.filter(t=>match(t)&&t.date.slice(0,7)===month);
  const actual=round(actualRows.reduce((a,t)=>a+Number(t.amount),0));
  const result={actual,additional:0,projectedTotal:actual,expected:[],recurring:0,variable:0,
@@ -96,7 +96,9 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  if(month<today.slice(0,7))return result;
  const past=coverage(all,today.slice(0,7));
  result.historyMonths=past;
- const forced=Object.entries(patternRules||{}).some(([key,value])=>(value?.mode==='monthly'||value?.mode==='schedule')&&
+ const forced=Object.entries(patternRules||{}).some(([key,value])=>
+   (value?.mode==='monthly'&&!(mode==='transfer'&&flow==='in')||
+    value?.mode==='schedule'&&(mode!=='transfer'||(value.cashDirection||'out')===flow))&&
    key.startsWith([mode,category||'Income'].map(encodeURIComponent).join('|')+'|'));
  const lastMonth=shiftMonth(today.slice(0,7),-1),previousMonth=shiftMonth(today.slice(0,7),-2);
  const syncGap=!past.includes(lastMonth)&&past.includes(previousMonth)&&past.length>=4;
@@ -120,7 +122,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const stable=round(amount);if(!(stable>0)||!validDate(date))return;
   const id=['hist',month,category||'Income',encodeURIComponent(accountKey(group[0])),encodeURIComponent(normalize(group[0].merchant)),slot].join('|');
   return {id,merchant:group[0].merchant,account:accountKey(group[0]),category:category||'Income',
-   type:mode,cashDirection:mode==='transfer'?'out':undefined,date,amount:stable,cadence,
+   type:mode,cashDirection:mode==='transfer'?flow:undefined,date,amount:stable,cadence,
    confidence:confidence(obs,observedMonths,relativeSpread,dateSpread,cadence),
    evidence:observedMonths,observations:obs,source:'historical',pattern:{day:Number(date.slice(8,10)),amount:stable},
    slot,seasonal:Boolean(extra.seasonal),groupKey:accountKey(group[0])+'|'+normalize(group[0].merchant)};
@@ -261,6 +263,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const directive=patternRules[keyOfRule];
   if(directive?.mode==='none')continue;
   if(directive?.mode==='schedule'){
+   if(mode==='transfer'&&(directive.cashDirection||'out')!==flow)continue;
    const dates=scheduledDates(directive,month);
    for(const date of dates){
     const cadence={weekly:'weekly',biweekly:'every 2 weeks',monthly:'monthly',
@@ -272,6 +275,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
    }
    continue;
   }
+  if(mode==='transfer'&&flow==='in')continue; // Never infer inbound transfers without an explicit rule.
   if(directive?.mode==='monthly'){
    const day=Number(directive.day),amount=Number(directive.amount);
    if(day>=1&&day<=31&&Number.isFinite(amount)&&amount>0){
@@ -355,9 +359,10 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
 }
 function forecast(transactions,month,category,todayDate,patternRules){return infer(transactions,month,category,todayDate,'expense',patternRules)}
 function forecastIncome(transactions,month,todayDate,patternRules){return infer(transactions,month,null,todayDate,'income',patternRules)}
-function forecastTransfers(transactions,month,todayDate,patternRules){return infer(transactions,month,null,todayDate,'transfer',patternRules)}
+function forecastTransfers(transactions,month,todayDate,patternRules){return infer(transactions,month,null,todayDate,'transfer',patternRules,'out')}
+function forecastTransferInflows(transactions,month,todayDate,patternRules){return infer(transactions,month,null,todayDate,'transfer',patternRules,'in')}
 function patternKey(type,category,account,merchant){return [type,category,account,normalize(merchant)].map(encodeURIComponent).join('|')}
-const api={forecast,forecastIncome,forecastTransfers,infer,patternKey};
+const api={forecast,forecastIncome,forecastTransfers,forecastTransferInflows,infer,patternKey};
 root.HouseholdForecast=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

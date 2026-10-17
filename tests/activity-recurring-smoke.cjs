@@ -71,14 +71,14 @@ async function browserCheck(browser,settings={},mobile=false){
   const row=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:nth-child(2)').filter({hasText:'Fictional Single Charge'})});
   const toggle=row.locator('[data-recurring]');
   assert.equal(await row.locator('td').count(),6,'Activity has a new recurring column');
-  assert.match(await toggle.innerText(),/Not set/,'One-time transaction is not falsely declared recurring');
+  assert.match(await toggle.innerText(),/Set recurring/,'Every unrecognized expense has a visible Set recurring action');
   assert.equal(await page.locator('.ledger-table [data-category]').count()>0,true,'Category inline edit stays available');
   const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')).transactions);
   await toggle.click();
   let editor=row.locator('[data-recurring-form]');
   assert.equal(await editor.count(),1,'Schedule editor appears in its own Activity row');
   assert.equal(await page.locator('#entry').count(),0,'No top-of-page editor');
-  assert.equal(await editor.locator('[name=decision]').inputValue(),'auto');
+  assert.equal(await editor.locator('[name=decision]').inputValue(),'schedule','Unrecognized charges open ready to schedule');
   await editor.locator('[name=decision]').selectOption('schedule');
   assert.equal(await editor.locator('[name=frequency]').inputValue(),'monthly','Monthly is default');
   assert.equal(await editor.locator('[name=day]').inputValue(),'14','Defaults to recorded calendar day');
@@ -116,8 +116,57 @@ async function browserCheck(browser,settings={},mobile=false){
   await page.reload({waitUntil:'load'});await page.locator(nav).click();
   assert.match(await page.locator('[data-recurring=test-charge-recurring]').innerText(),/Weekly/,'Rule persists after reload');
   const transfer=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("transfer")')}).first();
-  if(await transfer.count())assert.equal(await transfer.locator('[data-recurring]').count(),0,
-   'Direction-ambiguous transfers have no misleading recurrence control');
+  assert.ok(await transfer.count(),'Demo includes a transfer not automatically detected');
+  assert.equal(await transfer.locator('[data-recurring]').count(),1,
+   'Every transfer has a recurring control instead of an inert dash');
+  assert.match(await transfer.locator('[data-recurring]').innerText(),/Set recurring/,
+   'Undetected transfer prominently allows manual schedule');
+  const transferMerchant=(await transfer.locator('td:nth-child(2)').innerText()).split('\\n')[0].trim();
+  const transferId=await transfer.locator('[data-recurring]').getAttribute('data-recurring');
+  await transfer.locator('[data-recurring]').click();
+  let transferForm=transfer.locator('[data-recurring-form]');
+  assert.equal(await transferForm.locator('[name=decision]').inputValue(),'schedule');
+  assert.equal(await transferForm.locator('[name=cashDirection]').inputValue(),'',
+   'Do not assume unknown cash direction');
+  assert.equal(await transferForm.locator('[name=frequency]').inputValue(),'monthly');
+  await transferForm.locator('button[type=submit]').click();
+  assert.equal(await transferForm.locator('[name=cashDirection]').inputValue(),'',
+   'Missing transfer direction prevents saving');
+  await transferForm.locator('[name=cashDirection]').selectOption('out');
+  await transferForm.locator('button[type=submit]').click();
+  assert.match(await transfer.locator('[data-recurring]').innerText(),/Recurring · Monthly/);
+  const transferState=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  const originalTransfer=transferState.transactions.find(t=>String(t.id)===String(transferId));
+  assert.equal(originalTransfer.cashDirection,undefined,'Bank transfer direction not inserted into source records');
+  const transferKey=F.patternKey('transfer','Income',originalTransfer.accountId||originalTransfer.account||'Unknown',originalTransfer.merchant);
+  assert.equal(transferState.predictions.patternRules[transferKey].cashDirection,'out');
+  const transferForecast=await page.evaluate(()=>{
+   const M=window.HouseholdLedgerData,F=window.HouseholdForecast,L=window.HouseholdForecastLedger;
+   const s=M.migrate(JSON.parse(localStorage.getItem('household-ledger-v1')));
+   return L.build(s,M.records(s),'2026-10-17',90,F,M).events.filter(t=>t.type==='transfer');
+  });
+  assert.ok(transferForecast.some(t=>t.cashDirection==='out'&&t.merchant===originalTransfer.merchant),
+   'Recurring transfer is projected as a checking outflow, not spending');
+  await transfer.locator('[data-recurring]').click();
+  transferForm=transfer.locator('[data-recurring-form]');
+  await transferForm.locator('[name=cashDirection]').selectOption('in');
+  await transferForm.locator('button[type=submit]').click();
+  const incoming=await page.evaluate(()=>{
+   const M=window.HouseholdLedgerData,F=window.HouseholdForecast,L=window.HouseholdForecastLedger;
+   const s=M.migrate(JSON.parse(localStorage.getItem('household-ledger-v1')));
+   return L.build(s,M.records(s),'2026-10-17',90,F,M).events
+    .filter(t=>t.type==='transfer');
+  });
+  assert.ok(incoming.some(t=>t.cashDirection==='in'&&t.merchant===originalTransfer.merchant),
+   'User-directed incoming transfer is supported');
+  assert.equal(incoming.filter(t=>t.merchant===originalTransfer.merchant&&t.cashDirection==='out').length,0,
+   'Changing direction never double-counts the same transfer');
+  await transfer.locator('[data-recurring]').click();
+  transferForm=transfer.locator('[data-recurring-form]');
+  await transferForm.locator('[name=decision]').selectOption('none');
+  await transferForm.locator('button[type=submit]').click();
+  assert.match(await transfer.locator('[data-recurring]').innerText(),/Not recurring/);
+
   if(mobile)assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),
    'Inline recurrence controls do not overflow the phone viewport');
   assert.deepEqual(errors,[]);

@@ -14,6 +14,15 @@ function build(state,records,asOf,days,forecast,dataModel){
  const count=(Number(endMonth.slice(0,4))-Number(asOf.slice(0,4)))*12+Number(endMonth.slice(5,7))-Number(asOf.slice(5,7));
  const months=Array.from({length:count+1},(_,i)=>shiftMonth(asOf.slice(0,7),i));
  const rules=state?.predictions?.patternRules||{};
+ // A manually reviewed transfer direction is a forecasting assumption only.
+ // Keep the posted source record unchanged, even when its direction is unknown.
+ const transferProjectionRows=(records||[]).map(t=>{
+  if(t.type!=='transfer')return t;
+  const key=forecast.patternKey('transfer','Income',t.accountId||t.account||'Unknown',t.merchant);
+  const directive=rules[key];
+  return directive?.mode==='schedule'&&['in','out'].includes(directive.cashDirection)?
+    {...t,cashDirection:directive.cashDirection}:t;
+ });
  const events=[],categoryViews={},risk=[];
 
 const toDate=s=>new Date(s+'T12:00:00Z');
@@ -86,12 +95,16 @@ function calcUndatedRisk(rows,asOf,events,state){
  // checking outflows, avoiding guesses from unlabeled internal transfers.
  if(typeof forecast.forecastTransfers==='function'){
   for(const month of months){
-   const transfer=forecast.forecastTransfers(records,month,asOf,rules);
-   for(const item of transfer.expected){
+   const outgoing=forecast.forecastTransfers(transferProjectionRows,month,asOf,rules);
+   const incoming=typeof forecast.forecastTransferInflows==='function'?
+     forecast.forecastTransferInflows(transferProjectionRows,month,asOf,rules):{expected:[]};
+   for(const item of [...outgoing.expected,...incoming.expected]){
     if(item.date<=asOf||item.date>end||known.has(item.id))continue;
     known.add(item.id);
-    events.push({...item,type:'transfer',category:'Cash transfer',cashDirection:'out',
-     account:item.account||'Checking',description:'Expected checking transfer (not spending)'});
+    events.push({...item,type:'transfer',category:'Cash transfer',
+     cashDirection:item.cashDirection,account:item.account||'Checking',
+     description:'Expected '+(item.cashDirection==='in'?'incoming':'outgoing')+' transfer (not spending or earned income)',
+     postingStatus:'unconfirmed',confirmed:false});
    }
   }
  }
