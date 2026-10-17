@@ -125,3 +125,24 @@ The Accuracy screen includes event-level precision/recall, missed charges, false
 A deterministic regression baseline is in `tests/accuracy-regression-baseline.json`, checked by `tests/accuracy-phase4-smoke.cjs`. Tests verify zero forward-looking data access, accuracy reproducibility, one-to-one payment matching, mobile view compatibility, and untouched source records. **All 14 browser tests passed** on the implemented Phase 4 version.
 
 **Recommended next:** Phase 4.1, an accuracy-improvement pass targeting 60/90-day schedule coverage, transfers, irregular-spend uncertainty and additional held-out scenarios. The complete <a href="DEVELOPMENT_ROADMAP.md">roadmap</a> keeps Plaid deferred until the user requests it.
+
+
+## Phase 4.1 — Improve 90-day forecasting and evaluate independently
+
+**Implemented, October 17, 2026.** The recurring pattern detector now uses the latest fully observed calendar months as its reference even when forecasting the second and third months ahead. Monthly bills, semimonthly paychecks and stable repeated charges now extend across the whole 90-day horizon, while weekly and every-two-week streams retain date cadence and no-lookahead safeguards.
+
+Only historical transactions with a **known outgoing cash direction** may produce forecast transfer withdrawals. These are account-specific cash movements, not expenses; ambiguous-direction transfers are deliberately omitted rather than guessed. For example, a Checking-to-Savings transfer reduces the Checking balance but does not count as grocery spending, and an incoming Savings-side counterpart does not get added to Checking again.
+
+An **account-specific non-dated spending scenario** estimates likely irregular spending from the last three to six fully observed months of residual expense patterns. It uses a median for a central illustration and percentile bounds for a range; it never inserts a fake future transaction, changes a recorded transaction, or alters the dated pink Budget forecast. The Budget chart continues to show the scheduled-only line, and a separate explanatory box shows the possible 90-day ending balance after illustrative irregular spending.
+
+The **Insights → Accuracy** tab evaluates the original fictional household **and an independently generated second fictional household** with two accounts, irregular purchases, changed bills and internal transfers. Results are not bank-verified or externally validated. In twelve overlapping simulated historical 90-day windows per household:
+
+| Fictional test | Recurring precision | Recurring recall | 90-day balance error, dated only | 90-day error, irregular scenario |
+| --- | ---: | ---: | ---: | ---: |
+| Original fixture, before Phase 4.1 | 89.12% | 58.95% | $7,781.64 | not available |
+| Original fixture, after Phase 4.1 | 100% | 98.95% | $2,190.69 | $403.30 |
+| Independent second fixture, after Phase 4.1 | 99.36% | 93.23% | $1,379.17 | $915.11 |
+
+Numbers are mean absolute checking-balance errors; the irregular-spending scenario is an analytical balance estimate, not a predicted payment. The original and second households are synthetic and are **not sufficient evidence of real household reliability**. Annual renewals, new and disrupted merchants, and incomplete bank feeds still require stress testing. Tests are wired to continuous integration with a fixed baseline and 15 browser smoke tests.
+
+**Next:** Phase 4.2: stress-test the detector on disrupted history, shifted due dates, refunds, interrupted paychecks, missing statements and more genuinely varied households, then decide whether to evaluate historical statements in a separate consented read-only test environment. Plaid remains deferred.
