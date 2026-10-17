@@ -116,8 +116,31 @@ function expectedTransactionMarkup(e){
   '<label>Expected amount ($)<input type="number" name="amount" step=".01" min="0" required value="'+esc(e.amount)+'"></label>'+
   '<label class="expected-check"><input type="checkbox" name="enabled" '+(e.enabled!==false?'checked':'')+'> Include in forecast</label>'+
   '<div class="expected-actions"><button class="btn primary" type="submit">Save prediction</button>'+
-  '<button type="button" class="btn" data-expected-reset="'+esc(e.id)+'">'+(manual?'Remove prediction':'Use history estimate')+'</button></div></form></details>';
+  '<button type="button" class="btn" data-expected-reset="'+esc(e.id)+'">'+(manual?'Remove prediction':'Use history estimate')+'</button>'+
+ (manual?'':'<button type="button" class="btn" data-pattern-none="'+esc(window.HouseholdForecast.patternKey('expense',e.category,e.account,e.merchant))+'">Not recurring</button>')+
+ '</div></form></details>';
 }
+function recurrenceRulesMarkup(category){
+ const selected=entries().filter(t=>t.category===category&&t.type==='expense'&&t.date<=today());
+ const merchants=new Map();
+ for(const t of selected){
+  const key=window.HouseholdForecast.patternKey('expense',category,String(t.accountId||t.account||'Unknown'),t.merchant);
+  const prior=merchants.get(key);
+  if(!prior||prior.date<t.date)merchants.set(key,{...t,key});
+ }
+ const options=[...merchants.values()].sort((a,b)=>a.merchant.localeCompare(b.merchant));
+ if(!options.length)return '';
+ return '<details class="pattern-rules"><summary>Manage recurring merchant rules</summary>'+
+ '<p class="prediction-note">Use recorded transactions to tell the model a merchant repeats monthly, does not repeat, or should be detected automatically. This does not edit actual transactions.</p>'+
+ '<form class="pattern-rule-form" data-pattern-rule-form="'+esc(category)+'">'+
+ '<label>Merchant<select name="key" required>'+options.map(t=>'<option value="'+esc(t.key)+'" data-amount="'+esc(t.amount)+'" data-day="'+esc(Number(t.date.slice(8,10)))+'">'+esc(t.merchant)+' · '+esc(t.account||t.accountId||'Checking')+'</option>').join('')+'</select></label>'+
+ '<label>Recurrence<select name="mode"><option value="auto">Automatic detection</option><option value="monthly">Recurring every month</option><option value="none">Not recurring</option></select></label>'+
+ '<label>Expected day<input name="day" type="number" min="1" max="31" required value="'+Number(options[0].date.slice(8,10))+'"></label>'+
+ '<label>Expected amount ($)<input name="amount" type="number" min=".01" step=".01" required value="'+options[0].amount+'"></label>'+
+ '<div class="expected-actions"><button type="submit" class="btn primary">Save recurrence rule</button></div>'+
+ '</form></details>';
+}
+
 function predictedCategoryMarkup(f,category,month){
  if(month!==today().slice(0,7))return'';
  return '<div class="expected-section"><div class="section-top"><h3>Expected transactions <span class="expected-count">'+f.active.length+' active</span></h3><strong class="expected-total">'+money(f.additional)+'</strong></div>'+
@@ -231,7 +254,7 @@ if(page==='insights'){
   '<span class="budget-category-meta '+(limit&&currentMonth&&f.projectedTotal>limit?'over-budget':'')+'">'+
   (currentMonth?'Expected '+money(f.projectedTotal):'Completed month')+'</span></div></div><span class="chevron" aria-hidden="true">⌄</span></summary>'+
   '<div class="drill-expanded"><div class="section-top"><h3>'+esc(category)+' · '+esc(month)+'</h3><button class="btn" data-budget="'+esc(category)+'">Edit budget target</button></div>'+
-  predictedCategoryMarkup(f,category,month)+
+  predictedCategoryMarkup(f,category,month)+recurrenceRulesMarkup(category)+
   '<div class="recorded-section"><div class="section-top"><h3>Recorded transactions</h3><strong>'+money(f.actual)+'</strong></div>'+
   (matching.length?table(matching):'<div class="empty">No posted expenses in this category for the selected month.</div>')+'</div>'+
   (currentMonth?'<p class="prediction-note">Automatic predictions based on '+f.historyMonths.length+' historical months; never guaranteed. Monthly category expected amount = sum of active dated predictions.</p>':'')+
@@ -291,6 +314,37 @@ document.querySelectorAll('[data-stream]').forEach(b=>b.onclick=()=>streamPredic
 document.querySelectorAll('[data-event]').forEach(b=>b.onclick=()=>eventPredictionForm(b.dataset.event));
 document.querySelectorAll('[data-add-event]').forEach(b=>b.onclick=()=>eventPredictionForm(null));
 document.querySelectorAll('[data-daily-prediction]').forEach(b=>b.onclick=()=>dailyPredictionForm());
+
+document.querySelectorAll('[data-pattern-rule-form]').forEach(form=>{
+ const select=form.querySelector('[name=key]'),mode=form.querySelector('[name=mode]');
+ const fill=()=>{
+  const choice=select.selectedOptions[0];
+  form.querySelector('[name=amount]').value=choice.dataset.amount||'0';
+  form.querySelector('[name=day]').value=choice.dataset.day||'1';
+  mode.value=data.predictions.patternRules?.[select.value]?.mode||'auto';
+  const rule=data.predictions.patternRules?.[select.value];
+  if(rule?.mode==='monthly'){form.querySelector('[name=amount]').value=rule.amount;form.querySelector('[name=day]').value=rule.day}
+ };
+ select.onchange=fill;fill();
+ form.onsubmit=e=>{
+  e.preventDefault();
+  const fields=new FormData(form),category=form.dataset.patternRuleForm,key=String(fields.get('key')),kind=String(fields.get('mode'));
+  try{
+   Model.setPatternRule(data,key,kind==='auto'?null:{mode:kind,day:fields.get('day'),amount:fields.get('amount')});
+   save();refreshCategory(category);
+  }catch(err){alert(err.message)}
+ };
+});
+document.querySelectorAll('[data-pattern-none]').forEach(button=>button.onclick=()=>{
+ const key=button.dataset.patternNone,category=button.closest('.budget-entry').dataset.budgetCategory;
+ Model.setPatternRule(data,key,{mode:'none'});save();refreshCategory(category);
+});
+document.querySelectorAll('[data-forecast-jump]').forEach(button=>button.onclick=()=>{
+ budgetMonth=today().slice(0,7);navigateTo('budgets');
+ const category=button.dataset.forecastJump;
+ const item=[...document.querySelectorAll('.budget-entry')].find(x=>x.dataset.budgetCategory===category);
+ if(item){item.querySelector(':scope > details').open=true;item.scrollIntoView({block:'start'})}
+});
 
 document.querySelectorAll('[data-expected-form]').forEach(form=>form.onsubmit=e=>{
  e.preventDefault();
@@ -371,7 +425,7 @@ function dailyPredictionForm(){
  bindCancel();
 }
 function eventPredictionForm(id){
- const {account}=projectedCashFlow(),old=data.predictions.cashFlowEvents.find(e=>e.id===id);
+ const {account}=previewCashFlow(),old=data.predictions.cashFlowEvents.find(e=>e.id===id);
  const event=old||{date:today(),type:'expense',amount:'',description:''};
  showEditor('<h3>'+(old?'Edit':'Add')+' projected event</h3><p class="prediction-note">This is a forecast, not a bank transaction.</p>'+
  '<form id="entry"><div class="formgrid"><label>Expected date<input name="date" type="date" required value="'+esc(event.date)+'"></label>'+
