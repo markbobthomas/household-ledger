@@ -112,7 +112,7 @@ assert.deepEqual(repeat.score,report.score,'Scoring is deterministic and reprodu
   assert.equal(displayed,report.score.recurring.precision.toFixed(1)+'%','UI matches measured recurring precision');
   await page.locator('.accuracy-detail').first().locator('summary').click();
   assert.ok(await page.locator('.accuracy-table').count()>=1);
-  assert.match(await page.locator('.accuracy-lab').innerText(),/fictional anchored balance/i);
+  assert.match(await page.locator('.accuracy-lab').innerText(),/mathematically constructed from fictional transactions/i);
   await page.locator('#rerun-accuracy').click();
   assert.equal(await page.locator('.accuracy-stat strong').first().innerText(),displayed,'Rerun produces same reproducible score');
   assert.equal(await page.evaluate(()=>localStorage.getItem('household-ledger-v1')),before,'Scoring never modifies browser ledger');
