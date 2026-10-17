@@ -35,3 +35,4 @@ jobs:
           node tests/prediction-phase1-smoke.cjs
           node tests/unified-forecast-smoke.cjs
           node tests/reviews-smoke.cjs
+          node tests/learning-phase3-smoke.cjs
