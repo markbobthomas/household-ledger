@@ -66,8 +66,10 @@ async function run(browser,options={},isPhone=false){
    'Detailed date editor remains reachable');
   assert.equal(await budget.locator('.expected-tx').first().locator('input[name="amount"]').count(),1,
    'Detailed amount editor remains reachable');
-  assert.equal(await page.locator('.ledger-table .editable-value').count(),0,
-   'Recorded purchase amounts are not shown as editable');
+  assert.equal(await page.locator('.ledger-table td:nth-child(5) .editable-value').count(),0,
+   'Recorded purchase amounts remain read-only even when categories are editable');
+  assert.ok(await page.locator('.ledger-table td:nth-child(3) .editable-category').count()>0,
+   'Category names intentionally use the same editable-value styling');
   if(isPhone)assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),
     'Inline controls fit within the phone viewport');
   assert.deepEqual(errors,[],'No browser script errors');
