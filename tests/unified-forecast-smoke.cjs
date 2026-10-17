@@ -16,7 +16,7 @@ const recurringRows=[
  {id:'j2',type:'expense',category:'Shopping',merchant:'Same Price Service',account:'Checking',date:'2026-08-13',amount:48.75},
  {id:'j3',type:'expense',category:'Shopping',merchant:'Same Price Service',account:'Checking',date:'2026-09-12',amount:48.75}
 ];
-const expected=F.forecast(recurringRows,'2026-10','Shopping',asOf);
+const expected=F.forecast(recurringRows,'2026-10','Shopping','2026-10-05');
 assert.equal(expected.expected.length,1,'Three matching monthly charges must create a forecast');
 assert.equal(expected.expected[0].date,'2026-10-12','Expected around same calendar day');
 assert.equal(expected.expected[0].amount,48.75,'Identical amounts retained');
@@ -24,7 +24,7 @@ assert.equal(expected.expected[0].confidence,'High','Three same-price charges on
 const patternKey=F.patternKey('expense','Shopping','Checking','Same Price Service');
 const ruleState=M.migrate({transactions:recurringRows});
 M.setPatternRule(ruleState,patternKey,{mode:'none'});
-assert.equal(F.forecast(recurringRows,'2026-10','Shopping',asOf,ruleState.predictions.patternRules).expected.length,0,'Not recurring overrides detection');
+assert.equal(F.forecast(recurringRows,'2026-10','Shopping','2026-10-05',ruleState.predictions.patternRules).expected.length,0,'Not recurring overrides detection');
 M.setPatternRule(ruleState,patternKey,null);
 assert.equal(F.forecast(recurringRows,'2026-10','Shopping',asOf,ruleState.predictions.patternRules).expected.length,1,'Removing rejection restores automatic recurrence');
 M.setPatternRule(ruleState,patternKey,{mode:'monthly',day:23,amount:59});
