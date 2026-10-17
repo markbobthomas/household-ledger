@@ -77,7 +77,8 @@ function cashFlow90(input){
   // Spread uncommitted variable expenses across future days, excluding predicted bills.
   const irregular=history.filter(t=>t.type==='expense'&&!scheduledKeys.has(t.type+'|'+String(t.merchant||'').trim().toLowerCase()));
   const observedDays=months.reduce((n,m)=>n+monthLength(Number(m.slice(0,4)),Number(m.slice(5,7))),0);
-  const dailyVariable=observedDays?round(irregular.reduce((n,t)=>n+Number(t.amount),0)/observedDays):0;
+  const modeledDaily=observedDays?round(irregular.reduce((n,t)=>n+Number(t.amount),0)/observedDays):0;
+  const dailyVariable=predictionOverrides.dailyVariable===null||predictionOverrides.dailyVariable===undefined?modeledDaily:Math.max(0,round(Number(predictionOverrides.dailyVariable)));
   let balance=round(opening),minimum=Infinity,lowestDate='',expectedIncome=0,expectedOutflow=0;
   const series=[{date:asOf,balance,starting:true,income:0,outflow:0,events:[]}];
   for(let index=1;index<=days;index++){
