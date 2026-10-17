@@ -41,6 +41,10 @@ assert.ok(electricity.historyMonths.length>=20,'Long-term scenario contributes r
 const novemberUtilities=forecast('Utilities',november);
 assert.ok(novemberUtilities.expected.some(x=>x.merchant==='Northwest Electric'&&x.seasonal),
   'Seasonal utility model uses previous-year same-month observation');
+assert.ok(!novemberUtilities.expected.some(x=>x.merchant==='Quarterly Pest Service'),
+  'Quarterly expense must not be misclassified as monthly the month after it occurs');
+assert.ok(!novemberUtilities.expected.some(x=>x.merchant==='Fiber Internet'&&x.seasonal),
+  'A fixed internet bill should never be labeled as seasonal');
 const octoberSubscription=subscriptions.expected.find(x=>x.merchant==='Music Stream');
 assert.ok(octoberSubscription.evidence>=12,'Confidence uses long history, not only three observations');
 assert.equal(octoberSubscription.confidence,'High','Long stable subscriptions are high evidence');
