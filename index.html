@@ -152,5 +152,73 @@ document.querySelectorAll('[data-add-event]').forEach(b=>b.onclick=()=>eventPred
 document.querySelectorAll('[data-daily-prediction]').forEach(b=>b.onclick=()=>dailyPredictionForm());
 if(page==='settings')el('backup').onclick=()=>download(JSON.stringify(data,null,2),'household-ledger-backup.json','application/json');
 }
-function download(s,name,mime){let u=URL.createObjectURL(new Blob([s],{type:mime})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}function form(t){let edit=!!t;t??={date:today(),merchant:'',amount:'',type:'expense',category:'Other',account:'',description:''};el('flash').innerHTML='<div class="panel"><h3>'+(edit?'Edit':'Add')+' transaction</h3><form id="entry"><div class="formgrid"><label>Date<input name="date" type="date" required value="'+esc(t.date)+'"></label><label>Amount ($)<input name="amount" type="number" step=".01" min=".01" required value="'+esc(t.amount)+'"></label><label>Merchant<input name="merchant" required value="'+esc(t.merchant)+'"></label><label>Type<select name="type">'+['expense','income','transfer'].map(x=>'<option '+(t.type===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label><label>Category<select name="category">'+CATS.map(x=>'<option '+(t.category===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label><label>Account<input name="account" value="'+esc(t.account||'')+'"></label></div><div class="toolbar"><button type="submit" class="btn primary">Save entry</button><button type="button" class="btn" id="cancel">Cancel</button>'+(edit?'<button type="button" class="btn danger" id="delete">Delete</button>':'')+'</div></form></div>';el('entry').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target),v={...t,id:t.id||id(),date:f.get('date'),merchant:cleanMerchant(f.get('merchant')),amount:+f.get('amount'),type:f.get('type'),category:f.get('category'),account:f.get('account')};if(edit)data.transactions=data.transactions.map(x=>x.id===t.id?v:x);else data.transactions.push(v);save();render();alertMsg('Entry saved')};el('cancel').onclick=()=>el('flash').innerHTML='';if(edit)el('delete').onclick=()=>{if(confirm('Delete this entry?')){data.transactions=data.transactions.filter(x=>x.id!==t.id);data.items=data.items.filter(x=>x.transactionId!==t.id);save();render()}};scrollTo({top:0,behavior:'smooth'})}function csvParse(s){let arr=[],row=[],field='',quote=false;s=s.replace(/^\uFEFF/,'');for(let i=0;i<s.length;i++){let c=s[i];if(c==='"'){if(quote&&s[i+1]==='"'){field+='"';i++}else quote=!quote}else if(c===','&&!quote){row.push(field);field=''}else if((c==='\n'||c==='\r')&&!quote){if(c==='\r'&&s[i+1]==='\n')i++;row.push(field);if(row.some(Boolean))arr.push(row);row=[];field=''}else field+=c}row.push(field);if(row.some(Boolean))arr.push(row);return arr}function parseDate(s){s=String(s||'').trim();if(/^\d{4}-\d\d-\d\d/.test(s))return s.slice(0,10);let m=s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);if(!m)return'';let y=+m[3];if(y<100)y+=2000;return y+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')}el('csv').onchange=async e=>{let f=e.target.files[0];if(!f)return;let csv=csvParse(await f.text());let heads=(csv.shift()||[]).map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,'')),ix=(...names)=>heads.findIndex(h=>names.some(n=>h.includes(n))),d=ix('date'),a=ix('amount'),db=ix('debit','withdrawal'),cr=ix('credit','deposit'),desc=ix('description','memo','details','name'),me=ix('merchant','payee'),acc=ix('account');if(d<0||(a<0&&db<0&&cr<0)){alertMsg('CSV needs Date and Amount (or Debit/Credit) columns.');return}let positive=confirm('Does this statement show expenses as POSITIVE amounts? Choose OK for yes, Cancel for no.');let added=0;for(let row of csv){let date=parseDate(row[d]);if(!date)continue;let description=String(row[desc]||row[me]||'Unknown').trim(),merchant=cleanMerchant(String(row[me]||description)),num=x=>{let v=String(x||'').replace(/[$,\s]/g,'');return /^\(.*\)$/.test(v)?-Number(v.replace(/[()]/g,'')):Number(v)},raw;if(db>=0||cr>=0){let debit=num(row[db]),credit=num(row[cr]);raw=debit?-Math.abs(debit):Math.abs(credit)}else{raw=num(row[a]);if(positive)raw=-raw}if(!Number.isFinite(raw)||!raw)continue;let v={id:id(),date,merchant,description,amount:Math.abs(raw),type:type(description,raw),category:category(merchant),account:acc>=0?row[acc]:''};if(v.type==='expense'&&raw>0&&positive)v.type='expense';if(!data.transactions.some(t=>t.date===v.date&&t.merchant===v.merchant&&t.amount===v.amount&&t.account===v.account&&t.type===v.type)){data.transactions.push(v);added++}}save();render();alertMsg('Imported '+added+' new transactions. Review transfers and categories.');e.target.value=''};function navigateTo(next){window.scrollTo({top:0,left:0,behavior:'instant'});page=next;render();window.scrollTo({top:0,left:0,behavior:'instant'})}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigateTo(b.dataset.page));el('period').onchange=e=>{if(page==='budgets'){budgetMonth=e.target.value;period=e.target.value}else{period=e.target.value;if(period!=='all')budgetMonth=period}render()};el('addBtn').onclick=()=>form();el('importBtn').onclick=()=>{el('top-menu').open=false;el('csv').click()};el('gotoSettings').onclick=()=>{el('top-menu').open=false;navigateTo('settings')};render()})();
+function download(s,name,mime){let u=URL.createObjectURL(new Blob([s],{type:mime})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+function showEditor(content){
+ el('flash').innerHTML='<div class="panel editable-forecast">'+content+'</div>';
+ window.scrollTo({top:0,left:0,behavior:'instant'});
+}
+function bindCancel(){el('cancel').onclick=()=>el('flash').innerHTML=''}
+function categoryForm(id){
+ const record=data.transactions.find(t=>t.id===id);if(!record)return;
+ const current=Model.categoryFor(data,id);
+ const options=CATS.map(c=>'<option value="'+esc(c)+'" '+(c===current?'selected':'')+'>'+esc(c)+'</option>').join('');
+ showEditor('<h3>Change category</h3><div class="readonly-transaction"><strong>'+esc(record.merchant)+'</strong> · '+money(record.amount)+' · '+esc(record.date)+'<div class="transaction-source">Source transaction is read-only.</div></div>'+
+ '<form id="entry"><label>Category<select name="category">'+options+'</select></label><div class="editor-actions"><button class="btn primary" type="submit">Save category</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
+ el('entry').onsubmit=e=>{e.preventDefault();try{Model.setCategory(data,id,new FormData(e.target).get('category'));save();render();alertMsg('Category updated. Source record unchanged.')}catch(err){alert(err.message)}};
+ bindCancel();
+}
+function budgetPredictionForm(category,month){
+ const base=window.HouseholdForecast.forecast(entries(),month,category,today()),override=data.predictions.categoryForecasts[month+'|'+category];
+ const budget=data.predictions.monthlyBudgets[category]||0;
+ showEditor('<h3>Predictions · '+esc(category)+'</h3><div class="readonly-transaction">Recorded spending <strong>'+money(base.actual)+'</strong> (read-only)</div>'+
+ '<form id="entry"><div class="formgrid"><label>Monthly budget target ($)<input name="budget" type="number" min="0" step=".01" required value="'+esc(budget)+'"></label>'+
+ '<label>Additional expected spending ($)<input name="additional" type="number" min="0" step=".01" required value="'+esc(override?override.additional:base.additional)+'"></label></div>'+
+ '<p class="prediction-note">Automatic estimate: '+money(base.additional)+'. Overrides only the pink forecast, not recorded spending.</p>'+
+ '<div class="editor-actions"><button class="btn primary" type="submit">Save predictions</button><button class="btn" type="button" id="reset-forecast">Use automatic estimate</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
+ el('entry').onsubmit=e=>{e.preventDefault();try{const f=new FormData(e.target);Model.setMonthlyBudget(data,category,f.get('budget'));Model.setCategoryForecast(data,month,category,f.get('additional'));save();render();alertMsg('Predictions saved. Actuals unchanged.')}catch(err){alert(err.message)}};
+ el('reset-forecast').onclick=()=>{Model.setCategoryForecast(data,month,category,null);save();render();alertMsg('Automatic forecast restored.')};
+ bindCancel();
+}
+function projectedCashFlow(){
+ const snapshot=window.HouseholdBankFeed.getSnapshot(today()),account=snapshot.accounts[0];
+ const history=snapshot.mode==='demo'&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo().transactions:entries();
+ const model=window.HouseholdCashFlow.cashFlow90({account,asOf:snapshot.asOf,days:90,transactions:history,
+ predictionOverrides:{streams:data.predictions.cashFlowStreams,events:data.predictions.cashFlowEvents,dailyVariable:data.predictions.dailyVariable}});
+ return {account,model};
+}
+function streamPredictionForm(key){
+ const {model}=projectedCashFlow(),stream=model.streams.find(s=>s.key===key);if(!stream)return;
+ showEditor('<h3>Adjust predicted payment</h3><div class="readonly-transaction">'+esc(stream.merchant)+' · '+esc(stream.type)+'<div class="transaction-source">Prediction only; no bank record modified.</div></div>'+
+ '<form id="entry"><div class="formgrid"><label>Expected amount ($)<input name="amount" type="number" min="0" step=".01" required value="'+stream.amount+'"></label>'+
+ '<label>Expected day of month<input name="day" type="number" min="1" max="31" step="1" required value="'+stream.day+'"></label></div>'+
+ '<label class="toggle-forecast"><input type="checkbox" name="enabled" '+(stream.enabled?'checked':'')+'> Include predicted payment</label>'+
+ '<div class="editor-actions"><button class="btn primary" type="submit">Save prediction</button><button class="btn" type="button" id="reset-prediction">Reset to model</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
+ el('entry').onsubmit=e=>{e.preventDefault();try{const f=new FormData(e.target);Model.setStreamOverride(data,key,{amount:f.get('amount'),day:Number(f.get('day')),enabled:f.has('enabled')});save();render();alertMsg('Predicted payment updated.')}catch(err){alert(err.message)}};
+ el('reset-prediction').onclick=()=>{Model.setStreamOverride(data,key,null);save();render();alertMsg('Automatic prediction restored.')};
+ bindCancel();
+}
+function dailyPredictionForm(){
+ const {model}=projectedCashFlow();
+ showEditor('<h3>Expected daily spending</h3><form id="entry"><label>Predicted variable spending ($ per day)<input name="amount" type="number" min="0" step=".01" required value="'+esc(data.predictions.dailyVariable??model.dailyVariable)+'"></label>'+
+ '<p class="prediction-note">Changes only future balances; not posted transactions.</p>'+
+ '<div class="editor-actions"><button class="btn primary" type="submit">Save prediction</button><button class="btn" type="button" id="reset-prediction">Use automatic estimate</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
+ el('entry').onsubmit=e=>{e.preventDefault();try{Model.setDailyVariable(data,new FormData(e.target).get('amount'));save();render();alertMsg('Daily forecast updated.')}catch(err){alert(err.message)}};
+ el('reset-prediction').onclick=()=>{Model.setDailyVariable(data,null);save();render();alertMsg('Automatic estimate restored.')};
+ bindCancel();
+}
+function eventPredictionForm(id){
+ const {account}=projectedCashFlow(),old=data.predictions.cashFlowEvents.find(e=>e.id===id);
+ const event=old||{date:today(),type:'expense',amount:'',description:''};
+ showEditor('<h3>'+(old?'Edit':'Add')+' projected event</h3><p class="prediction-note">This is a forecast, not a bank transaction.</p>'+
+ '<form id="entry"><div class="formgrid"><label>Expected date<input name="date" type="date" required value="'+esc(event.date)+'"></label>'+
+ '<label>Amount ($)<input name="amount" type="number" min=".01" step=".01" required value="'+esc(event.amount)+'"></label>'+
+ '<label>Direction<select name="type"><option value="expense" '+(event.type==='expense'?'selected':'')+'>Money out</option><option value="income" '+(event.type==='income'?'selected':'')+'>Money in</option></select></label>'+
+ '<label>Description<input name="description" type="text" maxlength="160" required value="'+esc(event.description)+'"></label></div>'+
+ '<div class="editor-actions"><button class="btn primary" type="submit">Save prediction</button>'+(old?'<button class="btn danger" id="remove-prediction" type="button">Remove prediction</button>':'')+
+ '<button class="btn" type="button" id="cancel">Cancel</button></div></form>');
+ el('entry').onsubmit=e=>{e.preventDefault();try{const f=new FormData(e.target);Model.saveEvent(data,{id,date:f.get('date'),amount:f.get('amount'),type:f.get('type'),description:f.get('description'),accountId:account.id});save();render();alertMsg('Forecast event saved.')}catch(err){alert(err.message)}};
+ if(old)el('remove-prediction').onclick=()=>{Model.removeEvent(data,id);save();render();alertMsg('Prediction removed. Ledger unchanged.')};
+ bindCancel();
+}
+function navigateTo(next){window.scrollTo({top:0,left:0,behavior:'instant'});page=next;render();window.scrollTo({top:0,left:0,behavior:'instant'})}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigateTo(b.dataset.page));el('period').onchange=e=>{if(page==='budgets'){budgetMonth=e.target.value;period=e.target.value}else{period=e.target.value;if(period!=='all')budgetMonth=period}render()};render()})();
 </script></body></html>
