@@ -51,7 +51,7 @@ const {chromium:chromiumBrowser}=require('playwright');
    const details=card.locator('details.cash-detail').first();
    await details.locator('summary').first().click();
    assert.equal(await details.evaluate(el=>el.open),true,'90-day detail expands');
-   assert.equal(await details.locator('tbody tr').count(),90,'Shows each day of the forecast');
+   assert.equal(await details.locator(':scope > .cash-table-wrap tbody tr').count(),90,'Shows each day of the forecast');
    await details.locator('tr').nth(2).locator('details.cash-day-detail summary').click();
    assert.ok(await details.locator('.cash-day-detail[open]').count()>0,'Projected day shows its entries');
    // Personal browser-local spending must not enter the fake bank simulation.
