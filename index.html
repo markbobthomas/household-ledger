@@ -213,10 +213,14 @@ function learnReviewedPrediction(task,modified){
 
 function stressAccuracyMarkup(result){
  const delta=x=>(x>0?'+':'')+x.toFixed(1);
- const worst=[...result.results].sort((a,b)=>a.deltaRecall-b.deltaRecall).slice(0,3);
+ const worst=[...result.results].sort((a,b)=>a.deltaRecall-b.deltaRecall).slice(0,2);
+ const payroll=result.results.find(x=>x.id==='paused-payroll');
  const cards=worst.map(x=>'<div class="stress-warning"><strong>'+esc(x.name)+'</strong>'+
   '<span>'+esc(delta(x.deltaRecall))+' percentage points recall vs clean history</span>'+
-  '<small>'+esc(x.description)+'</small></div>').join('');
+  '<small>'+esc(x.description)+'</small></div>').join('')+
+  (payroll?'<div class="stress-warning"><strong>Interrupted paychecks</strong>'+
+   '<span>+'+money(payroll.deltaBalanceError)+' balance error</span>'+
+   '<small>Past salary records cannot predict an unannounced income interruption. Never treat an expected paycheck as guaranteed.</small></div>':'');
  const rows=result.results.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+x.recall.toFixed(1)+'%</td>'+
   '<td>'+esc(delta(x.deltaRecall))+' pp</td><td>'+money(x.balanceError)+'</td>'+
   '<td>'+esc(x.deltaBalanceError>0?'+':'')+money(x.deltaBalanceError)+'</td></tr>').join('');
