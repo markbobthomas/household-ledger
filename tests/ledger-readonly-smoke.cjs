@@ -6,7 +6,7 @@ const bank=require('../bank-feed.js');
 
 const v1={transactions:[{id:'old-1',date:'2026-09-01',merchant:'Rent',amount:2000,type:'expense',category:'Housing',account:'Checking'}],items:[],budgets:{Housing:2800}};
 const migrated=M.migrate(v1);
-assert.equal(migrated.version,2);
+assert.equal(migrated.version,3,'Phase 3 rules migrate without altering original ledger');
 assert.equal(migrated.transactions[0].source.provider,'legacy-unverified','Existing data must not be relabeled as bank-verified');
 assert.equal(migrated.predictions.monthlyBudgets.Housing,2800,'Old budgets are migrated to predictions');
 const original=JSON.stringify(migrated.transactions);
