@@ -30,9 +30,11 @@ try{
  assert.ok(await budget.locator('details').first().evaluate(e=>e.open),'Budget expands');
  assert.ok(await budget.locator('button[data-category]').count()>0,'Budget contains transactions');
  assert.equal(await budget.locator('button[data-budget]').isVisible(),true,'Forecast editor available inside expanded section');
- assert.match(await budget.innerText(),/Projected additional spending/i);
+ assert.match(await budget.innerText(),/Expected transactions/i);
+ assert.ok(await budget.locator('.expected-tx').count()>=3,'Category shows dated expected transactions');
  await budget.locator('button[data-budget]').click();
- assert.equal(await page.locator('#entry [name="additional"]').count(),1,'Expected spend can be changed');
+ assert.equal(await page.locator('#entry [name="budget"]').count(),1,'Budget target can be changed');
+ assert.equal(await page.locator('#entry [name="additional"]').count(),0,'No undated lump-sum projection editor');
  assert.equal(await page.locator('#entry [name="amount"],#entry [name="merchant"],#entry [name="date"]').count(),0,'Actual source transactions cannot be edited');
  await page.locator('#cancel').click();
  await page.locator('#period').selectOption('2026-09');
