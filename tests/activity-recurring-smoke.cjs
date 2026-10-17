@@ -68,7 +68,7 @@ async function browserCheck(browser,settings={},mobile=false){
   await page.reload({waitUntil:'load'});
   const nav=mobile?'.mobile-top-nav [data-page=transactions]':'aside [data-page=transactions]';
   await page.locator(nav).click();
-  const row=page.locator('.ledger-table tbody tr').filter({has:page.locator('[data-recurring=test-charge-recurring]')});
+  const row=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:nth-child(2)').filter({hasText:'Fictional Single Charge'})});
   const toggle=row.locator('[data-recurring]');
   assert.equal(await row.locator('td').count(),6,'Activity has a new recurring column');
   assert.match(await toggle.innerText(),/Not set/,'One-time transaction is not falsely declared recurring');
