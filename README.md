@@ -1,35 +1,45 @@
 # Household Ledger
 
-A lightweight, functional household finance website, published from GitHub.
-
-## Launch the website
-
-Go to **Settings → Pages** in this repository. Under **Build and deployment**, choose **GitHub Actions** as the source. The included `.github/workflows/pages.yml` handles deployment.
-
-Your expected site address after the workflow succeeds is:
+A privacy-conscious household-finance web app with a **source-of-truth ledger** and **editable forecasts**, currently published at:
 
 https://markbobthomas.github.io/household-ledger/
 
-## What is included
+## Data integrity design (v2)
 
-- Overview dashboard showing expenses, income, net cash flow, and purchase counts.
-- Transaction entry, editing and deletion.
-- CSV imports with transfer/payment detection and duplicate checks.
-- Merchant totals separating Costco Gas and Costco Warehouse.
-- Price-band analysis and monthly category budgets.
-- JSON backup and restore.
-- Local-only browser data, responsive layout.
-- 90-day minimum projected checking-account balance with a simulated read-only bank feed, daily cash-flow chart, and recurring bill/paycheck estimates. No balance entry is required.
+**The ledger is read-only in the interface.** You cannot manually create, edit or delete posted transaction amounts, merchant names, dates, transaction types, account identifiers or recorded bank balances.
 
-This initial GitHub version is a **simplified working reconstruction**, not an exact copy of the original ChatGPT Site. A richer project version is also available as the earlier download in the ChatGPT conversation, with additional item-linking workflows and more sophisticated presentation. To replace this simplified version with the richer project, upload its extracted files to the repository root.
+The stored data now has four distinct parts:
 
-## Important privacy information
+| Field | Purpose | May the user edit it? |
+| --- | --- | --- |
+| `transactions[]` | Original immutable source records: date, merchant, amount, type, account, stable ID and `source` provenance | **No** |
+| `categoryOverrides` | Category corrections keyed by the source record's stable transaction ID | **Yes, category only** |
+| `predictions` | Monthly budget targets, additional monthly spending, 90-day recurring stream overrides, daily variable-spending assumption and one-time forecast events | **Yes** |
+| `sync` | Source synchronization metadata, including the future Plaid cursor | **No, provider-managed** |
 
-No finance data is included in the repository. All imported and manually entered transactions stay in the local browser storage on the device where you use the site. No account sync or bank credential connection is implemented. Keep JSON backups safely; they are unencrypted. A public GitHub Pages site is visible to others even though your private browser data is not published by this app.
+The UI uses `HouseholdLedgerData.records(state)` to merge base source transactions with category overrides **for display and analysis only**. Category edits never rewrite `transactions[]`.
 
+The source records carry `source.provider` and `source.providerTransactionId`. Demo data is marked `demo`; older browser entries are marked `legacy-unverified` and must **not** be mistaken for bank-verified records. The v1 localStorage data is migrated in place without losing the original transaction rows or budget targets. Only a properly authenticated future backend may designate imported records as Plaid source data.
 
-## 90-day cash-balance simulator
+### Predictions are not transactions
 
-The Budgets landing page includes **Lowest projected balance (next 90 days)**. The starting *available* balance is supplied by `bank-feed.js`, which currently returns an explicitly fictional Sample Bank checking-account snapshot (`$5,400.25` available). `cashflow.js` calculates 90 future end-of-day balances and returns the lowest day and balance. The projection contains expected recurring income, eligible bill and transfer patterns, and a historical average of day-to-day spending. Expand the daily forecast to see the predicted transactions and estimates.
+- Monthly budget targets and forecasted additional spending can be adjusted per category. Actual spending remains calculated from source transactions.
+- The 90-day bank-balance projection supports changes to predicted recurring bill/paycheck amounts and schedule, predicted daily spending and one-time forecast-only events.
+- These changes affect projected values, never recorded bank activity or the starting balance.
+- Recurring detection and merchant/category analytics use the effective categories while preserving the original records.
 
-**This is not a real bank connection.** No actual account balance or Plaid data has been retrieved. The sample balance is never mixed with the user's imported transaction data: when the provider is in demo mode, the cashflow calculator uses a separate fictional dataset only. The rest of the household app can still store imported personal records locally in the user's browser. There is no manual balance field. A real Plaid Balance integration requires an authenticated server-side connection; see [Plaid Integration Plan](PLAID_INTEGRATION_PLAN.md).
+`ledger-data.js` defines the data schema, migration, categorization and prediction methods and a provider-only `applyPlaidSync()` normalization/reconciliation contract. `cashflow.js` applies forecast overrides without incorporating them into actuals.
+
+### Current data limitations
+
+There is **no live Plaid connection**, login, bank synchronization or secure bank backend yet. The simulated starting bank balance and transactions used in the 90-day demo forecast remain fictional and segregated from local records. Bank statement/manual transaction creation/import and arbitrary backup restoration have been removed from the interface. The browser still has old imported records from earlier versions, but they are labeled **unverified**.
+
+A static GitHub Pages app is **not tamper-proof**: local storage can be changed outside the app. Production integrity requires authoritative transaction storage and auditability on a secure authenticated backend, plus Plaid webhooks and transaction reconciliation. See [Plaid integration plan](PLAID_INTEGRATION_PLAN.md).
+
+## Privacy and backup
+
+This public GitHub repository does not include personal financial data. Transactions and category/prediction preferences currently remain in each device's browser storage; there is no cross-device synchronization. Settings provides a **read-only JSON export** for safekeeping, not a tool for restoring or fabricating ledger transactions. Exports are unencrypted—store privately.
+
+## Developer tests
+
+The GitHub Actions workflow `.github/workflows/ui-smoke.yml` executes Playwright tests for budget/merchant drill-downs, read-only categorization, the cash-flow engine, recurring detection and mobile/desktop layout. `tests/ledger-readonly-smoke.cjs` additionally verifies historical data migration, Plaid upsert/pending reconciliation, category overrides and separation of forecast changes from original source records.
