@@ -217,6 +217,8 @@ function accuracyView(){
  try{
   if(!accuracyReport)accuracyReport=window.HouseholdAccuracyLab.runFixture(window.HouseholdAccuracyFixture,
    window.HouseholdForecast,window.HouseholdForecastLedger,Model);
+  if(!accuracyReportAlt)accuracyReportAlt=window.HouseholdAccuracyLab.runFixture(window.HouseholdAccuracyHoldout,
+   window.HouseholdForecast,window.HouseholdForecastLedger,Model);
  }catch(err){
   return '<div class="panel accuracy-lab"><h3>Historical accuracy test</h3><p class="prediction-note">Fictional test temporarily unavailable: '+esc(err.message)+'</p></div>';
  }
@@ -227,7 +229,7 @@ function accuracyView(){
  const maxErr=Math.max(1,...s.cash.map(x=>x.mae));
  const cash=s.cash.map(x=>'<div class="accuracy-cash-row"><span>'+x.days+' days</span>'+
   '<div class="accuracy-track"><i style="width:'+((x.mae/maxErr)*100).toFixed(1)+'%"></i></div>'+
-  '<strong>'+money(x.mae)+'</strong><small>Average absolute error</small></div>').join('');
+  '<strong>'+money(x.mae)+'</strong><small>Scheduled only · With irregular-spending scenario '+money(x.scenarioMAE)+'</small></div>').join('');
  const scoreTable=(items,kind)=>'<div class="accuracy-table-wrap"><table class="accuracy-table"><thead>'+
   '<tr><th>'+esc(kind)+'</th><th>Predicted</th><th>Matched</th><th>Missed</th><th>False</th><th>Precision</th><th>Recall</th></tr></thead><tbody>'+
   items.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+x.predicted+'</td><td>'+x.matched+'</td><td>'+x.missedRecurring+'</td><td>'+x.falsePredictions+'</td>'+
@@ -257,8 +259,13 @@ function accuracyView(){
   ' missed recurring events</span><span>'+percent(s.scheduledExpenseCoverage)+' of total expenses covered by matched scheduled charges</span></div>'+
   '<div class="section-top"><h3>Cash balance error by forecast horizon</h3></div>'+
   '<p class="prediction-note">Mean absolute balance error across '+s.snapshots+
-  ' fictional anchored-balance simulations. The model does not yet forecast irregular spending or checking transfers, so errors can be large.</p>'+cash+
-  '<details class="accuracy-detail"><summary>Accuracy by spending category</summary>'+
+  ' fictional anchored-balance simulations. Directed transfers are counted as cash movements, not purchases. Undated spending has a separate, illustrative statistical scenario.</p>'+cash+
+  '<div class="accuracy-detail-line"><strong>Independent fictional household</strong><span>Precision '+esc(percent(accuracyReportAlt.score.recurring.precision))+'</span>'+
+  '<span>Recall '+esc(percent(accuracyReportAlt.score.recurring.recall))+'</span>'+
+  '<span>90-day scheduled-only error '+money(accuracyReportAlt.score.cash.find(c=>c.days===90).mae)+'</span>'+
+  '<span>90-day scenario error '+money(accuracyReportAlt.score.cash.find(c=>c.days===90).scenarioMAE)+'</span></div>'+
+  '<p class="prediction-note">A second test family has different bills, income schedules, two accounts, missed payments and irregular purchases. Both accuracy scores are fictional.</p>'+
+ '<details class="accuracy-detail"><summary>Accuracy by spending category</summary>'+
   scoreTable(s.byCategory,'Category')+'</details>'+
   '<details class="accuracy-detail"><summary>Accuracy by recurrence pattern</summary>'+scoreTable(s.byCadence,'Pattern')+'</details>'+
   '<details class="accuracy-detail"><summary>Reliability by prediction confidence</summary>'+
@@ -270,7 +277,7 @@ function accuracyView(){
   '<details class="accuracy-detail"><summary>Example prediction mistakes</summary>'+errors+'</details>'+
   '<div class="accuracy-method"><strong>How to interpret this test</strong>'+
    '<p>These are historical test-window opportunities; overlapping 90-day windows intentionally count a payment more than once. Matching requires the same merchant, account, money direction and a date within 2–5 days. Irregular purchases are excluded from the recurring-recall denominator but still contribute to real spending and cash errors.</p>'+
-   '<p>Opening balances are mathematically constructed from fictional transactions, not fetched from a bank. Credit-card settlement transfers reduce checking cash without being categorized as spending; the current forecast does not schedule them. This helps reveal why the 90-day balance projection is not yet dependable.</p>'+
+   '<p>Opening balances are mathematically constructed from fictional transactions, not fetched from a bank. Explicitly directed checking transfers reduce checking cash without being categorized as spending. The irregular-spending scenario remains an analytical range, not invented transactions or a guaranteed future balance.</p>'+
    '<p>No bank data, local ledger records, or user rules are read, imported, changed or sent anywhere by this lab.</p></div>'+
   '</section>';
 }
@@ -396,7 +403,7 @@ document.querySelectorAll('[data-forget-pattern]').forEach(button=>button.onclic
 });
 
 document.querySelectorAll('[data-insight]').forEach(b=>b.onclick=()=>{insightMode=b.dataset.insight;render()});
-if(el('rerun-accuracy'))el('rerun-accuracy').onclick=()=>{accuracyReport=null;render()};
+if(el('rerun-accuracy'))el('rerun-accuracy').onclick=()=>{accuracyReport=null;accuracyReportAlt=null;render()};
 
 document.querySelectorAll('[data-review-filter]').forEach(b=>b.onclick=()=>{reviewFilter=b.dataset.reviewFilter;render()});
 document.querySelectorAll('[data-review-category]').forEach(form=>form.onsubmit=e=>{
