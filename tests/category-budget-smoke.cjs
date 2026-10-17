@@ -52,7 +52,7 @@ try{
  assert.ok(await amazon.evaluate(e=>e.open));
  assert.ok(await amazon.locator('[data-edit]').count()>0);
  await page.locator('aside [data-page="transactions"]').click();
- assert.match(await page.locator('#view').innerText(),/Transactions/);
+ assert.match(await page.locator('#view').innerText(),/Transactions/i);
  assert.ok(await page.locator('#view [data-edit]').count()>0);
  await page.locator('aside [data-page="settings"]').click();
  assert.equal(await page.locator('#backup').count(),1,'Backups remain reachable');
