@@ -131,7 +131,8 @@ function evaluateFold(opts){
   const predictedChange=cashEvents.filter(e=>e.date<=checkpoint&&cashFor(e)).reduce((n,e)=>n+cashImpact(e),0);
   const actualChange=futureActual.filter(t=>t.date<=checkpoint&&cashFor(t)).reduce((n,t)=>n+cashImpact(t),0);
   const expectedBalance=round(opening+predictedChange),realizedBalance=round(opening+actualChange);
-  const unc=predicted.uncertainty?.available?predicted.uncertainty:null;
+  const accountRisk=predicted.uncertaintyByAccount?.[cashAccount];
+  const unc=accountRisk?.available?accountRisk:null;
   const adjustedBalance=unc?round(expectedBalance-unc.dailyEstimated*days):null;
   return {days,forecastBalance:expectedBalance,actualBalance:realizedBalance,
     signedError:round(expectedBalance-realizedBalance),
