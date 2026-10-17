@@ -1,4 +1,5 @@
 const {chromium,webkit,devices}=require('playwright');
+const assert=require('node:assert/strict');
 (async()=>{
  for (const [name,engine,options] of [
   ['desktop',chromium,{viewport:{width:1440,height:850}}],
@@ -26,9 +27,16 @@ const {chromium,webkit,devices}=require('playwright');
    const budgetScrolled=await measure();
    await page.locator(name.includes('phone')||name.includes('iphone')?'.mobile-top-nav [data-page="settings"]':'aside [data-page="settings"]').click();
    const after=await measure();
+   assert.ok(after.scrollTop<=1,'Settings must start at top without animated scrolling on '+name+': '+JSON.stringify({afterScroll:after.scrollTop}));
+   assert.equal(after.innerWidth,before.innerWidth,'Settings must not resize viewport width on '+name);
+   assert.equal(after.visualHeight,before.visualHeight,'Settings must not resize viewport height on '+name);
+   assert.ok(Math.abs(after.pageTop.x-before.pageTop.x)<=1,'Settings header must not shift left/right on '+name);
+   assert.ok(Math.abs(after.pageTop.width-before.pageTop.width)<=1,'Settings header width must stay stable on '+name);
+   assert.ok(after.docHeight>after.innerHeight,'Settings should retain a scrollable canvas on '+name);
    await page.locator(name.includes('phone')||name.includes('iphone')?'.mobile-top-nav [data-page="budgets"]':'aside [data-page="budgets"]').click();
    const back=await measure();
-   console.log('DIAG '+name+' '+JSON.stringify({before,budgetScrolled,after,back}));
+   assert.ok(back.scrollTop<=1,'Returning to Budget starts at top without animation on '+name);
+   console.log('PASS SETTINGS SIZE '+name+' '+JSON.stringify({width:after.docWidth,viewportWidth:after.innerWidth,viewportHeight:after.innerHeight,settingsScroll:after.scrollTop,settingsHeight:after.docHeight,budgetScroll:budgetScrolled.scrollTop}));
   } finally {await browser.close()}
  }
 })().catch(e=>{console.error(e);process.exit(1)});
