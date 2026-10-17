@@ -73,14 +73,14 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   await first.locator('[data-category]').click();
   assert.equal(await page.locator('#entry [name="category"]').count(),1);
   assert.equal(await page.locator('#entry [name="amount"],#entry [name="date"],#entry [name="merchant"],#delete').count(),0,'Category edit shows no bank-field controls');
-  await page.locator('#entry [name="category"]').selectOption('Other');
+  await page.locator('#entry [name="category"]').selectOption('Shopping');
   await page.locator('#entry button[type="submit"]').click();
   const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(after.transactions,before.transactions,'Source ledger must be byte-for-byte unchanged by categorizing');
-  assert.equal(after.categoryOverrides[recordId]||before.transactions.find(x=>x.id===recordId).category,'Other');
+  assert.equal(after.categoryOverrides[recordId],'Shopping','Category correction stored separately from source');
   await page.reload({waitUntil:'load'});
   await page.locator('aside [data-page="transactions"]').click();
-  assert.equal(await page.locator('.ledger-table tbody tr').first().locator('td').nth(2).innerText(),'Other','Categorization survives reload');
+  assert.equal(await page.locator('.ledger-table tbody tr').first().locator('td').nth(2).innerText(),'Shopping','Categorization survives reload');
   await page.locator('aside [data-page="budgets"]').click();
   const category=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
   await category.locator('summary').click();
