@@ -1072,3 +1072,46 @@ html { scroll-behavior:auto; }
 .recurring-value.needs-recurrence:hover{color:#103f9d;border-bottom-style:solid}
 .recurring-inline-form .recurring-direction-field[hidden]{display:none}
 .recurring-inline-form .recurring-direction-field select{width:100%}
+
+/* Phase B: one compact, account-aware summary inside the existing cash forecast. */
+.account-forecast{padding:17px 0 5px;margin:18px 0 12px;border-block:1px solid var(--line)}
+.account-forecast .section-top{margin-bottom:12px}
+.account-forecast .section-top h3{font-size:15px}
+.account-total-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:17px}
+.account-total-strip span{display:flex;flex-direction:column;gap:3px;color:var(--muted);font-size:12px}
+.account-total-strip strong{font-size:19px;letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums}
+.account-projection-list{display:flex;flex-direction:column}
+.account-projection-heading,.account-projection-row{display:grid;grid-template-columns:minmax(0,1fr)minmax(75px,auto) 16px minmax(75px,auto);align-items:center;gap:9px}
+.account-projection-heading{font-size:11px;font-weight:650;color:var(--muted);text-align:right;padding:6px 0;border-bottom:1px solid var(--line)}
+.account-projection-heading span:first-child{text-align:left}
+.account-projection-row{padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.account-projection-label{display:flex;flex-direction:column;gap:3px;min-width:0}
+.account-projection-label strong{font-size:13px;overflow-wrap:anywhere}
+.account-projection-label small{font-size:11px;color:var(--muted)}
+.account-projection-current,.account-projection-future{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.account-projection-current,.account-projection-arrow{color:var(--muted)}
+.account-projection-future{font-weight:750}
+.account-forecast-warning{font-size:12px;line-height:1.5;margin:12px 0;color:#a34a19}
+.account-plan-detail{border-top:1px solid var(--line);margin-top:13px;padding:10px 0}
+.account-plan-detail>summary{cursor:pointer;font-weight:650;font-size:13px;padding:6px 0}
+.account-movement-form{margin:12px 0 15px}
+.account-plan-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-bottom:12px}
+.account-plan-grid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:620;min-width:0}
+.account-plan-grid input,.account-plan-grid select{box-sizing:border-box;width:100%;height:40px;min-width:0;
+ background:var(--surface,#fff);border:1px solid var(--line);border-radius:6px;
+ padding:7px 9px;font-size:13px;color:var(--ink);font-family:inherit}
+.account-movement-list h4{font-size:12px;margin:15px 0 9px}
+.account-movement-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+ border-top:1px solid var(--line);padding:10px 0;font-size:12px}
+.account-movement-row>span{min-width:0;overflow-wrap:anywhere}
+.account-movement-row small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+@media(max-width:700px){
+ .account-total-strip{gap:6px}
+ .account-total-strip strong{font-size:clamp(13px,3.6vw,18px)}
+ .account-total-strip span{font-size:11px}
+ .account-projection-heading,.account-projection-row{grid-template-columns:minmax(0,1fr)minmax(65px,auto) 10px minmax(65px,auto);gap:5px}
+ .account-projection-row{font-size:12px}
+ .account-projection-label strong{font-size:12px}
+ .account-plan-grid{grid-template-columns:1fr}
+ .account-plan-grid input,.account-plan-grid select{font-size:16px;min-height:44px}
+}

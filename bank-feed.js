@@ -22,6 +22,18 @@
           available: 5400.25,
           transactionAccount: 'Checking',
           simulated: true
+        },{
+          id:'demo-savings',institution:'Sample Bank (demo)',name:'Emergency Savings ••0189',
+          accountType:'savings',currency:'USD',current:2250,available:2250,
+          transactionAccount:'Savings',simulated:true
+        },{
+          id:'demo-visa',institution:'Sample Card (demo)',name:'Rewards Visa ••3201',
+          accountType:'credit',currency:'USD',current:810,available:4190,
+          transactionAccount:'Visa',simulated:true
+        },{
+          id:'demo-mastercard',institution:'Sample Card (demo)',name:'Everyday Mastercard ••5520',
+          accountType:'credit',currency:'USD',current:390,available:2610,
+          transactionAccount:'Mastercard',simulated:true
         }]
       };
     }

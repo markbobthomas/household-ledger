@@ -28,6 +28,7 @@ function migrate(input){
  predictions.patternRules=predictions.patternRules&&typeof predictions.patternRules==='object'&&!Array.isArray(predictions.patternRules)?predictions.patternRules:{};
  predictions.cashFlowStreams=predictions.cashFlowStreams&&typeof predictions.cashFlowStreams==='object'?predictions.cashFlowStreams:{};
  predictions.cashFlowEvents=Array.isArray(predictions.cashFlowEvents)?predictions.cashFlowEvents:[];
+ predictions.accountMovements=Array.isArray(predictions.accountMovements)?predictions.accountMovements:[];
  predictions.dailyVariable=predictions.dailyVariable===null||predictions.dailyVariable===undefined?null:Number(predictions.dailyVariable);
  const accounts=Array.isArray(old.accounts)?copy(old.accounts):[];
  const sync=old.sync&&typeof old.sync==='object'?copy(old.sync):{plaidCursor:null};
@@ -229,6 +230,26 @@ function saveEvent(state,event){
  return id;
 }
 function removeEvent(state,id){state.predictions.cashFlowEvents=state.predictions.cashFlowEvents.filter(x=>x.id!==id)}
+/* Future paired movements are forecast-only. Never duplicate these inside source transactions. */
+function saveAccountMovement(state,item){
+ const from=String(item?.fromAccountId||''),to=String(item?.toAccountId||'');
+ const amount=Number(item?.amount),anchorDate=String(item?.anchorDate||item?.date||'');
+ const frequency=String(item?.frequency||'once'),day=Number(item?.day||anchorDate.slice(8,10));
+ if(!from||!to||from===to||from.length>200||to.length>200||
+  !validDate(anchorDate)||!['once','weekly','biweekly','monthly','quarterly','semiannual','annual'].includes(frequency)||
+  !(amount>0)||!Number.isFinite(amount)||amount>999999999||!Number.isInteger(day)||day<1||day>31)
+  throw Error('Choose two different accounts, valid date, frequency and positive amount');
+ const id=item.id&&String(item.id).startsWith('movement|')?String(item.id):
+  'movement|'+Date.now().toString(36)+Math.random().toString(36).slice(2);
+ const record={id,fromAccountId:from,toAccountId:to,anchorDate,frequency,day,amount:round(amount)};
+ state.predictions.accountMovements??=[];
+ const i=state.predictions.accountMovements.findIndex(m=>m.id===id);
+ if(i<0)state.predictions.accountMovements.push(record);else state.predictions.accountMovements[i]=record;
+ return id;
+}
+function removeAccountMovement(state,id){
+ state.predictions.accountMovements=(state.predictions.accountMovements||[]).filter(x=>x.id!==id);
+}
 /* Future authenticated backend response only: never called from the browser edit forms.
  * Plaid amount sign: positive = money leaving this account; negative = money arriving.
  * Upsert replaces provider records on /transactions/sync updates and applies removals.
@@ -269,7 +290,7 @@ function applyPlaidSync(state,change){
  }
  return state;
 }
-const api={VERSION,migrate,records,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
+const api={VERSION,migrate,records,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,applyPlaidSync};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

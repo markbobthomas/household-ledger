@@ -28,6 +28,7 @@ jobs:
           node tests/inline-category-smoke.cjs
           node tests/activity-recurring-smoke.cjs
           node tests/accounting-phaseA-smoke.cjs
+          node tests/account-forecast-phaseB-smoke.cjs
           node tests/cashflow-smoke.cjs
           node tests/design-smoke.cjs
           node tests/settings-geometry-diagnostic.cjs
