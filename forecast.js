@@ -71,10 +71,14 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  result.historyMonths=past;
  const forced=Object.entries(patternRules||{}).some(([key,value])=>value?.mode==='monthly'&&
    key.startsWith([mode,category||'Income'].map(encodeURIComponent).join('|')+'|'));
- if(!forced&&(past.length<2||!past.includes(shiftMonth(today.slice(0,7),-1)))){
+ const lastMonth=shiftMonth(today.slice(0,7),-1),previousMonth=shiftMonth(today.slice(0,7),-2);
+ const syncGap=!past.includes(lastMonth)&&past.includes(previousMonth)&&past.length>=4;
+ if(!forced&&(past.length<2||(!past.includes(lastMonth)&&!syncGap))){
   result.method='Insufficient recent account history; no reliable dated schedule';
   return result;
  }
+ if(syncGap){result.diagnostics.warning='Recent complete month missing: possible sync gap. Predictions are provisional and need review';
+  result.diagnostics.syncGap=true;}
  const windowStart=shiftMonth(today.slice(0,7),-24);
  const records=all.filter(t=>match(t)&&t.date<=today&&t.date>=windowStart);
  const groups=new Map();
@@ -88,7 +92,8 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const stable=round(amount);if(!(stable>0)||!validDate(date))return;
   const id=['hist',month,category||'Income',encodeURIComponent(accountKey(group[0])),encodeURIComponent(normalize(group[0].merchant)),slot].join('|');
   return {id,merchant:group[0].merchant,account:accountKey(group[0]),category:category||'Income',
-   type:mode,cashDirection:mode==='transfer'?'out':undefined,date,amount:stable,cadence,confidence:confidence(obs,observedMonths,relativeSpread,dateSpread,cadence),
+   type:mode,cashDirection:mode==='transfer'?'out':undefined,date,amount:stable,cadence,
+   confidence:confidence(obs,observedMonths,relativeSpread,dateSpread,cadence),
    evidence:observedMonths,observations:obs,source:'historical',pattern:{day:Number(date.slice(8,10)),amount:stable},
    slot,seasonal:Boolean(extra.seasonal),groupKey:accountKey(group[0])+'|'+normalize(group[0].merchant)};
  };
@@ -115,10 +120,12 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   if(gaps.length<4)return false;
   let best=null;
   for(const period of [7,14]){
-   const tolerance=period===7?1:2;
+   const tolerance=mode==='income'?(period===7?2:4):period===7?1:2;
    const regular=gaps.filter(g=>Math.abs(g-period)<=tolerance).length;
    const nearMultiples=gaps.filter(g=>[1,2,3].some(k=>Math.abs(g-period*k)<=tolerance)).length;
-   if(regular/gaps.length>=.70&&nearMultiples/gaps.length>=.88){best=period;break}
+   const standard=regular/gaps.length>=.70&&nearMultiples/gaps.length>=.88;
+   const resilient=recent.length>=6&&regular/gaps.length>=.55&&nearMultiples/gaps.length>=.79;
+   if(standard||resilient){best=period;break}
   }
   if(!best)return false;
   const amounts=recent.map(t=>Number(t.amount)),mid=median(amounts);
@@ -126,7 +133,8 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const bill=mode==='income'||mode==='transfer'||group.some(likelyBill);
   if(variability>(bill?.6:.33))return false;
   const last=recent[recent.length-1];
-  if(dayDiff(today,last.date)>best*2+4)return false;
+  const stale=dayDiff(today,last.date)>best*2+4;
+  if(dayDiff(today,last.date)>(syncGap?best*4+5:best*3+3))return false;
   const months=new Set(recent.map(t=>t.date.slice(0,7))).size;
   let cursor=last.date,n=0;
   while(n<25){
@@ -134,25 +142,34 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
    if(cursor.slice(0,7)>month)break;
    if(cursor>today&&cursor.slice(0,7)===month){
     const c=make(group,'interval'+best+'-'+n,cursor,mid,best===7?'weekly':'every 2 weeks',recent.length,months,variability,0);
-    if(c)candidates.push(c);
+    if(c){if(stale||syncGap){c.confidence='Medium';c.historyGap=true;c.warning='Intermittent or missing recent transactions; confirm schedule';}candidates.push(c);}
    }
    n++;
   }
   return true;
  }
  function detectMonthly(group){
-  const relevant=group.filter(t=>t.date>=shiftMonth(today.slice(0,7),-6)&&t.date<today.slice(0,7)+'-01');
+  // Anchor cadence to the most recent completed calendar months. Permit one
+  // isolated missing billing month ONLY when longer source evidence supports
+  // it, and flag the resulting estimate for Review instead of asserting High.
+  const relevant=group.filter(t=>t.date>=shiftMonth(today.slice(0,7),-8)&&t.date<today.slice(0,7)+'-01');
   const observed=[...new Set(relevant.map(t=>t.date.slice(0,7)))].sort();
-  const last2=shiftMonth(today.slice(0,7),-2),last1=shiftMonth(today.slice(0,7),-1);
-  if(!observed.includes(last1)||observed.length<2)return;
+  if(observed.length<2)return;
   const bill=mode==='income'||mode==='transfer'||group.some(likelyBill);
-  if(!bill&&observed.length<3)return;
+  const latest=observed[observed.length-1];
+  const lastGap=monthIndex(today.slice(0,7))-monthIndex(latest);
+  if(lastGap>2)return;
   const byMonth=new Map(observed.map(m=>[m,monthRecords(relevant,m).sort((a,b)=>a.date.localeCompare(b.date))]));
   const recentMonths=observed.slice(-3);
-  if(recentMonths.some((m,i)=>i>0&&monthIndex(m)-monthIndex(recentMonths[i-1])!==1))return;
-  if(monthIndex(today.slice(0,7))-monthIndex(recentMonths[recentMonths.length-1])!==1)return;
-  const count=byMonth.get(recentMonths[0]).length;
-  if(!count||count>5||recentMonths.some(m=>byMonth.get(m).length!==count))return;
+  const consecutive=recentMonths.every((m,i)=>i===0||monthIndex(m)-monthIndex(recentMonths[i-1])===1);
+  const fullRecent=lastGap===1&&consecutive;
+  const counts=recentMonths.map(m=>byMonth.get(m).length);
+  const count=counts[0];
+  if(!count||count>5||counts.some(n=>n!==count))return;
+  const historyGap=!fullRecent||recentMonths.length<3;
+  if(historyGap&&(!bill||count!==1||observed.length<3||
+      monthIndex(recentMonths[recentMonths.length-1])-monthIndex(recentMonths[0])>5))return;
+  if(!bill&&(observed.length<3||!fullRecent))return;
   for(let slot=0;slot<count;slot++){
    const stableMonths=!bill&&observed.length>=5?observed.slice(-6):recentMonths;
    if(!bill&&observed.length>=5&&(
@@ -163,9 +180,9 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
    const amounts=rows.map(t=>Number(t.amount)),mid=median(amounts);
    const dateSpread=Math.max(...days)-Math.min(...days);
    const variability=Math.max(...amounts.map(v=>Math.abs(v-mid)/mid));
-   if(dateSpread>(bill?7:(!bill&&observed.length>=5?2:3))||variability>(bill?.75:(!bill&&observed.length>=5?.25:.4)))continue;
-   // Preserve IDs used by earlier predictions, allowing confirmed overrides
-   // to survive a detector update.
+   const nearFixed=variability<=.02;
+   if(dateSpread>(bill?8:(!bill&&observed.length>=5?2:3))||
+      variability>(bill?.75:(!bill&&observed.length>=5?.25:.4)))continue;
    const seasonal=seasonalAmount(group,month,mid,category==='Utilities');
    const endMonth=rows.every(t=>endDay(t.date.slice(0,7))-Number(t.date.slice(8,10))<=2);
    const due=endMonth?endDay(month):Math.min(endDay(month),Math.round(median(days)));
@@ -173,7 +190,14 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
    const observedMonths=new Set(group.map(t=>t.date.slice(0,7))).size;
    const candidate=make(group,slot,date,seasonal.amount,count===1?'monthly':count===2?'twice monthly':count+' / month',
     Math.floor(group.length/Math.max(1,count)),observedMonths,variability,dateSpread,seasonal);
-   if(candidate)candidates.push(candidate);
+   if(candidate){
+    if(historyGap||syncGap||dateSpread>5){
+     candidate.confidence='Medium';candidate.historyGap=Boolean(historyGap||syncGap);
+     candidate.warning=historyGap?'One or more months of this billing pattern are missing; verify it continues':
+      syncGap?'Bank history may be incomplete':'Posting date has shifted; verify next charge date';
+    }
+    candidates.push(candidate);
+   }
   }
  }
  function detectLongCycle(group){
