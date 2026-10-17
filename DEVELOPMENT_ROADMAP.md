@@ -138,7 +138,7 @@ A **High** prediction-confidence label achieved just **~86% observed matching** 
 
 **Regression safeguards:** \`tests/phase42-stress-baseline.json\` and \`tests/phase42-smoke.cjs\` enforce minimal stress coverage, no forward-looking source access, repeatability, no source writes, accurate transfer treatment, and desktop/iPhone UI rendering. These checks measure code behavior in fabricated cases; external reliability is still unknown.
 
-### Phase 4.3 — Bank-data readiness without Plaid (IMPLEMENTED · October 17, 2026)
+### Phase 4.3 — Bank-data readiness without Plaid (COMPLETE · October 17, 2026)
 
 Create a visibly non-authoritative *bank feed health* indicator (last successful sync, missing accounts, stale/pending data), and explicitly flag projected income as **unconfirmed until posted**. Stress-test new accounts, returned payments, employer changes, ambiguous transfer identities and larger/more heterogeneous fictional populations. If the user chooses, provide a clearly separated **read-only historical statement evaluation sandbox** with user-approved imports that cannot alter actual ledger source records. Only after evaluating realistic records and deciding on a secure backend should Plaid integration begin.
 
@@ -147,6 +147,8 @@ Create a visibly non-authoritative *bank feed health* indicator (last successful
 All forecasted income, including manually scheduled future deposits, has `postingStatus: 'unconfirmed'` and is explicitly labeled **unconfirmed until posted** in the Budget projection. Cash forecasts still include projected paydays for illustration, but prominently warn that missed paychecks can invalidate balances. Existing posted transactions and source balances are not modified.
 
 **Expanded stress coverage:** A separate `readiness-lab.js` evaluates four additional synthetic challenges — previously unseen accounts, returned and retried charges, changed employers/payers, and direction-unknown transfers — at three historic dates using three distinct fictional households (**36 added trials**). A separately authored seasonal-wage/side-business household adds variation in income and savings-account behavior. The original 48 Phase 4.2 trials and fixed baseline remain untouched. Insights → Accuracy displays the Phase 4.3 results separately. `tests/phase43-smoke.cjs` is wired into the Chromium/iPhone WebKit CI suite and covers freshness, unknown coverage, provisional income, source immutability, transfer caution, stress determinism and responsive UI.
+
+**Validation:** GitHub Actions browser suite **passed all 17 checks** (October 17, 2026), including the Phase 4.3 browser and unit stress tests in Chromium and iPhone WebKit. The GitHub Pages deployment succeeded. These passes confirm software behavior on fictional data, not live-bank performance.
 
 **Limits:** The synthetic households are authored test data, not blinded external validation; results cannot establish real-world prediction reliability or calibrated probabilities. A future connected adapter must securely provide actual sync timestamps and the explicit expected-account roster; transaction recency alone does not prove a successful sync. No bank records, real statement imports, Plaid tokens, or authenticated backend were added.
 
