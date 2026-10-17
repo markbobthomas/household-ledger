@@ -96,7 +96,6 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   assert.equal(await page.locator('[data-daily-prediction]').count(),0,'No separate daily phantom transaction assumptions in unified forecast');
   const afterDaily=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(afterDaily.transactions,before.transactions,'Shared forecast does not change source rows');
-  await page.locator('.forecast-editor > summary').click();
   await page.locator('[data-add-event]').click();
   await page.locator('#entry [name="date"]').fill('2026-10-21');
   await page.locator('#entry [name="amount"]').fill('250');
