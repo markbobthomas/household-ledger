@@ -19,7 +19,9 @@ function isPredictable(t){
   return /car payment|auto loan|student loan|loan payment/i.test(name);
 }
 function cashFlow90(input){
-  const account=input?.account, asOf=input?.asOf, days=input?.days??90, rows=input?.transactions||[];
+  const account=input?.account, asOf=input?.asOf, days=input?.days??90, rows=input?.transactions||[], predictionOverrides=input?.predictionOverrides||{};
+  const streamAdjustments=predictionOverrides.streams||{};
+  const additionalEvents=Array.isArray(predictionOverrides.events)?predictionOverrides.events:[];
   if(!account||!validDate(asOf))throw new Error('A bank snapshot with an as-of date is required');
   if(!Number.isInteger(days)||days<1||days>366)throw new Error('Forecast must be 1–366 days');
   const opening=Number.isFinite(account.available)?account.available:account.current;
@@ -42,7 +44,7 @@ function cashFlow90(input){
     if(!records.has(mon))records.set(mon,[]);
     records.get(mon).push(t);
   }
-  const streams=[];
+  let streams=[];
   const scheduledKeys=new Set();
   if(months.length>=2){
     for(const [key,perMonth] of group){
@@ -62,6 +64,16 @@ function cashFlow90(input){
       if(candidates.length===n){streams.push(...candidates);scheduledKeys.add(key)}
     }
   }
+  // A modified predicted payment is never a modified bank transaction.
+  streams=streams.map((stream,i)=>{
+    const streamKey=account.id+'|'+stream.key+'|'+stream.day+'|'+i;
+    const override=streamAdjustments[streamKey];
+    return {...stream,key:streamKey,originalAmount:stream.amount,originalDay:stream.day,
+      amount:override?round(Number(override.amount)):stream.amount,
+      day:override?Number(override.day):stream.day,
+      enabled:override?override.enabled!==false:true,
+      edited:Boolean(override)};
+  });
   // Spread uncommitted variable expenses across future days, excluding predicted bills.
   const irregular=history.filter(t=>t.type==='expense'&&!scheduledKeys.has(t.type+'|'+String(t.merchant||'').trim().toLowerCase()));
   const observedDays=months.reduce((n,m)=>n+monthLength(Number(m.slice(0,4)),Number(m.slice(5,7))),0);
@@ -75,12 +87,20 @@ function cashFlow90(input){
     const events=[];
     let income=0,outflow=0;
     for(const stream of streams){
-      if(day!==Math.min(stream.day,actualLast))continue;
+      if(!stream.enabled||day!==Math.min(stream.day,actualLast))continue;
       const isIncome=stream.type==='income';
       events.push({merchant:stream.merchant,amount:stream.amount,type:stream.type,category:stream.category,description:isIncome?'Estimated recurring deposit':stream.type==='transfer'?'Estimated outgoing bank transfer':'Estimated recurring bill'});
       if(isIncome)income+=stream.amount;else outflow+=stream.amount;
     }
     if(dailyVariable>0){outflow+=dailyVariable;events.push({merchant:'Other purchases',amount:dailyVariable,type:'expense',category:'Variable spending',description:'Estimated daily non-recurring spending'})}
+    // Explicit one-off forecast events affect the prediction only, never actuals.
+    for(const planned of additionalEvents){
+      if(planned.date!==date||(planned.accountId&&planned.accountId!==account.id))continue;
+      const amount=Number(planned.amount);
+      if(!Number.isFinite(amount)||amount<=0||!['income','expense'].includes(planned.type))continue;
+      events.push({merchant:String(planned.description||'One-time forecast'),amount,type:planned.type,category:'User forecast',description:'User-entered prediction only',predictionId:planned.id});
+      if(planned.type==='income')income+=amount;else outflow+=amount;
+    }
     income=round(income);outflow=round(outflow);
     balance=round(balance+income-outflow);
     expectedIncome=round(expectedIncome+income);expectedOutflow=round(expectedOutflow+outflow);
