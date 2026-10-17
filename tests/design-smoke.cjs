@@ -24,7 +24,7 @@ const assert=require('node:assert/strict');
   assert.equal(await expectedBar.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 20, 147)','Expected budget spending uses hot pink');
   assert.equal(await page.locator('.budget-legend span').last().evaluate(e=>getComputedStyle(e,'::before').backgroundColor),'rgb(255, 20, 147)','Expected-spending legend matches pink bar');
   await page.locator('aside [data-page="insights"]').click();
-  assert.deepEqual(await page.locator('[data-insight]').allInnerTexts(),['Merchants','Categories','Purchase sizes','Recurring'],'Merchants appears first');
+  assert.deepEqual(await page.locator('[data-insight]').allInnerTexts(),['Merchants','Categories','Purchase sizes','Recurring','Accuracy'],'Merchants appears first');
   assert.equal(await page.locator('[data-insight="merchants"]').getAttribute('aria-selected'),'true','Merchant totals open by default');
   assert.ok(await page.locator('#view').getByText('Merchant totals').isVisible(),'Merchants view is displayed by default');
   for(const tab of ['merchants','categories','bands','recurring']){
