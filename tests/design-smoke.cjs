@@ -127,7 +127,8 @@ const assert=require('node:assert/strict');
   await page.locator('[data-insight="bands"]').click();
   assert.equal(await page.locator('details.band-detail').count(),7);
   await page.locator('aside [data-page="settings"]').click();
-  assert.equal(await page.locator('#settings-import').isVisible(),true,'Import available on phone');
+  assert.equal(await page.locator('#settings-import').count(),0,'No bank statement import or manual entry on phone');
+  assert.equal(await page.locator('#backup').isVisible(),true,'Read-only export available on phone');
   assert.deepEqual(errors,[],'No JavaScript errors');
   console.log('PASS: High-contrast developer layout, no legacy CSS, working controls, mobile width and preserved insights');
  }finally{await browser.close()}
