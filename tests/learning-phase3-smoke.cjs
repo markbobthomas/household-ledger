@@ -38,9 +38,10 @@ assert.equal(M.records(reloaded).find(x=>x.id==='c4').category,'Other',
 assert.equal(reloaded.learning.categoryRules[learned.key].category,'Dining','Original learned rule persists for later reconciliation');
 assert.ok(R.build(reloaded,F,'2026-10-16').tasks.some(t=>t.targetId==='c4'&&t.suggested==='Dining'),
   'Conflict produces an actionable review instead of silently forcing merchant category');
+const beforeUndoSource=JSON.stringify(reloaded.transactions);
 assert.ok(M.removeCategoryRule(reloaded,learned.key),'Learned rule is removable');
 assert.equal(M.categoryFor(reloaded,'c4'),'Other','Removing rule stops auto-category overlay');
-assert.equal(JSON.stringify(state.transactions),JSON.stringify(reloaded.transactions),'Removing rule leaves source untouched');
+assert.equal(JSON.stringify(reloaded.transactions),beforeUndoSource,'Removing rule leaves source untouched');
 assert.equal(JSON.stringify(state.transactions.slice(0,original.transactions.length)),untouched,'Category learning never edits originals');
 // Normalized provider updates and new source records must trigger rescoring.
 const src=M.migrate({transactions:[]});
