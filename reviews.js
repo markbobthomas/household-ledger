@@ -69,7 +69,7 @@ function build(state,forecast,asOf,shared){
     if(state.reviews.predictionConfirmed[item.id]?.fingerprint===predictionFingerprint(item))continue;
     tasks.push({id:'prediction|'+item.id,kind:'prediction',targetId:item.id,merchant:item.merchant,
       date:item.date,amount:Number(item.amount),category,confidence:item.confidence||'Low',cadence:item.cadence||null,ruleChanged:Boolean(item.ruleChanged),
-      priority:1,reason:(item.ruleChanged?'Confirmed repeating payment changed':item.confidence==='Medium'?'Limited historical evidence':'Transaction pattern needs confirmation')+' · '+item.evidence+' historical months',
+      priority:1,reason:(item.warning|| (item.ruleChanged?'Confirmed repeating payment changed':item.confidence==='Medium'?'Limited historical evidence':'Transaction pattern needs confirmation'))+' · '+item.evidence+' historical months',
       evidence:item.evidence,account:item.account||'',fingerprint:predictionFingerprint(item),
       demo:source.some(t=>t.source?.provider==='demo'&&merchantKey(t.merchant)===merchantKey(item.merchant))});
    }
