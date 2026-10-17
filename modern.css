@@ -128,7 +128,7 @@ input[type=file]{width:100%}.hide{display:none}
 .budget-progress .forecast{display:block;background:var(--forecast);height:100%;flex:none}
 .budget-legend{display:flex;gap:20px;flex-wrap:wrap;margin:11px 0 8px;font-size:10px;color:var(--muted)}
 .budget-legend span:before{display:inline-block;content:"";width:9px;height:9px;margin-right:6px;vertical-align:middle;background:var(--accent)}
-.budget-legend span:last-child:before{background:var(--forecast)}
+.budget-legend span:nth-of-type(2):before{background:var(--forecast)}
 .forecast-assumption{margin:14px 0 0;padding:9px;border-left:2px solid #bac2ca;background:var(--subtle);font-size:11px;color:#47525c}
 .over-budget{color:#a64c00;font-weight:700}
 .budget-date-note{font-size:11px;color:var(--muted)}
