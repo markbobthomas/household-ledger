@@ -155,3 +155,21 @@ td .btn{font-size:11px;padding:7px 9px;border:0;background:#edf1ed}
 @media(prefers-reduced-motion:reduce){
  *{transition:none!important;scroll-behavior:auto!important}
 }
+
+/* Fine alignment after the navigation consolidation */
+#budget-range{display:inline-flex;background:none;border:0;color:#77867e;font-weight:600;font-size:11px;padding:0}
+#budget-range[hidden]{display:none}
+.stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+.toolbar{justify-content:space-between}
+.settings-block .btn{min-width:152px;text-align:center}
+.settings-block label.btn{display:inline-block;width:max-content}
+.budget-entry .drill-summary{width:100%}
+.budget-entry .drill-detail{width:100%}
+.cash-head{align-items:center}
+.cash-primary-amount{font-variant-numeric:tabular-nums}
+@media(max-width:640px){
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .stat{padding:14px 10px}
+  .stat .num{font-size:clamp(15px,4vw,23px)}
+  .cash-secondary strong{font-size:17px}
+}
