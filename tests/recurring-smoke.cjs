@@ -41,13 +41,14 @@ assert.equal(unconfirmed.monthlyTotal,0,'Unconfirmed charge should not inflate m
   await netflix.locator('summary').click();
   assert.equal(await netflix.evaluate(el=>el.open),true,'Subscription opens on click');
   assert.equal(await page.locator('#period').inputValue(),'2026-10','Subscriptions start on current month');
-  assert.equal(await netflix.locator('[data-edit]').count(),1,'Current month shows only its charge');
+  assert.equal(await netflix.locator('[data-category]').count(),1,'Current month shows only its charge');
   await page.locator('#period').selectOption('all');
   const allNetflix=page.locator('.recurring-panel').first().locator('details.recurring-detail').filter({has:page.locator('summary strong:text-is("Netflix")')});
   await allNetflix.locator('summary').click();
-  assert.ok(await allNetflix.locator('[data-edit]').count()>=2,'All dates reveals the full subscription history');
-  await allNetflix.locator('[data-edit]').first().click();
-  assert.equal(await page.locator('#entry').count(),1,'Can edit a recurring source transaction');
+  assert.ok(await allNetflix.locator('[data-category]').count()>=2,'All dates reveals the full subscription history');
+  await allNetflix.locator('[data-category]').first().click();
+  assert.equal(await page.locator('#entry').count(),1,'Can categorize a recurring source transaction');
+  assert.equal(await page.locator('#entry [name="amount"]').count(),0,'No editing the recurring charge');
   await page.locator('#cancel').click();
   await page.locator('#period').selectOption('2026-09');
   const septemberNetflix=page.locator('.recurring-panel').first().locator('details.recurring-detail').filter({has:page.locator('summary strong:text-is("Netflix")')});
@@ -61,6 +62,6 @@ assert.equal(unconfirmed.monthlyTotal,0,'Unconfirmed charge should not inflate m
   await page.locator('[data-insight="bands"]').click();
   assert.equal(await page.locator('details.band-detail').count(),7,'Previous price-band analysis remains reachable');
   assert.deepEqual(errors,[],'No runtime errors');
-  console.log('PASS: Four Insights tabs, subscriptions, recurring bills, editable histories, date filter, review confidence and mobile layout');
+  console.log('PASS: Four Insights tabs, subscriptions, recurring bills, category-only histories, date filter, review confidence and mobile layout');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exit(1)});
