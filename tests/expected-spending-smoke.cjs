@@ -18,6 +18,20 @@ assert.equal(groceries.variable,0,'No undated catch-all spending');
 const subs=F.forecast(source,'2026-10','Subscriptions',todays);
 assert.equal(subs.expected.some(t=>t.merchant==='Netflix'),false,'Already-paid monthly Netflix is not forecast again');
 assert.ok(subs.expected.some(t=>t.merchant==='Spotify'&&t.date==='2026-10-19'),'Future Spotify bill is forecast on observed date');
+const weeklyDates=['2026-07-07','2026-07-14','2026-07-21','2026-07-28','2026-08-04','2026-08-11','2026-08-18','2026-08-25','2026-09-01','2026-09-08','2026-09-15','2026-09-22','2026-09-29','2026-10-06','2026-10-13'];
+const weeklies=weeklyDates.map((date,i)=>({id:'weekly-'+i,date,merchant:'Weekly recurring service',type:'expense',category:'Subscriptions',amount:8.99,account:'Checking'}));
+const weeklyForecast=F.forecast(weeklies,'2026-10','Subscriptions',todays);
+assert.ok(weeklyForecast.expected.some(t=>t.date==='2026-10-20'&&t.cadence==='weekly'),'Weekly service predicts next week despite 4 vs 5 charges per month');
+assert.ok(weeklyForecast.expected.some(t=>t.date==='2026-10-27'),'Recurring weekly service predicts another dated charge');
+const twiceMonthly=['2026-07-02','2026-07-16','2026-07-30','2026-08-13','2026-08-27','2026-09-10','2026-09-24','2026-10-08']
+ .map((date,i)=>({id:'biweek-'+i,date,merchant:'Fortnightly bill',type:'expense',category:'Subscriptions',amount:24.99,account:'Checking'}));
+const fortnightly=F.forecast(twiceMonthly,'2026-10','Subscriptions',todays);
+assert.ok(fortnightly.expected.some(t=>t.date==='2026-10-22'&&t.cadence==='every 2 weeks'),'Biweekly pattern predicts Oct 22');
+const staleHistory=[
+ {id:'stale-1',date:'2026-07-12',merchant:'Old subscription',amount:20,type:'expense',category:'Subscriptions',account:'Checking'},
+ {id:'stale-2',date:'2026-08-12',merchant:'Old subscription',amount:20,type:'expense',category:'Subscriptions',account:'Checking'}
+];
+assert.equal(F.forecast(staleHistory,'2026-10','Subscriptions',todays).expected.length,0,'Do not extrapolate stale history without last month');
 const historyOnly=F.forecast(source,'2026-09','Subscriptions',todays);
 assert.equal(historyOnly.expected.length,0,'Closed months contain no future predictions');
 const insufficient=F.forecast([
