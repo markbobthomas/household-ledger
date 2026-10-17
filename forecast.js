@@ -27,6 +27,7 @@ const skip=t=>!t||!validDate(t.date)||!Number.isFinite(Number(t.amount))||Number
  t.pending||t.type==='transfer';
 const confidence=(observations,months,stability,dateSpread,cadence)=>{
  // Labels are evidence heuristics, not measured probabilities.
+ if(observations>=3&&months>=3&&stability<=.0005&&dateSpread<=3)return 'High';
  if(observations>=5&&months>=3&&stability<=.18&&dateSpread<=2)return 'High';
  if((cadence==='monthly'||cadence==='twice monthly'||cadence==='weekly'||cadence==='every 2 weeks')&&observations>=3&&stability<=.50)return 'Medium';
  return 'Pattern';
@@ -50,7 +51,7 @@ function seasonalAmount(rows,month,baseline,variable){
  if(ratio<.4||ratio>2.5)return {amount:baseline,seasonal:false};
  return {amount:round(.6*seasonValue+.4*baseline),seasonal:true};
 }
-function infer(transactions,month,category,asOf,mode='expense'){
+function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  const today=String(asOf||new Date().toLocaleDateString('en-CA')).slice(0,10);
  const all=(Array.isArray(transactions)?transactions:[]).filter(t=>!skip(t)&&t.date<=today);
  const expenseMode=mode==='expense';
@@ -61,14 +62,14 @@ function infer(transactions,month,category,asOf,mode='expense'){
   recurringDetails:[],historyMonths:[],method:'No dated predictions',
   unscheduled:{estimate:0,min:0,max:0,confidence:'Unknown',includedInDatedTotal:false},
   diagnostics:{candidateCount:0,patternCount:0,lookbackMonths:24}};
- if(month!==today.slice(0,7))return result;
- const past=coverage(all,month);
+ if(month<today.slice(0,7))return result;
+ const past=coverage(all,today.slice(0,7));
  result.historyMonths=past;
- if(past.length<2||!past.includes(shiftMonth(month,-1))){
+ if(past.length<2||!past.includes(shiftMonth(today.slice(0,7),-1))){
   result.method='Insufficient recent account history; no reliable dated schedule';
   return result;
  }
- const windowStart=shiftMonth(month,-24);
+ const windowStart=shiftMonth(today.slice(0,7),-24);
  const records=all.filter(t=>match(t)&&t.date<month+'-01'&&t.date>=windowStart);
  const groups=new Map();
  for(const t of records){
@@ -108,7 +109,7 @@ function infer(transactions,month,category,asOf,mode='expense'){
   if(dayDiff(today,last.date)>best*2+4)return false;
   const months=new Set(recent.map(t=>t.date.slice(0,7))).size;
   let cursor=last.date,n=0;
-  while(n<12){
+  while(n<25){
    cursor=addDays(cursor,best);
    if(cursor.slice(0,7)>month)break;
    if(cursor>today&&cursor.slice(0,7)===month){
@@ -129,7 +130,7 @@ function infer(transactions,month,category,asOf,mode='expense'){
   const byMonth=new Map(observed.map(m=>[m,monthRecords(relevant,m).sort((a,b)=>a.date.localeCompare(b.date))]));
   const recentMonths=observed.slice(-3);
   if(recentMonths.some((m,i)=>i>0&&monthIndex(m)-monthIndex(recentMonths[i-1])!==1))return;
-  if(monthIndex(month)-monthIndex(recentMonths[recentMonths.length-1])!==1)return;
+  if(monthIndex(month)-monthIndex(recentMonths[recentMonths.length-1])<1||monthIndex(month)-monthIndex(recentMonths[recentMonths.length-1])>4)return;
   const count=byMonth.get(recentMonths[0]).length;
   if(!count||count>5||recentMonths.some(m=>byMonth.get(m).length!==count))return;
   for(let slot=0;slot<count;slot++){
@@ -165,7 +166,7 @@ function infer(transactions,month,category,asOf,mode='expense'){
    // three and consistent intervals to avoid classifying random purchases.
    if(months.length<(span===12?2:3)||gaps.some(g=>g!==span))continue;
    const mostRecent=months[months.length-1];
-   if(monthIndex(month)-monthIndex(mostRecent)!==span)continue;
+   if(monthIndex(month)-monthIndex(mostRecent)<span||(monthIndex(month)-monthIndex(mostRecent))%span!==0)continue;
    if(group.some(t=>!likelyBill(t))&&mode!=='income')continue; // long cycles need bill evidence
    const amounts=group.map(t=>Number(t.amount)),mid=median(amounts);
    const variability=Math.max(...amounts.map(v=>Math.abs(v-mid)/mid));
@@ -184,6 +185,18 @@ function infer(transactions,month,category,asOf,mode='expense'){
   group.sort((a,b)=>a.date.localeCompare(b.date));
   const key=normalize(group[0].merchant);
   if(!key||group.length<2)continue;
+  const keyOfRule=[mode,category||'Income',accountKey(group[0]),key].map(encodeURIComponent).join('|');
+  const directive=patternRules[keyOfRule];
+  if(directive?.mode==='none')continue;
+  if(directive?.mode==='monthly'){
+   const day=Number(directive.day),amount=Number(directive.amount);
+   if(day>=1&&day<=31&&Number.isFinite(amount)&&amount>0){
+    const date=month+'-'+String(Math.min(endDay(month),day)).padStart(2,'0');
+    const item=make(group,0,date,amount,'monthly',group.length,new Set(group.map(x=>x.date.slice(0,7))).size,0,0);
+    if(item){item.confidence='Confirmed';item.manualRule=true;item.patternKey=keyOfRule;candidates.push(item);}
+   }
+   continue;
+  }
   // A genuine two-paydays-per-month schedule stays anchored to calendar days;
   // a true biweekly schedule drifts across months and uses 14-day intervals.
   const recentThree=[...new Set(group.filter(t=>t.date>=shiftMonth(month,-3)).map(t=>t.date.slice(0,7)))].sort();
@@ -245,9 +258,10 @@ function infer(transactions,month,category,asOf,mode='expense'){
  result.method='Dated recurring patterns using up to 24 months; confidence labels are heuristics';
  return result;
 }
-function forecast(transactions,month,category,todayDate){return infer(transactions,month,category,todayDate,'expense')}
-function forecastIncome(transactions,month,todayDate){return infer(transactions,month,null,todayDate,'income')}
-const api={forecast,forecastIncome,infer};
+function forecast(transactions,month,category,todayDate,patternRules){return infer(transactions,month,category,todayDate,'expense',patternRules)}
+function forecastIncome(transactions,month,todayDate,patternRules){return infer(transactions,month,null,todayDate,'income',patternRules)}
+function patternKey(type,category,account,merchant){return [type,category,account,normalize(merchant)].map(encodeURIComponent).join('|')}
+const api={forecast,forecastIncome,infer,patternKey};
 root.HouseholdForecast=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
