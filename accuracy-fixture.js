@@ -27,7 +27,8 @@ function buildScenario(){
   add(d(15),'Childcare Center',815,'Kids & Family','expense','Checking','','monthly');
   add(d(21),'Music Stream',11.99,'Subscriptions','expense','Checking','','monthly');
   add(d(27),'Water Utility',67+((idx%4)*5),'Utilities','expense','Checking','','monthly');
-  add(d(10),'Credit Card Settlement',1100,'Other','transfer'); // moves cash but is not additional spending
+  add(d(10),'Credit Card Settlement',1100,'Other','transfer'); // checking outflow, not consumption
+  transactions[transactions.length-1].cashDirection='out';
   // Quarterly vendor, with slightly moving posting dates.
   if(m%3===1)add(d(18+(idx%2)),'Quarterly Pest Service',90+(idx%3)*3,'Utilities','expense','Checking','','quarterly');
   // Semiannual bill, due in May and November.
