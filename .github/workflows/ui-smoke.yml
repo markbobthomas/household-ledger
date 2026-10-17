@@ -26,6 +26,7 @@ jobs:
           node tests/category-budget-smoke.cjs
           node tests/inline-edit-smoke.cjs
           node tests/inline-category-smoke.cjs
+          node tests/activity-recurring-smoke.cjs
           node tests/cashflow-smoke.cjs
           node tests/design-smoke.cjs
           node tests/settings-geometry-diagnostic.cjs

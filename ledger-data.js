@@ -172,8 +172,21 @@ function setPatternRule(state,key,rule){
   }
  };
  if(rule===null){clearForecastEdits();delete state.predictions.patternRules[key];return}
- if(!rule||!['none','monthly','trust'].includes(rule.mode))throw Error('Invalid recurrence decision');
+ if(!rule||!['none','monthly','trust','schedule'].includes(rule.mode))throw Error('Invalid recurrence decision');
  if(rule.mode==='none'){state.predictions.patternRules[key]={mode:'none'};return}
+ if(rule.mode==='schedule'){
+  const allowed=['weekly','biweekly','monthly','quarterly','semiannual','annual'];
+  const anchorDate=String(rule.anchorDate||'');
+  const day=Number(rule.day),amount=Number(rule.amount);
+  if(!allowed.includes(rule.frequency)||!validDate(anchorDate)||
+     !Number.isInteger(day)||day<1||day>31||
+     !Number.isFinite(amount)||amount<=0||amount>999999999)
+    throw Error('Choose a valid recurring frequency, starting date, day and amount');
+  clearForecastEdits();
+  state.predictions.patternRules[key]={mode:'schedule',frequency:rule.frequency,anchorDate,
+   day,amount:round(amount),source:'activity'};
+  return;
+ }
  if(rule.mode==='trust'){
   if(typeof rule.cadence!=='string'||!['weekly','every 2 weeks','monthly','twice monthly','quarterly','semiannual','annual','3 / month','4 / month','5 / month'].includes(rule.cadence)||
      !Number.isFinite(Number(rule.amount))||Number(rule.amount)<=0||

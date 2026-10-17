@@ -15,6 +15,33 @@ const addDays=(date,n)=>{const d=utc(date);d.setUTCDate(d.getUTCDate()+n);return
 const shiftMonth=(m,n)=>{const [y,mo]=m.split('-').map(Number);return iso(new Date(Date.UTC(y,mo-1+n,1,12))).slice(0,7)};
 const endDay=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
 const monthIndex=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7));
+/* A user-confirmed schedule starts at its anchored source date.
+ * Calendar cadence clamps the chosen day in short months; interval cadence
+ * counts actual days so biweekly pay/bills can drift across month boundaries.
+ */
+function scheduledDates(rule,month){
+ const anchor=String(rule.anchorDate||'');
+ if(!validDate(anchor))return [];
+ const start=month+'-01',end=month+'-'+String(endDay(month)).padStart(2,'0');
+ if(rule.frequency==='weekly'||rule.frequency==='biweekly'){
+  const step=rule.frequency==='weekly'?7:14;
+  const n=Math.max(0,Math.ceil(dayDiff(start,anchor)/step));
+  const dates=[];
+  for(let i=n;i<n+6;i++){
+   const date=addDays(anchor,i*step);
+   if(date>end)break;
+   if(date>=start&&date>=anchor)dates.push(date);
+  }
+  return dates;
+ }
+ const spacing={monthly:1,quarterly:3,semiannual:6,annual:12}[rule.frequency];
+ if(!spacing)return [];
+ const offset=monthIndex(month)-monthIndex(anchor.slice(0,7));
+ if(offset<0||offset%spacing!==0)return [];
+ const day=Math.min(endDay(month),Number(rule.day));
+ const date=month+'-'+String(day).padStart(2,'0');
+ return date>=anchor?[date]:[];
+}
 const normalize=s=>String(s||'').toLowerCase().replace(/\s+/g,' ').replace(/(?:\s*[-#*]\s*\d{3,})$/,'').trim();
 const accountKey=t=>String(t.accountId||t.account||'Unknown');
 const periodicCategories=new Set(['Housing','Utilities','Subscriptions','Insurance','Kids & Family']);
@@ -69,7 +96,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  if(month<today.slice(0,7))return result;
  const past=coverage(all,today.slice(0,7));
  result.historyMonths=past;
- const forced=Object.entries(patternRules||{}).some(([key,value])=>value?.mode==='monthly'&&
+ const forced=Object.entries(patternRules||{}).some(([key,value])=>(value?.mode==='monthly'||value?.mode==='schedule')&&
    key.startsWith([mode,category||'Income'].map(encodeURIComponent).join('|')+'|'));
  const lastMonth=shiftMonth(today.slice(0,7),-1),previousMonth=shiftMonth(today.slice(0,7),-2);
  const syncGap=!past.includes(lastMonth)&&past.includes(previousMonth)&&past.length>=4;
@@ -80,7 +107,8 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  if(syncGap){result.diagnostics.warning='Recent complete month missing: possible sync gap. Predictions are provisional and need review';
   result.diagnostics.syncGap=true;}
  const windowStart=shiftMonth(today.slice(0,7),-24);
- const records=all.filter(t=>match(t)&&t.date<=today&&t.date>=windowStart);
+ const records=all.filter(t=>match(t)&&t.date<=today&&(t.date>=windowStart||
+  patternRules[patternKey(t.type,t.type==='income'?'Income':t.type==='transfer'?'Income':t.category,accountKey(t),t.merchant)]?.mode==='schedule'));
  const groups=new Map();
  for(const t of records){
   const key=accountKey(t)+'|'+normalize(t.merchant);
@@ -232,6 +260,18 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const keyOfRule=[mode,category||'Income',accountKey(group[0]),key].map(encodeURIComponent).join('|');
   const directive=patternRules[keyOfRule];
   if(directive?.mode==='none')continue;
+  if(directive?.mode==='schedule'){
+   const dates=scheduledDates(directive,month);
+   for(const date of dates){
+    const cadence={weekly:'weekly',biweekly:'every 2 weeks',monthly:'monthly',
+     quarterly:'quarterly',semiannual:'semiannual',annual:'annual'}[directive.frequency];
+    const slot=directive.frequency==='monthly'?'0':'scheduled-'+date;
+    const item=make(group,slot,date,directive.amount,cadence,group.length,
+     new Set(group.map(x=>x.date.slice(0,7))).size,0,0);
+    if(item){item.confidence='Confirmed';item.manualRule=true;item.patternKey=keyOfRule;candidates.push(item);}
+   }
+   continue;
+  }
   if(directive?.mode==='monthly'){
    const day=Number(directive.day),amount=Number(directive.amount);
    if(day>=1&&day<=31&&Number.isFinite(amount)&&amount>0){

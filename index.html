@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=review-count-tabs1"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phase42"></script><script src="bank-feed.js?v=phase43"></script><script src="feed-health.js?v=phase43"></script><script src="cashflow.js?v=phase41"></script><script src="forecast-ledger.js?v=phase43"></script><script src="recurring.js"></script><script src="ledger-data.js?v=phase3-learning"></script><script src="reviews.js?v=phase42"></script><script src="accuracy-fixture.js?v=phase4"></script><script src="accuracy-fixture-holdout.js?v=phase41"></script><script src="accuracy-lab.js?v=phase41"></script><script src="stress-lab.js?v=phase42"></script><script src="accuracy-fixture-seasonal.js?v=phase43"></script><script src="readiness-lab.js?v=phase43"></script><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=activity-recurring1"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=activity-recurring1"></script><script src="bank-feed.js?v=phase43"></script><script src="feed-health.js?v=phase43"></script><script src="cashflow.js?v=phase41"></script><script src="forecast-ledger.js?v=phase43"></script><script src="recurring.js"></script><script src="ledger-data.js?v=activity-recurring1"></script><script src="reviews.js?v=phase42"></script><script src="accuracy-fixture.js?v=phase4"></script><script src="accuracy-fixture-holdout.js?v=phase41"></script><script src="accuracy-lab.js?v=phase41"></script><script src="stress-lab.js?v=phase42"></script><script src="accuracy-fixture-seasonal.js?v=phase43"></script><script src="readiness-lab.js?v=phase43"></script><script>
 (()=>{
 'use strict';const KEY='household-ledger-v1',CATS=['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other'],BANDS=[['Under $10',0,10],['$10–$25',10,25],['$25–$50',25,50],['$50–$100',50,100],['$100–$200',100,200],['$200–$500',200,500],['$500+',500,Infinity]],money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c])),el=x=>document.getElementById(x),id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2),today=()=>new Date().toLocaleDateString('en-CA');const Model=window.HouseholdLedgerData,initialStorage=localStorage.getItem(KEY);let initial;try{initial=initialStorage?JSON.parse(initialStorage):null}catch{initial=null}
 if(!initial)initial=initialStorage===null&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[],budgets:{}};
@@ -33,7 +33,34 @@ function cleanMerchant(s){let u=s.toUpperCase();if(u.includes('COSTCO'))return /
     (report.review.length?'<div class="panel recurring-panel"><div class="section-top"><h3>Subscriptions to review</h3><span class="budget-summary-meta">'+report.review.length+' uncertain</span></div>'+listRecurring(report.review,true)+'</div>':'')+
     '<div class="recurring-disclaimer">Estimates from local history; not bank-verified. One-off charges are excluded.</div>';
 }
-function gridStats(){const a=expense(),income=sum(rows().filter(x=>x.type==='income'));return'<div class="stats">'+[['Spent',money(sum(a))],['Income',money(income)],['Net cash flow',money(income-sum(a))]].map(x=>'<div class="stat"><div class="sub">'+x[0]+'</div><div class="num">'+x[1]+'</div></div>').join('')+'</div>'}function list(a,max=999,kind=null,source=expense()){const top=Math.max(1,...a.map(x=>x.amount));return a.slice(0,max).map(x=>{const matching=kind?source.filter(t=>kind==='merchant'?cleanMerchant(t.merchant)===x.name:t.category===x.name).sort((a,b)=>b.date.localeCompare(a.date)):[];const line='<div style="flex:1;min-width:0"><b>'+esc(x.name)+'</b><div class="bar"><i style="width:'+(x.amount/top*100).toFixed(1)+'%"></i></div></div><div style="text-align:right"><strong>'+money(x.amount)+'</strong><div class="sub">'+x.count+' purchases</div></div>';if(!kind)return'<div class="row">'+line+'</div>';return'<details class="drill-detail" data-report-group="'+esc(kind+'|'+x.name)+'"><summary class="row drill-summary">'+line+'<span class="chevron" aria-hidden="true">⌄</span></summary><div class="drill-expanded"><div class="sub">'+matching.length+' transactions • '+money(x.amount)+' total</div>'+table(matching)+'</div></details>'}).join('')||'<div class="empty">No data yet. Import a bank CSV or add a transaction.</div>'}function table(a){return'<div class="ledger-table-wrap"><table class="ledger-table"><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th>Type</th><th>Amount</th></tr></thead><tbody>'+a.map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(t.merchant)+'<div class="transaction-source">'+esc(t.source?.provider==='plaid'?'Bank synced':t.source?.provider==='demo'?'Demo record':'Unverified legacy record')+'</div></td><td>'+categoryControl(t.id,t.category,t.merchant)+(t.method==='learned'?'<div class="transaction-source">Learned from confirmed merchant rule</div>':t.suggested&&t.category!==t.suggested?'<div class="transaction-source">Suggested: '+esc(t.suggested)+'</div>':'')+'</td><td>'+esc(t.type)+'</td><td><strong>'+money(t.amount)+'</strong></td></tr>').join('')+'</tbody></table></div>'}
+function gridStats(){const a=expense(),income=sum(rows().filter(x=>x.type==='income'));return'<div class="stats">'+[['Spent',money(sum(a))],['Income',money(income)],['Net cash flow',money(income-sum(a))]].map(x=>'<div class="stat"><div class="sub">'+x[0]+'</div><div class="num">'+x[1]+'</div></div>').join('')+'</div>'}function list(a,max=999,kind=null,source=expense()){const top=Math.max(1,...a.map(x=>x.amount));return a.slice(0,max).map(x=>{const matching=kind?source.filter(t=>kind==='merchant'?cleanMerchant(t.merchant)===x.name:t.category===x.name).sort((a,b)=>b.date.localeCompare(a.date)):[];const line='<div style="flex:1;min-width:0"><b>'+esc(x.name)+'</b><div class="bar"><i style="width:'+(x.amount/top*100).toFixed(1)+'%"></i></div></div><div style="text-align:right"><strong>'+money(x.amount)+'</strong><div class="sub">'+x.count+' purchases</div></div>';if(!kind)return'<div class="row">'+line+'</div>';return'<details class="drill-detail" data-report-group="'+esc(kind+'|'+x.name)+'"><summary class="row drill-summary">'+line+'<span class="chevron" aria-hidden="true">⌄</span></summary><div class="drill-expanded"><div class="sub">'+matching.length+' transactions • '+money(x.amount)+' total</div>'+table(matching)+'</div></details>'}).join('')||'<div class="empty">No data yet. Import a bank CSV or add a transaction.</div>'}function table(a,activity=false){
+ const detected=activity?new Set(sharedForecast().events.filter(e=>e.type==='expense'||e.type==='income')
+  .map(e=>window.HouseholdForecast.patternKey(e.type,e.type==='income'?'Income':e.category,
+   e.account||e.accountId||'Unknown',e.merchant))):null;
+ return'<div class="ledger-table-wrap"><table class="ledger-table"><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th>Type</th><th>Amount</th>'+
+ (activity?'<th>Recurring</th>':'')+'</tr></thead><tbody>'+
+ a.map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(t.merchant)+
+ '<div class="transaction-source">'+esc(t.source?.provider==='plaid'?'Bank synced':t.source?.provider==='demo'?'Demo record':'Unverified legacy record')+'</div></td><td>'+
+ categoryControl(t.id,t.category,t.merchant)+(t.method==='learned'?'<div class="transaction-source">Learned from confirmed merchant rule</div>':
+ t.suggested&&t.category!==t.suggested?'<div class="transaction-source">Suggested: '+esc(t.suggested)+'</div>':'')+
+ '</td><td>'+esc(t.type)+'</td><td><strong>'+money(t.amount)+'</strong></td>'+
+ (activity?'<td class="recurring-cell">'+recurringControl(t,detected)+'</td>':'')+'</tr>').join('')+'</tbody></table></div>';
+}
+function recurringControl(t,detected){
+ if(!['expense','income'].includes(t.type))
+  return '<span class="recurring-na" title="Transfer forecasts require an explicit direction">—</span>';
+ const key=window.HouseholdForecast.patternKey(t.type,t.type==='income'?'Income':t.category,
+  String(t.accountId||t.account||'Unknown'),t.merchant);
+ const rule=data.predictions.patternRules?.[key];
+ const freq=rule?.mode==='schedule'?rule.frequency:rule?.mode==='monthly'?'monthly':null;
+ const names={weekly:'Weekly',biweekly:'Every 2 weeks',monthly:'Monthly',quarterly:'Quarterly',
+  semiannual:'Every 6 months',annual:'Yearly'};
+ const label=rule?.mode==='none'?'Not recurring':freq?'Recurring · '+names[freq]:
+  rule?.mode==='trust'?'Confirmed pattern':detected?.has(key)?'Detected':'Not set';
+ return '<button type="button" class="editable-value recurring-value'+(freq?' is-recurring':'')+
+ '" data-recurring="'+esc(t.id)+'" title="Edit recurrence for this merchant, account and category"'+
+ ' aria-label="Edit recurrence for '+esc(t.merchant)+'">'+esc(label)+'</button>';
+}
 function categoryControl(id,current,merchant){
  const width=Math.min(19,Math.max(8,String(current).length+3));
  return '<select class="editable-value editable-category inline-category-native" data-category="'+esc(id)+
@@ -167,7 +194,7 @@ function recurrenceRulesMarkup(category){
  '<p class="prediction-note">Use recorded transactions to tell the model a merchant repeats monthly, does not repeat, or should be detected automatically. This does not edit actual transactions.</p>'+
  '<form class="pattern-rule-form" data-pattern-rule-form="'+esc(category)+'">'+
  '<label>Merchant<select name="key" required>'+options.map(t=>'<option value="'+esc(t.key)+'" data-amount="'+esc(t.amount)+'" data-day="'+esc(Number(t.date.slice(8,10)))+'">'+esc(t.merchant)+' · '+esc(t.account||t.accountId||'Checking')+'</option>').join('')+'</select></label>'+
- '<label>Recurrence<select name="mode"><option value="auto">Automatic detection</option><option value="monthly">Recurring every month</option><option value="trust">Trust observed pattern</option><option value="none">Not recurring</option></select></label>'+
+ '<label>Recurrence<select name="mode"><option value="auto">Automatic detection</option><option value="monthly">Recurring every month</option><option value="trust">Trust observed pattern</option><option value="schedule">Activity schedule (edit in Activity)</option><option value="none">Not recurring</option></select></label>'+
  '<label>Expected day<input name="day" type="number" min="1" max="31" required value="'+Number(options[0].date.slice(8,10))+'"></label>'+
  '<label>Expected amount ($)<input name="amount" type="number" min=".01" step=".01" required value="'+options[0].amount+'"></label>'+
  '<div class="expected-actions"><button type="submit" class="btn primary">Save recurrence rule</button></div>'+
@@ -407,7 +434,7 @@ if(page==='budgets'){
   el('subtitle').textContent=page==='transactions'?'All of your entries in one place.':page==='insights'?'See where your money actually goes.':page==='reviews'?'Items that need your confirmation.':'Data and account preferences.';
 }
 el('period').hidden=page==='reviews';
-let a=expense(),html='';if(page==='reviews')html=reviewsPage();if(page==='transactions')html='<div class="panel"><div class="section-top"><h3>Transactions</h3><span class="budget-summary-meta">'+rows().length+' entries</span></div>'+table(rows().sort((a,b)=>b.date.localeCompare(a.date)))+'</div>';
+let a=expense(),html='';if(page==='reviews')html=reviewsPage();if(page==='transactions')html='<div class="panel"><div class="section-top"><h3>Transactions</h3><span class="budget-summary-meta">'+rows().length+' entries</span></div>'+table(rows().sort((a,b)=>b.date.localeCompare(a.date)),true)+'</div>';
 if(page==='insights'){
   const tabs='<div class="insight-tabs" role="tablist" aria-label="Insight views">'+[['merchants','Merchants'],['categories','Categories'],['bands','Purchase sizes'],['recurring','Recurring'],['accuracy','Accuracy']].map(([key,name])=>'<button type="button" role="tab" aria-selected="'+(insightMode===key)+'" class="'+(insightMode===key?'active':'')+'" data-insight="'+key+'">'+name+'</button>').join('')+'</div>';
   if(insightMode==='categories'){
@@ -534,6 +561,7 @@ if(page==='insights'&&window.matchMedia('(max-width:700px)').matches){
  if(tabs&&active)tabs.scrollLeft+=active.getBoundingClientRect().left-tabs.getBoundingClientRect().left-16;
 }
 bindInlineCategoryEdits();
+bindActivityRecurrenceEdits();
 bindInlineMoneyEdits();
 document.querySelectorAll('[data-stream]').forEach(b=>b.onclick=()=>streamPredictionForm(b.dataset.stream));
 document.querySelectorAll('[data-event]').forEach(b=>b.onclick=()=>eventPredictionForm(b.dataset.event));
@@ -548,7 +576,7 @@ document.querySelectorAll('[data-pattern-rule-form]').forEach(form=>{
   form.querySelector('[name=day]').value=choice.dataset.day||'1';
   mode.value=data.predictions.patternRules?.[select.value]?.mode||'auto';
   const rule=data.predictions.patternRules?.[select.value];
-  if(rule?.mode==='monthly'){form.querySelector('[name=amount]').value=rule.amount;form.querySelector('[name=day]').value=rule.day}
+  if(rule?.mode==='monthly'||rule?.mode==='schedule'){form.querySelector('[name=amount]').value=rule.amount;form.querySelector('[name=day]').value=rule.day}
  };
  select.onchange=fill;fill();
  form.onsubmit=e=>{
@@ -556,7 +584,9 @@ document.querySelectorAll('[data-pattern-rule-form]').forEach(form=>{
   const fields=new FormData(form),category=form.dataset.patternRuleForm,key=String(fields.get('key')),kind=String(fields.get('mode'));
   try{
    const previous=data.predictions.patternRules?.[key];
-   if(kind==='trust'){
+   if(kind==='schedule'){
+    if(previous?.mode!=='schedule')throw Error('Set or change this schedule in Activity');
+   }else if(kind==='trust'){
     if(previous?.mode!=='trust')throw Error('Confirm this recurrence from Reviews first');
     Model.setPatternRule(data,key,{...previous,mode:'trust'});
    }else Model.setPatternRule(data,key,kind==='auto'?null:{mode:kind,day:fields.get('day'),amount:fields.get('amount')});
@@ -649,6 +679,96 @@ function bindInlineCategoryEdits(){
   });
  });
 }
+/* Editable recurrence is a prediction-only merchant/account/category rule.
+ * It never writes a future transaction to the source Activity ledger.
+ */
+function bindActivityRecurrenceEdits(){
+ document.querySelectorAll('[data-recurring]').forEach(button=>{
+  button.addEventListener('click',event=>{
+   event.preventDefault();
+   beginActivityRecurrenceEdit(button);
+  });
+ });
+}
+function beginActivityRecurrenceEdit(button){
+ const record=data.transactions.find(t=>String(t.id)===button.dataset.recurring);
+ if(!record||!['expense','income'].includes(record.type))return;
+ const category=Model.categoryFor(data,record.id),account=String(record.accountId||record.account||'Unknown');
+ const key=window.HouseholdForecast.patternKey(record.type,record.type==='income'?'Income':category,account,record.merchant);
+ const rule=data.predictions.patternRules?.[key];
+ const existing=rule?.mode==='none'?'none':rule?.mode==='schedule'||rule?.mode==='monthly'?'schedule':
+  rule?.mode==='trust'?'trust':'auto';
+ const frequency=rule?.mode==='schedule'?rule.frequency:'monthly';
+ const day=rule?.day||Number(record.date.slice(8,10));
+ const amount=rule?.amount||record.amount;
+ const anchorDate=rule?.anchorDate||record.date;
+ const form=document.createElement('form');
+ form.className='recurring-inline-form';
+ form.dataset.recurringForm=String(record.id);
+ const choices=[['auto','Automatic detection'],['schedule','Recurring'],['none','Not recurring']];
+ if(existing==='trust')choices.push(['trust','Keep confirmed pattern']);
+ const freqs=[['monthly','Monthly'],['weekly','Weekly'],['biweekly','Every 2 weeks'],
+  ['quarterly','Every 3 months'],['semiannual','Every 6 months'],['annual','Yearly']];
+ form.innerHTML='<label>Status<select name="decision">'+choices.map(([v,label])=>
+  '<option value="'+v+'" '+(v===existing?'selected':'')+'>'+label+'</option>').join('')+'</select></label>'+
+  '<div class="recurring-schedule-fields">'+
+  '<label>Frequency<select name="frequency">'+freqs.map(([v,label])=>
+   '<option value="'+v+'" '+(v===frequency?'selected':'')+'>'+label+'</option>').join('')+'</select></label>'+
+  '<label class="recurring-day-field">Day of month<input type="number" name="day" min="1" max="31" step="1" required value="'+esc(day)+'"></label>'+
+  '<label>Starting date<input type="date" name="anchorDate" required value="'+esc(anchorDate)+'"></label>'+
+  '<label>Expected amount ($)<input type="number" name="amount" min=".01" step=".01" required value="'+esc(amount)+'"></label>'+
+  '</div><small class="recurring-schedule-hint"></small>'+
+  '<div class="recurring-inline-actions"><button type="submit" class="btn primary">Save</button>'+
+  '<button type="button" class="btn" data-recurring-cancel>Cancel</button></div>'+
+  '<span class="recurring-error" role="alert"></span>';
+ form.addEventListener('click',e=>e.stopPropagation());
+ form.addEventListener('pointerdown',e=>e.stopPropagation());
+ form.addEventListener('keydown',e=>e.stopPropagation());
+ const cell=button.closest('td');cell.classList.add('recurring-editing');
+ button.replaceWith(form);
+ const decision=form.querySelector('[name=decision]'),frequencyInput=form.querySelector('[name=frequency]');
+ const fields=form.querySelector('.recurring-schedule-fields'),dayField=form.querySelector('.recurring-day-field');
+ const hint=form.querySelector('.recurring-schedule-hint');
+ function update(){
+  const active=decision.value==='schedule',interval=['weekly','biweekly'].includes(frequencyInput.value);
+  fields.hidden=!active;dayField.hidden=!active||interval;
+  fields.querySelectorAll('input,select').forEach(x=>x.disabled=!active);
+  hint.textContent=active?interval?
+   'The starting date determines the weekday. Repeats every 7 or 14 days.':
+   'Repeats on this day of the month; short months use their last day.':
+   decision.value==='none'?'Never predict this merchant from its transaction history.':
+   'Automatic detection needs enough historical evidence.';
+ }
+ function cancel(){
+  if(form.isConnected)form.replaceWith(button);
+  cell.classList.remove('recurring-editing');
+  button.focus({preventScroll:true});
+ }
+ decision.addEventListener('change',update);
+ frequencyInput.addEventListener('change',update);
+ form.querySelector('[data-recurring-cancel]').addEventListener('click',cancel);
+ form.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();cancel()}});
+ form.addEventListener('submit',e=>{
+  e.preventDefault();
+  try{
+   const values=new FormData(form);
+   const choice=String(values.get('decision'));
+   if(choice==='auto')Model.setPatternRule(data,key,null);
+   else if(choice==='none')Model.setPatternRule(data,key,{mode:'none'});
+   else if(choice==='schedule')Model.setPatternRule(data,key,{mode:'schedule',
+    frequency:values.get('frequency'),day:values.get('day'),anchorDate:values.get('anchorDate'),
+    amount:values.get('amount')});
+   else if(choice!=='trust'||rule?.mode!=='trust')throw Error('Invalid recurrence choice');
+   save();
+   const scroll=window.scrollY,id=String(record.id);
+   render();
+   window.scrollTo({top:scroll,behavior:'instant'});
+   [...document.querySelectorAll('[data-recurring]')].find(x=>x.dataset.recurring===id)?.focus({preventScroll:true});
+  }catch(error){form.querySelector('.recurring-error').textContent=error.message}
+ });
+ update();decision.focus({preventScroll:true});
+}
+
 /* Direct-edit forecast values only; recorded bank amounts remain immutable. */
 function beginInlineMoneyEdit(button,onSave){
  const prior=Number(button.dataset.amount)||0;
