@@ -873,3 +873,24 @@ html { scroll-behavior:auto; }
   .cash-chart{width:100%;height:auto;max-height:116px}
   .cash-status{font-size:11px;line-height:1.45;margin:5px 0}
 }
+
+/* Phase 3: explainable, reversible learned rules */
+.learned-rules{border-top:2px solid var(--ink);border-bottom:1px solid var(--line);margin:24px 0 16px}
+.learned-rules>summary{cursor:pointer;list-style:none;font-size:15px;font-weight:700;padding:15px 4px;min-height:46px}
+.learned-rules>summary::-webkit-details-marker{display:none}
+.learned-rules>summary span{font:700 13px var(--mono);color:var(--muted);margin-left:7px}
+.learned-rules .section-top{margin:19px 0 8px}
+.learned-rules .section-top h3{font-size:13px}
+.learning-rule{display:flex;align-items:center;gap:12px;padding:12px 4px;border-top:1px solid var(--line);min-width:0}
+.learning-rule>span{flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
+.learning-rule>span strong{display:block;font-size:14px}
+.learning-rule>span small{display:block;color:var(--muted);font-size:12px;line-height:1.5;margin-top:3px}
+.learning-rule>strong{font:650 13px var(--mono)}
+.learning-rule button{white-space:nowrap;min-height:40px}
+.learn-checkbox{display:flex!important;flex-direction:row!important;align-items:center!important;gap:9px!important;font-size:13px!important;font-weight:600!important;line-height:1.4}
+.learn-checkbox input{width:18px!important;height:18px!important;min-height:18px!important;flex:0 0 18px}
+@media(max-width:700px){
+ .learning-rule{flex-wrap:wrap}
+ .learning-rule>span{flex:1 1 170px}
+ .learning-rule button{min-height:44px;font-size:12px}
+}
