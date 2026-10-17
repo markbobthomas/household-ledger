@@ -18,10 +18,11 @@ The app must never let users manually change bank transaction facts. These are s
 ## Editable decisions — separate tables / collections
 
 1. `transaction_category_overrides`: `household_id`, `bank_transaction_id`, `category`, `changed_at`. Category corrections are overlays, never rewritten bank transaction records. Preserve mappings through pending-to-posted ID reconciliation.
-2. `prediction_settings`: household/account, `month`, category, monthly budget and future additional-spending override. Automatic predictions remain separate from posted totals.
-3. `forecast_stream_overrides`: account, inferred stream ID, expected amount, due day, include/exclude status. These edit *predicted* recurring transactions only.
-4. `forecast_one_off_events`: account, expected date, direction, amount, user description. Never part of the actual transaction ledger.
-5. `forecast_variable_daily`: account-level average daily future spending override.
+2. `prediction_settings`: household/account, monthly budget targets, and immutable model-run metadata. Existing undated aggregate overrides are archived, not treated as dated charges.
+3. `expected_transaction_overrides`: account, calendar month, category, stable merchant/slot candidate ID, predicted date/amount and include/exclude status; `manual_expected_transactions` contains forecast-only future entries. Updates to these fields never mutate posted transactions.
+4. `forecast_stream_overrides`: account, inferred stream ID, expected amount, due day, include/exclude status. These edit *predicted* recurring 90-day cash-flow streams only.
+5. `forecast_one_off_events`: account, expected date, direction, amount, user description. Never part of the actual transaction ledger.
+6. `forecast_variable_daily`: account-level average daily future spending override.
 
 Actuals and forecasts must remain visually and logically distinct. The current blue budget bar represents recorded spending and hot pink represents predicted remaining spending. User forecast adjustments can shift the projected balance/date, but **never** mutate the authoritative balance or recorded transactions.
 
@@ -46,3 +47,11 @@ Actuals and forecasts must remain visually and logically distinct. The current b
 - [Plaid Transactions](https://plaid.com/docs/transactions/)
 - [Plaid Balance](https://plaid.com/docs/balance/)
 - [Plaid Recurring](https://plaid.com/docs/api/products/transactions/#transactionsrecurringget)
+
+## Dated monthly category predictions (implemented)
+
+`forecast.js` produces actual posted totals separately from an array of **estimated future transactions**. Every predicted item includes a merchant, account label, category, expected date, expected amount, a stable per-month/merchant/slot ID, evidence-month count and confidence label. It infers recurring bill patterns and consistent periodic merchant purchases from up to three recent observed completed months, scanning at most six months backward. The most recently completed month must contain history; one-time irregular purchases are not invented or spread into undated totals. Where current-month source transactions already match a predicted merchant/slot, the model omits those future candidates to prevent double counting.
+
+Expanded Budgets categories display these predicted items individually, with **inline** amount/date/include controls and automatic-estimate reset, as well as a separate recorded-transactions section. User additions create only forecast data, not bank transactions. Overrides are stored under `predictions.expectedTransactionOverrides` and `predictions.manualExpectedTransactions`. The amount on the hot pink bar is always the sum of enabled dated future estimates. Unscheduled irregular spending remains a real source of forecast uncertainty; it is omitted rather than presented as a fabricated scheduled payment.
+
+The distinct 90-day bank-balance simulator still uses its existing recurring streams and optional average daily-variable-spend assumption. It must be reconciled to fully sourced account history when Plaid is connected; it is not guaranteed to match the separate monthly category forecast.
