@@ -32,6 +32,9 @@ function forecast(transactions, month, category, todayDate){
       for(const tx of all){const mon=String(tx.date).slice(0,7);if(!byMonth.has(mon))byMonth.set(mon,[]);byMonth.get(mon).push(tx)}
       const records=[...byMonth.values()];
       if(records.length<2||records.length<Math.ceil(priorMonths.length*0.67)||records.some(a=>a.length!==1))continue;
+      const name=String(all[0].merchant||'').toLowerCase();
+      if(category==='Housing'&&!/mortgage|rent|home loan|hoa|property tax/.test(name))continue;
+      if(category==='Kids & Family'&&!/daycare|childcare|preschool|tuition|school fee/.test(name))continue;
       const prices=records.map(a=>Number(a[0].amount));
       const dates=records.map(a=>Number(localDay(a[0].date)));
       if(prices.some(n=>!Number.isFinite(n)||n<=0)||Math.max(...prices)/Math.min(...prices)>1.35||Math.max(...dates)-Math.min(...dates)>5)continue;
