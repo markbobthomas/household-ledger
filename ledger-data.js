@@ -4,7 +4,7 @@
  */
 (function(root){
 'use strict';
-const VERSION=2;
+const VERSION=3;
 const copy=x=>JSON.parse(JSON.stringify(x));
 const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(String(d)+'T12:00:00Z'));
 const categorySet=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
@@ -15,6 +15,9 @@ function migrate(input){
  const reviews=old.reviews&&typeof old.reviews==='object'&&!Array.isArray(old.reviews)?copy(old.reviews):{categoryConfirmed:{},predictionConfirmed:{}};
  reviews.categoryConfirmed=reviews.categoryConfirmed&&typeof reviews.categoryConfirmed==='object'?reviews.categoryConfirmed:{};
  reviews.predictionConfirmed=reviews.predictionConfirmed&&typeof reviews.predictionConfirmed==='object'?reviews.predictionConfirmed:{};
+ const learning=old.learning&&typeof old.learning==='object'&&!Array.isArray(old.learning)?copy(old.learning):{};
+ learning.categoryRules=learning.categoryRules&&typeof learning.categoryRules==='object'&&!Array.isArray(learning.categoryRules)?learning.categoryRules:{};
+ learning.ruleHistory=Array.isArray(learning.ruleHistory)?learning.ruleHistory:[];
  const predictions=old.predictions&&typeof old.predictions==='object'?copy(old.predictions):{};
  predictions.monthlyBudgets=predictions.monthlyBudgets&&typeof predictions.monthlyBudgets==='object'?predictions.monthlyBudgets:copy(old.budgets||{});
  predictions.categoryForecasts=predictions.categoryForecasts&&typeof predictions.categoryForecasts==='object'?predictions.categoryForecasts:{};
@@ -33,15 +36,76 @@ function migrate(input){
   }
   return record;
  });
- return {version:VERSION,transactions,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,
+ return {version:VERSION,transactions,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,
     sync:old.sync&&typeof old.sync==='object'?copy(old.sync):{plaidCursor:null}};
 }
+// Category learning never edits authoritative ledger rows. A learned rule can
+// automatically resolve an unclassified/low-confidence transaction only when
+// the merchant is safe for a repeated single category and evidence agrees.
+const mixedUse=/\b(amazon|walmart|costco|target|home depot|lowe'?s|ebay|etsy|paypal|venmo|square|stripe|apple|google|general store|marketplace)\b/i;
+const merchantKey=s=>String(s||'').toLowerCase().trim().replace(/\s+/g,' ').replace(/(?:\s*[-#*]\s*\d{3,})$/,'');
+const accountKey=t=>String(t.accountId||t.account||'Unknown');
+const categoryRuleKey=t=>[accountKey(t),merchantKey(t.merchant),t.type||'expense'].map(encodeURIComponent).join('|');
+const numericCategoryConfidence=t=>{
+ const n=Number(t?.categoryConfidence??t?.category_confidence??t?.source?.categoryConfidence);
+ return Number.isFinite(n)&&n>=0&&n<=1?n:null;
+};
+function categoryRuleSafety(state,t){
+ const related=(state.transactions||[]).filter(row=>row.type==='expense'&&categoryRuleKey(row)===categoryRuleKey(t));
+ const categories=new Set(related.map(x=>state.categoryOverrides?.[x.id]||x.category).filter(x=>x&&x!=='Other'));
+ const mixed=mixedUse.test(t.merchant)||categories.size>1;
+ return {mixed,count:related.length,distinctCategories:categories.size,
+  cause:mixedUse.test(t.merchant)?'Multi-purpose merchant':categories.size>1?'Conflicting past categories':'Consistent merchant history'};
+}
+function resolution(state,t){
+ const explicit=state.categoryOverrides?.[t.id];
+ if(explicit)return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
+ const original=t.category||'Other';
+ const key=categoryRuleKey(t),rule=state.learning?.categoryRules?.[key];
+ if(!rule||t.type!=='expense')return {category:original,method:'source',confidence:'Source',ruleKey:null};
+ const safety=categoryRuleSafety(state,t);
+ const applicable=original==='Other'||(numericCategoryConfidence(t)!==null&&numericCategoryConfidence(t)<.7);
+ const safe=rule.mode==='auto'&&!safety.mixed&&applicable;
+ // Never overwrite a specific provider category with high/unknown confidence.
+ if(safe)return {category:rule.category,method:'learned',confidence:'User rule',ruleKey:key,
+  explanation:'Learned from your review of '+rule.merchant};
+ return {category:original,method:rule.mode==='suggest'||safety.mixed?'suggested':'source',
+  confidence:rule.mode==='suggest'?'Review recommended':'Source',ruleKey:key,
+  suggested:rule.category,conflict:original!=='Other'&&original!==rule.category,
+  explanation:safety.mixed?safety.cause:original!=='Other'?'Original category preserved':'Rule awaiting review'};
+}
 function records(state){
- return (state.transactions||[]).map(t=>({...t,category:state.categoryOverrides?.[t.id]||t.category||'Other'}));
+ return (state.transactions||[]).map(t=>({...t,...resolution(state,t),originalCategory:t.category||'Other'}));
 }
 function categoryFor(state,id){
  const t=(state.transactions||[]).find(x=>x.id===id);
- return t?(state.categoryOverrides?.[id]||t.category||'Other'):null;
+ return t?resolution(state,t).category:null;
+}
+function learnCategory(state,id,category,remember=true){
+ const t=(state.transactions||[]).find(x=>x.id===id);
+ if(!t||t.type!=='expense')throw Error('Unknown expense transaction');
+ if(!categorySet.has(category)||category==='Other')throw Error('Choose a specific category before learning a rule');
+ if(!remember)return null;
+ state.learning??={categoryRules:{},ruleHistory:[]};
+ state.learning.categoryRules??={};state.learning.ruleHistory??=[];
+ const key=categoryRuleKey(t),safety=categoryRuleSafety(state,t);
+ const mode=safety.mixed?'suggest':'auto';
+ const previous=state.learning.categoryRules[key];
+ const next={category,mode,merchant:String(t.merchant||''),account:accountKey(t),
+   sourceId:id,createdAt:new Date().toISOString(),count:safety.count,reason:safety.cause,
+   previousCategory:previous?.category||null};
+ state.learning.categoryRules[key]=next;
+ state.learning.ruleHistory.push({key,action:'learn',category,mode,date:next.createdAt});
+ if(state.learning.ruleHistory.length>150)state.learning.ruleHistory=state.learning.ruleHistory.slice(-150);
+ return {key,...next};
+}
+function removeCategoryRule(state,key){
+ if(!state.learning?.categoryRules?.[key])return false;
+ const old=state.learning.categoryRules[key];
+ delete state.learning.categoryRules[key];
+ state.learning.ruleHistory??=[];
+ state.learning.ruleHistory.push({key,action:'removed',category:old.category,date:new Date().toISOString()});
+ return true;
 }
 function setCategory(state,id,category){
  if(!(state.transactions||[]).some(t=>t.id===id))throw Error('Unknown transaction');
@@ -166,7 +230,7 @@ function applyPlaidSync(state,change){
  if(typeof change.nextCursor==='string')state.sync.plaidCursor=change.nextCursor;
  return state;
 }
-const api={VERSION,migrate,records,categoryFor,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
+const api={VERSION,migrate,records,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
