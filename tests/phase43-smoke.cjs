@@ -86,6 +86,7 @@ assert.ok(!withTransfers.events.some(t=>t.merchant==='Unidentified internal swee
  try{
   const page=await safari.newPage({...devices['iPhone 13']});
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
+  await page.locator('.mobile-top-nav [data-page=overview]').click();
   assert.equal(await page.locator('.feed-health').count(),1);
   await page.locator('.mobile-top-nav [data-page=insights]').click();
   await page.locator('[data-insight=accuracy]').click();
