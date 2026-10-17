@@ -76,3 +76,15 @@ Phase 1 improves the local inference engine in `forecast.js`; it does **not** ac
 **The demo app still uses its existing three-month fictional ledger; the 25-month fixture exists only for automated tests and is never inserted into user browser storage.** This avoids overwriting household financial data and preserves the current sample's transaction IDs.
 
 **Next:** Phase 2 — make Budget, Reviews, Insights and the 90-day cash-flow chart share the same dated forecast events and override decisions. See [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) for the complete saved phases.
+
+## Three-cycle recurrence decisions and Phase 2 unified forecast
+
+A **three-charge monthly pattern** (the same merchant and account in three consecutive historical months, within three calendar days and with essentially identical amounts) is treated as **High** recurrence evidence regardless of the merchant's category. Less regular bills and shopping use stricter heuristics and can still trigger Reviews; confidence labels remain uncalibrated.
+
+In **Budget → expand category → Manage recurring merchant rules**, a user can explicitly mark a historically observed merchant as **not recurring**, restore **automatic detection**, or **establish a monthly recurring charge** with a chosen day and amount. Detected expected items also offer a quick **Not recurring** action. These decisions live in `predictions.patternRules`, keyed by transaction type, category, account and normalized merchant. They do not rewrite bank records. A user can establish a monthly schedule from even a single prior charge. An explicit decision takes precedence over the detector; updating the rule clears obsolete per-payment overrides for that merchant.
+
+**Phase 2:** `forecast-ledger.js` is now the single source for dated future income/expense events (including category prediction overrides and user-added one-time estimates). The app's Budget, the upcoming forecast in Insights, the Reviews uncertainty queue and the 90-day cash-flow simulator use the same candidate schedules. A change to an expected payment in Budget immediately changes the cash-flow chart and projected low balance on the same date. The 90-day simulation no longer has a separate monthly bill detector; its older calculation remains as a compatibility fallback only for isolated engine tests.
+
+The bank balance is still fictional. Nondateable everyday spending is disclosed as an uncertainty range **outside** the scheduled events rather than silently charging a fictitious amount per day. Transfers and credit-card settlements are intentionally not forecast as purchases. The demo-balance projection is isolated from browser records that cannot be established as belonging to the fictional account. If real accounts are introduced, account-aware balance/transfer treatment and source reconciliation must be validated through Plaid before claiming real-world reliability.
+
+**Next recommended phase:** Phase 3 — learn reusable categorization and schedule decisions from Reviews. See `DEVELOPMENT_ROADMAP.md`. Phase 4 (backtesting) and Plaid remain future steps.
