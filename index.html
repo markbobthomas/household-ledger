@@ -451,14 +451,14 @@ function categoryForm(id){
  showEditor('<h3>Change category</h3><div class="readonly-transaction"><strong>'+esc(record.merchant)+'</strong> · '+money(record.amount)+' · '+esc(record.date)+
  '<div class="transaction-source">Source transaction is read-only.'+(prior.method==='learned'?' Category supplied by a learned rule.':'')+'</div></div>'+
  '<form id="entry"><label>Category<select name="category">'+options+'</select></label>'+
- '<label class="learn-checkbox"><input type="checkbox" name="remember" '+(safety.mixed?'':'checked')+'> Remember this merchant for future purchases</label>'+
+ (record.type==='expense'?'<label class="learn-checkbox"><input type="checkbox" name="remember" '+(safety.mixed?'':'checked')+'> Remember this merchant for future purchases</label>':'')+
  '<p class="prediction-note">'+esc(safety.mixed?'Multi-purpose or conflicting merchant: saving a rule will suggest categories for review, not force every purchase.':
  'Consistent merchant: saved rules apply automatically to new unclassified or low-confidence expenses from the same account.')+'</p>'+
  '<div class="editor-actions"><button class="btn primary" type="submit">Save category</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
  el('entry').onsubmit=e=>{e.preventDefault();try{
   const fields=new FormData(e.target),category=String(fields.get('category'));
   Model.setCategory(data,id,category);
-  if(fields.has('remember')&&category!=='Other')Model.learnCategory(data,id,category);
+  if(record.type==='expense'&&fields.has('remember')&&category!=='Other')Model.learnCategory(data,id,category);
   save();render();alertMsg('Category saved. Original bank record unchanged.');
  }catch(err){alert(err.message)}};
  bindCancel();
