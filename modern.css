@@ -843,3 +843,10 @@ html { scroll-behavior:auto; }
  .review-filters button{padding:10px 11px;font-size:13px}
  .review-actions .btn{flex:1 1 auto;text-align:center}
 }
+
+/* Phase 1: keep stochastic everyday spending visible but never fake a dated bill. */
+.variable-risk {border:1px solid var(--line);border-left:3px solid #7d8995;margin:15px 0 9px;padding:13px 15px;display:flex;flex-direction:column;gap:4px;background:#f8f9fb}
+.variable-risk strong{font-size:13px;color:var(--ink)}
+.variable-risk span{font:650 14px var(--mono);color:#3b4754;line-height:1.5}
+.variable-risk small{font-size:12px;color:var(--muted);line-height:1.45}
+@media(max-width:700px){.variable-risk{padding:12px 10px}.variable-risk span{font-size:13px}}
