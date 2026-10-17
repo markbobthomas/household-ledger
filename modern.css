@@ -945,3 +945,11 @@ html { scroll-behavior:auto; }
  .accuracy-examples{grid-template-columns:minmax(0,1fr)}
  .accuracy-detail>summary{min-height:44px}
 }
+
+/* Phase 4.1 — observed-history cash uncertainty, not fake dated transfers */
+.cash-risk{margin:10px 0 4px;border:1px solid var(--line);padding:12px 15px;background:#f7f9fc;display:flex;align-items:baseline;gap:8px 22px;flex-wrap:wrap}
+.cash-risk>span{font-size:13px;font-weight:650;color:var(--ink)}
+.cash-risk>strong{font:750 18px var(--mono)}
+.cash-risk>small{flex-basis:100%;font-size:12px;line-height:1.45;color:var(--muted)}
+.accuracy-detail-line>strong{flex-basis:100%;font-size:13px;color:var(--ink)}
+@media(max-width:700px){.cash-risk{padding:10px}.cash-risk>span{font-size:12px}.cash-risk>strong{font-size:16px}.cash-risk>small{font-size:11px}}
