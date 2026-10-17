@@ -14,7 +14,7 @@ aside{position:fixed;inset:0 auto 0 0;width:172px;background:var(--nav);color:#b
 aside h2{margin:0 12px 42px;color:#fff;letter-spacing:.8px;font:700 14px var(--mono)}
 .brand-mark{color:#fff}.brand-word{color:#8f99a2}
 aside button{display:block;width:100%;text-align:left;background:transparent;border:0;border-left:2px solid transparent;
-  color:#aeb7c1;padding:10px 12px;font:600 12px inherit;cursor:pointer;border-radius:0}
+  color:#aeb7c1;padding:10px 12px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border-radius:0}
 aside button:hover{color:#fff;background:#272c32}
 aside button.active{border-left-color:#85a9ff;color:#fff;background:#20252b}
 aside button[data-page="settings"]{margin-top:auto}
@@ -28,7 +28,7 @@ p{margin:9px 0}
 .muted,.sub,.cash-sub,.cash-explain,.forecast-meta{color:var(--muted)}
 .header-actions{display:flex;gap:8px;align-items:center}
 .btn{display:inline-block;background:#fff;border:1px solid #9da7b1;color:#18222b;border-radius:3px;
-  padding:8px 11px;font:600 12px inherit;cursor:pointer;text-decoration:none;white-space:nowrap}
+  padding:8px 11px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;text-decoration:none;white-space:nowrap}
 .btn:hover{background:var(--subtle);border-color:#626e7a}
 .btn.primary{color:white;background:var(--ink);border-color:var(--ink)}
 .btn.primary:hover{background:#37414d}
@@ -44,13 +44,13 @@ p{margin:9px 0}
 .top-menu-content button:hover{background:var(--subtle)}
 .toolbar{display:flex;align-items:center;justify-content:flex-start;gap:14px;min-height:40px;
   margin:0 0 21px;padding-bottom:14px;border-bottom:1px solid var(--line)}
-#period{min-width:155px;max-width:270px;font:600 12px inherit;color:var(--ink);background:white;border:1px solid #aeb7c0;
+#period{min-width:155px;max-width:270px;font-size:12px;font-weight:600;font-family:inherit;color:var(--ink);background:white;border:1px solid #aeb7c0;
   border-radius:3px;padding:7px 9px;height:33px}
 #budget-range{display:inline-block;background:none;border:0;padding:0;color:var(--muted);font:500 11px var(--mono)}
 #budget-range[hidden]{display:none}
 #demo-banner:empty{display:none}
 .demo-banner{display:flex;gap:8px;align-items:center;justify-content:flex-start;margin:0;color:var(--muted);
-  font:500 11px inherit;border:0;background:none;padding:0}
+  font-size:11px;font-weight:500;font-family:inherit;border:0;background:none;padding:0}
 .demo-banner strong{font:700 10px var(--mono);color:#fff;background:#303740;letter-spacing:.7px;padding:3px 6px}
 .demo-banner span{font-size:11px}
 .demo-banner button{display:none}
@@ -168,7 +168,7 @@ input[type=file]{width:100%}.hide{display:none}
 .insight-tabs{display:flex;align-items:center;gap:17px;overflow-x:auto;max-width:100%;min-width:0;
   border-bottom:1px solid var(--line);margin:0 0 23px;scrollbar-width:thin;-webkit-overflow-scrolling:touch;white-space:nowrap}
 .insight-tabs button{flex:0 0 auto;cursor:pointer;border:0;border-bottom:2px solid transparent;background:none;
-  border-radius:0;font:600 12px inherit;color:var(--muted);padding:8px 1px 10px}
+  border-radius:0;font-size:12px;font-weight:600;font-family:inherit;color:var(--muted);padding:8px 1px 10px}
 .insight-tabs button.active{color:var(--ink);border-bottom-color:var(--ink)}
 .insight-tabs button:hover{color:var(--ink)}
 .recurring-stats{margin:0 0 20px}
