@@ -104,7 +104,12 @@ function calcUndatedRisk(rows,asOf,events,state){
  }
  events.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
  const uncertainty=calcUndatedRisk(records,asOf,events,state);
- return {asOf,through:end,events,categoryViews,risk,uncertainty,months,
+ const uncertaintyByAccount={};
+ for(const accountName of new Set((records||[]).map(t=>String(t.account||t.accountId||'Unknown')))){
+  const subset=records.filter(t=>String(t.account||t.accountId||'Unknown')===accountName);
+  uncertaintyByAccount[accountName]=calcUndatedRisk(subset,asOf,events.filter(t=>String(t.account||t.accountId||'Unknown')===accountName),state);
+ }
+ return {asOf,through:end,events,categoryViews,risk,uncertainty,uncertaintyByAccount,months,
    totalIncome:round(events.filter(e=>e.type==='income').reduce((n,e)=>n+e.amount,0)),
    totalExpense:round(events.filter(e=>e.type==='expense').reduce((n,e)=>n+e.amount,0))};
 }
