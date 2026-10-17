@@ -66,6 +66,7 @@ assert.ok(!withTransfers.events.some(t=>t.merchant==='Unidentified internal swee
    window.Date=Fixed});
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   const initialStorage=await page.evaluate(()=>localStorage.getItem('household-ledger-v1'));
+  await page.locator('aside [data-page=overview]').click();
   assert.match(await page.locator('.feed-health').innerText(),/demo only|not connected/i);
   assert.match(await page.locator('.income-caution').innerText(),/unconfirmed/i);
   await page.locator('aside [data-page=insights]').click();
