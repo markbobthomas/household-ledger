@@ -167,7 +167,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const count=counts[0];
   if(!count||count>5||counts.some(n=>n!==count))return;
   const historyGap=!fullRecent||recentMonths.length<3;
-  if(historyGap&&(!bill||count!==1||observed.length<3||
+  if(historyGap&&(!bill||count>2||observed.length<3||
       monthIndex(recentMonths[recentMonths.length-1])-monthIndex(recentMonths[0])>5))return;
   if(!bill&&(observed.length<3||!fullRecent))return;
   for(let slot=0;slot<count;slot++){
