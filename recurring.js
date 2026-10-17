@@ -13,7 +13,9 @@ function classify(merchant,category){
   if(category==='Subscriptions'||/\b(netflix|spotify|hulu|disney\+?|disney plus|apple music|icloud|youtube premium|youtube music|hbo|max subscription|paramount\+?|adobe|dropbox|microsoft 365|office 365|audible|prime membership|amazon prime membership|peloton membership|subscription)\b/.test(m))return'subscription';
   // Reject shopping and grocery merchants which can coincidentally recur around payday.
   if(['Groceries','Shopping','Dining','Entertainment','Transportation'].includes(category))return null;
-  if(['Housing','Utilities','Insurance','Kids & Family'].includes(category))return 'bill';
+  if(category==='Housing'&&/\b(mortgage|rent|hoa|home loan|property tax)\b/.test(m))return 'bill';
+  if(category==='Kids & Family'&&/\b(daycare|childcare|preschool|tuition|school fee)\b/.test(m))return 'bill';
+  if(['Utilities','Insurance'].includes(category))return 'bill';
   if(/\b(mortgage|rent|daycare|childcare|electric|internet|water bill|gas bill|insurance|phone bill|loan payment|storage unit|gym membership)\b/.test(m))return 'bill';
   return null;
 }
