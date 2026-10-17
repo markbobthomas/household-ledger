@@ -71,7 +71,7 @@ The lab computes one-to-one event matching by merchant, account, type and date t
 
 **Automation and safeguards:** `accuracy-lab.js` runs the evaluation independently of localStorage, Plaid and the user ledger. `accuracy-fixture.js` is the only source of fictional ground truth and is shared by browser UI/tests. `tests/accuracy-phase4-smoke.cjs` guards against future-truth leakage, duplicated matching, score instability and mutation; `tests/accuracy-regression-baseline.json` defines modest regression alert floors on these invented results. All **14 browser checks passed**, including iPhone Safari.
 
-### Recommended next — Phase 4.1: correct measured accuracy gaps (NEXT)
+### Phase 4.1 — Improve measured prediction accuracy (COMPLETE · October 17, 2026)
 
 Before adding Plaid, improve the model using the Accuracy report:
 1. Extend **monthly, semimonthly and annual recurring forecasts through the entire 90-day horizon**; the current model is strong on certain near-term dates but often misses later months.
@@ -81,6 +81,32 @@ Before adding Plaid, improve the model using the Accuracy report:
 5. Optionally evaluate user-supplied historical statements in a **strictly isolated, read-only sandbox** after explicit approval; not as manual inserts into the source ledger.
 
 **Plaid remains deferred until the user explicitly asks for it.** Phase 4.1 is an accuracy-improvement pass, not an automatic bank-connection task.
+
+
+**Status: Implemented and verified on two fictional households.** The predictor now anchors monthly and twice-monthly schedules to the latest fully observed calendar months so it repeats charges and paychecks throughout the full 90-day horizon instead of stopping after the first month. Weekly/14-day paychecks use cadence anchored to the as-of date. Quarterly and semiannual predictions retain historical evidence limits; annual renewals remain difficult to validate with the currently available 25-month fixture and 90-day windows.
+
+**Cash movements:** Only explicitly directed checking-transfer outflows can become future cash events; these are separate from spending categories and never treated as new purchases. Internal Savings transfer credits do not count toward Checking balances. Unknown-direction transfers are not guessed. The 90-day simulator, Budget and Insights continue using the same dated forecast events.
+
+**Irregular spending:** An independently derived, account-scoped statistical range uses the median and 20th/80th percentiles of unscheduled spending over the last 3–6 complete months. It remains entirely separate from dated forecast events, cannot be edited as a bank transaction, and is explicitly presented as an *illustrative balance scenario*, not a guaranteed safe-to-spend amount. The historical Accuracy tab reports both scheduled-only and statistically adjusted cash errors.
+
+**Test results, synthetic only** (12 overlapping 90-day historical windows per household; not real-world accuracy):
+
+| Metric | Phase 4 primary fixture | Phase 4.1 primary fixture | Phase 4.1 independent fictional holdout |
+| --- | ---: | ---: | ---: |
+| Recurring event precision | 89.12% | 100.00% | 99.36% |
+| Recurring event recall | 58.95% | 98.95% | 93.23% |
+| Recurring events matched | 336 | 564 | 468 |
+| Share of all expense dollars covered by matched scheduled charges | 29.80% | 84.71% | 75.84% |
+| 90-day scheduled-only checking balance MAE | $7,781.64 | $2,190.69 | $1,379.17 |
+| 90-day balance MAE with undated spending scenario | Not available | $403.30 | $915.11 |
+
+**Caveat:** The primary and holdout fixtures were developed to test the algorithm, so neither represents a blind externally sourced holdout. The near-perfect recurring precision on synthetic data should not be generalized to live bank histories. Confidence labels are still heuristic. No Plaid connection or real spending data is involved.
+
+**Regression controls:** The original Phase 4 baseline is retained in \`tests/accuracy-regression-baseline.json\` along with Phase 4.1 results and stricter checks for both fictional households. \`tests/phase41-smoke.cjs\` tests recurring horizon, transfer isolation, uncertainty ranges, source immutability, hidden future data and desktop/iPhone user flows. 15 automated browser tests passed.
+
+### Recommended next — Phase 4.2: reliability stress-testing (NEXT)
+
+Before Plaid, expand fictional robustness checks to missing/intermittent bank history, shifted paydays, provider-delayed posting, annual and semiannual renewals, income interruption, new merchants, refunds, and multi-account reconciliation. Improve confidence calibration using genuinely varied datasets rather than only repeated clean schedules. Optionally provide a **separate read-only statement evaluation sandbox** with explicit user approval, never inserting statement data into bank source records. Reassess whether balance ranges are good enough for decisions. Then return to Plaid only if the user chooses.
 
 ## Phase 5 — Plaid, only after user chooses
 
