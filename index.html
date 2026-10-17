@@ -199,6 +199,32 @@ document.querySelectorAll('[data-stream]').forEach(b=>b.onclick=()=>streamPredic
 document.querySelectorAll('[data-event]').forEach(b=>b.onclick=()=>eventPredictionForm(b.dataset.event));
 document.querySelectorAll('[data-add-event]').forEach(b=>b.onclick=()=>eventPredictionForm(null));
 document.querySelectorAll('[data-daily-prediction]').forEach(b=>b.onclick=()=>dailyPredictionForm());
+
+document.querySelectorAll('[data-expected-form]').forEach(form=>form.onsubmit=e=>{
+ e.preventDefault();
+ const id=form.dataset.expectedForm,category=form.closest('.budget-entry').dataset.budgetCategory,fields=new FormData(form);
+ try{
+  const item=monthlyProjection(budgetMonth,category).expected.find(x=>x.id===id);
+  if(!item)throw Error('Forecast no longer available');
+  const date=String(fields.get('date'));
+  if(!date.startsWith(budgetMonth)||date<=today())throw Error('Please choose a future date within the selected month');
+  if(id.startsWith('manual|'))Model.saveManualExpected(data,{...item,merchant:fields.get('merchant'),date,amount:fields.get('amount'),enabled:fields.has('enabled')});
+  else Model.updateExpectedTransaction(data,id,{date,amount:fields.get('amount'),enabled:fields.has('enabled')});
+  save();refreshCategory(category);
+ }catch(err){alert(err.message)}
+});
+document.querySelectorAll('[data-expected-reset]').forEach(button=>button.onclick=()=>{
+ const id=button.dataset.expectedReset,category=button.closest('.budget-entry').dataset.budgetCategory;
+ if(id.startsWith('manual|'))Model.removeManualExpected(data,id);else Model.updateExpectedTransaction(data,id,null);
+ save();refreshCategory(category);
+});
+document.querySelectorAll('[data-expected-add]').forEach(form=>form.onsubmit=e=>{
+ e.preventDefault();
+ const category=form.dataset.expectedAdd,fields=new FormData(form),date=String(fields.get('date'));
+ if(!date.startsWith(budgetMonth)||date<=today()){alert('Expected date must be later this month');return}
+ try{Model.saveManualExpected(data,{category,merchant:fields.get('merchant'),date,amount:fields.get('amount')});save();refreshCategory(category)}catch(err){alert(err.message)}
+});
+
 if(page==='settings')el('backup').onclick=()=>download(JSON.stringify(data,null,2),'household-ledger-backup.json','application/json');
 }
 function download(s,name,mime){let u=URL.createObjectURL(new Blob([s],{type:mime})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
@@ -217,15 +243,12 @@ function categoryForm(id){
  bindCancel();
 }
 function budgetPredictionForm(category,month){
- const base=window.HouseholdForecast.forecast(entries(),month,category,today()),override=data.predictions.categoryForecasts[month+'|'+category];
- const budget=data.predictions.monthlyBudgets[category]||0;
- showEditor('<h3>Predictions · '+esc(category)+'</h3><div class="readonly-transaction">Recorded spending <strong>'+money(base.actual)+'</strong> (read-only)</div>'+
- '<form id="entry"><div class="formgrid"><label>Monthly budget target ($)<input name="budget" type="number" min="0" step=".01" required value="'+esc(budget)+'"></label>'+
- '<label>Additional expected spending ($)<input name="additional" type="number" min="0" step=".01" required value="'+esc(override?override.additional:base.additional)+'"></label></div>'+
- '<p class="prediction-note">Automatic estimate: '+money(base.additional)+'. Overrides only the pink forecast, not recorded spending.</p>'+
- '<div class="editor-actions"><button class="btn primary" type="submit">Save predictions</button><button class="btn" type="button" id="reset-forecast">Use automatic estimate</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>');
- el('entry').onsubmit=e=>{e.preventDefault();try{const f=new FormData(e.target);Model.setMonthlyBudget(data,category,f.get('budget'));Model.setCategoryForecast(data,month,category,f.get('additional'));save();render();alertMsg('Predictions saved. Actuals unchanged.')}catch(err){alert(err.message)}};
- el('reset-forecast').onclick=()=>{Model.setCategoryForecast(data,month,category,null);save();render();alertMsg('Automatic forecast restored.')};
+ const f=monthlyProjection(month,category),budget=data.predictions.monthlyBudgets[category]||0;
+ showEditor('<h3>Monthly budget target · '+esc(category)+'</h3>'+
+ '<p class="prediction-note">Actual spending '+money(f.actual)+' is read-only. '+f.active.length+' individually dated expected transactions total '+money(f.additional)+'. Expand the category to edit those payments individually.</p>'+
+ '<form id="entry"><label>Monthly budget ($)<input name="budget" type="number" min="0" step=".01" required value="'+esc(budget)+'"></label>'+
+ '<div class="editor-actions"><button type="submit" class="btn primary">Save budget</button><button type="button" class="btn" id="cancel">Cancel</button></div></form>');
+ el('entry').onsubmit=e=>{e.preventDefault();try{Model.setMonthlyBudget(data,category,new FormData(e.target).get('budget'));save();render();alertMsg('Monthly budget updated. Actuals and individual predictions unchanged.')}catch(err){alert(err.message)}};
  bindCancel();
 }
 function projectedCashFlow(){
