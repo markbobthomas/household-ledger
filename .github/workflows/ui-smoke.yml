@@ -32,6 +32,7 @@ jobs:
           node tests/account-reliability-phaseC-smoke.cjs
           node tests/cashflow-smoke.cjs
           node tests/design-smoke.cjs
+          node tests/navigation-overview-smoke.cjs
           node tests/settings-geometry-diagnostic.cjs
           node tests/mobile-safari-smoke.cjs
           node tests/recurring-smoke.cjs

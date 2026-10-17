@@ -97,6 +97,7 @@ async function browserCase(browser,opts,mobile){
  }window.Date=Fixed});
  try{
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
+  await page.locator(mobile?'.mobile-top-nav [data-page=overview]':'aside [data-page=overview]').click();
   const panel=page.locator('#cashflow');
   assert.equal(await panel.locator('.account-forecast').count(),1);
   assert.equal(await panel.locator('.account-projection-row').count(),4,'Demo checks two cards, savings and checking');
@@ -132,6 +133,7 @@ async function browserCase(browser,opts,mobile){
   assert.equal(after.tx,before.tx,'Editing forecast cannot edit real source transactions');
   assert.equal(after.stored[0].amount,150);
   await page.reload({waitUntil:'load'});
+  await page.locator(mobile?'.mobile-top-nav [data-page=overview]':'aside [data-page=overview]').click();
   assert.equal(await page.locator('.account-movement-row').count(),1,'Saved planned movement persists across reload');
   await page.locator('.account-plan-detail > summary').click();
   await page.locator('[data-remove-account-movement]').click();

@@ -71,9 +71,12 @@ assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spe
  });
  try{
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
+  assert.equal(await page.locator('#cashflow').count(),0,'Budget has no 90-day dashboard');
+  await page.locator('aside [data-page=overview]').click();
   assert.equal(await page.locator('#cashflow').count(),1);
   const initial=await page.locator('#cashflow .cash-secondary strong').last().innerText();
   const originals=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')).transactions);
+  await page.locator('aside [data-page=budgets]').click();
   const category=page.locator('.budget-entry[data-budget-category="Subscriptions"]');
   await category.locator(':scope > details > summary').click();
   const payment=category.locator('.expected-tx').filter({hasText:'Spotify'}).first();
@@ -81,10 +84,12 @@ assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spe
   await payment.locator('summary').click();
   await payment.locator('[name=amount]').fill('111.99');
   await payment.locator('[type=submit]').click();
+  await page.locator('aside [data-page=overview]').click();
   assert.notEqual(await page.locator('#cashflow .cash-secondary strong').last().innerText(),initial,
    'Editing a Budget prediction automatically updates 90-day cash chart');
   const updated=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(updated.transactions,originals,'Actual transaction records remain unchanged');
+  await page.locator('aside [data-page=budgets]').click();
   const cat2=page.locator('.budget-entry[data-budget-category="Subscriptions"]');
   if(!await cat2.locator(':scope > details').evaluate(e=>e.open))await cat2.locator(':scope > details > summary').click();
   const payment2=cat2.locator('.expected-tx').filter({hasText:'Spotify'}).first();
@@ -109,7 +114,7 @@ assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spe
   await page.locator('[data-insight=categories]').click();
   assert.match(await page.locator('#view').innerText(),/Upcoming expected payments/i,'Categories uses the shared predictions');
   await page.setViewportSize({width:390,height:844});
-  assert.ok(await page.locator('.mobile-top-nav [data-page=reviews]').isVisible(),'Five-tab phone layout retained');
+  assert.ok(await page.locator('.mobile-top-nav [data-page=reviews]').isVisible(),'Six-tab phone layout retained');
   assert.deepEqual(errors,[],'No JS errors');
   console.log('PASS: Three fixed-price cycles, recurrence suppression/forcing, unified Budget/Insights/cash flow, mobile and immutable bank facts');
  }finally{await browser.close()}

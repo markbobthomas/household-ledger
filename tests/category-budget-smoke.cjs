@@ -8,7 +8,7 @@ await page.addInitScript(()=>{const Base=Date;class DemoDate extends Base{constr
 try{
  await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
  assert.equal(await page.locator('#title').innerText(),'Budgets');
- assert.equal(await page.locator('aside button[data-page]').count(),5,'Five primary navigation choices');
+ assert.equal(await page.locator('aside button[data-page]').count(),6,'Six primary navigation choices');
  assert.equal(await page.locator('aside button.active').getAttribute('data-page'),'budgets');
  assert.equal(await page.locator('#period').inputValue(),'2026-10');
  assert.equal(await page.locator('#period option[value="all"]').count(),0,'Budget selector must use a month');
@@ -82,6 +82,6 @@ try{
  await leap.locator(':scope > details > summary').click();
  assert.match(await leap.innerText(),/Leap Day Grocery/);
  assert.deepEqual(errors,[],'No client-side errors');
- console.log('PASS: five-nav layout, budget period boundaries, expandable forecasts, category/merchant tabs, activity and settings');
+ console.log('PASS: six-nav layout, budget period boundaries, expandable forecasts, category/merchant tabs, activity and settings');
 }finally{await browser.close()}
 })().catch(err=>{console.error(err);process.exit(1)});

@@ -7,14 +7,17 @@ const assert=require('node:assert/strict');
  try{
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   const nav=page.locator('aside button[data-page]');
-  assert.deepEqual(await nav.allInnerTexts(),['Budget','Activity','Insights','Reviews','Settings']);
+  assert.deepEqual(await nav.allInnerTexts(),['Budget','Overview','Activity','Insights','Reviews','Settings']);
   assert.equal(await page.locator('link[href^="modern.css?v="]').count(),1,'Versioned core style sheet loaded');
   assert.equal(await page.locator('style').count(),0,'Legacy inline CSS removed');
   assert.equal(await page.locator('.eyebrow').count(),0,'Decorative eyebrow removed');
   assert.equal(await page.locator('.page-top').count(),1,'Dense title and actions row');
   assert.equal(await page.locator('.panel').first().evaluate(e=>getComputedStyle(e).boxShadow),'none','Reports use flat surfaces');
-  assert.equal(await page.locator('#cashflow .cash-primary-amount').count(),1,'Single hero metric');
+  assert.equal(await page.locator('#cashflow').count(),0,'Budget opens without the long forecast dashboard');
+  await page.locator('aside [data-page=overview]').click();
+  assert.equal(await page.locator('#cashflow .cash-primary-amount').count(),1,'Single Overview hero metric');
   assert.equal(await page.locator('#cashflow .cash-numbers').count(),0,'Old four-card row removed');
+  await page.locator('aside [data-page=budgets]').click();
   assert.equal(await page.locator('.budget-entry .budget-edit').count(),0,'Budget edit buttons not repeated outside rows');
   assert.equal(await page.locator('#addBtn').count(),0,'No add transaction button');
   const bodyFont=await page.locator('body').evaluate(e=>parseFloat(getComputedStyle(e).fontSize));
@@ -64,7 +67,7 @@ const assert=require('node:assert/strict');
   const sizes=await page.evaluate(()=>({body:document.documentElement.scrollWidth,window:innerWidth,canvas:document.body.scrollWidth}));
   assert.ok(sizes.body<=sizes.window+1,'No phone-width horizontal document overflow: '+JSON.stringify(sizes));
   assert.equal(await page.locator('.mobile-top-nav').isVisible(),true,'Section tabs visible near top on phones');
-  assert.deepEqual(await page.locator('.mobile-top-nav button').allInnerTexts(),['Budget','Activity','Insights','Reviews','Settings']);
+  assert.deepEqual(await page.locator('.mobile-top-nav button').allInnerTexts(),['Budget','Overview','Activity','Insights','Reviews','Settings']);
   const topTabs=await page.evaluate(()=>{
     const n=document.querySelector('.mobile-top-nav'),r=n.getBoundingClientRect(),b=n.querySelector('button');
     const br=b.getBoundingClientRect(),target=document.elementFromPoint(br.left+br.width/2,br.top+br.height/2);
@@ -104,17 +107,16 @@ const assert=require('node:assert/strict');
       navColumns:getComputedStyle(nav).gridTemplateColumns.split(' ').length,
       iconCount:buttons.filter(b=>getComputedStyle(b.querySelector('.nav-icon')).display!=='none').length,
       smallestTarget:Math.min(...buttons.map(b=>b.getBoundingClientRect().height)),
-      budgetBarHeight:bar.getBoundingClientRect().height,
-      chartViewBox:document.querySelector('.cash-chart').getAttribute('viewBox')
+      budgetBarHeight:bar.getBoundingClientRect().height
     };
   });
   assert.equal(mobile.navPosition,'fixed','Phone navigation should be docked');
   assert.ok(Math.abs(mobile.navBottom-mobile.viewportHeight)<=2,'Bottom navigation should touch screen bottom');
-  assert.equal(mobile.navColumns,5,'Five phone navigation destinations');
-  assert.equal(mobile.iconCount,5,'Phone navigation shows five icons');
+  assert.equal(mobile.navColumns,6,'Six phone navigation destinations');
+  assert.equal(mobile.iconCount,6,'Phone navigation shows six icons');
   assert.ok(mobile.smallestTarget>=44,'Navigation has touch-sized buttons');
   assert.ok(mobile.budgetBarHeight>=16,'Budget bars are prominent on mobile');
-  assert.ok(mobile.chartViewBox.includes('560 156'),'Bank chart has reduced compact phone dimensions');
+  await page.locator('aside [data-page=overview]').click();
   const chartMobile=await page.locator('svg.cash-chart').evaluate(e=>({
     height:e.getBoundingClientRect().height,
     points:e.querySelector('polyline').getAttribute('points').trim().split(/\s+/).length,
@@ -123,15 +125,17 @@ const assert=require('node:assert/strict');
     name:e.getAttribute('aria-label')
   }));
   assert.ok(chartMobile.height<=117,'Mobile 90-day chart is compact: '+chartMobile.height);
+  assert.ok((await page.locator('svg.cash-chart').getAttribute('viewBox')).includes('560 156'),'Bank chart has compact mobile viewBox');
   assert.equal(chartMobile.points,91,'Chart draws exactly 90 days plus opening snapshot');
   assert.ok(chartMobile.guides<=4,'Chart uses at most three guides and optional zero line');
   assert.equal(chartMobile.labels,6,'Only three dates and three balance labels');
   assert.match(chartMobile.name,/over 90 days/,'Chart explicitly describes 90-day window');
   await page.locator('aside [data-page="transactions"]').click();
   assert.equal(await page.locator('.ledger-table tr').first().evaluate(e=>getComputedStyle(e).display),'grid','Transactions become phone-friendly rows');
-  await page.locator('aside [data-page="budgets"]').click();
+  await page.locator('aside [data-page="overview"]').click();
   await page.locator('.cash-panel .cash-detail > summary').first().click();
   assert.equal(await page.locator('.daily-cash-table tr').first().evaluate(e=>getComputedStyle(e).display),'grid','Daily cash flow becomes phone-friendly rows');
+  await page.locator('aside [data-page=budgets]').click();
   await page.setViewportSize({width:320,height:740});
   const narrow=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,width:innerWidth,bars:[...document.querySelectorAll('.budget-progress')].map(x=>x.getBoundingClientRect().height)}));
   assert.ok(narrow.doc<=narrow.width+1,'No overflow on narrow phones: '+JSON.stringify(narrow));

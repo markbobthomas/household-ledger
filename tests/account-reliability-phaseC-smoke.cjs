@@ -151,6 +151,7 @@ async function browserCase(browser,opts,mobile){
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   const snapBefore=await page.evaluate(()=>window.HouseholdBankFeed.getSnapshot('2026-10-17'));
   const txBefore=await page.evaluate(()=>JSON.stringify(JSON.parse(localStorage.getItem('household-ledger-v1')).transactions));
+  await page.locator(mobile?'.mobile-top-nav [data-page=overview]':'aside [data-page=overview]').click();
   const card=page.locator('#cashflow');
   await card.locator('.account-plan-detail > summary').click();
   const form=card.locator('#account-movement-form');
@@ -171,6 +172,7 @@ async function browserCase(browser,opts,mobile){
   assert.deepEqual(after,snapBefore,'Manual reversal can never alter provider balance');
   assert.equal(await page.evaluate(()=>JSON.stringify(JSON.parse(localStorage.getItem('household-ledger-v1')).transactions)),txBefore);
   await page.reload({waitUntil:'load'});
+  await page.locator(mobile?'.mobile-top-nav [data-page=overview]':'aside [data-page=overview]').click();
   await page.locator('.account-plan-detail > summary').click();
   assert.match(await page.locator('.account-movement-row').innerText(),/Returned 2026-10-28/);
   await page.locator('.account-reliability > summary').click();

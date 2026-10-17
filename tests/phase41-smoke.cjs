@@ -61,6 +61,7 @@ assert.equal(JSON.stringify(stored.transactions),original,'Backtesting does not 
  try{
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   const originalBrowser=await page.evaluate(()=>localStorage.getItem('household-ledger-v1'));
+  await page.locator('aside [data-page=overview]').click();
   assert.ok(await page.locator('#cashflow .cash-risk').count(),'Risk band is separate from scheduled balance line');
   await page.locator('aside [data-page=insights]').click();await page.locator('[data-insight=accuracy]').click();
   assert.match(await page.locator('.accuracy-lab').innerText(),/Independent fictional household/i);

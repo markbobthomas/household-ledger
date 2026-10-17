@@ -4,6 +4,16 @@ A privacy-conscious household-finance web app with a **source-of-truth ledger** 
 
 https://markbobthomas.github.io/household-ledger/
 
+
+## Navigation: Budget, Overview and default opening tab
+
+The main navigation now has **six sections**: **Budget**, **Overview**, **Activity**, **Insights**, **Reviews**, and **Settings**.
+
+- **Budget** is the default opening tab and focuses only on monthly category budgets. The existing editable limits, actual/expected bars, category-level predicted transactions and recurring merchant rules are unchanged.
+- **Overview** houses the separate 90-day cash projection, account balances and credit-card liabilities, payment and transfer planner, forecast details, and reconciliation checks. This uses the exact same underlying predicted events as Budget; no second independent forecast is created.
+- Open **Settings → Menu preferences → Default opening tab** to choose any of the six sections as the opening page. The selection takes effect on your next reload or visit and is saved in this browser's local storage under `household-ledger-default-page`. It defaults to Budget when unset or invalid. This setting does not change bank transactions or forecasts and does not connect Plaid.
+- On iPhone, both the sticky top navigation and fixed bottom navigation include all six sections. Budget and Overview remain separated at every screen size.
+
 ## Data integrity design (v2)
 
 **The ledger is read-only in the interface.** You cannot manually create, edit or delete posted transaction amounts, merchant names, dates, transaction types, account identifiers or recorded bank balances.
