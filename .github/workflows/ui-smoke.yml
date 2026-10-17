@@ -27,3 +27,4 @@ jobs:
           node tests/cashflow-smoke.cjs
           node tests/design-smoke.cjs
           node tests/recurring-smoke.cjs
+          node tests/current-month-smoke.cjs
