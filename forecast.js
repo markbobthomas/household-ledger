@@ -184,7 +184,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  for(const group of groups.values()){
   group.sort((a,b)=>a.date.localeCompare(b.date));
   const key=normalize(group[0].merchant);
-  if(!key||group.length<2)continue;
+  if(!key)continue;
   const keyOfRule=[mode,category||'Income',accountKey(group[0]),key].map(encodeURIComponent).join('|');
   const directive=patternRules[keyOfRule];
   if(directive?.mode==='none')continue;
@@ -197,6 +197,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
    }
    continue;
   }
+  if(group.length<2)continue;
   // A genuine two-paydays-per-month schedule stays anchored to calendar days;
   // a true biweekly schedule drifts across months and uses 14-day intervals.
   const recentThree=[...new Set(group.filter(t=>t.date>=shiftMonth(month,-3)).map(t=>t.date.slice(0,7)))].sort();
