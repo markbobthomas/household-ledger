@@ -4,7 +4,7 @@ This is the durable, project-owned plan for continuing the finance predictor wor
 
 ## Phase 1 — Pattern detection and realistic simulations
 
-**Status: Implemented; confidence and browser checks must pass before marked complete.**
+**Status: COMPLETE (October 17, 2026).** The 25-month simulation, historical detection, source-integrity checks and cross-browser regression suite passed. This verifies test behavior, not real-bank forecast accuracy.
 
 - Detect weekly, every-two-week, monthly, twice-monthly, quarterly, six-monthly, and annual repeating payments, with tolerance for posting-date slippage.
 - Detect repeating income/paychecks separately from expense predictions; future UI use in Phase 2.
