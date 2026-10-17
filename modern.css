@@ -293,3 +293,81 @@ td .btn{font-size:13px}
   .recurring-stats .stat .num{font-size:clamp(14px,3.8vw,18px)}
   .cash-secondary strong{font-size:17px}
 }
+
+/* Larger type throughout — keep the terminal-like hierarchy without microtext. */
+body{font-size:17px;line-height:1.54}
+aside h2{font-size:18px}
+aside button{font-size:16px;padding-top:13px;padding-bottom:13px}
+h1{font-size:35px}
+h3,.recurring-panel .section-top h3{font-size:16px}
+.btn,.top-menu-content button{font-size:16px;padding:10px 13px}
+.top-menu>summary{font-size:23px;width:39px;height:40px}
+#period{font-size:16px;min-width:195px;height:42px;padding:8px 11px}
+#budget-range,.demo-banner{font-size:14px}
+.demo-banner strong{font-size:13px}
+.message{font-size:16px}
+.stat .sub{font-size:14px}
+.stat .num{font-size:clamp(24px,2.35vw,31px)}
+.row,.band-row{font-size:16px}
+table,.cash-table{font-size:16px}
+thead th,.cash-table th{font-size:14px}
+td strong{font-size:16px}
+td .btn{font-size:15px}
+td,th{padding-top:13px;padding-bottom:13px}
+.pill{font-size:14px}
+.empty{font-size:16px}
+input,select,textarea{font-size:16px}
+.formgrid label{font-size:15px}
+.drill-expanded .sub{font-size:15px}
+.band-row .band-amount strong{font-size:18px}
+.band-row .band-amount .sub{font-size:14px}
+.band-expanded .band-subheading{font-size:15px}
+.budget-title{font-size:17px}
+.budget-summary-amount{font-size:20px}
+.budget-summary-meta,.budget-category-meta,.budget-date-note{font-size:14px}
+.budget-legend{font-size:14px}
+.forecast-assumption{font-size:15px}
+.cash-head h3{font-size:16px}
+.cash-sub{font-size:15px}
+.cash-demo{font-size:14px}
+.cash-primary-amount{font-size:clamp(43px,5vw,64px)}
+.cash-primary-date{font-size:15px}
+.cash-secondary .sub{font-size:14px}
+.cash-secondary strong{font-size:23px}
+.cash-status,.cash-explain{font-size:14px}
+.cash-detail>summary{font-size:16px}
+.cash-day-detail>summary{font-size:15px}
+.cash-event{font-size:14px}
+.cash-chart{max-height:255px}
+.insight-tabs button{font-size:16px;padding:12px 2px 14px}
+.recurring-description,.recurring-disclaimer{font-size:15px}
+.recurring-info>strong,.recurring-amount>strong{font-size:17px}
+.recurring-meta,.recurring-detail-note,.recurring-empty{font-size:15px}
+.settings-block p{font-size:15px}
+@media(max-width:700px){
+  aside h2{font-size:14px}
+  aside button{font-size:14px;padding:11px 9px}
+  h1{font-size:30px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:16px}
+  .stat:nth-child(2){border-right:0}
+  .stat:nth-child(3){padding-left:0;border-right:0}
+  .stat .num{font-size:clamp(20px,5vw,25px)}
+  .stat .sub{font-size:13px}
+  .cash-primary-amount{font-size:clamp(37px,9vw,49px)}
+  .cash-secondary strong{font-size:20px}
+  .row,.band-row{font-size:16px}
+  .recurring-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .recurring-stats .stat .num{font-size:clamp(19px,4.8vw,24px)}
+  .insight-tabs button{font-size:15px}
+  .cash-chart{max-height:205px}
+}
+@media(max-width:400px){
+  aside h2{font-size:13px}
+  aside button{font-size:13px;padding:11px 8px}
+  #period{min-width:165px;font-size:15px}
+  .budget-category-meta{font-size:12px}
+  .recurring-amount>strong{font-size:15px}
+  .recurring-stats .stat .num{font-size:clamp(19px,4.8vw,23px)}
+  .cash-secondary strong{font-size:19px}
+  .cash-demo{font-size:12px}
+}
