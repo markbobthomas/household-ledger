@@ -88,6 +88,20 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
    evidence:observedMonths,observations:obs,source:'historical',pattern:{day:Number(date.slice(8,10)),amount:stable},
    slot,seasonal:Boolean(extra.seasonal),groupKey:accountKey(group[0])+'|'+normalize(group[0].merchant)};
  };
+ // Confirmation is reusable as long as the new evidence still resembles the
+ // reviewed pattern. Changed cadence/date/amount reopens an uncertainty review.
+ function applyTrustedEvidence(items,directive,key){
+  if(directive?.mode!=='trust')return;
+  for(const item of items){
+   item.patternKey=key;
+   const dayGap=Math.abs(Number(item.date.slice(8,10))-Number(directive.day));
+   const amountGap=Math.abs(item.amount-Number(directive.amount))/Math.max(1,Number(directive.amount));
+   const matches=item.cadence===directive.cadence&&dayGap<=3&&amountGap<=
+     (item.category==='Utilities'?.55:.25);
+   if(matches){item.confidence='Confirmed';item.learnedRule=true;}
+   else {item.ruleChanged=true;item.ruleReason='The repeating pattern changed since your last confirmation';}
+  }
+ }
  const monthRecords=(rows,selectedMonth)=>rows.filter(t=>t.date.slice(0,7)===selectedMonth);
  function detectInterval(group){
   // Weekly/biweekly evidence must be based on a sequence (not count per month).
@@ -200,6 +214,9 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
    continue;
   }
   if(group.length<2)continue;
+  // Trust the recurring behavior, not a forever-frozen estimate. The model
+  // continues learning future amounts and dates from new source transactions.
+  const beforeDetected=candidates.length;
   // A genuine two-paydays-per-month schedule stays anchored to calendar days;
   // a true biweekly schedule drifts across months and uses 14-day intervals.
   const recentThree=[...new Set(group.filter(t=>t.date>=shiftMonth(month,-3)).map(t=>t.date.slice(0,7)))].sort();
@@ -210,13 +227,20 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
     });
   if(anchoredTwice){
    const before=candidates.length;detectMonthly(group);
-   if(candidates.length>before)continue;
+   if(candidates.length>before){
+    applyTrustedEvidence(candidates.slice(beforeDetected),directive,keyOfRule);
+    continue;
+   }
   }
   // For 4/5 weekly occurrences, interval detection must precede monthly slots.
-  if(detectInterval(group))continue;
+  if(detectInterval(group)){
+   applyTrustedEvidence(candidates.slice(beforeDetected),directive,keyOfRule);
+   continue;
+  }
   const countBefore=candidates.length;
   detectMonthly(group);
   if(candidates.length===countBefore)detectLongCycle(group);
+  applyTrustedEvidence(candidates.slice(beforeDetected),directive,keyOfRule);
  }
  result.diagnostics.candidateCount=candidates.length;
  result.diagnostics.patternCount=groups.size;
