@@ -50,12 +50,37 @@ Currently `forecast.js` powers category/month predictions, and `cashflow.js` sep
 - Test persistence, rule conflicts and changing provider records without modifying source transactions.
 - No Plaid connection required.
 
-## Phase 4 — Automated accuracy laboratory (NEXT)
+## Phase 4 — Automated accuracy laboratory (COMPLETE · October 17, 2026)
 
 - Run walk-forward backtests on 12–24 months of **fictional** fixture data first: at each historical as-of date, allow only older transactions to inform the forecast, hide future actuals.
 - Score recurring detection precision/recall, missed/false predicted events, date and amount error, forecast coverage and 30/60/90-day cash-flow error (where valid opening balance evidence exists).
 - Report results per cadence/category, highlight unreliable segments, track regression of metrics over time and tune thresholds with honest holdout periods.
 - Later support user-provided historical statements in an isolated evaluation tool; never mix them into the read-only bank ledger.
+
+
+**Status: Implemented, tested, and deployed.** A new **Insights → Accuracy** view runs a deterministic, entirely fictional 25-month household through twelve month-start walk-forward 90-day evaluations (August 2025–July 2026). Each forecast sees only transactions available as of its own historical date; hidden recurring-truth labels and future records are stripped before reaching the prediction engine. Actual future records are used only for evaluation.
+
+The lab computes one-to-one event matching by merchant, account, type and date tolerance (2–5 days). It reports precision, recall, missed/false recurring payment opportunities, average matched date/amount error, share of all expense dollars covered by matched scheduled payments, separate category/cadence/confidence breakdowns, and 30/60/90-day cash-balance mean absolute errors. Cash balances are mathematically anchored in **fictional** starting cash, not bank snapshots. The current predictor does not schedule some checking transfers or non-dateable shopping, a material limitation of its balance curve.
+
+**Baseline on the invented dataset (not household accuracy):**
+- 377 expected recurring-payment/deposit opportunities, 336 matched; precision **89.12%**, recall **58.95%** of 570 actual recurring opportunities.
+- Matched posting date MAE **0.09 days**, matched amount MAE **$0.87**, but only **29.8%** of all expense dollars are covered by correctly matched scheduled outflows.
+- Fictional balance MAE: **$1,483.19 at 30 days**, **$7,752.66 at 60 days**, **$7,781.64 at 90 days**. These values are too high for a dependable safe-to-spend prediction.
+- Annual and variable recurring charges have weaker coverage; false predictions and missing income patterns also affect cash-flow error.
+- The 12 overlapping holdout windows intentionally count the same true transaction in multiple independently prepared forecast opportunities. These metrics are not real-world performance guarantees.
+
+**Automation and safeguards:** `accuracy-lab.js` runs the evaluation independently of localStorage, Plaid and the user ledger. `accuracy-fixture.js` is the only source of fictional ground truth and is shared by browser UI/tests. `tests/accuracy-phase4-smoke.cjs` guards against future-truth leakage, duplicated matching, score instability and mutation; `tests/accuracy-regression-baseline.json` defines modest regression alert floors on these invented results. All **14 browser checks passed**, including iPhone Safari.
+
+### Recommended next — Phase 4.1: correct measured accuracy gaps (NEXT)
+
+Before adding Plaid, improve the model using the Accuracy report:
+1. Extend **monthly, semimonthly and annual recurring forecasts through the entire 90-day horizon**; the current model is strong on certain near-term dates but often misses later months.
+2. Reconcile **income timing, account transfers, and credit-card cash movements** without double counting expenses; don't mistake transfer outflows for ordinary spending.
+3. Represent irregular retail spending as an **honest probabilistic/range forecast** in the cash-balance uncertainty view, without inventing exact dated bank transactions.
+4. Rerun identical **held-out fictional accuracy tests**, avoid overfitting one fixture, and add distinctly different holdout households before treating improvements as generalizable.
+5. Optionally evaluate user-supplied historical statements in a **strictly isolated, read-only sandbox** after explicit approval; not as manual inserts into the source ledger.
+
+**Plaid remains deferred until the user explicitly asks for it.** Phase 4.1 is an accuracy-improvement pass, not an automatic bank-connection task.
 
 ## Phase 5 — Plaid, only after user chooses
 
