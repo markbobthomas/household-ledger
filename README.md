@@ -49,3 +49,15 @@ The GitHub Actions workflow `.github/workflows/ui-smoke.yml` executes Playwright
 ### Historic aggregate adjustment compatibility
 
 Earlier category-level `categoryForecasts` overrides are preserved in local storage for backward compatibility but **are not included** in the new dated category totals. This avoids silently creating an invented lump-sum transaction on an arbitrary date. Individual expected payments can be edited in each category instead.
+
+## Reviews: action-oriented uncertainty queue
+
+The new **Reviews** tab automatically creates review tasks from source transaction history and dated spending predictions. The queue is recalculated from the current facts when a page loads or an item changes; it is not a static list.
+
+- **Category reviews:** Expenses marked `Other` or lacking a category; provider-labeled category confidence under 70%; merchants with inconsistent category assignments; ambiguous home-improvement demo records. Tasks consider source rows from the preceding 90 days, excluding unrelated income/transfers.
+- **Prediction reviews:** Dated merchant predictions labeled `Medium` or `Pattern` rather than `High`. Shows date, projected amount and supporting historical months. Evidence without a sufficiently defensible dated prediction is not fabricated.
+- **Decisions:** Confirm a category, change its category, confirm a prediction, edit its expected amount/date, or exclude a prediction. Confirmation creates a review-decision record; changing a category creates a category override; changing a forecast creates an expected-transaction override. None rewrite source bank transactions.
+- **Persistence:** Review confirmations are stored under `reviews.categoryConfirmed` and `reviews.predictionConfirmed`. If a source transaction changes, its category confirmation is reconsidered; if an automatically inferred predicted date, amount or evidence changes, its confirmation is reconsidered. Explicit user prediction edits are already resolved.
+- **Simulated data:** The fictional sample ledger includes **Home Depot** purchases, where Housing versus Shopping is ambiguous, plus repeating merchant purchases with lower prediction confidence. These are flagged as *Demo* tasks, even when the demo ledger was created in an earlier version. No fake bank record is inserted merely to show Reviews.
+
+Filter **All / Categories / Predictions** to work through the tasks. The dedicated mobile layout has the fifth **Reviews** tab in both top and bottom navigation.
