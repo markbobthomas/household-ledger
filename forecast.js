@@ -88,7 +88,11 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
  const expenseMode=mode==='expense';
  const match=t=>t.type===mode&&(expenseMode?t.category===category:mode==='transfer'?t.cashDirection===flow:true);
  const actualRows=all.filter(t=>match(t)&&t.date.slice(0,7)===month);
- const actual=round(actualRows.reduce((a,t)=>a+Number(t.amount),0));
+ // Refunds reduce recorded spending, but they are never recurring deposits.
+ const refunds=expenseMode?all.filter(t=>t.type==='refund'&&t.category===category&&
+  t.date.slice(0,7)===month):[];
+ const actual=round(actualRows.reduce((a,t)=>a+Number(t.amount),0)-
+  refunds.reduce((a,t)=>a+Number(t.amount),0));
  const result={actual,additional:0,projectedTotal:actual,expected:[],recurring:0,variable:0,
   recurringDetails:[],historyMonths:[],method:'No dated predictions',
   unscheduled:{estimate:0,min:0,max:0,confidence:'Unknown',includedInDatedTotal:false},
@@ -341,7 +345,9 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
  // band, not a fictional dated transaction or part of the hot-pink bar.
  if(expenseMode&&past.length>=3){
   const lastMonths=past.slice(-6);
-  const totals=lastMonths.map(m=>all.filter(t=>match(t)&&t.date.slice(0,7)===m).reduce((n,t)=>n+Number(t.amount),0));
+  const totals=lastMonths.map(m=>Math.max(0,all.filter(t=>(match(t)||
+    t.type==='refund'&&t.category===category)&&t.date.slice(0,7)===m)
+    .reduce((n,t)=>n+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0)));
   const scheduledMean=lastMonths.map(m=>records.filter(t=>t.date.slice(0,7)===m&&
     groups.has(accountKey(t)+'|'+normalize(t.merchant))&&
     // Only subtract the most recent monthly bill-like patterns; irregular

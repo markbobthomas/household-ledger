@@ -39,7 +39,7 @@ function calcUndatedRisk(rows,asOf,events,state){
    .map(([k])=>k.split('|').slice(2).map(decodeURIComponent).join('|')));
  const base=asOf.slice(0,7);
  const complete=Array.from({length:6},(_,i)=>priorMonth(base,-6+i));
- const past=(rows||[]).filter(t=>t.type==='expense'&&t.date<base+'-01'&&t.date<=asOf&&!t.pending);
+ const past=(rows||[]).filter(t=>['expense','refund'].includes(t.type)&&t.date<base+'-01'&&t.date<=asOf&&!t.pending);
  const present=new Set(past.map(t=>t.date.slice(0,7)));
  const months=complete.filter(m=>present.has(m));
  if(months.length<3)return {method:'Not enough fully observed months',historyMonths:months.length,
@@ -49,7 +49,7 @@ function calcUndatedRisk(rows,asOf,events,state){
    .filter(t=>{
     const acct=String(t.account||t.accountId||'Unknown'),merchant=String(t.merchant||'').toLowerCase().trim();
     return !scheduled.has(acct+'|'+merchant)&&!rejected.has(acct+'|'+merchant);
-   }).reduce((n,t)=>n+Number(t.amount||0),0)).sort((a,b)=>a-b);
+   }).reduce((n,t)=>n+Number(t.spendingAmount??t.amount??0),0)).map(x=>Math.max(0,x)).sort((a,b)=>a-b);
  const median=spending.length%2?spending[(spending.length-1)/2]:
    (spending[spending.length/2-1]+spending[spending.length/2])/2;
  const percentile=p=>{

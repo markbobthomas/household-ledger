@@ -5,6 +5,7 @@
 (function(root){
 'use strict';
 const VERSION=3;
+const Accounting=root.HouseholdAccounting||(typeof require==='function'?require('./accounting.js'):null);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(String(d)+'T12:00:00Z'));
 const categorySet=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
@@ -28,6 +29,9 @@ function migrate(input){
  predictions.cashFlowStreams=predictions.cashFlowStreams&&typeof predictions.cashFlowStreams==='object'?predictions.cashFlowStreams:{};
  predictions.cashFlowEvents=Array.isArray(predictions.cashFlowEvents)?predictions.cashFlowEvents:[];
  predictions.dailyVariable=predictions.dailyVariable===null||predictions.dailyVariable===undefined?null:Number(predictions.dailyVariable);
+ const accounts=Array.isArray(old.accounts)?copy(old.accounts):[];
+ const sync=old.sync&&typeof old.sync==='object'?copy(old.sync):{plaidCursor:null};
+ sync.itemCursors=sync.itemCursors&&typeof sync.itemCursors==='object'&&!Array.isArray(sync.itemCursors)?sync.itemCursors:{};
  const transactions=(Array.isArray(old.transactions)?old.transactions:[]).filter(t=>t&&typeof t==='object').map(t=>{
   const record=copy(t);
   // Legacy browser records have no verified bank provenance. Never badge as Plaid.
@@ -36,8 +40,7 @@ function migrate(input){
   }
   return record;
  });
- return {version:VERSION,transactions,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,
-    sync:old.sync&&typeof old.sync==='object'?copy(old.sync):{plaidCursor:null}};
+ return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,sync};
 }
 // Category learning never edits authoritative ledger rows. A learned rule can
 // automatically resolve an unclassified/low-confidence transaction only when
@@ -75,7 +78,7 @@ function resolution(state,t){
   explanation:safety.mixed?safety.cause:original!=='Other'?'Original category preserved':'Rule awaiting review'};
 }
 function records(state){
- return (state.transactions||[]).map(t=>({...t,...resolution(state,t),originalCategory:t.category||'Other'}));
+ return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t),originalCategory:t.category||'Other'}));
 }
 function categoryFor(state,id){
  const t=(state.transactions||[]).find(x=>x.id===id);
@@ -233,30 +236,40 @@ function removeEvent(state,id){state.predictions.cashFlowEvents=state.prediction
 function applyPlaidSync(state,change){
  if(!change||!Array.isArray(change.added)||!Array.isArray(change.modified)||!Array.isArray(change.removed))throw Error('Invalid Plaid sync batch');
  const byId=new Map((state.transactions||[]).map(t=>[t.id,t]));
+ if(Array.isArray(change.accounts))Accounting.registerAccounts(state,change.accounts);
+ const itemId=String(change.itemId||'');
+ const providerId=id=>'plaid:'+(itemId?itemId+':':'')+String(id);
  const read=t=>{
   if(!t||!t.transaction_id||!t.account_id||!validDate(t.date)||!Number.isFinite(Number(t.amount)))throw Error('Invalid provider transaction');
   const amount=Number(t.amount);
-  const id='plaid:'+t.transaction_id;
+  const id=providerId(t.transaction_id);
   const current=byId.get(id);
   const defaultCategory=current?.category||'Other';
+  const meta=(state.accounts||[]).find(a=>a.id===String(t.account_id));
   const next={id,date:t.date,merchant:String(t.merchant_name||t.name||'Unknown'),description:String(t.name||''),amount:round(Math.abs(amount)),type:amount>=0?'expense':'income',category:defaultCategory,
-    accountId:String(t.account_id),account:String(t.account_name||t.account_id),pending:Boolean(t.pending),
-    source:{provider:'plaid',providerTransactionId:String(t.transaction_id),accountId:String(t.account_id),pendingTransactionId:t.pending_transaction_id||null,verified:true}};
+    accountId:String(t.account_id),account:String(meta?.name||t.account_name||t.account_id),pending:Boolean(t.pending),
+    source:{provider:'plaid',providerTransactionId:String(t.transaction_id),accountId:String(t.account_id),itemId:itemId||null,
+      plaidAmount:amount,pendingTransactionId:t.pending_transaction_id||null,verified:true}};
   // Pending->posted often changes the transaction ID; carry a category correction forward.
-  const previous=t.pending_transaction_id?'plaid:'+t.pending_transaction_id:null;
+  const previous=t.pending_transaction_id?providerId(t.pending_transaction_id):null;
   if(previous&&state.categoryOverrides[previous]&&!state.categoryOverrides[id])state.categoryOverrides[id]=state.categoryOverrides[previous];
+  if(previous)byId.delete(previous);
   byId.set(id,next);
  };
  for(const t of [...change.added,...change.modified])read(t);
  for(const r of change.removed){
   if(!r||!r.transaction_id)throw Error('Invalid provider deletion');
-  byId.delete('plaid:'+r.transaction_id);
+  byId.delete(providerId(r.transaction_id));
  }
  state.transactions=[...byId.values()];
- if(typeof change.nextCursor==='string')state.sync.plaidCursor=change.nextCursor;
+ if(typeof change.nextCursor==='string'){
+  state.sync.itemCursors??={};
+  if(itemId)state.sync.itemCursors[itemId]=change.nextCursor;
+  else state.sync.plaidCursor=change.nextCursor;
+ }
  return state;
 }
-const api={VERSION,migrate,records,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
+const api={VERSION,migrate,records,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

@@ -1,0 +1,181 @@
+/* Phase A: account-aware household transaction classification and reconciliation.
+ * Read-only derived accounting view; Plaid and historical source rows are never mutated.
+ * Both halves of a transfer remain independently auditable bank transactions.
+ */
+(function(root){
+'use strict';
+const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
+const safe=s=>String(s??'').trim();
+const key=t=>safe(t.accountId||t.account||'Unknown');
+const norm=s=>safe(s).toLowerCase().replace(/\s+/g,' ');
+const iso=s=>/^\d{4}-\d{2}-\d{2}$/.test(safe(s))&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
+const days=(a,b)=>Math.abs((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
+const accountTypes=new Set(['checking','savings','credit','loan','other','unknown']);
+function accountType(input){
+ const type=norm(input?.accountType||input?.type),sub=norm(input?.subtype);
+ if(type==='depository')return sub==='savings'||sub==='money market'?'savings':'checking';
+ if(type==='credit'||type==='credit_card'||type==='credit card'||sub==='credit card')return 'credit';
+ if(type==='loan')return 'loan';
+ if(accountTypes.has(type))return type;
+ return 'unknown';
+}
+function registerAccounts(state,provided){
+ if(!Array.isArray(provided))throw Error('Accounts must be an array');
+ const current=Array.isArray(state.accounts)?state.accounts:[];
+ const byId=new Map(current.filter(a=>a?.id).map(a=>[String(a.id),{...a}]));
+ for(const raw of provided){
+  const id=safe(raw?.account_id||raw?.id);
+  if(!id||id.length>200)throw Error('Account requires a stable account ID');
+  const prev=byId.get(id)||{};
+  const explicit=raw.type||raw.subtype||raw.accountType;
+  const type=explicit?accountType(raw):(prev.type||'unknown');
+  const institution=safe(raw.institution||raw.institutionName||prev.institution);
+  const name=safe(raw.name||raw.official_name||prev.name||id);
+  const itemId=safe(raw.itemId||raw.item_id||prev.itemId);
+  // Preserve only account metadata. Snapshots are separate and dated; no made-up balances.
+  byId.set(id,{...prev,id,name,type,institution,itemId,
+   ...(raw.mask!==undefined?{mask:safe(raw.mask)}:{}),
+   ...(raw.currency||raw.iso_currency_code?{currency:safe(raw.currency||raw.iso_currency_code)}:{})});
+ }
+ state.accounts=[...byId.values()].sort((a,b)=>a.name.localeCompare(b.name));
+ return state.accounts;
+}
+function accountsFor(state){
+ const byId=new Map((Array.isArray(state?.accounts)?state.accounts:[])
+  .filter(a=>a?.id).map(a=>[String(a.id),{...a}]));
+ for(const t of state?.transactions||[]){
+  const id=key(t);
+  if(!byId.has(id))byId.set(id,{id,name:safe(t.account||id),type:'unknown',
+   institution:'',inferred:true});
+ }
+ return [...byId.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
+const cardPayment=/\b(?:credit card payment|card payment|payment to (?:card|credit)|autopay (?:card|credit)|card autopay|payment thank you|thank you(?: for)? (?:your )?payment|credit card autopay|cardmember payment|cc payment|cc pymt|payment received(?: - card)?|payment received on card|payment from checking)\b/i;
+const cardIssuer=/\b(?:amex|american express|discover card|capital one card|chase (?:visa|freedom|sapphire)|citi(?:bank)? card|bank of america (?:visa|card)|barclays card|synchrony card)\b/i;
+const transferText=/\b(?:transfer (?:to|from)|internal transfer|account transfer|xfer (?:to|from)|transfer between|savings transfer|moving money)\b/i;
+const refundText=/\b(?:refund|reversal|chargeback|return credit|purchase return|merchant credit|returned purchase|credit adjustment)\b/i;
+const payrollText=/\b(?:payroll|salary|wages|paycheck|direct deposit|interest earned|dividend|deposit from employer)\b/i;
+function direction(t){
+ const raw=t.source?.plaidAmount;
+ if(Number.isFinite(Number(raw))&&raw!==null&&raw!==undefined&&raw!=='')
+  return Number(raw)>0?'out':Number(raw)<0?'in':'unknown';
+ if(['out','in'].includes(t.cashDirection))return t.cashDirection;
+ return t.type==='expense'?'out':t.type==='income'?'in':'unknown';
+}
+function initialKind(t,account){
+ const name=String(t.merchant||'')+' '+String(t.description||'');
+ const dir=direction(t),isCard=account?.type==='credit';
+ const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
+   cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
+ if(payment)return 'card_payment';
+ if(transferText.test(name))return 'internal_transfer';
+ if(t.type==='transfer')return 'internal_transfer';
+ if(refundText.test(name)&&dir==='in')return 'refund';
+ if(isCard&&dir==='in')return 'unclassified_card_credit'; // Not earned household income.
+ if(dir==='in')return 'income';
+ if(dir==='out')return 'purchase';
+ return 'unclassified';
+}
+function cleanedRefundMerchant(name){
+ return norm(name).replace(/^(?:refund|reversal|return|returned|credit|purchase return)\s*[:#-]?\s*/,'')
+  .replace(/\s*(?:refund|return|reversal)$/,'').trim();
+}
+function reconcile(state){
+ const registry=accountsFor(state),accountMap=new Map(registry.map(a=>[a.id,a]));
+ const output=(state?.transactions||[]).filter(t=>t&&typeof t==='object').map(t=>{
+  const accountId=key(t),kind=initialKind(t,accountMap.get(accountId));
+  return {...t,accountId,account:t.account||accountMap.get(accountId)?.name||accountId,
+   accountType:accountMap.get(accountId)?.type||'unknown',
+   accountingKind:kind,cashDirection:direction(t),
+   spendingAmount:0,earnedIncomeAmount:0,reconciliationStatus:'not-applicable',
+   transferGroupId:null,pairedTransactionId:null,
+   classificationConfidence:kind==='unclassified'||kind==='unclassified_card_credit'?'Needs review':'Rule'};
+ });
+ // Match conservatively: exact equal amounts, opposite direction, separate accounts,
+ // within 5 days, at least one side has unmistakable transfer/payment semantics.
+ // If multiple equally plausible counterparts exist, leave them unmatched for review.
+ const candidateRows=output.filter(t=>!t.pending&&Number(t.amount)>0&&iso(t.date));
+ const candidates=[];
+ for(let i=0;i<candidateRows.length;i++)for(let j=i+1;j<candidateRows.length;j++){
+  const a=candidateRows[i],b=candidateRows[j];
+  if(a.accountId===b.accountId||a.cashDirection===b.cashDirection||
+     !['in','out'].includes(a.cashDirection)||!['in','out'].includes(b.cashDirection)||
+     Math.abs(Number(a.amount)-Number(b.amount))>.011||days(a.date,b.date)>5)continue;
+  const aTransfer=['card_payment','internal_transfer'].includes(a.accountingKind);
+  const bTransfer=['card_payment','internal_transfer'].includes(b.accountingKind);
+  if(!aTransfer&&!bTransfer)continue;
+  const aCard=a.accountType==='credit',bCard=b.accountType==='credit';
+  const card=a.accountingKind==='card_payment'||b.accountingKind==='card_payment'||aCard!==bCard&&(aCard||bCard);
+  const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
+  candidates.push({a,b,card,priority,delta:days(a.date,b.date)});
+ }
+ const assigned=new Set();
+ const byRow=new Map();
+ for(const c of candidates){
+  for(const t of [c.a,c.b]){
+   if(!byRow.has(t.id))byRow.set(t.id,[]);
+   byRow.get(t.id).push(c);
+  }
+ }
+ // Only uniquely resolvable counterparts are linked. Never guess if two card
+ // accounts have indistinguishable same-dollar payment credits.
+ for(const c of candidates.sort((a,b)=>b.priority-a.priority||a.delta-b.delta)){
+  if(assigned.has(c.a.id)||assigned.has(c.b.id))continue;
+  const eligible=t=>{
+   const list=(byRow.get(t.id)||[]).filter(x=>!assigned.has(x.a.id)&&!assigned.has(x.b.id));
+   const best=Math.max(...list.map(x=>x.priority));
+   const tied=list.filter(x=>x.priority===best).sort((x,y)=>x.delta-y.delta);
+   return tied.length===1||tied[0]===c&&(tied.length===1||tied[1].delta>c.delta);
+  };
+  if(!eligible(c.a)||!eligible(c.b))continue;
+  assigned.add(c.a.id);assigned.add(c.b.id);
+  const group='transfer|'+[String(c.a.id),String(c.b.id)].sort().map(encodeURIComponent).join('|');
+  for(const [t,peer] of [[c.a,c.b],[c.b,c.a]]){
+   t.accountingKind=c.card?'card_payment':'internal_transfer';
+   t.transferGroupId=group;t.pairedTransactionId=peer.id;
+   t.reconciliationStatus='matched';t.classificationConfidence='Matched accounts';
+  }
+ }
+ const purchases=output.filter(t=>t.accountingKind==='purchase');
+ for(const t of output){
+  if(['card_payment','internal_transfer'].includes(t.accountingKind)){
+   if(t.reconciliationStatus!=='matched'){
+    t.reconciliationStatus=(byRow.get(t.id)||[]).length?'ambiguous':'unmatched';
+    t.classificationConfidence=t.reconciliationStatus==='ambiguous'?'Needs review':'Description';
+   }
+   t.type='transfer';
+  }else if(t.accountingKind==='refund'){
+   t.type='refund';
+   // A verifiable same-account matching purchase is enough to recover a refund's
+   // category; otherwise retain the bank category / user override for review.
+   if((!t.category||t.category==='Other')&&iso(t.date)){
+    const target=cleanedRefundMerchant(t.merchant);
+    const possibilities=purchases.filter(p=>p.accountId===t.accountId&&
+     cleanedRefundMerchant(p.merchant)===target&&p.date<=t.date&&days(p.date,t.date)<=120);
+    possibilities.sort((a,b)=>b.date.localeCompare(a.date));
+    if(possibilities.length)t.category=state?.categoryOverrides?.[possibilities[0].id]||possibilities[0].category||'Other';
+   }
+  }else if(t.accountingKind==='unclassified_card_credit'){
+   t.type='transfer';t.reconciliationStatus='needs-review';
+  }else if(t.accountingKind==='purchase')t.type='expense';
+  else if(t.accountingKind==='income')t.type='income';
+  else {t.type='transfer';t.reconciliationStatus='needs-review'}
+  if(!t.pending){
+   if(t.type==='expense')t.spendingAmount=round(Number(t.amount)||0);
+   if(t.type==='refund')t.spendingAmount=round(-Number(t.amount)||0);
+   if(t.type==='income')t.earnedIncomeAmount=round(Number(t.amount)||0);
+  }
+ }
+ return {accounts:registry,transactions:output,summary:{
+  spending:round(output.reduce((s,t)=>s+t.spendingAmount,0)),
+  income:round(output.reduce((s,t)=>s+t.earnedIncomeAmount,0)),
+  refunds:round(output.filter(t=>t.type==='refund').reduce((s,t)=>s+Number(t.amount||0),0)),
+  matchedTransfers:output.filter(t=>t.pairedTransactionId).length/2,
+  unmatchedTransfers:output.filter(t=>t.type==='transfer'&&t.reconciliationStatus==='unmatched').length,
+  needsReview:output.filter(t=>t.reconciliationStatus==='ambiguous'||t.reconciliationStatus==='needs-review').length
+ }};
+}
+const api={accountType,registerAccounts,accountsFor,reconcile};
+root.HouseholdAccounting=api;
+if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof window!=='undefined'?window:globalThis);
