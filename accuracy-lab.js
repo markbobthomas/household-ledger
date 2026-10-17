@@ -78,7 +78,7 @@ function addMetrics(bin,match,forecastCount,actualCount){
  for(const pair of match.matched)recordMatched(bin,pair.predicted,pair.actual);
 }
 function evaluateFold(opts){
- const {transactions,asOf,forecast,ledger,dataModel,horizon=90,initialBalance=18000,baselineDate='2024-09-30'}=opts;
+ const {transactions,asOf,forecast,ledger,dataModel,horizon=90,initialBalance=18000,baselineDate='2024-09-30',cashAccount='Checking'}=opts;
  if(!isoDate(asOf)||!Number.isInteger(horizon)||horizon<30||horizon>90)throw Error('Invalid evaluation window');
  if(!Array.isArray(transactions)||!forecast||!ledger||!dataModel)throw Error('Missing fixture and prediction modules');
  const until=shiftDays(asOf,horizon);
@@ -124,11 +124,12 @@ function evaluateFold(opts){
    if(pair)recordMatched(bin,pair.predicted,pair.actual);
   }else bin.false++;
  }
- const opening=round(initialBalance+transactions.filter(t=>t.date>baselineDate&&t.date<=asOf).reduce((n,t)=>n+cashImpact(t),0));
+ const cashFor=t=>account(t)===cashAccount;
+ const opening=round(initialBalance+transactions.filter(t=>t.date>baselineDate&&t.date<=asOf&&cashFor(t)).reduce((n,t)=>n+cashImpact(t),0));
  const cash=CASH_DAYS.filter(n=>n<=horizon).map(days=>{
   const checkpoint=shiftDays(asOf,days);
-  const predictedChange=cashEvents.filter(e=>e.date<=checkpoint).reduce((n,e)=>n+cashImpact(e),0);
-  const actualChange=futureActual.filter(t=>t.date<=checkpoint).reduce((n,t)=>n+cashImpact(t),0);
+  const predictedChange=cashEvents.filter(e=>e.date<=checkpoint&&cashFor(e)).reduce((n,e)=>n+cashImpact(e),0);
+  const actualChange=futureActual.filter(t=>t.date<=checkpoint&&cashFor(t)).reduce((n,t)=>n+cashImpact(t),0);
   const expectedBalance=round(opening+predictedChange),realizedBalance=round(opening+actualChange);
   const unc=predicted.uncertainty?.available?predicted.uncertainty:null;
   const adjustedBalance=unc?round(expectedBalance-unc.dailyEstimated*days):null;
@@ -192,7 +193,7 @@ function run(options){
  if(rows.length<1||!rows.every(x=>isoDate(x.date)))throw Error('Valid fictional historical transactions are required');
  const immutable=JSON.stringify(rows);
  const folds=dates.map(asOf=>evaluateFold({transactions:rows,forecast,ledger,dataModel,asOf,
-  horizon:90,initialBalance:options.initialBalance??18000,baselineDate:options.baselineDate||'2024-09-30'}));
+  horizon:90,initialBalance:options.initialBalance??18000,baselineDate:options.baselineDate||'2024-09-30',cashAccount:options.cashAccount||'Checking'}));
  if(JSON.stringify(rows)!==immutable)throw Error('Accuracy lab must never mutate source fixture');
  const score=summarize(folds);
  return {kind:'fictional-walk-forward',label:'Fictional 25-month household',method:'Month-start 90-day walk-forward; 12 overlapping holdout windows',
@@ -209,7 +210,7 @@ function run(options){
     'A hit requires the same merchant, account, direction and a posting date within 2–5 days; each actual matches at most one prediction.',
     'Precision and recall score recurring opportunities, not every irregular purchase. Shopping without reliable dates is not counted as a recurring miss.',
     'Monthly tests overlap: a charge may be scored in several independently generated forecasts.',
-    'Cash-flow error uses an explicitly fictional anchored balance. Checking transfers affect actual cash but are not forecasted as expenses.',
+    'Cash-flow error uses an explicitly fictional anchored Checking account; checking transfers affect cash but are not spending.',
     'No metric is a measured real-bank accuracy rate. Missing or unverified source history would reduce reliability.'
    ]};
 }
