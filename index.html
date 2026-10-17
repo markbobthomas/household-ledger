@@ -1,8 +1,8 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=phase3-review-learning"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phase3-pattern-learning"></script><script src="bank-feed.js"></script><script src="cashflow.js?v=unified2"></script><script src="forecast-ledger.js?v=unified2"></script><script src="recurring.js"></script><script src="ledger-data.js?v=phase3-learning"></script><script src="reviews.js?v=phase3-learning"></script><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=phase4-accuracy"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phase3-pattern-learning"></script><script src="bank-feed.js"></script><script src="cashflow.js?v=unified2"></script><script src="forecast-ledger.js?v=unified2"></script><script src="recurring.js"></script><script src="ledger-data.js?v=phase3-learning"></script><script src="reviews.js?v=phase3-learning"></script><script src="accuracy-fixture.js?v=phase4"></script><script src="accuracy-lab.js?v=phase4"></script><script>
 (()=>{
 'use strict';const KEY='household-ledger-v1',CATS=['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other'],BANDS=[['Under $10',0,10],['$10–$25',10,25],['$25–$50',25,50],['$50–$100',50,100],['$100–$200',100,200],['$200–$500',200,500],['$500+',500,Infinity]],money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c])),el=x=>document.getElementById(x),id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2),today=()=>new Date().toLocaleDateString('en-CA');const Model=window.HouseholdLedgerData,initialStorage=localStorage.getItem(KEY);let initial;try{initial=initialStorage?JSON.parse(initialStorage):null}catch{initial=null}
 if(!initial)initial=initialStorage===null&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[],budgets:{}};
-let data=Model.migrate(initial),page='budgets',period=today().slice(0,7),budgetMonth=today().slice(0,7),insightMode='merchants',reviewFilter='all',reviewTasks=[];
+let data=Model.migrate(initial),page='budgets',period=today().slice(0,7),budgetMonth=today().slice(0,7),insightMode='merchants',reviewFilter='all',reviewTasks=[],accuracyReport=null;
 function save(){localStorage.setItem(KEY,JSON.stringify(data))}save();
 function entries(){return Model.records(data)}
 function alertMsg(message){el('flash').innerHTML='<div class="message">'+esc(message)+'</div>';window.scrollTo({top:0,behavior:'instant'})}
@@ -206,6 +206,70 @@ function learnReviewedPrediction(task,modified){
  }
 }
 
+function accuracyView(){
+ // This evaluation is deliberately isolated from data/localStorage, including
+ // user-categorized transactions and imported legacy rows.
+ try{
+  if(!accuracyReport)accuracyReport=window.HouseholdAccuracyLab.runFixture(window.HouseholdAccuracyFixture,
+   window.HouseholdForecast,window.HouseholdForecastLedger,Model);
+ }catch(err){
+  return '<div class="panel accuracy-lab"><h3>Historical accuracy test</h3><p class="prediction-note">Fictional test temporarily unavailable: '+esc(err.message)+'</p></div>';
+ }
+ const s=accuracyReport.score,primary=s.recurring;
+ const percent=x=>x===null?'Not measurable':x.toFixed(1)+'%';
+ const num=x=>x===null?'N/A':String(x.toFixed(2)).replace(/\.00$/,'');
+ const stat=(name,value,subtitle)=>'<div class="accuracy-stat"><span>'+esc(name)+'</span><strong>'+esc(value)+'</strong><small>'+esc(subtitle)+'</small></div>';
+ const maxErr=Math.max(1,...s.cash.map(x=>x.mae));
+ const cash=s.cash.map(x=>'<div class="accuracy-cash-row"><span>'+x.days+' days</span>'+
+  '<div class="accuracy-track"><i style="width:'+((x.mae/maxErr)*100).toFixed(1)+'%"></i></div>'+
+  '<strong>'+money(x.mae)+'</strong><small>Average absolute error</small></div>').join('');
+ const scoreTable=(items,kind)=>'<div class="accuracy-table-wrap"><table class="accuracy-table"><thead>'+
+  '<tr><th>'+esc(kind)+'</th><th>Predicted</th><th>Matched</th><th>Missed</th><th>False</th><th>Precision</th><th>Recall</th></tr></thead><tbody>'+
+  items.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+x.predicted+'</td><td>'+x.matched+'</td><td>'+x.missedRecurring+'</td><td>'+x.falsePredictions+'</td>'+
+   '<td>'+esc(percent(x.precision))+'</td><td>'+esc(percent(x.recall))+'</td></tr>').join('')+
+  '</tbody></table></div>';
+ const snapshots='<div class="accuracy-table-wrap"><table class="accuracy-table"><thead><tr><th>Forecast made</th><th>Precision</th><th>Recall</th><th>90-day balance error</th></tr></thead><tbody>'+
+  accuracyReport.folds.map(x=>'<tr><td>'+esc(x.asOf)+'</td><td>'+esc(percent(x.precision))+'</td>'+
+  '<td>'+esc(percent(x.recall))+'</td><td>'+money(x.cash.find(c=>c.days===90).absoluteError)+'</td></tr>').join('')+
+  '</tbody></table></div>';
+ const examples=accuracyReport.score.examples;
+ const errors='<div class="accuracy-examples"><div><strong>Examples of missed repeating payments</strong>'+
+  (examples.missedRecurring.length?examples.missedRecurring.slice(0,4).map(e=>'<p>'+esc(e.merchant)+' · '+esc(e.date)+' · '+esc(e.asOf)+'</p>').join(''):'<p>No examples in these windows.</p>')+
+  '</div><div><strong>Examples of false predictions</strong>'+
+  (examples.falsePredictions.length?examples.falsePredictions.slice(0,4).map(e=>'<p>'+esc(e.merchant)+' · '+esc(e.date)+' · '+esc(e.asOf)+'</p>').join(''):'<p>No examples in these windows.</p>')+'</div></div>';
+ return '<section class="panel accuracy-lab" aria-label="Historical accuracy laboratory">'+
+  '<div class="section-top"><div><h3>Prediction accuracy lab</h3><p class="prediction-note">FICTIONAL HISTORY ONLY · Not a score for your household</p></div>'+
+  '<button class="btn" type="button" id="rerun-accuracy">Run again</button></div>'+
+  '<p class="accuracy-intro">We rewound the same 25-month fictional household to '+s.snapshots+
+  ' historical dates. At each one, future transactions were hidden from the predictor and used only afterward to score its 90-day forecast.</p>'+
+  '<div class="accuracy-stats">'+
+  stat('Recurring precision',percent(primary.precision),'Of '+primary.predicted+' predicted charges or deposits, '+primary.matched+' matched')+
+  stat('Recurring recall',percent(primary.recall),primary.matched+' of '+primary.actualRecurring+' actual repeating transactions anticipated')+
+  stat('Date error',primary.averageDateErrorDays===null?'N/A':num(primary.averageDateErrorDays)+' days','Average on correctly matched recurring events')+
+  stat('Amount error',primary.averageAmountError===null?'N/A':money(primary.averageAmountError),'Average absolute error on matched events')+
+  '</div>'+
+  '<div class="accuracy-detail-line"><span>'+primary.falsePredictions+' false predictions</span><span>'+primary.missedRecurring+
+  ' missed recurring events</span><span>'+percent(s.scheduledExpenseCoverage)+' of total expenses covered by matched scheduled charges</span></div>'+
+  '<div class="section-top"><h3>Cash balance error by forecast horizon</h3></div>'+
+  '<p class="prediction-note">Mean absolute balance error across '+s.snapshots+
+  ' fictional anchored-balance simulations. The model does not yet forecast irregular spending or checking transfers, so errors can be large.</p>'+cash+
+  '<details class="accuracy-detail"><summary>Accuracy by spending category</summary>'+
+  scoreTable(s.byCategory,'Category')+'</details>'+
+  '<details class="accuracy-detail"><summary>Accuracy by recurrence pattern</summary>'+scoreTable(s.byCadence,'Pattern')+'</details>'+
+  '<details class="accuracy-detail"><summary>Reliability by prediction confidence</summary>'+
+  '<p class="prediction-note">Hit rate by model confidence, not calibrated probability.</p>'+
+  '<div class="accuracy-table-wrap"><table class="accuracy-table"><thead><tr><th>Confidence</th><th>Predictions</th><th>Matched</th><th>Hit rate</th></tr></thead><tbody>'+
+   s.byConfidence.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+x.predicted+'</td><td>'+x.matched+'</td><td>'+esc(percent(x.precision))+'</td></tr>').join('')+
+  '</tbody></table></div></details>'+
+  '<details class="accuracy-detail"><summary>All '+s.snapshots+' historical forecast windows</summary>'+snapshots+'</details>'+
+  '<details class="accuracy-detail"><summary>Example prediction mistakes</summary>'+errors+'</details>'+
+  '<div class="accuracy-method"><strong>How to interpret this test</strong>'+
+   '<p>These are historical test-window opportunities; overlapping 90-day windows intentionally count a payment more than once. Matching requires the same merchant, account, money direction and a date within 2–5 days. Irregular purchases are excluded from the recurring-recall denominator but still contribute to real spending and cash errors.</p>'+
+   '<p>Opening balances are mathematically constructed from fictional transactions, not fetched from a bank. Credit-card settlement transfers reduce checking cash without being categorized as spending; the current forecast does not schedule them. This helps reveal why the 90-day balance projection is not yet dependable.</p>'+
+   '<p>No bank data, local ledger records, or user rules are read, imported, changed or sent anywhere by this lab.</p></div>'+
+  '</section>';
+}
+
 function reviewsPage(){
  const report=window.HouseholdReviews.build(data,window.HouseholdForecast,today(),sharedForecast());
  reviewTasks=report.tasks;
@@ -265,13 +329,15 @@ if(page==='budgets'){
 el('period').hidden=page==='reviews';
 let a=expense(),html='';if(page==='reviews')html=reviewsPage();if(page==='transactions')html='<div class="panel"><div class="section-top"><h3>Transactions</h3><span class="budget-summary-meta">'+rows().length+' entries</span></div>'+table(rows().sort((a,b)=>b.date.localeCompare(a.date)))+'</div>';
 if(page==='insights'){
-  const tabs='<div class="insight-tabs" role="tablist" aria-label="Insight views">'+[['merchants','Merchants'],['categories','Categories'],['bands','Purchase sizes'],['recurring','Recurring']].map(([key,name])=>'<button type="button" role="tab" aria-selected="'+(insightMode===key)+'" class="'+(insightMode===key?'active':'')+'" data-insight="'+key+'">'+name+'</button>').join('')+'</div>';
+  const tabs='<div class="insight-tabs" role="tablist" aria-label="Insight views">'+[['merchants','Merchants'],['categories','Categories'],['bands','Purchase sizes'],['recurring','Recurring'],['accuracy','Accuracy']].map(([key,name])=>'<button type="button" role="tab" aria-selected="'+(insightMode===key)+'" class="'+(insightMode===key?'active':'')+'" data-insight="'+key+'">'+name+'</button>').join('')+'</div>';
   if(insightMode==='categories'){
     html=tabs+gridStats()+'<div class="panel"><div class="section-top"><h3>Upcoming expected payments · this month</h3><strong>'+money(sharedForecast().events.filter(e=>e.type==='expense'&&e.date.slice(0,7)===today().slice(0,7)).reduce((n,e)=>n+e.amount,0))+'</strong></div><p class="prediction-note">Same dated payments used by Budget, Reviews and the 90-day projection. Select Budget to edit.</p></div><div class="panel"><div class="section-top"><h3>Spending by category</h3></div>'+list(grouped(a,'category'),999,'category',a)+'</div>';
   }else if(insightMode==='merchants'){
     html=tabs+gridStats()+'<div class="panel"><div class="section-top"><h3>Merchant totals</h3></div>'+list(grouped(a,'merchant'),999,'merchant',a)+'</div>';
   }else if(insightMode==='recurring'){
     html=recurringInsights(tabs);
+  }else if(insightMode==='accuracy'){
+    html=tabs+accuracyView();
   }else{
     const purchases=a.flatMap(t=>{const linked=data.items.filter(i=>i.transactionId===t.id),parts=linked.length?linked:[t];return parts.map(i=>({transactionId:t.id,date:t.date,merchant:cleanMerchant(t.merchant),category:t.category,description:linked.length?String(i.description||i.name||i.title||'Itemized purchase'):'Entire transaction (not itemized)',amount:Number(i.amount),transactionTotal:Number(t.amount),itemized:linked.length>0}))}).filter(i=>Number.isFinite(i.amount));
     const counts=BANDS.map(([name,min,max],index)=>({name,min,max,index,count:0,amount:0,details:[]}));
@@ -325,6 +391,7 @@ document.querySelectorAll('[data-forget-pattern]').forEach(button=>button.onclic
 });
 
 document.querySelectorAll('[data-insight]').forEach(b=>b.onclick=()=>{insightMode=b.dataset.insight;render()});
+if(el('rerun-accuracy'))el('rerun-accuracy').onclick=()=>{accuracyReport=null;render()};
 
 document.querySelectorAll('[data-review-filter]').forEach(b=>b.onclick=()=>{reviewFilter=b.dataset.reviewFilter;render()});
 document.querySelectorAll('[data-review-category]').forEach(form=>form.onsubmit=e=>{
