@@ -104,9 +104,43 @@ Before adding Plaid, improve the model using the Accuracy report:
 
 **Regression controls:** The original Phase 4 baseline is retained in \`tests/accuracy-regression-baseline.json\` along with Phase 4.1 results and stricter checks for both fictional households. \`tests/phase41-smoke.cjs\` tests recurring horizon, transfer isolation, uncertainty ranges, source immutability, hidden future data and desktop/iPhone user flows. 15 automated browser tests passed.
 
-### Recommended next — Phase 4.2: reliability stress-testing (NEXT)
+### Phase 4.2 — Reliability stress-testing (COMPLETE · October 17, 2026)
 
 Before Plaid, expand fictional robustness checks to missing/intermittent bank history, shifted paydays, provider-delayed posting, annual and semiannual renewals, income interruption, new merchants, refunds, and multi-account reconciliation. Improve confidence calibration using genuinely varied datasets rather than only repeated clean schedules. Optionally provide a **separate read-only statement evaluation sandbox** with explicit user approval, never inserting statement data into bank source records. Reassess whether balance ranges are good enough for decisions. Then return to Plaid only if the user chooses.
+
+
+**Status: implemented, published and verified with automated browser tests.** The independent \`stress-lab.js\` deliberately disrupts clean synthetic histories, forecasting under three distinct as-of dates for two different households. All 48 tests retain strict future-data isolation, bank transaction immutability, and separate checking/savings cash accounting.
+
+**Scenarios:** (1) 25% missing transaction rows, (2) a missing last bank-sync month, (3) up to three days of historical posting slippage, (4) future payment posting delays, (5) suddenly interrupted paychecks, (6) merchant statement renaming, (7) unexpected refund credits, and (8) a matched internal Savings-side transfer. Annual/semiannual renewals and multiple apparently identical refunds also have independent targeted assertions.
+
+**Detector hardening:**
+- Recover some monthly charges and twice-monthly income schedules when *one* month is missing, but explicitly mark these patterns \`Medium\` confidence and send warnings to **Reviews**; never assume missing information is verified.
+- Allow somewhat more posting-day drift and intermittent weekly/biweekly history only when there is deeper supporting historical evidence. Repeated refunds and reversals are excluded from income-schedule detection while remaining untouched actual ledger records.
+- Still refuse to revive ancient canceled patterns from stale history; an unknown renamed merchant does not silently acquire another merchant's category or recurrence.
+- Preserve directed Checking-to-Savings cash transfers without treating mirrored savings credits as household income or doubling spending.
+
+**Disrupted synthetic performance** (average across the two invented datasets and three historical snapshots, not a real-bank validation):
+
+| Scenario | Recurring recall after stress | Loss from clean history | Extra 90-day balance MAE |
+| --- | ---: | ---: | ---: |
+| One quarter of prior rows missing | 80.9% | −16.7 points | +$6,982 |
+| Entire recent bank-sync month missing | 51.0% | −46.6 points | +$4,312 |
+| Historical posting dates delayed | 62.1% | −35.5 points | +$3,120 |
+| Future transactions posted late | 88.3% | −9.4 points | $0 (in this fixture) |
+| Unannounced payroll interruption | 97.8% | +0.1 points (due to changed denominator) | **+$25,492** |
+| Merchant description changed | 83.8% | −13.9 points | $0 (in this fixture) |
+| Surprise refund credit | 97.6% | unchanged | −$150 (forecast happened to be closer) |
+| Mirrored Savings transfer | 97.6% | unchanged | $0 (no double counting) |
+
+A **High** prediction-confidence label achieved just **~86% observed matching** under a selected mix of artificial disruptions. Medium and High labels are **not statistically calibrated probabilities**. A missed or stopped paycheck cannot be reliably inferred from past deposits alone; forecasts must never be described as guaranteed funds. The clean-history gains measured in Phase 4.1 remain valid for those particular synthetic examples, but they overstate reliability under disrupted bank histories.
+
+**Product UI:** Insights → Accuracy now exposes three high-priority warnings, all eight stress-case results, and a confidence-label audit. Reviews shows the specific missing-history or late-posting concern when a provisional expected payment needs confirmation. The original/holdout synthetic accuracy screens remain available.
+
+**Regression safeguards:** \`tests/phase42-stress-baseline.json\` and \`tests/phase42-smoke.cjs\` enforce minimal stress coverage, no forward-looking source access, repeatability, no source writes, accurate transfer treatment, and desktop/iPhone UI rendering. These checks measure code behavior in fabricated cases; external reliability is still unknown.
+
+### Recommended next — Phase 4.3: bank-data readiness without Plaid (NEXT)
+
+Create a visibly non-authoritative *bank feed health* indicator (last successful sync, missing accounts, stale/pending data), and explicitly flag projected income as **unconfirmed until posted**. Stress-test new accounts, returned payments, employer changes, ambiguous transfer identities and larger/more heterogeneous fictional populations. If the user chooses, provide a clearly separated **read-only historical statement evaluation sandbox** with user-approved imports that cannot alter actual ledger source records. Only after evaluating realistic records and deciding on a secure backend should Plaid integration begin.
 
 ## Phase 5 — Plaid, only after user chooses
 
