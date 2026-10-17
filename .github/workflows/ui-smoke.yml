@@ -24,6 +24,7 @@ jobs:
           sleep 2
           node tests/price-band-smoke.cjs
           node tests/category-budget-smoke.cjs
+          node tests/inline-edit-smoke.cjs
           node tests/cashflow-smoke.cjs
           node tests/design-smoke.cjs
           node tests/settings-geometry-diagnostic.cjs

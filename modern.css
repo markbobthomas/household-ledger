@@ -978,3 +978,36 @@ html { scroll-behavior:auto; }
 .readiness-section h3{font-size:15px}
 .readiness-section .accuracy-table-wrap{max-width:100%;overflow-x:auto}
 @media(max-width:700px){.feed-health{padding:10px}.readiness-section{margin-top:12px}}
+
+/* Inline edit pattern — intentionally only on values the household can change. */
+.editable-value{
+ appearance:none;-webkit-appearance:none;background:transparent;border:0;border-radius:0;
+ border-bottom:1px dashed #79899a;padding:3px 1px 4px;margin:0;
+ font:inherit;color:inherit;line-height:inherit;cursor:text;text-decoration:none;
+ text-underline-offset:3px;font-variant-numeric:tabular-nums;
+}
+.editable-value:hover{border-bottom-style:solid;border-bottom-color:#1855cb;color:#1855cb}
+.editable-value:focus-visible{outline:2px solid #356fe0;outline-offset:3px;border-bottom-style:solid}
+.budget-category-meta .editable-value{font-size:inherit;font-weight:680}
+.budget-edit-legend{margin-left:auto;color:var(--muted);font-size:11px;line-height:1.5}
+.budget-target-note{font-size:11px;font-weight:500;color:var(--muted);line-height:1.5;text-align:right}
+.expected-value.editable-value{font:700 15px var(--mono);text-align:right;justify-self:end;min-width:0}
+.expected-value.excluded.editable-value{color:var(--muted);text-decoration:line-through}
+.inline-money-editor{
+ display:inline-flex;align-items:center;gap:3px;vertical-align:middle;
+ border:1px solid #526273;border-radius:4px;background:#fff;color:var(--ink);
+ padding:0 7px;max-width:100%;font:650 14px var(--mono);box-shadow:0 0 0 2px rgba(53,111,224,.12);
+}
+.inline-money-input,.inline-money-input:focus-visible{
+ width:8ch;min-width:0;max-width:100%;height:32px;min-height:32px;padding:0;
+ border:0;outline:0;border-radius:0;background:transparent;box-shadow:none;
+ font:650 14px var(--mono);text-align:left;color:var(--ink);
+}
+@media(max-width:700px){
+ .budget-edit-legend{font-size:11px;margin-left:0;flex-basis:100%}
+ .budget-target-note{text-align:left}
+ .editable-value{min-height:36px;padding:6px 1px}
+ .expected-value.editable-value{font-size:15px}
+ .inline-money-input,.inline-money-input:focus-visible{font-size:16px}
+ .inline-money-editor{padding:0 5px}
+}

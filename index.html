@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=phase43"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phase42"></script><script src="bank-feed.js?v=phase43"></script><script src="feed-health.js?v=phase43"></script><script src="cashflow.js?v=phase41"></script><script src="forecast-ledger.js?v=phase43"></script><script src="recurring.js"></script><script src="ledger-data.js?v=phase3-learning"></script><script src="reviews.js?v=phase42"></script><script src="accuracy-fixture.js?v=phase4"></script><script src="accuracy-fixture-holdout.js?v=phase41"></script><script src="accuracy-lab.js?v=phase41"></script><script src="stress-lab.js?v=phase42"></script><script src="accuracy-fixture-seasonal.js?v=phase43"></script><script src="readiness-lab.js?v=phase43"></script><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#111418"><title>Household Ledger</title><link rel="stylesheet" href="modern.css?v=inline-edit1"></head><body><aside aria-label="Primary navigation"><h2><span class="brand-mark">HL</span><span class="brand-word"> / LEDGER</span></h2><button class="active" data-page="budgets"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Budget</span></button><button data-page="transactions"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 6h14M7 12h14M7 18h14"/><circle cx="3.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg><span>Activity</span></button><button data-page="insights"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20V11m6 9V4m6 16v-7m4 7V8" stroke-linecap="round"/></svg><span>Insights</span></button><button data-page="reviews"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6M8.5 11l2 2 4-4M8.5 17h7" stroke-linecap="round"/></svg><span>Reviews</span></button><button data-page="settings"><svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="#111418"/><circle cx="15" cy="17" r="2.5" fill="#111418"/></svg><span>Settings</span></button></aside><main><div class="content"><div class="page-top"><h1 id="title">Budgets</h1><span class="ledger-readonly">SOURCE LEDGER · READ ONLY</span></div><p class="sr-only" id="subtitle">Monthly spending and forecasts</p><nav class="mobile-top-nav" aria-label="App sections"><button type="button" data-page="budgets" class="active">Budget</button><button type="button" data-page="transactions">Activity</button><button type="button" data-page="insights">Insights</button><button type="button" data-page="reviews">Reviews</button><button type="button" data-page="settings">Settings</button></nav><div class="toolbar"><select id="period" aria-label="Select reporting month"><option value="all">All dates</option></select><span id="budget-range" class="sr-only" aria-live="polite"></span><div id="demo-banner"></div></div><div id="flash"></div><div id="view"></div></div></main><script src="demo-data.js"></script><script src="forecast.js?v=phase42"></script><script src="bank-feed.js?v=phase43"></script><script src="feed-health.js?v=phase43"></script><script src="cashflow.js?v=phase41"></script><script src="forecast-ledger.js?v=phase43"></script><script src="recurring.js"></script><script src="ledger-data.js?v=phase3-learning"></script><script src="reviews.js?v=phase42"></script><script src="accuracy-fixture.js?v=phase4"></script><script src="accuracy-fixture-holdout.js?v=phase41"></script><script src="accuracy-lab.js?v=phase41"></script><script src="stress-lab.js?v=phase42"></script><script src="accuracy-fixture-seasonal.js?v=phase43"></script><script src="readiness-lab.js?v=phase43"></script><script>
 (()=>{
 'use strict';const KEY='household-ledger-v1',CATS=['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other'],BANDS=[['Under $10',0,10],['$10–$25',10,25],['$25–$50',25,50],['$50–$100',50,100],['$100–$200',100,200],['$200–$500',200,500],['$500+',500,Infinity]],money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c])),el=x=>document.getElementById(x),id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2),today=()=>new Date().toLocaleDateString('en-CA');const Model=window.HouseholdLedgerData,initialStorage=localStorage.getItem(KEY);let initial;try{initial=initialStorage?JSON.parse(initialStorage):null}catch{initial=null}
 if(!initial)initial=initialStorage===null&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[],budgets:{}};
@@ -136,7 +136,7 @@ function expectedTransactionMarkup(e){
  return '<details class="expected-tx" data-expected="'+esc(e.id)+'"><summary class="expected-summary">'+
   '<span class="expected-date">'+esc(cashDateLabel(e.date))+'</span>'+
   '<span class="expected-info"><strong>'+esc(e.merchant)+'</strong><small>'+esc(manual?'Added prediction':(e.cadence+' · '+e.evidence+' historical months · '+e.confidence+' confidence'+(e.seasonal?' · Seasonal amount':'')))+(e.adjusted?' · Adjusted':'')+(e.enabled===false?' · Excluded':e.date<=today()?' · Past due':'')+'</small></span>'+
-  '<strong class="expected-value '+(active?'':'excluded')+'">'+money(e.amount)+'</strong><span class="expected-action">Edit</span></summary>'+
+  '<button type="button" class="expected-value editable-value '+(active?'':'excluded')+'" data-inline-expected="'+esc(e.id)+'" data-amount="'+Number(e.amount)+'" aria-label="Edit expected amount for '+esc(e.merchant)+'">'+money(e.amount)+'</button><span class="expected-action">Details</span></summary>'+
   '<form class="expected-inline-form" data-expected-form="'+esc(e.id)+'"><p class="prediction-note">Prediction only. This does not change a bank transaction.</p>'+
   (manual?'<label>Merchant<input type="text" name="merchant" maxlength="130" required value="'+esc(e.merchant)+'"></label>':'')+
   '<label>Expected date<input type="date" name="date" required value="'+esc(e.date)+'"></label>'+
@@ -181,10 +181,20 @@ function predictedCategoryMarkup(f,category,month){
   (f.unscheduled?.estimate>0?'<div class="variable-risk"><strong>Unscheduled spending exposure</strong><span>'+money(f.unscheduled.min)+'–'+money(f.unscheduled.max)+' estimated remaining (midpoint '+money(f.unscheduled.estimate)+')</span><small>Historical range, not a dated payment. Excluded from the pink bar and recorded actuals.</small></div>':'')+
   '<p class="prediction-note">Expected dates are pattern estimates, not guaranteed charges. Irregular purchases remain separate from dated transactions.</p></div>';
 }
-function refreshCategory(category){
- const y=window.scrollY;render();
- const item=Array.from(document.querySelectorAll('.budget-entry')).find(x=>x.dataset.budgetCategory===category);
- if(item){const d=item.querySelector(':scope > details');if(d)d.open=true}
+function refreshCategory(category,focusExpectedId){
+ const y=window.scrollY;
+ const expanded=[...document.querySelectorAll('.budget-entry > details[open]')].map(x=>x.closest('.budget-entry').dataset.budgetCategory);
+ const expectedOpen=[...document.querySelectorAll('.expected-tx[open]')].map(x=>x.dataset.expected);
+ render();
+ for(const node of document.querySelectorAll('.budget-entry')){
+  if(expanded.includes(node.dataset.budgetCategory)||node.dataset.budgetCategory===category)
+   node.querySelector(':scope > details').open=true;
+ }
+ for(const node of document.querySelectorAll('.expected-tx'))if(expectedOpen.includes(node.dataset.expected))node.open=true;
+ if(focusExpectedId){
+  const value=[...document.querySelectorAll('[data-inline-expected]')].find(x=>x.dataset.inlineExpected===focusExpectedId);
+  value?.focus({preventScroll:true});
+ }
  window.scrollTo({top:y,behavior:'instant'});
 }
 
@@ -417,7 +427,7 @@ if(page==='insights'){
  const cats=[...new Set([...CATS,...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,
  {start:monthStart,end:monthEnd,label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
  html=cashFlowCard()+'<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div>'+
- '<div class="budget-legend"><span>Spent</span><span>Expected</span></div>'+
+ '<div class="budget-legend"><span>Spent</span><span>Expected</span><small class="budget-edit-legend">Underlined amounts are editable</small></div>'+
  cats.map(category=>{
   const matching=entries().filter(t=>t.type==='expense'&&t.category===category&&t.date>=monthStart&&t.date<=monthEnd).sort((a,b)=>b.date.localeCompare(a.date));
   const f=monthlyProjection(month,category),limit=Number(data.predictions.monthlyBudgets[category])||0;
@@ -427,10 +437,10 @@ if(page==='insights'){
   '<div class="budget-heading"><span class="budget-title">'+esc(category)+'</span><span class="budget-summary-amount">'+money(f.actual)+'</span></div>'+
   '<div class="budget-progress" role="img" aria-label="'+esc(category)+': '+esc(money(f.actual))+' spent, '+esc(money(f.additional))+' expected transactions, budget '+esc(limit?money(limit):'not set')+'">'+
   '<i class="actual" style="width:'+spentWidth.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecastWidth.toFixed(2)+'%"></i></div>'+
-  '<div class="budget-heading"><span class="budget-category-meta">'+(limit?'Budget '+money(limit):'No budget set')+'</span>'+
+  '<div class="budget-heading"><span class="budget-category-meta">Budget <button type="button" class="editable-value" data-inline-budget="'+esc(category)+'" data-amount="'+limit+'" aria-label="Edit '+esc(category)+' monthly budget cap">'+(limit?money(limit):'Set cap')+'</button></span>'+
   '<span class="budget-category-meta '+(limit&&currentMonth&&f.projectedTotal>limit?'over-budget':'')+'">'+
   (currentMonth?'Expected '+money(f.projectedTotal):'Completed month')+'</span></div></div><span class="chevron" aria-hidden="true">⌄</span></summary>'+
-  '<div class="drill-expanded"><div class="section-top"><h3>'+esc(category)+' · '+esc(month)+'</h3><button class="btn" data-budget="'+esc(category)+'">Edit budget target</button></div>'+
+  '<div class="drill-expanded"><div class="section-top"><h3>'+esc(category)+' · '+esc(month)+'</h3><small class="budget-target-note">Edit the underlined cap above · applies to every month</small></div>'+
   predictedCategoryMarkup(f,category,month)+recurrenceRulesMarkup(category)+
   '<div class="recorded-section"><div class="section-top"><h3>Recorded transactions</h3><strong>'+money(f.actual)+'</strong></div>'+
   (matching.length?table(matching):'<div class="empty">No posted expenses in this category for the selected month.</div>')+'</div>'+
@@ -512,7 +522,7 @@ if(page==='insights'&&window.matchMedia('(max-width:700px)').matches){
  if(tabs&&active)tabs.scrollLeft+=active.getBoundingClientRect().left-tabs.getBoundingClientRect().left-16;
 }
 document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>categoryForm(b.dataset.category));
-document.querySelectorAll('[data-budget]').forEach(b=>b.onclick=()=>budgetPredictionForm(b.dataset.budget,budgetMonth));
+bindInlineMoneyEdits();
 document.querySelectorAll('[data-stream]').forEach(b=>b.onclick=()=>streamPredictionForm(b.dataset.stream));
 document.querySelectorAll('[data-event]').forEach(b=>b.onclick=()=>eventPredictionForm(b.dataset.event));
 document.querySelectorAll('[data-add-event]').forEach(b=>b.onclick=()=>eventPredictionForm(null));
@@ -605,15 +615,92 @@ function categoryForm(id){
  }catch(err){alert(err.message)}};
  bindCancel();
 }
-function budgetPredictionForm(category,month){
- const f=monthlyProjection(month,category),budget=data.predictions.monthlyBudgets[category]||0;
- showEditor('<h3>Monthly budget target · '+esc(category)+'</h3>'+
- '<p class="prediction-note">Actual spending '+money(f.actual)+' is read-only. '+f.active.length+' individually dated expected transactions total '+money(f.additional)+'. Expand the category to edit those payments individually.</p>'+
- '<form id="entry"><label>Monthly budget ($)<input name="budget" type="number" min="0" step=".01" required value="'+esc(budget)+'"></label>'+
- '<div class="editor-actions"><button type="submit" class="btn primary">Save budget</button><button type="button" class="btn" id="cancel">Cancel</button></div></form>');
- el('entry').onsubmit=e=>{e.preventDefault();try{Model.setMonthlyBudget(data,category,new FormData(e.target).get('budget'));save();render();alertMsg('Monthly budget updated. Actuals and individual predictions unchanged.')}catch(err){alert(err.message)}};
- bindCancel();
+/* Direct-edit forecast values only; recorded bank amounts remain immutable. */
+function beginInlineMoneyEdit(button,onSave){
+ const prior=Number(button.dataset.amount)||0;
+ const host=document.createElement('span');host.className='inline-money-editor';
+ const prefix=document.createElement('span');prefix.textContent='$';prefix.setAttribute('aria-hidden','true');
+ const input=document.createElement('input');input.type='text';input.inputMode='decimal';
+ input.autocomplete='off';input.spellcheck=false;input.className='inline-money-input';
+ input.value=prior.toFixed(2);input.maxLength=13;
+ input.setAttribute('aria-label',button.getAttribute('aria-label')||'Edit amount');
+ host.append(prefix,input);
+ for(const name of ['click','pointerdown','mousedown','keydown','keyup'])
+  host.addEventListener(name,e=>e.stopPropagation());
+ button.replaceWith(host);input.focus();input.select();
+ let done=false;
+ function close(commit,showError=false){
+  if(done)return;
+  let amount=prior;
+  if(commit){
+   const raw=input.value.trim().replace(/,/g,'');
+   const valid=/^\d+(?:\.\d{1,2})?$/.test(raw)&&Number.isFinite(Number(raw))&&Number(raw)<=999999999;
+   if(!valid){
+    if(showError){
+     input.setCustomValidity('Enter zero or a positive amount with at most two decimals.');
+     input.reportValidity();return;
+    }
+    commit=false;
+   }else amount=Number(raw);
+  }
+  done=true;host.replaceWith(button);
+  if(commit&&amount!==prior){
+   try{onSave(amount,button)}catch(err){alert(err.message)}
+  }
+  if(button.isConnected)button.focus({preventScroll:true});
+ }
+ input.addEventListener('input',()=>input.setCustomValidity(''));
+ input.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();close(false)}
+  if(e.key==='Enter'){e.preventDefault();close(true,true)}
+ });
+ input.addEventListener('blur',()=>close(true,false));
 }
+function updateBudgetAmountUI(category,amount,button){
+ const item=button.closest('.budget-entry');
+ const f=monthlyProjection(budgetMonth,category),limit=Number(amount)||0;
+ button.dataset.amount=String(limit);
+ button.textContent=limit?money(limit):'Set cap';
+ const width=limit?Math.min(100,Math.max(0,f.actual/limit*100)):0;
+ const expected=limit?Math.min(Math.max(0,100-width),Math.max(0,f.additional/limit*100)):0;
+ const bar=item.querySelector('.budget-progress');
+ bar.querySelector('.actual').style.width=width.toFixed(2)+'%';
+ bar.querySelector('.forecast').style.width=expected.toFixed(2)+'%';
+ bar.setAttribute('aria-label',category+': '+money(f.actual)+' spent, '+money(f.additional)+
+  ' expected transactions, budget '+(limit?money(limit):'not set'));
+ item.querySelector('.budget-heading:last-child .budget-category-meta:last-child')
+  ?.classList.toggle('over-budget',Boolean(limit&&budgetMonth===today().slice(0,7)&&f.projectedTotal>limit));
+}
+function bindInlineMoneyEdits(){
+ document.querySelectorAll('[data-inline-budget]').forEach(button=>{
+  button.addEventListener('keydown',e=>e.stopPropagation());
+  button.addEventListener('keyup',e=>e.stopPropagation());
+  button.addEventListener('click',e=>{
+   e.preventDefault();e.stopPropagation();
+   const category=button.dataset.inlineBudget;
+   beginInlineMoneyEdit(button,(amount,control)=>{
+    Model.setMonthlyBudget(data,category,amount);save();
+    updateBudgetAmountUI(category,amount,control);
+   });
+  });
+ });
+ document.querySelectorAll('[data-inline-expected]').forEach(button=>{
+  button.addEventListener('keydown',e=>e.stopPropagation());
+  button.addEventListener('keyup',e=>e.stopPropagation());
+  button.addEventListener('click',e=>{
+   e.preventDefault();e.stopPropagation();
+   const id=button.dataset.inlineExpected,category=button.closest('.budget-entry').dataset.budgetCategory;
+   beginInlineMoneyEdit(button,amount=>{
+    const item=monthlyProjection(budgetMonth,category).expected.find(x=>x.id===id);
+    if(!item)throw Error('Expected payment no longer available');
+    if(id.startsWith('manual|'))Model.saveManualExpected(data,{...item,amount});
+    else Model.updateExpectedTransaction(data,id,{date:item.date,amount,enabled:item.enabled!==false});
+    save();refreshCategory(category,id);
+   });
+  });
+ });
+}
+
 function projectedCashFlow(){
  const snapshot=window.HouseholdBankFeed.getSnapshot(today()),account=snapshot.accounts[0];
  const history=snapshot.mode==='demo'&&window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo().transactions:entries();
