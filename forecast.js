@@ -83,7 +83,7 @@ function infer(transactions,month,category,asOf,mode='expense'){
    evidence:observedMonths,observations:obs,source:'historical',pattern:{day:Number(date.slice(8,10)),amount:stable},
    slot,seasonal:Boolean(extra.seasonal),groupKey:accountKey(group[0])+'|'+normalize(group[0].merchant)};
  };
- const monthRecords=groups=>groups.filter(t=>t.date.slice(0,7)===month);
+ const monthRecords=(rows,selectedMonth)=>rows.filter(t=>t.date.slice(0,7)===selectedMonth);
  function detectInterval(group){
   // Weekly/biweekly evidence must be based on a sequence (not count per month).
   const recent=group.filter(t=>t.date>=shiftMonth(month,-4));
