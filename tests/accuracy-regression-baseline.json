@@ -10,10 +10,33 @@
     "cash90DayMAE": 7781.64
   },
   "regressionGuardrails": {
-    "minimumPrecisionPct": 84,
-    "minimumRecallPct": 54,
-    "minimumRecurringMatched": 300,
-    "maximum90DayCashMAE": 9000
+    "minimumPrecisionPct": 94,
+    "minimumRecallPct": 92,
+    "minimumRecurringMatched": 520,
+    "maximum90DayCashMAE": 3000,
+    "maximum90DayScenarioMAE": 650,
+    "holdoutMinimumPrecisionPct": 92,
+    "holdoutMinimumRecallPct": 87,
+    "holdoutMaximum90DayMAE": 2200,
+    "holdoutMaximum90DayScenarioMAE": 1300
   },
-  "interpretation": "Guardrails only flag material regressions on this invented dataset. Passing them does not prove reliability or guarantee safe-to-spend balances."
+  "interpretation": "Phase 4.1 improvements are measured on two invented households only, never validated on real bank records. Scenario MAE is a statistical balance estimate; it does not create dated transactions. Historical base at Phase 4 is retained for comparison.",
+  "baselineAtPhase41": {
+    "primary": {
+      "recurringPrecisionPct": 100,
+      "recurringRecallPct": 98.95,
+      "recurringMatched": 564,
+      "scheduledSpendingCoveragePct": 84.71,
+      "cash90DayMAE": 2190.69,
+      "statisticalScenario90DayMAE": 403.3
+    },
+    "independentHoldout": {
+      "recurringPrecisionPct": 99.36,
+      "recurringRecallPct": 93.23,
+      "recurringMatched": 468,
+      "scheduledSpendingCoveragePct": 75.84,
+      "cash90DayMAE": 1379.17,
+      "statisticalScenario90DayMAE": 915.11
+    }
+  }
 }
