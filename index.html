@@ -151,7 +151,7 @@ function recurrenceRulesMarkup(category){
  '<p class="prediction-note">Use recorded transactions to tell the model a merchant repeats monthly, does not repeat, or should be detected automatically. This does not edit actual transactions.</p>'+
  '<form class="pattern-rule-form" data-pattern-rule-form="'+esc(category)+'">'+
  '<label>Merchant<select name="key" required>'+options.map(t=>'<option value="'+esc(t.key)+'" data-amount="'+esc(t.amount)+'" data-day="'+esc(Number(t.date.slice(8,10)))+'">'+esc(t.merchant)+' · '+esc(t.account||t.accountId||'Checking')+'</option>').join('')+'</select></label>'+
- '<label>Recurrence<select name="mode"><option value="auto">Automatic detection</option><option value="monthly">Recurring every month</option><option value="none">Not recurring</option></select></label>'+
+ '<label>Recurrence<select name="mode"><option value="auto">Automatic detection</option><option value="monthly">Recurring every month</option><option value="trust">Trust observed pattern</option><option value="none">Not recurring</option></select></label>'+
  '<label>Expected day<input name="day" type="number" min="1" max="31" required value="'+Number(options[0].date.slice(8,10))+'"></label>'+
  '<label>Expected amount ($)<input name="amount" type="number" min=".01" step=".01" required value="'+options[0].amount+'"></label>'+
  '<div class="expected-actions"><button type="submit" class="btn primary">Save recurrence rule</button></div>'+
@@ -395,7 +395,11 @@ document.querySelectorAll('[data-pattern-rule-form]').forEach(form=>{
   e.preventDefault();
   const fields=new FormData(form),category=form.dataset.patternRuleForm,key=String(fields.get('key')),kind=String(fields.get('mode'));
   try{
-   Model.setPatternRule(data,key,kind==='auto'?null:{mode:kind,day:fields.get('day'),amount:fields.get('amount')});
+   const previous=data.predictions.patternRules?.[key];
+   if(kind==='trust'){
+    if(previous?.mode!=='trust')throw Error('Confirm this recurrence from Reviews first');
+    Model.setPatternRule(data,key,{...previous,mode:'trust'});
+   }else Model.setPatternRule(data,key,kind==='auto'?null:{mode:kind,day:fields.get('day'),amount:fields.get('amount')});
    save();refreshCategory(category);
   }catch(err){alert(err.message)}
  };
