@@ -172,8 +172,17 @@ function setPatternRule(state,key,rule){
   }
  };
  if(rule===null){clearForecastEdits();delete state.predictions.patternRules[key];return}
- if(!rule||!['none','monthly'].includes(rule.mode))throw Error('Invalid recurrence decision');
+ if(!rule||!['none','monthly','trust'].includes(rule.mode))throw Error('Invalid recurrence decision');
  if(rule.mode==='none'){state.predictions.patternRules[key]={mode:'none'};return}
+ if(rule.mode==='trust'){
+  if(typeof rule.cadence!=='string'||!['weekly','every 2 weeks','monthly','twice monthly','quarterly','semiannual','annual','3 / month','4 / month','5 / month'].includes(rule.cadence)||
+     !Number.isFinite(Number(rule.amount))||Number(rule.amount)<=0||
+     !Number.isInteger(Number(rule.day))||Number(rule.day)<1||Number(rule.day)>31)
+     throw Error('Invalid confirmed recurrence');
+  state.predictions.patternRules[key]={mode:'trust',cadence:rule.cadence,day:Number(rule.day),
+    amount:round(rule.amount),confirmedAt:new Date().toISOString(),source:'review'};
+  return;
+ }
  if(!Number.isInteger(Number(rule.day))||Number(rule.day)<1||Number(rule.day)>31||
    !Number.isFinite(Number(rule.amount))||Number(rule.amount)<=0)throw Error('Invalid recurring amount or date');
  clearForecastEdits();
