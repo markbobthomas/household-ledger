@@ -38,3 +38,4 @@ jobs:
           node tests/learning-phase3-smoke.cjs
           node tests/accuracy-phase4-smoke.cjs
           node tests/phase41-smoke.cjs
+          node tests/phase42-smoke.cjs
