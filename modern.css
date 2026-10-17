@@ -569,7 +569,6 @@ button,summary { -webkit-tap-highlight-color: transparent; }
   .ledger-table td:nth-child(4) { grid-column: 1; grid-row: 4; color: var(--muted); font-size: 13px; text-transform: capitalize; }
   .ledger-table td:nth-child(5) { grid-column: 2; grid-row: 1; text-align: right; }
   .ledger-table td:nth-child(5) strong { font-size: 17px; }
-  .ledger-table td:nth-child(6) { grid-column: 2; grid-row: 2 / 5; align-self: center; text-align: right; }
   .ledger-table td .btn { min-height: 44px; padding: 10px 6px; font-size: 15px; }
   .drill-expanded,.band-expanded { width: 100%; padding: 8px 0 17px; overflow-x: auto; }
 }
@@ -605,8 +604,6 @@ button,summary { -webkit-tap-highlight-color: transparent; }
   .details-table td:nth-child(5) { grid-area:1 / 2; font-weight:700; text-align:right; white-space:nowrap; }
   .details-table td:nth-child(6) { grid-area:3 / 2; font-size:13px; color:var(--muted); text-align:right; white-space:normal; }
   .details-table td:nth-child(6):before { content:"Total "; }
-  .details-table td:nth-child(7) { grid-area:4 / 2; text-align:right; }
-  .details-table td:nth-child(7) .btn { min-height:44px; padding:9px 5px; }
   .cash-days-wrap { max-height:460px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; }
   .daily-cash-table,.daily-cash-table tbody { display:block; width:100%; min-width:0; }
   .daily-cash-table thead { display:none; }
@@ -718,7 +715,6 @@ html { scroll-behavior:auto; }
 .forecast-row small{color:var(--muted);font-size:12px;font-weight:500}
 .forecast-row strong{font:650 14px var(--mono)}
 .forecast-row button{font-size:13px}
-.ledger-table td:last-child .btn{color:#1855cb;text-decoration:none;border:1px solid #c5d3ed;border-radius:4px;padding:8px 10px;min-height:36px}
 @media(max-width:700px){
  .ledger-readonly{font-size:10px;letter-spacing:0;text-align:right;max-width:114px;line-height:1.3}
  .editable-forecast .formgrid{grid-template-columns:minmax(0,1fr)}
@@ -729,7 +725,6 @@ html { scroll-behavior:auto; }
  .forecast-row>span{flex:1 1 160px;font-size:14px}
  .forecast-row button{min-height:44px}
  .transaction-source{font-size:12px}
- .ledger-table td:last-child .btn{min-height:44px}
 }
 
 /* Historical, dated transaction forecasts inside each category. */
@@ -1010,4 +1005,27 @@ html { scroll-behavior:auto; }
  .expected-value.editable-value{font-size:15px}
  .inline-money-input,.inline-money-input:focus-visible{font-size:16px}
  .inline-money-editor{padding:0 5px}
+}
+
+/* One direct-edit language for category names and amounts. */
+.editable-category{
+ display:inline;max-width:100%;height:auto;min-height:0;
+ padding:1px 1px 3px;text-align:left;white-space:normal;overflow-wrap:anywhere;
+ cursor:pointer;font-size:12px;font-weight:650;
+}
+.editable-category:hover{border-bottom-color:#1855cb}
+.inline-category-select{
+ display:inline-block;vertical-align:middle;
+ max-width:100%;width:min(186px,100%);min-width:122px;
+ min-height:35px;padding:5px 8px;font-size:13px;font-weight:600;
+ border:1px solid #617084;border-radius:4px;background:#fff;color:var(--ink);
+ outline-offset:2px;
+}
+.inline-category-select:focus-visible{outline:2px solid #356fe0}
+.expected-action{font-size:20px;color:var(--muted);font-weight:500;line-height:1}
+.expected-tx[open]>.expected-summary .expected-action{transform:rotate(180deg)}
+@media(max-width:700px){
+ .editable-category{font-size:14px;min-height:36px;padding:7px 1px 5px}
+ .inline-category-select{font-size:16px;min-height:44px;min-width:0;width:min(176px,100%)}
+ .ledger-table td:nth-child(3){font-size:14px}
 }

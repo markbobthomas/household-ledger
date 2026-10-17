@@ -99,12 +99,14 @@ assert.equal(bills.predictions.patternRules[k],undefined,'Can restore automatic 
   const undone=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.equal(Object.keys(undone.learning.categoryRules).length,0,'Rule can be removed from Reviews');
   assert.ok(!await page.locator('.review-task[data-review-task="'+firstId+'"]').count(),'Explicit original review remains confirmed');
-  // Activity corrections also offer an optional merchant learning action.
+  // Quick edits affect one transaction; reusable merchant learning stays explicitly in Reviews.
   await page.locator('aside [data-page=transactions]').click();
-  await page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first().locator('[data-category]').click();
-  assert.equal(await page.locator('#entry [name=remember]').count(),1,'Activity category editor can teach reusable rules');
-  assert.equal(await page.locator('#entry [name=amount]').count(),0,'No actual expense amount editing');
-  await page.locator('#cancel').click();
+  const transaction=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first();
+  await transaction.locator('[data-category]').click();
+  assert.equal(await transaction.locator('select.inline-category-select').count(),1,'Activity category changes inline');
+  assert.equal(await page.locator('#entry').count(),0,'No top-of-page category editor');
+  assert.equal(await transaction.locator('input[name=remember]').count(),0,'Quick edit never automatically learns a merchant rule');
+  await transaction.locator('.inline-category-select').press('Escape');
   const finalState=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(finalState.transactions,originalTransactions,'Learning is separate from posted bank records');
   await page.setViewportSize({width:390,height:844});
