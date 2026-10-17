@@ -20,10 +20,10 @@ function fixtureTransport(){
   const transactions=[
    tx('payroll',0,-2450,'Payroll','2026-10-02'),
    tx('grocery',2,87.45,'Market Grocery','2026-10-04'),
-   tx('card-payment-out',0,240,'Credit Card Payment','2026-10-09'),
-   tx('card-payment-in',2,-240,'Payment Thank You','2026-10-09'),
-   tx('transfer-out',0,180,'Transfer to Savings','2026-10-10'),
-   tx('transfer-in',1,-180,'Transfer from Checking','2026-10-10'),
+   tx('card-payment-out',0,240+serial,'Credit Card Payment','2026-10-09'),
+   tx('card-payment-in',2,-240-serial,'Payment Thank You','2026-10-09'),
+   tx('transfer-out',0,180+serial,'Transfer to Savings','2026-10-10'),
+   tx('transfer-in',1,-180-serial,'Transfer from Checking','2026-10-10'),
    tx('refund',2,-15.55,'Refund Market Grocery','2026-10-11'),
    tx('pending',2,22.50,'Pending Merchant','2026-10-12',{pending:true})
   ];
