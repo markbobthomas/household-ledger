@@ -76,6 +76,48 @@ function cashFlowCard(){
   '<div class="cash-table-wrap"><table class="cash-table"><thead><tr><th>Expected item</th><th>Type</th><th>Estimated day</th><th>Amount</th></tr></thead><tbody>'+recurring+'</tbody></table></div>'+
   '<p class="cash-explain">Fictional bank balance and transactions only. No Plaid connection yet. These are estimated end-of-day balances, not an overdraft guarantee.</p></details></details></div>';
 }
+
+function monthlyProjection(month,category){
+ const modeled=window.HouseholdForecast.forecast(entries(),month,category,today());
+ const expected=Model.expectedForCategory(data,modeled.expected,month,category,today());
+ const active=month===today().slice(0,7)?expected.filter(e=>e.enabled!==false&&e.date>today()&&e.date.startsWith(month)):[];
+ const additional=Math.round(active.reduce((t,e)=>t+Number(e.amount||0),0)*100)/100;
+ return {...modeled,expected,active,additional,recurring:additional,variable:0,projectedTotal:Math.round((modeled.actual+additional)*100)/100};
+}
+function expectedTransactionMarkup(e){
+ const active=e.enabled!==false&&e.date>today()&&e.date.startsWith(budgetMonth);
+ const manual=e.source==='manual';
+ return '<details class="expected-tx" data-expected="'+esc(e.id)+'"><summary class="expected-summary">'+
+  '<span class="expected-date">'+esc(cashDateLabel(e.date))+'</span>'+
+  '<span class="expected-info"><strong>'+esc(e.merchant)+'</strong><small>'+esc(manual?'Added prediction':(e.evidence+' historical months · '+e.confidence+' confidence'))+(e.adjusted?' · Adjusted':'')+(e.enabled===false?' · Excluded':e.date<=today()?' · Past due':'')+'</small></span>'+
+  '<strong class="expected-value '+(active?'':'excluded')+'">'+money(e.amount)+'</strong><span class="expected-action">Edit</span></summary>'+
+  '<form class="expected-inline-form" data-expected-form="'+esc(e.id)+'"><p class="prediction-note">Prediction only. This does not change a bank transaction.</p>'+
+  (manual?'<label>Merchant<input type="text" name="merchant" maxlength="130" required value="'+esc(e.merchant)+'"></label>':'')+
+  '<label>Expected date<input type="date" name="date" required value="'+esc(e.date)+'"></label>'+
+  '<label>Expected amount ($)<input type="number" name="amount" step=".01" min="0" required value="'+esc(e.amount)+'"></label>'+
+  '<label class="expected-check"><input type="checkbox" name="enabled" '+(e.enabled!==false?'checked':'')+'> Include in forecast</label>'+
+  '<div class="expected-actions"><button class="btn primary" type="submit">Save prediction</button>'+
+  '<button type="button" class="btn" data-expected-reset="'+esc(e.id)+'">'+(manual?'Remove prediction':'Use history estimate')+'</button></div></form></details>';
+}
+function predictedCategoryMarkup(f,category,month){
+ if(month!==today().slice(0,7))return'';
+ return '<div class="expected-section"><div class="section-top"><h3>Expected transactions <span class="expected-count">'+f.active.length+' active</span></h3><strong class="expected-total">'+money(f.additional)+'</strong></div>'+
+  (f.expected.length?f.expected.map(expectedTransactionMarkup).join(''):'<div class="empty">No reliable future transactions detected for this category.</div>')+
+  '<details class="expected-add"><summary>+ Add an expected transaction</summary>'+
+  '<form class="expected-inline-form" data-expected-add="'+esc(category)+'">'+
+  '<label>Merchant or bill<input name="merchant" type="text" maxlength="130" required placeholder="Expected payment"></label>'+
+  '<label>Expected date<input name="date" type="date" required min="'+esc(today())+'" value="'+esc(month+'-'+String(Math.min(Number(today().slice(8))+1,Number(new Date(Number(month.slice(0,4)),Number(month.slice(5)),0).getDate()))).padStart(2,'0'))+'"></label>'+
+  '<label>Expected amount ($)<input name="amount" type="number" required min="0" step=".01"></label>'+
+  '<div class="expected-actions"><button class="btn primary" type="submit">Add to forecast</button></div></form></details>'+
+  '<p class="prediction-note">Each expected transaction is estimated from historical patterns or explicitly added. Irregular purchases without a reliable date are excluded, not hidden in a lump sum.</p></div>';
+}
+function refreshCategory(category){
+ const y=window.scrollY;render();
+ const item=Array.from(document.querySelectorAll('.budget-entry')).find(x=>x.dataset.budgetCategory===category);
+ if(item){const d=item.querySelector(':scope > details');if(d)d.open=true}
+ window.scrollTo({top:y,behavior:'instant'});
+}
+
 function budgetBounds(month){const [year,monthNum]=month.split('-').map(Number),endDay=new Date(year,monthNum,0).getDate(),start=month+'-01',end=month+'-'+String(endDay).padStart(2,'0');const label=new Date(year,monthNum-1,1).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+new Date(year,monthNum-1,endDay).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});return {start,end,label}}function render(){const demoCount=data.transactions.filter(t=>t.source?.provider==='demo').length;el('demo-banner').innerHTML=demoCount?'<div class="demo-banner"><strong>DEMO</strong></div>':'';const title=page.charAt(0).toUpperCase()+page.slice(1);el('title').textContent=title;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let months=[...new Set([...entries().map(t=>String(t.date).slice(0,7)),today().slice(0,7),...(period==='all'?[]:[period])].filter(m=>/^\d{4}-\d{2}$/.test(m)&&+m.slice(5,7)>=1&&+m.slice(5,7)<=12))].sort().reverse();
 if(page==='budgets'){
   const now=new Date(),recent=Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-i,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')});
@@ -114,24 +156,31 @@ if(page==='insights'){
     '<p class="budget-date-note">Full transactions are counted once when no item-level details are available.</p></div>';
   }
 }if(page==='budgets'){
-const cats=[...new Set([...CATS,...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,{start:monthStart,end:monthEnd,label:budgetDates}=budgetBounds(month);
-const currentMonth=month===today().slice(0,7);
-html=cashFlowCard()+'<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div><div class="budget-legend"><span>Spent</span><span>Expected</span></div>'+
-cats.map(c=>{
-const matching=entries().filter(t=>t.type==='expense'&&t.category===c&&t.date>=monthStart&&t.date<=monthEnd).sort((a,b)=>b.date.localeCompare(a.date));
-let f=window.HouseholdForecast?window.HouseholdForecast.forecast(entries(),month,c,today()):{actual:sum(matching),additional:0,projectedTotal:sum(matching),recurring:0,variable:0,recurringDetails:[],method:'forecast unavailable',historyMonths:[]};
-const override=data.predictions.categoryForecasts[month+'|'+c];
-if(currentMonth&&override)f={...f,additional:override.additional,projectedTotal:Math.round((f.actual+override.additional)*100)/100,method:'manual prediction',manual:true};
-const limit=+data.predictions.monthlyBudgets[c]||0;
-const spentWidth=limit?Math.min(100,Math.max(0,f.actual/limit*100)):0;
-const forecastWidth=limit?Math.min(Math.max(0,100-spentWidth),Math.max(0,f.additional/limit*100)):0;
-const projectedNote=currentMonth?(f.additional?'Projected month-end '+money(f.projectedTotal)+' • '+(limit?(f.projectedTotal>limit?'over budget by '+money(f.projectedTotal-limit):money(limit-f.projectedTotal)+' below budget'):'no budget set'):'No projected additional spending'):'Past month: actual spending only';
-const recurringLines=f.recurringDetails.map(rec=>'<div class="row"><span>'+esc(rec.merchant)+' <span class="sub">(typically day '+rec.day+')</span></span><strong>'+money(rec.amount)+'</strong></div>').join('');
-return'<div class="budget-entry"><details class="drill-detail"><summary class="row drill-summary"><div style="flex:1;min-width:0"><div class="budget-heading"><span class="budget-title">'+esc(c)+'</span><span class="budget-summary-amount">'+money(f.actual)+'</span></div><div class="budget-progress" role="img" aria-label="'+esc(c)+': '+esc(money(f.actual))+' spent, '+esc(money(f.additional))+' projected remaining, budget '+esc(limit?money(limit):'not set')+'"><i class="actual" style="width:'+spentWidth.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecastWidth.toFixed(2)+'%"></i></div><div class="budget-heading"><span class="budget-category-meta">'+(limit?'Budget '+money(limit):'No budget set')+'</span><span class="budget-category-meta '+(limit&&currentMonth&&f.projectedTotal>limit?'over-budget':'')+'">'+(currentMonth?'Expected '+money(f.projectedTotal):'Completed month')+'</span></div></div><span class="chevron" aria-hidden="true">⌄</span></summary><div class="drill-expanded"><div class="section-top"><h3>'+esc(c)+' · '+esc(month)+'</h3><button class="btn" data-budget="'+esc(c)+'">Edit predictions</button></div>'+
-(matching.length?table(matching):'<div class="empty">No transactions recorded in this category.</div>')+
-(currentMonth?'<div class="forecast-assumption">Projected additional spending: <strong>'+money(f.additional)+'</strong> ('+money(f.recurring)+' recurring + '+money(f.variable)+' other). Based on '+f.historyMonths.length+' historical months.</div>':'')+
-(recurringLines?'<details class="cash-detail"><summary>Expected recurring expenses</summary>'+recurringLines+'</details>':'')+'</div></details></div>'}).join('')+'</div>';
-}if(page==='settings'){
+ const cats=[...new Set([...CATS,...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,
+ {start:monthStart,end:monthEnd,label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
+ html=cashFlowCard()+'<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div>'+
+ '<div class="budget-legend"><span>Spent</span><span>Expected</span></div>'+
+ cats.map(category=>{
+  const matching=entries().filter(t=>t.type==='expense'&&t.category===category&&t.date>=monthStart&&t.date<=monthEnd).sort((a,b)=>b.date.localeCompare(a.date));
+  const f=monthlyProjection(month,category),limit=Number(data.predictions.monthlyBudgets[category])||0;
+  const spentWidth=limit?Math.min(100,Math.max(0,f.actual/limit*100)):0;
+  const forecastWidth=limit?Math.min(Math.max(0,100-spentWidth),Math.max(0,f.additional/limit*100)):0;
+  return'<div class="budget-entry" data-budget-category="'+esc(category)+'"><details class="drill-detail"><summary class="row drill-summary"><div style="flex:1;min-width:0">'+
+  '<div class="budget-heading"><span class="budget-title">'+esc(category)+'</span><span class="budget-summary-amount">'+money(f.actual)+'</span></div>'+
+  '<div class="budget-progress" role="img" aria-label="'+esc(category)+': '+esc(money(f.actual))+' spent, '+esc(money(f.additional))+' expected transactions, budget '+esc(limit?money(limit):'not set')+'">'+
+  '<i class="actual" style="width:'+spentWidth.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecastWidth.toFixed(2)+'%"></i></div>'+
+  '<div class="budget-heading"><span class="budget-category-meta">'+(limit?'Budget '+money(limit):'No budget set')+'</span>'+
+  '<span class="budget-category-meta '+(limit&&currentMonth&&f.projectedTotal>limit?'over-budget':'')+'">'+
+  (currentMonth?'Expected '+money(f.projectedTotal):'Completed month')+'</span></div></div><span class="chevron" aria-hidden="true">⌄</span></summary>'+
+  '<div class="drill-expanded"><div class="section-top"><h3>'+esc(category)+' · '+esc(month)+'</h3><button class="btn" data-budget="'+esc(category)+'">Edit budget target</button></div>'+
+  predictedCategoryMarkup(f,category,month)+
+  '<div class="recorded-section"><div class="section-top"><h3>Recorded transactions</h3><strong>'+money(f.actual)+'</strong></div>'+
+  (matching.length?table(matching):'<div class="empty">No posted expenses in this category for the selected month.</div>')+'</div>'+
+  (currentMonth?'<p class="prediction-note">Automatic predictions based on '+f.historyMonths.length+' historical months; never guaranteed. Monthly category expected amount = sum of active dated predictions.</p>':'')+
+  '</div></details></div>';
+ }).join('')+'</div>';
+}
+if(page==='settings'){
  const sources=data.transactions.reduce((counts,t)=>{const p=t.source?.provider||'legacy-unverified';counts[p]=(counts[p]||0)+1;return counts},{});
  html='<div class="settings-grid"><div class="panel settings-block"><h3>Read-only ledger</h3><p>Transaction facts are provided by source records. Only categories and predictions are editable.</p>'+
  Object.entries(sources).map(([provider,n])=>'<div class="row"><span>'+esc(provider==='plaid'?'Plaid connected':provider==='demo'?'Fictional demo data':'Unverified legacy records')+'</span><strong>'+n+'</strong></div>').join('')+
