@@ -79,7 +79,7 @@ function calcUndatedRisk(rows,asOf,events,state){
    if(item.date<=asOf||item.date>end||known.has(item.id))continue;
    known.add(item.id);
    // Separate read-only income estimates from source deposits.
-   events.push({...item,type:'income',category:'Income',description:'Estimated incoming payment'});
+   events.push({...item,type:'income',category:'Income',postingStatus:'unconfirmed',confirmed:false,description:'Estimated incoming payment — unconfirmed until posted'});
   }
  }
  // Transfer is not consumption. Forecast ONLY explicitly directed
@@ -100,7 +100,7 @@ function calcUndatedRisk(rows,asOf,events,state){
   if(known.has(item.id))continue;
   known.add(item.id);
   events.push({id:item.id,date:item.date,amount:Number(item.amount),type:item.type,category:'One-time forecast',
-   merchant:item.description||'One-time forecast',description:'User forecast',accountId:item.accountId||'',source:'manual'});
+   merchant:item.description||'One-time forecast',description:'User forecast',accountId:item.accountId||'',source:'manual',postingStatus:item.type==='income'?'unconfirmed':undefined,confirmed:false});
  }
  events.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
  const uncertainty=calcUndatedRisk(records,asOf,events,state);

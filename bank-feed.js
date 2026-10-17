@@ -8,6 +8,9 @@
       return {
         source: 'Simulated bank feed — not connected to any institution',
         mode: 'demo',
+        connected: false,
+        lastSuccessfulSync: null,
+        expectedAccountIds: [],
         asOf,
         accounts: [{
           id: 'demo-checking',

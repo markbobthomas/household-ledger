@@ -966,3 +966,15 @@ html { scroll-behavior:auto; }
 .stress-section .accuracy-detail{margin-top:10px}
 .stress-section .prediction-note{line-height:1.6}
 @media(max-width:700px){.stress-warnings{grid-template-columns:minmax(0,1fr)}.stress-warning{padding:11px}.stress-section{margin-top:17px}}
+
+/* Phase 4.3: honest bank freshness and provisional future deposits */
+.feed-health{border:1px solid var(--line);padding:11px 14px;margin:11px 0 8px;display:flex;gap:5px;flex-direction:column;min-width:0}
+.feed-health strong{font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.feed-health span{font-size:13px;font-weight:600}
+.feed-health small{color:var(--muted);font-size:11px;line-height:1.5}
+.income-caution{font-size:12px;line-height:1.55;border-left:3px solid var(--ink);padding:9px 13px;margin:9px 0;color:var(--ink)}
+.readiness-section{margin:18px 0 12px;padding-top:15px;border-top:1px solid var(--line);min-width:0}
+.readiness-section .section-top{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.readiness-section h3{font-size:15px}
+.readiness-section .accuracy-table-wrap{max-width:100%;overflow-x:auto}
+@media(max-width:700px){.feed-health{padding:10px}.readiness-section{margin-top:12px}}
