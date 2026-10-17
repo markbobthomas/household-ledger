@@ -78,7 +78,7 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   assert.equal(after.categoryOverrides[recordId],'Shopping','Category correction stored separately from source');
   await page.reload({waitUntil:'load'});
   await page.locator('aside [data-page="transactions"]').click();
-  assert.equal(await page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first().locator('td').nth(2).innerText(),'Shopping','Categorization survives reload');
+  assert.equal(await page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first().locator('select[data-category]').inputValue(),'Shopping','Categorization survives reload');
   await page.locator('aside [data-page="budgets"]').click();
   const category=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
   await category.locator(':scope > details > summary').click();
