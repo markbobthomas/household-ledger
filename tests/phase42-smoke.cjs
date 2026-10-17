@@ -10,6 +10,17 @@ const report=run();
 assert.equal(report.scenarioCount,8);
 assert.equal(report.trialCount,48);
 assert.equal(report.datasetCount,2);
+const stressBaseline=require('./phase42-stress-baseline.json');
+assert.equal(report.trialCount,stressBaseline.scenarioTrials);
+for(const [id,min] of Object.entries(stressBaseline.qualityGates.minRecallPct)){
+ const scenario=report.results.find(s=>s.id===id);
+ assert.ok(scenario.recall>=min,'Adversarial regression: '+id+' recall fell below fictional quality gate');
+}
+assert.ok(Math.abs(report.results.find(s=>s.id==='transfer-mirror').deltaBalanceError)<=
+ stressBaseline.qualityGates.doubleCountMirrorMaxAddedBalanceError,'No mirror-transfer double count');
+assert.ok(report.results.find(s=>s.id==='paused-payroll').deltaBalanceError>=
+ stressBaseline.qualityGates.minimumPayrollInterruptionAddedBalanceError,
+ 'Stress fixture must reveal interrupted payroll risk rather than concealing it');
 assert.deepEqual(report.results.map(s=>s.id),[
  'missing-rows','sync-gap','late-history','delayed-future','paused-payroll',
  'renamed-merchant','surprise-refund','transfer-mirror']);
