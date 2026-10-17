@@ -84,10 +84,11 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   await page.locator('aside [data-page="budgets"]').click();
   const category=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
   await category.locator(':scope > details > summary').click();
-  await category.locator('[data-budget]').click();
-  assert.equal(await page.locator('#entry [name="budget"]').count(),1,'Monthly budget can be edited separately');
-  await page.locator('#entry [name="budget"]').fill('999');
-  await page.locator('#entry button[type="submit"]').click();
+  await category.locator('[data-inline-budget]').click();
+  assert.equal(await category.locator('.inline-money-input').count(),1,'Budget changes directly on the row');
+  assert.equal(await page.locator('#entry').count(),0,'No separate budget dialog');
+  await category.locator('.inline-money-input').fill('999');
+  await category.locator('.inline-money-input').press('Enter');
   const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(stored.transactions,before.transactions,'Adjusting a category forecast never writes to ledger');
   assert.equal(stored.predictions.monthlyBudgets.Groceries,999);
