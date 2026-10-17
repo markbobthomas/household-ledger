@@ -61,3 +61,18 @@ The new **Reviews** tab automatically creates review tasks from source transacti
 - **Simulated data:** The fictional sample ledger includes **Home Depot** purchases, where Housing versus Shopping is ambiguous, plus repeating merchant purchases with lower prediction confidence. These are flagged as *Demo* tasks, even when the demo ledger was created in an earlier version. No fake bank record is inserted merely to show Reviews.
 
 Filter **All / Categories / Predictions** to work through the tasks. The dedicated mobile layout has the fifth **Reviews** tab in both top and bottom navigation.
+
+## Phase 1: Longer-history pattern detection (October 2026)
+
+Phase 1 improves the local inference engine in `forecast.js`; it does **not** activate Plaid or change any source transaction values.
+
+- Scans up to 24 calendar months of dated, nonpending records. It supports stable weekly, every-two-week, twice-monthly, monthly, quarterly, semiannual and annual patterns, including an independent `forecastIncome()` API for paychecks (not yet connected to the 90-day bank simulator).
+- Bills and subscriptions can tolerate several days of posting drift and modest amount variation. Variable utilities can use a same-season prior-year reference when there is sufficient history. Annual patterns require two years; quarterly/six-month cycles require repeated evidence.
+- It only presents future estimated charges after the calculation's as-of date and attempts to match already-paid transactions to avoid double-counting.
+- The calendar schedule is **conservative** for shopping: irregular merchant visits are not given fictional exact transaction dates. An `unscheduled` risk estimate exposes a historical range of nondated spending; it is **informational** and excluded from the hot-pink dated-payments total.
+- Forecast evidence and cadence appear beneath each expandable expected transaction. Confidence labels are heuristics, **not calibrated percentages**. Source data may be incomplete or stale.
+- A deterministic, completely fictitious 25-month dataset is in `tests/fixtures/household-25months.cjs` (541 simulated records). `tests/prediction-phase1-smoke.cjs` verifies the engine detects real patterns, avoids seasonal/quarterly false positives, ignores unseen future transactions, and does not create a dated expense for inconsistent grocery purchases.
+
+**The demo app still uses its existing three-month fictional ledger; the 25-month fixture exists only for automated tests and is never inserted into user browser storage.** This avoids overwriting household financial data and preserves the current sample's transaction IDs.
+
+**Next:** Phase 2 — make Budget, Reviews, Insights and the 90-day cash-flow chart share the same dated forecast events and override decisions. See [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) for the complete saved phases.
