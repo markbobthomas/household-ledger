@@ -860,3 +860,16 @@ html { scroll-behavior:auto; }
 .pattern-rule-form>.expected-actions{grid-column:1/-1}
 .cash-status{line-height:1.6}
 @media(max-width:700px){.pattern-rule-form{grid-template-columns:minmax(0,1fr)}.pattern-rule-form>.expected-actions{grid-column:1}}
+
+/* Compact 90-day balance chart: fewer markings, less vertical space. */
+.cash-panel{padding-top:13px;margin-bottom:23px}
+.cash-hero{margin-top:10px;margin-bottom:8px}
+.cash-chart{width:100%;height:auto;max-height:148px;overflow:visible}
+.cash-status{margin:6px 0 8px;font-size:12px;line-height:1.35}
+.cash-panel .cash-detail{margin-top:9px}
+@media (max-width:700px){
+  .cash-panel{padding-top:10px;margin-bottom:19px}
+  .cash-hero{gap:9px;margin:10px 0 7px}
+  .cash-chart{width:100%;height:auto;max-height:116px}
+  .cash-status{font-size:11px;line-height:1.45;margin:5px 0}
+}
