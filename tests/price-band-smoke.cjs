@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
   try {
     await page.goto('http://127.0.0.1:8765/', { waitUntil: 'load' });
     await page.locator('aside [data-page="insights"]').click();
+    await page.locator('[data-insight="bands"]').click();
     const bands = page.locator('details.band-detail');
     assert.equal(await bands.count(), 7, 'All seven price bands should render');
     const band = bands.nth(3);
