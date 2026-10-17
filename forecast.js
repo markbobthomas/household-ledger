@@ -40,6 +40,8 @@ function seasonalAmount(rows,month,baseline,variable){
  // A last-year same-calendar-month charge informs seasonal utilities only.
  // Require 12+ months of data and at least two same-season observations.
  if(!variable||rows.length<12)return {amount:baseline,seasonal:false};
+ const amounts=rows.map(t=>Number(t.amount));
+ if(Math.max(...amounts)-Math.min(...amounts)<1)return {amount:baseline,seasonal:false};
  const prev=shiftMonth(month,-12),season=rows.filter(t=>t.date.slice(0,7)===prev).map(t=>Number(t.amount));
  if(!season.length)return {amount:baseline,seasonal:false};
  const recent=rows.slice(-4).map(t=>Number(t.amount));
@@ -126,7 +128,8 @@ function infer(transactions,month,category,asOf,mode='expense'){
   if(!bill&&observed.length<3)return;
   const byMonth=new Map(observed.map(m=>[m,monthRecords(relevant,m).sort((a,b)=>a.date.localeCompare(b.date))]));
   const recentMonths=observed.slice(-3);
-  if(monthIndex(recentMonths[recentMonths.length-1])-monthIndex(recentMonths[0])>3)return;
+  if(recentMonths.some((m,i)=>i>0&&monthIndex(m)-monthIndex(recentMonths[i-1])!==1))return;
+  if(monthIndex(month)-monthIndex(recentMonths[recentMonths.length-1])!==1)return;
   const count=byMonth.get(recentMonths[0]).length;
   if(!count||count>5||recentMonths.some(m=>byMonth.get(m).length!==count))return;
   for(let slot=0;slot<count;slot++){
