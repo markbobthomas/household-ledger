@@ -55,7 +55,7 @@ M.setPatternRule(source,F.patternKey('expense','Subscriptions','Checking','Spoti
 assert.ok(!unified().events.some(e=>e.merchant==='Spotify'),'User rejection removes merchant events in all months');
 M.setPatternRule(source,F.patternKey('expense','Subscriptions','Checking','Spotify'),null);
 assert.ok(unified().events.some(e=>e.merchant==='Spotify'),'Automatic recurrence can be re-established');
-assert.deepEqual(source.transactions,JSON.parse(raw),'Overrides never mutate posted ledger');
+assert.equal(JSON.stringify(source.transactions),raw,'Overrides never mutate posted ledger');
 assert.ok(!unified().events.some(e=>e.type==='transfer'),'Transfers excluded from dated forecast');
 assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spending risk separated from dated charges');
 
