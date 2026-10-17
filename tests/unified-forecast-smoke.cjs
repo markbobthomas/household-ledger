@@ -88,7 +88,7 @@ assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spe
   const cat2=page.locator('.budget-entry[data-budget-category="Subscriptions"]');
   if(!await cat2.locator(':scope > details').evaluate(e=>e.open))await cat2.locator(':scope > details > summary').click();
   const payment2=cat2.locator('.expected-tx').filter({hasText:'Spotify'}).first();
-  await payment2.locator('summary').click();
+  if(!await payment2.evaluate(e=>e.open))await payment2.locator('summary').click();
   await payment2.locator('[data-pattern-none]').click();
   const suppressed=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')).predictions.patternRules);
   const spotifyKey=F.patternKey('expense','Subscriptions','Checking','Spotify');
