@@ -34,7 +34,9 @@ function build(state,forecast,asOf,shared){
  const cutoffDate=new Date(current+'T12:00:00Z');cutoffDate.setUTCDate(cutoffDate.getUTCDate()-90);
  const cutoff=cutoffDate.toISOString().slice(0,10);
  const source=Array.isArray(state.transactions)?state.transactions:[];
- const effective=source.map(t=>({...t,category:state.categoryOverrides?.[t.id]||t.category||'Other'}));
+ const model=root.HouseholdLedgerData;
+ const effective=model?.records?model.records(state):
+   source.map(t=>({...t,category:state.categoryOverrides?.[t.id]||t.category||'Other'}));
  const distribution=new Map();
  for(const t of effective.filter(t=>t.type==='expense')){
   const key=merchantKey(t.merchant);if(!distribution.has(key))distribution.set(key,new Set());
@@ -43,12 +45,19 @@ function build(state,forecast,asOf,shared){
  const tasks=[];
  for(const t of effective){
   if(t.type!=='expense'||!isoValid(t.date)||t.date<cutoff||t.date>current||state.categoryOverrides?.[t.id])continue;
-  const assessment=categoryReason(t,distribution);
+  let assessment=categoryReason(t,distribution);
+  // A reused rule never overwrites a confident bank classification. Instead
+  // its disagreement becomes an explainable review task.
+  if(t.suggested&&t.suggested!==t.category){
+    assessment={reason:'Saved merchant rule suggests '+t.suggested+'; verify this category',priority:1,
+      suggested:t.suggested,confidence:'Low'};
+  }
+  if(t.method==='learned')continue;
   if(!assessment)continue;
   const fingerprint=categoryFingerprint(t);
   if(state.reviews.categoryConfirmed[t.id]?.fingerprint===fingerprint)continue;
   tasks.push({id:'category|'+t.id,kind:'category',targetId:t.id,merchant:t.merchant,amount:Number(t.amount)||0,date:t.date,category:t.category,
-    priority:assessment.priority,reason:assessment.reason,confidence:assessment.confidence,suggested:assessment.suggested,
+    priority:assessment.priority,reason:assessment.reason,confidence:assessment.confidence,suggested:assessment.suggested,learnedRuleKey:t.ruleKey||null,learnedReason:t.explanation||null,
     demo:t.source?.provider==='demo',fingerprint,account:t.account||t.accountId||''});
  }
  const month=current.slice(0,7);
@@ -56,11 +65,11 @@ function build(state,forecast,asOf,shared){
   for(const category of categoryNames){
    const prediction=shared?.categoryViews?.[month+'|'+category]||forecast.forecast(effective,month,category,current,state.predictions?.patternRules);
    for(const item of prediction.expected||[]){
-    if(['High','Confirmed'].includes(item.confidence)||item.source==='manual'||item.date<=current||state.predictions?.expectedTransactionOverrides?.[item.id])continue;
+    if((['High','Confirmed'].includes(item.confidence)&&!item.ruleChanged)||item.source==='manual'||item.date<=current||state.predictions?.expectedTransactionOverrides?.[item.id])continue;
     if(state.reviews.predictionConfirmed[item.id]?.fingerprint===predictionFingerprint(item))continue;
     tasks.push({id:'prediction|'+item.id,kind:'prediction',targetId:item.id,merchant:item.merchant,
-      date:item.date,amount:Number(item.amount),category,confidence:item.confidence||'Low',
-      priority:1,reason:(item.confidence==='Medium'?'Limited historical evidence':'Transaction pattern needs confirmation')+' · '+item.evidence+' historical months',
+      date:item.date,amount:Number(item.amount),category,confidence:item.confidence||'Low',cadence:item.cadence||null,ruleChanged:Boolean(item.ruleChanged),
+      priority:1,reason:(item.ruleChanged?'Confirmed repeating payment changed':item.confidence==='Medium'?'Limited historical evidence':'Transaction pattern needs confirmation')+' · '+item.evidence+' historical months',
       evidence:item.evidence,account:item.account||'',fingerprint:predictionFingerprint(item),
       demo:source.some(t=>t.source?.provider==='demo'&&merchantKey(t.merchant)===merchantKey(item.merchant))});
    }
