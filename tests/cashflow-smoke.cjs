@@ -49,6 +49,16 @@ const {chromium:chromiumBrowser}=require('playwright');
    assert.match(demoLowest,/^\$[\d,]+\.\d{2}$/,'Forecast supplies a dollar amount');
    assert.equal(await card.locator('input').count(),0,'No manual bank starting balance input');
    assert.equal(await card.locator('svg.cash-chart').count(),1,'Forecast chart visible');
+   const compactChart=await card.locator('svg.cash-chart').evaluate(el=>({
+     height:el.getBoundingClientRect().height,
+     horizon:el.querySelector('polyline').getAttribute('points').trim().split(/\s+/).length,
+     viewBox:el.getAttribute('viewBox'),
+     labels:el.querySelectorAll('text').length
+   }));
+   assert.ok(compactChart.height<=149,'90-day Budget chart is shorter on desktop');
+   assert.ok(compactChart.viewBox.includes('960 148'),'Chart is drawn in the compact aspect ratio');
+   assert.equal(compactChart.horizon,91,'Only opening snapshot plus 90 future days');
+   assert.equal(compactChart.labels,6,'Minimal labels reduce chart clutter');
    const details=card.locator('details.cash-detail').filter({has:page.locator('.cash-days-wrap')}).first();
    await details.locator('summary').first().click();
    assert.equal(await details.evaluate(el=>el.open),true,'90-day detail expands');
