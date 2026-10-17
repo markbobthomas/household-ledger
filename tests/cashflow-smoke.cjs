@@ -43,7 +43,7 @@ const {chromium:chromiumBrowser}=require('playwright');
    assert.equal(await card.count(),1,'Cash-flow forecast visible on main page');
    assert.match(await card.innerText(),/SIMULATED BANK DATA/);
    assert.match(await card.innerText(),/Everyday Checking/);
-   assert.match(await card.innerText(),/Lowest projected balance/i);
+   assert.match(await card.innerText(),/Lowest scheduled-only balance/i);
    assert.match(await card.innerText(),/Lowest on [A-Z][a-z]{2} \d{1,2}, 2026/,'Forecast supplies an expected low date');
    const demoLowest=await card.locator('.cash-primary-amount').innerText();
    assert.match(demoLowest,/^\$[\d,]+\.\d{2}$/,'Forecast supplies a dollar amount');
