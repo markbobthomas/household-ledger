@@ -80,7 +80,7 @@ function previewCashFlow(){
  const future=demoRows.length&&demoRows.length===entries().length?
    sharedForecast():window.HouseholdForecastLedger.build(data,source,today(),90,window.HouseholdForecast,Model);
  const f=engine.cashFlow90({account,asOf:snapshot.asOf,days:90,
-   expectedEvents:future.events,uncertainty:future.uncertainty,source:snapshot.source,historyMonths:source.map(t=>t.date.slice(0,7))});
+   expectedEvents:future.events,uncertainty:future.uncertaintyByAccount?.[account.transactionAccount]||future.uncertainty,source:snapshot.source,historyMonths:source.map(t=>t.date.slice(0,7))});
  return {snapshot,account,f,future};
 }
 function cashFlowCard(){
@@ -94,7 +94,7 @@ function cashFlowCard(){
  '<strong>'+money(v.amount)+'</strong><button class="btn" data-forecast-jump="'+esc(v.category)+'">Review</button></div>').join('');
  const added=future.events.filter(e=>e.source==='manual'&&e.category==='One-time forecast').map(v=>'<div class="row forecast-row"><span>'+
  esc(v.merchant)+' <small>· '+esc(v.date)+'</small></span><strong>'+money(v.amount)+'</strong><button class="btn" data-event="'+esc(v.id)+'">Edit</button></div>').join('');
- const risk=future.uncertainty;
+ const risk=future.uncertaintyByAccount?.[account.transactionAccount]||future.uncertainty;
  const riskDisplay=risk?.available?'<div class="cash-risk" aria-label="Unscheduled spending scenario"><span>Illustrative 90-day balance with irregular spending</span>'+
   '<strong>'+money(f.uncertainty.closingTypical)+'</strong>'+
   '<small>Scenario range '+money(f.uncertainty.closingLow)+' – '+money(f.uncertainty.closingHigh)+
