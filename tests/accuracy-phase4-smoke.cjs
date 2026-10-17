@@ -34,6 +34,16 @@ assert.ok(report.score.byCadence.some(x=>x.name==='annual'&&x.missedRecurring>0)
 assert.ok(report.score.byConfidence.some(x=>x.name==='High'&&x.precision<100),
  'High confidence is not treated as perfect calibrated certainty');
 assert.equal(JSON.stringify(rows),startSnapshot,'Accuracy runs never edit test transactions');
+const guardrails=require('./accuracy-regression-baseline.json').regressionGuardrails;
+assert.ok(report.score.recurring.precision>=guardrails.minimumPrecisionPct,
+  'Warn if recurring precision materially regresses on the fixed fictional fixture');
+assert.ok(report.score.recurring.recall>=guardrails.minimumRecallPct,
+  'Warn if recurring recall deteriorates versus fictional baseline');
+assert.ok(report.score.recurring.matched>=guardrails.minimumRecurringMatched,
+  'Warn if significantly fewer recurring charges are anticipated');
+assert.ok(report.score.cash.find(x=>x.days===90).mae<=guardrails.maximum90DayCashMAE,
+  'Warn if 90-day cash error worsens significantly on fictional fixture');
+
 
 const match=Lab.matchEvents(
  [{id:'p1',date:'2026-04-20',merchant:'A',account:'Checking',type:'expense',amount:50,cadence:'monthly'},
