@@ -85,8 +85,8 @@ assert.ok(Reviews.build(newFact,Forecast,'2026-10-17').tasks.some(t=>t.id===oldT
   await page.setViewportSize({width:320,height:740});
   const mobile=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth,tabs:getComputedStyle(document.querySelector('aside')).gridTemplateColumns.split(' ').length,topTabs:getComputedStyle(document.querySelector('.mobile-top-nav')).gridTemplateColumns.split(' ').length}));
   assert.ok(mobile.scroll<=mobile.viewport+1,'No narrow phone overflow: '+JSON.stringify(mobile));
-  assert.equal(mobile.tabs,5);
-  assert.equal(mobile.topTabs,5);
+  assert.equal(mobile.tabs,6,'Six bottom navigation choices');
+  assert.equal(mobile.topTabs,6,'Six top navigation choices');
   assert.deepEqual(errors,[],'No browser errors');
  }finally{await browser.close()}
  const safari=await webkit.launch({headless:true});
