@@ -88,3 +88,26 @@ In **Budget → expand category → Manage recurring merchant rules**, a user ca
 The bank balance is still fictional. Nondateable everyday spending is disclosed as an uncertainty range **outside** the scheduled events rather than silently charging a fictitious amount per day. Transfers and credit-card settlements are intentionally not forecast as purchases. The demo-balance projection is isolated from browser records that cannot be established as belonging to the fictional account. If real accounts are introduced, account-aware balance/transfer treatment and source reconciliation must be validated through Plaid before claiming real-world reliability.
 
 **Next recommended phase:** Phase 3 — learn reusable categorization and schedule decisions from Reviews. See `DEVELOPMENT_ROADMAP.md`. Phase 4 (backtesting) and Plaid remain future steps.
+
+## Phase 3: Learning from Reviews (October 2026)
+
+**The read-only bank ledger stays authoritative.** Reviewing a category or a repeated payment creates a separate, reversible learning decision. Rules are stored in browser-local data and do not modify original source fields.
+
+### Category rules
+- In **Reviews**, confirm or change a transaction's category and leave **Remember this decision for similar transactions** selected. The Activity category editor also offers an optional **Remember this merchant** choice.
+- Rules are scoped to the **account, transaction type and normalized merchant**. If the merchant has consistently one category and the user explicitly saves the rule, subsequent *unclassified or low-confidence expense transactions* can receive that category automatically. Specific high-confidence provider categories are never overwritten.
+- Multi-purpose merchants (e.g. Amazon, Costco, Walmart, Home Depot, PayPal) and merchants with conflicting historical categories receive **suggestion-only** rules. Reviewers still decide each ambiguous purchase.
+- If new provider data conflicts with an automatic rule, that rule stops silently classifying the merchant and a review can reopen. The user can remove any learned rule in **Reviews → Learned rules**. Individual manual category corrections remain unchanged.
+- Every auto-classified record carries its classification provenance and can still be individually corrected.
+- Existing data migrates from v2 to v3: `learning.categoryRules` and a small `learning.ruleHistory` are added, without replacing transactions.
+
+### Prediction learning
+- **Confirm estimate** in Reviews teaches the model to *trust the historical recurring pattern*, without permanently freezing future amounts or dates. Confirmed subscriptions and bills can update from newer bank history.
+- Strong changes in expected amount, posting day or cadence trigger an **uncertainty review** rather than continued silent confirmation.
+- Editing an individual predicted payment still changes only that date's forecast; for monthly payments there is an explicit opt-in to apply the changed date and amount to future monthly charges.
+- Manual recurring / not-recurring rules from Phase 2 remain in effect, and all learned recurrence rules can be restored to automatic mode from **Reviews → Learned rules**.
+
+### Boundaries and accuracy
+Confidence labels remain uncalibrated heuristics. Confirmed history reduces *repeated requests*, but does not prove a particular future charge or amount is correct. Rules stored in browser-local storage do not sync across devices and are not tamper-proof until the secure backend exists. The next phase will measure performance using held-out historical transactions.
+
+See [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) for Phase 4, **automated accuracy backtesting**, then Plaid later when chosen by the user.
