@@ -15,6 +15,18 @@ await page.addInitScript(()=>{
 });
 try{
 await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
+assert.equal(await page.locator('#title').innerText(),'Budgets','Budgets should be landing page');
+assert.equal(await page.locator('aside button.active').getAttribute('data-page'),'budgets','Budget nav should be active');
+assert.equal(await page.locator('#period').inputValue(),'2026-10','Budget should default to the current month');
+assert.equal(await page.locator('#period option[value="all"]').count(),0,'Budgets must not offer All dates');
+assert.match(await page.locator('#budget-range').innerText(),/Oct 1 – Oct 31, 2026/,'Budget date range should include full month');
+await page.locator('#period').selectOption('2026-02');
+assert.match(await page.locator('#budget-range').innerText(),/Feb 1 – Feb 28, 2026/,'Non-leap February should end on 28th');
+await page.locator('#period').selectOption('2026-09');
+assert.match(await page.locator('#budget-range').innerText(),/Sep 1 – Sep 30, 2026/,'September should end on 30th');
+await page.locator('#period').selectOption('2026-10');
+await page.locator('aside [data-page="overview"]').click();
+assert.equal(await page.locator('#period option[value="all"]').count(),1,'Other screens retain All dates');
 const categories=page.locator('.grid .panel').first().locator('details.drill-detail');
 assert.ok(await categories.count()>2,'Overview categories should be expandable');
 await categories.first().locator('summary').click();
@@ -58,6 +70,15 @@ const past=page.locator('.budget-entry').filter({has:page.locator('summary stron
 assert.match(await past.innerText(),/Past month: actual spending only/);
 assert.equal(await past.locator('.forecast').evaluate(el=>parseFloat(el.style.width)),0,'Past months should have no future forecast');
 assert.deepEqual(errors,[],'No runtime script errors');
+await page.evaluate(()=>{const key='household-ledger-v1',v=JSON.parse(localStorage.getItem(key));v.transactions.push({id:'leap-fixture',date:'2024-02-29',merchant:'Leap Day Grocery',amount:19.90,category:'Groceries',type:'expense',account:'Checking'});localStorage.setItem(key,JSON.stringify(v))});
+await page.reload({waitUntil:'load'});
+assert.equal(await page.locator('#title').innerText(),'Budgets','Budgets should load by default after refresh');
+await page.locator('#period').selectOption('2024-02');
+assert.match(await page.locator('#budget-range').innerText(),/Feb 1 – Feb 29, 2024/,'Leap-year February must end on 29th');
+const leap=page.locator('.budget-entry').filter({has:page.locator('summary strong:text-is("Groceries")')});
+await leap.locator('summary').click();
+assert.match(await leap.innerText(),/Leap Day Grocery/,'Transactions on the last day of a month should be included');
+assert.deepEqual(errors,[],'No runtime script errors after reload');
 console.log('PASS: Overview categories/merchants, Merchant totals, Insights categories, Budgets drilldown, two-color forecast and past-month behavior');
 }finally{await browser.close()}
 })().catch(err=>{console.error(err);process.exit(1)});
