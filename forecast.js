@@ -24,7 +24,7 @@ const likelyBill=t=>periodicCategories.has(t.category)&&(
  (t.category==='Kids & Family'&&/daycare|childcare|tuition|preschool|school fee/i.test(t.merchant))
  )||/auto loan|car payment|student loan|loan payment/i.test(t.merchant||'');
 const skip=t=>!t||!validDate(t.date)||!Number.isFinite(Number(t.amount))||Number(t.amount)<=0||
- t.pending||t.type==='transfer';
+ t.pending||(t.type==='transfer'&&!['in','out'].includes(t.cashDirection));
 const confidence=(observations,months,stability,dateSpread,cadence)=>{
  // Labels are evidence heuristics, not measured probabilities.
  if(observations>=3&&months>=3&&stability<=.0005&&dateSpread<=3)return 'High';
@@ -55,7 +55,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  const today=String(asOf||new Date().toLocaleDateString('en-CA')).slice(0,10);
  const all=(Array.isArray(transactions)?transactions:[]).filter(t=>!skip(t)&&t.date<=today);
  const expenseMode=mode==='expense';
- const match=t=>t.type===mode&&(expenseMode?t.category===category:true);
+ const match=t=>t.type===mode&&(expenseMode?t.category===category:mode==='transfer'?t.cashDirection==='out':true);
  const actualRows=all.filter(t=>match(t)&&t.date.slice(0,7)===month);
  const actual=round(actualRows.reduce((a,t)=>a+Number(t.amount),0));
  const result={actual,additional:0,projectedTotal:actual,expected:[],recurring:0,variable:0,
@@ -72,7 +72,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   return result;
  }
  const windowStart=shiftMonth(today.slice(0,7),-24);
- const records=all.filter(t=>match(t)&&t.date<month+'-01'&&t.date>=windowStart);
+ const records=all.filter(t=>match(t)&&t.date<=today&&t.date>=windowStart);
  const groups=new Map();
  for(const t of records){
   const key=accountKey(t)+'|'+normalize(t.merchant);
@@ -84,7 +84,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const stable=round(amount);if(!(stable>0)||!validDate(date))return;
   const id=['hist',month,category||'Income',encodeURIComponent(accountKey(group[0])),encodeURIComponent(normalize(group[0].merchant)),slot].join('|');
   return {id,merchant:group[0].merchant,account:accountKey(group[0]),category:category||'Income',
-   type:mode,date,amount:stable,cadence,confidence:confidence(obs,observedMonths,relativeSpread,dateSpread,cadence),
+   type:mode,cashDirection:mode==='transfer'?'out':undefined,date,amount:stable,cadence,confidence:confidence(obs,observedMonths,relativeSpread,dateSpread,cadence),
    evidence:observedMonths,observations:obs,source:'historical',pattern:{day:Number(date.slice(8,10)),amount:stable},
    slot,seasonal:Boolean(extra.seasonal),groupKey:accountKey(group[0])+'|'+normalize(group[0].merchant)};
  };
@@ -105,7 +105,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  const monthRecords=(rows,selectedMonth)=>rows.filter(t=>t.date.slice(0,7)===selectedMonth);
  function detectInterval(group){
   // Weekly/biweekly evidence must be based on a sequence (not count per month).
-  const recent=group.filter(t=>t.date>=shiftMonth(month,-4));
+  const recent=group.filter(t=>t.date>=shiftMonth(today.slice(0,7),-4));
   if(recent.length<5)return false;
   const gaps=recent.slice(1).map((t,i)=>dayDiff(t.date,recent[i].date)).filter(n=>n>0);
   if(gaps.length<4)return false;
@@ -119,7 +119,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   if(!best)return false;
   const amounts=recent.map(t=>Number(t.amount)),mid=median(amounts);
   const variability=Math.max(...amounts.map(a=>Math.abs(a-mid)/mid));
-  const bill=mode==='income'||group.some(likelyBill);
+  const bill=mode==='income'||mode==='transfer'||group.some(likelyBill);
   if(variability>(bill?.6:.33))return false;
   const last=recent[recent.length-1];
   if(dayDiff(today,last.date)>best*2+4)return false;
@@ -137,16 +137,16 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   return true;
  }
  function detectMonthly(group){
-  const relevant=group.filter(t=>t.date>=shiftMonth(month,-5));
+  const relevant=group.filter(t=>t.date>=shiftMonth(today.slice(0,7),-6)&&t.date<today.slice(0,7)+'-01');
   const observed=[...new Set(relevant.map(t=>t.date.slice(0,7)))].sort();
-  const last2=shiftMonth(month,-2),last1=shiftMonth(month,-1);
+  const last2=shiftMonth(today.slice(0,7),-2),last1=shiftMonth(today.slice(0,7),-1);
   if(!observed.includes(last1)||observed.length<2)return;
-  const bill=mode==='income'||group.some(likelyBill);
+  const bill=mode==='income'||mode==='transfer'||group.some(likelyBill);
   if(!bill&&observed.length<3)return;
   const byMonth=new Map(observed.map(m=>[m,monthRecords(relevant,m).sort((a,b)=>a.date.localeCompare(b.date))]));
   const recentMonths=observed.slice(-3);
   if(recentMonths.some((m,i)=>i>0&&monthIndex(m)-monthIndex(recentMonths[i-1])!==1))return;
-  if(monthIndex(month)-monthIndex(recentMonths[recentMonths.length-1])<1||monthIndex(month)-monthIndex(recentMonths[recentMonths.length-1])>4)return;
+  if(monthIndex(today.slice(0,7))-monthIndex(recentMonths[recentMonths.length-1])!==1)return;
   const count=byMonth.get(recentMonths[0]).length;
   if(!count||count>5||recentMonths.some(m=>byMonth.get(m).length!==count))return;
   for(let slot=0;slot<count;slot++){
@@ -219,7 +219,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
   const beforeDetected=candidates.length;
   // A genuine two-paydays-per-month schedule stays anchored to calendar days;
   // a true biweekly schedule drifts across months and uses 14-day intervals.
-  const recentThree=[...new Set(group.filter(t=>t.date>=shiftMonth(month,-3)).map(t=>t.date.slice(0,7)))].sort();
+  const recentThree=[...new Set(group.filter(t=>t.date>=shiftMonth(today.slice(0,7),-3)&&t.date<today.slice(0,7)+'-01').map(t=>t.date.slice(0,7)))].sort();
   const anchoredTwice=recentThree.length===3&&recentThree.every(m=>group.filter(t=>t.date.slice(0,7)===m).length===2)&&
     [0,1].every(slot=>{
       const days=recentThree.map(m=>group.filter(t=>t.date.slice(0,7)===m).sort((a,b)=>a.date.localeCompare(b.date))[slot]).map(t=>Number(t.date.slice(8,10)));
@@ -287,8 +287,9 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
 }
 function forecast(transactions,month,category,todayDate,patternRules){return infer(transactions,month,category,todayDate,'expense',patternRules)}
 function forecastIncome(transactions,month,todayDate,patternRules){return infer(transactions,month,null,todayDate,'income',patternRules)}
+function forecastTransfers(transactions,month,todayDate,patternRules){return infer(transactions,month,null,todayDate,'transfer',patternRules)}
 function patternKey(type,category,account,merchant){return [type,category,account,normalize(merchant)].map(encodeURIComponent).join('|')}
-const api={forecast,forecastIncome,infer,patternKey};
+const api={forecast,forecastIncome,forecastTransfers,infer,patternKey};
 root.HouseholdForecast=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
