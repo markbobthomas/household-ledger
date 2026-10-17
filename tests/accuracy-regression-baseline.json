@@ -1,0 +1,19 @@
+{
+  "dataset": "fictional-25-month-household",
+  "evaluation": "twelve month-start 90-day rolling windows",
+  "notRealBankAccuracy": true,
+  "baselineAtPhase4": {
+    "recurringPrecisionPct": 89.12,
+    "recurringRecallPct": 58.95,
+    "recurringMatched": 336,
+    "scheduledSpendingCoveragePct": 29.8,
+    "cash90DayMAE": 7781.64
+  },
+  "regressionGuardrails": {
+    "minimumPrecisionPct": 84,
+    "minimumRecallPct": 54,
+    "minimumRecurringMatched": 300,
+    "maximum90DayCashMAE": 9000
+  },
+  "interpretation": "Guardrails only flag material regressions on this invented dataset. Passing them does not prove reliability or guarantee safe-to-spend balances."
+}
