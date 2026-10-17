@@ -37,7 +37,7 @@ try{
  assert.equal(await past.locator('.forecast').evaluate(el=>parseFloat(el.style.width)),0,'Past month has no forward forecast');
  await page.locator('aside [data-page="insights"]').click();
  assert.equal(await page.locator('#period option[value="all"]').count(),1,'Non-budget dates remain flexible');
- assert.equal(await page.locator('[data-insight]').count(),3,'Insights has three views');
+ assert.equal(await page.locator('[data-insight]').count(),4,'Insights has four views');
  const categories=page.locator('details.drill-detail');
  assert.ok(await categories.count()>2,'Categories expandable');
  await categories.first().locator('summary').click();
