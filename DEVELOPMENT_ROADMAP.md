@@ -33,7 +33,15 @@ Currently `forecast.js` powers category/month predictions, and `cashflow.js` sep
 - Add end-to-end regression tests asserting a corrected payment updates every view consistently and that source records are unchanged.
 - No Plaid connection required.
 
-## Phase 3 — Learning from Reviews (NEXT)
+## Phase 3 — Learning from Reviews (COMPLETE · October 17, 2026)
+
+**Status: Complete and browser-tested.** Reviews now learns reversible merchant/category rules scoped to transaction type and account. A saved decision automatically classifies matching expenses only when they are unclassified or low-confidence and the merchant has consistent categorization. Conflicting bank categories and multi-purpose merchants trigger suggestions rather than silently overriding source values. Activity also offers an opt-in to remember corrections. Users can inspect and undo these rules in Reviews, and Activity shows the provenance of learned classifications.
+
+**Recurring learning:** Confirming an expected payment can store a trusted pattern without freezing future amounts/dates; materially changed patterns reopen Reviews. Month-specific forecast edits remain month-specific unless the user explicitly asks to apply the corrected monthly schedule going forward. Manual recurring/not-recurring decisions are reversible.
+
+**Validation:** The GitHub Actions suite passed 13 browser checks, including `tests/learning-phase3-smoke.cjs` (safe auto-classification, ambiguous suggestions, conflict recovery, new source changes, reversibility and mobile interaction). This proves the implemented rules behave as specified, **not** that prediction accuracy is validated on real bank records. Existing source transactions were not edited.
+
+
 
 - Confirmations and corrections become reusable, reversible merchant/account/category and schedule rules rather than being scoped to a single prediction or transaction.
 - Show which rule applied, its confidence, evidence, history and ability to undo.
@@ -42,7 +50,7 @@ Currently `forecast.js` powers category/month predictions, and `cashflow.js` sep
 - Test persistence, rule conflicts and changing provider records without modifying source transactions.
 - No Plaid connection required.
 
-## Phase 4 — Automated accuracy laboratory
+## Phase 4 — Automated accuracy laboratory (NEXT)
 
 - Run walk-forward backtests on 12–24 months of **fictional** fixture data first: at each historical as-of date, allow only older transactions to inform the forecast, hide future actuals.
 - Score recurring detection precision/recall, missed/false predicted events, date and amount error, forecast coverage and 30/60/90-day cash-flow error (where valid opening balance evidence exists).
