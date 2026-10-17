@@ -139,7 +139,7 @@ function infer(transactions,month,category,asOf,mode='expense'){
    const amounts=rows.map(t=>Number(t.amount)),mid=median(amounts);
    const dateSpread=Math.max(...days)-Math.min(...days);
    const variability=Math.max(...amounts.map(v=>Math.abs(v-mid)/mid));
-   if(dateSpread>(bill?7:3)||variability>(bill?.75:.4))continue;
+   if(dateSpread>(bill?7:(!bill&&observed.length>=5?2:3))||variability>(bill?.75:(!bill&&observed.length>=5?.25:.4)))continue;
    // Preserve IDs used by earlier predictions, allowing confirmed overrides
    // to survive a detector update.
    const seasonal=seasonalAmount(group,month,mid,category==='Utilities');
