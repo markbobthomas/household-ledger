@@ -14,7 +14,7 @@ The stored data now has four distinct parts:
 | --- | --- | --- |
 | `transactions[]` | Original immutable source records: date, merchant, amount, type, account, stable ID and `source` provenance | **No** |
 | `categoryOverrides` | Category corrections keyed by the source record's stable transaction ID | **Yes, category only** |
-| `predictions` | Monthly budget targets, additional monthly spending, 90-day recurring stream overrides, daily variable-spending assumption and one-time forecast events | **Yes** |
+| `predictions` | Monthly budget targets, dated expected-transaction overrides and manual forecast items, plus 90-day balance assumptions | **Yes** |
 | `sync` | Source synchronization metadata, including the future Plaid cursor | **No, provider-managed** |
 
 The UI uses `HouseholdLedgerData.records(state)` to merge base source transactions with category overrides **for display and analysis only**. Category edits never rewrite `transactions[]`.
@@ -23,7 +23,9 @@ The source records carry `source.provider` and `source.providerTransactionId`. D
 
 ### Predictions are not transactions
 
-- Monthly budget targets and forecasted additional spending can be adjusted per category. Actual spending remains calculated from source transactions.
+- Monthly budget targets remain editable, while expected category spending is now the **sum of dated, merchant-specific predicted transactions**. Expand a category to inspect the expected date, merchant, amount, evidence and confidence for each item, and edit/omit/reset it inline.
+- Inference looks at up to six recent calendar months, requires history in the latest completed month, and normally requires two or three observed months with stable merchant, account, frequency, dates and amounts. Bank-paid transactions are suppressed to avoid counting them twice. Future one-time expected expenses can be added to a category as **predictions only**.
+- **No generic undisclosed catch-all transaction** is inserted into monthly category estimates; irregular spending without a defensible expected date is omitted and may make projections optimistic. Amounts/dates are estimates, not commitments.
 - The 90-day bank-balance projection supports changes to predicted recurring bill/paycheck amounts and schedule, predicted daily spending and one-time forecast-only events.
 - These changes affect projected values, never recorded bank activity or the starting balance.
 - Recurring detection and merchant/category analytics use the effective categories while preserving the original records.
@@ -43,3 +45,7 @@ This public GitHub repository does not include personal financial data. Transact
 ## Developer tests
 
 The GitHub Actions workflow `.github/workflows/ui-smoke.yml` executes Playwright tests for budget/merchant drill-downs, read-only categorization, the cash-flow engine, recurring detection and mobile/desktop layout. `tests/ledger-readonly-smoke.cjs` additionally verifies historical data migration, Plaid upsert/pending reconciliation, category overrides and separation of forecast changes from original source records.
+
+### Historic aggregate adjustment compatibility
+
+Earlier category-level `categoryForecasts` overrides are preserved in local storage for backward compatibility but **are not included** in the new dated category totals. This avoids silently creating an invented lump-sum transaction on an arbitrary date. Individual expected payments can be edited in each category instead.
