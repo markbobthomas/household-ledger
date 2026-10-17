@@ -81,16 +81,16 @@ let a=expense(),html='';if(page==='transactions')html='<div class="panel"><div c
 if(page==='insights'){
   const tabs='<div class="insight-tabs" role="tablist" aria-label="Insight views">'+[['categories','Categories'],['merchants','Merchants'],['bands','Purchase sizes'],['recurring','Subscriptions / Recurring']].map(([key,name])=>'<button type="button" role="tab" aria-selected="'+(insightMode===key)+'" class="'+(insightMode===key?'active':'')+'" data-insight="'+key+'">'+name+'</button>').join('')+'</div>';
   if(insightMode==='categories'){
-    html=gridStats()+tabs+'<div class="panel"><div class="section-top"><h3>Spending by category</h3></div>'+list(grouped(a,'category'),999,'category',a)+'</div>';
+    html=tabs+gridStats()+'<div class="panel"><div class="section-top"><h3>Spending by category</h3></div>'+list(grouped(a,'category'),999,'category',a)+'</div>';
   }else if(insightMode==='merchants'){
-    html=gridStats()+tabs+'<div class="panel"><div class="section-top"><h3>Merchant totals</h3></div>'+list(grouped(a,'merchant'),999,'merchant',a)+'</div>';
+    html=tabs+gridStats()+'<div class="panel"><div class="section-top"><h3>Merchant totals</h3></div>'+list(grouped(a,'merchant'),999,'merchant',a)+'</div>';
   }else if(insightMode==='recurring'){
     html=recurringInsights(tabs);
   }else{
     const purchases=a.flatMap(t=>{const linked=data.items.filter(i=>i.transactionId===t.id),parts=linked.length?linked:[t];return parts.map(i=>({transactionId:t.id,date:t.date,merchant:cleanMerchant(t.merchant),category:t.category,description:linked.length?String(i.description||i.name||i.title||'Itemized purchase'):'Entire transaction (not itemized)',amount:Number(i.amount),transactionTotal:Number(t.amount),itemized:linked.length>0}))}).filter(i=>Number.isFinite(i.amount));
     const counts=BANDS.map(([name,min,max],index)=>({name,min,max,index,count:0,amount:0,details:[]}));
     purchases.forEach(p=>{const band=counts.find(x=>p.amount>=x.min&&p.amount<x.max);if(band){band.count++;band.amount+=p.amount;band.details.push(p)}});
-    html=gridStats()+tabs+'<div class="panel"><div class="section-top"><h3>Individual purchase price bands</h3><span class="budget-summary-meta">Item-level where available</span></div>'+
+    html=tabs+gridStats()+'<div class="panel"><div class="section-top"><h3>Individual purchase price bands</h3><span class="budget-summary-meta">Item-level where available</span></div>'+
     counts.map(b=>{
       const d=b.details.slice().sort((x,y)=>y.date.localeCompare(x.date)||x.merchant.localeCompare(y.merchant));
       return '<details class="band-detail"><summary class="band-row"><span>'+esc(b.name)+'</span><span class="band-amount"><strong>'+money(b.amount)+'</strong><span class="sub">'+b.count+' purchases / items</span></span><span class="chevron" aria-hidden="true">⌄</span></summary><div class="band-expanded"><div class="sub band-subheading">'+b.count+' purchases totaling '+money(b.amount)+'</div>'+
