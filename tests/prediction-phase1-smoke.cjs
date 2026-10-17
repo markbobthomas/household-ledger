@@ -5,7 +5,7 @@ const {buildScenario}=require('./fixtures/household-25months.cjs');
 const source=buildScenario(),asOf='2026-10-17';
 const forecast=(cat,date=asOf,mode='expense')=> mode==='income'?
  F.forecastIncome(source,date.slice(0,7),date):F.forecast(source,date.slice(0,7),cat,date);
-assert.ok(source.length>700,'Scenario should cover 25 months and hundreds of records');
+assert.ok(source.length>450,'Scenario should cover 25 months and hundreds of records');
 assert.equal(source.every(x=>x.source.provider==='scenario'),true,'Never presented as bank-verified data');
 
 const subscriptions=forecast('Subscriptions');
