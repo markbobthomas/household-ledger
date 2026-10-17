@@ -65,7 +65,9 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={}){
  if(month<today.slice(0,7))return result;
  const past=coverage(all,today.slice(0,7));
  result.historyMonths=past;
- if(past.length<2||!past.includes(shiftMonth(today.slice(0,7),-1))){
+ const forced=Object.entries(patternRules||{}).some(([key,value])=>value?.mode==='monthly'&&
+   key.startsWith([mode,category||'Income'].map(encodeURIComponent).join('|')+'|'));
+ if(!forced&&(past.length<2||!past.includes(shiftMonth(today.slice(0,7),-1)))){
   result.method='Insufficient recent account history; no reliable dated schedule';
   return result;
  }
