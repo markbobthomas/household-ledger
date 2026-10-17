@@ -676,3 +676,13 @@ button,summary { -webkit-tap-highlight-color: transparent; }
   .page-top .header-actions .btn { padding: 9px 8px; }
   .mobile-top-nav { gap: 4px; }
 }
+
+/* Keep the workspace from shifting horizontally when Settings has no scrollbar. */
+@media (min-width:701px) {
+  html { scrollbar-gutter: stable; }
+  .settings-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .settings-block { min-width:0; }
+}
+@media (max-width:700px) {
+  html { scrollbar-gutter: auto; }
+}
