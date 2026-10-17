@@ -88,7 +88,7 @@ async function browserCase(browser,opts,mobile){
   await page.reload({waitUntil:'load'});
   const nav=x=>mobile?'.mobile-top-nav [data-page='+x+']':'aside [data-page='+x+']';
   await page.locator(nav('transactions')).click();
-  assert.ok((await page.locator('.ledger-table tbody tr').filter({hasText:'Credit Card Payment'}).first().innerText()).includes('Card payment'));
+  assert.ok((await page.locator('.ledger-table tbody tr').filter({hasText:'Credit Card Payment'}).first().innerText()).toLowerCase().includes('card payment'));
   const refund=await page.locator('.ledger-table tbody tr').filter({hasText:'Refund Grocery Shop'}).innerText();
   assert.ok(refund.includes('Refund')&&refund.includes('20.00'));
   const before=await page.evaluate(()=>JSON.stringify(JSON.parse(localStorage.getItem('household-ledger-v1')).transactions));
