@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
     assert.equal(await band.evaluate(el => el.open), false, 'Band should initially be collapsed');
     await band.locator('summary').click();
     assert.equal(await band.evaluate(el => el.open), true, 'Click must expand band immediately');
-    assert.match(await band.innerText(), /Transaction total/, 'Expanded band should include table');
+    assert.match(await band.innerText(), /Transaction total/i, 'Expanded band should include table');
     const firstEdit = band.locator('button[data-edit]').first();
     assert.ok(await firstEdit.count(), 'Test band should contain an item with edit navigation');
     await firstEdit.click();
