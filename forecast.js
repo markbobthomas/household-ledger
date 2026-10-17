@@ -24,7 +24,11 @@ const likelyBill=t=>periodicCategories.has(t.category)&&(
  (t.category==='Kids & Family'&&/daycare|childcare|tuition|preschool|school fee/i.test(t.merchant))
  )||/auto loan|car payment|student loan|loan payment/i.test(t.merchant||'');
 const skip=t=>!t||!validDate(t.date)||!Number.isFinite(Number(t.amount))||Number(t.amount)<=0||
- t.pending||(t.type==='transfer'&&!['in','out'].includes(t.cashDirection));
+ t.pending||(t.type==='transfer'&&!['in','out'].includes(t.cashDirection))||
+ // Refund/reversal income belongs in actual history, but is not pay or a
+ // recurring incoming payment. Never turn repeat refunds into a payday.
+ (t.type==='income'&&/\b(refund|reversal|chargeback|cashback|rebate|return credit)\b/i.test(
+  String(t.merchant||'')+' '+String(t.description||'')));
 const confidence=(observations,months,stability,dateSpread,cadence)=>{
  // Labels are evidence heuristics, not measured probabilities.
  if(observations>=3&&months>=3&&stability<=.0005&&dateSpread<=3)return 'High';
