@@ -62,13 +62,15 @@ function cleanForPrediction(t){
  // evaluation metadata, synthetic opening-balance hints, or hidden labels.
  return {id:t.id,date:t.date,merchant:t.merchant,description:t.description,amount:t.amount,
    category:t.category,type:t.type,account:t.account,accountId:t.accountId,pending:Boolean(t.pending),
+   cashDirection:t.cashDirection,
    source:{provider:'scenario',verified:false}};
 }
 function cashImpact(t){
  const amount=Number(t.amount)||0;
  // Fixture transfer is a Checking cash withdrawal, not spending. It still
  // affects realized cash balance, exposing a model's transfer omission.
- return t.type==='income'?amount:t.type==='expense'||t.type==='transfer'?-amount:0;
+ return t.type==='income'||(t.type==='transfer'&&t.cashDirection==='in')?amount:
+   t.type==='expense'||(t.type==='transfer'&&t.cashDirection==='out')?-amount:0;
 }
 function addMetrics(bin,match,forecastCount,actualCount){
  bin.forecast+=forecastCount;bin.actual+=actualCount;
@@ -88,7 +90,8 @@ function evaluateFold(opts){
  // date and has no access to scenarioTruth, future records or future balance.
  const temporary=dataModel.migrate({transactions:past,items:[],budgets:{}});
  const predicted=ledger.build(temporary,dataModel.records(temporary),asOf,horizon,forecast,dataModel);
- const events=predicted.events.filter(e=>e.date>asOf&&e.date<=until&&['expense','income'].includes(e.type));
+ const cashEvents=predicted.events.filter(e=>e.date>asOf&&e.date<=until&&['expense','income','transfer'].includes(e.type));
+ const events=cashEvents.filter(e=>['expense','income'].includes(e.type));
  const recurring=futureActual.filter(t=>t.scenarioTruth?.recurring===true&&['expense','income'].includes(t.type));
  const match=matchEvents(events,recurring);
  const allActualExpense=futureActual.filter(t=>t.type==='expense').reduce((n,t)=>n+Number(t.amount),0);
@@ -124,12 +127,17 @@ function evaluateFold(opts){
  const opening=round(initialBalance+transactions.filter(t=>t.date>baselineDate&&t.date<=asOf).reduce((n,t)=>n+cashImpact(t),0));
  const cash=CASH_DAYS.filter(n=>n<=horizon).map(days=>{
   const checkpoint=shiftDays(asOf,days);
-  const predictedChange=events.filter(e=>e.date<=checkpoint).reduce((n,e)=>n+cashImpact(e),0);
+  const predictedChange=cashEvents.filter(e=>e.date<=checkpoint).reduce((n,e)=>n+cashImpact(e),0);
   const actualChange=futureActual.filter(t=>t.date<=checkpoint).reduce((n,t)=>n+cashImpact(t),0);
   const expectedBalance=round(opening+predictedChange),realizedBalance=round(opening+actualChange);
+  const unc=predicted.uncertainty?.available?predicted.uncertainty:null;
+  const adjustedBalance=unc?round(expectedBalance-unc.dailyEstimated*days):null;
   return {days,forecastBalance:expectedBalance,actualBalance:realizedBalance,
     signedError:round(expectedBalance-realizedBalance),
-    absoluteError:round(Math.abs(expectedBalance-realizedBalance))};
+    absoluteError:round(Math.abs(expectedBalance-realizedBalance)),
+    adjustedBalance,adjustedAbsoluteError:adjustedBalance===null?null:round(Math.abs(adjustedBalance-realizedBalance)),
+    illustrativeLow:unc?round(expectedBalance-unc.dailyHigh*days):null,
+    illustrativeHigh:unc?round(expectedBalance-unc.dailyLow*days):null};
  });
  const examples={
   falsePredictions:match.unmatchedPredictions.slice(0,5).map(t=>({date:t.date,merchant:t.merchant,amount:t.amount,category:t.category})),
@@ -142,7 +150,7 @@ function evaluateFold(opts){
 }
 function summarize(folds){
  const overall=createBin('All recurring events'),categories={},cadences={},confidence={};
- const cash=CASH_DAYS.map(days=>({days,samples:0,absoluteErrorSum:0,signedErrorSum:0,maxError:0}));
+ const cash=CASH_DAYS.map(days=>({days,samples:0,absoluteErrorSum:0,signedErrorSum:0,maxError:0,adjustedSamples:0,adjustedErrorSum:0}));
  const misses=[],falseAlarms=[];
  let actualSpend=0,coveredSpend=0,opportunities=0;
  for(const f of folds){
@@ -159,6 +167,7 @@ function summarize(folds){
    const target=cash.find(d=>d.days===c.days);
    target.samples++;target.absoluteErrorSum+=c.absoluteError;target.signedErrorSum+=c.signedError;
    target.maxError=Math.max(target.maxError,c.absoluteError);
+   if(c.adjustedAbsoluteError!==null){target.adjustedSamples++;target.adjustedErrorSum+=c.adjustedAbsoluteError;}
   }
   misses.push(...f.examples.missedRecurring.map(t=>({...t,asOf:f.asOf})));
   falseAlarms.push(...f.examples.falsePredictions.map(t=>({...t,asOf:f.asOf})));
@@ -171,7 +180,8 @@ function summarize(folds){
   byCadence:Object.values(cadences).map(binSummary).sort((a,b)=>b.actualRecurring-a.actualRecurring||a.name.localeCompare(b.name)),
   byConfidence:Object.values(confidence).map(binSummary).sort((a,b)=>b.predicted-a.predicted),
   cash:cash.map(x=>({days:x.days,observations:x.samples,mae:mean(x.absoluteErrorSum,x.samples),
-   bias:mean(x.signedErrorSum,x.samples),worstAbsoluteError:round(x.maxError)})),
+   bias:mean(x.signedErrorSum,x.samples),worstAbsoluteError:round(x.maxError),
+   scenarioMAE:mean(x.adjustedErrorSum,x.adjustedSamples),scenarioSamples:x.adjustedSamples})),
   examples:{missedRecurring:misses.slice(0,10),falsePredictions:falseAlarms.slice(0,10)}};
 }
 function run(options){
