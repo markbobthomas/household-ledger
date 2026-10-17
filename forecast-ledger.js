@@ -15,6 +15,45 @@ function build(state,records,asOf,days,forecast,dataModel){
  const months=Array.from({length:count+1},(_,i)=>shiftMonth(asOf.slice(0,7),i));
  const rules=state?.predictions?.patternRules||{};
  const events=[],categoryViews={},risk=[];
+
+const toDate=s=>new Date(s+'T12:00:00Z');
+function priorMonth(base,n){
+ const [y,m]=base.split('-').map(Number);
+ return new Date(Date.UTC(y,m-1+n,1,12)).toISOString().slice(0,7);
+}
+function calcUndatedRisk(rows,asOf,events,state){
+ // This is a statistical *range* of shopping/other non-scheduled expenses,
+ // never an invented entry in events[] or the source transaction ledger.
+ const scheduled=new Set(events.filter(t=>t.type==='expense').map(t=>
+   String(t.account||t.accountId||'Unknown')+'|'+String(t.merchant||'').toLowerCase().trim()));
+ const rejected=new Set(Object.entries(state?.predictions?.patternRules||{}).filter(([k,r])=>r?.mode==='none')
+   .map(([k])=>k.split('|').slice(2).map(decodeURIComponent).join('|')));
+ const base=asOf.slice(0,7);
+ const complete=Array.from({length:6},(_,i)=>priorMonth(base,-6+i));
+ const past=(rows||[]).filter(t=>t.type==='expense'&&t.date<base+'-01'&&t.date<=asOf&&!t.pending);
+ const present=new Set(past.map(t=>t.date.slice(0,7)));
+ const months=complete.filter(m=>present.has(m));
+ if(months.length<3)return {method:'Not enough fully observed months',historyMonths:months.length,
+   dailyEstimated:0,dailyLow:0,dailyHigh:0,available:false,confidence:'Unavailable',
+   includedInDatedEvents:false};
+ const spending=months.map(m=>past.filter(t=>t.date.slice(0,7)===m)
+   .filter(t=>{
+    const acct=String(t.account||t.accountId||'Unknown'),merchant=String(t.merchant||'').toLowerCase().trim();
+    return !scheduled.has(acct+'|'+merchant)&&!rejected.has(acct+'|'+merchant);
+   }).reduce((n,t)=>n+Number(t.amount||0),0)).sort((a,b)=>a-b);
+ const median=spending.length%2?spending[(spending.length-1)/2]:
+   (spending[spending.length/2-1]+spending[spending.length/2])/2;
+ const percentile=p=>{
+  const at=p*(spending.length-1),i=Math.floor(at),weight=at-i;
+  return spending[i]*(1-weight)+spending[Math.min(spending.length-1,i+1)]*weight;
+ };
+ const perDay=n=>round(Math.max(0,n)/30.44);
+ return {method:'Historical unscheduled expense range, not a dated payment',
+  historyMonths:months.length,dailyEstimated:perDay(median),dailyLow:perDay(percentile(.2)),
+  dailyHigh:perDay(percentile(.8)),monthlyMedian:round(median),confidence:'Illustrative',
+  includedInDatedEvents:false,available:true};
+}
+
  const known=new Set();
  for(const month of months){
   for(const category of CATS){
@@ -40,6 +79,19 @@ function build(state,records,asOf,days,forecast,dataModel){
    events.push({...item,type:'income',category:'Income',description:'Estimated incoming payment'});
   }
  }
+ // Transfer is not consumption. Forecast ONLY explicitly directed
+ // checking outflows, avoiding guesses from unlabeled internal transfers.
+ if(typeof forecast.forecastTransfers==='function'){
+  for(const month of months){
+   const transfer=forecast.forecastTransfers(records,month,asOf,rules);
+   for(const item of transfer.expected){
+    if(item.date<=asOf||item.date>end||known.has(item.id))continue;
+    known.add(item.id);
+    events.push({...item,type:'transfer',category:'Cash transfer',cashDirection:'out',
+     account:item.account||'Checking',description:'Expected checking transfer (not spending)'});
+   }
+  }
+ }
  for(const item of state?.predictions?.cashFlowEvents||[]){
   if(item.date<=asOf||item.date>end||!['income','expense'].includes(item.type)||!(Number(item.amount)>0))continue;
   if(known.has(item.id))continue;
@@ -48,7 +100,8 @@ function build(state,records,asOf,days,forecast,dataModel){
    merchant:item.description||'One-time forecast',description:'User forecast',accountId:item.accountId||'',source:'manual'});
  }
  events.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
- return {asOf,through:end,events,categoryViews,risk,months,
+ const uncertainty=calcUndatedRisk(records,asOf,events,state);
+ return {asOf,through:end,events,categoryViews,risk,uncertainty,months,
    totalIncome:round(events.filter(e=>e.type==='income').reduce((n,e)=>n+e.amount,0)),
    totalExpense:round(events.filter(e=>e.type==='expense').reduce((n,e)=>n+e.amount,0))};
 }
