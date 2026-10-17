@@ -25,3 +25,4 @@ jobs:
           node tests/price-band-smoke.cjs
           node tests/category-budget-smoke.cjs
           node tests/cashflow-smoke.cjs
+          node tests/design-smoke.cjs
