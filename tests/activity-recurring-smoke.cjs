@@ -48,7 +48,8 @@ const incomeLedger=L.build(inc,M.records(inc),'2026-10-17',90,F,M);
 assert.ok(incomeLedger.events.some(e=>e.type==='income'&&e.date==='2026-11-14'&&e.postingStatus==='unconfirmed'));
 assert.ok(incomeLedger.events.filter(e=>e.type==='income').every(e=>e.confirmed===false));
 async function browserCheck(browser,settings={},mobile=false){
- const page=await browser.newPage(settings),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await browser.newPage(settings),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{
   const Actual=Date;class Fixed extends Actual{
    constructor(...args){if(args.length)super(...args);else super('2026-10-17T12:00:00Z')}
@@ -68,123 +69,118 @@ async function browserCheck(browser,settings={},mobile=false){
   await page.reload({waitUntil:'load'});
   const nav=mobile?'.mobile-top-nav [data-page=transactions]':'aside [data-page=transactions]';
   await page.locator(nav).click();
-  const row=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:nth-child(2)').filter({hasText:'Fictional Single Charge'})});
-  const toggle=row.locator('[data-recurring]');
-  assert.equal(await row.locator('td').count(),6,'Activity has a new recurring column');
-  assert.match(await toggle.innerText(),/Set recurring/,'Every unrecognized expense has a visible Set recurring action');
-  assert.equal(await page.locator('.ledger-table [data-category]').count()>0,true,'Category inline edit stays available');
-  const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')).transactions);
-  await toggle.click();
-  let editor=row.locator('[data-recurring-form]');
-  assert.equal(await editor.count(),1,'Schedule editor appears in its own Activity row');
+  const row=page.locator('.ledger-table tbody tr').filter({
+   has:page.locator('td:nth-child(2)').filter({hasText:'Fictional Single Charge'})
+  });
+  const selection=()=>row.locator('select[data-recurring]');
+  const selectedLabel=()=>selection().locator('option:checked').innerText();
+  const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  const before=(await state()).transactions;
+  assert.equal(await row.locator('td').count(),6,'Activity includes a Recurring column');
+  assert.equal(await selection().evaluate(e=>e.tagName),'SELECT','Recurring uses the same native dropdown as Category');
+  assert.equal(await row.locator('[data-category]').evaluate(e=>e.tagName),'SELECT','Category remains direct inline select');
+  assert.equal(await selection().inputValue(),'choose');
+  assert.match(await selectedLabel(),/Set recurring/);
+  assert.equal(await row.locator('[data-recurring-form]').count(),0,'No editor or extra click is needed to see recurrence choices');
   assert.equal(await page.locator('#entry').count(),0,'No top-of-page editor');
-  assert.equal(await editor.locator('[name=decision]').inputValue(),'choose','Unrecognized charges require choosing a recurrence status');
-  assert.equal(await editor.locator('.recurring-schedule-fields').isVisible(),false,'Schedule questions remain hidden until Recurring is selected');
-  assert.equal(await editor.locator('[data-recurring-save]').isVisible(),false,'No redundant Save on status choices');
-  await editor.locator('[name=decision]').selectOption('schedule');
-  assert.equal(await editor.locator('.recurring-schedule-fields').isVisible(),true,'Recurring selection reveals questions');
-  assert.equal(await editor.locator('[data-recurring-save]').isVisible(),true,'Only a schedule needs Save');
-  assert.equal(await editor.locator('[name=frequency]').inputValue(),'monthly','Monthly is default');
-  assert.equal(await editor.locator('[name=day]').inputValue(),'14','Defaults to recorded calendar day');
+  await selection().selectOption('none');
+  assert.equal(await selection().inputValue(),'none','Not recurring commits on dropdown selection');
+  assert.equal(await row.locator('[data-recurring-form]').count(),0,'Not recurring needs no second click or Save');
+  assert.equal((await state()).predictions.patternRules[key].mode,'none');
+  await selection().selectOption('auto');
+  assert.equal(await selection().inputValue(),'choose','Automatic selection restores undetected initial state');
+  assert.equal(await row.locator('[data-recurring-form]').count(),0,'Automatic selection needs no Save');
+  assert.equal((await state()).predictions.patternRules[key],undefined,'Automatic selection clears the override');
+  await selection().selectOption('schedule');
+  let editor=row.locator('[data-recurring-form]');
+  assert.equal(await editor.count(),1,'Choosing Recurring directly reveals schedule questions in the row');
+  assert.equal(await selection().count(),0,'The dropdown temporarily yields to the schedule fields');
+  assert.equal(await editor.locator('[name=decision]').count(),0,'No second status selection inside the schedule editor');
+  assert.equal(await editor.locator('.recurring-schedule-fields').isVisible(),true);
+  assert.equal(await editor.locator('[name=frequency]').inputValue(),'monthly');
+  assert.equal(await editor.locator('[name=day]').inputValue(),'14');
   assert.equal(await editor.locator('[name=anchorDate]').inputValue(),'2026-10-14');
-  await editor.locator('button[type=submit]').click();
-  assert.match(await row.locator('[data-recurring]').innerText(),/Recurring · Monthly/);
-  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
-  assert.deepEqual(stored.transactions,before,'Schedule changes never insert fictional bank activity');
+  assert.equal(await editor.locator('[name=amount]').inputValue(),'23.45');
+  await editor.locator('[data-recurring-cancel]').click();
+  assert.equal(await selection().inputValue(),'choose','Cancel restores previous native dropdown value');
+  assert.equal((await state()).predictions.patternRules[key],undefined,'Cancelling schedule cannot save a prediction');
+  await selection().selectOption('schedule');
+  editor=row.locator('[data-recurring-form]');
+  await editor.locator('[data-recurring-save]').click();
+  assert.equal(await selection().inputValue(),'schedule');
+  assert.match(await selectedLabel(),/Recurring · Monthly/);
+  const stored=await state();
+  assert.deepEqual(stored.transactions,before,'Schedule changes never modify recorded bank activity');
   assert.ok(Object.values(stored.predictions.patternRules).some(r=>r.mode==='schedule'&&r.frequency==='monthly'&&r.day===14));
   const predicted=await page.evaluate(()=>{
    const M=window.HouseholdLedgerData,F=window.HouseholdForecast,L=window.HouseholdForecastLedger;
    const s=M.migrate(JSON.parse(localStorage.getItem('household-ledger-v1')));
-   return L.build(s,M.records(s),'2026-10-17',90,F,M).events
-    .filter(t=>t.merchant==='Fictional Single Charge').map(t=>({date:t.date,type:t.type}));
+   return L.build(s,M.records(s),'2026-10-17',90,F,M).events.filter(t=>t.merchant==='Fictional Single Charge');
   });
   assert.deepEqual(predicted.filter(t=>t.type==='expense').map(t=>t.date).slice(0,3),
-   ['2026-11-14','2026-12-14','2027-01-14'],'Recurring Activity rule drives 90-day Budget events');
-  await row.locator('[data-recurring]').click();
+   ['2026-11-14','2026-12-14','2027-01-14'],'Monthly Activity schedule drives the shared 90-day forecast');
+  assert.equal(await selection().locator('option[value=edit-schedule]').count(),1,
+   'An existing recurring schedule offers a direct Edit schedule choice');
+  await selection().selectOption('edit-schedule');
   editor=row.locator('[data-recurring-form]');
-  assert.equal(await editor.locator('[name=decision]').inputValue(),'schedule');
-  await editor.locator('[name=decision]').selectOption('auto');
-  assert.equal(await row.locator('[data-recurring-form]').count(),0,'Automatic selection saves and closes immediately');
-  assert.match(await row.locator('[data-recurring]').innerText(),/Set recurring/);
-  const autoState=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
-  assert.equal(autoState.predictions.patternRules[key],undefined,'Automatic selection removes manual schedule without Save');
-  await row.locator('[data-recurring]').click();
-  editor=row.locator('[data-recurring-form]');
-  assert.equal(await editor.locator('[name=decision]').inputValue(),'choose');
-  await editor.locator('[name=decision]').selectOption('none');
-  assert.equal(await row.locator('[data-recurring-form]').count(),0,'Not recurring saves and closes immediately');
-  assert.match(await row.locator('[data-recurring]').innerText(),/Not recurring/);
-  const noPredictions=await page.evaluate(()=>{
+  await editor.locator('[name=frequency]').selectOption('weekly');
+  await editor.locator('[data-recurring-save]').click();
+  assert.match(await selectedLabel(),/Recurring · Weekly/);
+  await page.reload({waitUntil:'load'});
+  await page.locator(nav).click();
+  assert.match(await page.locator('select[data-recurring=test-charge-recurring] option:checked').innerText(),/Weekly/,
+   'Schedule persists across reload');
+  await selection().selectOption('none');
+  assert.equal(await row.locator('[data-recurring-form]').count(),0,'Existing scheduled transaction can be disabled with one choice');
+  assert.equal(await selection().inputValue(),'none');
+  const count=await page.evaluate(()=>{
    const M=window.HouseholdLedgerData,F=window.HouseholdForecast,L=window.HouseholdForecastLedger;
    const s=M.migrate(JSON.parse(localStorage.getItem('household-ledger-v1')));
    return L.build(s,M.records(s),'2026-10-17',90,F,M).events.filter(t=>t.merchant==='Fictional Single Charge').length;
   });
-  assert.equal(noPredictions,0,'Explicit No stops forecasts');
-  await row.locator('[data-recurring]').click();
-  editor=row.locator('[data-recurring-form]');
-  await editor.locator('[name=decision]').selectOption('schedule');
-  await editor.locator('[name=frequency]').selectOption('weekly');
-  await editor.locator('button[type=submit]').click();
-  assert.match(await row.locator('[data-recurring]').innerText(),/Weekly/);
-  await page.reload({waitUntil:'load'});await page.locator(nav).click();
-  assert.match(await page.locator('[data-recurring=test-charge-recurring]').innerText(),/Weekly/,'Rule persists after reload');
+  assert.equal(count,0,'One-click Not recurring suppresses forecast');
   const transfer=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("Transfer")')}).first();
-  assert.ok(await transfer.count(),'Demo includes a transfer not automatically detected');
-  assert.equal(await transfer.locator('[data-recurring]').count(),1,
-   'Every transfer has a recurring control instead of an inert dash');
-  assert.match(await transfer.locator('[data-recurring]').innerText(),/Set recurring/,
-   'Undetected transfer prominently allows manual schedule');
-  const transferMerchant=(await transfer.locator('td:nth-child(2)').innerText()).split('\\n')[0].trim();
-  const transferId=await transfer.locator('[data-recurring]').getAttribute('data-recurring');
-  await transfer.locator('[data-recurring]').click();
+  assert.ok(await transfer.count(),'Demo includes a transfer');
+  const transferSelection=()=>transfer.locator('select[data-recurring]');
+  const transferId=await transferSelection().getAttribute('data-recurring');
+  assert.equal(await transferSelection().inputValue(),'choose','Undetected transfer has direct native dropdown');
+  await transferSelection().selectOption('schedule');
   let transferForm=transfer.locator('[data-recurring-form]');
-  assert.equal(await transferForm.locator('[name=decision]').inputValue(),'choose');
-  assert.equal(await transferForm.locator('[name=cashDirection]').isVisible(),false,'Transfer direction is only requested when Recurring is selected');
-  await transferForm.locator('[name=decision]').selectOption('schedule');
-  assert.equal(await transferForm.locator('[name=cashDirection]').isVisible(),true);
+  assert.equal(await transferForm.locator('[name=decision]').count(),0,'Transfer schedule also has no secondary status dropdown');
   assert.equal(await transferForm.locator('[name=cashDirection]').inputValue(),'',
-   'Do not assume unknown cash direction');
-  assert.equal(await transferForm.locator('[name=frequency]').inputValue(),'monthly');
-  await transferForm.locator('button[type=submit]').click();
-  assert.equal(await transferForm.locator('[name=cashDirection]').inputValue(),'',
-   'Missing transfer direction prevents saving');
+   'Unknown transfer direction is never assumed');
+  await transferForm.locator('[data-recurring-save]').click();
+  assert.equal(await transferForm.count(),1,'Missing transfer direction prevents schedule save');
   await transferForm.locator('[name=cashDirection]').selectOption('out');
-  await transferForm.locator('button[type=submit]').click();
-  assert.match(await transfer.locator('[data-recurring]').innerText(),/Recurring · Monthly/);
-  const transferState=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  await transferForm.locator('[data-recurring-save]').click();
+  assert.match(await transferSelection().locator('option:checked').innerText(),/Recurring · Monthly/);
+  const transferState=await state();
   const originalTransfer=transferState.transactions.find(t=>String(t.id)===String(transferId));
-  assert.equal(originalTransfer.cashDirection,undefined,'Bank transfer direction not inserted into source records');
+  assert.equal(originalTransfer.cashDirection,undefined,'Transfer source has not been edited');
   const transferKey=F.patternKey('transfer','Income',originalTransfer.accountId||originalTransfer.account||'Unknown',originalTransfer.merchant);
   assert.equal(transferState.predictions.patternRules[transferKey].cashDirection,'out');
-  const transferForecast=await page.evaluate(()=>{
+  const transferForecast=async()=>page.evaluate(()=>{
    const M=window.HouseholdLedgerData,F=window.HouseholdForecast,L=window.HouseholdForecastLedger;
    const s=M.migrate(JSON.parse(localStorage.getItem('household-ledger-v1')));
    return L.build(s,M.records(s),'2026-10-17',90,F,M).events.filter(t=>t.type==='transfer');
   });
-  assert.ok(transferForecast.some(t=>t.cashDirection==='out'&&t.merchant===originalTransfer.merchant),
-   'Recurring transfer is projected as a checking outflow, not spending');
-  await transfer.locator('[data-recurring]').click();
+  assert.ok((await transferForecast()).some(t=>t.cashDirection==='out'&&t.merchant===originalTransfer.merchant),
+   'Outgoing transfer forecast is supported');
+  await transferSelection().selectOption('edit-schedule');
   transferForm=transfer.locator('[data-recurring-form]');
   await transferForm.locator('[name=cashDirection]').selectOption('in');
-  await transferForm.locator('button[type=submit]').click();
-  const incoming=await page.evaluate(()=>{
-   const M=window.HouseholdLedgerData,F=window.HouseholdForecast,L=window.HouseholdForecastLedger;
-   const s=M.migrate(JSON.parse(localStorage.getItem('household-ledger-v1')));
-   return L.build(s,M.records(s),'2026-10-17',90,F,M).events
-    .filter(t=>t.type==='transfer');
-  });
+  await transferForm.locator('[data-recurring-save]').click();
+  const incoming=await transferForecast();
   assert.ok(incoming.some(t=>t.cashDirection==='in'&&t.merchant===originalTransfer.merchant),
-   'User-directed incoming transfer is supported');
-  assert.equal(incoming.filter(t=>t.merchant===originalTransfer.merchant&&t.cashDirection==='out').length,0,
-   'Changing direction never double-counts the same transfer');
-  await transfer.locator('[data-recurring]').click();
-  transferForm=transfer.locator('[data-recurring-form]');
-  await transferForm.locator('[name=decision]').selectOption('none');
-  assert.equal(await transfer.locator('[data-recurring-form]').count(),0,'Transfer nonrecurring decision commits on change');
-  assert.match(await transfer.locator('[data-recurring]').innerText(),/Not recurring/);
-
+   'Direction can be changed in the same schedule editor');
+  assert.equal(incoming.filter(t=>t.cashDirection==='out'&&t.merchant===originalTransfer.merchant).length,0,
+   'Changing direction never double-counts the transfer');
+  await transferSelection().selectOption('none');
+  assert.equal(await transferSelection().inputValue(),'none');
+  assert.equal(await transfer.locator('[data-recurring-form]').count(),0,'Transfer can be disabled without Save');
+  assert.equal((await state()).predictions.patternRules[transferKey].mode,'none');
   if(mobile)assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),
-   'Inline recurrence controls do not overflow the phone viewport');
+   'Native recurrence dropdowns and expanded schedule fit iPhone viewport');
   assert.deepEqual(errors,[]);
  }finally{await page.close()}
 }

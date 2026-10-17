@@ -1147,3 +1147,8 @@ html { scroll-behavior:auto; }
 
 /* Non-recurring selections apply on change; only manual schedules expose Save. */
 .recurring-inline-form [data-recurring-save][hidden]{display:none!important}
+
+/* Activity recurrence is the same one-tap native select as Category. */
+select.recurring-value{appearance:none;-webkit-appearance:none;cursor:pointer;white-space:nowrap;text-align:left;min-width:0;max-width:100%;font-family:inherit;font-weight:650;font-size:13px}
+select.recurring-value:hover{border-bottom-style:solid}
+@media(max-width:700px){select.recurring-value{font-size:14px;max-width:100%;text-align:right}}
