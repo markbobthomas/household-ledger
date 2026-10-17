@@ -15,6 +15,9 @@ function migrate(input){
  const predictions=old.predictions&&typeof old.predictions==='object'?copy(old.predictions):{};
  predictions.monthlyBudgets=predictions.monthlyBudgets&&typeof predictions.monthlyBudgets==='object'?predictions.monthlyBudgets:copy(old.budgets||{});
  predictions.categoryForecasts=predictions.categoryForecasts&&typeof predictions.categoryForecasts==='object'?predictions.categoryForecasts:{};
+ // Kept for migration only: former undated aggregate overrides never alter dated transaction predictions.
+ predictions.expectedTransactionOverrides=predictions.expectedTransactionOverrides&&typeof predictions.expectedTransactionOverrides==='object'?predictions.expectedTransactionOverrides:{};
+ predictions.manualExpectedTransactions=Array.isArray(predictions.manualExpectedTransactions)?predictions.manualExpectedTransactions:[];
  predictions.cashFlowStreams=predictions.cashFlowStreams&&typeof predictions.cashFlowStreams==='object'?predictions.cashFlowStreams:{};
  predictions.cashFlowEvents=Array.isArray(predictions.cashFlowEvents)?predictions.cashFlowEvents:[];
  predictions.dailyVariable=predictions.dailyVariable===null||predictions.dailyVariable===undefined?null:Number(predictions.dailyVariable);
@@ -54,6 +57,40 @@ function setCategoryForecast(state,month,category,additional){
  if(!Number.isFinite(Number(additional))||Number(additional)<0)throw Error('Invalid additional forecast');
  state.predictions.categoryForecasts[key]={additional:round(additional)};
 }
+
+function updateExpectedTransaction(state,id,adjustment){
+ if(typeof id!=='string'||!id.startsWith('hist|')||id.length>500)throw Error('Invalid prediction ID');
+ if(adjustment===null){delete state.predictions.expectedTransactionOverrides[id];return}
+ if(!adjustment||!validDate(adjustment.date)||!Number.isFinite(Number(adjustment.amount))||Number(adjustment.amount)<0||typeof adjustment.enabled!=='boolean')
+  throw Error('Invalid predicted transaction');
+ state.predictions.expectedTransactionOverrides[id]={date:String(adjustment.date),amount:round(adjustment.amount),enabled:adjustment.enabled};
+}
+function saveManualExpected(state,item){
+ if(!item||!categorySet.has(item.category)||!validDate(item.date)||!String(item.merchant||'').trim()||!Number.isFinite(Number(item.amount))||Number(item.amount)<0)
+  throw Error('Invalid manual expected payment');
+ const id=item.id&&String(item.id).startsWith('manual|')?String(item.id):'manual|'+Date.now().toString(36)+Math.random().toString(36).slice(2);
+ const next={id,category:item.category,merchant:String(item.merchant).trim().slice(0,130),date:item.date,amount:round(item.amount),enabled:item.enabled!==false,source:'manual'};
+ const items=state.predictions.manualExpectedTransactions;
+ const i=items.findIndex(x=>x.id===id);
+ if(i<0)items.push(next);else items[i]=next;
+ return id;
+}
+function removeManualExpected(state,id){
+ state.predictions.manualExpectedTransactions=state.predictions.manualExpectedTransactions.filter(x=>x.id!==id);
+}
+function expectedForCategory(state,detected,month,category,today){
+ const limit=month+'-01',cutoff=month+'-31';
+ const overrides=state.predictions.expectedTransactionOverrides||{};
+ const rows=[...(detected||[]).map(x=>{
+  const o=overrides[x.id];
+  return {...x,date:o?.date||x.date,amount:o?.amount??x.amount,enabled:o?.enabled!==false,adjusted:Boolean(o)};
+ }),...(state.predictions.manualExpectedTransactions||[]).filter(x=>x.category===category&&x.date>=limit&&x.date<=cutoff)];
+ // A disabled item remains visible for review, but never inflates the forecast.
+ // An edited historical prediction moved to another month stays attached to
+ // its original month; the user can reset it or make a new forecast event.
+ return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
+}
+
 function setStreamOverride(state,key,override){
  if(typeof key!=='string'||!key||key.length>256)throw Error('Invalid forecast stream');
  if(override===null){delete state.predictions.cashFlowStreams[key];return}
@@ -105,7 +142,7 @@ function applyPlaidSync(state,change){
  if(typeof change.nextCursor==='string')state.sync.plaidCursor=change.nextCursor;
  return state;
 }
-const api={VERSION,migrate,records,categoryFor,setCategory,setMonthlyBudget,setCategoryForecast,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
+const api={VERSION,migrate,records,categoryFor,setCategory,setMonthlyBudget,setCategoryForecast,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
