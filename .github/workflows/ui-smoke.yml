@@ -30,3 +30,4 @@ jobs:
           node tests/mobile-safari-smoke.cjs
           node tests/recurring-smoke.cjs
           node tests/current-month-smoke.cjs
+          node tests/ledger-readonly-smoke.cjs
