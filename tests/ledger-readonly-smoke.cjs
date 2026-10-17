@@ -85,12 +85,13 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   const category=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
   await category.locator('summary').click();
   await category.locator('[data-budget]').click();
-  assert.equal(await page.locator('#entry [name="additional"]').count(),1,'Additional category spending can be predicted');
-  await page.locator('#entry [name="additional"]').fill('999');
+  assert.equal(await page.locator('#entry [name="budget"]').count(),1,'Monthly budget can be edited separately');
+  await page.locator('#entry [name="budget"]').fill('999');
   await page.locator('#entry button[type="submit"]').click();
   const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(stored.transactions,before.transactions,'Adjusting a category forecast never writes to ledger');
-  assert.equal(stored.predictions.categoryForecasts['2026-10|Groceries'].additional,999);
+  assert.equal(stored.predictions.monthlyBudgets.Groceries,999);
+  assert.equal(stored.predictions.categoryForecasts['2026-10|Groceries'],undefined,'No aggregate spending projection written');
   await page.locator('.forecast-editor > summary').click();
   const daily=page.locator('[data-daily-prediction]').first();
   await daily.click();
