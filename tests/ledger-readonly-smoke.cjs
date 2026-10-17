@@ -66,7 +66,7 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   assert.equal(await page.locator('#addBtn,#importBtn,#settings-import,#restore,#load-demo').count(),0,'Cannot manually add or import ledger rows');
   await page.locator('aside [data-page="transactions"]').click();
-  const first=page.locator('.ledger-table tbody tr').first();
+  const first=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first();
   const merchant=await first.locator('td').nth(1).innerText();
   const recordId=await first.locator('[data-category]').getAttribute('data-category');
   const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
@@ -80,7 +80,7 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   assert.equal(after.categoryOverrides[recordId],'Shopping','Category correction stored separately from source');
   await page.reload({waitUntil:'load'});
   await page.locator('aside [data-page="transactions"]').click();
-  assert.equal(await page.locator('.ledger-table tbody tr').first().locator('td').nth(2).innerText(),'Shopping','Categorization survives reload');
+  assert.equal(await page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first().locator('td').nth(2).innerText(),'Shopping','Categorization survives reload');
   await page.locator('aside [data-page="budgets"]').click();
   const category=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
   await category.locator(':scope > details > summary').click();
