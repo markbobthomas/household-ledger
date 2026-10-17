@@ -65,6 +65,11 @@ const ambiguous=M.migrate({accounts:[{id:'c',type:'checking',name:'Checking'},
  {id:'in2',type:'income',date:'2026-10-10',accountId:'cc2',merchant:'Payment Thank You',amount:100}]});
 assert.equal(M.records(ambiguous).filter(t=>t.pairedTransactionId).length,0,'Ambiguous identical card settlements remain unmatched');
 assert.equal(M.accountingView(ambiguous).summary.spending,0,'Ambiguous transfers do not become spending');
+const incoming=M.migrate({accounts:[{id:'check',type:'checking',name:'Checking'}],
+ transactions:[{id:'client-fee',date:'2026-10-10',accountId:'check',merchant:'Payment received',amount:125,type:'income'}]});
+assert.equal(M.records(incoming)[0].type,'income','An ordinary received payment to checking is not card settlement');
+assert.equal(M.accountingView(incoming).summary.income,125);
+
 const unknown=M.migrate({transactions:[{id:'a',type:'income',date:'2026-10-01',amount:150,account:'Unverified Account',merchant:'Deposit'}]});
 assert.equal(M.accountsFor(unknown)[0].type,'unknown','Never invent verified account types');
 async function browserCase(browser,opts,mobile){

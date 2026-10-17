@@ -50,7 +50,7 @@ function accountsFor(state){
  }
  return [...byId.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
-const cardPayment=/\b(?:credit card payment|card payment|payment to (?:card|credit)|autopay (?:card|credit)|card autopay|payment thank you|thank you(?: for)? (?:your )?payment|credit card autopay|cardmember payment|cc payment|cc pymt|payment received(?: - card)?|payment received on card|payment from checking)\b/i;
+const cardPayment=/\b(?:credit card payment|card payment|payment to (?:card|credit)|autopay (?:card|credit)|card autopay|payment thank you|thank you(?: for)? (?:your )?payment|credit card autopay|cardmember payment|cc payment|cc pymt|payment received on card)\b/i;
 const cardIssuer=/\b(?:amex|american express|discover card|capital one card|chase (?:visa|freedom|sapphire)|citi(?:bank)? card|bank of america (?:visa|card)|barclays card|synchrony card)\b/i;
 const transferText=/\b(?:transfer (?:to|from)|internal transfer|account transfer|xfer (?:to|from)|transfer between|savings transfer|moving money)\b/i;
 const refundText=/\b(?:refund|reversal|chargeback|return credit|purchase return|merchant credit|returned purchase|credit adjustment)\b/i;

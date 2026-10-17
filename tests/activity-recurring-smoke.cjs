@@ -115,7 +115,7 @@ async function browserCheck(browser,settings={},mobile=false){
   assert.match(await row.locator('[data-recurring]').innerText(),/Weekly/);
   await page.reload({waitUntil:'load'});await page.locator(nav).click();
   assert.match(await page.locator('[data-recurring=test-charge-recurring]').innerText(),/Weekly/,'Rule persists after reload');
-  const transfer=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("transfer")')}).first();
+  const transfer=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("Transfer")')}).first();
   assert.ok(await transfer.count(),'Demo includes a transfer not automatically detected');
   assert.equal(await transfer.locator('[data-recurring]').count(),1,
    'Every transfer has a recurring control instead of an inert dash');
