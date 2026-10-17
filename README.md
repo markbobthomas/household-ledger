@@ -146,3 +146,24 @@ The **Insights → Accuracy** tab evaluates the original fictional household **a
 Numbers are mean absolute checking-balance errors; the irregular-spending scenario is an analytical balance estimate, not a predicted payment. The original and second households are synthetic and are **not sufficient evidence of real household reliability**. Annual renewals, new and disrupted merchants, and incomplete bank feeds still require stress testing. Tests are wired to continuous integration with a fixed baseline and 15 browser smoke tests.
 
 **Next:** Phase 4.2: stress-test the detector on disrupted history, shifted due dates, refunds, interrupted paychecks, missing statements and more genuinely varied households, then decide whether to evaluate historical statements in a separate consented read-only test environment. Plaid remains deferred.
+
+
+## Phase 4.2 — Adversarial reliability lab (October 17, 2026)
+
+The **Insights → Accuracy** tab now includes a stress-test section with eight deliberately difficult synthetic events. Each scenario runs on two fictional households at three historical prediction dates (48 disruption trials); none of these records, classifications, or bank events are ever imported into the live ledger.
+
+The stress tests independently examine one-quarter of history missing, an entire missed bank-sync month, delayed posting dates, late future payments, abruptly interrupted payroll, renamed merchant descriptions, unanticipated refunds, and the two sides of a Checking-to-Savings transfer. The predictor receives only historical transactions available by each simulated date. It is scored against actual future transactions held separate from its training input.
+
+**Safety improvements:** A single missing billing month can retain a provisional monthly payment or twice-monthly income prediction, but confidence is downgraded and the reason is surfaced in Reviews. Substantial date drift is handled cautiously; repeated refund credits are not interpreted as paychecks. A two-sided Savings transfer must not double-count Checking cash, and long-canceled repeating patterns stay excluded.
+
+**Important measured weaknesses on disrupted fictional cases:**
+
+- Dropping about 25% of historical rows reduces repeating-event recall to **80.9%**, with ~$6,982 additional 90-day balance error.
+- Hiding the entire latest month reduces recall to **51.0%**, with ~$4,312 additional 90-day balance error.
+- Delaying historical posting dates reduces recall to **62.1%**. Merchant renaming and posting delays also lower event matching.
+- Unexpectedly stopped income can create **~$25,492 more 90-day balance error** even when repeating-transaction recall stays high. Expected paychecks are **not guaranteed deposits**.
+- A nominally “High” confidence label matched **~86%** of the time in the selected synthetic stress audit. Confidence labels are heuristics, **not calibrated probabilities**.
+
+A dedicated stress baseline is stored at \`tests/phase42-stress-baseline.json\` and evaluated by \`tests/phase42-smoke.cjs\`, including PC and iPhone browser checks. The feature does not connect banks, write to bank ledger transactions, or make real-world accuracy claims.
+
+**Recommended next:** Phase 4.3 — bank-feed health indicators, clearly pending/unconfirmed future income, stronger multi-account/reversal cases and (only with explicit consent) a completely separate read-only historical statement evaluation sandbox. Plaid remains deferred.
