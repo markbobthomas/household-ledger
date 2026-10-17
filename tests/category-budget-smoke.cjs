@@ -26,7 +26,7 @@ try{
  assert.ok(await forecast.evaluate(e=>parseFloat(e.style.width))>0,'Projected spending visible');
  assert.notEqual(await actual.evaluate(e=>getComputedStyle(e).backgroundColor),await forecast.evaluate(e=>getComputedStyle(e).backgroundColor),'Two bar colors');
  assert.equal(await budget.locator('button[data-budget]').isVisible(),false,'Edit budget hidden until expanded');
- await budget.locator('summary').click();
+ await budget.locator(':scope > details > summary').click();
  assert.ok(await budget.locator('details').first().evaluate(e=>e.open),'Budget expands');
  assert.ok(await budget.locator('button[data-category]').count()>0,'Budget contains transactions');
  assert.equal(await budget.locator('button[data-budget]').isVisible(),true,'Forecast editor available inside expanded section');
@@ -69,7 +69,7 @@ try{
  await page.locator('#period').selectOption('2024-02');
  assert.match(await page.locator('#budget-range').innerText(),/Feb 1 – Feb 29, 2024/);
  const leap=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
- await leap.locator('summary').click();
+ await leap.locator(':scope > details > summary').click();
  assert.match(await leap.innerText(),/Leap Day Grocery/);
  assert.deepEqual(errors,[],'No client-side errors');
  console.log('PASS: four-nav layout, budget period boundaries, expandable forecasts, category/merchant tabs, activity and settings');
