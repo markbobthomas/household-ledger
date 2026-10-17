@@ -46,10 +46,10 @@ assert.equal(unconfirmed.monthlyTotal,0,'Unconfirmed charge should not inflate m
   const allNetflix=page.locator('.recurring-panel').first().locator('details.recurring-detail').filter({has:page.locator('summary strong:text-is("Netflix")')});
   await allNetflix.locator('summary').click();
   assert.ok(await allNetflix.locator('[data-category]').count()>=2,'All dates reveals the full subscription history');
-  await allNetflix.locator('[data-category]').first().click();
-  assert.equal(await page.locator('#entry').count(),1,'Can categorize a recurring source transaction');
-  assert.equal(await page.locator('#entry [name="amount"]').count(),0,'No editing the recurring charge');
-  await page.locator('#cancel').click();
+  assert.equal(await allNetflix.locator('select[data-category]').first().locator('option').count(),12,
+   'Recurring source transactions have an inline category dropdown');
+  assert.equal(await page.locator('#entry').count(),0,'No separate category editor');
+  assert.equal(await allNetflix.locator('td:nth-child(5) input').count(),0,'Recurring charge amount is read-only');
   await page.locator('#period').selectOption('2026-09');
   const septemberNetflix=page.locator('.recurring-panel').first().locator('details.recurring-detail').filter({has:page.locator('summary strong:text-is("Netflix")')});
   await septemberNetflix.locator('summary').click();
