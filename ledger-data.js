@@ -12,6 +12,9 @@ const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 function migrate(input){
  const old=input&&typeof input==='object'?input:{};
  const categoryOverrides=old.categoryOverrides&&typeof old.categoryOverrides==='object'&&!Array.isArray(old.categoryOverrides)?copy(old.categoryOverrides):{};
+ const reviews=old.reviews&&typeof old.reviews==='object'&&!Array.isArray(old.reviews)?copy(old.reviews):{categoryConfirmed:{},predictionConfirmed:{}};
+ reviews.categoryConfirmed=reviews.categoryConfirmed&&typeof reviews.categoryConfirmed==='object'?reviews.categoryConfirmed:{};
+ reviews.predictionConfirmed=reviews.predictionConfirmed&&typeof reviews.predictionConfirmed==='object'?reviews.predictionConfirmed:{};
  const predictions=old.predictions&&typeof old.predictions==='object'?copy(old.predictions):{};
  predictions.monthlyBudgets=predictions.monthlyBudgets&&typeof predictions.monthlyBudgets==='object'?predictions.monthlyBudgets:copy(old.budgets||{});
  predictions.categoryForecasts=predictions.categoryForecasts&&typeof predictions.categoryForecasts==='object'?predictions.categoryForecasts:{};
@@ -29,7 +32,7 @@ function migrate(input){
   }
   return record;
  });
- return {version:VERSION,transactions,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,
+ return {version:VERSION,transactions,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,
     sync:old.sync&&typeof old.sync==='object'?copy(old.sync):{plaidCursor:null}};
 }
 function records(state){
