@@ -227,6 +227,40 @@ if(page==='settings'){
 }
 el('view').innerHTML=html;
 document.querySelectorAll('[data-insight]').forEach(b=>b.onclick=()=>{insightMode=b.dataset.insight;render()});
+
+document.querySelectorAll('[data-review-filter]').forEach(b=>b.onclick=()=>{reviewFilter=b.dataset.reviewFilter;render()});
+document.querySelectorAll('[data-review-category]').forEach(form=>form.onsubmit=e=>{
+ e.preventDefault();
+ const task=taskById(form.dataset.reviewCategory);if(!task)return;
+ try{
+  const choice=String(new FormData(form).get('category'));
+  Model.setCategory(data,task.targetId,choice);
+  window.HouseholdReviews.confirm(data,task);
+  finishReview();
+ }catch(err){alert(err.message)}
+});
+document.querySelectorAll('[data-review-prediction]').forEach(form=>form.onsubmit=e=>{
+ e.preventDefault();const task=taskById(form.dataset.reviewPrediction);if(!task)return;
+ try{
+  const fields=new FormData(form),date=String(fields.get('date'));
+  if(date<=today()||date.slice(0,7)!==today().slice(0,7))throw Error('Choose a future date this month');
+  Model.updateExpectedTransaction(data,task.targetId,{date,amount:fields.get('amount'),enabled:true});
+  window.HouseholdReviews.confirm(data,task);
+  finishReview();
+ }catch(err){alert(err.message)}
+});
+document.querySelectorAll('[data-review-confirm]').forEach(button=>button.onclick=()=>{
+ const task=taskById(button.dataset.reviewConfirm);if(!task)return;
+ window.HouseholdReviews.confirm(data,task);finishReview();
+});
+document.querySelectorAll('[data-review-exclude]').forEach(button=>button.onclick=()=>{
+ const task=taskById(button.dataset.reviewExclude);if(!task||task.kind!=='prediction')return;
+ try{
+  Model.updateExpectedTransaction(data,task.targetId,{date:task.date,amount:task.amount,enabled:false});
+  window.HouseholdReviews.confirm(data,task);finishReview();
+ }catch(err){alert(err.message)}
+});
+
 if(page==='insights'&&window.matchMedia('(max-width:700px)').matches){
  const tabs=document.querySelector('.insight-tabs'),active=tabs?.querySelector('.active');
  if(tabs&&active)tabs.scrollLeft+=active.getBoundingClientRect().left-tabs.getBoundingClientRect().left-16;
