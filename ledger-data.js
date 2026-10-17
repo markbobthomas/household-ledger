@@ -17,6 +17,7 @@ function migrate(input){
  predictions.categoryForecasts=predictions.categoryForecasts&&typeof predictions.categoryForecasts==='object'?predictions.categoryForecasts:{};
  predictions.cashFlowStreams=predictions.cashFlowStreams&&typeof predictions.cashFlowStreams==='object'?predictions.cashFlowStreams:{};
  predictions.cashFlowEvents=Array.isArray(predictions.cashFlowEvents)?predictions.cashFlowEvents:[];
+ predictions.dailyVariable=predictions.dailyVariable===null||predictions.dailyVariable===undefined?null:Number(predictions.dailyVariable);
  const transactions=(Array.isArray(old.transactions)?old.transactions:[]).filter(t=>t&&typeof t==='object').map(t=>{
   const record=copy(t);
   // Legacy browser records have no verified bank provenance. Never badge as Plaid.
@@ -59,6 +60,11 @@ function setStreamOverride(state,key,override){
  if(typeof override!=='object'||typeof override.enabled!=='boolean'||!Number.isFinite(Number(override.amount))||Number(override.amount)<0||!Number.isInteger(Number(override.day))||Number(override.day)<1||Number(override.day)>31)throw Error('Invalid stream prediction');
  state.predictions.cashFlowStreams[key]={enabled:override.enabled,amount:round(override.amount),day:Number(override.day)};
 }
+function setDailyVariable(state,value){
+ if(value===null){state.predictions.dailyVariable=null;return}
+ if(!Number.isFinite(Number(value))||Number(value)<0)throw Error('Invalid daily spending prediction');
+ state.predictions.dailyVariable=round(value);
+}
 function saveEvent(state,event){
  if(!event||!validDate(event.date)||!['income','expense'].includes(event.type)||!Number.isFinite(Number(event.amount))||Number(event.amount)<=0||!String(event.description||'').trim())throw Error('Invalid projected event');
  const id=typeof event.id==='string'&&event.id?event.id:'prediction-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
@@ -99,7 +105,7 @@ function applyPlaidSync(state,change){
  if(typeof change.nextCursor==='string')state.sync.plaidCursor=change.nextCursor;
  return state;
 }
-const api={VERSION,migrate,records,categoryFor,setCategory,setMonthlyBudget,setCategoryForecast,setStreamOverride,saveEvent,removeEvent,applyPlaidSync};
+const api={VERSION,migrate,records,categoryFor,setCategory,setMonthlyBudget,setCategoryForecast,setStreamOverride,setDailyVariable,saveEvent,removeEvent,applyPlaidSync};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
