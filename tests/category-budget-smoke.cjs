@@ -43,7 +43,7 @@ try{
  assert.equal(await cap.innerText(),'$500.00','Escape cancels an inline edit');
  await budget.locator(':scope > details > summary').click();
  assert.ok(await budget.locator('details').first().evaluate(e=>e.open),'Budget expands');
- assert.ok(await budget.locator('button[data-category]').count()>0,'Budget contains transactions');
+ assert.ok(await budget.locator('select[data-category]').count()>0,'Budget contains transactions');
  assert.equal(await budget.locator('button[data-budget]').count(),0,'Legacy budget dialog is removed');
  assert.match(await budget.innerText(),/Expected transactions/i);
  assert.ok(await budget.locator('.expected-tx').count()>=3,'Category shows dated expected transactions');

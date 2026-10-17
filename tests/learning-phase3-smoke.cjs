@@ -102,11 +102,10 @@ assert.equal(bills.predictions.patternRules[k],undefined,'Can restore automatic 
   // Quick edits affect one transaction; reusable merchant learning stays explicitly in Reviews.
   await page.locator('aside [data-page=transactions]').click();
   const transaction=page.locator('.ledger-table tbody tr').filter({has:page.locator('td:text-is("expense")')}).first();
-  await transaction.locator('[data-category]').click();
-  assert.equal(await transaction.locator('select.inline-category-select').count(),1,'Activity category changes inline');
+  assert.equal(await transaction.locator('select[data-category]').count(),1,'Activity category uses native inline dropdown');
+  assert.equal(await transaction.locator('select[data-category] option').count(),12);
   assert.equal(await page.locator('#entry').count(),0,'No top-of-page category editor');
   assert.equal(await transaction.locator('input[name=remember]').count(),0,'Quick edit never automatically learns a merchant rule');
-  await transaction.locator('.inline-category-select').press('Escape');
   const finalState=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(finalState.transactions,originalTransactions,'Learning is separate from posted bank records');
   await page.setViewportSize({width:390,height:844});

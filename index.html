@@ -35,8 +35,10 @@ function cleanMerchant(s){let u=s.toUpperCase();if(u.includes('COSTCO'))return /
 }
 function gridStats(){const a=expense(),income=sum(rows().filter(x=>x.type==='income'));return'<div class="stats">'+[['Spent',money(sum(a))],['Income',money(income)],['Net cash flow',money(income-sum(a))]].map(x=>'<div class="stat"><div class="sub">'+x[0]+'</div><div class="num">'+x[1]+'</div></div>').join('')+'</div>'}function list(a,max=999,kind=null,source=expense()){const top=Math.max(1,...a.map(x=>x.amount));return a.slice(0,max).map(x=>{const matching=kind?source.filter(t=>kind==='merchant'?cleanMerchant(t.merchant)===x.name:t.category===x.name).sort((a,b)=>b.date.localeCompare(a.date)):[];const line='<div style="flex:1;min-width:0"><b>'+esc(x.name)+'</b><div class="bar"><i style="width:'+(x.amount/top*100).toFixed(1)+'%"></i></div></div><div style="text-align:right"><strong>'+money(x.amount)+'</strong><div class="sub">'+x.count+' purchases</div></div>';if(!kind)return'<div class="row">'+line+'</div>';return'<details class="drill-detail" data-report-group="'+esc(kind+'|'+x.name)+'"><summary class="row drill-summary">'+line+'<span class="chevron" aria-hidden="true">⌄</span></summary><div class="drill-expanded"><div class="sub">'+matching.length+' transactions • '+money(x.amount)+' total</div>'+table(matching)+'</div></details>'}).join('')||'<div class="empty">No data yet. Import a bank CSV or add a transaction.</div>'}function table(a){return'<div class="ledger-table-wrap"><table class="ledger-table"><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th>Type</th><th>Amount</th></tr></thead><tbody>'+a.map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(t.merchant)+'<div class="transaction-source">'+esc(t.source?.provider==='plaid'?'Bank synced':t.source?.provider==='demo'?'Demo record':'Unverified legacy record')+'</div></td><td>'+categoryControl(t.id,t.category,t.merchant)+(t.method==='learned'?'<div class="transaction-source">Learned from confirmed merchant rule</div>':t.suggested&&t.category!==t.suggested?'<div class="transaction-source">Suggested: '+esc(t.suggested)+'</div>':'')+'</td><td>'+esc(t.type)+'</td><td><strong>'+money(t.amount)+'</strong></td></tr>').join('')+'</tbody></table></div>'}
 function categoryControl(id,current,merchant){
- return '<button type="button" class="editable-value editable-category" data-category="'+esc(id)+
- '" aria-label="Change category for '+esc(merchant)+'">'+esc(current)+'</button>';
+ const width=Math.min(19,Math.max(8,String(current).length+3));
+ return '<select class="editable-value editable-category inline-category-native" data-category="'+esc(id)+
+ '" style="width:'+width+'ch" aria-label="Change category for '+esc(merchant)+'">'+
+ CATS.map(category=>'<option value="'+esc(category)+'" '+(category===current?'selected':'')+'>'+esc(category)+'</option>').join('')+'</select>';
 }
 function cashDateLabel(iso,year=false){return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',...(year?{year:'numeric'}:{})})}
 function cashChart(series,lowestDate){
@@ -601,48 +603,6 @@ function showEditor(content){
 }
 function bindCancel(){el('cancel').onclick=()=>el('flash').innerHTML=''}
 /* Direct categorization is deliberately single-record. Rule learning stays in Reviews. */
-function beginInlineCategoryEdit(button){
- const id=button.dataset.category;
- const record=data.transactions.find(x=>String(x.id)===String(id));
- if(!record)return;
- const current=Model.categoryFor(data,id);
- const select=document.createElement('select');
- select.className='inline-category-select';
- select.setAttribute('aria-label',button.getAttribute('aria-label')||'Choose transaction category');
- for(const name of CATS){
-  const option=document.createElement('option');option.value=name;option.textContent=name;
-  select.append(option);
- }
- select.value=current;
- for(const name of ['pointerdown','mousedown','click','keydown','keyup'])
-  select.addEventListener(name,e=>e.stopPropagation());
- button.replaceWith(select);
- let finished=false;
- const restore=()=>{
-  if(finished)return false;
-  finished=true;
-  if(select.isConnected)select.replaceWith(button);
-  return true;
- };
- select.addEventListener('change',()=>{
-  if(finished)return;
-  const selected=select.value;
-  restore();
-  if(selected===current){button.focus({preventScroll:true});return}
-  try{
-   Model.setCategory(data,id,selected);save();
-   renderPreservingCategoryContext(id,selected);
-  }catch(err){alert(err.message);button.focus({preventScroll:true})}
- });
- select.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){e.preventDefault();restore();button.focus({preventScroll:true})}
- });
- select.addEventListener('blur',()=>{if(restore())button.focus({preventScroll:true})});
- select.focus({preventScroll:true});
- if(typeof select.showPicker==='function'){
-  try{select.showPicker()}catch(e){/* native focus still permits interaction */}
- }
-}
 function renderPreservingCategoryContext(id,target){
  const y=window.scrollY;
  const budgets=[...document.querySelectorAll('.budget-entry > details[open]')]
@@ -669,13 +629,18 @@ function renderPreservingCategoryContext(id,target){
  updated?.focus({preventScroll:true});
 }
 function bindInlineCategoryEdits(){
- document.querySelectorAll('[data-category]').forEach(button=>{
-  button.addEventListener('click',e=>{
-   e.preventDefault();e.stopPropagation();
-   beginInlineCategoryEdit(button);
+ document.querySelectorAll('[data-category]').forEach(select=>{
+  select.addEventListener('click',e=>e.stopPropagation());
+  select.addEventListener('keydown',e=>e.stopPropagation());
+  select.addEventListener('keyup',e=>e.stopPropagation());
+  select.addEventListener('change',()=>{
+   const id=select.dataset.category,selected=select.value;
+   if(Model.categoryFor(data,id)===selected)return;
+   try{
+    Model.setCategory(data,id,selected);
+    save();renderPreservingCategoryContext(id,selected);
+   }catch(err){alert(err.message);render()}
   });
-  button.addEventListener('keydown',e=>e.stopPropagation());
-  button.addEventListener('keyup',e=>e.stopPropagation());
  });
 }
 /* Direct-edit forecast values only; recorded bank amounts remain immutable. */

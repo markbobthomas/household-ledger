@@ -70,10 +70,9 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   const merchant=await first.locator('td').nth(1).innerText();
   const recordId=await first.locator('[data-category]').getAttribute('data-category');
   const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
-  await first.locator('[data-category]').click();
-  assert.equal(await first.locator('select.inline-category-select').count(),1,'Category name opens a dropdown in its own row');
+  assert.equal(await first.locator('select[data-category]').count(),1,'Category name is a native dropdown in its own row');
   assert.equal(await page.locator('#entry').count(),0,'No separate category editor or bank fact fields');
-  await first.locator('select.inline-category-select').selectOption('Shopping');
+  await first.locator('select[data-category]').selectOption('Shopping');
   const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(after.transactions,before.transactions,'Source ledger must be byte-for-byte unchanged by categorizing');
   assert.equal(after.categoryOverrides[recordId],'Shopping','Category correction stored separately from source');

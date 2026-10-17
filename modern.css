@@ -1007,25 +1007,21 @@ html { scroll-behavior:auto; }
  .inline-money-editor{padding:0 5px}
 }
 
-/* One direct-edit language for category names and amounts. */
-.editable-category{
- display:inline;max-width:100%;height:auto;min-height:0;
- padding:1px 1px 3px;text-align:left;white-space:normal;overflow-wrap:anywhere;
- cursor:pointer;font-size:12px;font-weight:650;
+
+/* Native category selects look like underlined values; one tap opens the menu. */
+.inline-category-native{
+ appearance:none;-webkit-appearance:none;display:inline-block;
+ vertical-align:baseline;min-width:0;max-width:100%;
+ height:auto;min-height:28px;padding:2px 2px 4px;
+ border:0;border-bottom:1px dashed #79899a;border-radius:0;
+ background:transparent;color:var(--ink);font-size:13px;font-weight:650;
+ font-family:inherit;text-align:left;cursor:pointer;line-height:1.3;
 }
-.editable-category:hover{border-bottom-color:#1855cb}
-.inline-category-select{
- display:inline-block;vertical-align:middle;
- max-width:100%;width:min(186px,100%);min-width:122px;
- min-height:35px;padding:5px 8px;font-size:13px;font-weight:600;
- border:1px solid #617084;border-radius:4px;background:#fff;color:var(--ink);
- outline-offset:2px;
-}
-.inline-category-select:focus-visible{outline:2px solid #356fe0}
+.inline-category-native:hover{border-bottom-color:#1855cb;border-bottom-style:solid;color:#1855cb}
+.inline-category-native:focus-visible{outline:2px solid #356fe0;outline-offset:3px}
 .expected-action{font-size:20px;color:var(--muted);font-weight:500;line-height:1}
 .expected-tx[open]>.expected-summary .expected-action{transform:rotate(180deg)}
 @media(max-width:700px){
- .editable-category{font-size:14px;min-height:36px;padding:7px 1px 5px}
- .inline-category-select{font-size:16px;min-height:44px;min-width:0;width:min(176px,100%)}
+ .inline-category-native{font-size:16px;min-height:36px;padding:7px 1px 5px}
  .ledger-table td:nth-child(3){font-size:14px}
 }
