@@ -47,7 +47,8 @@ const {chromium:chromiumBrowser}=require('playwright');
    assert.match(await card.innerText(),/Lowest on [A-Z][a-z]{2} \d{1,2}, 2026/,'Forecast supplies an expected low date');
    const demoLowest=await card.locator('.cash-primary-amount').innerText();
    assert.match(demoLowest,/^\$[\d,]+\.\d{2}$/,'Forecast supplies a dollar amount');
-   assert.equal(await card.locator('input').count(),0,'No manual bank starting balance input');
+   assert.equal(await card.locator('input[name="balance"],input[name="available"],input[name="current"],input[data-bank-balance]').count(),0,
+    'Bank snapshot balances cannot be edited; forecast-only transfer inputs are allowed');
    assert.equal(await card.locator('svg.cash-chart').count(),1,'Forecast chart visible');
    const compactChart=await card.locator('svg.cash-chart').evaluate(el=>({
      height:el.getBoundingClientRect().height,
