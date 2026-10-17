@@ -628,3 +628,51 @@ button,summary { -webkit-tap-highlight-color: transparent; }
   .daily-cash-table td:nth-child(4) { grid-area:1 / 2; text-align:right; }
   .daily-cash-table td:nth-child(4) strong { font-size:15px; font-weight:700; }
 }
+
+/* Reliable visible navigation near top of mobile screen */
+.mobile-top-nav { display: none; }
+@media (max-width:700px) {
+  html { scroll-padding-top: 148px; }
+  .mobile-top-nav {
+    display: grid;
+    position: sticky;
+    top: 74px;
+    z-index: 29;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    padding: 4px 0 10px;
+    margin: 0 0 14px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-top-nav button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px 3px;
+    background: #f0f2f5;
+    border: 1px solid #e1e6ec;
+    border-radius: 7px;
+    color: #34404b;
+    font: 700 clamp(12px,3.5vw,15px)/1.15 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-top-nav button.active {
+    background: #111418;
+    color: #fff;
+    border-color: #111418;
+  }
+  .mobile-top-nav button:focus-visible { outline: 3px solid #356fe0; outline-offset: 2px; }
+  .insight-tabs { top: 136px; }
+}
+@media (max-width:375px) {
+  .page-top h1 { font-size: 23px; }
+  .page-top .header-actions { gap: 5px; }
+  .page-top .header-actions .btn { padding: 9px 8px; }
+  .mobile-top-nav { gap: 4px; }
+}
