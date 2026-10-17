@@ -24,7 +24,10 @@ const assert=require('node:assert/strict');
   assert.equal(await expectedBar.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 20, 147)','Expected budget spending uses hot pink');
   assert.equal(await page.locator('.budget-legend span').last().evaluate(e=>getComputedStyle(e,'::before').backgroundColor),'rgb(255, 20, 147)','Expected-spending legend matches pink bar');
   await page.locator('aside [data-page="insights"]').click();
-  for(const tab of ['categories','merchants','bands','recurring']){
+  assert.deepEqual(await page.locator('[data-insight]').allInnerTexts(),['Merchants','Categories','Purchase sizes','Recurring'],'Merchants appears first');
+  assert.equal(await page.locator('[data-insight="merchants"]').getAttribute('aria-selected'),'true','Merchant totals open by default');
+  assert.ok(await page.locator('#view').getByText('Merchant totals').isVisible(),'Merchants view is displayed by default');
+  for(const tab of ['merchants','categories','bands','recurring']){
     await page.locator('[data-insight="'+tab+'"]').click();
     const pos=await page.evaluate(()=>({tabs:document.querySelector('.insight-tabs').getBoundingClientRect().top,stats:document.querySelector('.stats').getBoundingClientRect().top}));
     assert.ok(pos.tabs<pos.stats,'Tabs should precede the metrics in '+tab+': '+JSON.stringify(pos));
@@ -84,6 +87,7 @@ const assert=require('node:assert/strict');
   assert.ok(settingsSize.scrollWidth<=settingsSize.viewport+1,'No Settings horizontal overflow');
   await page.locator('.mobile-top-nav [data-page="insights"]').click();
   assert.equal(await page.locator('#title').innerText(),'Insights','Top section tabs navigate');
+  assert.equal(await page.locator('[data-insight="merchants"]').getAttribute('aria-selected'),'true','Merchants remains the default on phones');
   assert.equal(await page.locator('[data-insight="recurring"]').innerText(),'Recurring',
     'Short Recurring tab appears on phone');
   await page.locator('.mobile-top-nav [data-page="budgets"]').click();
@@ -110,7 +114,19 @@ const assert=require('node:assert/strict');
   assert.equal(mobile.iconCount,5,'Phone navigation shows five icons');
   assert.ok(mobile.smallestTarget>=44,'Navigation has touch-sized buttons');
   assert.ok(mobile.budgetBarHeight>=16,'Budget bars are prominent on mobile');
-  assert.ok(mobile.chartViewBox.includes('560 260'),'Bank chart uses phone-readable axis labels');
+  assert.ok(mobile.chartViewBox.includes('560 156'),'Bank chart has reduced compact phone dimensions');
+  const chartMobile=await page.locator('svg.cash-chart').evaluate(e=>({
+    height:e.getBoundingClientRect().height,
+    points:e.querySelector('polyline').getAttribute('points').trim().split(/\s+/).length,
+    guides:e.querySelectorAll('line').length,
+    labels:e.querySelectorAll('text').length,
+    name:e.getAttribute('aria-label')
+  }));
+  assert.ok(chartMobile.height<=117,'Mobile 90-day chart is compact: '+chartMobile.height);
+  assert.equal(chartMobile.points,91,'Chart draws exactly 90 days plus opening snapshot');
+  assert.ok(chartMobile.guides<=4,'Chart uses at most three guides and optional zero line');
+  assert.equal(chartMobile.labels,6,'Only three dates and three balance labels');
+  assert.match(chartMobile.name,/over 90 days/,'Chart explicitly describes 90-day window');
   await page.locator('aside [data-page="transactions"]').click();
   assert.equal(await page.locator('.ledger-table tr').first().evaluate(e=>getComputedStyle(e).display),'grid','Transactions become phone-friendly rows');
   await page.locator('aside [data-page="budgets"]').click();
