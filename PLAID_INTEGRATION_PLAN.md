@@ -43,3 +43,21 @@ Use a small protected API (for example, a serverless backend) with:
 ### Future implementation milestone
 
 Build/test the backend against **Plaid Sandbox** first. Then add secure household login/storage and launch the actual bank connection flow. After bank transactions are normalized and reconciled, use Plaid's recurring streams (if enabled) as a stronger signal for estimated upcoming bills. Do not label projections as confirmed without evidence.
+
+## 90-day lowest bank-balance forecast (implemented as a demo)
+
+The Budgets home page now has a **90-day cash-flow forecast**. It is driven by the read-only provider adapter in `bank-feed.js` and the calculation engine in `cashflow.js`. The adapter returns an account snapshot with a current/available balance and account ID. There is **no manual starting-balance entry**.
+
+For now, `bank-feed.js` returns a completely fictional checking account (available balance $5,400.25). The demo forecast always loads its own synthetic transaction series from `demo-data.js`, even when the user has imported real transactions into browser storage. This intentional isolation prevents the false impression that private browser transactions were reconciled to the sample balance.
+
+- The 90-day forecast starts from the sample available balance **as of today** and projects each next day's end-of-day balance.
+- It estimates periodic income, eligible monthly expenses, regular savings transfers/credit-card payments, and average irregular daily spending using three historical months.
+- It reports the lowest future end-of-day balance and its date, projects net income/outflows, and displays a daily chart with itemized forecast entries.
+- The forecast has explicit uncertainty: institution posting timing, unrecognized one-off obligations, available-versus-current differences, overdraft rules, and credit-card reconciliation can significantly change the result.
+- No bank account has been connected and no personal transactions are used in sample forecasts.
+
+### Future Plaid upgrade to this feature
+
+The secure backend should call [`/accounts/balance/get`](https://plaid.com/docs/balance/) for current and available bank balances (Balance works in combination with other products such as Transactions), rather than treating recent transaction sums as a bank balance. Use [`/transactions/sync`](https://plaid.com/docs/transactions/) for reconciled account-specific transactions. Normalize account IDs and run the forecasting engine against authenticated **matching-account transactions**, not transactions from unrelated cards or other checking/savings accounts. Plaid balance `available` can be absent for some institutions; clearly state whether the forecast anchors to available or current balance. Use the recurring transaction product, if enabled, to improve the cash-flow prediction. Track last-updated timestamps and warn when balance data is stale.
+
+Do not deploy bank credentials or long-lived Plaid access tokens in the GitHub Pages front end. Add a secure backend and user consent/authentication before activating any live account connections.
