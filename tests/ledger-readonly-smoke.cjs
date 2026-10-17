@@ -110,7 +110,7 @@ assert.equal(M.records(store)[0].category,'Groceries','Pending category transfer
   assert.deepEqual(afterEvent.transactions,before.transactions,'Predicted expense not inserted into ledger');
   await page.locator('aside [data-page="settings"]').click();
   assert.equal(await page.locator('#settings-import,#restore,#addBtn').count(),0);
-  assert.match(await page.locator('#view').innerText(),/Read-only ledger/);
+  assert.match(await page.locator('#view').innerText(),/Read-only ledger/i);
   assert.deepEqual(errors,[],'No browser script errors');
   console.log('PASS: Immutable ledger migration, Plaid reconciliation, categorization persistence and forecast-only controls');
  }finally{await browser.close()}
