@@ -923,7 +923,7 @@ function beginActivityRecurrenceEdit(select,record,key){
  function update(){
   const interval=['weekly','biweekly'].includes(frequencyInput.value);
   dayField.hidden=interval;
-  dayField.querySelector('input').disabled=interval;
+  // Keep the hidden day value in FormData: weekly schedules still require a valid stored day.
   hint.textContent=(interval?
    'The starting date determines the weekday. Repeats every 7 or 14 days.':
    'Repeats on this calendar day; short months use their last day.')+
