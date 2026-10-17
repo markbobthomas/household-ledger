@@ -17,7 +17,7 @@ jobs:
       - name: Install Playwright
         run: |
           npm install --no-save playwright
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
       - name: Verify interactive price bands in Chromium
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 &
@@ -26,5 +26,6 @@ jobs:
           node tests/category-budget-smoke.cjs
           node tests/cashflow-smoke.cjs
           node tests/design-smoke.cjs
+          node tests/mobile-safari-smoke.cjs
           node tests/recurring-smoke.cjs
           node tests/current-month-smoke.cjs
