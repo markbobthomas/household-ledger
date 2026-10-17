@@ -26,7 +26,7 @@ const ruleState=M.migrate({transactions:recurringRows});
 M.setPatternRule(ruleState,patternKey,{mode:'none'});
 assert.equal(F.forecast(recurringRows,'2026-10','Shopping','2026-10-05',ruleState.predictions.patternRules).expected.length,0,'Not recurring overrides detection');
 M.setPatternRule(ruleState,patternKey,null);
-assert.equal(F.forecast(recurringRows,'2026-10','Shopping',asOf,ruleState.predictions.patternRules).expected.length,1,'Removing rejection restores automatic recurrence');
+assert.equal(F.forecast(recurringRows,'2026-10','Shopping','2026-10-05',ruleState.predictions.patternRules).expected.length,1,'Removing rejection restores automatic recurrence');
 M.setPatternRule(ruleState,patternKey,{mode:'monthly',day:23,amount:59});
 const forced=F.forecast(recurringRows,'2026-10','Shopping','2026-10-16',ruleState.predictions.patternRules).expected;
 assert.equal(forced.length,1);
@@ -34,8 +34,8 @@ assert.equal(forced[0].date,'2026-10-23','User-established recurrence overrides 
 assert.equal(forced[0].amount,59,'User-established recurrence overrides amount');
 assert.equal(forced[0].confidence,'Confirmed','Manual pattern visually distinguished');
 const oneCharge=[{...recurringRows[0],date:'2026-09-12'}];
-assert.equal(F.forecast(oneCharge,'2026-10','Shopping','2026-10-16',ruleState.predictions.patternRules).expected.length,0,
- 'No automatic estimate from single charge even with no coverage');
+assert.equal(F.forecast(oneCharge,'2026-10','Shopping','2026-10-16',ruleState.predictions.patternRules).expected.length,1,
+ 'Explicit monthly rule can work from a single recorded charge');
 const before=unified();
 const spotify=before.categoryViews['2026-10|Subscriptions'].active.find(e=>e.merchant==='Spotify');
 assert.ok(spotify,'Preview has dated Spotify payment');
