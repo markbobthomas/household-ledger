@@ -28,7 +28,8 @@ function cashFlowFromExpected(input){
  const eventsByDate=new Map();
  for(const e of all){
   if(!validDate(e.date)||e.date<=asOf||!Number.isFinite(Number(e.amount))||Number(e.amount)<=0||
-    !['income','expense'].includes(e.type))continue;
+    !['income','expense','transfer'].includes(e.type))continue;
+  if(e.type==='transfer'&&!['in','out'].includes(e.cashDirection))continue;
   if(e.accountId&&e.accountId!==account.id)continue;
   if(e.account&&!e.accountId&&e.account!==account.transactionAccount&&e.account!==account.id)continue;
   if(!eventsByDate.has(e.date))eventsByDate.set(e.date,[]);
@@ -42,10 +43,10 @@ function cashFlowFromExpected(input){
   const date=addDays(asOf,i);
   const events=(eventsByDate.get(date)||[]).map(e=>({
    id:e.id,merchant:e.merchant,amount:round(e.amount),type:e.type,
-   category:e.category,description:e.description||'Dated expected transaction'
+   category:e.category,cashDirection:e.cashDirection,description:e.description||'Dated expected transaction'
   }));
-  const income=round(events.filter(e=>e.type==='income').reduce((n,e)=>n+e.amount,0));
-  const outflow=round(events.filter(e=>e.type==='expense').reduce((n,e)=>n+e.amount,0));
+  const income=round(events.filter(e=>e.type==='income'||e.type==='transfer'&&e.cashDirection==='in').reduce((n,e)=>n+e.amount,0));
+  const outflow=round(events.filter(e=>e.type==='expense'||e.type==='transfer'&&e.cashDirection==='out').reduce((n,e)=>n+e.amount,0));
   balance=round(balance+income-outflow);
   expectedIncome=round(expectedIncome+income);expectedOutflow=round(expectedOutflow+outflow);
   series.push({date,balance,income,outflow,events});
@@ -55,6 +56,14 @@ function cashFlowFromExpected(input){
   balanceBasis:Number.isFinite(account.available)?'available':'current',asOf,opening:round(opening),
   minimum:round(minimum),lowestDate,closing:balance,days,through:addDays(asOf,days),
   series,expectedIncome,expectedOutflow,dailyVariable:0,
+  uncertainty:input.uncertainty?.available?{
+    ...input.uncertainty,estimated90Day:round(input.uncertainty.dailyEstimated*days),
+    lowOutflow:round(input.uncertainty.dailyLow*days),
+    highOutflow:round(input.uncertainty.dailyHigh*days),
+    closingTypical:round(balance-input.uncertainty.dailyEstimated*days),
+    closingLow:round(balance-input.uncertainty.dailyHigh*days),
+    closingHigh:round(balance-input.uncertainty.dailyLow*days)
+  }:null,
   streams:all.filter(e=>e.source==='historical'||e.manualRule),
   historyMonths:input.historyMonths||[],
   method:'Unified dated expense and income forecast; irregular spending shown separately',
