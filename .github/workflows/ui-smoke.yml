@@ -31,3 +31,4 @@ jobs:
           node tests/recurring-smoke.cjs
           node tests/current-month-smoke.cjs
           node tests/ledger-readonly-smoke.cjs
+          node tests/expected-spending-smoke.cjs
