@@ -86,7 +86,7 @@ assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spe
   const updated=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.deepEqual(updated.transactions,originals,'Actual transaction records remain unchanged');
   const cat2=page.locator('.budget-entry[data-budget-category="Subscriptions"]');
-  await cat2.locator(':scope > details > summary').click();
+  if(!await cat2.locator(':scope > details').evaluate(e=>e.open))await cat2.locator(':scope > details > summary').click();
   const payment2=cat2.locator('.expected-tx').filter({hasText:'Spotify'}).first();
   await payment2.locator('summary').click();
   await payment2.locator('[data-pattern-none]').click();
