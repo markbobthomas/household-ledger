@@ -33,7 +33,11 @@ state.transactions.push({id:'amazon3',date:'2026-10-15',merchant:'Amazon',type:'
 assert.equal(M.categoryFor(state,'amazon3'),'Other','Ambiguous merchant rule does not auto-classify');
 assert.ok(R.build(state,F,'2026-10-16').tasks.some(t=>t.targetId==='amazon3'&&t.suggested==='Groceries'),'Learned suggestion surfaces for review');
 const reloaded=M.migrate(state);
-assert.equal(M.records(reloaded).find(x=>x.id==='c4').category,'Dining','Learning persists across reload/migration');
+assert.equal(M.records(reloaded).find(x=>x.id==='c4').category,'Other',
+  'A conflicting new category safely downgrades auto-classification to a review suggestion after reload');
+assert.equal(reloaded.learning.categoryRules[learned.key].category,'Dining','Original learned rule persists for later reconciliation');
+assert.ok(R.build(reloaded,F,'2026-10-16').tasks.some(t=>t.targetId==='c4'&&t.suggested==='Dining'),
+  'Conflict produces an actionable review instead of silently forcing merchant category');
 assert.ok(M.removeCategoryRule(reloaded,learned.key),'Learned rule is removable');
 assert.equal(M.categoryFor(reloaded,'c4'),'Other','Removing rule stops auto-category overlay');
 assert.equal(JSON.stringify(state.transactions),JSON.stringify(reloaded.transactions),'Removing rule leaves source untouched');
