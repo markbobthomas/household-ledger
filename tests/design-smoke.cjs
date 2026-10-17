@@ -42,6 +42,36 @@ const assert=require('node:assert/strict');
   assert.equal(await page.locator('#addBtn').isVisible(),true,'New entry remains accessible on phone');
   const sizes=await page.evaluate(()=>({body:document.documentElement.scrollWidth,window:innerWidth,canvas:document.body.scrollWidth}));
   assert.ok(sizes.body<=sizes.window+1,'No phone-width horizontal document overflow: '+JSON.stringify(sizes));
+  const mobile=await page.evaluate(()=>{
+    const nav=document.querySelector('aside'),buttons=[...nav.querySelectorAll('button[data-page]')],bar=document.querySelector('.budget-progress');
+    const nr=nav.getBoundingClientRect();
+    return {
+      navPosition:getComputedStyle(nav).position,navBottom:nr.bottom,
+      viewportHeight:innerHeight,
+      navColumns:getComputedStyle(nav).gridTemplateColumns.split(' ').length,
+      iconCount:buttons.filter(b=>getComputedStyle(b.querySelector('.nav-icon')).display!=='none').length,
+      smallestTarget:Math.min(...buttons.map(b=>b.getBoundingClientRect().height)),
+      budgetBarHeight:bar.getBoundingClientRect().height,
+      chartViewBox:document.querySelector('.cash-chart').getAttribute('viewBox')
+    };
+  });
+  assert.equal(mobile.navPosition,'fixed','Phone navigation should be docked');
+  assert.ok(Math.abs(mobile.navBottom-mobile.viewportHeight)<=2,'Bottom navigation should touch screen bottom');
+  assert.equal(mobile.navColumns,4,'Four phone navigation destinations');
+  assert.equal(mobile.iconCount,4,'Phone navigation shows four icons');
+  assert.ok(mobile.smallestTarget>=44,'Navigation has touch-sized buttons');
+  assert.ok(mobile.budgetBarHeight>=16,'Budget bars are prominent on mobile');
+  assert.ok(mobile.chartViewBox.includes('560 260'),'Bank chart uses phone-readable axis labels');
+  await page.locator('aside [data-page="transactions"]').click();
+  assert.equal(await page.locator('.ledger-table tr').first().evaluate(e=>getComputedStyle(e).display),'grid','Transactions become phone-friendly rows');
+  await page.locator('aside [data-page="budgets"]').click();
+  await page.locator('.cash-panel .cash-detail > summary').first().click();
+  assert.equal(await page.locator('.daily-cash-table tr').first().evaluate(e=>getComputedStyle(e).display),'grid','Daily cash flow becomes phone-friendly rows');
+  await page.setViewportSize({width:320,height:740});
+  const narrow=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,width:innerWidth,bars:[...document.querySelectorAll('.budget-progress')].map(x=>x.getBoundingClientRect().height)}));
+  assert.ok(narrow.doc<=narrow.width+1,'No overflow on narrow phones: '+JSON.stringify(narrow));
+  assert.ok(narrow.bars.every(h=>h>=16),'All budget bars remain thick on narrow phones');
+  await page.setViewportSize({width:390,height:844});
   await page.locator('aside [data-page="insights"]').click();
   await page.locator('[data-insight="merchants"]').click();
   assert.equal(await page.locator('.panel details.drill-detail').count()>0,true);
