@@ -111,3 +111,17 @@ The bank balance is still fictional. Nondateable everyday spending is disclosed 
 Confidence labels remain uncalibrated heuristics. Confirmed history reduces *repeated requests*, but does not prove a particular future charge or amount is correct. Rules stored in browser-local storage do not sync across devices and are not tamper-proof until the secure backend exists. The next phase will measure performance using held-out historical transactions.
 
 See [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) for Phase 4, **automated accuracy backtesting**, then Plaid later when chosen by the user.
+
+## Phase 4 — Historical accuracy laboratory (completed October 17, 2026)
+
+Open **Insights → Accuracy** to see the prediction accuracy of the **fictional** 25-month household scenario. The lab does not use actual user transactions, connected accounts or browser localStorage. `accuracy-fixture.js` contains 25 months of invented records with a *separate, hidden* label identifying which events are truly recurring; the fixture is never added to the live ledger.
+
+`accuracy-lab.js` evaluates 12 monthly start dates (August 2025 through July 2026) using 90-day holdout windows. For each date the model receives only transactions at or before that date, with future records and hidden truth labels stripped. It then compares expected dated charges/deposits to actual later recurring events using one-to-one matching by merchant, account, direction and up to 2–5 days of posting-date tolerance.
+
+The Accuracy screen includes event-level precision/recall, missed charges, false predictions, matched-date and amount errors, event and spending coverage, breakdowns by category/cadence/confidence, and cash-balance errors after 30, 60 and 90 days. Cash-balance scores derive from a mathematically anchored **invented** bank balance; transfer withdrawals still affect checking cash but do not count as spending. Future irregular purchases have real cash effects even when no exact dated transaction was predicted.
+
+**Fictional baseline (not real-world accuracy):** precision 89.12%; recall 58.95%; expense-dollar coverage 29.8%; 30/60/90-day balance MAEs about $1,483 / $7,753 / $7,782. These are not sufficiently reliable for safe-to-spend decisions. Predictions often miss recurring payments beyond the near month, especially semiannual/annual items and income scheduling. No model confidence level is a calibrated probability.
+
+A deterministic regression baseline is in `tests/accuracy-regression-baseline.json`, checked by `tests/accuracy-phase4-smoke.cjs`. Tests verify zero forward-looking data access, accuracy reproducibility, one-to-one payment matching, mobile view compatibility, and untouched source records. **All 14 browser tests passed** on the implemented Phase 4 version.
+
+**Recommended next:** Phase 4.1, an accuracy-improvement pass targeting 60/90-day schedule coverage, transfers, irregular-spend uncertainty and additional held-out scenarios. The complete <a href="DEVELOPMENT_ROADMAP.md">roadmap</a> keeps Plaid deferred until the user requests it.
