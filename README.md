@@ -24,7 +24,7 @@ The source records carry `source.provider` and `source.providerTransactionId`. D
 ### Predictions are not transactions
 
 - Monthly budget targets remain editable, while expected category spending is now the **sum of dated, merchant-specific predicted transactions**. Expand a category to inspect the expected date, merchant, amount, evidence and confidence for each item, and edit/omit/reset it inline.
-- Inference looks at up to six recent calendar months, requires history in the latest completed month, and normally requires two or three observed months with stable merchant, account, frequency, dates and amounts. Bank-paid transactions are suppressed to avoid counting them twice. Future one-time expected expenses can be added to a category as **predictions only**.
+- Inference scans up to six recent calendar months, requires history in the latest completed month, and generally needs two or three observed months with stable merchant, account, posting dates and amounts. Weekly and every-two-week charges are identified from regular intervals even when the count varies across months. Bank-paid transactions are suppressed to avoid counting them twice. Future one-time expected expenses can be added to a category as **predictions only**.
 - **No generic undisclosed catch-all transaction** is inserted into monthly category estimates; irregular spending without a defensible expected date is omitted and may make projections optimistic. Amounts/dates are estimates, not commitments.
 - The 90-day bank-balance projection supports changes to predicted recurring bill/paycheck amounts and schedule, predicted daily spending and one-time forecast-only events.
 - These changes affect projected values, never recorded bank activity or the starting balance.
