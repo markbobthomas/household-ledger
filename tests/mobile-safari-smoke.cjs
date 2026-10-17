@@ -10,7 +10,7 @@ const assert=require('node:assert/strict');
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   const top=page.locator('.mobile-top-nav');
   assert.ok(await top.isVisible(),'Top navigation visible in iPhone Safari');
-  assert.deepEqual(await top.locator('[data-page]').allInnerTexts(),['Budget','Activity','Insights','Settings']);
+  assert.deepEqual(await top.locator('[data-page]').allInnerTexts(),['Budget','Activity','Insights','Reviews','Settings']);
   const style=await top.evaluate(e=>({top:e.getBoundingClientRect().top,position:getComputedStyle(e).position,background:getComputedStyle(e).backgroundColor}));
   assert.equal(style.position,'sticky');
   assert.ok(style.top>=0&&style.top<160,'Navigation is near phone top: '+JSON.stringify(style));
