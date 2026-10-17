@@ -104,7 +104,10 @@ assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spe
   await rules.locator('button[type=submit]').click();
   assert.ok(await cat2.locator('.expected-tx').filter({hasText:'Spotify'}).count(),'Monthly recurrence re-established');
   await page.locator('aside [data-page=insights]').click();
-  assert.match(await page.locator('#view').innerText(),/Upcoming expected payments/i,'Insights uses shared projections');
+  assert.equal(await page.locator('[data-insight=merchants]').getAttribute('aria-selected'),'true','Merchants is default in Insights');
+  assert.match(await page.locator('#view').innerText(),/Merchant totals/i,'Merchant reporting shown by default');
+  await page.locator('[data-insight=categories]').click();
+  assert.match(await page.locator('#view').innerText(),/Upcoming expected payments/i,'Categories uses the shared predictions');
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.locator('.mobile-top-nav [data-page=reviews]').isVisible(),'Five-tab phone layout retained');
   assert.deepEqual(errors,[],'No JS errors');
