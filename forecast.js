@@ -34,6 +34,7 @@ function infer(transactions,month,category,asOf){
  const previous=completeMonths(all,month);
  result.historyMonths=previous;
  if(previous.length<2){result.method='Insufficient completed-month history (need at least two months)';return result}
+ if(!previous.includes(shiftMonth(month,-1))){result.method='Last completed month is missing: no trusted schedule forecast';return result}
  const latest=previous.slice(-3);
  const groups=new Map();
  const historical=all.filter(t=>t.type==='expense'&&t.category===category&&latest.includes(String(t.date||'').slice(0,7))&&validDate(t.date)&&Number(t.amount)>0&&!t.pending);
