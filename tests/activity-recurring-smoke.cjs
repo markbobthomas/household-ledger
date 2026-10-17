@@ -78,8 +78,12 @@ async function browserCheck(browser,settings={},mobile=false){
   let editor=row.locator('[data-recurring-form]');
   assert.equal(await editor.count(),1,'Schedule editor appears in its own Activity row');
   assert.equal(await page.locator('#entry').count(),0,'No top-of-page editor');
-  assert.equal(await editor.locator('[name=decision]').inputValue(),'schedule','Unrecognized charges open ready to schedule');
+  assert.equal(await editor.locator('[name=decision]').inputValue(),'choose','Unrecognized charges require choosing a recurrence status');
+  assert.equal(await editor.locator('.recurring-schedule-fields').isVisible(),false,'Schedule questions remain hidden until Recurring is selected');
+  assert.equal(await editor.locator('[data-recurring-save]').isVisible(),false,'No redundant Save on status choices');
   await editor.locator('[name=decision]').selectOption('schedule');
+  assert.equal(await editor.locator('.recurring-schedule-fields').isVisible(),true,'Recurring selection reveals questions');
+  assert.equal(await editor.locator('[data-recurring-save]').isVisible(),true,'Only a schedule needs Save');
   assert.equal(await editor.locator('[name=frequency]').inputValue(),'monthly','Monthly is default');
   assert.equal(await editor.locator('[name=day]').inputValue(),'14','Defaults to recorded calendar day');
   assert.equal(await editor.locator('[name=anchorDate]').inputValue(),'2026-10-14');
@@ -98,8 +102,17 @@ async function browserCheck(browser,settings={},mobile=false){
    ['2026-11-14','2026-12-14','2027-01-14'],'Recurring Activity rule drives 90-day Budget events');
   await row.locator('[data-recurring]').click();
   editor=row.locator('[data-recurring-form]');
+  assert.equal(await editor.locator('[name=decision]').inputValue(),'schedule');
+  await editor.locator('[name=decision]').selectOption('auto');
+  assert.equal(await row.locator('[data-recurring-form]').count(),0,'Automatic selection saves and closes immediately');
+  assert.match(await row.locator('[data-recurring]').innerText(),/Set recurring/);
+  const autoState=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  assert.equal(autoState.predictions.patternRules[key],undefined,'Automatic selection removes manual schedule without Save');
+  await row.locator('[data-recurring]').click();
+  editor=row.locator('[data-recurring-form]');
+  assert.equal(await editor.locator('[name=decision]').inputValue(),'choose');
   await editor.locator('[name=decision]').selectOption('none');
-  await editor.locator('button[type=submit]').click();
+  assert.equal(await row.locator('[data-recurring-form]').count(),0,'Not recurring saves and closes immediately');
   assert.match(await row.locator('[data-recurring]').innerText(),/Not recurring/);
   const noPredictions=await page.evaluate(()=>{
    const M=window.HouseholdLedgerData,F=window.HouseholdForecast,L=window.HouseholdForecastLedger;
@@ -125,7 +138,10 @@ async function browserCheck(browser,settings={},mobile=false){
   const transferId=await transfer.locator('[data-recurring]').getAttribute('data-recurring');
   await transfer.locator('[data-recurring]').click();
   let transferForm=transfer.locator('[data-recurring-form]');
-  assert.equal(await transferForm.locator('[name=decision]').inputValue(),'schedule');
+  assert.equal(await transferForm.locator('[name=decision]').inputValue(),'choose');
+  assert.equal(await transferForm.locator('[name=cashDirection]').isVisible(),false,'Transfer direction is only requested when Recurring is selected');
+  await transferForm.locator('[name=decision]').selectOption('schedule');
+  assert.equal(await transferForm.locator('[name=cashDirection]').isVisible(),true);
   assert.equal(await transferForm.locator('[name=cashDirection]').inputValue(),'',
    'Do not assume unknown cash direction');
   assert.equal(await transferForm.locator('[name=frequency]').inputValue(),'monthly');
@@ -164,7 +180,7 @@ async function browserCheck(browser,settings={},mobile=false){
   await transfer.locator('[data-recurring]').click();
   transferForm=transfer.locator('[data-recurring-form]');
   await transferForm.locator('[name=decision]').selectOption('none');
-  await transferForm.locator('button[type=submit]').click();
+  assert.equal(await transfer.locator('[data-recurring-form]').count(),0,'Transfer nonrecurring decision commits on change');
   assert.match(await transfer.locator('[data-recurring]').innerText(),/Not recurring/);
 
   if(mobile)assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),

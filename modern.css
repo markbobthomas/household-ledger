@@ -1144,3 +1144,6 @@ html { scroll-behavior:auto; }
  aside button,aside button[data-page="settings"]{font-size:9px;letter-spacing:-.15px}
  aside .nav-icon{width:19px;height:19px;flex-basis:19px}
 }
+
+/* Non-recurring selections apply on change; only manual schedules expose Save. */
+.recurring-inline-form [data-recurring-save][hidden]{display:none!important}
