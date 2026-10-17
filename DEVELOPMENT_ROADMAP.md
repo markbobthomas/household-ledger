@@ -16,7 +16,13 @@ This is the durable, project-owned plan for continuing the finance predictor wor
 
 **Completion check:** All existing browser/integrity tests plus `tests/prediction-phase1-smoke.cjs` pass in GitHub Actions. The engine remains heuristic and **not validated on bank data**.
 
-## Phase 2 — One unified forecasting engine (NEXT)
+## Phase 2 — One unified forecasting engine (COMPLETE · October 17, 2026)
+
+**Status: Complete and tested.** `forecast-ledger.js` supplies the date/account/category-tagged events for Budget, Insights, Reviews and the app's 90-day cash forecast. Repeating payments detected from three matching calendar-month charges receive stronger evidence; manual monthly/not-recurring decisions survive reload and can be reversed. The existing independent `cashflow.js` heuristic remains only as a compatibility path for isolated historical engine tests. Future changes to a monthly prediction flow through its shared event into the projected balance, without editing posted facts.
+
+**Validation:** GitHub Actions browser smoke suite (12 PASS lines) including the new `tests/unified-forecast-smoke.cjs`, iPhone WebKit and immutable source records. Balance remains fictional until a real bank connection exists. Irregular-spending range is disclosed separately, not silently added to the dated balance curve.
+
+
 
 Currently `forecast.js` powers category/month predictions, and `cashflow.js` separately computes a 90-day demo-balance forecast from recurring schedules and variable daily spend. This can produce contradictory predictions.
 
@@ -27,7 +33,7 @@ Currently `forecast.js` powers category/month predictions, and `cashflow.js` sep
 - Add end-to-end regression tests asserting a corrected payment updates every view consistently and that source records are unchanged.
 - No Plaid connection required.
 
-## Phase 3 — Learning from Reviews
+## Phase 3 — Learning from Reviews (NEXT)
 
 - Confirmations and corrections become reusable, reversible merchant/account/category and schedule rules rather than being scoped to a single prediction or transaction.
 - Show which rule applied, its confidence, evidence, history and ability to undo.
