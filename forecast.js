@@ -142,8 +142,9 @@ function infer(transactions,month,category,asOf,mode='expense'){
    const endMonth=rows.every(t=>endDay(t.date.slice(0,7))-Number(t.date.slice(8,10))<=2);
    const due=endMonth?endDay(month):Math.min(endDay(month),Math.round(median(days)));
    const date=month+'-'+String(due).padStart(2,'0');
+   const observedMonths=new Set(group.map(t=>t.date.slice(0,7))).size;
    const candidate=make(group,slot,date,seasonal.amount,count===1?'monthly':count===2?'twice monthly':count+' / month',
-    rows.length,recentMonths.length,variability,dateSpread,seasonal);
+    Math.floor(group.length/Math.max(1,count)),observedMonths,variability,dateSpread,seasonal);
    if(candidate)candidates.push(candidate);
   }
  }
