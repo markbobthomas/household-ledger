@@ -48,8 +48,13 @@ assert.equal(state.sync.itemCursors['bank-a'],'a');assert.equal(state.sync.itemC
 M.applyPlaidSync(state,{itemId:'bank-a',added:[],modified:[],removed:[],nextCursor:'a2'});
 assert.equal(state.sync.itemCursors['bank-b'],'b','Plaid Item cursors independent');
 assert.equal(new Set(M.records(state).map(t=>t.id)).size,source.length,'No duplicate source records');
-assert.equal(F.forecast(M.records(state),'2026-10','Other','2026-10-17').actual,285,
- 'Monthly budget actual accounts for card spending and refunds');
+assert.equal(F.forecast(M.records(state),'2026-10','Groceries','2026-10-17').actual,180,
+ 'Grocery purchase less its card refund appears in Groceries');
+assert.equal(F.forecast(M.records(state),'2026-10','Other','2026-10-17').actual,105,
+ 'Unrecognized gym and corner-store purchases remain Other, not invented categories');
+assert.equal(['Groceries','Other'].reduce((n,cat)=>
+ n+F.forecast(M.records(state),'2026-10',cat,'2026-10-17').actual,0),285,
+ 'Category budgets sum to reconciled household spending without duplicate card payments');
 L.build(state,M.records(state),'2026-10-17',90,F,M);
 assert.equal(JSON.stringify(state.transactions),original,'Forecast cannot mutate source ledger');
 const posted=M.migrate({accounts:[{id:'cc',name:'Credit',type:'credit'}]});
