@@ -45,7 +45,7 @@ assert.equal(byName.get('Refund Market Grocery').category,'Groceries');
 assert.equal(byName.get('Unrecognized Merchant').category,'Other','Unknown remains transparently unclassified');
 assert.equal(state.transactions.find(x=>x.merchant==='Market Grocery').source.personalFinanceCategory.primary,'FOOD_AND_DRINK');
 assert.equal(state.transactions.find(x=>x.merchant==='Market Grocery').source.categoryConfidence,0.99);
-assert.equal(M.accountingView(state).summary.spending,75,'Expense and refund net correctly; pending excluded');
+assert.equal(M.accountingView(state).summary.spending,120,'Grocery net $75 plus unclassified $45 expense; pending purchase excluded');
 const baseline=JSON.stringify(state.transactions);
 M.records(state);M.records(state);
 assert.equal(JSON.stringify(state.transactions),baseline,'Derived categorization reads cannot mutate source bank facts');
