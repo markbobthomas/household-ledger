@@ -21,6 +21,23 @@ async function browserCheck(browser,options,url,mobile){
   assert.equal(one.transactions.filter(t=>t.source?.provider==='demo').length,0,'Demo source rows isolated');
   assert.equal(one.accounts.filter(a=>a.itemId).length,3,'Three linked simulated accounts');
   assert.ok(one.transactions.every(t=>t.source.provider==='plaid'&&t.source.simulated));
+  assert.equal(one.transactions.find(t=>t.merchant==='Market Grocery').category,'Groceries',
+   'Plaid PFC assigns Groceries during Sandbox import');
+  assert.equal(one.transactions.find(t=>t.merchant==='Pending Merchant').category,'Shopping',
+   'Plaid medium-confidence PFC assigns Shopping');
+  assert.equal(one.transactions.find(t=>t.merchant==='Refund Market Grocery').category,'Groceries',
+   'Refund retains original spending category');
+  await page.locator(mobile?'.mobile-top-nav [data-page=transactions]':'aside [data-page=transactions]').click();
+  const sourceGrocery=page.locator('.ledger-table tbody tr')
+   .filter({has:page.locator('td:nth-child(2)').filter({hasText:'Market Grocery'})})
+   .filter({has:page.locator('td:nth-child(4):text-is("expense")')});
+  assert.equal(await sourceGrocery.locator('select[data-category]').inputValue(),'Groceries');
+  assert.match(await sourceGrocery.innerText(),/Auto · Plaid category/);
+  const pendingRow=page.locator('.ledger-table tbody tr').filter({hasText:'Pending Merchant'});
+  assert.equal(await pendingRow.locator('select[data-category]').inputValue(),'Shopping');
+  await pendingRow.locator('select[data-category]').selectOption('Health');
+  assert.equal(await pendingRow.locator('select[data-category]').inputValue(),'Health');
+  await page.locator(nav).click();
   assert.equal(await panel.locator('[data-sandbox-refresh]').count(),1);
   await page.locator('#sandbox-institution').selectOption('ins_109509');
   await page.locator('#sandbox-connect').click();
@@ -33,6 +50,9 @@ async function browserCheck(browser,options,url,mobile){
   const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
   assert.equal(after.transactions.filter(t=>t.source.pendingTransactionId).length,1);
   assert.equal(after.transactions.filter(t=>t.pending).length,1,'Only unaffected Item retains pending row');
+  const posted=after.transactions.find(t=>t.source.pendingTransactionId);
+  assert.equal(after.categoryOverrides[posted.id],'Health',
+   'Manual category follows pending-to-posted replacement and overrides the PFC');
   await page.locator(mobile?'.mobile-top-nav [data-page=transactions]':'aside [data-page=transactions]').click();
   const table=page.locator('.ledger-table');
   assert.match(await table.innerText(),/Sandbox test/,'Every imported transaction marked as test-only');

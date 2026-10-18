@@ -40,3 +40,16 @@ Run Phase D API test with: node tests/sandbox-phaseD-smoke.cjs
 Run Phase D browser test (after installing Playwright): node tests/sandbox-phaseD-ui-smoke.cjs
 
 Provider docs: https://plaid.com/docs/sandbox/ and https://plaid.com/docs/transactions/ and https://plaid.com/docs/api/webhooks/webhook-verification/
+
+## Categorization fix for Sandbox transactions
+
+Sandbox imports now use a single shared categorization model (`categorization.js`) instead of always assigning `Other`.
+
+- Genuine Plaid `personal_finance_category.primary`, `detailed`, and `confidence_level` travel through `/transactions/sync`, the local service, and browser normalization. A sufficiently confident Plaid category maps to the Ledger's existing category list.
+- When Plaid provides no usable category, recognizable merchants can be categorized conservatively. Mixed-use retailers such as Amazon, Costco, and Walmart are **not automatically classified from their names** because their purchases span multiple categories.
+- Uncertain purchases deliberately stay **Other** and display **Needs category**. The Category dropdown remains editable directly, and a manual choice always wins over an automatic suggestion.
+- Older Sandbox records stored with `Other` are categorized in the derived Activity/Budget views at load time without rewriting source transaction facts. Updated provider transactions can acquire a better category during a later sync. Pending-to-posted replacements retain explicit category overrides.
+- Payroll and checking-to-credit-card payments remain income or transfers for accounting purposes; they are never classified as consumer spending just to avoid an `Other` label.
+- The fixture contains high-confidence grocery/refund examples and a medium-confidence Shopping purchase. The UI labels automated categories as **Auto · Plaid category** or **Auto · Merchant match**, so the categorization source is transparent.
+
+After pulling the updated code, **stop and restart** the local Sandbox server; previously downloaded copies of the app do not update automatically. Then reconnect test institutions. No real bank data or production access is used.

@@ -47,7 +47,11 @@ const stripTransaction=t=>({
  transaction_id:t.transaction_id,account_id:t.account_id,
  amount:t.amount,date:t.date,
  name:t.name,merchant_name:t.merchant_name||t.name,pending:Boolean(t.pending),
- pending_transaction_id:t.pending_transaction_id||null
+ pending_transaction_id:t.pending_transaction_id||null,
+ personal_finance_category:t.personal_finance_category&&typeof t.personal_finance_category==='object'?
+  {primary:t.personal_finance_category.primary||null,
+   detailed:t.personal_finance_category.detailed||null,
+   confidence_level:t.personal_finance_category.confidence_level||null}:null
 });
 function createService({request,now=()=>new Date(),mode='fixture'}){
  if(typeof request!=='function')throw Error('Plaid transport required');

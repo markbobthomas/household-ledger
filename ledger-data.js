@@ -6,6 +6,7 @@
 'use strict';
 const VERSION=3;
 const Accounting=root.HouseholdAccounting||(typeof require==='function'?require('./accounting.js'):null);
+const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('./categorization.js'):null);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(String(d)+'T12:00:00Z'));
 const categorySet=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
@@ -65,18 +66,26 @@ function resolution(state,t){
  const explicit=state.categoryOverrides?.[t.id];
  if(explicit)return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
  const original=t.category||'Other';
+ const bankCategory=t.source?.provider==='plaid'&&['expense','refund'].includes(t.type)?
+  Categorization.classify(t):null;
+ const inferred=original==='Other'&&bankCategory?.category!=='Other'?bankCategory.category:original;
+ const origin=original!=='Other'&&t.source?.provider==='plaid'?
+  t.source?.categoryOrigin||'plaid-category':bankCategory?.method||'source';
+ const originLabel=origin==='plaid-category'?'Plaid category':
+  origin==='merchant-match'?'Merchant match':'Source';
  const key=categoryRuleKey(t),rule=state.learning?.categoryRules?.[key];
- if(!rule||t.type!=='expense')return {category:original,method:'source',confidence:'Source',ruleKey:null};
+ if(!rule||t.type!=='expense')return {category:inferred,method:origin,
+  confidence:originLabel,ruleKey:null};
  const safety=categoryRuleSafety(state,t);
  const applicable=original==='Other'||(numericCategoryConfidence(t)!==null&&numericCategoryConfidence(t)<.7);
  const safe=rule.mode==='auto'&&!safety.mixed&&applicable;
  // Never overwrite a specific provider category with high/unknown confidence.
  if(safe)return {category:rule.category,method:'learned',confidence:'User rule',ruleKey:key,
   explanation:'Learned from your review of '+rule.merchant};
- return {category:original,method:rule.mode==='suggest'||safety.mixed?'suggested':'source',
-  confidence:rule.mode==='suggest'?'Review recommended':'Source',ruleKey:key,
-  suggested:rule.category,conflict:original!=='Other'&&original!==rule.category,
-  explanation:safety.mixed?safety.cause:original!=='Other'?'Original category preserved':'Rule awaiting review'};
+ return {category:inferred,method:rule.mode==='suggest'||safety.mixed?'suggested':origin,
+  confidence:rule.mode==='suggest'?'Review recommended':originLabel,ruleKey:key,
+  suggested:rule.category,conflict:inferred!=='Other'&&inferred!==rule.category,
+  explanation:safety.mixed?safety.cause:inferred!=='Other'?'Original category preserved':'Rule awaiting review'};
 }
 function records(state){
  return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t),originalCategory:t.category||'Other'}));
@@ -286,7 +295,14 @@ function applyPlaidSync(state,change){
    t.amount===null||t.amount===undefined||!Number.isFinite(Number(t.amount)))
    throw Error('Invalid provider transaction');
   const amount=Number(t.amount),id=providerId(t.transaction_id);
-  const current=byId.get(id),defaultCategory=current?.category||'Other';
+  const current=byId.get(id);
+  const classified=Categorization.classify(t);
+  const defaultCategory=classified.category!=='Other'?classified.category:current?.category||'Other';
+  const pfc=t.personal_finance_category&&typeof t.personal_finance_category==='object'?
+   {primary:String(t.personal_finance_category.primary||'').slice(0,90),
+    detailed:String(t.personal_finance_category.detailed||'').slice(0,140),
+    confidence_level:String(t.personal_finance_category.confidence_level||'UNKNOWN').slice(0,30)}:
+   current?.source?.personalFinanceCategory||null;
   const meta=(staged.accounts||[]).find(a=>a.id===String(t.account_id));
   if(itemId&&meta?.itemId&&meta.itemId!==itemId)
    throw Error('Account belongs to a different Plaid Item');
@@ -296,7 +312,10 @@ function applyPlaidSync(state,change){
    accountId:String(t.account_id),account:String(meta?.name||t.account_name||t.account_id),
    pending:Boolean(t.pending),source:{provider:'plaid',providerTransactionId:String(t.transaction_id),
     accountId:String(t.account_id),itemId:itemId||null,plaidAmount:amount,simulated:change.simulated===true,
-    pendingTransactionId:t.pending_transaction_id||null,verified:true}};
+    pendingTransactionId:t.pending_transaction_id||null,verified:true,
+    categoryOrigin:classified.category!=='Other'?classified.method:current?.source?.categoryOrigin||'unclassified',
+    categoryConfidence:classified.category!=='Other'?classified.confidence:current?.source?.categoryConfidence??0,
+    ...(pfc?{personalFinanceCategory:pfc}:{})}};
   const previous=t.pending_transaction_id?providerId(t.pending_transaction_id):null;
   if(previous&&staged.categoryOverrides?.[previous]&&!staged.categoryOverrides[id])
    staged.categoryOverrides[id]=staged.categoryOverrides[previous];

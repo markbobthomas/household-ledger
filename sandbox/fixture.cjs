@@ -17,15 +17,26 @@ function fixtureTransport(){
    transaction_id:id+'-'+i,account_id:accounts[accountIndex].account_id,
    date,amount,name,merchant_name:name,pending:false,...extra
   });
+  const pfc=(primary,detailed,confidence_level='VERY_HIGH')=>
+   ({primary,detailed,confidence_level});
   const transactions=[
-   tx('payroll',0,-2450,'Payroll','2026-10-02'),
-   tx('grocery',2,87.45,'Market Grocery','2026-10-04'),
-   tx('card-payment-out',0,240+serial,'Credit Card Payment','2026-10-09'),
-   tx('card-payment-in',2,-240-serial,'Payment Thank You','2026-10-09'),
-   tx('transfer-out',0,180+serial,'Transfer to Savings','2026-10-10'),
-   tx('transfer-in',1,-180-serial,'Transfer from Checking','2026-10-10'),
-   tx('refund',2,-15.55,'Refund Market Grocery','2026-10-11'),
-   tx('pending',2,22.50,'Pending Merchant','2026-10-12',{pending:true})
+   tx('payroll',0,-2450,'Payroll','2026-10-02',{
+    personal_finance_category:pfc('INCOME','INCOME_WAGES')}),
+   tx('grocery',2,87.45,'Market Grocery','2026-10-04',{
+    personal_finance_category:pfc('FOOD_AND_DRINK','FOOD_AND_DRINK_GROCERIES')}),
+   tx('card-payment-out',0,240+serial,'Credit Card Payment','2026-10-09',{
+    personal_finance_category:pfc('TRANSFER_OUT','TRANSFER_OUT_ACCOUNT_TRANSFER')}),
+   tx('card-payment-in',2,-240-serial,'Payment Thank You','2026-10-09',{
+    personal_finance_category:pfc('TRANSFER_IN','TRANSFER_IN_ACCOUNT_TRANSFER')}),
+   tx('transfer-out',0,180+serial,'Transfer to Savings','2026-10-10',{
+    personal_finance_category:pfc('TRANSFER_OUT','TRANSFER_OUT_ACCOUNT_TRANSFER')}),
+   tx('transfer-in',1,-180-serial,'Transfer from Checking','2026-10-10',{
+    personal_finance_category:pfc('TRANSFER_IN','TRANSFER_IN_ACCOUNT_TRANSFER')}),
+   tx('refund',2,-15.55,'Refund Market Grocery','2026-10-11',{
+    personal_finance_category:pfc('FOOD_AND_DRINK','FOOD_AND_DRINK_GROCERIES')}),
+   tx('pending',2,22.50,'Pending Merchant','2026-10-12',{
+    pending:true,personal_finance_category:pfc('GENERAL_MERCHANDISE',
+     'GENERAL_MERCHANDISE_OTHER_GENERAL_MERCHANDISE','MEDIUM')})
   ];
   const item={id,token,accounts,transactions,version:0,institutionId};
   itemAccess.set(token,item);return item;
