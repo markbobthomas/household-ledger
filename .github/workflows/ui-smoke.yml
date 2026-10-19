@@ -30,6 +30,7 @@ jobs:
           node tests/accounting-phaseA-smoke.cjs
           node tests/account-forecast-phaseB-smoke.cjs
           node tests/account-reliability-phaseC-smoke.cjs
+          node tests/hosted-sandbox-smoke.cjs
           node tests/sandbox-categorization-smoke.cjs
           node tests/sandbox-phaseD-smoke.cjs
           node tests/sandbox-phaseD-ui-smoke.cjs
