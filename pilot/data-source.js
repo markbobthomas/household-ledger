@@ -91,7 +91,7 @@ function persist(data){
  writeQueue=writeQueue.catch(()=>{}).then(()=>request('/adjustments',body)).catch(e=>{
   lastError='Your latest real-data change was not saved: '+e.message;
   const flash=document.getElementById('flash');if(flash)flash.textContent=lastError;
-  throw e;
+  return null;
  });
  return writeQueue;
 }
