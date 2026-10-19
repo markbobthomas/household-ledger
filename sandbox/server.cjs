@@ -96,7 +96,10 @@ function createServer({service}={}){
   });
  },close(){return new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()))}};
 }
-if(require.main===module){
+if(require.main===module&&process.env.LIVE_PLAID_ENABLED==='1'){
+ // Explicit mode switch: never run fictional Sandbox routes with live bank credentials.
+ require('../pilot/server.cjs').start(Number(process.env.PORT||8766)).then(()=>process.stdout.write('Household Ledger live bank mode ready\n')).catch(e=>{process.stderr.write('Live bank startup failed: '+e.message+'\n');process.exitCode=1});
+}else if(require.main===module){
  const app=createServer();
  app.listen(Number(process.env.PORT||process.env.SANDBOX_PORT||8766)).then(addr=>{
   const mode=app.service.status().mode;
