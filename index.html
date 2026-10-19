@@ -599,7 +599,15 @@ if(page==='insights'){
 }if(page==='budgets'){
  const cats=[...new Set([...CATS,...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,
  {start:monthStart,end:monthEnd,label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
- html='<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div>'+
+ const totals=cats.reduce((sum,category)=>{const f=monthlyProjection(month,category);sum.actual+=Number(f.actual)||0;sum.expected+=Number(f.additional)||0;sum.limit+=Number(data.predictions.monthlyBudgets[category])||0;return sum},{actual:0,expected:0,limit:0});
+ const used=totals.limit?Math.min(100,Math.max(0,totals.actual/totals.limit*100)):0;
+ const forecast=totals.limit?Math.min(Math.max(0,100-used),Math.max(0,totals.expected/totals.limit*100)):0;
+ const overall='<section class="panel" aria-label="Overall monthly budget"><div class="section-top"><h3>Overall budget</h3><strong>'+money(totals.actual)+' spent</strong></div>'+
+ '<div class="budget-progress" role="img" aria-label="Overall budget: '+esc(money(totals.actual))+' spent, '+esc(money(totals.expected))+' expected, total budget '+esc(money(totals.limit))+'">'+
+ '<i class="actual" style="width:'+used.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecast.toFixed(2)+'%"></i></div>'+
+ '<div class="budget-heading"><span class="budget-category-meta">Combined budget '+money(totals.limit)+'</span><span class="budget-category-meta '+(totals.limit&&totals.actual+totals.expected>totals.limit?'over-budget':'')+'">'+(currentMonth?'Expected total '+money(totals.actual+totals.expected):'Recorded total '+money(totals.actual))+'</span></div>'+
+ '<p class="prediction-note">Sum of all category budgets. Recorded spending and expected payments are separate; no amounts are added to bank balances.</p></section>';
+ html=overall+'<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div>'+
  '<div class="budget-legend"><span>Spent</span><span>Expected</span><small class="budget-edit-legend">Underlined amounts are editable</small></div>'+
  cats.map(category=>{
   const matching=entries().filter(t=>['expense','refund'].includes(t.type)&&t.category===category&&t.date>=monthStart&&t.date<=monthEnd).sort((a,b)=>b.date.localeCompare(a.date));
