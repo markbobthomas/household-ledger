@@ -11,6 +11,7 @@ function ensure(state){
  if(!state.reviews||typeof state.reviews!=='object'||Array.isArray(state.reviews))state.reviews={};
  if(!state.reviews.categoryConfirmed||typeof state.reviews.categoryConfirmed!=='object')state.reviews.categoryConfirmed={};
  if(!state.reviews.predictionConfirmed||typeof state.reviews.predictionConfirmed!=='object')state.reviews.predictionConfirmed={};
+ if(!state.reviews.accountingConfirmed||typeof state.reviews.accountingConfirmed!=='object')state.reviews.accountingConfirmed={};
  return state.reviews;
 }
 function categoryReason(t,distribution){
@@ -43,6 +44,16 @@ function build(state,forecast,asOf,shared){
   distribution.get(key).add(t.category);
  }
  const tasks=[];
+ const audit=model?.accountingView?.(state);
+ for(const issue of audit?.issues||[]){
+  const row=effective.find(t=>t.id===issue.id);if(!row)continue;
+  const fingerprint=[row.id,row.accountId,row.date,row.amount,row.merchant,row.accountingKind,row.reconciliationStatus,row.pairedTransactionId||''].join('|');
+  if(state.reviews.accountingConfirmed[issue.id]?.fingerprint===fingerprint)continue;
+  tasks.push({id:'accounting|'+issue.id,kind:'accounting',targetId:issue.id,merchant:issue.merchant,
+   amount:issue.amount,date:issue.date,account:issue.accountId,category:row.category||'Other',
+   reason:issue.reason,priority:0,confidence:'Needs review',fingerprint,demo:row.source?.provider==='demo'||row.source?.simulated===true});
+ }
+
  for(const t of effective){
   if(t.type!=='expense'||!isoValid(t.date)||t.date<cutoff||t.date>current||state.categoryOverrides?.[t.id])continue;
   let assessment=categoryReason(t,distribution);
@@ -76,7 +87,7 @@ function build(state,forecast,asOf,shared){
   }
  }
  tasks.sort((a,b)=>a.priority-b.priority||(a.kind===b.kind?0:a.kind==='category'?-1:1)||b.date.localeCompare(a.date)||a.merchant.localeCompare(b.merchant));
- return {tasks,categoryCount:tasks.filter(t=>t.kind==='category').length,predictionCount:tasks.filter(t=>t.kind==='prediction').length,
+ return {tasks,categoryCount:tasks.filter(t=>t.kind==='category').length,predictionCount:tasks.filter(t=>t.kind==='prediction').length,accountingCount:tasks.filter(t=>t.kind==='accounting').length,
    demoCount:tasks.filter(t=>t.demo).length,asOf:current};
 }
 function confirm(state,task){
@@ -85,6 +96,7 @@ function confirm(state,task){
  const entry={fingerprint:task.fingerprint,confirmedAt:new Date().toISOString()};
  if(task.kind==='category')review.categoryConfirmed[task.targetId]=entry;
  else if(task.kind==='prediction')review.predictionConfirmed[task.targetId]=entry;
+ else if(task.kind==='accounting')review.accountingConfirmed[task.targetId]=entry;
  else throw Error('Unknown review type');
 }
 const api={build,ensure,confirm,categoryFingerprint,predictionFingerprint};
