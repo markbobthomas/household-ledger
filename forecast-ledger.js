@@ -68,7 +68,7 @@ function calcUndatedRisk(rows,asOf,events,state){
 
  const known=new Set();
  for(const month of months){
-  for(const category of CATS){
+  for(const category of [...new Set([...(typeof dataModel.categories==='function'?dataModel.categories(state):CATS),...Object.keys(state?.predictions?.monthlyBudgets||{})])]){
    const detected=forecast.forecast(records,month,category,asOf,rules);
    const edited=dataModel.expectedForCategory(state,detected.expected,month,category,asOf);
    categoryViews[month+'|'+category]={...detected,expected:edited,
