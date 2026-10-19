@@ -1179,3 +1179,35 @@ select.recurring-value:hover{border-bottom-style:solid}
  .recurring-control-shell{width:100%;max-width:100%}
  .recurring-control-actions .btn{flex:1 1 145px;white-space:normal}
 }
+
+/* Overview hierarchy: bank-reported balance, then projected low, then history. */
+.overview-current{margin-bottom:17px}
+.overview-current-heading{margin-bottom:9px}
+.overview-balance-hero{padding:10px 0 17px;border-bottom:1px solid var(--line);min-width:0}
+.overview-balance-label{font-size:13px;letter-spacing:.02em;font-weight:650;color:var(--muted)}
+.overview-balance-value{display:block;margin:7px 0 10px;font:730 clamp(58px,7.2vw,102px)/1.05 var(--mono);letter-spacing:-3px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:var(--ink)}
+.overview-balance-account{display:flex;align-items:baseline;gap:10px 16px;flex-wrap:wrap;font-size:14px}
+.overview-balance-account>strong{font-weight:700}
+.overview-balance-status{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.overview-available{display:flex;align-items:baseline;gap:8px 20px;flex-wrap:wrap;margin-top:15px;font-size:13px;color:var(--muted)}
+.overview-available strong{font:700 22px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.overview-other-accounts{padding:12px 0;border-bottom:1px solid var(--line)}
+.overview-other-accounts>summary,.overview-history-details>summary{cursor:pointer;font-size:13px}
+.overview-other-accounts .row{margin-top:12px}
+.overview-current .bank-overview-controls{margin:15px 0 8px}
+.overview-current .overview-sync{margin:8px 0 4px}
+.overview-coverage{margin:7px 0 0}
+.overview-history-details{border-top:1px solid var(--line);padding:18px 0 0;margin-top:10px}
+.overview-history-details>summary{display:flex;gap:8px 18px;flex-wrap:wrap;align-items:center;color:var(--ink);font-size:14px}
+.overview-history-details>summary::marker{color:var(--muted)}
+.overview-history-period{color:var(--muted);font-size:12px;font-weight:400}
+.overview-history-details[open] .stats{margin-top:14px}
+@media(max-width:700px){
+ .overview-current{margin-bottom:14px}
+ .overview-balance-value{font-size:clamp(43px,11vw,68px);letter-spacing:-2px;white-space:normal}
+ .overview-balance-label{font-size:13px}
+ .overview-balance-account{gap:4px 10px;font-size:13px}
+ .overview-balance-status{font-size:11px}
+ .overview-available strong{font-size:19px}
+ .overview-history-details{margin-top:6px}
+}

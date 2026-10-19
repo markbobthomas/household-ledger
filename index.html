@@ -289,57 +289,76 @@ function overviewSummary(){
  const snapshot=window.HouseholdBankFeed.getSnapshot(today());
  const real=liveMode&&snapshot.connected===true&&snapshot.mode==='plaid';
  const feed=window.HouseholdFeedHealth.assess(snapshot,entries(),snapshot.expectedAccountIds||[],new Date());
- const history=entries(),spend=history.filter(t=>['expense','refund'].includes(t.type));
- const total=spend.reduce((n,t)=>n+Number(t.spendingAmount??0),0);
- const income=history.filter(t=>t.type==='income').reduce((n,t)=>n+Number(t.earnedIncomeAmount??0),0);
- const asOf=String(snapshot.asOf||today()).slice(0,10);
+ const accounts=snapshot.accounts||[];
+ const primary=accounts.find(a=>['checking','savings','depository'].includes(String(a.accountType||a.type).toLowerCase()))||accounts[0];
  const balanceAge=a=>{
-  const t=Date.parse(String(a.balanceAsOf||a.observedAt||''));
+  const t=Date.parse(String(a?.balanceAsOf||a?.observedAt||''));
   return Number.isFinite(t)?(Date.now()-t)/86400000:null;
  };
- const balances=(snapshot.accounts||[]).map(a=>{
-  const current=a.current===null||a.current===undefined?null:Number(a.current);
-  const available=a.available===null||a.available===undefined?null:Number(a.available);
+ const accountStatus=a=>{
+  const amount=a?.current===null||a?.current===undefined?null:Number(a.current);
   const age=balanceAge(a);
-  const status=!liveMode||a.simulated?'Simulated':!real?'Connection unverified':
-   a.disconnected?'Disconnected':current===null||!Number.isFinite(current)?'Balance unavailable':
+  return !liveMode||a?.simulated?'Simulated':!real?'Connection unverified':
+   a?.disconnected?'Disconnected':amount===null||!Number.isFinite(amount)?'Balance unavailable':
    age===null||age<-.01?'Observation time unavailable':age>2?'Last reported · stale':'Bank reported';
-  const currentValue=current!==null&&Number.isFinite(current)&&status!=='Disconnected'?money(current):'Unavailable';
-  const availableValue=available!==null&&Number.isFinite(available)?money(available):'Unavailable';
-  const currentLabel=String(a.accountType||a.type||'').toLowerCase()==='credit'?'Bank-reported amount owed':'Bank-reported current';
-  const observedLabel=liveMode?' · observed '+esc(a.balanceAsOf||'time unavailable'):'';
-  return '<div class="row bank-overview-account"><span><strong>'+esc(a.name||a.id)+'</strong>'+
-   '<small class="transaction-source"> · '+esc(status)+observedLabel+'</small>'+
-   '<small class="transaction-source bank-overview-available"> · '+esc(liveMode?'Bank-reported available':'Simulated available')+': '+esc(availableValue)+'</small></span>'+
-   '<strong aria-label="'+esc(currentLabel)+'">'+esc(currentValue)+'</strong></div>';
- }).join('');
- const sourceLabel=real?(snapshot.accounts.length+' connected account'+(snapshot.accounts.length===1?'':'s')):liveMode?
+ };
+ const currency=(a,field)=>a?.[field]===null||a?.[field]===undefined||!Number.isFinite(Number(a[field]))?
+  'Unavailable':money(Number(a[field]));
+ const type=String(primary?.accountType||primary?.type||'').toLowerCase();
+ const credit=type==='credit';
+ const status=primary?accountStatus(primary):'Balance unavailable';
+ const currentLabel=credit?'Bank-reported amount owed':'Bank-reported current';
+ const balanceLabel=!liveMode?'Simulated '+(credit?'card debt':'current balance'):
+  credit?'Bank-reported card debt':status==='Bank reported'?'Current bank balance':'Last reported bank balance';
+ const sourceLabel=real?(accounts.length+' connected account'+(accounts.length===1?'':'s')):liveMode?
   'Bank information unavailable':'Demo selected · simulated balances';
- const feedStatus=real?'<p class="prediction-note" data-bank-sync>'+
+ const asOfText=primary?.balanceAsOf?String(primary.balanceAsOf):'Observation time unavailable';
+ const balanceDetails=primary?'<div class="bank-overview-account overview-balance-hero">'+
+   '<div class="overview-balance-label">'+esc(balanceLabel)+'</div>'+
+   '<strong class="overview-balance-value" aria-label="'+esc(currentLabel)+'">'+esc(currency(primary,'current'))+'</strong>'+
+   '<div class="overview-balance-account"><strong>'+esc(primary.name||primary.id)+'</strong>'+
+    '<span class="overview-balance-status">'+esc(status)+(liveMode?' · '+esc(asOfText):' · fictional sample')+'</span></div>'+
+   '<div class="overview-available"><span class="bank-overview-available">'+
+    esc(liveMode?'Bank-reported available':'Simulated available')+'</span>'+
+    '<strong>'+esc(currency(primary,'available'))+'</strong></div>'+
+   '</div>':'<div class="overview-balance-hero"><strong class="overview-balance-value">Unavailable</strong><p>No bank account snapshot is available.</p></div>';
+ const extraAccounts=accounts.filter(a=>a!==primary);
+ const extraList=extraAccounts.length?'<details class="overview-other-accounts"><summary>Other account balances ('+extraAccounts.length+')</summary>'+
+  extraAccounts.map(a=>'<div class="row bank-overview-account"><span><strong>'+esc(a.name||a.id)+'</strong>'+
+   '<small class="transaction-source"> · '+esc(accountStatus(a))+'</small>'+
+   '<small class="transaction-source bank-overview-available"> · '+esc(liveMode?'Bank-reported available':'Simulated available')+': '+esc(currency(a,'available'))+'</small>'+
+   '</span><strong>'+esc(currency(a,'current'))+'</strong></div>').join('')+'</details>':'';
+ const feedStatus=real?'<p class="prediction-note overview-sync" data-bank-sync>'+
   'Last successful transaction sync: '+esc(feed.lastSuccessfulSync||'Unavailable')+
   (feed.syncAgeDays!==null?' · '+feed.syncAgeDays+' days ago':' · freshness unknown')+
-  '. These are last-synced bank records, not a continuous live stream.</p>':
-  '<p class="prediction-note">These are fictional Demo balances. A Real bank may already be connected; Demo mode does not display it.</p>';
+  '. Bank balances are snapshots, not a continuously updated live balance.</p>':
+  '<p class="prediction-note overview-sync">These are fictional Demo balances. A Real bank may already be connected; Demo mode does not display it.</p>';
  const controls=window.HouseholdLiveSource?
   '<div class="bank-overview-controls">'+(liveMode?
   '<button type="button" class="btn" data-refresh-bank'+(window.HouseholdLiveSource.loading?' disabled':'')+'>'+
-    (window.HouseholdLiveSource.loading?'Refreshing bank data…':'Refresh bank data')+'</button>':
+   (window.HouseholdLiveSource.loading?'Refreshing bank data…':'Refresh bank data')+'</button>':
   '<button type="button" class="btn" data-show-real>Show Real bank data</button>')+'</div>'+
   (window.HouseholdLiveSource.error?'<p role="alert" class="prediction-note">'+esc(window.HouseholdLiveSource.error)+'</p>':''):'';
- const dataScope=real?'Synced transactions from the '+snapshot.accounts.length+' connected account'+
-  (snapshot.accounts.length===1?'':'s')+' only; not necessarily every household account.':
-  'Fictional local demo transaction history.';
- return '<section class="panel" aria-label="Household overview summary"><div class="section-top"><h3>Household overview</h3>'+
-  '<span class="budget-summary-meta" data-overview-source>'+esc(sourceLabel)+'</span></div>'+
-  controls+feedStatus+
+ const coverage=real?'Bank data below covers '+accounts.length+' connected account'+(accounts.length===1?'':'s')+
+  ' only; not necessarily every household account.':'Demo figures are illustrative, not bank-verified.';
+ return '<section class="panel overview-current" aria-label="Household overview summary">'+
+  '<div class="section-top overview-current-heading"><h3>Bank balance</h3><span class="budget-summary-meta" data-overview-source>'+esc(sourceLabel)+'</span></div>'+
+  balanceDetails+extraList+controls+feedStatus+
+  '<p class="prediction-note overview-coverage" data-overview-coverage>'+esc(coverage)+'</p></section>';
+}
+function overviewHistorySummary(){
+ const history=entries();
+ const spend=history.filter(t=>['expense','refund'].includes(t.type)&&!t.pending&&t.date<=today());
+ const total=spend.reduce((n,t)=>n+Number(t.spendingAmount??0),0);
+ const income=history.filter(t=>t.type==='income'&&!t.pending&&t.date<=today()).reduce((n,t)=>n+Number(t.earnedIncomeAmount??0),0);
+ const dates=history.filter(t=>/^\\d{4}-\\d{2}-\\d{2}$/.test(String(t.date))).map(t=>t.date).sort();
+ const coverage=dates.length?' · '+dates[0]+' – '+dates[dates.length-1]:' · no dated transactions';
+ return '<details class="panel overview-history-details" aria-label="Recorded activity from loaded history">'+
+  '<summary><strong>Recorded activity from loaded history</strong><span class="overview-history-period">'+esc(coverage)+'</span></summary>'+
+  '<p class="prediction-note">Historical inflows and outflows, not your current bank balance or complete household cash position. Transfers and credit-card payments are excluded; pending charges are not counted.</p>'+
   '<div class="stats"><div class="stat"><div class="sub">Recorded spending · loaded history</div><div class="num">'+money(total)+'</div></div>'+
   '<div class="stat"><div class="sub">Recorded income · loaded history</div><div class="num">'+money(income)+'</div></div>'+
-  '<div class="stat"><div class="sub">Recorded net flow · loaded history</div><div class="num">'+money(income-total)+'</div></div></div>'+
-  '<p class="prediction-note" data-overview-coverage>'+esc(dataScope)+' Pending charges, transfers and credit-card payments are not spending or income.</p>'+
-  '<div class="section-top"><h3>Account balances</h3><span class="budget-summary-meta">Original bank snapshots · never calculated</span></div>'+
-  (balances||'<p class="prediction-note">No account snapshot is available.</p>')+
-  '<p class="prediction-note">The main value is the bank-reported current balance'+
-   (real?' (credit cards show debt owed)':'')+'. Available balance is separate. Future amounts below are estimates, not balances verified by your bank.</p></section>';
+  '<div class="stat"><div class="sub">Recorded net flow · loaded history</div><div class="num">'+money(income-total)+'</div></div></div></details>';
 }
 function cashFlowCard(){
  const {snapshot,account,f,future,multi,feed,forecastUnavailable}=previewCashFlow();
@@ -374,11 +393,11 @@ function cashFlowCard(){
  '<p class="prediction-note">Edit a scheduled expense in its Budget category; the same date and amount update this cash-flow chart. Only explicitly directed checking transfers are included as cash movements, not purchases. Undated spending is shown separately as a statistical scenario.</p></details>';
  return '<div class="cash-panel" id="cashflow"><div class="cash-head"><div><h3>Lowest scheduled-only balance · next 90 days</h3>'+
  '<div class="cash-sub">'+esc(account.name)+' · '+esc(f.balanceBasis)+' balance</div></div><span class="cash-demo">'+(liveMode?'REAL BANK · PLAID BALANCE / PREDICTED FUTURE':'SIMULATED BANK DATA')+'</span></div>'+
- feedMarkup+'<div class="cash-hero"><div><div class="cash-primary-amount">'+money(f.minimum)+'</div>'+
+ '<div class="cash-hero"><div><div class="cash-primary-amount">'+money(f.minimum)+'</div>'+
  '<div class="cash-primary-date">Lowest on '+esc(cashDateLabel(f.lowestDate,true))+'</div></div>'+
  '<div class="cash-secondary"><div><span class="sub">'+(liveMode?(f.balanceBasis==='available'?'Bank-reported available · forecast start':'Bank-reported current · forecast start'):'Available now')+'</span><strong>'+money(f.opening)+'</strong></div>'+
  '<div><span class="sub">In 90 days</span><strong>'+money(f.closing)+'</strong></div></div></div>'+
- cashChart(f.series,f.lowestDate)+accountForecastMarkup(snapshot,multi)+incomeWarning+riskDisplay+controls+
+ cashChart(f.series,f.lowestDate)+feedMarkup+accountForecastMarkup(snapshot,multi)+incomeWarning+riskDisplay+controls+
  '<div class="cash-status">90 days · '+future.events.length+' scheduled items including directed transfers · Undated spending excluded from chart line</div>'+
  '<details class="cash-detail"><summary>Explore 90-day cash flow</summary>'+
  '<div class="cash-table-wrap cash-days-wrap"><table class="cash-table daily-cash-table"><thead>'+
@@ -662,7 +681,7 @@ if(page==='budgets'){
   el('subtitle').textContent=page==='overview'?'Accounts, cash flow and the next 90 days.':page==='transactions'?'All of your entries in one place.':page==='insights'?'See where your money actually goes.':page==='reviews'?'Items that need your confirmation.':'Data and account preferences.';
 }
 el('period').hidden=page==='reviews'||page==='overview'||page==='settings';
-let a=expense(),html='';if(page==='overview')html=window.HouseholdLiveSource?.loading&&!liveMode?'<section class="panel" aria-label="Loading bank data"><h3>Loading Real bank data…</h3><p class="prediction-note">Connecting to the authenticated bank source. Fictional balances are hidden until the connection is confirmed.</p></section>':overviewSummary()+cashFlowCard();if(page==='reviews')html=reviewsPage();if(page==='transactions')html='<div class="panel"><div class="section-top"><h3>Transactions</h3><span class="budget-summary-meta">'+rows().length+' entries</span></div>'+table(rows().sort((a,b)=>b.date.localeCompare(a.date)),true)+'</div>';
+let a=expense(),html='';if(page==='overview')html=window.HouseholdLiveSource?.loading&&!liveMode?'<section class="panel" aria-label="Loading bank data"><h3>Loading Real bank data…</h3><p class="prediction-note">Connecting to the authenticated bank source. Fictional balances are hidden until the connection is confirmed.</p></section>':overviewSummary()+cashFlowCard()+overviewHistorySummary();if(page==='reviews')html=reviewsPage();if(page==='transactions')html='<div class="panel"><div class="section-top"><h3>Transactions</h3><span class="budget-summary-meta">'+rows().length+' entries</span></div>'+table(rows().sort((a,b)=>b.date.localeCompare(a.date)),true)+'</div>';
 if(page==='insights'){
   const tabs='<div class="insight-tabs" role="tablist" aria-label="Insight views">'+[['merchants','Merchants'],['categories','Categories'],['bands','Purchase sizes'],['recurring','Recurring'],['accuracy','Accuracy']].map(([key,name])=>'<button type="button" role="tab" aria-selected="'+(insightMode===key)+'" class="'+(insightMode===key?'active':'')+'" data-insight="'+key+'">'+name+'</button>').join('')+'</div>';
   if(insightMode==='categories'){

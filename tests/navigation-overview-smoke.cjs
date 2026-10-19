@@ -29,6 +29,28 @@ async function check(browser,options,mobile){
   await nav('overview').click();
   assert.equal(await page.locator('#title').innerText(),'Overview');
   assert.equal(await page.locator('#cashflow').count(),1,'Cash projection belongs on Overview');
+  const mainBalance=page.locator('.overview-current .overview-balance-value');
+  assert.equal(await mainBalance.innerText(),'$5,650.25','The primary balance is the bank-feed current balance, not net transaction flow');
+  assert.match(await page.locator('.overview-current .overview-available').innerText(),/\$5,400\.25/,'Available is secondary and separate');
+  const historical=page.locator('details.overview-history-details');
+  assert.equal(await historical.count(),1,'Old history totals remain available below the forecast');
+  assert.equal(await historical.evaluate(el=>el.open),false,'Loaded spending and income are collapsed by default');
+  assert.ok(await historical.evaluate(el=>!!el.querySelector('.stat')),'Historical numbers are retained, not discarded');
+  const hierarchy=await page.evaluate(()=>{
+   const current=document.querySelector('.overview-balance-value'),
+    low=document.querySelector('#cashflow .cash-primary-amount'),
+    history=document.querySelector('.overview-history-details');
+   return {positions:[current,low,history].map(el=>el?.getBoundingClientRect().top+window.scrollY),
+    currentFont:parseFloat(getComputedStyle(current).fontSize),
+    lowFont:parseFloat(getComputedStyle(low).fontSize)};
+  });
+  assert.ok(hierarchy.positions[0]<hierarchy.positions[1]&&hierarchy.positions[1]<hierarchy.positions[2],
+   'Visual reading order is current balance, projected low, then collapsed history');
+  assert.ok(hierarchy.currentFont>hierarchy.lowFont,'Current balance has larger type than projected low');
+  await historical.locator(':scope > summary').click();
+  assert.match(await historical.innerText(),/Recorded spending · loaded history/);
+  await historical.locator(':scope > summary').click();
+
   assert.equal(await page.locator('.budget-entry').count(),0,'Overview omits the category budget list');
   assert.ok(await page.locator('.account-projection-row').count()>=4,'All account predictions moved intact');
   assert.equal(await page.locator('svg.cash-chart').count(),1,'90-day chart moved intact');

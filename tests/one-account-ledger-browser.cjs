@@ -53,7 +53,20 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   assert.match(await summary.locator('[data-overview-coverage]').innerText(),/not necessarily every household account/);
   assert.match(await summary.locator('[data-bank-sync]').innerText(),/Last successful transaction sync/);
   assert.equal(await summary.locator('.bank-overview-account [aria-label="Bank-reported current"]').innerText(),'$1,000.00');
-  assert.match(await summary.locator('.bank-overview-available').innerText(),/\$950\.00/);
+  const realHierarchy=await bankTest.evaluate(()=>{
+   const balance=document.querySelector('.overview-balance-value'),
+    forecast=document.querySelector('#cashflow .cash-primary-amount'),
+    history=document.querySelector('.overview-history-details');
+   return {y:[balance,forecast,history].map(el=>el.getBoundingClientRect().top+scrollY),
+    sizes:[balance,forecast].map(el=>parseFloat(getComputedStyle(el).fontSize)),
+    hidden:history.open===false};
+  });
+  assert.ok(realHierarchy.y[0]<realHierarchy.y[1]&&realHierarchy.y[1]<realHierarchy.y[2],
+   'Real mode prioritizes current balance, then projected low, then history');
+  assert.ok(realHierarchy.sizes[0]>realHierarchy.sizes[1],'Current balance is most prominent in Real mode');
+  assert.equal(realHierarchy.hidden,true,'Loaded history totals are collapsed by default');
+
+  assert.match(await summary.locator('.overview-available').innerText(),/\$950\.00/);
   assert.match(await bankTest.locator('#cashflow .feed-health').innerText(),/recent sync reported/i,
    'Plaid is recognized by feed health as connected');
   assert.doesNotMatch(await bankTest.locator('#view').innerText(),/bank not connected|no connected bank feed/i);
@@ -65,7 +78,7 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await bankTest.locator('[data-refresh-bank]').first().click();
   await bankTest.locator('.bank-overview-account [aria-label="Bank-reported current"]').getByText('$1,234.56').waitFor();
   assert.equal(syncCount,1,'Real Overview refresh called the bank sync endpoint');
-  assert.match(await bankTest.locator('.bank-overview-available').innerText(),/\$1,211\.11/,
+  assert.match(await bankTest.locator('.overview-available').innerText(),/\$1,211\.11/,
    'Fresh available is separate from unchanged current');
   assert.match(await bankTest.locator('#cashflow .cash-secondary').innerText(),/\$1,211\.11/);
   // A stale bank snapshot is still disclosed as last reported, never projected as current cash.
