@@ -104,6 +104,8 @@ async function start(port=Number(env.PORT||8788)){
     if(Object.keys(body).some(k=>!allowed.includes(k)))return respond(400,{error:'Bank source fields may not be changed'});
     for(const keyName of allowed){if(body[keyName]!==undefined&&(body[keyName]===null||typeof body[keyName]!=='object'||Array.isArray(body[keyName])&&keyName!=='customCategories'))return respond(400,{error:'Invalid '+keyName})}
     const allowedCats=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
+    if(body.customCategories&&(body.customCategories.length>50||body.customCategories.some(c=>typeof c!=='string'||c.length<2||c.length>40||!/^[A-Za-z0-9][A-Za-z0-9 &'().-]*$/.test(c))))return respond(400,{error:'Invalid custom categories'});
+    for(const name of body.customCategories||[])allowedCats.add(name);
     if(body.categoryOverrides){
      const ids=new Set(Object.keys(state.transactions).map(String));
      if(Object.entries(body.categoryOverrides).some(([id,category])=>!ids.has(id)||!allowedCats.has(category)))return respond(400,{error:'Invalid category override'});
