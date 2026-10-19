@@ -35,7 +35,7 @@ async function main(){
   const page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   const date=new Date().toISOString().slice(0,10);
-  await page.route('**/api/status',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({connected:true,lastSync:new Date().toISOString(),account:{name:'Mock Checking',current:1034.52,available:1034.52,balanceObservedAt:new Date().toISOString()},transactions:[{id:'a',date,name:'Coffee Shop',merchant:'Coffee Shop',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_COFFEE',confidence_level:'HIGH'}},{id:'b',date,name:'Uncertain Merchant',merchant:'Uncertain Merchant',amount:36,pending:false,category:null},{id:'c',date,name:'Pending',merchant:'Pending',amount:18,pending:true,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_COFFEE',confidence_level:'HIGH'}}]})}));
+  await page.route('**/api/ledger',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({connected:true,lastSync:new Date().toISOString(),account:{id:'mock-account',name:'Mock Checking',type:'depository',subtype:'checking',current:1034.52,available:1034.52,balanceObservedAt:new Date().toISOString()},adjustments:{},transactions:[{id:'a',date,name:'Coffee Shop',merchant:'Coffee Shop',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_COFFEE',confidence_level:'HIGH'}},{id:'b',date,name:'Uncertain Merchant',merchant:'Uncertain Merchant',amount:36,pending:false,category:null},{id:'c',date,name:'Pending',merchant:'Pending',amount:18,pending:true,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_COFFEE',confidence_level:'HIGH'}}]})}));
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'load'});
   async function snapshot(){
    const out={};
@@ -51,6 +51,7 @@ async function main(){
   const demo=await snapshot();
   await page.locator('aside [data-page=settings]').click();
   await page.locator('#ledger-mode-switch').selectOption('real');
+  await page.locator('#demo-banner').getByText('REAL BANK · PLAID').waitFor();
   const real=await snapshot();
   const viewLeaks={};
   for(const tab of [...new Set(checks.map(x=>x.tab))]){
@@ -66,6 +67,8 @@ async function main(){
   console.log(JSON.stringify({total,baseline,retained,matrix:checks.map(c=>({area:c.tab,capability:c.name,demo:demo[c.name],real:real[c.name]})),consoleErrors:errors},null,2));
   console.log('UI_PARITY_AUDIT_END');
   assert.ok(baseline>=12,'Demo baseline features not available in test');
+  assert.ok(retained>=baseline-2,'Real mode must retain practically all original Demo UI capabilities');
+  assert.ok(Object.values(viewLeaks).every(x=>x.visibleDespiteHidden===0),'Demo content must not leak under alternate overlays');
   assert.deepEqual(errors,[],'Browser threw errors during audit');
  }finally{if(browser)await browser.close();child.kill();fs.rmSync(dir,{recursive:true,force:true})}
 }
