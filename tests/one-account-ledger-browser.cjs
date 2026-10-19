@@ -41,7 +41,7 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   assert.equal(await bankTest.locator('[data-real-budget="Debt payments"]').count(),0,'Loan payments are not spending budget categories');
   assert.equal(await bankTest.locator('#period').isVisible(),false,'Demo month control hidden in real mode');
   await bankTest.locator('aside [data-page=insights]').click();
-  assert.match(await bankTest.locator('#real-mode-surface').innerText(),/Real spending insights/);
+  assert.match(await bankTest.locator('#real-mode-surface').innerText(),/Real spending insights/i);
   await bankTest.locator('aside [data-page=reviews]').click();
   assert.match(await bankTest.locator('#real-mode-surface').innerText(),/pending transaction/);
   assert.equal((await bankTest.locator('#real-mode-surface').innerText()).includes('Demo totals'),false);
