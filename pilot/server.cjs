@@ -92,7 +92,7 @@ async function start(port=Number(env.PORT||8788)){
   try{
    if(req.url==='/api/link-token'){
     if(state.item)throw Error('One account only. Disconnect first.');
-    const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-single-pilot'},client_name:'Household Ledger Pilot',products:['transactions'],country_codes:['US'],language:'en',account_filters:{depository:{account_subtypes:['checking']}}});
+    const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-single-pilot'},client_name:'Household Ledger Pilot',products:['transactions'],country_codes:['US'],language:'en'});
     return respond(200,{link_token:t.link_token});
    }
    if(req.url==='/api/exchange'){
@@ -100,8 +100,8 @@ async function start(port=Number(env.PORT||8788)){
     if(!body.publicToken||!body.accountId)throw Error('Missing Plaid Link selection');
     const x=await plaid('/item/public_token/exchange',{public_token:body.publicToken});
     const accounts=await plaid('/accounts/get',{access_token:x.access_token});
-    const chosen=accounts.accounts.find(a=>a.account_id===body.accountId&&a.type==='depository'&&a.subtype==='checking');
-    if(!chosen){await plaid('/item/remove',{access_token:x.access_token});throw Error('Select one checking account only')}
+    const chosen=accounts.accounts.find(a=>a.account_id===body.accountId&&['depository','credit'].includes(a.type));
+    if(!chosen){await plaid('/item/remove',{access_token:x.access_token});throw Error('Select one eligible bank or credit account only')}
     state.item={id:x.item_id,token:x.access_token};state.accountId=chosen.account_id;await save();
     try{await sync()}catch(e){state.error='Initial sync pending';await save()}
     return respond(200,{connected:true});
