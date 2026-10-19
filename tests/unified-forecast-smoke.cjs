@@ -112,7 +112,7 @@ assert.ok(unified().risk.every(r=>r.includedInDatedTotal===false),'Irregular spe
   assert.equal(await page.locator('[data-insight=merchants]').getAttribute('aria-selected'),'true','Merchants is default in Insights');
   assert.match(await page.locator('#view').innerText(),/Merchant totals/i,'Merchant reporting shown by default');
   await page.locator('[data-insight=categories]').click();
-  assert.match(await page.locator('#view').innerText(),/Upcoming expected payments/i,'Categories uses the shared predictions');
+  assert.match(await page.locator('#view').innerText(),/Expected payments/i,'Categories uses the same expected totals as Budget');
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.locator('.mobile-top-nav [data-page=reviews]').isVisible(),'Six-tab phone layout retained');
   assert.deepEqual(errors,[],'No JS errors');
