@@ -23,7 +23,7 @@ assert.equal(generated.plans[0].amount,1000,'Next payment is issued statement, n
 assert.equal(generated.plans[0].fromAccountId,'checking-1');
 assert.ok(generated.statements.some(x=>x.dueDate==='2026-12-12'&&x.estimated),'Later statements are explicitly estimates');
 assert.ok(generated.warnings.length===0,'Valid schedules do not invent warnings');
-assert.equal(generated.billEvents.length,0,'User-entered mortgage does not double-count an identical historical prediction');
+assert.equal(generated.billEvents.length,2,'Existing November mortgage is not double-counted; December and January are retained');
 const multi=accountForecast.build(snapshot,[...future,...generated.billEvents],generated.plans,{days:90,records:[]});
 const check=multi.accounts.find(a=>a.id==='checking-1'),card=multi.accounts.find(a=>a.id==='visa');
 assert.equal(check.series.find(x=>x.date==='2026-10-22').balance,4800,
