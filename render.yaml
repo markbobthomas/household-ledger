@@ -1,0 +1,26 @@
+# Deploy from https://dashboard.render.com/blueprints
+# This is a PASSWORD-PROTECTED FICTIONAL TEST ENVIRONMENT only.
+# Do not set real banking or Plaid credentials here.
+services:
+  - type: web
+    name: household-ledger-test
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: "node --version"
+    startCommand: "node sandbox/server.cjs"
+    autoDeployTrigger: commit
+    healthCheckPath: /
+    envVars:
+      - key: HOSTED_SANDBOX
+        value: "1"
+      - key: NODE_ENV
+        value: production
+      - key: SANDBOX_TEST_PASSWORD
+        sync: false
+      - key: SANDBOX_FIXTURE_STATE_PATH
+        value: /var/data/sandbox-fixture.json
+    disk:
+      name: sandbox-test-fixtures
+      mountPath: /var/data
+      sizeGB: 1
