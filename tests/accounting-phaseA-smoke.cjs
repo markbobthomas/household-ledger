@@ -99,8 +99,12 @@ async function browserCase(browser,opts,mobile){
   const before=await page.evaluate(()=>JSON.stringify(JSON.parse(localStorage.getItem('household-ledger-v1')).transactions));
   await page.locator(nav('insights')).click();await page.locator('[data-insight=categories]').click();
   const summary=await page.locator('.stats').innerText();
-  assert.ok(summary.includes('$285.00'),'Spend totals reconcile across 5 accounts: '+summary);
-  assert.ok(summary.includes('$1,010.00'),'Income excludes credit card payments: '+summary);
+  assert.ok(summary.includes('$285.00'),'Category spending reconciles across 5 accounts: '+summary);
+  // Categories now shares Budget's monthly values; all-source income remains
+  // available in Merchants and still excludes card settlements.
+  await page.locator('[data-insight=merchants]').click();
+  const incomeSummary=await page.locator('.stats').innerText();
+  assert.ok(incomeSummary.includes('$1,010.00'),'Income excludes credit card payments: '+incomeSummary);
   await page.locator(nav('settings')).click();
   const settings=await page.locator('#view').innerText();
   assert.ok(settings.includes('5 recorded accounts')&&settings.includes('3 matched internal/card payments'));
