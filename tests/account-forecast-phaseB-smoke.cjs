@@ -86,6 +86,13 @@ const manualWins=B.build(snapshot,mirrored,[{id:'movement|same',amount:200,
  fromAccountId:'checking-1',toAccountId:'visa',anchorDate:'2026-11-14',frequency:'once'}],{records:history,days:90});
 assert.equal(manualWins.diagnostics.pairedMovements.length,1,'Manual matching settlement cannot produce a second card payment');
 assert.equal(manualWins.household.closingNet,mirroredForecast.household.closingNet);
+const changedStatement=B.build(snapshot,mirrored,[{id:'movement|statement',amount:240,
+ fromAccountId:'checking-1',toAccountId:'visa',anchorDate:'2026-11-14',frequency:'once'}],{records:history,days:90});
+assert.equal(changedStatement.diagnostics.pairedMovements.length,1,
+ 'Updated issued statement overrides outdated inferred settlement instead of double-charging checking');
+assert.equal(changedStatement.diagnostics.pairedMovements[0].amount,240);
+assert.equal(changedStatement.household.conservationDifference,0,'Credit payment is still a two-sided transfer');
+assert.ok(changedStatement.diagnostics.ambiguousMovements.length,'Mismatch requires human review');
 const noPartner=B.build(snapshot,[mirrored[0]],[],{days:90});
 assert.equal(noPartner.diagnostics.unmatchedTransfers.length,1,'Unlinked bank movement is flagged');
 assert.equal(noPartner.household.complete,false,'Incomplete internal transfer cannot claim reconciled net');

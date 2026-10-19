@@ -188,8 +188,17 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
     amount:round(amount),withinHorizon:true,originalIncludedInSnapshot:true});
   }
   for(const when of occurrences(p,asOf,through)){
-   // A reviewed explicit plan takes precedence over inferred matching movement
-   // or single source leg of same amount/date/accounts; never double-pay a card.
+   // A confirmed card autopay amount supersedes older inferred card-payment
+   // transfers, including when their estimated amounts differ.
+   const inferredIndex=movements.findIndex(m=>m.source==='matched history'&&
+    m.fromAccountId===from&&m.toAccountId===to&&Math.abs(deltaDays(m.date,when))<=2&&
+    (byId.get(from)?.type==='credit'||byId.get(to)?.type==='credit'));
+   if(inferredIndex>=0){
+    const inferred=movements.splice(inferredIndex,1)[0];
+    diagnostics.suppressedDuplicates.push({id:p.id,matching:inferred.id,reason:'Card autopay replaces inferred settlement'});
+    if(Math.abs(inferred.amount-amount)>.011)
+     diagnostics.ambiguousMovements.push({id:p.id,matching:inferred.id,reason:'Inferred amount differs; entered statement amount used'});
+   }
    const exists=movements.find(m=>m.fromAccountId===from&&m.toAccountId===to&&
     Math.abs(m.amount-amount)<.011&&Math.abs(deltaDays(m.date,when))<=2);
    if(exists){
@@ -219,10 +228,25 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
  // very same money leaving or entering one of its account endpoints.
  for(const e of candidates){
   if(coveredEvents.has(e._eventIndex)||!e._accountId)continue;
-  const replaces=movements.some(m=>Math.abs(Number(e.amount)-m.amount)<.011&&
-   Math.abs(deltaDays(e.date,m.date))<=2&&
-   (e.cashDirection==='out'&&m.fromAccountId===e._accountId||
-    e.cashDirection==='in'&&m.toAccountId===e._accountId));
+  const replaces=movements.some(m=>{
+   if(Math.abs(deltaDays(e.date,m.date))>2)return false;
+   const leg=e.cashDirection==='out'&&m.fromAccountId===e._accountId||
+    e.cashDirection==='in'&&m.toAccountId===e._accountId;
+   if(!leg)return false;
+   if(Math.abs(Number(e.amount)-m.amount)<.011)return true;
+   // If the earlier transfer was identified as a card settlement, an owner-
+   // entered card payment overrides a competing inferred amount.
+   const card=byId.get(m.toAccountId);
+   const merchant=norm(e.merchant);
+   const identifiesCard=card?.type==='credit'&&
+    (/credit card|card payment|visa|mastercard|amex|discover|payment thank you|card autopay/.test(merchant)||
+     merchant.includes(norm(card.name)));
+   if(identifiesCard&&m.source==='user plan'){
+    diagnostics.ambiguousMovements.push({id:e.id,matching:m.id,reason:'Card payment estimate differs; entered statement amount used'});
+    return true;
+   }
+   return false;
+  });
   if(replaces){coveredEvents.add(e._eventIndex);diagnostics.suppressedDuplicates.push({id:e.id,reason:'Paired movement already projected'})}
  }
  for(const m of movements){
