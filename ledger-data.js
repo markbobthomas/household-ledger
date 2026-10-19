@@ -289,12 +289,18 @@ function applyPlaidSync(state,change){
  if(Array.isArray(change.accounts))
   Accounting.registerAccounts(staged,change.accounts.map(a=>({...a,itemId:a.itemId||a.item_id||itemId})));
  const byId=new Map((staged.transactions||[]).map(t=>[t.id,t]));
+ const seenBatch=new Map();
  const providerId=id=>'plaid:'+(itemId?itemId+':':'')+String(id);
  const read=t=>{
   if(!t||!t.transaction_id||!t.account_id||!validDate(t.date)||
    t.amount===null||t.amount===undefined||!Number.isFinite(Number(t.amount)))
    throw Error('Invalid provider transaction');
   const amount=Number(t.amount),id=providerId(t.transaction_id);
+  const signature=JSON.stringify([String(t.account_id),amount,t.date,String(t.merchant_name||t.name||''),Boolean(t.pending)]);
+  if(seenBatch.has(id)&&seenBatch.get(id)!==signature)throw Error('Conflicting repeated provider transaction ID in sync batch');
+  seenBatch.set(id,signature);
+  const foreign=(staged.transactions||[]).find(row=>row.source?.provider==='plaid'&&row.source?.providerTransactionId===String(t.transaction_id)&&row.source?.itemId!==itemId&&row.source?.accountId===String(t.account_id));
+  if(foreign)throw Error('Same bank transaction appears under multiple Plaid Items; review duplicate connection');
   const current=byId.get(id);
   const classified=Categorization.classify(t);
   const defaultCategory=classified.category!=='Other'?classified.category:current?.category||'Other';
@@ -319,7 +325,11 @@ function applyPlaidSync(state,change){
   const previous=t.pending_transaction_id?providerId(t.pending_transaction_id):null;
   if(previous&&staged.categoryOverrides?.[previous]&&!staged.categoryOverrides[id])
    staged.categoryOverrides[id]=staged.categoryOverrides[previous];
-  if(previous)byId.delete(previous);
+  if(previous){
+   const old=byId.get(previous);
+   if(old&&old.accountId!==String(t.account_id))throw Error('Pending predecessor belongs to another account');
+   if(old)byId.delete(previous);
+  }
   byId.set(id,next);
  };
  for(const t of [...change.added,...change.modified])read(t);
