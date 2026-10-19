@@ -57,7 +57,7 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   assert.match(await bankTest.locator('#cashflow .feed-health').innerText(),/recent sync reported/i,
    'Plaid is recognized by feed health as connected');
   assert.doesNotMatch(await bankTest.locator('#view').innerText(),/bank not connected|no connected bank feed/i);
-  assert.match(await bankTest.locator('#cashflow .cash-secondary').innerText(),/Bank-reported available[\s\S]*\$950\.00/,
+  assert.match(await bankTest.locator('#cashflow .cash-secondary').innerText(),/Bank-reported available[\s\S]*\$950\.00/i,
    'Projection starts with available balance and labels it as available, not current');
   assert.equal(await bankTest.locator('#cashflow .cash-chart').count(),1,'Fresh linked checking account supports a forecast');
   // Clicking Refresh must perform a genuine authenticated bank sync, then fetch fresh reported balances.
