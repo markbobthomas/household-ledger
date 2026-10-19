@@ -42,6 +42,9 @@ function migrate(input){
  predictions.cashFlowStreams=predictions.cashFlowStreams&&typeof predictions.cashFlowStreams==='object'?predictions.cashFlowStreams:{};
  predictions.cashFlowEvents=Array.isArray(predictions.cashFlowEvents)?predictions.cashFlowEvents:[];
  predictions.accountMovements=Array.isArray(predictions.accountMovements)?predictions.accountMovements:[];
+ predictions.paymentRules=predictions.paymentRules&&typeof predictions.paymentRules==='object'&&!Array.isArray(predictions.paymentRules)?predictions.paymentRules:{};
+ predictions.paymentBills=Array.isArray(predictions.paymentBills)?predictions.paymentBills:[];
+ predictions.cashCushion=Number.isFinite(Number(predictions.cashCushion))&&Number(predictions.cashCushion)>=0?Number(predictions.cashCushion):500;
  predictions.dailyVariable=predictions.dailyVariable===null||predictions.dailyVariable===undefined?null:Number(predictions.dailyVariable);
  const accounts=Array.isArray(old.accounts)?copy(old.accounts):[];
  const sync=old.sync&&typeof old.sync==='object'?copy(old.sync):{plaidCursor:null};
@@ -377,7 +380,47 @@ function applyPlaidSyncPages(state,batch){
  Object.assign(state,staged);
  return state;
 }
-const api={VERSION,migrate,records,categories,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,applyPlaidSync,applyPlaidSyncPages};
+function setCardPaymentRule(state,accountId,rule){
+ const id=String(accountId||'');
+ if(!id||!rule||typeof rule!=='object')throw Error('Select a credit card');
+ const dateOK=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
+ const closingDay=Number(rule.closingDay),amount=Number(rule.lastStatementBalance);
+ const method=String(rule.method||'statement'),due=String(rule.nextPaymentDate||''),closed=String(rule.lastStatementClose||'');
+ if(!String(rule.fromAccountId||'')||!dateOK(due)||!dateOK(closed)||due<=closed||
+  !Number.isInteger(closingDay)||closingDay<1||closingDay>31||
+  !Number.isFinite(amount)||amount<0||amount>999999999||
+  !['statement','minimum','fixed'].includes(method))throw Error('Enter a valid statement close, next withdrawal date and balance');
+ const minimum=Number(rule.minimumAmount),fixed=Number(rule.fixedAmount);
+ if(method==='minimum'&&(!Number.isFinite(minimum)||minimum<0)||
+  method==='fixed'&&(!Number.isFinite(fixed)||fixed<0))throw Error('Enter a valid autopay amount');
+ state.predictions.paymentRules??={};
+ state.predictions.paymentRules[id]={fromAccountId:String(rule.fromAccountId),closingDay,
+  lastStatementClose:closed,nextPaymentDate:due,lastStatementBalance:round(amount),method,
+  minimumAmount:Number.isFinite(minimum)?round(minimum):0,
+  fixedAmount:Number.isFinite(fixed)?round(fixed):0};
+}
+function removeCardPaymentRule(state,id){delete(state.predictions.paymentRules||{})[String(id)]}
+function savePaymentBill(state,bill){
+ const dateOK=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
+ if(!bill||!bill.fromAccountId||!String(bill.name||'').trim()||!dateOK(bill.date)||
+  !['once','monthly'].includes(bill.frequency)||!Number.isFinite(Number(bill.amount))||
+  Number(bill.amount)<=0||Number(bill.amount)>999999999)throw Error('Complete the payment account, name, amount and due date');
+ state.predictions.paymentBills??=[];
+ const id=bill.id||'bill-'+Date.now().toString(36)+Math.random().toString(36).slice(2);
+ if(String(id).length>120)throw Error('Invalid payment ID');
+ const entry={id:String(id),fromAccountId:String(bill.fromAccountId),name:String(bill.name).trim().slice(0,130),
+  date:String(bill.date),amount:round(bill.amount),category:String(bill.category||'Housing'),
+  frequency:bill.frequency,enabled:bill.enabled!==false};
+ const pos=state.predictions.paymentBills.findIndex(x=>x.id===id);
+ if(pos<0)state.predictions.paymentBills.push(entry);else state.predictions.paymentBills[pos]=entry;
+ return id;
+}
+function removePaymentBill(state,id){state.predictions.paymentBills=(state.predictions.paymentBills||[]).filter(x=>x.id!==id)}
+function setCashCushion(state,amount){
+ if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
+ state.predictions.cashCushion=round(amount);
+}
+const api={VERSION,migrate,records,categories,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

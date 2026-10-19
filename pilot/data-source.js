@@ -23,15 +23,19 @@ function record(t,account){
  const amount=Number(t.amount),pfc=t.category||null;
  if(!t.id||!/^\d{4}-\d{2}-\d{2}$/.test(String(t.date))||!Number.isFinite(amount))return null;
  const name=String(t.merchant||t.name||'Bank transaction').slice(0,250);
- const code=String(pfc?.primary||'').toUpperCase();
- const incoming=amount<0;
- const transfer=/^(?:TRANSFER_IN|TRANSFER_OUT|LOAN_PAYMENTS)$/.test(code)||name.toLowerCase().includes('transfer to ')||name.toLowerCase().includes('transfer from ');
- const type=transfer?'transfer':incoming?'income':'expense';
+ const code=String(pfc?.primary||'').toUpperCase(),lower=name.toLowerCase();
+ const incoming=amount<0,card=account.type==='credit';
+ // Credit settlements, mortgage/loan payments and transfers are cash
+ // movements, not new household purchases or earned wages.
+ const payment=/\b(payment thank you|autopay payment|automatic payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(name);
+ const transfer=/^(?:TRANSFER_IN|TRANSFER_OUT|LOAN_PAYMENTS)$/.test(code)||
+  lower.includes('transfer to ')||lower.includes('transfer from ')||payment;
+ const type=transfer?'transfer':card&&incoming?'refund':incoming?'income':'expense';
  const row={id:String(t.id),date:t.date,merchant:name,description:'Bank-imported transaction',amount:Math.abs(amount),
   type,account:account.name,accountId:account.id,pending:!!t.pending,category:'Other',
-  personal_finance_category:pfc,
-  source:{provider:'plaid',verified:true,itemId:'connected-bank-item',providerTransactionId:String(t.id),
-   accountId:account.id,plaidAmount:amount,personalFinanceCategory:pfc,
+  ...(transfer?{cashDirection:incoming?'in':'out'}:{}),personal_finance_category:pfc,
+  source:{provider:'plaid',verified:true,itemId:account.itemId||'connected-bank-item',
+   providerTransactionId:String(t.id),accountId:account.id,plaidAmount:amount,personalFinanceCategory:pfc,
    categoryConfidence:pfc?.confidence_level==='VERY_HIGH'?.99:pfc?.confidence_level==='HIGH'?.93:0}};
  const classification=root.HouseholdCategorization?.classify(row);
  if(!transfer&&classification?.category&&classification.category!=='Other'){
@@ -42,22 +46,29 @@ function record(t,account){
  return row;
 }
 function prepare(payload){
- if(!payload.connected||!payload.account)throw Error('Connect one bank account first under Bank Connection');
- const bank=payload.account;
- const rows=(payload.transactions||[]).map(t=>record(t,bank)).filter(Boolean);
+ const banks=Array.isArray(payload.accounts)&&payload.accounts.length?payload.accounts:payload.account?[payload.account]:[];
+ if(!payload.connected||!banks.length)throw Error('Connect at least one bank account under Bank Connection');
+ const byId=new Map(banks.map(a=>[String(a.id),a]));
+ const rows=(payload.transactions||[]).map(t=>{
+  const bank=byId.get(String(t.accountId||t.account_id||''))||(banks.length===1?banks[0]:null);
+  return bank?record(t,bank):null;
+ }).filter(Boolean);
  const adjustments=payload.adjustments||{};
  const state=root.HouseholdLedgerData.migrate({
   transactions:rows,items:[],
-  accounts:[{id:bank.id,name:bank.name,type:bank.type,subtype:bank.subtype,institution:'Connected via Plaid',itemId:'connected-bank-item'}],
-  ...Object.fromEntries(['categoryOverrides','predictions','reviews','learning','customCategories'].filter(k=>adjustments[k]!==undefined).map(k=>[k,adjustments[k]]))
+  accounts:banks.map(a=>({id:a.id,name:a.name,type:a.type,subtype:a.subtype,
+   institution:'Connected via Plaid',itemId:a.itemId||'connected-bank-item'})),
+  ...Object.fromEntries(['categoryOverrides','predictions','reviews','learning','customCategories']
+   .filter(k=>adjustments[k]!==undefined).map(k=>[k,adjustments[k]]))
  });
- const snapshot={asOf:today(),mode:'plaid',connected:true,source:'Plaid bank-reported balance',lastSuccessfulSync:payload.lastSync,
-  expectedAccountIds:[bank.id],
-  accounts:[{id:bank.id,name:bank.name+(bank.mask?' ••'+bank.mask:''),accountType:bank.type==='credit'?'credit':bank.subtype==='savings'?'savings':'checking',
-   type:bank.type,subtype:bank.subtype,transactionAccount:bank.name,current:bank.current??null,
-   available:bank.available??null,balanceAsOf:bank.balanceObservedAt||null,
-   currency:bank.currency||'USD',simulated:false}]};
- return {state,snapshot,account:bank};
+ const snapshot={asOf:today(),mode:'plaid',connected:true,source:'Plaid bank-reported balances',
+  lastSuccessfulSync:payload.lastSync,expectedAccountIds:banks.map(a=>a.id),
+  accounts:banks.map(a=>({id:a.id,name:a.name+(a.mask?' ••'+a.mask:''),
+   accountType:a.type==='credit'?'credit':a.subtype==='savings'?'savings':'checking',
+   type:a.type,subtype:a.subtype,transactionAccount:a.name,current:a.current??null,
+   available:a.available??null,balanceAsOf:a.balanceObservedAt||null,
+   currency:a.currency||'USD',simulated:false}))};
+ return {state,snapshot,account:banks[0],accounts:banks};
 }
 async function enter(){
  if(loading)return;loading=true;lastError='';

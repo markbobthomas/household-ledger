@@ -34,6 +34,7 @@ jobs:
           node tests/reconciliation-phase3-stress.cjs
           node tests/conservative-categorization-phase2.cjs
           node tests/overall-budget-smoke.cjs
+          node tests/payment-obligations-smoke.cjs
           node tests/one-account-ledger-browser.cjs
           node tests/accounting-phaseA-smoke.cjs
           node tests/account-forecast-phaseB-smoke.cjs
