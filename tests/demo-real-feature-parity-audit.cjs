@@ -67,7 +67,7 @@ async function main(){
   console.log(JSON.stringify({total,baseline,retained,matrix:checks.map(c=>({area:c.tab,capability:c.name,demo:demo[c.name],real:real[c.name]})),consoleErrors:errors},null,2));
   console.log('UI_PARITY_AUDIT_END');
   assert.ok(baseline>=12,'Demo baseline features not available in test');
-  assert.ok(retained>=baseline-2,'Real mode must retain practically all original Demo UI capabilities');
+  assert.equal(retained,baseline,'Real mode must retain every demonstrated feature from Demo mode');
   assert.ok(Object.values(viewLeaks).every(x=>x.visibleDespiteHidden===0),'Demo content must not leak under alternate overlays');
   assert.deepEqual(errors,[],'Browser threw errors during audit');
  }finally{if(browser)await browser.close();child.kill();fs.rmSync(dir,{recursive:true,force:true})}
