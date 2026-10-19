@@ -23,9 +23,10 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await page.locator('#add-custom-category button[type=submit]').click();
   assert.ok((await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')))).customCategories.includes('Pet supplies'),'Demo category creation uses original Ledger state');
   const bankTest=await ctx.newPage(),postedDate=new Date().toISOString().slice(0,10);
+  let currentBalance=1000,availableBalance=950,lastSync=new Date().toISOString(),balanceObservedAt=lastSync;
   await bankTest.route('**/api/ledger',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
-   connected:true,lastSync:'2026-10-19T12:00:00Z',
-   account:{id:'acct-1',name:'Test Checking',type:'depository',subtype:'checking',current:1000,available:950,balanceObservedAt:'2026-10-19T12:00:00Z'},
+   connected:true,lastSync,
+   account:{id:'acct-1',name:'Test Checking',type:'depository',subtype:'checking',current:currentBalance,available:availableBalance,balanceObservedAt},
    adjustments:{},transactions:[
     {id:'posted',date:postedDate,merchant:'Cafe',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT',confidence_level:'HIGH'}},
     {id:'pending',date:postedDate,merchant:'Pending cafe',amount:60,pending:true,category:{primary:'FOOD_AND_DRINK'}},
@@ -33,6 +34,11 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
     {id:'unknown',date:postedDate,merchant:'Mystery',amount:19,pending:false,category:null},
     {id:'membership',date:postedDate,merchant:'Example Membership',amount:14.95,pending:false,category:null}]
   })}));
+  let syncCount=0;
+  await bankTest.route('**/api/sync',route=>{
+   syncCount++;
+   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true})});
+  });
   let adjustments=[];
   await bankTest.route('**/api/ledger/adjustments',async route=>{adjustments.push(route.request().postDataJSON());await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({saved:true})})});
   const errorsReal=[];bankTest.on('pageerror',e=>errorsReal.push(e.message));
@@ -40,6 +46,42 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await bankTest.locator('aside [data-page=settings]').click();
   await bankTest.locator('#ledger-mode-switch').selectOption('real');
   await bankTest.locator('#demo-banner').getByText('REAL BANK · PLAID').waitFor();
+  // Connected Plaid Overview must never inherit Demo's "bank not connected" status.
+  await bankTest.locator('aside [data-page=overview]').click();
+  const summary=bankTest.locator('[aria-label="Household overview summary"]');
+  assert.match(await summary.locator('[data-overview-source]').innerText(),/1 connected account/);
+  assert.match(await summary.locator('[data-overview-coverage]').innerText(),/not necessarily every household account/);
+  assert.match(await summary.locator('[data-bank-sync]').innerText(),/Last successful transaction sync/);
+  assert.equal(await summary.locator('.bank-overview-account [aria-label="Bank-reported current"]').innerText(),'$1,000.00');
+  assert.match(await summary.locator('.bank-overview-available').innerText(),/\$950\.00/);
+  assert.match(await bankTest.locator('#cashflow .feed-health').innerText(),/recent sync reported/i,
+   'Plaid is recognized by feed health as connected');
+  assert.doesNotMatch(await bankTest.locator('#view').innerText(),/bank not connected|no connected bank feed/i);
+  assert.match(await bankTest.locator('#cashflow .cash-secondary').innerText(),/Bank-reported available[\s\S]*\$950\.00/,
+   'Projection starts with available balance and labels it as available, not current');
+  assert.equal(await bankTest.locator('#cashflow .cash-chart').count(),1,'Fresh linked checking account supports a forecast');
+  // Clicking Refresh must perform a genuine authenticated bank sync, then fetch fresh reported balances.
+  currentBalance=1234.56;availableBalance=1211.11;
+  await bankTest.locator('[data-refresh-bank]').first().click();
+  await bankTest.locator('.bank-overview-account [aria-label="Bank-reported current"]').getByText('$1,234.56').waitFor();
+  assert.equal(syncCount,1,'Real Overview refresh called the bank sync endpoint');
+  assert.match(await bankTest.locator('.bank-overview-available').innerText(),/\$1,211\.11/,
+   'Fresh available is separate from unchanged current');
+  assert.match(await bankTest.locator('#cashflow .cash-secondary').innerText(),/\$1,211\.11/);
+  // A stale bank snapshot is still disclosed as last reported, never projected as current cash.
+  lastSync=new Date(Date.now()-5*86400000).toISOString();
+  balanceObservedAt=lastSync;
+  await bankTest.locator('[data-refresh-bank]').first().click();
+  await bankTest.locator('#cashflow').getByText('90-day cash forecast unavailable').waitFor();
+  assert.equal(await bankTest.locator('#cashflow .cash-chart').count(),0,'No 90-day cash chart from stale bank data');
+  assert.match(await summary.locator('.bank-overview-account').innerText(),/Last reported · stale/);
+  assert.equal(await summary.locator('.bank-overview-account [aria-label="Bank-reported current"]').innerText(),'$1,234.56');
+  assert.equal(syncCount,2);
+  // Restore a fresh fixture for remaining shared-mode regression tests.
+  lastSync=new Date().toISOString();balanceObservedAt=lastSync;
+  await bankTest.locator('[data-refresh-bank]').first().click();
+  await bankTest.locator('#cashflow .cash-chart').waitFor();
+  assert.equal(syncCount,3);
   await bankTest.locator('aside [data-page=budgets]').click();
   assert.equal(await bankTest.locator('.budget-entry[data-budget-category="Groceries"]').count(),1,'Original category budget rows retained');
   assert.equal(await bankTest.locator('section[aria-label="Overall monthly budget"]').count(),1,'Same overall budget renderer');

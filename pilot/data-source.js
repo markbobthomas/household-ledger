@@ -61,12 +61,32 @@ function prepare(payload){
 }
 async function enter(){
  if(loading)return;loading=true;lastError='';
+ // The last preference is Real: do not briefly show fictional balances or
+ // "bank not connected" while the authenticated bank snapshot loads.
+ host.render();
  try{
   const data=prepare(await request(''));
   host.enterReal(data.state,data.snapshot);
   loadedAccount=data.account;live=true;
   localStorage.setItem(MODE,'real');
  }catch(e){lastError=e.message;host.enterDemo();live=false;localStorage.setItem(MODE,'demo')}
+ finally{loading=false;host.render()}
+}
+async function refresh(){
+ if(loading||!live)return;
+ loading=true;lastError='';host.render();
+ try{
+  // Finish the user's category and schedule writes before retrieving a new
+  // server state, otherwise the screen could overwrite their latest decision.
+  await writeQueue;
+  const response=await fetch('/api/sync',{method:'POST',cache:'no-store',
+   headers:{'X-Pilot-Action':'1','Content-Type':'application/json'},body:'{}'});
+  const result=await response.json();
+  if(!response.ok)throw Error(result?.error||'The bank could not complete this sync');
+  const updated=prepare(await request(''));
+  host.enterReal(updated.state,updated.snapshot);
+  loadedAccount=updated.account;
+ }catch(e){lastError='Bank refresh failed: '+e.message}
  finally{loading=false;host.render()}
 }
 function demo(){
@@ -77,8 +97,8 @@ function panel(){
  return '<section class="panel settings-block" aria-label="Ledger data source">'+
   '<h3>Data source</h3><label for="ledger-mode-switch">Choose your data</label>'+
   '<select id="ledger-mode-switch" aria-label="Choose demo or real data source"'+(loading?' disabled':'')+'>'+
-   '<option value="demo"'+(!live?' selected':'')+'>Demo / simulated</option>'+
-   '<option value="real"'+(live?' selected':'')+'>Real / Plaid</option></select>'+
+   '<option value="demo"'+(!live&&!loading?' selected':'')+'>Demo / simulated</option>'+
+   '<option value="real"'+(live||loading?' selected':'')+'>Real / Plaid</option></select>'+
   '<p>Both modes use the same Ledger pages, category controls, budgets, forecasts and Insights. Bank transactions and balances cannot be edited.</p>'+
   '<p>Real data is stored on the private server, separate from fictional data. Only your mode preference is stored on this device.</p>'+
   '<a href="/bank-connect">Connect, sync or disconnect bank account</a>'+statusText()+'</section>';
@@ -103,5 +123,6 @@ function bind(callbacks){
  });
  if(localStorage.getItem(MODE)==='real')enter();
 }
-root.HouseholdLiveSource={bind,panel,persist,mode:selection,get error(){return lastError}};
+root.HouseholdLiveSource={bind,panel,persist,enterReal:enter,refresh,mode:selection,
+ get loading(){return loading},get error(){return lastError}};
 })(typeof window!=='undefined'?window:globalThis);

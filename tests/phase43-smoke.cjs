@@ -18,6 +18,14 @@ const connected=(overrides={})=>({...demo,mode:'live',connected:true,
  lastSuccessfulSync:'2026-10-17T19:00:00Z',accounts:[{id:'a1'}],...overrides});
 assert.equal(H.assess(connected(),[],['a1'],now).status,'recent-sync-reported');
 assert.equal(H.assess(connected(),[],['a1'],now).authoritative,false);
+const plaidSnapshot=connected({mode:'plaid'});
+const plaidHealth=H.assess(plaidSnapshot,[],['a1'],now);
+assert.equal(plaidHealth.connected,true,'A connected Plaid snapshot must not appear as Demo');
+assert.equal(plaidHealth.status,'recent-sync-reported','A recent Plaid sync is a connected account, not bank not connected');
+assert.equal(plaidHealth.lastSuccessfulSync,'2026-10-17T19:00:00Z');
+assert.equal(plaidHealth.authoritative,false,'Feed metadata is not independent bank validation');
+assert.equal(H.assess(connected({mode:'plaid',lastSuccessfulSync:null}),[],['a1'],now).status,'attention',
+ 'A connected Plaid account with no sync time requires attention, not a fake disconnected status');
 assert.equal(H.assess(connected({lastSuccessfulSync:null}),[],[],now).status,'attention');
 assert.equal(H.assess(connected({lastSuccessfulSync:'2026-10-01T10:00:00Z'}),[],['a1'],now).status,'stale');
 assert.deepEqual(H.assess(connected(),[],['a1','missing'],now).missingAccountIds,['missing']);

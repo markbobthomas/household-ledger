@@ -3,7 +3,8 @@
 const validTime=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)&&/(?:Z|[+-]\d{2}:?\d{2})$/.test(v)&&Number.isFinite(Date.parse(v));
 function assess(snapshot,records=[],expectedAccountIds=[],now=new Date()){
  const mode=String(snapshot?.mode||'disconnected');
- const connected=(mode==='live'||mode==='connected')&&snapshot?.connected===true;
+ // Plaid is the Real account adapter mode; a connected Plaid account is not Demo.
+ const connected=(mode==='live'||mode==='connected'||mode==='plaid')&&snapshot?.connected===true;
  const accounts=Array.isArray(snapshot?.accounts)?snapshot.accounts:[];
  const expected=Array.isArray(expectedAccountIds)?[...new Set(expectedAccountIds.filter(Boolean).map(String))]:[];
  const actual=new Set(accounts.map(a=>String(a.id)));
