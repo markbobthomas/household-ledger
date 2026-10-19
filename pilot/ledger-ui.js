@@ -1,41 +1,79 @@
-/* Same-origin, read-only live Plaid status. Never store real bank transactions in localStorage. */
+/* Private live Ledger: explicit display modes. Real financial facts are never copied to localStorage. */
 (function(){
- 'use strict';
- const escapeText=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
- const dollars=n=>n===null||n===undefined?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
- let current=null,pending=false;
- async function update(){
-  if(pending)return;pending=true;
-  try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('Cannot read secure bank connection');current=await r.json()}
-  catch(e){current={error:'Bank connection unavailable'}; }
-  finally{pending=false;paint()}
+'use strict';
+const KEY='household-ledger-view-mode';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
+const money=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n));
+let current=null,mode=localStorage.getItem(KEY)==='real'?'real':'demo',busy=false;
+async function reload(){
+ if(busy)return;busy=true;
+ try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok||!(r.headers.get('content-type')||'').includes('application/json'))throw Error('Private bank service unavailable');current=await r.json()}
+ catch{current={error:'Bank connection unavailable'};}finally{busy=false;draw()}
+}
+function safeReal(){
+ const a=current?.account;
+ return !!(current?.connected&&a&&a.current!==null&&a.current!==undefined&&Number.isFinite(Number(a.current)));
+}
+function details(tab){
+ if(current?.error)return '<p role="status">'+esc(current.error)+'</p>';
+ if(!current?.connected)return '<p>No real account connected. <a href="/bank-connect">Connect one bank account</a>.</p>';
+ const a=current.account;
+ const head='<p><strong>'+esc(a?.name||'Bank account')+'</strong> · Bank-reported current balance <strong>'+money(a?.current)+'</strong></p>'+
+  '<p>Bank-reported available balance '+money(a?.available)+' · Retrieved '+esc(a?.balanceObservedAt||'unknown')+'</p>'+
+  '<p>'+Number(current.transactions?.length||0)+' imported transactions · <a href="/bank-connect">Refresh or disconnect</a></p>';
+ const t=current.transactions||[];
+ if(tab==='Transactions'){
+  return head+'<div class="cash-table-wrap"><table class="cash-table"><thead><tr><th>Posted date</th><th>Merchant</th><th>Bank amount</th><th>Status</th></tr></thead><tbody>'+
+   t.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.merchant)+'</td><td>'+money(x.amount)+'</td><td>'+esc(x.pending?'Pending':'Posted')+'</td></tr>').join('')+
+   '</tbody></table></div><p class="prediction-note">Only transactions from the connected bank account. Pending transactions are identified, not included as posted spending.</p>';
  }
- function paint(){
-  const mount=document.querySelector('#real-account-status');if(!mount)return;
-  if(!current){mount.textContent='Checking bank connection…';return}
-  if(current.error){mount.textContent=current.error;return}
-  if(!current.connected){mount.innerHTML='<p>No real bank connected yet. Fictional demonstration data below remains separate.</p><p><a href="/bank-connect">Connect one bank account securely</a></p>';return}
-  const a=current.account,tab=document.querySelector('#title')?.textContent;
-  const summary='<div><strong>'+escapeText(a?.name||'Checking account')+'</strong> · Bank-reported current balance: <strong>'+dollars(a?.current)+'</strong></div>'+
-   '<p>Bank-reported available balance: '+dollars(a?.available)+' · Retrieved '+escapeText(a?.balanceObservedAt||'unknown')+'</p>'+
-   '<p>Imported bank transactions: '+Number(current.transactions?.length||0)+' · <a href="/bank-connect">Refresh, inspect or disconnect</a></p>';
-  const tx=tab==='Transactions'?'<div class="cash-table-wrap"><table class="cash-table"><thead><tr><th>Bank date</th><th>Bank merchant</th><th>Bank amount</th><th>Bank status</th></tr></thead><tbody>'+
-   (current.transactions||[]).map(t=>'<tr><td>'+escapeText(t.date)+'</td><td>'+escapeText(t.merchant)+'</td><td>'+dollars(t.amount)+'</td><td>'+escapeText(t.pending?'Pending':'Posted')+'</td></tr>').join('')+
-   '</tbody></table></div>':'';
-  mount.innerHTML=summary+tx+
-   '<p class="prediction-note">Read-only Plaid source data. The fictional '+(tab==='Transactions'?'transactions below':'forecast below')+' remain separate and do not change bank balances.</p>';
+ return head+'<p class="prediction-note">Exact Plaid-reported balance, not reconstructed from transactions. Plaid may lag your bank.</p>';
+}
+function realView(tab){
+ if(tab==='Budgets'||tab==='Insights'||tab==='Reviews'){
+  return '<section class="panel" aria-label="Real data status"><h3>'+esc(tab)+' · Real data</h3>'+
+   '<p>Real-account '+esc(tab.toLowerCase())+' calculations are not enabled yet. Demo totals have been hidden so no fictional data can be mistaken for real spending.</p>'+
+   '<p>Connect and verify bank transactions first. <a href="/bank-connect">Inspect the connected account</a>.</p></section>';
  }
- function place(){
-  if(!document.querySelector('#real-account-status')){
-   const tab=document.querySelector('#title')?.textContent;
-   if(!['Overview','Settings','Transactions'].includes(tab))return;
-   const container=document.createElement('section');container.className='panel';container.setAttribute('aria-label','Real checking account');
-   container.innerHTML='<div class="section-top"><h3>Real checking account · Plaid</h3><span class="budget-summary-meta">Bank-reported · read-only</span></div><div id="real-account-status">Checking bank connection…</div>';
-   const view=document.querySelector('#view');
-   if(view)view.prepend(container);else return;
-  }
-  paint();
+ return '';
+}
+function draw(){
+ const view=document.querySelector('#view'),tab=document.querySelector('#title')?.textContent;
+ if(!view||!tab)return;
+ const active=mode==='real',connected=!!current?.connected;
+ let overlay=document.querySelector('#real-mode-surface');
+ if(overlay)overlay.remove();
+ // Keep original application state untouched. Hide, never reclassify or copy demo data.
+ const existing=view.children;
+ for(const child of existing)child.hidden=active;
+ if(active){
+  overlay=document.createElement('div');overlay.id='real-mode-surface';overlay.setAttribute('data-real-view','');
+  if(['Overview','Transactions','Settings'].includes(tab)){
+   overlay.innerHTML='<section class="panel" aria-label="Real checking account"><div class="section-top"><h3>Real bank account · Plaid</h3><span class="budget-summary-meta">Read-only</span></div>'+
+    details(tab)+'</section>'+(tab==='Settings'?settingsControl():'');
+  }else overlay.innerHTML=realView(tab);
+  view.prepend(overlay);
+ }else if(tab==='Settings'){
+  overlay=document.createElement('div');overlay.id='real-mode-surface';overlay.innerHTML=settingsControl();view.prepend(overlay);
  }
- const observer=new MutationObserver(()=>{if(!document.querySelector('#real-account-status')&&['Overview','Settings','Transactions'].includes(document.querySelector('#title')?.textContent))place()});
- document.addEventListener('DOMContentLoaded',()=>{observer.observe(document.querySelector('#view'),{childList:true});place();update()});
+ const button=document.querySelector('#ledger-mode-switch');
+ if(button)button.addEventListener('change',e=>{
+  const requested=e.target.value;
+  if(requested==='real'&&!connected){e.target.value='demo';alert('Connect your bank first before choosing Real data.');return}
+  mode=requested;localStorage.setItem(KEY,mode);draw();
+ });
+}
+function settingsControl(){
+ return '<section class="panel" aria-label="Data mode settings"><div class="section-top"><h3>Data mode</h3><span class="budget-summary-meta">'+(mode==='real'?'REAL BANK':'SIMULATED')+'</span></div>'+
+  '<label for="ledger-mode-switch">Show data from</label> <select id="ledger-mode-switch" aria-label="Choose demo or real bank data">'+
+  '<option value="demo"'+(mode==='demo'?' selected':'')+'>Demo / simulated data</option>'+
+  '<option value="real"'+(mode==='real'?' selected':'')+'>Real bank data</option></select>'+
+  '<p class="prediction-note">This switches what is displayed. It does not change, combine or delete bank records. Real budgeting and forecasts will stay unavailable until they are verified.</p>'+
+  '<p><a href="/bank-connect">Manage bank connection</a></p></section>';
+}
+const observer=new MutationObserver(()=>{if(!document.querySelector('#real-mode-surface')||document.querySelector('#real-mode-surface')?.parentElement!==document.querySelector('#view'))draw()});
+document.addEventListener('DOMContentLoaded',()=>{
+ observer.observe(document.querySelector('#view'),{childList:true});
+ draw();reload();
+});
 })();
