@@ -386,7 +386,8 @@ function setCardPaymentRule(state,accountId,rule){
  const dateOK=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
  const closingDay=Number(rule.closingDay),amount=Number(rule.lastStatementBalance);
  const method=String(rule.method||'statement'),due=String(rule.nextPaymentDate||''),closed=String(rule.lastStatementClose||'');
- if(!String(rule.fromAccountId||'')||!dateOK(due)||!dateOK(closed)||due<=closed||
+ const paymentDue=String(rule.nextDueDate||due);
+ if(!String(rule.fromAccountId||'')||!dateOK(due)||!dateOK(paymentDue)||!dateOK(closed)||due<=closed||paymentDue<=closed||
   !Number.isInteger(closingDay)||closingDay<1||closingDay>31||
   !Number.isFinite(amount)||amount<0||amount>999999999||
   !['statement','minimum','fixed'].includes(method))throw Error('Enter a valid statement close, next withdrawal date and balance');
@@ -395,7 +396,7 @@ function setCardPaymentRule(state,accountId,rule){
   method==='fixed'&&(!Number.isFinite(fixed)||fixed<0))throw Error('Enter a valid autopay amount');
  state.predictions.paymentRules??={};
  state.predictions.paymentRules[id]={fromAccountId:String(rule.fromAccountId),closingDay,
-  lastStatementClose:closed,nextPaymentDate:due,lastStatementBalance:round(amount),method,
+  lastStatementClose:closed,nextPaymentDate:due,nextDueDate:paymentDue,lastStatementBalance:round(amount),method,
   minimumAmount:Number.isFinite(minimum)?round(minimum):0,
   fixedAmount:Number.isFinite(fixed)?round(fixed):0};
 }

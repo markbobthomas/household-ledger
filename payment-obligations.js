@@ -62,8 +62,10 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const estimated=Math.max(calculated,Number(rule.lastStatementBalance));
    const amount=round(n===0?amount0:method==='statement'?estimated:amount0);
    const confidence=n===0?'entered statement / review required':'estimate, not a bank-issued statement';
+   const actualDue=plus(String(rule.nextDueDate||rule.nextPaymentDate),n);
+   if(due>actualDue)warnings.push(card.name+': planned bank withdrawal '+due+' is after the card due date '+actualDue);
    const statement={cardId:id,cardName:card.name,fromAccountId:from.id,fromName:from.name,
-    dueDate:due,closingDate:cycleClose,amount,statementBalance:n===0?Number(rule.lastStatementBalance):calculated,
+    dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,statementBalance:n===0?Number(rule.lastStatementBalance):calculated,
     bankPurchases,estimatedCharges:futureCharges,method,confidence,confirmed:n===0,estimated:n>0};
    statements.push(statement);
    // Each card payment appears exactly once as one two-legged transfer.

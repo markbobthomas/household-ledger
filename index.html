@@ -170,9 +170,19 @@ function previewCashFlow(){
    sharedForecast():window.HouseholdForecastLedger.build(data,source,today(),90,window.HouseholdForecast,Model);
  const payment=window.HouseholdPaymentObligations.build(snapshot,source,future.events,data.predictions);
  const suppressed=new Set(payment.suppressedExpectedIds||[]);
+ // A statement-autopay rule owns its card/source/date. Do not leave a prior
+ // manually scheduled amount in place on the same day (even if it differs).
+ const cardAutopays=payment.plans;
+ const manualMovements=(data.predictions.accountMovements||[]).filter(p=>{
+  const occurrences=window.HouseholdAccountForecast.occurrences(p,snapshot.asOf,cashDateOffset(snapshot.asOf,90));
+  const conflict=cardAutopays.some(a=>a.fromAccountId===p.fromAccountId&&a.toAccountId===p.toAccountId&&
+   occurrences.some(d=>Math.abs(Date.parse(d)-Date.parse(a.anchorDate))<=3*86400000));
+  if(conflict)payment.warnings.push('An older manual card-payment plan overlaps the statement autopay and was excluded from this forecast.');
+  return !conflict;
+ });
  const multi=window.HouseholdAccountForecast.build(snapshot,
    [...future.events.filter(e=>!suppressed.has(String(e.id))),...payment.billEvents],
-   [...(data.predictions.accountMovements||[]),...payment.plans],{days:90,records:source});
+   [...manualMovements,...payment.plans],{days:90,records:source});
  const accountEvents=multi.events.filter(p=>p.accountId===account.id).map(p=>({
   id:p.id,date:p.date,amount:p.amount,merchant:p.merchant,accountId:p.accountId,
   type:p.kind==='transfer_out'||p.kind==='transfer_in'?'transfer':
@@ -242,6 +252,16 @@ function paymentCoverageMarkup(snapshot,multi,payment){
   '<span>Lowest projected cash account <strong>'+esc(worst?money(worst.minimum):'Unverified')+'</strong></span></div>'+
   (warnings.length?'<p class="account-forecast-warning">'+esc(warnings.join(' · '))+'</p>':'')+
   (visible||'<p class="prediction-note">No dated withdrawals are verified or predicted yet. Set up your mortgage, card autopay and other automatic bills below.</p>')+
+  (payment.statements.length?'<details class="statement-breakdown"><summary>Credit card statements and expected withdrawals ('+payment.statements.length+')</summary>'+
+   '<div class="statement-list">'+payment.statements.map(s=>'<div class="statement-row"><div><strong>'+esc(s.cardName)+'</strong>'+
+    '<small>Statement closes '+esc(s.closingDate)+' · Due '+esc(s.dueDate)+' · Checking withdrawal '+esc(s.withdrawalDate)+'</small>'+
+    '<small>'+esc(s.confidence)+'</small></div><div><strong>'+money(s.amount)+'</strong>'+
+    '<small>Recorded card purchases '+money(s.bankPurchases)+' · Expected charges '+money(s.estimatedCharges)+'</small></div></div>').join('')+
+    '</div><p class="prediction-note">Only the latest statement balance is entered by you. Future cycles are estimated from recorded and scheduled card purchases, with the last-entered statement amount used as a conservative planning floor—not as a bank-issued statement.</p></details>':'')+
+  (()=>{const charges=multi.events.filter(e=>e.kind==='card_purchase').sort((a,b)=>a.date.localeCompare(b.date));
+   return charges.length?'<details class="statement-breakdown"><summary>Expected credit card charges ('+charges.length+')</summary>'+
+    charges.slice(0,50).map(e=>'<div class="statement-row"><span>'+esc(cashDateLabel(e.date))+' · '+esc(e.merchant)+'</span><strong>'+money(e.amount)+'</strong></div>').join('')+
+    '<p class="prediction-note">Purchases increase card debt and household spending; they do not directly reduce checking.</p></details>':'';})()+
   '<p class="prediction-note">These are predictions after known/scheduled daily events, not guaranteed bank balances. A payment may clear on a different date; multiple same-day withdrawals share an end-of-day balance. Unscheduled purchases are excluded.</p>'+
   '</section>';
 }
@@ -261,6 +281,7 @@ function paymentSetupMarkup(snapshot){
     '<label>Latest statement closes<input type="date" name="lastStatementClose" value="'+esc(close)+'" required></label>'+
     '<label>Statement closing day<input type="number" min="1" max="31" name="closingDay" value="'+esc(rule.closingDay||Number(close.slice(8)))+'" required></label>'+
     '<label>Next checking withdrawal date<input type="date" name="nextPaymentDate" value="'+esc(next)+'" required></label>'+
+    '<label>Card payment due date<input type="date" name="nextDueDate" value="'+esc(rule.nextDueDate||next)+'" required></label>'+
     '<label>Last issued statement balance ($)<input type="number" name="lastStatementBalance" min="0" step=".01" placeholder="Enter statement amount" value="'+esc(rule.lastStatementBalance??'')+'" required></label>'+
     '<label>Autopay choice<select name="method">'+[['statement','Full statement'],['minimum','Minimum due'],['fixed','Fixed amount']].map(([v,n])=>'<option value="'+v+'" '+((rule.method||'statement')===v?'selected':'')+'>'+n+'</option>').join('')+'</select></label>'+
     '<label>Minimum due ($)<input type="number" name="minimumAmount" min="0" step=".01" value="'+esc(rule.minimumAmount??'')+'" placeholder="If minimum autopay"></label>'+
