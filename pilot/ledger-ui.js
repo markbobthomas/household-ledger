@@ -71,7 +71,7 @@ function settingsControl(){
   '<p class="prediction-note">This switches what is displayed. It does not change, combine or delete bank records. Real budgeting and forecasts will stay unavailable until they are verified.</p>'+
   '<p><a href="/bank-connect">Manage bank connection</a></p></section>';
 }
-const observer=new MutationObserver(()=>{if(!document.querySelector('#real-mode-surface')||document.querySelector('#real-mode-surface')?.parentElement!==document.querySelector('#view'))draw()});
+const observer=new MutationObserver(()=>{const v=document.querySelector('#view');if(!v)return;const surface=document.querySelector('#real-mode-surface');const tab=document.querySelector('#title')?.textContent;if(mode==='real'||tab==='Settings'){if(!surface||surface.parentElement!==v)draw()}else if(surface&&surface.parentElement!==v)draw()});
 document.addEventListener('DOMContentLoaded',()=>{
  observer.observe(document.querySelector('#view'),{childList:true});
  draw();reload();
