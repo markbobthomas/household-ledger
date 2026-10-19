@@ -1073,6 +1073,30 @@ function updateBudgetAmountUI(category,amount,button){
   ' expected transactions, budget '+(limit?money(limit):'not set'));
  item.querySelector('.budget-heading:last-child .budget-category-meta:last-child')
   ?.classList.toggle('over-budget',Boolean(limit&&budgetMonth===today().slice(0,7)&&f.projectedTotal>limit));
+ // Category caps are editable inline; keep the overall cap and bar synchronized immediately.
+ const overall=document.querySelector('section[aria-label="Overall monthly budget"]');
+ if(overall){
+  const cats=[...new Set([...allCategories(),...Object.keys(data.predictions.monthlyBudgets)])];
+  const totals=cats.reduce((total,name)=>{
+   const projection=monthlyProjection(budgetMonth,name);
+   total.actual+=Number(projection.actual)||0;
+   total.expected+=Number(projection.additional)||0;
+   total.limit+=Number(data.predictions.monthlyBudgets[name])||0;
+   return total;
+  },{actual:0,expected:0,limit:0});
+  const actualWidth=totals.limit?Math.min(100,Math.max(0,totals.actual/totals.limit*100)):0;
+  const expectedWidth=totals.limit?Math.min(Math.max(0,100-actualWidth),Math.max(0,totals.expected/totals.limit*100)):0;
+  const progress=overall.querySelector('.budget-progress');
+  progress.querySelector('.actual').style.width=actualWidth.toFixed(2)+'%';
+  progress.querySelector('.forecast').style.width=expectedWidth.toFixed(2)+'%';
+  progress.setAttribute('aria-label','Overall budget: '+money(totals.actual)+' spent, '+money(totals.expected)+' expected, total budget '+money(totals.limit));
+  const summary=overall.querySelectorAll('.budget-heading .budget-category-meta');
+  if(summary[0])summary[0].textContent='Combined budget '+money(totals.limit);
+  if(summary[1]){
+   summary[1].textContent=budgetMonth===today().slice(0,7)?'Expected total '+money(totals.actual+totals.expected):'Recorded total '+money(totals.actual);
+   summary[1].classList.toggle('over-budget',Boolean(totals.limit&&totals.actual+totals.expected>totals.limit));
+  }
+ }
 }
 function bindInlineMoneyEdits(){
  document.querySelectorAll('[data-inline-budget]').forEach(button=>{
