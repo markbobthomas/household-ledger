@@ -609,8 +609,10 @@ if(page==='settings'){
  audit.accounts.map(a=>'<div class="row"><span>'+esc(a.name)+
  ' <small class="transaction-source">· '+esc(a.type==='unknown'?'Type unverified':a.type==='credit'?'Credit card':a.type)+
  '</small></span><strong>'+audit.transactions.filter(t=>t.accountId===a.id).length+' records</strong></div>').join('')+
- (audit.summary.needsReview?'<p class="prediction-note">'+audit.summary.needsReview+
- ' ambiguous credit/transfer classifications need review before connecting real accounts.</p>':'')+
+ (audit.issues?.length?'<details class="drill-detail"><summary class="row drill-summary"><strong>'+audit.issues.length+' transactions requiring reconciliation confirmation</strong><span class="chevron">⌄</span></summary><div class="drill-expanded">'+
+ '<p class="prediction-note">These are not automatically matched or discarded. Check the source accounts and transactions before relying on reconciled totals. Confirmations for transfers are not yet supported in the Ledger; do not reinterpret them as expenses.</p>'+
+ audit.issues.map(issue=>'<div class="row"><span><strong>'+esc(issue.merchant)+'</strong><div class="transaction-source">'+esc(issue.date)+' · '+esc(issue.accountId)+' · '+esc(issue.reason)+'</div></span><strong>'+money(issue.amount)+'</strong></div>').join('')+
+ '</div></details>':'<p class="prediction-note">No unresolved accounting matches found in the loaded records.</p>')+
  '<p class="prediction-note">Source transactions remain unchanged. Account types are inferred only from verified metadata; unverified accounts are not assumed to be checking accounts.</p></div>';
  const startupSettings='<div class="panel settings-block menu-preferences"><h3>Menu preferences</h3>'+
  '<label class="default-page-label" for="default-page">Default opening tab</label>'+
