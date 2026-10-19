@@ -77,7 +77,9 @@ async function start(port=Number(env.PORT||8788)){
   const origin=req.headers.origin,host=req.headers.host;
   if(origin&&new URL(origin).host!==host)return respond(403,{error:'Origin rejected'});
   if(req.method==='GET'&&req.url==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
-  if(req.method==='GET'&&(req.url==='/'||/^\\/(?:index\\.html|modern\\.css|(?:demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)\\.js|sandbox\\/sandbox-ui\\.js|pilot\\/ledger-ui\\.js)(?:\\?[^/]*)?$/.test(req.url))){
+  const staticPath=req.url.split('?')[0].slice(1);
+  const allowed=/^(?:index[.]html|modern[.]css|(?:demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]ledger-ui[.]js)$/;
+  if(req.method==='GET'&&(req.url==='/'||allowed.test(staticPath))){
    const name=req.url.split('?')[0].slice(1)||'index.html';
    let body=await fs.readFile(path.resolve(__dirname,'..',name));
    if(name==='index.html')body=Buffer.from(body.toString('utf8').replace('</head>','<script src="/pilot/ledger-ui.js" defer></script></head>'));
