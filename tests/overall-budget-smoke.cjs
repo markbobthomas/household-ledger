@@ -22,7 +22,7 @@ const {chromium}=require('playwright');
   await groceries.locator('.inline-money-input').fill(String(oldCap+37));
   await groceries.locator('.inline-money-input').press('Enter');
   const newLabel=await overall.locator('.budget-progress').getAttribute('aria-label');
-  const newLimit=Number(newLabel.match(/total budget \\$([\\d,.]+)/)?.[1]?.replace(/,/g,''));
+  const newLimit=Number(newLabel.split('total budget $')[1]?.replace(/,/g,''));
   assert.ok(Math.abs(newLimit-overallLimit-37)<.01,'Overall budget updates immediately after uncapped or capped category edit');
   assert.ok((await overall.innerText()).includes(new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(newLimit)),'Visible overall total updates');
   console.log('PASS overall budget sums individual category caps and preserves category rows');
