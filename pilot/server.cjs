@@ -76,7 +76,14 @@ async function start(port=Number(env.PORT||8788)){
   if(!equal){res.writeHead(401,{'WWW-Authenticate':'Basic realm="Private bank pilot"','Cache-Control':'no-store'});return res.end('Authentication required')}
   const origin=req.headers.origin,host=req.headers.host;
   if(origin&&new URL(origin).host!==host)return respond(403,{error:'Origin rejected'});
-  if(req.method==='GET'&&req.url==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
+  if(req.method==='GET'&&req.url==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
+  if(req.method==='GET'&&(req.url==='/'||/^\\/(?:index\\.html|modern\\.css|(?:demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)\\.js|sandbox\\/sandbox-ui\\.js|pilot\\/ledger-ui\\.js)(?:\\?[^/]*)?$/.test(req.url))){
+   const name=req.url.split('?')[0].slice(1)||'index.html';
+   let body=await fs.readFile(path.resolve(__dirname,'..',name));
+   if(name==='index.html')body=Buffer.from(body.toString('utf8').replace('</head>','<script src="/pilot/ledger-ui.js" defer></script></head>'));
+   res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
+   return res.end(body);
+  }
   if(req.method==='GET'&&req.url==='/api/status')return respond(200,{connected:!!state.item,account:state.accounts[0]||null,lastSync:state.lastSync,transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>8192)return respond(413,{error:'Too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
