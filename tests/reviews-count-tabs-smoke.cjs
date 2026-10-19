@@ -14,13 +14,13 @@ async function check(browser,options={},phone=false){
   await page.goto('http://127.0.0.1:8765/',{waitUntil:'load'});
   const nav=phone?'.mobile-top-nav [data-page=reviews]':'aside [data-page=reviews]';
   await page.locator(nav).click();
-  assert.equal(await page.locator('.review-filters button').count(),3);
+  assert.equal(await page.locator('.review-filters button').count(),4);
   assert.equal(await page.locator('.review-stats,.review-count').count(),0,
    'No duplicate static count bar or duplicate total in header');
-  assert.deepEqual(await page.locator('.review-filter-label').allInnerTexts(),['All','Categories','Predictions']);
+  assert.deepEqual(await page.locator('.review-filter-label').allInnerTexts(),['All','Categories','Predictions','Reconciliation']);
   const tabs=page.locator('.review-filters button');
   const numbers=(await page.locator('.review-filter-count').allInnerTexts()).map(Number);
-  assert.equal(numbers[0],numbers[1]+numbers[2],'Combined counters partition all reviews');
+  assert.equal(numbers[0],numbers[1]+numbers[2]+numbers[3],'Combined counters partition all reviews');
   assert.equal(numbers[0],await page.locator('.review-task').count(),'All-count matches displayed rows');
   assert.equal(await tabs.nth(0).getAttribute('aria-pressed'),'true','Current filter exposed accessibly');
   assert.equal(await page.locator('.review-filters').count(),1,'Only one filter control strip');
