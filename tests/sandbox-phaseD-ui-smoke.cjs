@@ -38,7 +38,9 @@ async function browserCheck(browser,options,url,mobile){
   await pendingRow.locator('select[data-category]').selectOption('Health');
   assert.equal(await pendingRow.locator('select[data-category]').inputValue(),'Health');
   await page.locator(nav).click();
-  assert.equal(await panel.locator('[data-sandbox-refresh]').count(),1);
+  assert.equal(await panel.locator('[data-sandbox-refresh]').count(),1,
+   'Sandbox settings after categorization; current tab='+await page.locator('#title').innerText()+
+   '; script errors='+errors.join(' | '));
   await page.locator('#sandbox-institution').selectOption('ins_109509');
   await page.locator('#sandbox-connect').click();
   await page.waitForFunction(()=>document.querySelectorAll('.sandbox-item').length===2);
