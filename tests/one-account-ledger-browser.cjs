@@ -24,7 +24,7 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   const bankTest=await ctx.newPage();
   await bankTest.route('**/api/status',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
    connected:true,lastSync:'2026-10-19T12:00:00Z',account:{name:'Test account',current:1000,available:950,balanceObservedAt:'2026-10-19T12:00:00Z'},
-   transactions:[{id:'posted',date:new Date().toISOString().slice(0,10),merchant:'Cafe',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT'}},
+   transactions:[{id:'posted',date:new Date().toISOString().slice(0,10),merchant:'Cafe',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT',confidence_level:'HIGH'}},
     {id:'pending',date:new Date().toISOString().slice(0,10),merchant:'Pending cafe',amount:60,pending:true,category:{primary:'FOOD_AND_DRINK'}},
     {id:'transfer',date:new Date().toISOString().slice(0,10),merchant:'Savings transfer',amount:400,pending:false,category:{primary:'TRANSFER_OUT'}}]
   })}));
