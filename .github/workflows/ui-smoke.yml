@@ -29,6 +29,7 @@ jobs:
           node tests/activity-recurring-smoke.cjs
           node tests/reconciliation-phase1-smoke.cjs
           node tests/reconciliation-phase3-stress.cjs
+          node tests/conservative-categorization-phase2.cjs
           node tests/accounting-phaseA-smoke.cjs
           node tests/account-forecast-phaseB-smoke.cjs
           node tests/account-reliability-phaseC-smoke.cjs
