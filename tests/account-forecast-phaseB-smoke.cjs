@@ -101,7 +101,7 @@ async function browserCase(browser,opts,mobile){
   const panel=page.locator('#cashflow');
   assert.equal(await panel.locator('.account-forecast').count(),1);
   assert.equal(await panel.locator('.account-projection-row').count(),4,'Demo checks two cards, savings and checking');
-  assert.match(await panel.locator('.account-total-strip').innerText(),/Card debt/);
+  assert.match(await panel.locator('.account-total-strip').innerText(),/Projected card debt/);
   const before=await page.evaluate(()=>({
    bank:window.HouseholdBankFeed.getSnapshot('2026-10-17'),
    tx:JSON.stringify(JSON.parse(localStorage.getItem('household-ledger-v1')).transactions),
