@@ -4,6 +4,7 @@
 'use strict';
 const categoryNames=['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other'];
 const isoValid=s=>/^\d{4}-\d\d-\d\d$/.test(String(s||''));
+const mixedMerchant=/\b(?:amazon|amzn|costco|walmart|wal-mart|target|paypal|venmo|etsy|ebay|home depot|lowe'?s|square|stripe)\b/i;
 const merchantKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
 const categoryFingerprint=t=>[t.id,t.merchant,t.date,t.amount,t.category,t.type].join('|');
 const predictionFingerprint=t=>[t.id,t.merchant,t.date,t.amount,t.confidence,t.evidence,t.account].join('|');
@@ -15,8 +16,10 @@ function ensure(state){
  return state.reviews;
 }
 function categoryReason(t,distribution){
+ if(mixedMerchant.test(t.merchant)&&t.source?.provider==='plaid')return {reason:'Multi-purpose merchant: confirm what was purchased',priority:1,suggested:null,confidence:'Needs confirmation'};
  if(t.category==='Other'||!t.category)return {reason:'No specific category assigned',priority:0,suggested:null,confidence:'None'};
- const n=Number(t.categoryConfidence??t.category_confidence??t.source?.categoryConfidence);
+ const raw=t.categoryConfidence??t.category_confidence??t.source?.categoryConfidence;
+ const n=raw===null||raw===undefined?NaN:Number(raw);
  if(Number.isFinite(n)&&n>=0&&n<0.7)return {reason:'Imported category marked low confidence ('+Math.round(n*100)+'%)',priority:1,suggested:null,confidence:'Low'};
  const key=merchantKey(t.merchant);
  // The same merchant being categorized multiple ways is a useful, objective
