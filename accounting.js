@@ -153,7 +153,8 @@ function reconcile(state){
     const possibilities=purchases.filter(p=>p.accountId===t.accountId&&
      cleanedRefundMerchant(p.merchant)===target&&p.date<=t.date&&days(p.date,t.date)<=120);
     possibilities.sort((a,b)=>b.date.localeCompare(a.date));
-    if(possibilities.length)t.category=state?.categoryOverrides?.[possibilities[0].id]||possibilities[0].category||'Other';
+    if(possibilities.length===1)t.category=state?.categoryOverrides?.[possibilities[0].id]||possibilities[0].category||'Other';
+    else if(possibilities.length>1){t.reconciliationStatus='needs-review';t.classificationConfidence='Multiple possible refund purchases';}
    }
   }else if(t.accountingKind==='unclassified_card_credit'){
    t.type='transfer';t.reconciliationStatus='needs-review';
@@ -166,7 +167,15 @@ function reconcile(state){
    if(t.type==='income')t.earnedIncomeAmount=round(Number(t.amount)||0);
   }
  }
- return {accounts:registry,transactions:output,summary:{
+ const issues=output.filter(t=>['ambiguous','unmatched','needs-review'].includes(t.reconciliationStatus)).map(t=>({
+  id:t.id,accountId:t.accountId,date:t.date,merchant:t.merchant,amount:t.amount,
+  status:t.reconciliationStatus,kind:t.accountingKind,
+  reason:t.reconciliationStatus==='ambiguous'?'Several plausible transfer counterparts: confirm manually':
+   t.reconciliationStatus==='unmatched'?'Transfer counterpart not found: verify account coverage':
+   t.accountingKind==='refund'?'Multiple possible source purchases: confirm refund category':
+   'Accounting classification requires confirmation'
+ }));
+ return {accounts:registry,transactions:output,issues,summary:{
   spending:round(output.reduce((s,t)=>s+t.spendingAmount,0)),
   income:round(output.reduce((s,t)=>s+t.earnedIncomeAmount,0)),
   refunds:round(output.filter(t=>t.type==='refund').reduce((s,t)=>s+Number(t.amount||0),0)),
