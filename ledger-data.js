@@ -299,7 +299,7 @@ function applyPlaidSync(state,change){
   const signature=JSON.stringify([String(t.account_id),amount,t.date,String(t.merchant_name||t.name||''),Boolean(t.pending)]);
   if(seenBatch.has(id)&&seenBatch.get(id)!==signature)throw Error('Conflicting repeated provider transaction ID in sync batch');
   seenBatch.set(id,signature);
-  const foreign=(staged.transactions||[]).find(row=>row.source?.provider==='plaid'&&row.source?.providerTransactionId===String(t.transaction_id)&&row.source?.itemId!==itemId&&row.source?.accountId===String(t.account_id));
+  const foreign=itemId?(staged.transactions||[]).find(row=>row.source?.provider==='plaid'&&row.source?.providerTransactionId===String(t.transaction_id)&&row.source?.itemId&&row.source.itemId!==itemId&&row.source?.accountId===String(t.account_id)):null;
   if(foreign)throw Error('Same bank transaction appears under multiple Plaid Items; review duplicate connection');
   const current=byId.get(id);
   const classified=Categorization.classify(t);
