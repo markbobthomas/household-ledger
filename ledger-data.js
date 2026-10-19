@@ -11,7 +11,7 @@ const copy=x=>JSON.parse(JSON.stringify(x));
 const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(String(d)+'T12:00:00Z'));
 const categorySet=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
-const validCustomName=s=>typeof s==='string'&&s===s.trim()&&s.length>=2&&s.length<=40&&/^[\\p{L}\\p{N}][\\p{L}\\p{N} &'().-]*$/u.test(s);
+const validCustomName=s=>typeof s==='string'&&s===s.trim()&&s.length>=2&&s.length<=40&&/^[A-Za-z0-9][A-Za-z0-9 &'().-]*$/.test(s);
 const categories=state=>[...categorySet,...(Array.isArray(state?.customCategories)?state.customCategories:[])];
 const isCategory=(state,name)=>categories(state).includes(name);
 function addCategory(state,name){
