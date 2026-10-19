@@ -24,7 +24,8 @@ function pfcCategory(pfc){
  if(primary==='TRANSPORTATION'||primary==='AUTO_AND_TRANSPORT')return 'Transportation';
  if(primary==='TRAVEL')return 'Transportation';
  if(primary==='RENT_AND_UTILITIES'){
-  return /RENT|MORTGAGE|PROPERTY_TAX/.test(detailed)?'Housing':'Utilities';
+  const utilityDetail=detailed.replace(/^RENT_AND_UTILITIES_/,'');
+  return /^(?:RENT|MORTGAGE|PROPERTY_TAX)(?:_|$)/.test(utilityDetail)?'Housing':'Utilities';
  }
  if(primary==='HOME_AND_GARDEN'||primary==='HOME_IMPROVEMENT')return 'Shopping';
  if(primary==='GENERAL_MERCHANDISE'||primary==='SHOPPING')return 'Shopping';
