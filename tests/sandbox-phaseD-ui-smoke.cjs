@@ -38,7 +38,6 @@ async function browserCheck(browser,options,url,mobile){
   await pendingRow.locator('select[data-category]').selectOption('Health');
   assert.equal(await pendingRow.locator('select[data-category]').inputValue(),'Health');
   await page.locator(nav).click();
-  await panel.locator('[data-sandbox-refresh]').first().waitFor({state:'visible'});
   assert.equal(await panel.locator('[data-sandbox-refresh]').count(),1);
   await page.locator('#sandbox-institution').selectOption('ins_109509');
   await page.locator('#sandbox-connect').click();

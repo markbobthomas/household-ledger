@@ -68,7 +68,7 @@ function resolution(state,t){
  const original=t.category||'Other';
  const bankCategory=t.source?.provider==='plaid'&&['expense','refund'].includes(t.type)?
   Categorization.classify(t):null;
- const inferred=original==='Other'&&bankCategory?.category&&bankCategory.category!=='Other'?bankCategory.category:original;
+ const inferred=original==='Other'&&bankCategory?.category!=='Other'?bankCategory.category:original;
  const origin=original!=='Other'&&t.source?.provider==='plaid'?
   t.source?.categoryOrigin||'plaid-category':bankCategory?.method||'source';
  const originLabel=origin==='plaid-category'?'Plaid category':
