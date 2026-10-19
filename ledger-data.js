@@ -11,6 +11,18 @@ const copy=x=>JSON.parse(JSON.stringify(x));
 const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(String(d)+'T12:00:00Z'));
 const categorySet=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
+const validCustomName=s=>typeof s==='string'&&s===s.trim()&&s.length>=2&&s.length<=40&&/^[\\p{L}\\p{N}][\\p{L}\\p{N} &'().-]*$/u.test(s);
+const categories=state=>[...categorySet,...(Array.isArray(state?.customCategories)?state.customCategories:[])];
+const isCategory=(state,name)=>categories(state).includes(name);
+function addCategory(state,name){
+ const value=String(name||'').trim();
+ if(!validCustomName(value))throw Error('Category must be 2–40 letters/numbers and ordinary punctuation');
+ if(categories(state).some(n=>n.toLowerCase()===value.toLowerCase()))throw Error('Category already exists');
+ if((state.customCategories||[]).length>=50)throw Error('Too many custom categories');
+ state.customCategories??=[];state.customCategories.push(value);
+ return value;
+}
+
 function migrate(input){
  const old=input&&typeof input==='object'?input:{};
  const categoryOverrides=old.categoryOverrides&&typeof old.categoryOverrides==='object'&&!Array.isArray(old.categoryOverrides)?copy(old.categoryOverrides):{};
@@ -42,7 +54,7 @@ function migrate(input){
   }
   return record;
  });
- return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,sync};
+ return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,sync,customCategories:Array.isArray(old.customCategories)?old.customCategories.filter(validCustomName).slice(0,50):[]};
 }
 // Category learning never edits authoritative ledger rows. A learned rule can
 // automatically resolve an unclassified/low-confidence transaction only when
@@ -97,7 +109,7 @@ function categoryFor(state,id){
 function learnCategory(state,id,category,remember=true){
  const t=(state.transactions||[]).find(x=>x.id===id);
  if(!t||t.type!=='expense')throw Error('Unknown expense transaction');
- if(!categorySet.has(category)||category==='Other')throw Error('Choose a specific category before learning a rule');
+ if(!isCategory(state,category)||category==='Other')throw Error('Choose a specific category before learning a rule');
  if(!remember)return null;
  state.learning??={categoryRules:{},ruleHistory:[]};
  state.learning.categoryRules??={};state.learning.ruleHistory??=[];
@@ -122,17 +134,17 @@ function removeCategoryRule(state,key){
 }
 function setCategory(state,id,category){
  if(!(state.transactions||[]).some(t=>t.id===id))throw Error('Unknown transaction');
- if(!categorySet.has(category))throw Error('Invalid category');
+ if(!isCategory(state,category))throw Error('Invalid category');
  state.categoryOverrides??={};
  const original=state.transactions.find(t=>t.id===id).category||'Other';
  if(category===original)delete state.categoryOverrides[id];else state.categoryOverrides[id]=category;
 }
 function setMonthlyBudget(state,category,amount){
- if(!categorySet.has(category)||!Number.isFinite(Number(amount))||Number(amount)<0)throw Error('Invalid budget');
+ if(!isCategory(state,category)||!Number.isFinite(Number(amount))||Number(amount)<0)throw Error('Invalid budget');
  state.predictions.monthlyBudgets[category]=round(amount);
 }
 function setCategoryForecast(state,month,category,additional){
- if(!/^\d{4}-\d{2}$/.test(String(month))||!categorySet.has(category))throw Error('Invalid forecast selection');
+ if(!/^\d{4}-\d{2}$/.test(String(month))||!isCategory(state,category))throw Error('Invalid forecast selection');
  const key=month+'|'+category;
  if(additional===null){delete state.predictions.categoryForecasts[key];return}
  if(!Number.isFinite(Number(additional))||Number(additional)<0)throw Error('Invalid additional forecast');
@@ -147,7 +159,7 @@ function updateExpectedTransaction(state,id,adjustment){
  state.predictions.expectedTransactionOverrides[id]={date:String(adjustment.date),amount:round(adjustment.amount),enabled:adjustment.enabled};
 }
 function saveManualExpected(state,item){
- if(!item||!categorySet.has(item.category)||!validDate(item.date)||!String(item.merchant||'').trim()||!Number.isFinite(Number(item.amount))||Number(item.amount)<0)
+ if(!item||!isCategory(state,item.category)||!validDate(item.date)||!String(item.merchant||'').trim()||!Number.isFinite(Number(item.amount))||Number(item.amount)<0)
   throw Error('Invalid manual expected payment');
  const id=item.id&&String(item.id).startsWith('manual|')?String(item.id):'manual|'+Date.now().toString(36)+Math.random().toString(36).slice(2);
  const next={id,category:item.category,merchant:String(item.merchant).trim().slice(0,130),date:item.date,amount:round(item.amount),enabled:item.enabled!==false,source:'manual'};
@@ -365,7 +377,7 @@ function applyPlaidSyncPages(state,batch){
  Object.assign(state,staged);
  return state;
 }
-const api={VERSION,migrate,records,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,applyPlaidSync,applyPlaidSyncPages};
+const api={VERSION,migrate,records,categories,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
