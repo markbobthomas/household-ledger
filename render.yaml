@@ -10,7 +10,6 @@ services:
     buildCommand: "node --version"
     startCommand: "node sandbox/server.cjs"
     autoDeployTrigger: commit
-    healthCheckPath: /
     envVars:
       - key: HOSTED_SANDBOX
         value: "1"
