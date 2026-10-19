@@ -52,15 +52,23 @@ async function sync(){
  if(!account)throw Error('Selected account is no longer available');
  // Expose only the one selected account.
  const next={...state.transactions};
+ const nextOverrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
  for(const p of pages){
   for(const t of [...p.added,...p.modified]){
    if(t.account_id!==state.accountId)continue;
-   if(t.pending_transaction_id)delete next[t.pending_transaction_id];
+   if(t.pending_transaction_id){
+    delete next[t.pending_transaction_id];
+    // Carry forward only the user's explicit category decision, never change bank records.
+    if(Object.prototype.hasOwnProperty.call(nextOverrides,t.pending_transaction_id)){
+     if(!Object.prototype.hasOwnProperty.call(nextOverrides,t.transaction_id))nextOverrides[t.transaction_id]=nextOverrides[t.pending_transaction_id];
+     delete nextOverrides[t.pending_transaction_id];
+    }
+   }
    next[t.transaction_id]={id:t.transaction_id,date:t.date,name:t.name,merchant:t.merchant_name||t.name,amount:t.amount,pending:!!t.pending,pendingId:t.pending_transaction_id||null,category:t.personal_finance_category||null};
   }
-  for(const t of p.removed)delete next[t.transaction_id];
+  for(const t of p.removed){delete next[t.transaction_id];delete nextOverrides[t.transaction_id]}
  }
- state.transactions=next;state.cursor=cursor;state.accounts=[{id:account.account_id,name:account.name,mask:account.mask,type:account.type,subtype:account.subtype,current:account.balances?.current??null,available:account.balances?.available??null,balanceObservedAt:stamp(),currency:account.balances?.iso_currency_code||'USD'}];
+ state.transactions=next;if(state.ledgerAdjustments)state.ledgerAdjustments.categoryOverrides=nextOverrides;state.cursor=cursor;state.accounts=[{id:account.account_id,name:account.name,mask:account.mask,type:account.type,subtype:account.subtype,current:account.balances?.current??null,available:account.balances?.available??null,balanceObservedAt:stamp(),currency:account.balances?.iso_currency_code||'USD'}];
  state.lastSync=stamp();state.error=null;await save();
  return {transactions:Object.keys(next).length};
 }
