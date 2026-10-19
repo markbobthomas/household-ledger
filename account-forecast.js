@@ -66,7 +66,8 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const type=typeOf(a),current=Number(a.current),available=Number(a.available);
   const hasCurrent=Number.isFinite(current)&&a.current!==null&&a.current!==undefined;
   // A credit card's current balance is money owed, never cash available.
-  const initial=hasCurrent?current:(type!=='credit'&&Number.isFinite(available)&&a.available!=null?available:null);
+  // Never substitute available funds or derived transaction totals for a bank's current balance.
+  const initial=hasCurrent?current:null;
   const disconnected=a.disconnected===true||a.status==='disconnected';
   const valid=type!=='unsupported'&&initial!==null&&!disconnected;
   const live=sourceIsLive||a.provider==='plaid'||a.source?.provider==='plaid';
