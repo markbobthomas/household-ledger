@@ -52,6 +52,15 @@ async function main(){
   await page.locator('aside [data-page=settings]').click();
   await page.locator('#ledger-mode-switch').selectOption('real');
   const real=await snapshot();
+  const viewLeaks={};
+  for(const tab of [...new Set(checks.map(x=>x.tab))]){
+   await page.locator('aside [data-page='+tab+']').click();
+   viewLeaks[tab]=await page.evaluate(()=>{
+    const v=document.querySelector('#view'),children=[...v.children].filter(e=>e.id!=='real-mode-surface');
+    return {originals:children.length,markedHidden:children.filter(e=>e.hidden).length,visibleDespiteHidden:children.filter(e=>e.hidden&&getComputedStyle(e).display!=='none'&&e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0).length,realSurface:!!document.querySelector('#real-mode-surface')};
+   });
+  }
+  console.log('VISUAL_MODE_ISOLATION_AUDIT '+JSON.stringify(viewLeaks));
   const total=checks.length,baseline=Object.values(demo).filter(Boolean).length,retained=checks.filter(c=>demo[c.name]&&real[c.name]).length;
   console.log('UI_PARITY_AUDIT_BEGIN');
   console.log(JSON.stringify({total,baseline,retained,matrix:checks.map(c=>({area:c.tab,capability:c.name,demo:demo[c.name],real:real[c.name]})),consoleErrors:errors},null,2));
