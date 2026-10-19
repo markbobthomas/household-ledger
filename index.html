@@ -5,8 +5,8 @@ if(!initial)initial=initialStorage===null&&window.createHouseholdLedgerDemo?wind
 const DEFAULT_PAGE_KEY='household-ledger-default-page',NAV_PAGES=[['budgets','Budget'],['overview','Overview'],['transactions','Activity'],['insights','Insights'],['reviews','Reviews'],['settings','Settings']];
 const storedDefault=localStorage.getItem(DEFAULT_PAGE_KEY);
 let defaultPage=NAV_PAGES.some(([key])=>key===storedDefault)?storedDefault:'budgets';
-let data=Model.migrate(initial),page=defaultPage,period=today().slice(0,7),budgetMonth=today().slice(0,7),insightMode='merchants',reviewFilter='all',reviewTasks=[],accuracyReport=null,accuracyReportAlt=null,stressReport=null,readinessReport=null;
-function save(){localStorage.setItem(KEY,JSON.stringify(data))}save();
+let data=Model.migrate(initial),demoData=data,liveMode=false,page=defaultPage,period=today().slice(0,7),budgetMonth=today().slice(0,7),insightMode='merchants',reviewFilter='all',reviewTasks=[],accuracyReport=null,accuracyReportAlt=null,stressReport=null,readinessReport=null;
+function save(){if(liveMode){window.HouseholdLiveSource?.persist(data);return}demoData=data;localStorage.setItem(KEY,JSON.stringify(data))}save();
 function entries(){return Model.records(data)}
 function alertMsg(message){el('flash').innerHTML='<div class="message">'+esc(message)+'</div>';window.scrollTo({top:0,behavior:'instant'})}
 function cleanMerchant(s){let u=s.toUpperCase();if(u.includes('COSTCO'))return /GAS|FUEL|PUMP/.test(u)?'Costco Gas':'Costco Warehouse';if(/AMAZON|AMZN/.test(u))return 'Amazon';if(u.includes('WALMART')||u.includes('WAL-MART'))return 'Walmart';if(u.includes('SAFEWAY'))return 'Safeway';return s.trim()}function type(s,n){if(/TRANSFER|PAYMENT TO|CARD PAYMENT|AUTOPAY|CREDIT CARD PAYMENT/i.test(s))return 'transfer';if(/PAYROLL|DIRECT DEPOSIT|REFUND|DEPOSIT/i.test(s))return 'income';return n>0?'income':'expense'}function category(s){s=s.toLowerCase();if(/costco gas|shell|chevron|fuel|exxon/.test(s))return'Transportation';if(/costco|safeway|grocery|trader joe|kroger/.test(s))return'Groceries';if(/amazon|walmart|target|ebay|home depot/.test(s))return'Shopping';if(/mortgage|rent/.test(s))return'Housing';if(/water|electric|internet|utility|xfinity|verizon/.test(s))return'Utilities';if(/restaurant|coffee|pizza|cafe/.test(s))return'Dining';return'Other'}function rows(){return entries().filter(t=>period==='all'||t.date.slice(0,7)===period)}function expense(){return rows().filter(t=>['expense','refund'].includes(t.type))}function sum(a){return a.reduce((s,x)=>s+Number(x.type==='income'?(x.earnedIncomeAmount??x.amount??0):(x.spendingAmount??x.amount??0)),0)}function grouped(a,field){const o={};a.forEach(t=>{const k=field==='merchant'?cleanMerchant(t.merchant):t.category;o[k]??={name:k,amount:0,count:0};o[k].amount+=Number(t.spendingAmount??t.amount??0);o[k].count++});return Object.values(o).sort((a,b)=>b.amount-a.amount)}function recurringInsights(tabs){
@@ -131,8 +131,8 @@ function previewCashFlow(){
  // A simulated bank snapshot must never combine with unverified personal
  // transactions that a prior app version may have stored locally.
  const demoRows=entries().filter(t=>t.source?.provider==='demo');
- const source=demoRows.length?demoRows:window.createHouseholdLedgerDemo().transactions;
- const future=demoRows.length&&demoRows.length===entries().length?
+ const source=liveMode?entries():demoRows.length?demoRows:window.createHouseholdLedgerDemo().transactions;
+ const future=liveMode||demoRows.length&&demoRows.length===entries().length?
    sharedForecast():window.HouseholdForecastLedger.build(data,source,today(),90,window.HouseholdForecast,Model);
  const multi=window.HouseholdAccountForecast.build(snapshot,future.events,
    data.predictions.accountMovements||[],{days:90,records:source});
@@ -284,17 +284,17 @@ function cashFlowCard(){
  (added||'<div class="empty">None added.</div>')+
  '<p class="prediction-note">Edit a scheduled expense in its Budget category; the same date and amount update this cash-flow chart. Only explicitly directed checking transfers are included as cash movements, not purchases. Undated spending is shown separately as a statistical scenario.</p></details>';
  return '<div class="cash-panel" id="cashflow"><div class="cash-head"><div><h3>Lowest scheduled-only balance · next 90 days</h3>'+
- '<div class="cash-sub">'+esc(account.name)+' · '+esc(f.balanceBasis)+' balance</div></div><span class="cash-demo">SIMULATED BANK DATA</span></div>'+
+ '<div class="cash-sub">'+esc(account.name)+' · '+esc(f.balanceBasis)+' balance</div></div><span class="cash-demo">'+(liveMode?'REAL BANK · PLAID BALANCE / PREDICTED FUTURE':'SIMULATED BANK DATA')+'</span></div>'+
  feedMarkup+'<div class="cash-hero"><div><div class="cash-primary-amount">'+money(f.minimum)+'</div>'+
  '<div class="cash-primary-date">Lowest on '+esc(cashDateLabel(f.lowestDate,true))+'</div></div>'+
- '<div class="cash-secondary"><div><span class="sub">Available now</span><strong>'+money(f.opening)+'</strong></div>'+
+ '<div class="cash-secondary"><div><span class="sub">'+(liveMode?'Bank-reported current':'Available now')+'</span><strong>'+money(f.opening)+'</strong></div>'+
  '<div><span class="sub">In 90 days</span><strong>'+money(f.closing)+'</strong></div></div></div>'+
  cashChart(f.series,f.lowestDate)+accountForecastMarkup(snapshot,multi)+incomeWarning+riskDisplay+controls+
  '<div class="cash-status">90 days · '+future.events.length+' scheduled items including directed transfers · Undated spending excluded from chart line</div>'+
  '<details class="cash-detail"><summary>Explore 90-day cash flow</summary>'+
  '<div class="cash-table-wrap cash-days-wrap"><table class="cash-table daily-cash-table"><thead>'+
  '<tr><th>Date / expected items</th><th>Income</th><th>Outflow</th><th>End-of-day balance</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
- '<p class="cash-explain">Fictional bank balance. No Plaid connection. This illustrates recurring event cash flow and does not guarantee an actual balance or account funding availability.</p></details></div>';
+ '<p class="cash-explain">'+(liveMode?'Only the starting bank balance is supplied by Plaid. Forecasts are estimates, not bank-reported balances.':'Fictional bank balance. No Plaid connection. This illustrates recurring event cash flow and does not guarantee an actual balance or account funding availability.')+'</p></details></div>';
 }
 function monthlyProjection(month,category){
  const shared=sharedForecast(),existing=shared.categoryViews[month+'|'+category];
@@ -556,7 +556,7 @@ function reviewsPage(){
 function taskById(id){return reviewTasks.find(x=>x.id===id)}
 function finishReview(){save();render();window.scrollTo({top:0,left:0,behavior:'instant'})}
 
-function budgetBounds(month){const [year,monthNum]=month.split('-').map(Number),endDay=new Date(year,monthNum,0).getDate(),start=month+'-01',end=month+'-'+String(endDay).padStart(2,'0');const label=new Date(year,monthNum-1,1).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+new Date(year,monthNum-1,endDay).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});return {start,end,label}}function render(){unifiedCache=null;const demoCount=data.transactions.filter(t=>t.source?.provider==='demo').length;el('demo-banner').innerHTML=demoCount?'<div class="demo-banner"><strong>DEMO</strong></div>':'';const title=page.charAt(0).toUpperCase()+page.slice(1);el('title').textContent=title;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let months=[...new Set([...entries().map(t=>String(t.date).slice(0,7)),today().slice(0,7),...(period==='all'?[]:[period])].filter(m=>/^\d{4}-\d{2}$/.test(m)&&+m.slice(5,7)>=1&&+m.slice(5,7)<=12))].sort().reverse();
+function budgetBounds(month){const [year,monthNum]=month.split('-').map(Number),endDay=new Date(year,monthNum,0).getDate(),start=month+'-01',end=month+'-'+String(endDay).padStart(2,'0');const label=new Date(year,monthNum-1,1).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+new Date(year,monthNum-1,endDay).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});return {start,end,label}}function render(){unifiedCache=null;const demoCount=data.transactions.filter(t=>t.source?.provider==='demo').length;el('demo-banner').innerHTML=liveMode?'<div class="demo-banner"><strong>REAL BANK · PLAID</strong></div>':demoCount?'<div class="demo-banner"><strong>DEMO</strong></div>':'';const title=page.charAt(0).toUpperCase()+page.slice(1);el('title').textContent=title;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let months=[...new Set([...entries().map(t=>String(t.date).slice(0,7)),today().slice(0,7),...(period==='all'?[]:[period])].filter(m=>/^\d{4}-\d{2}$/.test(m)&&+m.slice(5,7)>=1&&+m.slice(5,7)<=12))].sort().reverse();
 if(page==='budgets'){
   const now=new Date(),recent=Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-i,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')});
   const choices=[...new Set([...months,...recent,budgetMonth])].sort().reverse();
@@ -657,9 +657,9 @@ if(page==='settings'){
  '<select id="default-page" aria-label="Default opening tab">'+
  NAV_PAGES.map(([key,label])=>'<option value="'+key+'" '+(key===defaultPage?'selected':'')+'>'+esc(label)+'</option>').join('')+
  '</select><p class="prediction-note">Open the Ledger on this tab next time. The default is Budget. This preference stays on this device.</p></div>';
- html='<div class="settings-grid">'+startupSettings+(window.HouseholdSandboxUI?.panel()||'')+feedSettings+accountMarkup+'<div class="panel settings-block"><h3>Read-only ledger</h3><p>Transaction facts are provided by source records. Only categories and predictions are editable.</p>'+
+ html='<div class="settings-grid">'+(window.HouseholdLiveSource?.panel()||'')+startupSettings+(window.HouseholdSandboxUI?.panel()||'')+feedSettings+accountMarkup+'<div class="panel settings-block"><h3>Read-only ledger</h3><p>Transaction facts are provided by source records. Only categories and predictions are editable.</p>'+
  Object.entries(sources).map(([provider,n])=>'<div class="row"><span>'+esc(provider==='plaid'?'Plaid Sandbox/test records':provider==='demo'?'Fictional demo data':'Unverified legacy records')+'</span><strong>'+n+'</strong></div>').join('')+
- '<p>Real bank connections are disabled. Sandbox tests run only through the local service; never enter credentials on this static site.</p><button class="btn" id="backup">Export local snapshot</button></div>'+
+ '<p>'+(liveMode?'Real bank connection active: source facts are read-only; adjustments save encrypted on the private server.':'Demo records are fictional. Real bank connections require the private Render website.')+'</p><button class="btn" id="backup">Export local snapshot</button></div>'+
  '<div class="panel settings-block"><h3>Your adjustments</h3><p>Change transaction categories without rewriting source data, or adjust monthly budgets and future payment predictions.</p><p>Amounts, dates, merchants, and bank balances cannot be edited in the ledger. Direct transaction imports and restores are disabled.</p></div></div>';
 }
 el('view').innerHTML=html;
@@ -1134,5 +1134,9 @@ function eventPredictionForm(id){
  if(old)el('remove-prediction').onclick=()=>{Model.removeEvent(data,id);save();render();alertMsg('Prediction removed. Ledger unchanged.')};
  bindCancel();
 }
-function navigateTo(next){window.scrollTo({top:0,left:0,behavior:'instant'});page=next;render();window.scrollTo({top:0,left:0,behavior:'instant'})}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigateTo(b.dataset.page));el('period').onchange=e=>{if(page==='budgets'){budgetMonth=e.target.value;period=e.target.value}else{period=e.target.value;if(period!=='all')budgetMonth=period}render()};render()})();
+function navigateTo(next){window.scrollTo({top:0,left:0,behavior:'instant'});page=next;render();window.scrollTo({top:0,left:0,behavior:'instant'})}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigateTo(b.dataset.page));el('period').onchange=e=>{if(page==='budgets'){budgetMonth=e.target.value;period=e.target.value}else{period=e.target.value;if(period!=='all')budgetMonth=period}render()};render();if(window.HouseholdLiveSource)window.HouseholdLiveSource.bind({
+ enterReal:(next,snapshot)=>{data=Model.migrate(next);liveMode=true;window.HouseholdBankFeed.setSandboxSnapshot(snapshot);unifiedCache=null},
+ enterDemo:()=>{liveMode=false;data=demoData;window.HouseholdBankFeed.setSandboxSnapshot(null);unifiedCache=null},
+ render:()=>render()
+})})();
 </script></body></html>
