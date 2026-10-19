@@ -44,7 +44,7 @@ assert.ok(Reviews.build(newFact,Forecast,'2026-10-17').tasks.some(t=>t.id===oldT
   assert.equal(await page.locator('aside [data-page=reviews]').count(),1,'Reviews main tab visible');
   await page.locator('aside [data-page=reviews]').click();
   assert.equal(await page.locator('#title').innerText(),'Reviews');
-  assert.equal(await page.locator('.review-filters button').count(),3);
+  assert.equal(await page.locator('.review-filters button').count(),4,'Reviews includes reconciliation confirmation filter');
   assert.ok(await page.locator('.review-task').count()>=2,'Simulated review tasks visible');
   assert.ok(await page.locator('.review-task-kind:text-is("Category")').count()>0);
   assert.ok(await page.locator('.review-task-kind:text-is("Prediction")').count()>0);
