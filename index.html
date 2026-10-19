@@ -8,6 +8,7 @@ let defaultPage=NAV_PAGES.some(([key])=>key===storedDefault)?storedDefault:'budg
 let data=Model.migrate(initial),demoData=data,liveMode=false,page=defaultPage,period=today().slice(0,7),budgetMonth=today().slice(0,7),insightMode='merchants',reviewFilter='all',reviewTasks=[],accuracyReport=null,accuracyReportAlt=null,stressReport=null,readinessReport=null;
 function save(){if(liveMode){window.HouseholdLiveSource?.persist(data);return}demoData=data;localStorage.setItem(KEY,JSON.stringify(data))}save();
 function entries(){return Model.records(data)}
+function allCategories(){return Model.categories?Model.categories(data):CATS}
 function alertMsg(message){el('flash').innerHTML='<div class="message">'+esc(message)+'</div>';window.scrollTo({top:0,behavior:'instant'})}
 function cleanMerchant(s){let u=s.toUpperCase();if(u.includes('COSTCO'))return /GAS|FUEL|PUMP/.test(u)?'Costco Gas':'Costco Warehouse';if(/AMAZON|AMZN/.test(u))return 'Amazon';if(u.includes('WALMART')||u.includes('WAL-MART'))return 'Walmart';if(u.includes('SAFEWAY'))return 'Safeway';return s.trim()}function type(s,n){if(/TRANSFER|PAYMENT TO|CARD PAYMENT|AUTOPAY|CREDIT CARD PAYMENT/i.test(s))return 'transfer';if(/PAYROLL|DIRECT DEPOSIT|REFUND|DEPOSIT/i.test(s))return 'income';return n>0?'income':'expense'}function category(s){s=s.toLowerCase();if(/costco gas|shell|chevron|fuel|exxon/.test(s))return'Transportation';if(/costco|safeway|grocery|trader joe|kroger/.test(s))return'Groceries';if(/amazon|walmart|target|ebay|home depot/.test(s))return'Shopping';if(/mortgage|rent/.test(s))return'Housing';if(/water|electric|internet|utility|xfinity|verizon/.test(s))return'Utilities';if(/restaurant|coffee|pizza|cafe/.test(s))return'Dining';return'Other'}function rows(){return entries().filter(t=>period==='all'||t.date.slice(0,7)===period)}function expense(){return rows().filter(t=>['expense','refund'].includes(t.type))}function sum(a){return a.reduce((s,x)=>s+Number(x.type==='income'?(x.earnedIncomeAmount??x.amount??0):(x.spendingAmount??x.amount??0)),0)}function grouped(a,field){const o={};a.forEach(t=>{const k=field==='merchant'?cleanMerchant(t.merchant):t.category;o[k]??={name:k,amount:0,count:0};o[k].amount+=Number(t.spendingAmount??t.amount??0);o[k].count++});return Object.values(o).sort((a,b)=>b.amount-a.amount)}function recurringInsights(tabs){
   const model=window.HouseholdRecurring;
@@ -87,7 +88,7 @@ function categoryControl(id,current,merchant){
  const width=Math.min(19,Math.max(8,String(current).length+3));
  return '<select class="editable-value editable-category inline-category-native" data-category="'+esc(id)+
  '" style="width:'+width+'ch" aria-label="Change category for '+esc(merchant)+'">'+
- CATS.map(category=>'<option value="'+esc(category)+'" '+(category===current?'selected':'')+'>'+esc(category)+'</option>').join('')+'</select>';
+ allCategories().map(category=>'<option value="'+esc(category)+'" '+(category===current?'selected':'')+'>'+esc(category)+'</option>').join('')+'</select>';
 }
 function cashDateLabel(iso,year=false){return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',...(year?{year:'numeric'}:{})})}
 function cashChart(series,lowestDate){
@@ -526,7 +527,7 @@ function reviewsPage(){
   '<strong class="review-filter-count">'+count+'</strong><span class="review-filter-label">'+label+'</span></button>').join('')+'</div>';
  const rows=shown.map(t=>{
   const isCategory=t.kind==='category',label=isCategory?'Category':t.kind==='accounting'?'Reconciliation':'Prediction';
-  const options=CATS.map(c=>'<option value="'+esc(c)+'" '+(c===t.category?'selected':'')+'>'+esc(c)+'</option>').join('');
+  const options=allCategories().map(c=>'<option value="'+esc(c)+'" '+(c===t.category?'selected':'')+'>'+esc(c)+'</option>').join('');
   const form=t.kind==='accounting'?'<div class="review-form"><p class="prediction-note">'+esc(t.reason)+'. Verify this transaction against your statements. Confirming acknowledges your review; it does not force an account match or alter the source amount, spending or income.</p><div class="review-actions"><button type="button" class="btn primary" data-review-accounting="'+esc(t.id)+'">Acknowledge reviewed</button></div></div>':isCategory?'<form class="review-form" data-review-category="'+esc(t.id)+'"><p class="prediction-note">Confirm the existing category, or choose a better one. The original merchant, date and amount stay read-only.</p>'+
    '<label>Category<select name="category">'+options+'</select></label>'+
    '<label class="learn-checkbox"><input type="checkbox" name="remember" checked> Remember this decision for similar transactions</label>'+
@@ -597,7 +598,7 @@ if(page==='insights'){
     '<p class="budget-date-note">Full transactions are counted once when no item-level details are available.</p></div>';
   }
 }if(page==='budgets'){
- const cats=[...new Set([...CATS,...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,
+ const cats=[...new Set([...allCategories(),...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,
  {start:monthStart,end:monthEnd,label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
  const totals=cats.reduce((sum,category)=>{const f=monthlyProjection(month,category);sum.actual+=Number(f.actual)||0;sum.expected+=Number(f.additional)||0;sum.limit+=Number(data.predictions.monthlyBudgets[category])||0;return sum},{actual:0,expected:0,limit:0});
  const used=totals.limit?Math.min(100,Math.max(0,totals.actual/totals.limit*100)):0;
@@ -657,7 +658,12 @@ if(page==='settings'){
  '<select id="default-page" aria-label="Default opening tab">'+
  NAV_PAGES.map(([key,label])=>'<option value="'+key+'" '+(key===defaultPage?'selected':'')+'>'+esc(label)+'</option>').join('')+
  '</select><p class="prediction-note">Open the Ledger on this tab next time. The default is Budget. This preference stays on this device.</p></div>';
- html='<div class="settings-grid">'+(window.HouseholdLiveSource?.panel()||'')+startupSettings+(window.HouseholdSandboxUI?.panel()||'')+feedSettings+accountMarkup+'<div class="panel settings-block"><h3>Read-only ledger</h3><p>Transaction facts are provided by source records. Only categories and predictions are editable.</p>'+
+ const categorySettings='<div class="panel settings-block" aria-label="Category management"><h3>Categories</h3>'+
+ '<p>Create a category for both modes. Changing a transaction category never changes the bank record.</p>'+
+ '<form id="add-custom-category"><label>Category name<input name="name" required maxlength="40" placeholder="e.g. Pet supplies"></label>'+
+ '<button type="submit" class="btn">Add category</button></form>'+
+ '<p>'+esc((data.customCategories||[]).length?(data.customCategories||[]).join(' · '):'No custom categories added yet')+'</p></div>';
+html='<div class="settings-grid">'+(window.HouseholdLiveSource?.panel()||'') +categorySettings+startupSettings+(window.HouseholdSandboxUI?.panel()||'')+feedSettings+accountMarkup+'<div class="panel settings-block"><h3>Read-only ledger</h3><p>Transaction facts are provided by source records. Only categories and predictions are editable.</p>'+
  Object.entries(sources).map(([provider,n])=>'<div class="row"><span>'+esc(provider==='plaid'?'Plaid Sandbox/test records':provider==='demo'?'Fictional demo data':'Unverified legacy records')+'</span><strong>'+n+'</strong></div>').join('')+
  '<p>'+(liveMode?'Real bank connection active: source facts are read-only; adjustments save encrypted on the private server.':'Demo records are fictional. Real bank connections require the private Render website.')+'</p><button class="btn" id="backup">Export local snapshot</button></div>'+
  '<div class="panel settings-block"><h3>Your adjustments</h3><p>Change transaction categories without rewriting source data, or adjust monthly budgets and future payment predictions.</p><p>Amounts, dates, merchants, and bank balances cannot be edited in the ledger. Direct transaction imports and restores are disabled.</p></div></div>';
@@ -835,6 +841,10 @@ document.querySelectorAll('[data-expected-add]').forEach(form=>form.onsubmit=e=>
 });
 
 if(page==='settings'){
+ const addCategoryForm=document.getElementById('add-custom-category');
+ if(addCategoryForm)addCategoryForm.onsubmit=e=>{e.preventDefault();try{
+  Model.addCategory(data,new FormData(e.target).get('name'));save();render();alertMsg('Category created.')
+ }catch(error){alert(error.message)}};
  el('backup').onclick=()=>download(JSON.stringify(data,null,2),'household-ledger-backup.json','application/json');
  if(window.HouseholdSandboxUI?.available)window.HouseholdSandboxUI.bind({
   Model,getData:()=>data,setData:next=>{data=next;unifiedCache=null},
