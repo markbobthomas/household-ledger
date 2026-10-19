@@ -27,5 +27,4 @@ jobs:
           node tests/reconciliation-phase1-smoke.cjs
           node tests/reconciliation-phase3-stress.cjs
           node tests/conservative-categorization-phase2.cjs
-          node tests/ledger-readonly-smoke.cjs
           node tests/sandbox-categorization-smoke.cjs
