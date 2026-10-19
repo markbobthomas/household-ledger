@@ -2,6 +2,7 @@
 (function(){
 'use strict';
 const KEY='household-ledger-view-mode';
+const SAFE_BUDGET_NAMES=new Set(['Groceries','Dining','Shopping','Housing','Utilities','Transportation','Entertainment','Health','Insurance','Kids & Family','Subscriptions','Fees','Services']);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const money=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n));
 let current=null,mode=localStorage.getItem(KEY)==='real'?'real':'demo',busy=false;
@@ -29,7 +30,7 @@ function details(tab){
  }
  return head+'<p class="prediction-note">Exact Plaid-reported balance, not reconstructed from transactions. Plaid may lag your bank.</p>';
 }
-const CATEGORY_MAP={FOOD_AND_DRINK:'Dining',GENERAL_MERCHANDISE:'Shopping',HOME_IMPROVEMENT:'Housing',RENT_AND_UTILITIES:'Utilities',TRANSPORTATION:'Transportation',TRAVEL:'Transportation',ENTERTAINMENT:'Entertainment',MEDICAL:'Health',PERSONAL_CARE:'Health',BANK_FEES:'Fees',GOVERNMENT_AND_NON_PROFIT:'Other',GENERAL_SERVICES:'Services',LOAN_PAYMENTS:null};
+const CATEGORY_MAP={FOOD_AND_DRINK:'Dining',GENERAL_MERCHANDISE:'Shopping',HOME_IMPROVEMENT:'Housing',RENT_AND_UTILITIES:'Utilities',TRANSPORTATION:'Transportation',TRAVEL:'Transportation',ENTERTAINMENT:'Entertainment',MEDICAL:'Health',PERSONAL_CARE:'Health',BANK_FEES:'Fees',GENERAL_SERVICES:'Services'};
 const TRANSFER_CATEGORIES=new Set(['TRANSFER_IN','TRANSFER_OUT','INCOME']);
 const CAP_KEY='household-ledger-real-budget-caps-v1';
 function caps(){try{const v=JSON.parse(localStorage.getItem(CAP_KEY)||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}catch{return {}}}
@@ -42,6 +43,9 @@ function categorized(t){
  if(detail.includes('CHILDCARE'))return 'Kids & Family';
  if(detail.includes('SUBSCRIPTION'))return 'Subscriptions';
  if(TRANSFER_CATEGORIES.has(primary)||primary.startsWith('TRANSFER_'))return 'Transfer / non-spending';
+ // Broad or absent Plaid codes are insufficient evidence of a household budget category.
+ if(primary==='LOAN_PAYMENTS')return 'Transfer / non-spending';
+ if(!detail||detail.endsWith('_OTHER')||detail.endsWith('_UNKNOWN'))return null;
  return Object.prototype.hasOwnProperty.call(CATEGORY_MAP,primary)?CATEGORY_MAP[primary]:null;
 }
 function verifiedRows(){
@@ -54,9 +58,9 @@ function spentRows(month){
 function realBudget(){
  if(!current?.connected)return '<section class="panel">Connect a bank account before using real budgets.</section>';
  const month=new Date().toISOString().slice(0,7),rows=spentRows(month),settings=caps();
- const groups=[...new Set([...rows.map(t=>t.bucket),...Object.keys(settings).filter(x=>x&&x!=='Needs review'&&x!=='Debt payments')])].sort();
+ const groups=[...new Set([...rows.map(t=>t.bucket),...Object.keys(settings).filter(x=>SAFE_BUDGET_NAMES.has(x))])].sort();
  const uncategorized=verifiedRows().filter(t=>t.date.startsWith(month)&&Number(t.amount)>0&&t.bucket===null);
- const spent=rows.reduce((n,t)=>n+Number(t.amount),0),limit=Object.values(settings).reduce((n,x)=>n+(Number(x)>0?Number(x):0),0),percent=limit?Math.min(100,spent/limit*100):0;
+ const spent=rows.reduce((n,t)=>n+Number(t.amount),0),limit=Object.entries(settings).reduce((n,[name,x])=>n+(SAFE_BUDGET_NAMES.has(name)&&Number(x)>0?Number(x):0),0),percent=limit?Math.min(100,spent/limit*100):0;
  const line=(name)=>{
   const amount=rows.filter(t=>t.bucket===name).reduce((n,t)=>n+Number(t.amount),0),cap=Number(settings[name])||0,pct=cap?Math.min(100,amount/cap*100):0;
   return '<div class="budget-entry"><div class="budget-heading"><strong>'+esc(name)+'</strong><strong>'+money(amount)+'</strong></div>'+
@@ -93,7 +97,7 @@ function realView(tab){
 }
 function draw(){
  const view=document.querySelector('#view'),tab=document.querySelector('#title')?.textContent;
- const badge=document.querySelector('#demo-banner');if(badge&&mode==='real')badge.innerHTML='<div class="demo-banner"><strong>REAL BANK · PLAID</strong></div>';
+ const badge=document.querySelector('#demo-banner');if(badge){if(mode==='real')badge.innerHTML='<div class="demo-banner"><strong>REAL BANK · PLAID</strong></div>';else badge.innerHTML='<div class="demo-banner"><strong>DEMO</strong></div>'}
  if(!view||!tab)return;
  const active=mode==='real',connected=!!current?.connected;
  let overlay=document.querySelector('#real-mode-surface');
