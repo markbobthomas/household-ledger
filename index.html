@@ -233,6 +233,28 @@ function accountForecastMarkup(snapshot,multi){
 function cashDateOffset(start,days){
  const d=new Date(start+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);
 }
+function overviewSummary(){
+ const a=entries(),spend=a.filter(t=>['expense','refund'].includes(t.type));
+ const total=spend.reduce((n,t)=>n+Number(t.spendingAmount??t.amount??0),0);
+ const income=a.filter(t=>t.type==='income').reduce((n,t)=>n+Number(t.earnedIncomeAmount??t.amount??0),0);
+ const snapshot=window.HouseholdBankFeed.getSnapshot(today());
+ const live=snapshot.connected===true&&!snapshot.accounts.some(a=>a.simulated);
+ const asOf=String(snapshot.asOf||today()).slice(0,10);
+ const age=a=>{const d=String(a.balanceAsOf||a.observedAt||a.asOf||'').slice(0,10);return /^\\d{4}-\\d\\d-\\d\\d$/.test(d)?Math.round((Date.parse(asOf+'T12:00:00Z')-Date.parse(d+'T12:00:00Z'))/86400000):null};
+ const balances=(snapshot.accounts||[]).map(a=>{
+  const current=a.current===null||a.current===undefined?null:Number(a.current),days=age(a);
+  const status=!live||a.simulated?'Simulated':a.disconnected?'Disconnected':current===null||!Number.isFinite(current)?'Balance unavailable':days===null||days<0?'Unverified date':days>2?'Last reported':'Bank reported';
+  const value=Number.isFinite(current)&&current!==null&&status!=='Balance unavailable'&&status!=='Disconnected'&&status!=='Unverified date'?money(current):'Unavailable';
+  return '<div class="row"><span><strong>'+esc(a.name||a.id)+'</strong><small class="transaction-source"> · '+esc(status)+(days!==null&&days>2?' · '+days+' days old':'')+'</small></span><strong>'+esc(value)+'</strong></div>';
+ }).join('');
+ return '<section class="panel" aria-label="Household overview summary"><div class="section-top"><h3>Household overview</h3><span class="budget-summary-meta">'+esc(live?'Connected bank snapshots':'Simulated data')+'</span></div>'+
+ '<div class="stats"><div class="stat"><div class="sub">Recorded spending · all dates</div><div class="num">'+money(total)+'</div></div>'+
+ '<div class="stat"><div class="sub">Recorded income · all dates</div><div class="num">'+money(income)+'</div></div>'+
+ '<div class="stat"><div class="sub">Recorded net flow · all dates</div><div class="num">'+money(income-total)+'</div></div></div>'+
+ '<div class="section-top"><h3>Account balances</h3><span class="budget-summary-meta">Source snapshots only</span></div>'+
+ (balances||'<p class="prediction-note">Balance unavailable — no bank snapshots.</p>')+
+ '<p class="prediction-note">Balances are supplied by the bank feed, never calculated from transactions. Forecasts below are separate estimates.</p></section>';
+}
 function cashFlowCard(){
  const {snapshot,account,f,future,multi}=previewCashFlow();
  const feed=window.HouseholdFeedHealth.assess(snapshot,entries(),snapshot.expectedAccountIds||[],new Date());
@@ -551,7 +573,7 @@ if(page==='budgets'){
   el('subtitle').textContent=page==='overview'?'Accounts, cash flow and the next 90 days.':page==='transactions'?'All of your entries in one place.':page==='insights'?'See where your money actually goes.':page==='reviews'?'Items that need your confirmation.':'Data and account preferences.';
 }
 el('period').hidden=page==='reviews'||page==='overview'||page==='settings';
-let a=expense(),html='';if(page==='overview')html=cashFlowCard();if(page==='reviews')html=reviewsPage();if(page==='transactions')html='<div class="panel"><div class="section-top"><h3>Transactions</h3><span class="budget-summary-meta">'+rows().length+' entries</span></div>'+table(rows().sort((a,b)=>b.date.localeCompare(a.date)),true)+'</div>';
+let a=expense(),html='';if(page==='overview')html=overviewSummary()+cashFlowCard();if(page==='reviews')html=reviewsPage();if(page==='transactions')html='<div class="panel"><div class="section-top"><h3>Transactions</h3><span class="budget-summary-meta">'+rows().length+' entries</span></div>'+table(rows().sort((a,b)=>b.date.localeCompare(a.date)),true)+'</div>';
 if(page==='insights'){
   const tabs='<div class="insight-tabs" role="tablist" aria-label="Insight views">'+[['merchants','Merchants'],['categories','Categories'],['bands','Purchase sizes'],['recurring','Recurring'],['accuracy','Accuracy']].map(([key,name])=>'<button type="button" role="tab" aria-selected="'+(insightMode===key)+'" class="'+(insightMode===key?'active':'')+'" data-insight="'+key+'">'+name+'</button>').join('')+'</div>';
   if(insightMode==='categories'){
