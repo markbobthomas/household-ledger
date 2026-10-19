@@ -240,7 +240,7 @@ function overviewSummary(){
  const snapshot=window.HouseholdBankFeed.getSnapshot(today());
  const live=snapshot.connected===true&&!snapshot.accounts.some(a=>a.simulated);
  const asOf=String(snapshot.asOf||today()).slice(0,10);
- const age=a=>{const d=String(a.balanceAsOf||a.observedAt||a.asOf||'').slice(0,10);return /^\\d{4}-\\d\\d-\\d\\d$/.test(d)?Math.round((Date.parse(asOf+'T12:00:00Z')-Date.parse(d+'T12:00:00Z'))/86400000):null};
+ const age=a=>{const d=String(a.balanceAsOf||a.observedAt||a.asOf||'').slice(0,10);return /^\d{4}-\d\d-\d\d$/.test(d)?Math.round((Date.parse(asOf+'T12:00:00Z')-Date.parse(d+'T12:00:00Z'))/86400000):null};
  const balances=(snapshot.accounts||[]).map(a=>{
   const current=a.current===null||a.current===undefined?null:Number(a.current),days=age(a);
   const status=!live||a.simulated?'Simulated':a.disconnected?'Disconnected':current===null||!Number.isFinite(current)?'Balance unavailable':days===null||days<0?'Unverified date':days>2?'Last reported':'Bank reported';
