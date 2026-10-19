@@ -20,7 +20,13 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
- const plans=[],billEvents=[],obligations=[],warnings=[],statements=[];
+ const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],suppressedExpectedIds=[];
+ const matchesAccount=(row,account)=>{
+  const key=String(row.accountId||row.account||''),id=String(account.id);
+  if(key===id)return true;
+  const aliases=accounts.filter(a=>String(a.name)===key||String(a.transactionAccount||'')===key);
+  return aliases.length===1&&aliases[0].id===id;
+ };
  for(const [id,rule] of Object.entries(cards)){
   const card=byId.get(id),from=byId.get(String(rule.fromAccountId||''));
   if(!card||!credit(card)||!from||!cash(from)){
@@ -48,7 +54,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const cycleRows=records.filter(t=>t.accountId===id&&!t.pending&&t.date>prevClose&&t.date<=cycleClose&&
      ['expense','refund'].includes(t.type));
    const bankPurchases=round(cycleRows.reduce((sum,t)=>sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
-   const futureCharges=round(expected.filter(t=>String(t.accountId||t.account)===id&&t.date>prevClose&&
+   const futureCharges=round(expected.filter(t=>matchesAccount(t,card)&&t.date>prevClose&&
      t.date<=cycleClose&&['expense','refund'].includes(t.type)).reduce((sum,t)=>sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
    const calculated=round(Math.max(0,bankPurchases+futureCharges));
    // Never falsely claim a statement is verified by transactions. Carry the
@@ -84,10 +90,16 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // An explicit bill replaces a same-account recurring bank-derived estimate
    // only when the merchant/amount/date all agree (no competing second withdrawal).
    const normalized=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-   const already=expected.some(t=>t.type==='expense'&&String(t.accountId||t.account)===account.id&&
-    Math.abs(Number(t.amount)-amount)<.011&&Math.abs(Date.parse(t.date)-Date.parse(due))<=3*86400000&&
-    normalized(t.merchant)===normalized(label));
-   if(already)continue;
+   const sameMerchant=expected.filter(t=>t.type==='expense'&&matchesAccount(t,account)&&
+    Math.abs(Date.parse(t.date)-Date.parse(due))<=3*86400000&&normalized(t.merchant)===normalized(label));
+   if(sameMerchant.length===1){
+    if(Math.abs(Number(sameMerchant[0].amount)-amount)<.011)continue;
+    // Owner-entered mortgage/bill amount is authoritative for forecasting;
+    // suppress only an unambiguous old recurring estimate for the same bill.
+    if(sameMerchant[0].id)suppressedExpectedIds.push(String(sameMerchant[0].id));
+   }else if(sameMerchant.length>1){
+    warnings.push(label+': multiple competing predicted payments near '+due+'; review duplicates');
+   }
    const e={id:'bill|'+b.id+'|'+due,accountId:account.id,account:account.name,
     type:'expense',amount,date:due,merchant:label,category:b.category||'Housing',source:'owner-bill'};
    billEvents.push(e);
@@ -95,7 +107,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     kind:'automatic_bill',confidence:'entered schedule / amount estimate'});
   }
  }
- return {plans,billEvents,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements};
+ return {plans,billEvents,suppressedExpectedIds,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements};
 }
 const api={build,plus,closeFor};
 root.HouseholdPaymentObligations=api;

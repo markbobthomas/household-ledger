@@ -169,7 +169,9 @@ function previewCashFlow(){
  const future=liveMode||demoRows.length&&demoRows.length===entries().length?
    sharedForecast():window.HouseholdForecastLedger.build(data,source,today(),90,window.HouseholdForecast,Model);
  const payment=window.HouseholdPaymentObligations.build(snapshot,source,future.events,data.predictions);
- const multi=window.HouseholdAccountForecast.build(snapshot,[...future.events,...payment.billEvents],
+ const suppressed=new Set(payment.suppressedExpectedIds||[]);
+ const multi=window.HouseholdAccountForecast.build(snapshot,
+   [...future.events.filter(e=>!suppressed.has(String(e.id))),...payment.billEvents],
    [...(data.predictions.accountMovements||[]),...payment.plans],{days:90,records:source});
  const accountEvents=multi.events.filter(p=>p.accountId===account.id).map(p=>({
   id:p.id,date:p.date,amount:p.amount,merchant:p.merchant,accountId:p.accountId,
