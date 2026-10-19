@@ -204,9 +204,9 @@ function accountForecastMarkup(snapshot,multi){
   '<div class="account-reliability-lines">'+auditRows.map(t=>'<p>'+esc(t)+'</p>').join('')+'</div></details>':'';
  const household=multi.household;
  return '<section class="account-forecast" aria-label="Account-level forecast"><div class="section-top"><h3>Account balances · next 90 days</h3><span class="budget-summary-meta">Scheduled events only</span></div>'+
- '<div class="account-total-strip"><span>Cash <strong>'+money(household.closingCash)+'</strong></span>'+
- '<span>Card debt <strong>'+money(household.closingDebt)+'</strong></span>'+
- '<span>Cash less card debt <strong>'+money(household.closingNet)+'</strong></span></div>'+
+ '<div class="account-total-strip"><span>Projected cash <strong>'+(household.complete?money(household.closingCash):'Incomplete')+'</strong></span>'+
+ '<span>Projected card debt <strong>'+(household.complete?money(household.closingDebt):'Incomplete')+'</strong></span>'+
+ '<span>Projected cash less card debt <strong>'+(household.complete?money(household.closingNet):'Incomplete')+'</strong></span></div>'+
  '<div class="account-projection-list"><div class="account-projection-heading"><span>Account</span><span>Today</span><span></span><span>90 days</span></div>'+
  rows+'</div>'+
  (notes.length?'<p class="account-forecast-warning">'+esc(notes.join(' · '))+'. These projections may be incomplete.</p>':'')+
