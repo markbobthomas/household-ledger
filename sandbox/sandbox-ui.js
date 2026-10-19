@@ -104,7 +104,7 @@ function paint(){
  const active=Boolean(data?.connected);
  const mode=data?.mode||'offline';
  status.textContent=data?data.mode==='fixture'?
-  'Fictional Sandbox mode · no Plaid API requests. '+data.items.length+' test institution(s).':
+  (root.location.hostname==='localhost'||root.location.hostname==='127.0.0.1'?'Local fixture mode · no Plaid API requests. ':'Fictional Sandbox mode · no Plaid API requests. ')+data.items.length+' test institution(s).':
   'Plaid Sandbox credentials configured · '+data.items.length+' test institution(s).':
   'Sandbox service unavailable. Refresh or check its hosting status.';
  rootPanel.querySelector('#sandbox-connect').disabled=loading||!data;
