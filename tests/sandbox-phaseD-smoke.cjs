@@ -143,7 +143,7 @@ const A=require('../accounting.js');
  const getKey=async()=>({key:publicJwk});
  assert.equal((await verifyPlaidWebhook(body,jwt,getKey)).webhook_type,'TRANSACTIONS');
  await assert.rejects(verifyPlaidWebhook(body+' ',jwt,getKey),/body mismatch/);
- await assert.rejects(verifyPlaidWebhook(body,jwt.slice(0,-2)+'xx',getKey),/signature rejected/);
+ await assert.rejects(verifyPlaidWebhook(body,toSign+'.'+(signed.toString('base64url')[0]==='A'?'B':'A')+signed.toString('base64url').slice(1),getKey),/signature rejected/);
  await assert.rejects(verifyPlaidWebhook(body,jwt,getKey,Date.now()+3600000),/expired/);
  console.log('PASS: Phase D Plaid paging restart, incomplete rollback, Sandbox-only transport and ES256 webhook signature/body/replay verification');
 })().catch(err=>{console.error(err);process.exitCode=1});
