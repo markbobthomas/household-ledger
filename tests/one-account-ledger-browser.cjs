@@ -18,6 +18,9 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await page.locator('#ledger-mode-switch').selectOption('real');
   await page.locator('#demo-banner').getByText('DEMO').waitFor();
   assert.equal(await page.locator('#ledger-mode-switch').inputValue(),'demo','Cannot enter Real without a connected account');
+  await page.locator('#add-custom-category [name=name]').fill('Pet supplies');
+  await page.locator('#add-custom-category button[type=submit]').click();
+  assert.ok((await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')))).customCategories.includes('Pet supplies'),'Demo category creation uses original Ledger state');
   const bankTest=await ctx.newPage(),postedDate=new Date().toISOString().slice(0,10);
   await bankTest.route('**/api/ledger',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
    connected:true,lastSync:'2026-10-19T12:00:00Z',
@@ -42,8 +45,15 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   const editor=bankTest.locator('select[data-category="posted"]').first();
   await editor.waitFor();
   await editor.selectOption('Groceries');
-  await bankTest.waitForFunction(()=>false,{timeout:100}).catch(()=>{}); 
+  for(let i=0;i<60&&!adjustments.some(a=>a.categoryOverrides?.posted==='Groceries');i++)await new Promise(resolve=>setTimeout(resolve,50));
   assert.ok(adjustments.some(a=>a.categoryOverrides?.posted==='Groceries'),'Category edit saved via encrypted server preferences');
+  await bankTest.locator('aside [data-page=settings]').click();
+  await bankTest.locator('#add-custom-category [name=name]').fill('Hobbies');
+  await bankTest.locator('#add-custom-category button[type=submit]').click();
+  for(let i=0;i<60&&!adjustments.some(a=>a.customCategories?.includes('Hobbies'));i++)await new Promise(resolve=>setTimeout(resolve,50));
+  assert.ok(adjustments.some(a=>a.customCategories?.includes('Hobbies')),'Real category creation is persisted separately');
+  const stored=await bankTest.evaluate(()=>localStorage.getItem('household-ledger-v1'));
+  assert.equal(stored.includes('posted'),false,'Real bank source transactions never written to localStorage');
   await bankTest.locator('aside [data-page=insights]').click();
   assert.equal(await bankTest.locator('[data-insight=merchants]').count(),1,'Original insights controls retained');
   assert.equal(await bankTest.locator('[data-insight=recurring]').count(),1,'Original recurring analysis retained');
