@@ -1,29 +1,31 @@
-# Real bank pilot — one checking account
+# Add Plaid to the existing Household Ledger (no new website)
 
-This is a separate application from the fictional Sandbox. **Never put real Plaid credentials in the existing household-ledger-test service or public GitHub Pages.**
+The current Render service `household-ledger-test` is the existing private hosted Ledger. It remains a fictional Sandbox until you explicitly enable live mode. **Do not put any API secret into GitHub, chat, or the GitHub Pages site.**
 
-## One-time Render setup
+## Activation in existing Render service
 
-1. In Render, select **New → Web Service**, connect GitHub repository `markbobthomas/household-ledger`, name it `household-ledger-pilot`. Set runtime **Node**, branch `main`, Build Command `node --version`, Start Command `node pilot/server.cjs`, and health check `/healthz`. Use a paid Starter instance with a **persistent disk** mounted at `/var/data` (1 GB). Set automatic deployments on.
-2. In the new service's **Environment** tab, create:
-   - `PILOT_PASSWORD`: a NEW password of at least 20 characters, different from the fictional Sandbox password
-   - `PILOT_ENCRYPTION_KEY`: a NEW randomly generated secret of at least 32 characters; **save it securely** (changing it later prevents decrypting existing records)
-   - `PLAID_CLIENT_ID`: your Plaid client ID, from the Plaid Dashboard
-   - `PLAID_SECRET`: your **production** Plaid secret, from the Plaid Dashboard, if your Plaid account is approved for live use
-   - `PLAID_ENV`: `production`
-   - `PILOT_STATE_PATH`: `/var/data/pilot.enc`
-   Keep each value **Secret** in Render. Never send them through chat, email or GitHub.
-3. Wait for the Render deployment to say Live. Open the new pilot URL. Log in with username **pilot** and the new `PILOT_PASSWORD`. Select **Connect one checking account**, sign in through Plaid, and choose **exactly one checking account**. Compare the bank's balance with the pilot screen, noting Plaid's observation time. Do not assume same-second agreement: Plaid may hold a cached bank snapshot.
+Open Render → **household-ledger-test** → Environment. Add these **secret** variables:
 
-**Do not connect a real bank** until the pilot's automated tests pass, its URL uses HTTPS, your Plaid account has live-data access, and its new Render disk is mounted. **Never enter bank credentials directly into Household Ledger**. Only enter them into Plaid's own Link screen.
+- `LIVE_PLAID_ENABLED` = `1`
+- `PLAID_ENV` = `production`
+- `PLAID_CLIENT_ID` = the Client ID in your Plaid Dashboard
+- `PLAID_SECRET` = the **Production Secret** in your Plaid Dashboard
+- `PILOT_PASSWORD` = a new, unique password of at least 20 characters
+- `PILOT_ENCRYPTION_KEY` = a new random string of at least 32 characters (save this privately; changing it renders encrypted data unreadable)
+- `PILOT_STATE_PATH` = `/var/data/pilot.enc`
 
-## Constraints
+The existing 1-GB persistent disk mounted at `/var/data` remains in place and keeps the live data encrypted at rest. The fictional Sandbox file is separate and is not migrated. **You do not need to create a second Render service or change its Start Command.** Save and redeploy the same service.
 
-- The server accepts at most one connected Plaid Item and stores only the chosen checking account's details and transactions.
-- It uses Plaid Link and server-side public-token exchange. The Plaid access token is encrypted with AES-256-GCM on a Render persistent disk and never sent to the browser.
-- Displayed **current** and **available** balance values are Plaid's reported values, timestamped at retrieval. Nothing is adjusted by ledger transactions. No manual transaction editing is provided.
-- Plaid may return delayed/partial transactions. Initial sync is not a guarantee of a complete transaction history.
-- This is an **isolated proof of concept**, not household multi-user production infrastructure. It uses a single strong HTTP Basic login over Render HTTPS, not a full identity/authentication system. Do not grant other users access.
-- **Disconnect and erase pilot** calls Plaid Item removal before deleting local stored pilot data. In the event of a Plaid-side failure, it leaves local state in place and reports an error rather than claiming success.
-- For OAuth institutions, Plaid may require a registered redirect URL. That enhancement is not yet implemented. Start with a checking institution that supports the ordinary Link flow. If Plaid flags a redirect requirement, stop rather than inventing a URL.
-- Never migrate production tokens or private bank data into the hosted fictional Sandbox or the public demo.
+When deployment succeeds, open the **existing Render URL**. HTTP Basic auth username changes to `pilot`; password becomes `PILOT_PASSWORD`. Open **Settings** or **Overview** and choose **Connect one checking account**. Plaid Link asks you to authorize exactly one eligible checking account.
+
+## Important separation and limits
+
+- This is a **read-only single checking account pilot** inside the same Ledger. It shows the bank balance on Overview and Settings and all imported transactions on the protected Bank Connection page. Real transactions are not yet used to change the demo budgeting/forecast model; those components stay expressly fictional until reconciliation is reviewed. This prevents financial source data from silently contaminating the existing model.
+- Only Plaid Link handles bank authorization; no bank username/password is sent directly to Household Ledger.
+- Plaid access tokens and transaction snapshots remain encrypted on Render persistent storage, are not written to browser localStorage, and are never committed to GitHub.
+- The live/private Render URL uses a password and is not the public GitHub Pages URL. HTTPS is required before use.
+- `/accounts/get` provides the most recent Plaid-reported bank balance available at refresh time. The display never computes a balance from transactions. Plaid's value may lag the bank's own app.
+- Clicking Disconnect attempts to remove the Plaid Item and erase stored pilot data. Keep the encryption key secured until then.
+- If a bank requires OAuth redirects, the current one-account pilot needs additional configuration before you can connect it. Do not attempt to bypass that.
+- Set `LIVE_PLAID_ENABLED` to `0` to return to the fictional Sandbox (the encrypted real account file is kept on disk until you disconnect/erase it while live mode is running). Do not mix the two modes.
+- There is no multi-user identity, transaction editing or production-grade administration. Do not share this private pilot with others.
