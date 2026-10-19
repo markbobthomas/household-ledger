@@ -38,6 +38,7 @@ async function browserCheck(browser,options,url,mobile){
   await pendingRow.locator('select[data-category]').selectOption('Health');
   assert.equal(await pendingRow.locator('select[data-category]').inputValue(),'Health');
   await page.locator(nav).click();
+  await panel.locator('[data-sandbox-refresh]').waitFor({state:'visible',timeout:10000});
   assert.equal(await panel.locator('[data-sandbox-refresh]').count(),1,
    'Sandbox settings after categorization; current tab='+await page.locator('#title').innerText()+
    '; script errors='+errors.join(' | '));
