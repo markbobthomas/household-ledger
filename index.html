@@ -258,6 +258,7 @@ function overviewSummary(){
 }
 function cashFlowCard(){
  const {snapshot,account,f,future,multi}=previewCashFlow();
+ if(liveMode&&(account?.current===null||account?.current===undefined||!Number.isFinite(Number(account?.current))))return '<div class="cash-panel" id="cashflow"><h3>Bank balance unavailable</h3><p class="prediction-note">Plaid has not reported a usable current balance for this account. Household Ledger will not substitute transaction totals or a made-up opening balance.</p></div>'+accountForecastMarkup(snapshot,multi);
  const feed=window.HouseholdFeedHealth.assess(snapshot,entries(),snapshot.expectedAccountIds||[],new Date());
  const feedText=feed.connected?(feed.lastSuccessfulSync?'Last reported sync '+feed.lastSuccessfulSync:'No verified bank sync timestamp'):'Demo only · bank not connected';
  const feedMarkup='<div class="feed-health" role="status"><strong>Bank feed health · '+esc(feed.status.replace(/-/g,' '))+'</strong><span>'+esc(feedText)+'</span>'+
