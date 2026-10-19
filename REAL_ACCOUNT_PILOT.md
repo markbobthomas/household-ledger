@@ -18,14 +18,21 @@ The existing 1-GB persistent disk mounted at `/var/data` remains in place and ke
 
 When deployment succeeds, open the **existing Render URL**. HTTP Basic auth username changes to `pilot`; password becomes `PILOT_PASSWORD`. Open **Settings** or **Overview** and choose **Connect one checking account**. Plaid Link asks you to authorize exactly one eligible checking account.
 
-## Important separation and limits
+## One interface, two data sources
 
-- This is a **read-only single checking account pilot** inside the same Ledger. It shows the bank balance on Overview and Settings and all imported transactions on the protected Bank Connection page. Real transactions are not yet used to change the demo budgeting/forecast model; those components stay expressly fictional until reconciliation is reviewed. This prevents financial source data from silently contaminating the existing model.
-- Only Plaid Link handles bank authorization; no bank username/password is sent directly to Household Ledger.
-- Plaid access tokens and transaction snapshots remain encrypted on Render persistent storage, are not written to browser localStorage, and are never committed to GitHub.
-- The live/private Render URL uses a password and is not the public GitHub Pages URL. HTTPS is required before use.
-- `/accounts/get` provides the most recent Plaid-reported bank balance available at refresh time. The display never computes a balance from transactions. Plaid's value may lag the bank's own app.
-- Clicking Disconnect attempts to remove the Plaid Item and erase stored pilot data. Keep the encryption key secured until then.
-- If a bank requires OAuth redirects, the current one-account pilot needs additional configuration before you can connect it. Do not attempt to bypass that.
-- Set `LIVE_PLAID_ENABLED` to `0` to return to the fictional Sandbox (the encrypted real account file is kept on disk until you disconnect/erase it while live mode is running). Do not mix the two modes.
-- There is no multi-user identity, transaction editing or production-grade administration. Do not share this private pilot with others.
+The private Render Ledger now uses **exactly the same** Overview, Budget, Activity, Insights, Reviews and Settings components for both Demo and Real modes. The selector is in **Settings → Data source**.
+
+- In Demo, the existing fictional dataset and its adjustments remain in device local storage.
+- In Real, `/api/ledger` supplies all imported bank transactions plus Plaid's bank-reported balance. The same categorization, budgeting, prediction and review engines operate on that dataset.
+- Plaid source transactions and balances are **read-only**. Overrides, learned categories, custom categories, budgets and predictions are stored separately, encrypted on Render's disk through `POST /api/ledger/adjustments`. Real source facts are not saved in browser local storage.
+- **Create Category** in Settings is shared by both modes. Real and demo category choices and budget amounts remain isolated (no accidental importing fictional values).
+- The original forecast/chart is present in both modes. In Real, its starting bank balance is sourced directly from Plaid, while future amounts remain predictions, not bank-reported figures. If bank current balance is unavailable, no derived substitute appears.
+- The one-account Plaid test still only connects one selected account. Plaid balances can lag the bank app and should be compared with the reported time.
+
+A connection can be disconnected from the **Bank Connection** page. Disconnecting removes the Plaid Item and clears encrypted local pilot records; do not attempt this without understanding that it cannot be undone.
+
+For OAuth-based institutions, a registered Plaid redirect configuration may still be needed. The live private Render site requires HTTPS and strong password protection. Never share production secrets in chat or public GitHub.
+
+## Testing
+
+`tests/demo-real-feature-parity-audit.cjs` compares the original interface in both modes and fails on missing baseline features. The full browser workflow also tests Plaid mock connection, category editing and encrypted-only persistence. `tests/pilot-plaid-flow.cjs` checks source immutability, exact bank balance authority, preferences, pending-to-posted correction preservation, and disconnect.
