@@ -101,7 +101,7 @@ try{
  await page.locator('aside [data-page=budgets]').click();
  const healthAfter=Number((await healthRow().locator('.budget-summary-amount').innerText()).replace(/[$,]/g,''));
  assert.ok(Math.abs(healthAfter-healthBefore-42)<.01,'Demo Health budget counts only posted $42');
- assert.match(await healthRow().locator('summary').innerText(),/Pending \$18\.00 · not yet counted/);
+ assert.match(await healthRow().locator(':scope > details > summary').innerText(),/Pending \$18\.00 · not yet counted/);
  await healthRow().locator(':scope > details > summary').click();
  assert.equal(await healthRow().locator('.recorded-section').first().locator('select[data-category="demo-health-posted"]').count(),1);
  assert.equal(await healthRow().locator('.recorded-section').first().locator('select[data-category="demo-health-pending"]').count(),0);
