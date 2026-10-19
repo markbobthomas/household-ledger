@@ -16,7 +16,7 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   assert.equal(JSON.parse((await get('/api/status',true)).body).connected,false);
   const ledger=await get('/',true);assert.equal(ledger.status,200);assert.match(ledger.body,/Household Ledger/,'Existing Ledger is served in live mode');
   const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect one bank account/,'Plaid authorization available on same website');
-  assert.equal((await get('/pilot/ledger-ui.js',true)).status,200);
+  assert.equal((await get('/pilot/data-source.js',true)).status,200);
   assert.ok(!(await get('/api/status',true)).body.includes('test-placeholder'),'Secrets absent from responses');
   console.log('PASS isolated pilot authentication, healthcheck, empty state, no leaked Plaid credentials');
  }finally{child.kill();fs.rmSync(dir,{recursive:true,force:true})}
