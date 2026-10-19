@@ -16,35 +16,43 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await page.locator('#ledger-mode-switch').waitFor();
   assert.equal(await page.locator('#ledger-mode-switch').inputValue(),'demo');
   await page.locator('#ledger-mode-switch').selectOption('real');
-  assert.equal(await page.locator('#ledger-mode-switch').inputValue(),'demo','Cannot switch to real without verified connected account');
-  await page.locator('aside [data-page=overview]').click();
-  assert.equal(await page.locator('#real-mode-surface').count(),0,'Demo overview remains visible');
-  await page.locator('aside [data-page=transactions]').click();
-  assert.equal(await page.locator('#real-mode-surface').count(),0,'Demo transactions remain visible');
-  const bankTest=await ctx.newPage();
-  await bankTest.route('**/api/status',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
-   connected:true,lastSync:'2026-10-19T12:00:00Z',account:{name:'Test account',current:1000,available:950,balanceObservedAt:'2026-10-19T12:00:00Z'},
-   transactions:[{id:'posted',date:new Date().toISOString().slice(0,10),merchant:'Cafe',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT',confidence_level:'HIGH'}},
-    {id:'pending',date:new Date().toISOString().slice(0,10),merchant:'Pending cafe',amount:60,pending:true,category:{primary:'FOOD_AND_DRINK'}},
-    {id:'transfer',date:new Date().toISOString().slice(0,10),merchant:'Savings transfer',amount:400,pending:false,category:{primary:'TRANSFER_OUT'}}]
+  await page.locator('#demo-banner').getByText('DEMO').waitFor();
+  assert.equal(await page.locator('#ledger-mode-switch').inputValue(),'demo','Cannot enter Real without a connected account');
+  const bankTest=await ctx.newPage(),postedDate=new Date().toISOString().slice(0,10);
+  await bankTest.route('**/api/ledger',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   connected:true,lastSync:'2026-10-19T12:00:00Z',
+   account:{id:'acct-1',name:'Test Checking',type:'depository',subtype:'checking',current:1000,available:950,balanceObservedAt:'2026-10-19T12:00:00Z'},
+   adjustments:{},transactions:[
+    {id:'posted',date:postedDate,merchant:'Cafe',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT',confidence_level:'HIGH'}},
+    {id:'pending',date:postedDate,merchant:'Pending cafe',amount:60,pending:true,category:{primary:'FOOD_AND_DRINK'}},
+    {id:'transfer',date:postedDate,merchant:'Savings transfer',amount:400,pending:false,category:{primary:'TRANSFER_OUT'}},
+    {id:'unknown',date:postedDate,merchant:'Mystery',amount:19,pending:false,category:null}]
   })}));
+  let adjustments=[];
+  await bankTest.route('**/api/ledger/adjustments',async route=>{adjustments.push(route.request().postDataJSON());await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({saved:true})})});
+  const errorsReal=[];bankTest.on('pageerror',e=>errorsReal.push(e.message));
   await bankTest.goto('http://127.0.0.1:'+port+'/',{waitUntil:'load'});
   await bankTest.locator('aside [data-page=settings]').click();
   await bankTest.locator('#ledger-mode-switch').selectOption('real');
+  await bankTest.locator('#demo-banner').getByText('REAL BANK · PLAID').waitFor();
   await bankTest.locator('aside [data-page=budgets]').click();
-  const budget=bankTest.locator('section[aria-label="Real overall budget"]');
-  await budget.waitFor();
-  assert.ok((await budget.innerText()).includes('$25.00'),'Only posted cafe charge counts in real budget');
-  assert.ok(!(await budget.innerText()).includes('$400.00'),'Transfers excluded');
-  assert.equal(await bankTest.locator('#demo-banner').innerText(),'REAL BANK · PLAID','Real mode must never show DEMO badge');
-  assert.equal(await bankTest.locator('[data-real-budget="Needs review"]').count(),0,'Uncategorized is never a budget category');
-  assert.equal(await bankTest.locator('[data-real-budget="Debt payments"]').count(),0,'Loan payments are not spending budget categories');
-  assert.equal(await bankTest.locator('#period').isVisible(),false,'Demo month control hidden in real mode');
+  assert.equal(await bankTest.locator('.budget-entry[data-budget-category="Groceries"]').count(),1,'Original category budget rows retained');
+  assert.equal(await bankTest.locator('section[aria-label="Overall monthly budget"]').count(),1,'Same overall budget renderer');
+  await bankTest.locator('aside [data-page=transactions]').click();
+  const editor=bankTest.locator('select[data-category="posted"]').first();
+  await editor.waitFor();
+  await editor.selectOption('Groceries');
+  await bankTest.waitForFunction(()=>false,{timeout:100}).catch(()=>{}); 
+  assert.ok(adjustments.some(a=>a.categoryOverrides?.posted==='Groceries'),'Category edit saved via encrypted server preferences');
   await bankTest.locator('aside [data-page=insights]').click();
-  assert.match(await bankTest.locator('#real-mode-surface').innerText(),/Real spending insights/i);
+  assert.equal(await bankTest.locator('[data-insight=merchants]').count(),1,'Original insights controls retained');
+  assert.equal(await bankTest.locator('[data-insight=recurring]').count(),1,'Original recurring analysis retained');
   await bankTest.locator('aside [data-page=reviews]').click();
-  assert.match(await bankTest.locator('#real-mode-surface').innerText(),/pending transaction/);
-  assert.equal((await bankTest.locator('#real-mode-surface').innerText()).includes('Demo totals'),false);
+  assert.equal(await bankTest.locator('.review-filters').count(),1,'Original Reviews controls retained');
+  await bankTest.locator('aside [data-page=overview]').click();
+  assert.equal(await bankTest.locator('#cashflow').count(),1,'Original 90-day forecast retained');
+  assert.equal(await bankTest.locator('#real-mode-surface').count(),0,'Second interface eliminated');
+  assert.deepEqual(errorsReal,[],'No JS errors after data-source switching');
   await bankTest.close();
   await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'load'});
   await page.locator('#connect').waitFor();
