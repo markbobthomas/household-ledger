@@ -10,7 +10,7 @@ const HOST={production:'https://production.plaid.com',sandbox:'https://sandbox.p
 if(!HOST)throw Error('PLAID_ENV must be production or sandbox');
 const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const stamp=()=>new Date().toISOString();
-let state={item:null,accountId:null,cursor:null,transactions:{},accounts:[],lastSync:null,error:null};
+let state={item:null,accountId:null,cursor:null,transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}};
 async function load(){
  try{const b=JSON.parse(await fs.readFile(file,'utf8'));const d=crypto.createDecipheriv('aes-256-gcm',key,Buffer.from(b.iv,'base64'));d.setAuthTag(Buffer.from(b.tag,'base64'));state=JSON.parse(Buffer.concat([d.update(Buffer.from(b.data,'base64')),d.final()]).toString())}
  catch(e){if(e.code!=='ENOENT')throw e}
@@ -78,18 +78,40 @@ async function start(port=Number(env.PORT||8788)){
   if(origin&&new URL(origin).host!==host)return respond(403,{error:'Origin rejected'});
   if(req.method==='GET'&&req.url==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
   const staticPath=req.url.split('?')[0].slice(1);
-  const allowed=/^(?:index[.]html|modern[.]css|(?:demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]ledger-ui[.]js)$/;
+  const allowed=/^(?:index[.]html|modern[.]css|(?:demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js)$/;
   if(req.method==='GET'&&(req.url==='/'||allowed.test(staticPath))){
    const name=req.url.split('?')[0].slice(1)||'index.html';
    let body=await fs.readFile(path.resolve(__dirname,'..',name));
-   if(name==='index.html')body=Buffer.from(body.toString('utf8').replace('</head>','<script src="/pilot/ledger-ui.js" defer></script></head>'));
+   if(name==='index.html')body=Buffer.from(body.toString('utf8').replace('</head>','<script src="/pilot/data-source.js"></script></head>'));
    res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
    return res.end(body);
   }
+  if(req.method==='GET'&&req.url==='/api/ledger'){
+   if(!state.item)return respond(200,{connected:false,account:null,transactions:[],adjustments:{}});
+   // No truncation: all imported records for the ONE selected account only.
+   return respond(200,{connected:true,account:state.accounts[0]||null,lastSync:state.lastSync,
+    transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object').sort((a,b)=>String(b.date).localeCompare(String(a.date))),
+    adjustments:state.ledgerAdjustments||{}});
+  }
   if(req.method==='GET'&&req.url==='/api/status')return respond(200,{connected:!!state.item,account:state.accounts[0]||null,lastSync:state.lastSync,transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
-  let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>8192)return respond(413,{error:'Too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   try{
+   if(req.url==='/api/ledger/adjustments'){
+    if(!state.item)return respond(409,{error:'No bank account connected'});
+    if(!body||typeof body!=='object'||Array.isArray(body))return respond(400,{error:'Invalid preferences'});
+    const allowed=['categoryOverrides','predictions','reviews','learning','customCategories'];
+    if(Object.keys(body).some(k=>!allowed.includes(k)))return respond(400,{error:'Bank source fields may not be changed'});
+    for(const keyName of allowed){if(body[keyName]!==undefined&&(body[keyName]===null||typeof body[keyName]!=='object'||Array.isArray(body[keyName])&&keyName!=='customCategories'))return respond(400,{error:'Invalid '+keyName})}
+    const allowedCats=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
+    if(body.categoryOverrides){
+     const ids=new Set(Object.keys(state.transactions).map(String));
+     if(Object.entries(body.categoryOverrides).some(([id,category])=>!ids.has(id)||!allowedCats.has(category)))return respond(400,{error:'Invalid category override'});
+    }
+    // Never permit source records, Plaid tokens, or provider balances in adjustment writes.
+    state.ledgerAdjustments=Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]]));
+    await save();return respond(200,{saved:true});
+   }
    if(req.url==='/api/link-token'){
     if(state.item)throw Error('One account only. Disconnect first.');
     const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-single-pilot'},client_name:'Household Ledger Pilot',products:['transactions'],country_codes:['US'],language:'en'});
