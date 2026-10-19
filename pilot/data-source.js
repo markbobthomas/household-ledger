@@ -86,7 +86,7 @@ function panel(){
 function persist(data){
  if(!live)return;
  const body={categoryOverrides:data.categoryOverrides||{},predictions:data.predictions||{},
-  reviews:data.reviews||{},learning:data.learning||{}};
+  reviews:data.reviews||{},learning:data.learning||{},customCategories:data.customCategories||[]};
  // Capture this exact snapshot; serialize writes so rapid edits cannot reverse their order.
  writeQueue=writeQueue.catch(()=>{}).then(()=>request('/adjustments',body)).catch(e=>{
   lastError='Your latest real-data change was not saved: '+e.message;
