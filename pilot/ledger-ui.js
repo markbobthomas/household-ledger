@@ -45,7 +45,8 @@ function categorized(t){
  if(TRANSFER_CATEGORIES.has(primary)||primary.startsWith('TRANSFER_'))return 'Transfer / non-spending';
  // Broad or absent Plaid codes are insufficient evidence of a household budget category.
  if(primary==='LOAN_PAYMENTS')return 'Transfer / non-spending';
- if(!detail||detail.endsWith('_OTHER')||detail.endsWith('_UNKNOWN'))return null;
+ const confidence=String(raw.confidence_level||'').toUpperCase();
+ if(!['HIGH','VERY_HIGH'].includes(confidence)||!detail||detail.endsWith('_OTHER')||detail.endsWith('_UNKNOWN'))return null;
  return Object.prototype.hasOwnProperty.call(CATEGORY_MAP,primary)?CATEGORY_MAP[primary]:null;
 }
 function verifiedRows(){
@@ -69,8 +70,8 @@ function realBudget(){
  };
  return '<section class="panel" aria-label="Real overall budget"><div class="section-top"><h3>Overall budget · '+esc(month)+'</h3><strong>'+money(spent)+' spent</strong></div>'+
   '<div class="budget-progress" role="img" aria-label="Overall real budget '+money(spent)+' spent of '+money(limit)+'"><i class="actual" style="width:'+percent.toFixed(2)+'%"></i></div>'+
-  '<div class="budget-heading"><span>Total caps '+money(limit)+'</span><span>'+rows.length+' posted spending transactions</span></div>'+
-  '<p class="prediction-note">Real posted transactions with a supported Plaid spending category only. '+uncategorized.length+' uncategorized transaction(s) excluded; pending charges, loan payments, and transfers excluded. No demo data. Real caps are separate from demo.</p></section>'+
+  '<div class="budget-heading"><span>Total caps '+money(limit)+'</span><span>'+rows.length+' confidently categorized posted transactions</span></div>'+
+  '<p class="prediction-note">Categorized spending only: Plaid HIGH or VERY_HIGH confidence with a specific spending category. '+uncategorized.length+' uncategorized transaction(s) excluded; pending charges, loan payments, and transfers excluded. No demo data. Real caps are separate from demo.</p></section>'+
   '<section class="panel" aria-label="Real category budgets"><h3>Spending by category</h3>'+(groups.map(line).join('')||'<p>No posted spending in this month yet.</p>')+
   '<p class="prediction-note">Only supported Plaid spending categories appear. Uncategorized items are shown in Reviews and excluded. Edit caps above; no bank transaction changes.</p></section>';
 }
