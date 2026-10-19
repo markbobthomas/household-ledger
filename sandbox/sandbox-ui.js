@@ -1,9 +1,9 @@
-/* Local-only Phase D Sandbox controls.
+/* Local or password-protected hosted Phase D Sandbox controls.
  * Public GitHub Pages displays nothing; tokens remain server-side.
  */
 (function(root){
 'use strict';
-const LOCAL=['127.0.0.1','localhost'].includes(root.location?.hostname||'');
+const LOCAL=['127.0.0.1','localhost'].includes(root.location?.hostname||'')||Boolean(root.document?.querySelector('meta[name="household-sandbox-hosted"]'));
 const api='/api/sandbox/';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BACKUP='household-ledger-pre-sandbox-backup-v1';
@@ -24,7 +24,7 @@ function panel(){
  return '<div class="panel settings-block sandbox-panel" id="sandbox-panel">'+
   '<div class="section-top"><h3>Plaid Sandbox</h3><span class="budget-summary-meta">Simulated only</span></div>'+
   '<p class="prediction-note">Test several checking, savings and credit-card accounts without connecting real banks. Plaid credentials never enter the browser.</p>'+
-  '<div id="sandbox-status" role="status">Checking local test service…</div>'+
+  '<div id="sandbox-status" role="status">Checking test service…</div>'+
   '<label for="sandbox-institution" class="sandbox-label">Test institution</label>'+
   '<select id="sandbox-institution">'+
    '<option value="ins_109508">First Platypus Bank</option>'+
@@ -38,7 +38,7 @@ function panel(){
   '<button class="btn" id="sandbox-sync" type="button" disabled>Sync test transactions</button>'+
   '<button class="btn" id="sandbox-link" type="button" hidden>Open Plaid Link (Sandbox)</button></div>'+
   '<div id="sandbox-items"></div>'+
-  '<p class="prediction-note">This is not live banking. The public GitHub Pages Ledger stays demo-only. Stop this local service to end the test session.</p>'+
+  '<p class="prediction-note">This is not live banking. The public GitHub Pages Ledger stays demo-only. This test website is separate from the public Ledger.</p>'+
   '</div>';
 }
 function accountSnapshot(snapshot){
@@ -104,9 +104,9 @@ function paint(){
  const active=Boolean(data?.connected);
  const mode=data?.mode||'offline';
  status.textContent=data?data.mode==='fixture'?
-  'Local fixture mode · no Plaid API requests. '+data.items.length+' test institution(s).':
+  'Fictional Sandbox mode · no Plaid API requests. '+data.items.length+' test institution(s).':
   'Plaid Sandbox credentials configured · '+data.items.length+' test institution(s).':
-  'Local Sandbox service unavailable. Start it using the setup instructions.';
+  'Sandbox service unavailable. Refresh or check its hosting status.';
  rootPanel.querySelector('#sandbox-connect').disabled=loading||!data;
  rootPanel.querySelector('#sandbox-sync').disabled=loading||!active;
  const link=rootPanel.querySelector('#sandbox-link');
