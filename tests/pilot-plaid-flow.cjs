@@ -22,7 +22,13 @@ const {spawn}=require('node:child_process');
   assert.equal(status.data.transactions.length,1);assert.equal(status.data.transactions[0].pending,true);
   assert.equal(JSON.stringify(status.data).includes('acct-2'),false,'Only selected account exposed');
   assert.equal(fs.readFileSync(store,'utf8').includes('secret-test-access-token'),false,'Plaid access token encrypted on disk');
+  const pendingOverride=await request('/api/ledger/adjustments',{categoryOverrides:{'pending-1':'Groceries'}});
+  assert.equal(pendingOverride.code,200);
   await request('/api/sync',{});
+  const carried=await request('/api/ledger');
+  assert.equal(carried.data.adjustments.categoryOverrides['posted-1'],'Groceries','Manual category follows replaced pending transaction');
+  assert.equal(carried.data.adjustments.categoryOverrides['pending-1'],undefined,'Obsolete pending ID is removed');
+
   status=await request('/api/status');
   assert.equal(status.data.transactions.length,1,'Pending charge replaced rather than duplicated');
   assert.equal(status.data.transactions[0].pending,false);
