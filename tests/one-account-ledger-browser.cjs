@@ -20,7 +20,7 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await page.locator('#real-account-status').waitFor();
   await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'load'});
   await page.locator('#connect').waitFor();
-  assert.match(await page.locator('#status').innerText(),/No account connected/);
+  await page.locator('#status').getByText('No account connected').waitFor();
   assert.deepEqual(errors,[],'No runtime JavaScript errors in live Ledger or connection screen');
   console.log('PASS private existing Ledger navigation, bank UI, connection screen, no browser exceptions');
  }finally{if(browser)await browser.close();child.kill();fs.rmSync(dir,{recursive:true,force:true})}
