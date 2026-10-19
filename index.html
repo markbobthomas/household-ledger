@@ -599,6 +599,8 @@ if(page==='insights'){
     '<p class="budget-date-note">Full transactions are counted once when no item-level details are available.</p></div>';
   }
 }if(page==='budgets'){
+ // Use the same reconciled ledger source as Activity.
+ const budgetLedger=entries(),budgetAsOf=today();
  const cats=[...new Set([...allCategories(),...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,
  {start:monthStart,end:monthEnd,label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
  const totals=cats.reduce((sum,category)=>{const f=monthlyProjection(month,category);sum.actual+=Number(f.actual)||0;sum.expected+=Number(f.additional)||0;sum.limit+=Number(data.predictions.monthlyBudgets[category])||0;return sum},{actual:0,expected:0,limit:0});
@@ -608,16 +610,27 @@ if(page==='insights'){
  '<div class="budget-progress" role="img" aria-label="Overall budget: '+esc(money(totals.actual))+' spent, '+esc(money(totals.expected))+' expected, total budget '+esc(money(totals.limit))+'">'+
  '<i class="actual" style="width:'+used.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecast.toFixed(2)+'%"></i></div>'+
  '<div class="budget-heading"><span class="budget-category-meta">Combined budget '+money(totals.limit)+'</span><span class="budget-category-meta '+(totals.limit&&totals.actual+totals.expected>totals.limit?'over-budget':'')+'">'+(currentMonth?'Expected total '+money(totals.actual+totals.expected):'Recorded total '+money(totals.actual))+'</span></div>'+
- '<p class="prediction-note">Sum of all category budgets. Recorded spending and expected payments are separate; no amounts are added to bank balances.</p></section>';
+ '<p class="prediction-note">Sum of all category budgets. Posted spending and expected payments are separate. Pending charges appear under their categories but do not count until posted. Bank balances are unchanged.</p></section>';
  html=overall+'<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div>'+
  '<div class="budget-legend"><span>Spent</span><span>Expected</span><small class="budget-edit-legend">Underlined amounts are editable</small></div>'+
  cats.map(category=>{
-  const matching=entries().filter(t=>['expense','refund'].includes(t.type)&&t.category===category&&t.date>=monthStart&&t.date<=monthEnd).sort((a,b)=>b.date.localeCompare(a.date));
+  const categoryRows=budgetLedger.filter(t=>t.category===category&&t.date>=monthStart&&t.date<=monthEnd);
+  const sortRecent=(a,b)=>b.date.localeCompare(a.date);
+  // Keep bank-reported source types unchanged. Pending and transfers are not posted spending.
+  const matching=categoryRows.filter(t=>['expense','refund'].includes(t.type)&&!t.pending&&t.date<=budgetAsOf&&Number(t.amount)>0).sort(sortRecent);
+  const pending=categoryRows.filter(t=>['expense','refund'].includes(t.type)&&t.pending&&Number(t.amount)>0).sort(sortRecent);
+  const notSpending=categoryRows.filter(t=>data.categoryOverrides?.[t.id]===category&&
+    (!['expense','refund'].includes(t.type)||!t.pending&&t.date>budgetAsOf)).sort(sortRecent);
+  const pendingNet=pending.reduce((sum,t)=>sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0);
   const f=monthlyProjection(month,category),limit=Number(data.predictions.monthlyBudgets[category])||0;
   const spentWidth=limit?Math.min(100,Math.max(0,f.actual/limit*100)):0;
   const forecastWidth=limit?Math.min(Math.max(0,100-spentWidth),Math.max(0,f.additional/limit*100)):0;
   return'<div class="budget-entry" data-budget-category="'+esc(category)+'"><details class="drill-detail"><summary class="row drill-summary"><div style="flex:1;min-width:0">'+
   '<div class="budget-heading"><span class="budget-title">'+esc(category)+'</span><span class="budget-summary-amount">'+money(f.actual)+'</span></div>'+
+  (pending.length||notSpending.length?'<div class="budget-category-meta">'+
+    (pending.length?'Pending '+money(pendingNet)+' · not yet counted':'')+
+    (pending.length&&notSpending.length?' · ':'')+
+    (notSpending.length?notSpending.length+' categorized item'+(notSpending.length===1?'':'s')+' not counted as spending':'')+'</div>':'')+
   '<div class="budget-progress" role="img" aria-label="'+esc(category)+': '+esc(money(f.actual))+' spent, '+esc(money(f.additional))+' expected transactions, budget '+esc(limit?money(limit):'not set')+'">'+
   '<i class="actual" style="width:'+spentWidth.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecastWidth.toFixed(2)+'%"></i></div>'+
   '<div class="budget-heading"><span class="budget-category-meta">Budget <button type="button" class="editable-value" data-inline-budget="'+esc(category)+'" data-amount="'+limit+'" aria-label="Edit '+esc(category)+' monthly budget cap">'+(limit?money(limit):'Set cap')+'</button></span>'+
@@ -627,6 +640,10 @@ if(page==='insights'){
   predictedCategoryMarkup(f,category,month)+recurrenceRulesMarkup(category)+
   '<div class="recorded-section"><div class="section-top"><h3>Recorded transactions</h3><strong>'+money(f.actual)+'</strong></div>'+
   (matching.length?table(matching):'<div class="empty">No posted expenses in this category for the selected month.</div>')+'</div>'+
+  (pending.length?'<div class="recorded-section budget-pending-section"><div class="section-top"><h3>Pending transactions · not yet counted</h3><strong>'+money(pendingNet)+'</strong></div>'+
+    '<p class="prediction-note">These are categorized here, but do not increase spent or the Overall Budget until the bank posts them.</p>'+table(pending)+'</div>':'')+
+  (notSpending.length?'<div class="recorded-section budget-excluded-section"><div class="section-top"><h3>Categorized activity · not counted as spending</h3></div>'+
+    '<p class="prediction-note">These manually categorized items are transfers, incoming funds, or future-dated records, not posted spending. Bank source facts are unchanged.</p>'+table(notSpending)+'</div>':'')+
   (currentMonth?'<p class="prediction-note">Automatic predictions based on '+f.historyMonths.length+' historical months; never guaranteed. Monthly category expected amount = sum of active dated predictions.</p>':'')+
   '</div></details></div>';
  }).join('')+'</div>';

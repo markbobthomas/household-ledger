@@ -47,6 +47,21 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await editor.selectOption('Groceries');
   for(let i=0;i<60&&!adjustments.some(a=>a.categoryOverrides?.posted==='Groceries');i++)await new Promise(resolve=>setTimeout(resolve,50));
   assert.ok(adjustments.some(a=>a.categoryOverrides?.posted==='Groceries'),'Category edit saved via encrypted server preferences');
+  // Health category: only a posted expense counts as spending. Pending charges and
+  // transfers are visible under Health without being mistaken for spending.
+  await bankTest.locator('select[data-category="posted"]').selectOption('Health');
+  await bankTest.locator('select[data-category="pending"]').selectOption('Health');
+  await bankTest.locator('select[data-category="transfer"]').selectOption('Health');
+  await bankTest.locator('aside [data-page=budgets]').click();
+  const health=bankTest.locator('.budget-entry[data-budget-category="Health"]');
+  assert.equal(await health.locator('.budget-summary-amount').innerText(),'$25.00','Health spent is the posted charge only');
+  assert.match(await health.locator('summary').innerText(),/Pending \$60\.00 · not yet counted/,'Pending Health category visible');
+  assert.match(await health.locator('summary').innerText(),/1 categorized item not counted as spending/,'Health transfer exclusion disclosed');
+  await health.locator(':scope > details > summary').click();
+  assert.equal(await health.locator('.recorded-section').first().locator('select[data-category="posted"]').count(),1,'Posted Health expense listed');
+  assert.equal(await health.locator('.recorded-section').first().locator('select[data-category="pending"]').count(),0,'Pending not falsely recorded');
+  assert.equal(await health.locator('.budget-pending-section select[data-category="pending"]').count(),1,'Pending Health visible separately');
+  assert.equal(await health.locator('.budget-excluded-section select[data-category="transfer"]').count(),1,'Health transfer visible separately');
   await bankTest.locator('aside [data-page=settings]').click();
   await bankTest.locator('#add-custom-category [name=name]').fill('Hobbies');
   await bankTest.locator('#add-custom-category button[type=submit]').click();

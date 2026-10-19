@@ -81,6 +81,31 @@ try{
  const leap=page.locator('.budget-entry').filter({has:page.locator('.budget-title:text-is("Groceries")')});
  await leap.locator(':scope > details > summary').click();
  assert.match(await leap.innerText(),/Leap Day Grocery/);
+ // Demo has the identical posted/pending budget accounting as Real.
+ await page.locator('#period').selectOption('2026-10');
+ const healthRow=()=>page.locator('.budget-entry[data-budget-category="Health"]');
+ const healthBefore=Number((await healthRow().locator('.budget-summary-amount').innerText()).replace(/[$,]/g,''));
+ await page.evaluate(()=>{
+  const key='household-ledger-v1',d=JSON.parse(localStorage.getItem(key));
+  d.transactions.push(
+   {id:'demo-health-posted',date:'2026-10-14',merchant:'Clinic Visit',amount:42,category:'Other',type:'expense',account:'Checking',pending:false,source:{provider:'demo',verified:false}},
+   {id:'demo-health-pending',date:'2026-10-15',merchant:'Lab Work',amount:18,category:'Other',type:'expense',account:'Checking',pending:true,source:{provider:'demo',verified:false}});
+  localStorage.setItem(key,JSON.stringify(d));
+ });
+ await page.reload({waitUntil:'load'});
+ await page.locator('aside [data-page=transactions]').click();
+ await page.locator('#period').selectOption('2026-10');
+ await page.locator('select[data-category="demo-health-posted"]').selectOption('Health');
+ await page.locator('select[data-category="demo-health-pending"]').selectOption('Health');
+ assert.equal(await page.locator('select[data-category="demo-health-pending"]').inputValue(),'Health');
+ await page.locator('aside [data-page=budgets]').click();
+ const healthAfter=Number((await healthRow().locator('.budget-summary-amount').innerText()).replace(/[$,]/g,''));
+ assert.ok(Math.abs(healthAfter-healthBefore-42)<.01,'Demo Health budget counts only posted $42');
+ assert.match(await healthRow().locator('summary').innerText(),/Pending \$18\.00 · not yet counted/);
+ await healthRow().locator(':scope > details > summary').click();
+ assert.equal(await healthRow().locator('.recorded-section').first().locator('select[data-category="demo-health-posted"]').count(),1);
+ assert.equal(await healthRow().locator('.recorded-section').first().locator('select[data-category="demo-health-pending"]').count(),0);
+ assert.equal(await healthRow().locator('.budget-pending-section select[data-category="demo-health-pending"]').count(),1);
  assert.deepEqual(errors,[],'No client-side errors');
  console.log('PASS: six-nav layout, budget period boundaries, expandable forecasts, category/merchant tabs, activity and settings');
 }finally{await browser.close()}
