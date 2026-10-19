@@ -85,4 +85,9 @@ assert.equal(JSON.stringify(older.transactions),before,
  'Backfill prior Sandbox records in presentation without rewriting source rows');
 M.setCategory(older,'plaid:fixtureA:legacy','Dining');
 assert.equal(M.records(older)[0].category,'Dining');
+const demo=M.migrate({transactions:[{id:'demo-generic',date:'2026-10-11',merchant:'Demo Purchase',
+ amount:16,type:'expense',category:'Other',account:'Checking',
+ source:{provider:'demo',verified:false}}]});
+assert.equal(M.records(demo)[0].category,'Other',
+ 'Ordinary demo data without Plaid metadata must still render safely');
 console.log('PASS: Plaid PFCv1/v2 and merchant categorization, low confidence safeguards, legacy backfill, manual overrides, refunds, pending-posted and source immutability');
