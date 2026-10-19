@@ -27,6 +27,28 @@ const {spawn}=require('node:child_process');
   assert.equal(status.data.transactions.length,1,'Pending charge replaced rather than duplicated');
   assert.equal(status.data.transactions[0].pending,false);
   assert.equal(status.data.account.current,321.45,'Transactions never mutate bank-reported balances');
+  const full=await request('/api/ledger');
+  assert.equal(full.code,200);
+  assert.equal(full.data.transactions.length,1,'Shared Ledger receives one selected account, not truncated HTML');
+  assert.equal(full.data.account.current,321.45,'Ledger source current balance matches bank');
+  const preferences={
+   customCategories:['Pet supplies'],
+   categoryOverrides:{'posted-1':'Pet supplies'},
+   predictions:{monthlyBudgets:{'Pet supplies':200}},
+   reviews:{categoryConfirmed:{}},learning:{categoryRules:{}}
+  };
+  const saved=await request('/api/ledger/adjustments',preferences);
+  assert.equal(saved.code,200,'Only non-bank adjustments can be stored');
+  let after=await request('/api/ledger');
+  assert.equal(after.data.adjustments.customCategories[0],'Pet supplies');
+  assert.equal(after.data.adjustments.categoryOverrides['posted-1'],'Pet supplies');
+  assert.equal(after.data.account.current,321.45,'Category changes never recalculate bank balances');
+  assert.equal(after.data.transactions[0].amount,10,'Original bank amount remains immutable');
+  const illegal=await request('/api/ledger/adjustments',{transactions:[{id:'posted-1',amount:99999}]});
+  assert.equal(illegal.code,400,'Server refuses bank transaction modification through settings');
+  const unknown=await request('/api/ledger/adjustments',{categoryOverrides:{'fake-bank-transaction':'Shopping'}});
+  assert.equal(unknown.code,400,'Server rejects override without matching bank transaction');
+  assert.equal(fs.readFileSync(store,'utf8').includes('Pet supplies'),false,'Even custom categories encrypted at rest');
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');
