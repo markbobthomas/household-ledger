@@ -14,7 +14,7 @@
   const mount=document.querySelector('#real-account-status');if(!mount)return;
   if(!current){mount.textContent='Checking bank connection…';return}
   if(current.error){mount.textContent=current.error;return}
-  if(!current.connected){mount.innerHTML='<p>No real bank connected yet. Fictional demonstration data below remains separate.</p><p><a href="/bank-connect">Connect one checking account securely</a></p>';return}
+  if(!current.connected){mount.innerHTML='<p>No real bank connected yet. Fictional demonstration data below remains separate.</p><p><a href="/bank-connect">Connect one bank account securely</a></p>';return}
   const a=current.account,tab=document.querySelector('#title')?.textContent;
   const summary='<div><strong>'+escapeText(a?.name||'Checking account')+'</strong> · Bank-reported current balance: <strong>'+dollars(a?.current)+'</strong></div>'+
    '<p>Bank-reported available balance: '+dollars(a?.available)+' · Retrieved '+escapeText(a?.balanceObservedAt||'unknown')+'</p>'+
