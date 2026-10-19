@@ -29,7 +29,7 @@ function details(tab){
  }
  return head+'<p class="prediction-note">Exact Plaid-reported balance, not reconstructed from transactions. Plaid may lag your bank.</p>';
 }
-const CATEGORY_MAP={FOOD_AND_DRINK:'Dining',GENERAL_MERCHANDISE:'Shopping',HOME_IMPROVEMENT:'Housing',RENT_AND_UTILITIES:'Housing',TRANSPORTATION:'Transportation',TRAVEL:'Transportation',ENTERTAINMENT:'Entertainment',MEDICAL:'Health',PERSONAL_CARE:'Health',BANK_FEES:'Fees',GOVERNMENT_AND_NON_PROFIT:'Other',GENERAL_SERVICES:'Services',LOAN_PAYMENTS:'Debt payments'};
+const CATEGORY_MAP={FOOD_AND_DRINK:'Dining',GENERAL_MERCHANDISE:'Shopping',HOME_IMPROVEMENT:'Housing',RENT_AND_UTILITIES:'Utilities',TRANSPORTATION:'Transportation',TRAVEL:'Transportation',ENTERTAINMENT:'Entertainment',MEDICAL:'Health',PERSONAL_CARE:'Health',BANK_FEES:'Fees',GOVERNMENT_AND_NON_PROFIT:'Other',GENERAL_SERVICES:'Services',LOAN_PAYMENTS:null};
 const TRANSFER_CATEGORIES=new Set(['TRANSFER_IN','TRANSFER_OUT','INCOME']);
 const CAP_KEY='household-ledger-real-budget-caps-v1';
 function caps(){try{const v=JSON.parse(localStorage.getItem(CAP_KEY)||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}catch{return {}}}
@@ -42,19 +42,20 @@ function categorized(t){
  if(detail.includes('CHILDCARE'))return 'Kids & Family';
  if(detail.includes('SUBSCRIPTION'))return 'Subscriptions';
  if(TRANSFER_CATEGORIES.has(primary)||primary.startsWith('TRANSFER_'))return 'Transfer / non-spending';
- return CATEGORY_MAP[primary]||'Needs review';
+ return Object.prototype.hasOwnProperty.call(CATEGORY_MAP,primary)?CATEGORY_MAP[primary]:null;
 }
 function verifiedRows(){
  if(!current?.connected)return [];
  return (current.transactions||[]).filter(t=>!t.pending&&/^\d{4}-\d{2}-\d{2}$/.test(String(t.date))&&Number.isFinite(Number(t.amount))).map(t=>({...t,bucket:categorized(t)}));
 }
 function spentRows(month){
- return verifiedRows().filter(t=>t.date.startsWith(month)&&Number(t.amount)>0&&t.bucket!=='Transfer / non-spending');
+ return verifiedRows().filter(t=>t.date.startsWith(month)&&Number(t.amount)>0&&t.bucket&&t.bucket!=='Transfer / non-spending');
 }
 function realBudget(){
  if(!current?.connected)return '<section class="panel">Connect a bank account before using real budgets.</section>';
  const month=new Date().toISOString().slice(0,7),rows=spentRows(month),settings=caps();
- const groups=[...new Set([...rows.map(t=>t.bucket),...Object.keys(settings)])].sort();
+ const groups=[...new Set([...rows.map(t=>t.bucket),...Object.keys(settings).filter(x=>x&&x!=='Needs review'&&x!=='Debt payments')])].sort();
+ const uncategorized=verifiedRows().filter(t=>t.date.startsWith(month)&&Number(t.amount)>0&&t.bucket===null);
  const spent=rows.reduce((n,t)=>n+Number(t.amount),0),limit=Object.values(settings).reduce((n,x)=>n+(Number(x)>0?Number(x):0),0),percent=limit?Math.min(100,spent/limit*100):0;
  const line=(name)=>{
   const amount=rows.filter(t=>t.bucket===name).reduce((n,t)=>n+Number(t.amount),0),cap=Number(settings[name])||0,pct=cap?Math.min(100,amount/cap*100):0;
@@ -65,9 +66,9 @@ function realBudget(){
  return '<section class="panel" aria-label="Real overall budget"><div class="section-top"><h3>Overall budget · '+esc(month)+'</h3><strong>'+money(spent)+' spent</strong></div>'+
   '<div class="budget-progress" role="img" aria-label="Overall real budget '+money(spent)+' spent of '+money(limit)+'"><i class="actual" style="width:'+percent.toFixed(2)+'%"></i></div>'+
   '<div class="budget-heading"><span>Total caps '+money(limit)+'</span><span>'+rows.length+' posted spending transactions</span></div>'+
-  '<p class="prediction-note">Real posted transactions only; pending charges and identified transfers excluded. No forecast or fictional spending included. Caps are separate from demo budgets.</p></section>'+
+  '<p class="prediction-note">Real posted transactions with a supported Plaid spending category only. '+uncategorized.length+' uncategorized transaction(s) excluded; pending charges, loan payments, and transfers excluded. No demo data. Real caps are separate from demo.</p></section>'+
   '<section class="panel" aria-label="Real category budgets"><h3>Spending by category</h3>'+(groups.map(line).join('')||'<p>No posted spending in this month yet.</p>')+
-  '<p class="prediction-note">Categories are preliminary. Uncertain transactions stay in Needs review rather than being guessed. Edit caps above; no bank transaction changes.</p></section>';
+  '<p class="prediction-note">Only supported Plaid spending categories appear. Uncategorized items are shown in Reviews and excluded. Edit caps above; no bank transaction changes.</p></section>';
 }
 function realInsights(){
  if(!current?.connected)return '<section class="panel">Connect a bank account first.</section>';
@@ -79,7 +80,7 @@ function realInsights(){
 }
 function realReviews(){
  const pending=(current?.transactions||[]).filter(t=>t.pending);
- const uncertain=verifiedRows().filter(t=>t.bucket==='Needs review');
+ const uncertain=verifiedRows().filter(t=>t.bucket===null&&Number(t.amount)>0);
  return '<section class="panel"><h3>Real bank reviews</h3><p>'+uncertain.length+' posted transaction(s) need category review · '+pending.length+' pending transaction(s) excluded from spending.</p>'+
   uncertain.map(t=>'<div class="row"><span>'+esc(t.date)+' · '+esc(t.merchant)+'</span><strong>'+money(t.amount)+'</strong></div>').join('')+
   '<p class="prediction-note">Bank values cannot be edited here. Category overrides are not yet enabled for real records.</p></section>';
@@ -92,6 +93,7 @@ function realView(tab){
 }
 function draw(){
  const view=document.querySelector('#view'),tab=document.querySelector('#title')?.textContent;
+ const badge=document.querySelector('#demo-banner');if(badge&&mode==='real')badge.innerHTML='<div class="demo-banner"><strong>REAL BANK · PLAID</strong></div>';
  if(!view||!tab)return;
  const active=mode==='real',connected=!!current?.connected;
  let overlay=document.querySelector('#real-mode-surface');
@@ -99,6 +101,8 @@ function draw(){
  // Keep original application state untouched. Hide, never reclassify or copy demo data.
  const existing=view.children;
  for(const child of existing)child.hidden=active;
+ const period=document.querySelector('#period');if(period)period.hidden=active;
+ const budgetRange=document.querySelector('#budget-range');if(budgetRange&&active)budgetRange.hidden=true;
  if(active){
   overlay=document.createElement('div');overlay.id='real-mode-surface';overlay.setAttribute('data-real-view','');
   if(['Overview','Transactions','Settings'].includes(tab)){
@@ -122,7 +126,7 @@ function settingsControl(){
   '<label for="ledger-mode-switch">Show data from</label> <select id="ledger-mode-switch" aria-label="Choose demo or real bank data">'+
   '<option value="demo"'+(mode==='demo'?' selected':'')+'>Demo / simulated data</option>'+
   '<option value="real"'+(mode==='real'?' selected':'')+'>Real bank data</option></select>'+
-  '<p class="prediction-note">This switches what is displayed. It does not change, combine or delete bank records. Real budgeting and forecasts will stay unavailable until they are verified.</p>'+
+  '<p class="prediction-note">This switches what is displayed. It does not change, combine or delete bank records. Real budgets and insights use verified posted Plaid categories only; forecasts remain unavailable.</p>'+
   '<p><a href="/bank-connect">Manage bank connection</a></p></section>';
 }
 const observer=new MutationObserver(()=>{const v=document.querySelector('#view');if(!v)return;const surface=document.querySelector('#real-mode-surface');const tab=document.querySelector('#title')?.textContent;if(mode==='real'||tab==='Settings'){if(!surface||surface.parentElement!==v)draw()}else if(surface&&surface.parentElement!==v)draw()});
