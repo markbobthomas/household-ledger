@@ -149,13 +149,21 @@ function previewCashFlow(){
 }
 function accountForecastMarkup(snapshot,multi){
  const moneyType=a=>a.type==='credit'?'Owed':'Cash';
- const opening=a=>a.type==='credit'?a.opening:a.openingAvailable??a.opening;
- const closing=a=>a.type==='credit'?a.closing:a.closingAvailable??a.closing;
+ const opening=a=>a.openingCurrent;
+ const closing=a=>a.closing;
+ const balanceLabel=a=>{
+  if(a.balanceStatus==='stale'&&a.openingCurrent!==null)return 'Last reported '+money(a.openingCurrent);
+  if(a.balanceStatus==='simulated')return a.valid?money(opening(a))+' · Simulated':'Balance unavailable';
+  if(a.balanceStatus==='fresh')return a.openingCurrent!==null?'Bank reported '+money(a.openingCurrent):'Balance unavailable';
+  return 'Balance unavailable';
+ };
+ const forecastLabel=a=>a.balanceStatus==='fresh'||a.balanceStatus==='simulated'?
+  (a.valid&&Number.isFinite(a.closing)?money(closing(a)):'Unavailable'):'Forecast unavailable';
  const rows=multi.accounts.map(a=>'<div class="account-projection-row"><div class="account-projection-label"><strong>'+
   esc(a.name)+'</strong><small>'+esc(a.type==='credit'?'Credit card':'Bank account')+' · '+moneyType(a)+'</small></div>'+
-  '<span class="account-projection-current">'+(a.valid?money(opening(a)):'Unavailable')+'</span>'+
+  '<span class="account-projection-current">'+balanceLabel(a)+'</span>'+
   '<span class="account-projection-arrow" aria-hidden="true">→</span><strong class="account-projection-future">'+
-  (a.valid?money(closing(a)):'Unavailable')+'</strong></div>').join('');
+  forecastLabel(a)+'</strong></div>').join('');
  const cashAccounts=snapshot.accounts.filter(a=>['checking','savings','depository'].includes(String(a.accountType||a.type)));
  const choices=snapshot.accounts.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+
   ' · '+esc(a.accountType==='credit'?'Credit card':a.accountType||'Bank')+'</option>').join('');
