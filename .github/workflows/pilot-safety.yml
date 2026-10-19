@@ -16,7 +16,7 @@ jobs:
       - name: Check independent pilot server syntax
         run: |
           node --check pilot/server.cjs
-          node --check pilot/ledger-ui.js
+          node --check pilot/data-source.js
           node --check sandbox/server.cjs
       - name: Smoke test authentication, health and no-credentials startup
         run: |
