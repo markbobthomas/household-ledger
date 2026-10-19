@@ -276,7 +276,7 @@ function cashFlowCard(){
  const riskDisplay=risk?.available?'<div class="cash-risk" aria-label="Unscheduled spending scenario"><span>Illustrative 90-day balance with irregular spending</span>'+
   '<strong>'+money(f.uncertainty.closingTypical)+'</strong>'+
   '<small>Scenario range '+money(f.uncertainty.closingLow)+' – '+money(f.uncertainty.closingHigh)+
-  ' · Based on '+risk.historyMonths+' complete fictional months · Not dated transactions</small></div>':
+  ' · Based on '+risk.historyMonths+' complete '+(liveMode?'historical':'fictional')+' months · Not dated transactions</small></div>':
   '<div class="cash-risk"><small>Insufficient complete history for an irregular-spending range.</small></div>';
  const controls='<details class="cash-detail forecast-editor"><summary>Review future payments</summary>'+
  '<div class="section-top"><h3>Scheduled expenses</h3><span class="budget-summary-meta">Shared with monthly budgets</span></div>'+
@@ -664,7 +664,7 @@ if(page==='settings'){
  '<button type="submit" class="btn">Add category</button></form>'+
  '<p>'+esc((data.customCategories||[]).length?(data.customCategories||[]).join(' · '):'No custom categories added yet')+'</p></div>';
 html='<div class="settings-grid">'+(window.HouseholdLiveSource?.panel()||'') +categorySettings+startupSettings+(window.HouseholdSandboxUI?.panel()||'')+feedSettings+accountMarkup+'<div class="panel settings-block"><h3>Read-only ledger</h3><p>Transaction facts are provided by source records. Only categories and predictions are editable.</p>'+
- Object.entries(sources).map(([provider,n])=>'<div class="row"><span>'+esc(provider==='plaid'?'Plaid Sandbox/test records':provider==='demo'?'Fictional demo data':'Unverified legacy records')+'</span><strong>'+n+'</strong></div>').join('')+
+ Object.entries(sources).map(([provider,n])=>'<div class="row"><span>'+esc(provider==='plaid'?(liveMode?'Real Plaid bank records':'Plaid Sandbox/test records'):provider==='demo'?'Fictional demo data':'Unverified legacy records')+'</span><strong>'+n+'</strong></div>').join('')+
  '<p>'+(liveMode?'Real bank connection active: source facts are read-only; adjustments save encrypted on the private server.':'Demo records are fictional. Real bank connections require the private Render website.')+'</p><button class="btn" id="backup">Export local snapshot</button></div>'+
  '<div class="panel settings-block"><h3>Your adjustments</h3><p>Change transaction categories without rewriting source data, or adjust monthly budgets and future payment predictions.</p><p>Amounts, dates, merchants, and bank balances cannot be edited in the ledger. Direct transaction imports and restores are disabled.</p></div></div>';
 }
