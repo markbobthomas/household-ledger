@@ -19,4 +19,6 @@ jobs:
           node --check pilot/ledger-ui.js
           node --check sandbox/server.cjs
       - name: Smoke test authentication, health and no-credentials startup
-        run: node tests/pilot-security-smoke.cjs
+        run: |
+          node tests/pilot-security-smoke.cjs
+          node tests/pilot-plaid-flow.cjs
