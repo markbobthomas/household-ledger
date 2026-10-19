@@ -46,7 +46,7 @@ function categorized(t){
 }
 function verifiedRows(){
  if(!current?.connected)return [];
- return (current.transactions||[]).filter(t=>!t.pending&&/^\\d{4}-\\d{2}-\\d{2}$/.test(String(t.date))&&Number.isFinite(Number(t.amount))).map(t=>({...t,bucket:categorized(t)}));
+ return (current.transactions||[]).filter(t=>!t.pending&&/^\d{4}-\d{2}-\d{2}$/.test(String(t.date))&&Number.isFinite(Number(t.amount))).map(t=>({...t,bucket:categorized(t)}));
 }
 function spentRows(month){
  return verifiedRows().filter(t=>t.date.startsWith(month)&&Number(t.amount)>0&&t.bucket!=='Transfer / non-spending');
