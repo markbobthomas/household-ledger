@@ -11,31 +11,64 @@ function entries(){return Model.records(data)}
 function allCategories(){return Model.categories?Model.categories(data):CATS}
 function alertMsg(message){el('flash').innerHTML='<div class="message">'+esc(message)+'</div>';window.scrollTo({top:0,behavior:'instant'})}
 function cleanMerchant(s){let u=s.toUpperCase();if(u.includes('COSTCO'))return /GAS|FUEL|PUMP/.test(u)?'Costco Gas':'Costco Warehouse';if(/AMAZON|AMZN/.test(u))return 'Amazon';if(u.includes('WALMART')||u.includes('WAL-MART'))return 'Walmart';if(u.includes('SAFEWAY'))return 'Safeway';return s.trim()}function type(s,n){if(/TRANSFER|PAYMENT TO|CARD PAYMENT|AUTOPAY|CREDIT CARD PAYMENT/i.test(s))return 'transfer';if(/PAYROLL|DIRECT DEPOSIT|REFUND|DEPOSIT/i.test(s))return 'income';return n>0?'income':'expense'}function category(s){s=s.toLowerCase();if(/costco gas|shell|chevron|fuel|exxon/.test(s))return'Transportation';if(/costco|safeway|grocery|trader joe|kroger/.test(s))return'Groceries';if(/amazon|walmart|target|ebay|home depot/.test(s))return'Shopping';if(/mortgage|rent/.test(s))return'Housing';if(/water|electric|internet|utility|xfinity|verizon/.test(s))return'Utilities';if(/restaurant|coffee|pizza|cafe/.test(s))return'Dining';return'Other'}function rows(){return entries().filter(t=>period==='all'||t.date.slice(0,7)===period)}function expense(){return rows().filter(t=>['expense','refund'].includes(t.type))}function sum(a){return a.reduce((s,x)=>s+Number(x.type==='income'?(x.earnedIncomeAmount??x.amount??0):(x.spendingAmount??x.amount??0)),0)}function grouped(a,field){const o={};a.forEach(t=>{const k=field==='merchant'?cleanMerchant(t.merchant):t.category;o[k]??={name:k,amount:0,count:0};o[k].amount+=Number(t.spendingAmount??t.amount??0);o[k].count++});return Object.values(o).sort((a,b)=>b.amount-a.amount)}function recurringInsights(tabs){
-  const model=window.HouseholdRecurring;
-  if(!model)return tabs+'<div class="panel">Recurring analysis is unavailable.</div>';
-  // Detect from all local history; the Insights month filter only limits displayed source transactions.
-  const report=model.analyze(entries(),today());
-  const currentOnly=period!=='all';
-  function listRecurring(items,needsReview=false){
-    if(!items.length)return'<div class="recurring-empty">'+(needsReview?'No subscriptions currently need review.':'No repeating payments detected yet.')+'</div>';
-    return items.map(g=>{
-      const visible=g.transactions.filter(t=>!currentOnly||t.date.startsWith(period)).slice().sort((x,y)=>y.date.localeCompare(x.date));
-      const next=g.nextExpected?cashDateLabel(g.nextExpected,true):null;
-      const amount=needsReview?money(g.amount)+' last charge':money(g.monthlyEstimate)+' / mo';
-      const meta=needsReview?'Unconfirmed • '+g.count+' recorded charge'+(g.count===1?'':'s'):
-        g.cadence+' • '+money(g.amount)+' per charge'+(next?' • Next est. '+next:'');
-      return'<details class="drill-detail recurring-detail"><summary class="row drill-summary"><div class="recurring-info"><strong>'+esc(g.merchant)+'</strong><div class="recurring-meta">'+esc(meta)+'</div></div><div class="recurring-amount"><strong>'+amount+'</strong><div class="recurring-meta">'+(needsReview?esc(g.status):'Estimated monthly cost')+'</div></div><span class="chevron" aria-hidden="true">⌄</span></summary><div class="drill-expanded"><div class="recurring-detail-note">'+(needsReview?'One or more charges were found, but there is not enough consistent, recent history to estimate a schedule.':'Detected from '+g.count+' similar charges; expected dates and amounts are estimates, not confirmed bills.')+(currentOnly?' Showing source transactions for '+esc(period)+'.':'')+'</div>'+
-      (visible.length?table(visible):'<div class="empty">No charges in the selected month. Select All dates to see the full history.</div>')+
-      '</div></details>';
-    }).join('');
-  }
-  return tabs+'<div class="stats recurring-stats">'+
-    [['Subscriptions / month',report.subscriptionMonthly,report.subscriptions.length+' detected'],['Recurring bills / month',report.billsMonthly,report.bills.length+' detected'],['Combined / month',report.monthlyTotal,report.confirmed.length+' repeating expenses']].map(([label,value,meta])=>'<div class="stat"><div class="sub">'+label+'</div><div class="num">'+money(value)+'</div><div class="sub">'+meta+'</div></div>').join('')+
-    '</div>'+
-    '<div class="panel recurring-panel"><div class="section-top"><h3>Subscriptions</h3><span class="budget-summary-meta">'+report.subscriptions.length+' detected</span></div>'+listRecurring(report.subscriptions)+'</div>'+
-    '<div class="panel recurring-panel"><div class="section-top"><h3>Recurring bills</h3><span class="budget-summary-meta">'+report.bills.length+' detected</span></div>'+listRecurring(report.bills)+'</div>'+
-    (report.review.length?'<div class="panel recurring-panel"><div class="section-top"><h3>Subscriptions to review</h3><span class="budget-summary-meta">'+report.review.length+' uncertain</span></div>'+listRecurring(report.review,true)+'</div>':'')+
-    '<div class="recurring-disclaimer">Estimates from local history; not bank-verified. One-off charges are excluded.</div>';
+ const model=window.HouseholdRecurring;
+ if(!model)return tabs+'<div class="panel">Recurring analysis is unavailable.</div>';
+ // A category describes the purchase; a saved pattern rule defines an explicit
+ // future schedule. Use both without ever editing the bank's source record.
+ const report=model.analyze(entries(),today(),data.predictions.patternRules);
+ const currentOnly=period!=='all';
+ function listRecurring(items,needsReview=false){
+  if(!items.length)return'<div class="recurring-empty">'+
+    (needsReview?'No subscriptions currently need review.':'No repeating payments detected yet.')+'</div>';
+  return items.map(g=>{
+   const visible=g.transactions.filter(t=>!currentOnly||t.date.startsWith(period))
+     .slice().sort((x,y)=>y.date.localeCompare(x.date));
+   const example=g.transactions[g.transactions.length-1];
+   const rule=data.predictions.patternRules?.[g.ruleKey];
+   const isStopped=rule?.mode==='none',manual=g.source==='manual';
+   const next=g.nextExpected?cashDateLabel(g.nextExpected,true):null;
+   const amount=needsReview||isStopped?money(g.amount)+' per charge':money(g.monthlyEstimate)+' / mo';
+   const meta=isStopped?'Marked not recurring • '+g.count+' historical charge'+(g.count===1?'':'s'):
+    needsReview?'Needs a schedule • '+g.count+' historical charge'+(g.count===1?'':'s'):
+    (manual?'Set by you · ':'Detected · ')+g.cadence+' • '+money(g.amount)+' per charge'+
+      (next?' • Next est. '+next:'');
+   const note=isStopped?'This merchant is explicitly marked not recurring. Automatic detection and future schedule estimates are disabled.':
+    needsReview?'The Subscriptions category alone does not prove a repeating payment. Set a schedule to include this subscription in recurring totals and forecasts, or mark it not recurring.':
+    manual?'You confirmed this payment schedule. Dates and amounts are forecast assumptions, not bank facts.':
+    'A pattern was detected from historical charges. You can confirm or edit its schedule; detected dates and amounts are estimates.';
+   const editLabel=manual?'Edit schedule':needsReview?'Set recurring schedule':'Confirm / edit schedule';
+   const hint=g.cadence==='Weekly'?'weekly':g.cadence==='Every 2 weeks'?'biweekly':
+    g.cadence==='Yearly'?'annual':'monthly';
+   const actions='<div class="recurring-control-shell"><div class="recurring-control-actions">'+
+    '<button class="btn" type="button" data-recurring-open="'+esc(g.ruleKey)+'" data-recurring-tx="'+esc(example.id)+
+      '" data-frequency-hint="'+hint+'">'+(isStopped?'Set schedule':editLabel)+'</button>'+
+    (isStopped?'<button class="btn" type="button" data-recurring-reset="'+esc(g.ruleKey)+'" data-recurring-tx="'+esc(example.id)+'">Use automatic detection</button>':
+      '<button class="btn" type="button" data-recurring-disable="'+esc(g.ruleKey)+'" data-recurring-tx="'+esc(example.id)+'">Not recurring</button>'+
+      (manual?'<button class="btn" type="button" data-recurring-reset="'+esc(g.ruleKey)+'" data-recurring-tx="'+esc(example.id)+'">Use automatic detection</button>':''))+
+    '</div></div>';
+   return'<details class="drill-detail recurring-detail" data-recurring-key="'+esc(g.ruleKey)+'"><summary class="row drill-summary">'+
+    '<div class="recurring-info"><strong>'+esc(g.merchant)+'</strong><div class="recurring-meta">'+esc(meta)+'</div></div>'+
+    '<div class="recurring-amount"><strong>'+amount+'</strong><div class="recurring-meta">'+
+      (needsReview?esc(g.status):manual?'Manually scheduled':isStopped?'Excluded':'Estimated monthly cost')+
+    '</div></div><span class="chevron" aria-hidden="true">⌄</span></summary>'+
+    '<div class="drill-expanded"><p class="recurring-detail-note">'+esc(note)+
+      (currentOnly?' Showing source transactions for '+esc(period)+'.':'')+'</p>'+actions+
+    (visible.length?table(visible):'<div class="empty">No charges in the selected month. Select All dates to see the full history.</div>')+
+    '</div></details>';
+  }).join('');
+ }
+ return tabs+'<div class="stats recurring-stats">'+
+   [['Subscriptions / month',report.subscriptionMonthly,report.subscriptions.length+' scheduled or detected'],
+    ['Recurring bills / month',report.billsMonthly,report.bills.length+' scheduled or detected'],
+    ['Combined / month',report.monthlyTotal,report.confirmed.length+' repeating expenses']]
+   .map(([label,value,meta])=>'<div class="stat"><div class="sub">'+label+'</div><div class="num">'+money(value)+'</div><div class="sub">'+meta+'</div></div>').join('')+
+   '</div>'+
+   '<p class="recurring-description">Categorizing a charge as Subscriptions does not automatically invent a payment schedule. Review uncertain charges below, or confirm a schedule to include them in forecasts.</p>'+
+   '<div class="panel recurring-panel"><div class="section-top"><h3>Subscriptions</h3><span class="budget-summary-meta">'+report.subscriptions.length+' scheduled or detected</span></div>'+listRecurring(report.subscriptions)+'</div>'+
+   '<div class="panel recurring-panel"><div class="section-top"><h3>Recurring bills</h3><span class="budget-summary-meta">'+report.bills.length+' scheduled or detected</span></div>'+listRecurring(report.bills)+'</div>'+
+   (report.review.length?'<div class="panel recurring-panel"><div class="section-top"><h3>Subscriptions to review</h3><span class="budget-summary-meta">'+report.review.length+' need a decision</span></div>'+listRecurring(report.review,true)+'</div>':'')+
+   (report.suppressed.length?'<div class="panel recurring-panel"><div class="section-top"><h3>Marked not recurring</h3><span class="budget-summary-meta">'+report.suppressed.length+' excluded</span></div>'+listRecurring(report.suppressed)+'</div>':'')+
+   '<div class="recurring-disclaimer">Bank records remain read-only. User schedules are predictions, and transfers, refunds, pending charges and duplicate payments do not become subscription spending.</div>';
 }
 function gridStats(){const a=expense(),income=sum(rows().filter(x=>x.type==='income'));return'<div class="stats">'+[['Spent',money(sum(a))],['Income',money(income)],['Net cash flow',money(income-sum(a))]].map(x=>'<div class="stat"><div class="sub">'+x[0]+'</div><div class="num">'+x[1]+'</div></div>').join('')+'</div>'}function list(a,max=999,kind=null,source=expense()){const top=Math.max(1,...a.map(x=>x.amount));return a.slice(0,max).map(x=>{const matching=kind?source.filter(t=>kind==='merchant'?cleanMerchant(t.merchant)===x.name:t.category===x.name).sort((a,b)=>b.date.localeCompare(a.date)):[];const line='<div style="flex:1;min-width:0"><b>'+esc(x.name)+'</b><div class="bar"><i style="width:'+(x.amount/top*100).toFixed(1)+'%"></i></div></div><div style="text-align:right"><strong>'+money(x.amount)+'</strong><div class="sub">'+x.count+' purchases</div></div>';if(!kind)return'<div class="row">'+line+'</div>';return'<details class="drill-detail" data-report-group="'+esc(kind+'|'+x.name)+'"><summary class="row drill-summary">'+line+'<span class="chevron" aria-hidden="true">⌄</span></summary><div class="drill-expanded"><div class="sub">'+matching.length+' transactions • '+money(x.amount)+' total</div>'+table(matching)+'</div></details>'}).join('')||'<div class="empty">No data yet. Import a bank CSV or add a transaction.</div>'}function table(a,activity=false){
  const detected=activity?new Set(sharedForecast().events.filter(e=>['expense','income','transfer'].includes(e.type))
@@ -755,6 +788,7 @@ if(page==='insights'&&window.matchMedia('(max-width:700px)').matches){
 }
 bindInlineCategoryEdits();
 bindActivityRecurrenceEdits();
+bindRecurringInsightsEdits();
 bindInlineMoneyEdits();
 document.querySelectorAll('[data-stream]').forEach(b=>b.onclick=()=>streamPredictionForm(b.dataset.stream));
 document.querySelectorAll('[data-event]').forEach(b=>b.onclick=()=>eventPredictionForm(b.dataset.event));
@@ -958,17 +992,41 @@ function bindActivityRecurrenceEdits(){
 function finishActivityRecurrenceEdit(id){
  save();
  const scroll=window.scrollY;
+ // An Insights group can move from "to review" to "Subscriptions" after an edit.
+ const openKeys=[...document.querySelectorAll('.recurring-detail[open]')].map(x=>x.dataset.recurringKey);
  render();
+ for(const key of openKeys){
+  const group=[...document.querySelectorAll('.recurring-detail')].find(x=>x.dataset.recurringKey===key);
+  if(group)group.open=true;
+ }
  window.scrollTo({top:scroll,behavior:'instant'});
  [...document.querySelectorAll('select[data-recurring]')]
   .find(x=>x.dataset.recurring===String(id))?.focus({preventScroll:true});
 }
+function bindRecurringInsightsEdits(){
+ const getRecord=button=>data.transactions.find(t=>String(t.id)===button.dataset.recurringTx);
+ document.querySelectorAll('[data-recurring-open]').forEach(button=>button.addEventListener('click',()=>{
+  const record=getRecord(button);
+  if(!record)return;
+  beginActivityRecurrenceEdit(button,record,button.dataset.recurringOpen);
+ }));
+ for(const [attribute,decision] of [['data-recurring-disable','none'],['data-recurring-reset','auto']]){
+  document.querySelectorAll('['+attribute+']').forEach(button=>button.addEventListener('click',()=>{
+   try{
+    const key=button.getAttribute(attribute),record=getRecord(button);
+    Model.setPatternRule(data,key,decision==='none'?{mode:'none'}:null);
+    finishActivityRecurrenceEdit(record?.id||'');
+   }catch(error){alert(error.message)}
+  }));
+ }
+}
+
 function beginActivityRecurrenceEdit(select,record,key){
  const rule=data.predictions.patternRules?.[key];
  const isTransfer=record.type==='transfer';
  const previous=rule?.mode==='none'?'none':rule?.mode==='schedule'||rule?.mode==='monthly'?'schedule':
   rule?.mode==='trust'?'trust':'auto';
- const frequency=rule?.mode==='schedule'?rule.frequency:'monthly';
+ const frequency=rule?.mode==='schedule'?rule.frequency:(select.dataset.frequencyHint||'monthly');
  const day=rule?.day||Number(record.date.slice(8,10));
  const amount=rule?.amount||record.amount;
  const anchorDate=rule?.anchorDate||record.date;
@@ -996,7 +1054,7 @@ function beginActivityRecurrenceEdit(select,record,key){
  form.addEventListener('click',e=>e.stopPropagation());
  form.addEventListener('pointerdown',e=>e.stopPropagation());
  form.addEventListener('keydown',e=>e.stopPropagation());
- const cell=select.closest('td');
+ const cell=select.closest('td')||select.closest('.recurring-control-shell');
  cell.classList.add('recurring-editing');
  select.replaceWith(form);
  const frequencyInput=form.querySelector('[name=frequency]'),dayField=form.querySelector('.recurring-day-field');

@@ -7,7 +7,7 @@ const utc=d=>new Date(d+'T12:00:00Z');
 const iso=d=>d.toISOString().slice(0,10);
 const dayDiff=(a,b)=>Math.round((utc(b)-utc(a))/86400000);
 const med=values=>{const a=values.slice().sort((x,y)=>x-y),k=Math.floor(a.length/2);return a.length%2?a[k]:(a[k-1]+a[k])/2};
-const normalize=name=>String(name||'').trim().toLowerCase().replace(/\s+/g,' ');
+const normalize=name=>String(name||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/(?:\s*[-#*]\s*\d{3,})$/,'').trim();
 function classify(merchant,category){
   const m=normalize(merchant);
   if(category==='Subscriptions'||/\b(netflix|spotify|hulu|disney\+?|disney plus|apple music|icloud|youtube premium|youtube music|hbo|max subscription|paramount\+?|adobe|dropbox|microsoft 365|office 365|audible|prime membership|amazon prime membership|peloton membership|subscription)\b/.test(m))return'subscription';
@@ -41,39 +41,83 @@ function nextDue(series,cadence,asOf){
  while(iso(result)<=asOf){result.setUTCDate(result.getUTCDate()+step)}
  return iso(result);
 }
-function analyze(transactions,asOf){
- const current=dateOnly(asOf)?asOf:iso(new Date());
+// An explicit schedule is a user-maintained forecast rule, never a new bank fact.
+const ruleKey=t=>['expense',t.category||'Other',String(t.accountId||t.account||'Unknown'),
+  normalize(t.merchant)].map(encodeURIComponent).join('|');
+const cadenceName={weekly:'Weekly',biweekly:'Every 2 weeks',monthly:'Monthly',
+  quarterly:'Every 3 months',semiannual:'Every 6 months',annual:'Yearly'};
+const monthlyFactor={weekly:52/12,biweekly:26/12,monthly:1,quarterly:1/3,
+  semiannual:1/6,annual:1/12};
+function nextRuleDue(rule,asOf,firstDate){
+ const freq=rule.frequency,anchor=dateOnly(rule.anchorDate)?rule.anchorDate:firstDate;
+ if(!dateOnly(anchor)||!cadenceName[freq])return null;
+ if(freq==='weekly'||freq==='biweekly'){
+  const step=freq==='weekly'?7:14,first=utc(anchor),now=utc(asOf);
+  const count=Math.max(0,Math.floor((now-first)/86400000/step)+1);
+  first.setUTCDate(first.getUTCDate()+count*step);
+  return iso(first);
+ }
+ const interval={monthly:1,quarterly:3,semiannual:6,annual:12}[freq];
+ const firstMonth=Number(anchor.slice(0,4))*12+Number(anchor.slice(5,7))-1;
+ const currentMonth=Number(asOf.slice(0,4))*12+Number(asOf.slice(5,7))-1;
+ let n=Math.max(0,Math.floor((currentMonth-firstMonth)/interval));
+ const day=Number(rule.day)||Number(anchor.slice(8,10));
+ for(let attempt=0;attempt<4;attempt++,n++){
+  const index=firstMonth+n*interval,year=Math.floor(index/12),month=index%12+1;
+  const max=new Date(Date.UTC(year,month,0)).getUTCDate();
+  const due=year+'-'+String(month).padStart(2,'0')+'-'+String(Math.min(day,max)).padStart(2,'0');
+  if(due>asOf&&due>=anchor)return due;
+ }
+ return null;
+}
+function analyze(transactions,asOf,patternRules={}){
+ const current=dateOnly(asOf)?asOf:iso(new Date()),rules=patternRules||{};
  const groups=new Map();
  for(const tx of transactions||[]){
-   if(tx.type!=='expense'||!dateOnly(tx.date)||tx.date>current||!Number.isFinite(Number(tx.amount))||+tx.amount<=0)continue;
-   const tag=classify(tx.merchant,tx.category);
-   if(!tag)continue;
-   const key=(tx.accountId||tx.account||'default')+'|'+normalize(tx.merchant);
-   if(!groups.has(key))groups.set(key,{merchant:String(tx.merchant).trim(),category:tx.category,kind:tag,account:tx.account||'',transactions:[]});
-   const g=groups.get(key);
-   g.transactions.push(tx);
-   if(tag==='subscription')g.kind='subscription';
+  // Pending charges are not additional posted evidence for a recurring payment.
+  if(tx.type!=='expense'||tx.pending||!dateOnly(tx.date)||tx.date>current||
+     !Number.isFinite(Number(tx.amount))||+tx.amount<=0)continue;
+  const key=ruleKey(tx),directive=rules[key],tag=classify(tx.merchant,tx.category);
+  if(!tag&&!directive)continue;
+  if(!groups.has(key))groups.set(key,{id:key,ruleKey:key,merchant:String(tx.merchant).trim(),
+    category:tx.category,kind:tag||'bill',account:tx.account||'',transactions:[]});
+  const group=groups.get(key);
+  group.transactions.push(tx);
+  if(tag==='subscription')group.kind='subscription';
  }
- const confirmed=[],review=[];
- for(const [key,g] of groups){
-   const txs=g.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
-   const monthly=classifyInterval(txs);
-   const amounts=txs.map(t=>Number(t.amount)),middle=med(amounts),stable=middle>0&&amounts.every(x=>Math.abs(x-middle)/middle<=0.4);
-   const stale=dayDiff(txs.at(-1).date,current)>75;
-   const valid=monthly&&stable&&!stale;
-   const out={id:key,merchant:g.merchant,category:g.category,kind:g.kind,account:g.account,transactions:txs,lastDate:txs.at(-1).date,firstDate:txs[0].date,
-      count:txs.length,amount:round(middle),cadence:valid?monthly.cadence:null,
-      monthlyEstimate:valid?round(middle*monthly.monthlyFactor):0,
-      nextExpected:valid?nextDue(txs,monthly.cadence,current):null,
-      status:valid?'pattern detected':stale?'not recently seen':'needs review'};
-   if(valid)confirmed.push(out);
-   else if(g.kind==='subscription')review.push(out);
+ const confirmed=[],review=[],suppressed=[];
+ for(const g of groups.values()){
+  const txs=g.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  const rule=rules[g.ruleKey],amounts=txs.map(t=>Number(t.amount)),middle=med(amounts);
+  const stable=middle>0&&amounts.every(x=>Math.abs(x-middle)/middle<=0.4);
+  const interval=classifyInterval(txs);
+  const stale=dayDiff(txs.at(-1).date,current)>75;
+  const valid=interval&&stable&&!stale;
+  const explicit=rule?.mode==='schedule'&&cadenceName[rule.frequency]&&Number(rule.amount)>0;
+  const legacy=rule?.mode==='monthly'&&Number(rule.amount)>0&&Number(rule.day)>=1&&Number(rule.day)<=31;
+  const manual=Boolean(explicit||legacy);
+  const cadence=manual?(explicit?cadenceName[rule.frequency]:'Monthly'):valid?interval.cadence:null;
+  const amount=manual?Number(rule.amount):middle;
+  const factor=manual?(explicit?monthlyFactor[rule.frequency]:1):valid?interval.monthlyFactor:0;
+  const nextExpected=manual?nextRuleDue(explicit?rule:{frequency:'monthly',day:rule.day,
+    anchorDate:txs[0].date},current,txs[0].date):
+    valid?nextDue(txs,interval.cadence,current):null;
+  const out={...g,transactions:txs,lastDate:txs.at(-1).date,firstDate:txs[0].date,
+    count:txs.length,amount:round(amount),cadence,
+    monthlyEstimate:round(amount*factor),
+    nextExpected,source:manual?'manual':valid?'detected':'unconfirmed',
+    status:manual?'schedule set by you':rule?.mode==='none'?'marked not recurring':
+      valid?'pattern detected':stale?'not recently seen':'needs review'};
+  if(rule?.mode==='none')suppressed.push(out);
+  else if(manual||valid)confirmed.push(out);
+  else if(g.kind==='subscription')review.push(out);
  }
  confirmed.sort((a,b)=>a.kind===b.kind?b.monthlyEstimate-a.monthlyEstimate:a.kind==='subscription'?-1:1);
  review.sort((a,b)=>b.lastDate.localeCompare(a.lastDate));
+ suppressed.sort((a,b)=>b.lastDate.localeCompare(a.lastDate));
  const subscriptions=confirmed.filter(g=>g.kind==='subscription');
  const bills=confirmed.filter(g=>g.kind!=='subscription');
- return{asOf:current,confirmed,subscriptions,bills,review,
+ return{asOf:current,confirmed,subscriptions,bills,review,suppressed,
    monthlyTotal:round(confirmed.reduce((n,x)=>n+x.monthlyEstimate,0)),
    subscriptionMonthly:round(subscriptions.reduce((n,x)=>n+x.monthlyEstimate,0)),
    billsMonthly:round(bills.reduce((n,x)=>n+x.monthlyEstimate,0))};

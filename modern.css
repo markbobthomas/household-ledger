@@ -1168,3 +1168,14 @@ select.recurring-value:hover{border-bottom-style:solid}
 @media(max-width:700px){.sandbox-panel select{max-width:100%;font-size:16px;min-height:44px}
  .sandbox-item{align-items:flex-start}
  .sandbox-actions button,.sandbox-item-actions button{min-height:38px}}
+
+/* Insights recurrence decisions reuse the same schedule editor as Activity. */
+.recurring-control-shell{margin:12px 0 15px;max-width:620px;min-width:0}
+.recurring-control-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.recurring-control-actions .btn{min-height:38px;font-size:13px}
+.recurring-control-shell.recurring-editing{min-width:0;width:100%}
+.recurring-control-shell .recurring-inline-form{max-width:520px;width:100%;min-width:0}
+@media(max-width:700px){
+ .recurring-control-shell{width:100%;max-width:100%}
+ .recurring-control-actions .btn{flex:1 1 145px;white-space:normal}
+}

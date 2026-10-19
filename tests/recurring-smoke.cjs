@@ -20,6 +20,28 @@ assert.equal(unconfirmed.confirmed.length,0,'Single subscription is not automati
 assert.equal(unconfirmed.review.length,1,'Single subscription is shown for review');
 assert.equal(unconfirmed.monthlyTotal,0,'Unconfirmed charge should not inflate monthly recurring forecast');
 
+// A user schedule is authoritative for predictions, independently of historical detection.
+const Model=require('../ledger-data.js'),Forecast=require('../forecast.js'),Shared=require('../forecast-ledger.js');
+const manual=Model.migrate({transactions:[{...novel[0],id:'manual-1'}]});
+const ruleKey=Forecast.patternKey('expense','Subscriptions','Checking','New Subscription');
+Model.setPatternRule(manual,ruleKey,{mode:'schedule',frequency:'monthly',anchorDate:'2026-10-04',day:4,amount:14.95});
+const manualReport=analyze(Model.records(manual),today,manual.predictions.patternRules);
+assert.equal(manualReport.review.length,0,'Manually scheduled subscription leaves review');
+assert.equal(manualReport.subscriptions[0].monthlyEstimate,14.95,'Manual schedule appears in recurring totals');
+assert.equal(manualReport.subscriptions[0].nextExpected,'2026-11-04','Manual schedule next due is shown');
+assert.ok(Shared.build(manual,Model.records(manual),today,90,Forecast,Model).events.some(e=>
+ e.merchant==='New Subscription'&&e.date==='2026-11-04'),'Same saved rule predicts future Ledger payment');
+Model.setPatternRule(manual,ruleKey,{mode:'none'});
+const stopped=analyze(Model.records(manual),today,manual.predictions.patternRules);
+assert.equal(stopped.subscriptionMonthly,0,'Not recurring suppresses subscription monthly total');
+assert.equal(stopped.suppressed.length,1,'Not recurring stays visible for reopening');
+assert.equal(stopped.review.length,0,'Explicitly rejected recurrence is not requested again');
+Model.setPatternRule(manual,ruleKey,null);
+assert.equal(analyze(Model.records(manual),today,manual.predictions.patternRules).review.length,1,'Reset restores review');
+assert.equal(manual.transactions[0].category,'Subscriptions','No recurrence action changes original transaction');
+const pending=analyze([{...novel[0],pending:true}],today);
+assert.equal(pending.review.length,0,'Pending bank charges do not count as independent posted recurrence evidence');
+
 (async()=>{
  const browser=await chromium.launch({headless:true});
  const page=await browser.newPage({viewport:{width:1300,height:900}});
@@ -56,6 +78,44 @@ assert.equal(unconfirmed.monthlyTotal,0,'Unconfirmed charge should not inflate m
   const dates=await septemberNetflix.locator('tbody tr td:first-child').allInnerTexts();
   assert.ok(dates.length>=1&&dates.every(x=>x.startsWith('2026-09')),'Date selection limits underlying transactions');
   assert.match(await page.locator('.recurring-stats').innerText(),/\$29\.98/,'History-wide subscription estimate persists despite date filter');
+
+  // A single posted subscription was previously review-only with no controls.
+  await page.evaluate(()=>{
+   const key='household-ledger-v1',state=JSON.parse(localStorage.getItem(key));
+   state.transactions.push({id:'subscription-to-schedule',date:'2026-10-04',merchant:'New Experimental Membership',
+     amount:14.95,type:'expense',category:'Subscriptions',account:'Checking',pending:false,
+     source:{provider:'demo',verified:false}});
+   localStorage.setItem(key,JSON.stringify(state));
+  });
+  await page.reload({waitUntil:'load'});
+  await page.locator('aside [data-page=insights]').click();
+  await page.locator('[data-insight=recurring]').click();
+  const reviewEntry=page.locator('.recurring-detail').filter({has:page.locator('summary strong:text-is("New Experimental Membership")')});
+  assert.equal(await reviewEntry.count(),1,'Categorized subscription with limited history is visible');
+  assert.ok(await page.locator('.recurring-panel').filter({hasText:'Subscriptions to review'}).locator('.recurring-detail').filter({hasText:'New Experimental Membership'}).count(),'Review list is actionable');
+  await reviewEntry.locator(':scope > summary').click();
+  await reviewEntry.locator('[data-recurring-open]').click();
+  const editor=reviewEntry.locator('.recurring-control-shell [data-recurring-form]');
+  assert.equal(await editor.locator('[name=frequency]').inputValue(),'monthly','Manual schedule opens right on reviewed subscription');
+  assert.equal(await editor.locator('[name=amount]').inputValue(),'14.95');
+  await editor.locator('[data-recurring-save]').click();
+  const scheduled=page.locator('.recurring-detail').filter({has:page.locator('summary strong:text-is("New Experimental Membership")')});
+  assert.ok(await page.locator('.recurring-panel').first().locator('.recurring-detail').filter({hasText:'New Experimental Membership'}).count(),'Confirmed subscription moves into recurring list');
+  assert.match(await scheduled.locator(':scope > summary').innerText(),/\$14\.95 \/ mo/);
+  const afterSave=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')));
+  const scheduleKey=Forecast.patternKey('expense','Subscriptions','Checking','New Experimental Membership');
+  assert.equal(afterSave.predictions.patternRules[scheduleKey].frequency,'monthly','Schedule is persisted as a separate forecast rule');
+  assert.equal(afterSave.transactions.find(t=>t.id==='subscription-to-schedule').amount,14.95,'Original charge remains immutable');
+  assert.ok(await scheduled.evaluate(e=>e.open),'Edited subscription remains expanded in Insights');
+  await scheduled.locator('[data-recurring-open]').click();
+  await scheduled.locator('[name=amount]').fill('16.25');
+  await scheduled.locator('[data-recurring-save]').click();
+  assert.match(await scheduled.locator(':scope > summary').innerText(),/\$16\.25 \/ mo/,'Edited schedule updates recurring total');
+  await scheduled.locator('[data-recurring-disable]').click();
+  assert.ok(await page.locator('.recurring-panel').filter({hasText:'Marked not recurring'}).locator('.recurring-detail').filter({hasText:'New Experimental Membership'}).count(),'Disabled subscription is reviewable without being forecast');
+  await scheduled.locator('[data-recurring-reset]').click();
+  assert.equal(await page.locator('.recurring-detail').filter({hasText:'New Experimental Membership'}).count(),1,'Reset preserves one review candidate');
+  assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')))).predictions.patternRules[scheduleKey],undefined);
   await page.setViewportSize({width:390,height:844});
   const dimensions=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:window.innerWidth}));
   assert.ok(dimensions.document<=dimensions.viewport+1,'No horizontal document overflow on phone: '+JSON.stringify(dimensions));

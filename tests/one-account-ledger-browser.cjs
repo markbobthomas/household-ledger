@@ -29,7 +29,8 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
     {id:'posted',date:postedDate,merchant:'Cafe',amount:25,pending:false,category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT',confidence_level:'HIGH'}},
     {id:'pending',date:postedDate,merchant:'Pending cafe',amount:60,pending:true,category:{primary:'FOOD_AND_DRINK'}},
     {id:'transfer',date:postedDate,merchant:'Savings transfer',amount:400,pending:false,category:{primary:'TRANSFER_OUT'}},
-    {id:'unknown',date:postedDate,merchant:'Mystery',amount:19,pending:false,category:null}]
+    {id:'unknown',date:postedDate,merchant:'Mystery',amount:19,pending:false,category:null},
+    {id:'membership',date:postedDate,merchant:'Example Membership',amount:14.95,pending:false,category:null}]
   })}));
   let adjustments=[];
   await bankTest.route('**/api/ledger/adjustments',async route=>{adjustments.push(route.request().postDataJSON());await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({saved:true})})});
@@ -94,6 +95,31 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   for(let i=0;i<60&&!adjustments.some(a=>a.categoryOverrides?.unknown==='Hobbies'&&a.predictions?.monthlyBudgets?.Hobbies===100);i++)await new Promise(resolve=>setTimeout(resolve,50));
   assert.ok(adjustments.some(a=>a.categoryOverrides?.unknown==='Hobbies'),'Review override posted to encrypted server preferences');
   assert.ok(adjustments.some(a=>a.predictions?.monthlyBudgets?.Hobbies===100),'Real budget cap posted to server preferences');
+  // An actual Plaid-shaped single subscription has no automatic schedule.
+  // It must be actionable in the same recurring Insights editor as Demo.
+  await bankTest.locator('aside [data-page=transactions]').click();
+  await bankTest.locator('select[data-category="membership"]').selectOption('Subscriptions');
+  await bankTest.locator('aside [data-page=insights]').click();
+  await bankTest.locator('[data-insight=recurring]').click();
+  const membership=bankTest.locator('.recurring-detail').filter({has:bankTest.locator('summary strong:text-is("Example Membership")')});
+  assert.equal(await membership.count(),1,'Real subscription with one charge appears for review');
+  await membership.locator(':scope > summary').click();
+  await membership.locator('[data-recurring-open]').click();
+  const scheduleForm=membership.locator('.recurring-control-shell [data-recurring-form]');
+  assert.equal(await scheduleForm.locator('[name=frequency]').inputValue(),'monthly','Real subscriptions can set schedules');
+  await scheduleForm.locator('[data-recurring-save]').click();
+  const subscriptionRule=['expense','Subscriptions','acct-1','example membership'].map(encodeURIComponent).join('|');
+  for(let i=0;i<80&&!adjustments.some(a=>a.predictions?.patternRules?.[subscriptionRule]?.mode==='schedule');i++)
+   await new Promise(resolve=>setTimeout(resolve,50));
+  assert.ok(adjustments.some(a=>a.predictions?.patternRules?.[subscriptionRule]?.frequency==='monthly'),
+   'Real subscription schedule persists in encrypted server adjustments');
+  assert.match(await membership.locator(':scope > summary').innerText(),/\$14\.95 \/ mo/,'Manually scheduled Real subscription counted immediately');
+  await membership.locator('[data-recurring-disable]').click();
+  assert.equal(await membership.count(),1,'Real disabled schedule remains available to reverse');
+  for(let i=0;i<80&&!adjustments.some(a=>a.predictions?.patternRules?.[subscriptionRule]?.mode==='none');i++)
+   await new Promise(resolve=>setTimeout(resolve,50));
+  assert.ok(adjustments.some(a=>a.predictions?.patternRules?.[subscriptionRule]?.mode==='none'),
+   'Real Not recurring choice persists without modifying bank facts');
   const stored=await bankTest.evaluate(()=>localStorage.getItem('household-ledger-v1'));
   assert.equal(stored.includes('posted'),false,'Real bank source transactions never written to localStorage');
   await bankTest.locator('aside [data-page=insights]').click();
