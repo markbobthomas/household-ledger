@@ -489,15 +489,15 @@ function reviewsPage(){
  const report=window.HouseholdReviews.build(data,window.HouseholdForecast,today(),sharedForecast());
  reviewTasks=report.tasks;
  const shown=reviewTasks.filter(t=>reviewFilter==='all'||t.kind===reviewFilter);
- const tabs=[['all','All',reviewTasks.length],['category','Categories',report.categoryCount],['prediction','Predictions',report.predictionCount]];
+ const tabs=[['all','All',reviewTasks.length],['category','Categories',report.categoryCount],['prediction','Predictions',report.predictionCount],['accounting','Reconciliation',report.accountingCount]];
  const filterMarkup='<div class="review-filters" role="group" aria-label="Filter reviews by type">'+tabs.map(([kind,label,count])=>
   '<button type="button" class="'+(reviewFilter===kind?'active':'')+'" data-review-filter="'+kind+
   '" aria-pressed="'+String(reviewFilter===kind)+'" aria-controls="review-task-list">'+
   '<strong class="review-filter-count">'+count+'</strong><span class="review-filter-label">'+label+'</span></button>').join('')+'</div>';
  const rows=shown.map(t=>{
-  const isCategory=t.kind==='category',label=isCategory?'Category':'Prediction';
+  const isCategory=t.kind==='category',label=isCategory?'Category':t.kind==='accounting'?'Reconciliation':'Prediction';
   const options=CATS.map(c=>'<option value="'+esc(c)+'" '+(c===t.category?'selected':'')+'>'+esc(c)+'</option>').join('');
-  const form=isCategory?'<form class="review-form" data-review-category="'+esc(t.id)+'"><p class="prediction-note">Confirm the existing category, or choose a better one. The original merchant, date and amount stay read-only.</p>'+
+  const form=t.kind==='accounting'?'<div class="review-form"><p class="prediction-note">'+esc(t.reason)+'. Verify this transaction against your statements. Confirming acknowledges your review; it does not force an account match or alter the source amount, spending or income.</p><div class="review-actions"><button type="button" class="btn primary" data-review-accounting="'+esc(t.id)+'">Acknowledge reviewed</button></div></div>':isCategory?'<form class="review-form" data-review-category="'+esc(t.id)+'"><p class="prediction-note">Confirm the existing category, or choose a better one. The original merchant, date and amount stay read-only.</p>'+
    '<label>Category<select name="category">'+options+'</select></label>'+
    '<label class="learn-checkbox"><input type="checkbox" name="remember" checked> Remember this decision for similar transactions</label>'+
    '<p class="prediction-note">Automatic rules apply only to unclassified or low-confidence charges from a consistent merchant. Multi-purpose merchants become suggestions to review.</p>'+
@@ -674,6 +674,10 @@ document.querySelectorAll('[data-review-confirm]').forEach(button=>button.onclic
   }else if(task.kind==='prediction'){learnReviewedPrediction(task,null)}
   window.HouseholdReviews.confirm(data,task);finishReview();
  }catch(err){alert(err.message)}
+});
+document.querySelectorAll('[data-review-accounting]').forEach(button=>button.onclick=()=>{
+ const task=taskById(button.dataset.reviewAccounting);if(!task)return;
+ window.HouseholdReviews.confirm(data,task);finishReview();
 });
 document.querySelectorAll('[data-review-exclude]').forEach(button=>button.onclick=()=>{
  const task=taskById(button.dataset.reviewExclude);if(!task||task.kind!=='prediction')return;
