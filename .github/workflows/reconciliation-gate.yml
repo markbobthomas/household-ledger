@@ -24,6 +24,7 @@ jobs:
           node --check sandbox/sandbox-ui.js
       - name: Reconciliation and categorization invariants
         run: |
+          node tests/bank-balance-authority.cjs
           node tests/reconciliation-phase1-smoke.cjs
           node tests/reconciliation-phase3-stress.cjs
           node tests/conservative-categorization-phase2.cjs
