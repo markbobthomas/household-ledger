@@ -410,6 +410,34 @@ function monthlyProjection(month,category){
  const f=window.HouseholdForecast.forecast(entries(),month,category,today(),data.predictions.patternRules);
  return {...f,active:[],expected:[],additional:0};
 }
+function ledgerCategories(){
+ // One catalog for Budget and Insights, including legacy categories with saved caps.
+ return [...new Set([...allCategories(),...Object.keys(data.predictions.monthlyBudgets||{})])];
+}
+function categoryMonthRows(month){
+ // Both category views use the same reconciled records, calendar month, posted
+ // expense filters, forecast engine and user-set caps. Never reclassify bank facts.
+ const bounds=budgetBounds(month),asOf=today(),records=entries();
+ return ledgerCategories().map(category=>{
+  const related=records.filter(t=>t.category===category&&t.date>=bounds.start&&t.date<=bounds.end);
+  const byNewest=(a,b)=>b.date.localeCompare(a.date);
+  const posted=related.filter(t=>['expense','refund'].includes(t.type)&&!t.pending&&t.date<=asOf&&Number(t.amount)>0).sort(byNewest);
+  const pending=related.filter(t=>['expense','refund'].includes(t.type)&&t.pending&&Number(t.amount)>0).sort(byNewest);
+  const notSpending=related.filter(t=>data.categoryOverrides?.[t.id]===category&&
+   (!['expense','refund'].includes(t.type)||!t.pending&&t.date>asOf)).sort(byNewest);
+  const pendingNet=pending.reduce((n,t)=>n+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0);
+  return {category,posted,pending,notSpending,pendingNet,
+   f:monthlyProjection(month,category),limit:Number(data.predictions.monthlyBudgets[category])||0};
+ });
+}
+function categoryCreationForm(){
+ return '<details class="category-create"><summary>+ Add category</summary>'+
+  '<form data-category-create class="category-create-form">'+
+  '<label>New category name<input name="name" required maxlength="40" placeholder="e.g. Pet supplies" autocomplete="off"></label>'+
+  '<button type="submit" class="btn primary">Create category</button></form>'+
+  '<p class="prediction-note">A new category appears in Budget, Insights and transaction category menus. It starts with $0 spent and no budget cap.</p>'+
+  '</details>';
+}
 function expectedTransactionMarkup(e){
  const active=e.enabled!==false&&e.date>today()&&e.date.startsWith(budgetMonth);
  const manual=e.source==='manual';
@@ -665,15 +693,16 @@ function taskById(id){return reviewTasks.find(x=>x.id===id)}
 function finishReview(){save();render();window.scrollTo({top:0,left:0,behavior:'instant'})}
 
 function budgetBounds(month){const [year,monthNum]=month.split('-').map(Number),endDay=new Date(year,monthNum,0).getDate(),start=month+'-01',end=month+'-'+String(endDay).padStart(2,'0');const label=new Date(year,monthNum-1,1).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+new Date(year,monthNum-1,endDay).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});return {start,end,label}}function render(){unifiedCache=null;const demoCount=data.transactions.filter(t=>t.source?.provider==='demo').length;el('demo-banner').innerHTML=liveMode?'<div class="demo-banner"><strong>REAL BANK · PLAID</strong></div>':window.HouseholdLiveSource?.loading?'<div class="demo-banner"><strong>CONNECTING REAL BANK</strong></div>':demoCount?'<div class="demo-banner"><strong>DEMO</strong></div>':'';const title=page.charAt(0).toUpperCase()+page.slice(1);el('title').textContent=title;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let months=[...new Set([...entries().map(t=>String(t.date).slice(0,7)),today().slice(0,7),...(period==='all'?[]:[period])].filter(m=>/^\d{4}-\d{2}$/.test(m)&&+m.slice(5,7)>=1&&+m.slice(5,7)<=12))].sort().reverse();
-if(page==='budgets'){
+const categoryMonthView=page==='budgets'||page==='insights'&&insightMode==='categories';
+if(categoryMonthView){
   const now=new Date(),recent=Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-i,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')});
   const choices=[...new Set([...months,...recent,budgetMonth])].sort().reverse();
   const bounds=budgetBounds(budgetMonth);
   el('period').innerHTML=choices.map(m=>'<option value="'+m+'" '+(budgetMonth===m?'selected':'')+'>'+new Date(Number(m.slice(0,4)),Number(m.slice(5,7))-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</option>').join('');
-  el('period').setAttribute('aria-label','Budget month');
-  el('budget-range').hidden=false;
+  el('period').setAttribute('aria-label',page==='budgets'?'Budget month':'Category reporting month');
+  el('budget-range').hidden=page!=='budgets';
   el('budget-range').textContent=bounds.label;
-  el('subtitle').textContent='Category spending, budget targets and expected amounts.';
+  el('subtitle').textContent=page==='budgets'?'Category spending, budget targets and expected amounts.':'Categories shared with Budget · same selected month and actual spending.';
 }else{
   el('period').innerHTML='<option value="all" '+(period==='all'?'selected':'')+'>All dates</option>'+months.map(m=>'<option value="'+m+'" '+(period===m?'selected':'')+'>'+new Date(+m.slice(0,4),+m.slice(5,7)-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</option>').join('');
   el('period').setAttribute('aria-label','Transaction date filter');
@@ -685,7 +714,29 @@ let a=expense(),html='';if(page==='overview')html=window.HouseholdLiveSource?.lo
 if(page==='insights'){
   const tabs='<div class="insight-tabs" role="tablist" aria-label="Insight views">'+[['merchants','Merchants'],['categories','Categories'],['bands','Purchase sizes'],['recurring','Recurring'],['accuracy','Accuracy']].map(([key,name])=>'<button type="button" role="tab" aria-selected="'+(insightMode===key)+'" class="'+(insightMode===key?'active':'')+'" data-insight="'+key+'">'+name+'</button>').join('')+'</div>';
   if(insightMode==='categories'){
-    html=tabs+gridStats()+'<div class="panel"><div class="section-top"><h3>Upcoming expected payments · this month</h3><strong>'+money(sharedForecast().events.filter(e=>e.type==='expense'&&e.date.slice(0,7)===today().slice(0,7)).reduce((n,e)=>n+e.amount,0))+'</strong></div><p class="prediction-note">Same dated payments used by Budget, Reviews and the 90-day projection. Select Budget to edit.</p></div><div class="panel"><div class="section-top"><h3>Spending by category</h3></div>'+list(grouped(a,'category'),999,'category',a)+'</div>';
+    const groups=categoryMonthRows(budgetMonth),bounds=budgetBounds(budgetMonth);
+    const totals=groups.reduce((n,r)=>{n.actual+=Number(r.f.actual)||0;n.expected+=Number(r.f.additional)||0;n.limit+=r.limit;return n},{actual:0,expected:0,limit:0});
+    const categoryStats='<div class="stats category-insights-stats">'+[
+      ['Recorded spending · '+budgetMonth,money(totals.actual)],
+      ['Expected payments · '+budgetMonth,money(totals.expected)],
+      ['Combined category budgets',money(totals.limit)]
+    ].map(([label,value])=>'<div class="stat"><div class="sub">'+esc(label)+'</div><div class="num">'+value+'</div></div>').join('')+'</div>';
+    const categoryList=groups.map(({category,posted,pending,f,limit})=>
+      '<details class="drill-detail category-insight-entry" data-report-group="category|'+esc(category)+'">'+
+       '<summary class="row drill-summary"><div class="category-insight-name"><strong>'+esc(category)+'</strong>'+
+        '<small>'+posted.length+' posted transaction'+(posted.length===1?'':'s')+
+        (pending.length?' · '+pending.length+' pending':'')+'</small></div>'+
+       '<div class="category-insight-values"><strong>'+money(f.actual)+' spent</strong>'+
+        '<small>'+money(f.additional)+' expected · '+(limit?money(limit)+' cap':'No budget cap')+'</small></div>'+
+       '<span class="chevron" aria-hidden="true">⌄</span></summary>'+
+       '<div class="drill-expanded"><div class="sub">Posted spending · '+money(f.actual)+' · '+esc(budgetMonth)+'</div>'+
+       (posted.length?table(posted):'<p class="prediction-note">No posted expenses in this month. The category is still available in Budget and Activity.</p>')+
+       (pending.length?'<p class="prediction-note">'+pending.length+' pending charge(s) are not counted as spending.</p>':'')+
+       '</div></details>').join('');
+    html=tabs+categoryStats+'<div class="panel" aria-label="Shared spending categories">'+
+     '<div class="section-top"><h3>Categories</h3><span class="budget-summary-meta">'+esc(bounds.label)+'</span></div>'+
+     '<p class="prediction-note">Identical categories, posted spending, expected payments and budget caps as Budget for this month. Changes to either tab appear in both.</p>'+
+     categoryCreationForm()+'<div class="category-insights-list">'+categoryList+'</div></div>';
   }else if(insightMode==='merchants'){
     html=tabs+gridStats()+'<div class="panel"><div class="section-top"><h3>Merchant totals</h3></div>'+list(grouped(a,'merchant'),999,'merchant',a)+'</div>';
   }else if(insightMode==='recurring'){
@@ -705,11 +756,10 @@ if(page==='insights'){
     '<p class="budget-date-note">Full transactions are counted once when no item-level details are available.</p></div>';
   }
 }if(page==='budgets'){
- // Use the same reconciled ledger source as Activity.
- const budgetLedger=entries(),budgetAsOf=today();
- const cats=[...new Set([...allCategories(),...Object.keys(data.predictions.monthlyBudgets)])],month=budgetMonth,
- {start:monthStart,end:monthEnd,label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
- const totals=cats.reduce((sum,category)=>{const f=monthlyProjection(month,category);sum.actual+=Number(f.actual)||0;sum.expected+=Number(f.additional)||0;sum.limit+=Number(data.predictions.monthlyBudgets[category])||0;return sum},{actual:0,expected:0,limit:0});
+ // Exactly the same category catalog and per-month data as Insights > Categories.
+ const month=budgetMonth,categoryGroups=categoryMonthRows(month),
+ {label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
+ const totals=categoryGroups.reduce((sum,{f,limit})=>{sum.actual+=Number(f.actual)||0;sum.expected+=Number(f.additional)||0;sum.limit+=limit;return sum},{actual:0,expected:0,limit:0});
  const used=totals.limit?Math.min(100,Math.max(0,totals.actual/totals.limit*100)):0;
  const forecast=totals.limit?Math.min(Math.max(0,100-used),Math.max(0,totals.expected/totals.limit*100)):0;
  const overall='<section class="panel" aria-label="Overall monthly budget"><div class="section-top"><h3>Overall budget</h3><strong>'+money(totals.actual)+' spent</strong></div>'+
@@ -718,17 +768,9 @@ if(page==='insights'){
  '<div class="budget-heading"><span class="budget-category-meta">Combined budget '+money(totals.limit)+'</span><span class="budget-category-meta '+(totals.limit&&totals.actual+totals.expected>totals.limit?'over-budget':'')+'">'+(currentMonth?'Expected total '+money(totals.actual+totals.expected):'Recorded total '+money(totals.actual))+'</span></div>'+
  '<p class="prediction-note">Sum of all category budgets. Posted spending and expected payments are separate. Pending charges appear under their categories but do not count until posted. Bank balances are unchanged.</p></section>';
  html=overall+'<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div>'+
+ categoryCreationForm()+
  '<div class="budget-legend"><span>Spent</span><span>Expected</span><small class="budget-edit-legend">Underlined amounts are editable</small></div>'+
- cats.map(category=>{
-  const categoryRows=budgetLedger.filter(t=>t.category===category&&t.date>=monthStart&&t.date<=monthEnd);
-  const sortRecent=(a,b)=>b.date.localeCompare(a.date);
-  // Keep bank-reported source types unchanged. Pending and transfers are not posted spending.
-  const matching=categoryRows.filter(t=>['expense','refund'].includes(t.type)&&!t.pending&&t.date<=budgetAsOf&&Number(t.amount)>0).sort(sortRecent);
-  const pending=categoryRows.filter(t=>['expense','refund'].includes(t.type)&&t.pending&&Number(t.amount)>0).sort(sortRecent);
-  const notSpending=categoryRows.filter(t=>data.categoryOverrides?.[t.id]===category&&
-    (!['expense','refund'].includes(t.type)||!t.pending&&t.date>budgetAsOf)).sort(sortRecent);
-  const pendingNet=pending.reduce((sum,t)=>sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0);
-  const f=monthlyProjection(month,category),limit=Number(data.predictions.monthlyBudgets[category])||0;
+ categoryGroups.map(({category,posted:matching,pending,notSpending,pendingNet,f,limit})=>{
   const spentWidth=limit?Math.min(100,Math.max(0,f.actual/limit*100)):0;
   const forecastWidth=limit?Math.min(Math.max(0,100-spentWidth),Math.max(0,f.additional/limit*100)):0;
   return'<div class="budget-entry" data-budget-category="'+esc(category)+'"><details class="drill-detail"><summary class="row drill-summary"><div style="flex:1;min-width:0">'+
@@ -784,7 +826,7 @@ if(page==='settings'){
  '</select><p class="prediction-note">Open the Ledger on this tab next time. The default is Budget. This preference stays on this device.</p></div>';
  const categorySettings='<div class="panel settings-block" aria-label="Category management"><h3>Categories</h3>'+
  '<p>Create a category for both modes. Changing a transaction category never changes the bank record.</p>'+
- '<form id="add-custom-category"><label>Category name<input name="name" required maxlength="40" placeholder="e.g. Pet supplies"></label>'+
+ '<form id="add-custom-category" data-category-create><label>Category name<input name="name" required maxlength="40" placeholder="e.g. Pet supplies"></label>'+
  '<button type="submit" class="btn">Add category</button></form>'+
  '<p>'+esc((data.customCategories||[]).length?(data.customCategories||[]).join(' · '):'No custom categories added yet')+'</p></div>';
 html='<div class="settings-grid">'+(window.HouseholdLiveSource?.panel()||'') +categorySettings+startupSettings+(window.HouseholdSandboxUI?.panel()||'')+feedSettings+accountMarkup+'<div class="panel settings-block"><h3>Read-only ledger</h3><p>Transaction facts are provided by source records. Only categories and predictions are editable.</p>'+
@@ -967,11 +1009,22 @@ document.querySelectorAll('[data-expected-add]').forEach(form=>form.onsubmit=e=>
  try{Model.saveManualExpected(data,{category,merchant:fields.get('merchant'),date,amount:fields.get('amount')});save();refreshCategory(category)}catch(err){alert(err.message)}
 });
 
+document.querySelectorAll('form[data-category-create]').forEach(form=>form.onsubmit=e=>{
+ e.preventDefault();
+ try{
+  const name=String(new FormData(form).get('name')||'').trim();
+  Model.addCategory(data,name);save();render();
+  const target=page==='budgets'?
+   [...document.querySelectorAll('.budget-entry')].find(x=>x.dataset.budgetCategory===name):
+   page==='insights'&&insightMode==='categories'?
+   [...document.querySelectorAll('.category-insight-entry')].find(x=>x.dataset.reportGroup==='category|'+name):null;
+  if(target){
+   target.querySelector(':scope > details')?.setAttribute('open','');
+   target.scrollIntoView({block:'center',behavior:'instant'});
+  }else alertMsg('Category '+name+' created. It is now available in Budget, Insights and Activity.');
+ }catch(error){alert(error.message)}
+});
 if(page==='settings'){
- const addCategoryForm=document.getElementById('add-custom-category');
- if(addCategoryForm)addCategoryForm.onsubmit=e=>{e.preventDefault();try{
-  Model.addCategory(data,new FormData(e.target).get('name'));save();render();alertMsg('Category created.')
- }catch(error){alert(error.message)}};
  el('backup').onclick=()=>download(JSON.stringify(data,null,2),'household-ledger-backup.json','application/json');
  if(window.HouseholdSandboxUI?.available)window.HouseholdSandboxUI.bind({
   Model,getData:()=>data,setData:next=>{data=next;unifiedCache=null},
@@ -1319,7 +1372,7 @@ function eventPredictionForm(id){
  if(old)el('remove-prediction').onclick=()=>{Model.removeEvent(data,id);save();render();alertMsg('Prediction removed. Ledger unchanged.')};
  bindCancel();
 }
-function navigateTo(next){window.scrollTo({top:0,left:0,behavior:'instant'});page=next;render();window.scrollTo({top:0,left:0,behavior:'instant'})}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigateTo(b.dataset.page));el('period').onchange=e=>{if(page==='budgets'){budgetMonth=e.target.value;period=e.target.value}else{period=e.target.value;if(period!=='all')budgetMonth=period}render()};render();if(window.HouseholdLiveSource)window.HouseholdLiveSource.bind({
+function navigateTo(next){window.scrollTo({top:0,left:0,behavior:'instant'});page=next;render();window.scrollTo({top:0,left:0,behavior:'instant'})}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigateTo(b.dataset.page));el('period').onchange=e=>{if(page==='budgets'||page==='insights'&&insightMode==='categories'){budgetMonth=e.target.value;period=e.target.value}else{period=e.target.value;if(period!=='all')budgetMonth=period}render()};render();if(window.HouseholdLiveSource)window.HouseholdLiveSource.bind({
  enterReal:(next,snapshot)=>{data=Model.migrate(next);liveMode=true;window.HouseholdBankFeed.setSandboxSnapshot(snapshot);unifiedCache=null},
  enterDemo:()=>{liveMode=false;data=demoData;window.HouseholdBankFeed.setSandboxSnapshot(null);unifiedCache=null},
  render:()=>render()

@@ -22,6 +22,33 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await page.locator('#add-custom-category [name=name]').fill('Pet supplies');
   await page.locator('#add-custom-category button[type=submit]').click();
   assert.ok((await page.evaluate(()=>JSON.parse(localStorage.getItem('household-ledger-v1')))).customCategories.includes('Pet supplies'),'Demo category creation uses original Ledger state');
+  // Both primary category pages can create a category and use the same catalog.
+  await page.locator('aside [data-page=budgets]').click();
+  const demoNames=async()=>page.locator('.budget-entry').evaluateAll(nodes=>nodes.map(el=>el.dataset.budgetCategory));
+  const demoBefore=await demoNames();
+  const demoCreate=page.locator('.budget-entry').count();
+  assert.ok((await demoCreate)>=12,'All known categories are available in Budget, including unused ones');
+  await page.locator('.category-create > summary').click();
+  await page.locator('.category-create-form [name=name]').fill('Garden');
+  await page.locator('.category-create-form button[type=submit]').click();
+  assert.equal(await page.locator('[data-budget-category="Garden"]').count(),1,'Budget quick-add creates new category in-place');
+  await page.locator('aside [data-page=insights]').click();
+  await page.locator('[data-insight=categories]').click();
+  const demoInsights=async()=>page.locator('.category-insight-entry').evaluateAll(nodes=>nodes.map(el=>el.dataset.reportGroup.slice('category|'.length)));
+  assert.deepEqual(await demoInsights(),await demoNames(),'Insights and Budget show the exact same ordered category catalog');
+  assert.equal(await page.locator('[data-report-group="category|Garden"]').count(),1,'Unused category is visible at $0 in Insights');
+  assert.match(await page.locator('[data-report-group="category|Garden"]').innerText(),/\$0\.00 spent/);
+  await page.locator('.category-create > summary').click();
+  await page.locator('.category-create-form [name=name]').fill('Watercraft');
+  await page.locator('.category-create-form button[type=submit]').click();
+  assert.equal(await page.locator('[data-report-group="category|Watercraft"]').count(),1,'Insights quick-add creates category immediately');
+  await page.locator('aside [data-page=budgets]').click();
+  assert.equal(await page.locator('[data-budget-category="Watercraft"]').count(),1,'Category added in Insights appears automatically in Budget');
+  assert.deepEqual(await demoNames(),[...demoBefore,'Garden','Watercraft'],'Single canonical catalog keeps addition order');
+  await page.locator('aside [data-page=transactions]').click();
+  assert.ok((await page.locator('select[data-category]').first().locator('option').allTextContents()).includes('Watercraft'),
+   'New shared categories are available for transaction assignment');
+
   const bankTest=await ctx.newPage(),postedDate=new Date().toISOString().slice(0,10);
   let currentBalance=1000,availableBalance=950,lastSync=new Date().toISOString(),balanceObservedAt=lastSync;
   await bankTest.route('**/api/ledger',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
@@ -139,6 +166,20 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   const categoryInsights=bankTest.locator('[data-report-group="category|Hobbies"]');
   await categoryInsights.waitFor();
   assert.ok((await categoryInsights.innerText()).includes('$19.00'),'Reviewed category updates Insights');
+  assert.equal(await bankTest.locator('#period').getAttribute('aria-label'),'Category reporting month',
+   'Insights Categories uses the same month as Budget, not the unrelated all-time filter');
+  const insightNames=async()=>bankTest.locator('.category-insight-entry').evaluateAll(nodes=>nodes.map(el=>el.dataset.reportGroup.slice('category|'.length)));
+  const initialCategoryNames=await insightNames();
+  const initialHobbiesSpent=await categoryInsights.locator('.category-insight-values strong').innerText();
+  await bankTest.locator('aside [data-page=budgets]').click();
+  const budgetNames=async()=>bankTest.locator('.budget-entry').evaluateAll(nodes=>nodes.map(el=>el.dataset.budgetCategory));
+  assert.deepEqual(initialCategoryNames,await budgetNames(),
+   'Insights and Budget are backed by the same category names');
+  assert.equal(await bankTest.locator('#period').inputValue(),new Date().toISOString().slice(0,7),
+   'The same reporting month appears in both categories views');
+  assert.equal(initialHobbiesSpent,(await bankTest.locator('[data-budget-category="Hobbies"] .budget-summary-amount').innerText())+' spent',
+   'Actual spending agrees between Budget and Insights');
+
   await bankTest.locator('aside [data-page=budgets]').click();
   const hobbies=bankTest.locator('.budget-entry[data-budget-category="Hobbies"]');
   assert.ok((await hobbies.locator('.budget-summary-amount').innerText()).includes('$19.00'),'Uncapped reviewed category appears in Budget');
@@ -148,6 +189,21 @@ const {spawn}=require('node:child_process'),{chromium}=require('playwright');
   await hobbies.locator('.inline-money-input').press('Enter');
   assert.ok((await hobbies.locator('.budget-summary-amount').innerText()).includes('$19.00'),'Adding cap retains actual reviewed spending');
   assert.equal(await hobbies.locator('[data-inline-budget]').innerText(),'$100.00');
+  await bankTest.locator('aside [data-page=insights]').click();
+  await bankTest.locator('[data-insight=categories]').click();
+  assert.match(await bankTest.locator('[data-report-group="category|Hobbies"] .category-insight-values').innerText(),/\$100\.00 cap/,
+   'Changes to Budget category caps appear automatically in Insights');
+  await bankTest.locator('.category-create > summary').click();
+  await bankTest.locator('.category-create-form [name=name]').fill('Household maintenance');
+  await bankTest.locator('.category-create-form button[type=submit]').click();
+  assert.match(await bankTest.locator('[data-report-group="category|Household maintenance"] .category-insight-values').innerText(),/\$0\.00 spent/,
+   'New Real category with no purchases appears in Insights');
+  await bankTest.locator('aside [data-page=budgets]').click();
+  assert.equal(await bankTest.locator('[data-budget-category="Household maintenance"]').count(),1,
+   'Category created from Real Insights appears in Budget without any copy/sync');
+  assert.deepEqual(await budgetNames(),[...initialCategoryNames,'Household maintenance'],
+   'Real mode uses identical canonical category list in both views');
+
   for(let i=0;i<60&&!adjustments.some(a=>a.categoryOverrides?.unknown==='Hobbies'&&a.predictions?.monthlyBudgets?.Hobbies===100);i++)await new Promise(resolve=>setTimeout(resolve,50));
   assert.ok(adjustments.some(a=>a.categoryOverrides?.unknown==='Hobbies'),'Review override posted to encrypted server preferences');
   assert.ok(adjustments.some(a=>a.predictions?.monthlyBudgets?.Hobbies===100),'Real budget cap posted to server preferences');

@@ -1211,3 +1211,34 @@ select.recurring-value:hover{border-bottom-style:solid}
  .overview-available strong{font-size:19px}
  .overview-history-details{margin-top:6px}
 }
+
+/* Shared Budget / Insights category catalog and quick-add controls. */
+.category-create{margin:14px 0 16px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 0 10px}
+.category-create>summary{display:inline-flex;align-items:center;min-height:40px;padding:7px 11px;margin:2px 0;cursor:pointer;border:1px solid var(--ink);border-radius:5px;font-weight:710;font-size:13px;letter-spacing:.01em;color:var(--ink);list-style:none}
+.category-create>summary::-webkit-details-marker{display:none}
+.category-create>summary:hover,.category-create>summary:focus-visible{background:var(--ink);color:#fff}
+.category-create-form{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:12px 0 8px}
+.category-create-form label{display:flex;flex-direction:column;gap:5px;min-width:190px;flex:1 1 230px;font-size:12px;font-weight:650}
+.category-create-form input{width:100%;min-height:41px;border:1px solid var(--line);border-radius:4px;padding:8px 10px;font:inherit;font-size:14px}
+.category-create-form button{min-height:41px}
+.category-create .prediction-note{margin:5px 0 2px}
+.category-insights-list{display:flex;flex-direction:column}
+.category-insight-entry{border-bottom:1px solid var(--line)}
+.category-insight-entry:last-child{border-bottom:0}
+.category-insight-entry>.drill-summary{display:flex;gap:15px;align-items:center;min-height:69px;padding:13px 5px}
+.category-insight-name{display:flex;min-width:0;flex:1 1 45%;flex-direction:column;gap:5px}
+.category-insight-name>strong{font-size:14px}
+.category-insight-name>small,.category-insight-values>small{display:block;color:var(--muted);font-size:11px}
+.category-insight-values{text-align:right;display:flex;min-width:0;flex:0 1 46%;flex-direction:column;gap:5px}
+.category-insight-values>strong{font:700 15px var(--mono);font-variant-numeric:tabular-nums}
+.category-insight-entry>.drill-expanded{padding:12px 4px 18px}
+.category-insights-stats{margin-top:15px;margin-bottom:15px}
+@media(max-width:700px){
+ .category-create{margin:10px 0 14px}
+ .category-create>summary{min-height:44px;padding:10px 13px;font-size:14px}
+ .category-create-form{align-items:stretch;flex-direction:column}
+ .category-create-form label,.category-create-form button{width:100%;flex-basis:auto}
+ .category-insight-entry>.drill-summary{gap:9px;min-height:80px}
+ .category-insight-values>strong{font-size:14px}
+ .category-insight-values>small{font-size:11px}
+}
