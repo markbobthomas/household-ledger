@@ -27,6 +27,7 @@ function createServer({service}={}){
    res.end(JSON.stringify(obj));
   };
   try{
+   if(HOSTED&&req.method==='GET'&&req.url==='/healthz')return send(200,{status:'ok',service:'fictional-test-sandbox'});
    if(HOSTED){
     const provided=String(req.headers.authorization||'');
     const expected='Basic '+Buffer.from('tester:'+process.env.SANDBOX_TEST_PASSWORD).toString('base64');
