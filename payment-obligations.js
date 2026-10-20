@@ -98,6 +98,14 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const futureCharges=round(predictedRows.reduce((sum,t)=>
     sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
    const calculated=round(Math.max(0,bankPurchases+futureCharges));
+   // Posted activity is an exact bank-ledger sum, distinct from both the
+   // projection for a not-yet-closed period and the issued card statement.
+   const actualPeriodNet=round(bankPurchases);
+   const periodComplete=cycleClose<=asOf;
+   const postedTransactions=cycleRows.map(t=>({
+    id:String(t.id||''),date:t.date,merchant:String(t.merchant||t.description||'Card transaction'),
+    type:t.type,amount:round(Number(t.amount))
+   })).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
    const legacy=!explicit;
    // A known issued statement (optional) supersedes our calculation once.
    // Legacy setups retain their old planning floor for subsequent cycles.
@@ -130,6 +138,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
     dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
+    actualPeriodNet,periodComplete,postedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
     autopayEnabled:autopay,alreadyPaid:paid,actualPayments:postedForCycle,
