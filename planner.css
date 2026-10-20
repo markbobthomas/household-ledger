@@ -187,3 +187,10 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
  .future-toolbar select{min-width:140px}
  .page-heading h2{font-size:20px}
 }
+
+/* Compact income visibility, avoiding an optimistic zero-deposit forecast. */
+.income-status{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:14px;padding-bottom:14px}
+.income-status .section-title{margin:0 0 5px}
+.income-status>div{flex:1;min-width:0}
+.income-status p{font-size:12px;line-height:1.5;color:var(--muted);margin:0}
+@media(max-width:780px){.income-status{align-items:flex-start;flex-direction:column}.income-status .btn{width:100%}}
