@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const R=require('../planner-recurrence.js');
+const T=require('../planner-transactions.js');
 const accounts=[
  {id:'checking',name:'Household Checking',accountType:'checking',transactionAccount:'Checking'},
  {id:'savings',name:'Savings',accountType:'savings'},
@@ -83,4 +84,24 @@ const explicit={id:'future-add|mortgage',date:'2026-11-16',merchant:'Home Mortga
  accountId:'checking',type:'expense',amount:2000,_forecastExtra:true};
 assert.equal(R.dedupeEvents([scheduled,explicit],accounts).events[0].id,explicit.id,
  'Explicit owner-added one-off debit replaces duplicate inferred monthly charge');
+const existingRule={predictions:{}};
+const data={date:'2026-11-15',amount:2000,accountId:'checking',
+ merchant:'Home Mortgage ACH',frequency:'monthly',type:'expense'};
+const firstRule=T.defineRecurring(existingRule,data,accounts,asOf,{
+ kind:'event',accountId:'checking',type:'transfer',merchant:'Home Mortgage ACH',
+ amount:2000,date:'2026-09-15'
+},[mortgage],['actual-mortgage']);
+const replay=T.defineRecurring(existingRule,{...data,date:'2026-11-25'},accounts,asOf,{
+ kind:'event',accountId:'checking',type:'expense',merchant:'Home Mortgage ACH',
+ amount:2000,date:'2026-10-15'
+},[tx('second-bank-row','2026-10-15','Home Mortgage ACH',2000)],['second-bank-row']);
+assert.equal(existingRule.predictions.futureRecurringRules.length,1,
+ 'Same mortgage selected again as a differently classified bank entry updates existing rule');
+assert.equal(firstRule.id,replay.id,'Rule retains its stable ID for future edits and overrides');
+assert.equal(replay.date,'2026-11-25','Reconfirmation can update future due date');
+assert.equal(R.infer([mortgage],snapshot,existingRule.predictions).events.length,0,
+ 'The saved rule completely blocks bank auto-inference even after date change');
+T.defineRecurring(existingRule,{...data,accountId:'savings'},accounts,asOf,null,[],[]);
+assert.equal(existingRule.predictions.futureRecurringRules.length,2,
+ 'Mortgage on another paying account is not mistakenly folded into the first');
 console.log('PASS direct early-mortgage / two-fixed-bill detection, low-confidence shopping exclusion, blocked/paired cases, manual-date override and cross-source dedupe safety');
