@@ -119,6 +119,15 @@ const twice=C.materialize(snapshot,twiceMonthly,{},T,P,90);
 assert.deepEqual(find(twice,'Employer Payroll').slice(0,4).map(x=>x.date),
  ['2026-11-01','2026-11-15','2026-12-01','2026-12-15'],
  'Twice-monthly payroll retains two calendar dates, never drifts biweekly');
+const historicalCardSettlements=[
+ tx('cardpaid1','2026-09-10','Credit card payment',600),
+ tx('cardpaid2','2026-10-10','Credit card payment',600)
+];
+const unpairedCard=C.analyze(historicalCardSettlements,accounts,snapshot.asOf);
+assert.equal(unpairedCard.automatic.length,0,
+ 'A payment to a linked card is never fabricated as an additional ordinary expense');
+assert.equal(unpairedCard.review.length,1,
+ 'Ambiguous historical card payments may be reviewed but not charged twice');
 const cardState={predictions:{paymentRules:{visa:{
  fromAccountId:'checking',method:'statement',closingDay:18,
  billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
