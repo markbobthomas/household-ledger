@@ -46,6 +46,11 @@ assert.equal(visa[0].statementBalance,200,
 assert.equal(visa[0].purchases,155);
 assert.equal(visa[0].refunds,5);
 assert.equal(visa[0].bankPurchases,150);
+assert.equal(visa[0].actualPeriodNet,150,'Actual spending excludes future estimates');
+assert.equal(visa[0].postedTransactions.length,3,'Every settled charge and refund is auditable');
+assert.equal(visa[0].postedTransactions.reduce((sum,x)=>sum+(x.type==='refund'?-x.amount:x.amount),0),150);
+assert.equal(visa[0].periodComplete,false,'Open statement cycle has not finished');
+assert.equal(amex[0].postedTransactions.length,1,'Expenses are isolated to each card');
 assert.equal(visa[0].estimatedCharges,50);
 assert.equal(visa[0].pendingExcluded,1,'Pending charges are not silently presented as posted');
 assert.equal(visa[0].estimated,true);
@@ -119,10 +124,47 @@ const postedPayment=[
 ];
 const actual=Payments.build(earlySnapshot,postedPayment,[],issued.predictions,{days:30});
 assert.equal(actual.statements[0].alreadyPaid,true,'Confirmed posted payment recognized before scheduled date');
+assert.equal(actual.statements[0].actualPaymentDate,'2026-11-09','Use actual posted bank date, not scheduled November 11');
+assert.equal(actual.statements[0].actualPaymentAmount,700);
+assert.equal(actual.statements[0].lastPostedPayment.date,'2026-11-09');
 assert.equal(actual.plans.length,0,'No second checking withdrawal after posted card autopay');
 const wrongAccount=Payments.build(earlySnapshot,postedPayment.map(t=>
  ({...t,accountId:t.accountId==='checking'?'savings':t.accountId})),[],
  issued.predictions,{days:30});
 assert.ok(wrongAccount.plans.some(x=>x.amount===700),
  'Do not suppress a card bill when source checking account does not match');
+// The bank's actual settled transfer is authoritative even if it differs
+// from the estimated full-statement amount; never debit checking twice.
+const uncertain=Payments.build(earlySnapshot,postedPayment.map(p=>({...p,amount:640})),[],
+ issued.predictions,{days:30});
+assert.equal(uncertain.statements[0].actualPaymentDate,'2026-11-09');
+assert.equal(uncertain.statements[0].actualPaymentAmount,640);
+assert.equal(uncertain.plans.length,0,'Actual $640 payment suppresses stale estimated $700 autopay');
+assert.ok(uncertain.warnings.some(w=>w.includes('differs from planned')),
+ 'A partial or different amount requires reconciliation, not silent full-payment claim');
+// Once the billing period is closed, no hypothetical future purchases
+// contribute to its total; the posted ledger is the actual cash ledger.
+const closedNoIssuer=Model.migrate({});
+Model.setCardPaymentRule(closedNoIssuer,'visa',{
+ billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
+ nextPaymentDate:'2026-11-11',nextDueDate:'2026-11-12',
+ fromAccountId:'checking',lastStatementBalance:'',method:'statement'
+});
+const allPosted=[
+ {id:'old-groceries',date:'2026-09-19',amount:110,accountId:'visa',type:'expense',merchant:'Grocery'},
+ {id:'old-service',date:'2026-10-18',amount:210,accountId:'visa',type:'expense',merchant:'Service'},
+ {id:'old-refund',date:'2026-10-16',amount:20,accountId:'visa',type:'refund',merchant:'Refund'},
+ {id:'outside-cycle',date:'2026-10-19',amount:999,accountId:'visa',type:'expense',merchant:'Later'}
+];
+const closedPlan=Payments.build(snapshot,allPosted,
+ [{id:'hypothetical',accountId:'visa',date:'2026-10-25',type:'expense',amount:999}],
+ closedNoIssuer.predictions,{days:90});
+assert.equal(closedPlan.statements[0].periodComplete,true);
+assert.equal(closedPlan.statements[0].purchases,320);
+assert.equal(closedPlan.statements[0].refunds,20);
+assert.equal(closedPlan.statements[0].actualPeriodNet,300);
+assert.equal(closedPlan.statements[0].estimatedCharges,0);
+assert.equal(closedPlan.statements[0].amount,300,'Closed period plans for all actual net purchases');
+assert.equal(closedPlan.statements[0].confirmed,false,
+ 'Posted charges alone do not prove bank-issued statement equals $300 (prior balance, fees)');
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
