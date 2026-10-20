@@ -22,9 +22,9 @@ const twiceDates=(from,slots,end)=>{const dates=[];
 const next=(s,f,n)=>f==='weekly'?add(s,n*7):f==='biweekly'?add(s,n*14):
  monthDate(s,n*({monthly:1,quarterly:3,semiannual:6,annual:12}[f]||1));
 const signature=(accountId,type,merchant)=>[accountId,type,norm(merchant)].map(encodeURIComponent).join('|');
-const suppressed=(prefs,accountId,type,merchant)=>Boolean(
+const isExcludedPattern=(prefs,accountId,type,merchant)=>Boolean(
  prefs?.futureRecurrenceExclusions?.[signature(accountId,type,merchant)]);
-const suppressedRecurrence=(prefs,e)=>suppressed(prefs,
+const suppressedRecurrence=(prefs,e)=>isExcludedPattern(prefs,
  e._forecastOriginalAccountId||e.accountId,e._forecastOriginalType||e.type,
  e._forecastOriginalMerchant||e.merchant);
 const billName=/\b(?:mortgage|mtg|home loan|rent|lease payment|loan payment|auto loan|car payment|subscription|membership|autopay|recurring|monthly fee|insurance premium|netflix|spotify|hulu|daycare|tuition)\b/i;
@@ -103,7 +103,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
   ]==='dismissed')||(prefs.mortgageReviewDismissals||[]).includes(
    ['mortgage',g.accountId,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|'));
-  if(blocked||suppressed(prefs,g.accountId,g.kind,g.merchant))continue;
+  if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant))continue;
   const owners=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
    (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
@@ -160,7 +160,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const asOf=snapshot.asOf,end=horizon(asOf,days),accounts=snapshot.accounts||[];
  if(!valid(asOf)||!tools||!Array.isArray(accounts))throw Error('Valid snapshot and forecast tools required');
  const detected=analyze(rows,accounts,asOf,prefs,days),
-  rules=(prefs.futureRecurringRules||[]).filter(r=>!suppressed(prefs,
+  rules=(prefs.futureRecurringRules||[]).filter(r=>!isExcludedPattern(prefs,
    r.originalAccountId||r.accountId||r.fromAccountId,
    r.kind==='movement'?'transfer':r.type,r.originalMerchant||r.merchant)),
   series=prefs.futureSeriesEdits||{},edits=prefs.futureTransactionEdits||{},
