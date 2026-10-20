@@ -544,7 +544,8 @@ document.addEventListener('click',async e=>{
   if(!row)return;
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.skip(state(),row.key,
-    {label:row.merchant,date:row.date,accountId:row.accountId||row.fromAccountId}));
+    {label:row.merchant,date:row.date,accountId:row.accountId||row.fromAccountId,
+     toAccountId:row.toAccountId}));
    editingKey='';transactionNotice='Skipped '+row.merchant+' on '+dateLong(row.date)+'.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
