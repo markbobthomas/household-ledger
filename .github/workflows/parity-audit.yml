@@ -20,5 +20,7 @@ jobs:
       - name: Verify same planner and forecast engine for Demo and Real
         run: |
           node --check planner.js
+          node --check planner-backtest.js
           node tests/planner-parity.cjs
           node tests/planner-routine-smoke.cjs
+          node tests/planner-backtest-smoke.cjs
