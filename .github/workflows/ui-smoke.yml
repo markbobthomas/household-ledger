@@ -25,9 +25,12 @@ jobs:
         run: |
           node --check planner.js
           node --check planner-backtest.js
+          node --check planner-transactions.js
+          node --check account-forecast.js
           node --check planner-intelligence.js
           node tests/planner-browser.cjs
           node tests/planner-routine-smoke.cjs
           node tests/planner-backtest-smoke.cjs
+          node tests/planner-transactions-smoke.cjs
           node tests/payment-obligations-smoke.cjs
           node tests/mortgage-prediction-smoke.cjs
