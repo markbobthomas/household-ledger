@@ -219,6 +219,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   !movementRules.some(m=>m.fromAccountId===p.fromAccountId&&
    m.toAccountId===p.toAccountId&&m.date.slice(0,7)===p.anchorDate.slice(0,7)))
   .map(p=>({...p,date:p.anchorDate,seriesKey:tools.seriesPlan(p),
+   // Statement autopay is a monthly series, even though each generated
+   // occurrence enters the ledger as a one-time linked movement.
+   cadence:p.cadence||(p.origin==='card-autopay'?'monthly':
+    p.frequency==='once'?null:p.frequency||null),
    baseDate:p.anchorDate,recurringRuleId:p.seriesRuleId||null}))];
  for(const e of extras.filter(x=>x.type==='transfer'&&x.date>asOf&&x.date<=end))
   plans.push({...e,id:'future|'+e.id,fromAccountId:e.fromAccountId,toAccountId:e.toAccountId,
