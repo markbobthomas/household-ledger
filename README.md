@@ -18,6 +18,14 @@ The interface retains:
 
 **The existing full Ledger has not been erased.** Before the reset, an identical copy of the original default branch (commit `53975e8672ab56fb5b29bf14ff94dc1746987928`) was saved to [`backup/full-ledger-before-balance-planner-2026-10-19`](https://github.com/markbobthomas/household-ledger/tree/backup/full-ledger-before-balance-planner-2026-10-19).
 
+## Actual billing-period activity vs. estimated future card payments
+
+The card billing preview now lists **every retrieved settled card expense and refund dated within that card's own billing cycle**, with a transaction-by-transaction disclosure and exact net sum (purchases minus refunds). All card transactions are included, not just repeating ones. Pending transactions remain excluded from the posted sum until posted. A cycle not yet closed shows actual spending-to-date and **separately** shows identified future charges; a closed cycle uses the actual retrieved period net without future guesses. The net purchases total is a **bank-transaction sum, not necessarily the issuer's statement balance** (carried debt, issuer adjustments, interest and fees can differ). The user can enter the issued statement amount when known, and that overrides the planning amount for the already-closed period.
+
+The configured future autopay date is a **planned** withdrawal date, not a bank-verified real payment date. Once the actual payment is posted and reconciled between the explicitly selected paying account and the credit card, the UI shows its **real posting date and amount** and suppresses the duplicate forecast transfer. A posted payment with an amount differing from the previous estimate also suppresses a duplicate full payment but triggers a warning to reconcile any possible remaining balance. With no matched posted bank transaction, the app never asserts that the future payment is actual.
+
+Tests: `tests/card-statement-cycles-smoke.cjs` validates closed-cycle posted totals, open-cycle separate estimates, exact selected paying account, real posted dates, variable posted payment amounts, and source immutability.
+
 ## Credit-card billing cycle forecasts and linked autopay
 
 In **Settings → Credit-card statements & autopay**, configure **each connected credit card individually**. Enter the first/last dates of a real billing period (the end is the statement closing date), next payment due date, actual bank withdrawal date, and the checking/savings account that automatically pays that card. The **issued statement balance** is optional: if a statement was already issued, its entered amount takes precedence for that period. Otherwise the app estimates the statement from the connected card's settled charges less refunds within that period, plus verified or owner-defined future recurring purchases on that card before the statement closes. A pending purchase is not silently treated as posted.
