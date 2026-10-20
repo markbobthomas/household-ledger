@@ -7,7 +7,7 @@ A focused, main-checking-first cash planning tool. The default interface replace
 - Present each suggested account/merchant pattern for a one-time **Confirm** or **Not repeating** choice; save this preference with the existing encrypted Real planning adjustments and reopen review if the amount materially changes.
 - Plan a credit-card's **full-statement autopay** with an explicit paying checking account. Enter actual last statement amount, close date, withdrawal and due dates. Following statements remain unconfirmed estimates.
 - Show **month-end available cash after dated payments**, **lowest balance in 90 days**, and **first projected negative balance date**.
-- Reserve what-if modifications until the owner answers the remaining sixth design question.
+- Defer optional what-if modifications: the owner chose to prioritize prediction accuracy.
 
 The interface retains:
 
@@ -28,15 +28,15 @@ The separate `render.yaml` blueprint currently describes the **fictional hosted 
 ## Files
 
 - `index.html`, `planner.css`, `planner.js`: the new, intentionally small interface.
-- `planner-intelligence.js`: conservative exact-amount repeat filter and durable confirm/exclude decisions.
+- `planner-intelligence.js`: conservative exact-amount repeat filter, validated calendar spacing and forecast dates, cadence-aware staleness limits, and durable confirm/exclude decisions.
 - `pilot/server.cjs`, `pilot/data-source.js`, `pilot/index.html`: existing authenticated Plaid server and bank connection flow.
 - `account-forecast.js`, `forecast-ledger.js`, `forecast.js`, `payment-obligations.js`, `ledger-data.js`, `accounting.js`: retained read-only calculation and classification machinery.
 - `tests/planner-browser.cjs`, `tests/planner-parity.cjs`: new planner-focused browser and source-parity checks.
 
-Older analysis and budgeting source files/tests remain in Git history and in the backup branch. They are **not loaded** by the new page. Only the optional what-if/simulation feature remains undecided. Bank source records are immutable and real planning settings are persisted through the existing authenticated `/api/ledger/adjustments` endpoint.
+Older analysis and budgeting source files/tests remain in Git history and in the backup branch. They are **not loaded** by the new page. The optional what-if/simulation feature is explicitly deferred until prediction accuracy is established. Bank source records are immutable and real planning settings are persisted through the existing authenticated `/api/ledger/adjustments` endpoint.
 
 ## Test
 
-The GitHub Actions workflows check the new demo and private-Real planner layouts, mobile browser usability, bank-feed security, statement and mortgage accounting invariants, source parity, and existing reconciliation invariants. No actual Plaid credentials are used in automated browser tests.
+The GitHub Actions workflows check the new demo and private-Real planner layouts, mobile browser usability, bank-feed security, statement and mortgage accounting invariants, source parity, and existing reconciliation invariants. Recurrence regressions now include correct month-to-month spacing, quarterly versus monthly charges, annual evidence, old inactive bills, forecast-day drift, and repeated charges within a single month. No actual Plaid credentials are used in automated browser tests.
 
 This application **does not initiate or schedule bank payments**. It predicts balances and shows uncertainties.
