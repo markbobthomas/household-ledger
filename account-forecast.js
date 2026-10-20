@@ -203,7 +203,11 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
    diagnostics.returnedPayments.push({id:p.id,paymentDate:anchor,reversalDate:returnAt,
     amount:round(amount),withinHorizon:true,originalIncludedInSnapshot:true});
   }
-  for(const when of occurrences(p,asOf,through)){
+  // A user-adjusted November 2 payment can be due November 20, even
+  // after November 2 has passed. Include the original date before shifting it.
+  const shifted=Boolean(p.seriesRuleId&&seriesEdits[seriesTools?.manualSeriesKey?.(p.seriesRuleId)]);
+  for(const when of occurrences(p,shifted?addDays(asOf,-32):asOf,
+    shifted?addDays(through,32):through)){
    // A confirmed card autopay amount supersedes older inferred card-payment
    // transfers, including when their estimated amounts differ.
    const inferredIndex=movements.findIndex(m=>m.source==='matched history'&&
