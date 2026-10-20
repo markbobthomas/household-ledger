@@ -8,6 +8,7 @@ A focused, main-checking-first cash planning tool. The default interface replace
 - Plan a credit-card's **full-statement autopay** with an explicit paying checking account. Enter actual last statement amount, close date, withdrawal and due dates. Following statements remain unconfirmed estimates.
 - Show **month-end available cash after dated payments**, **lowest balance in 90 days**, and **first projected negative balance date**.
 - Defer optional what-if modifications: the owner chose to prioritize prediction accuracy.
+- Add a **Prediction accuracy** section that runs only when requested, checking past forecasts against later bank transactions.
 
 The interface retains:
 
@@ -16,6 +17,16 @@ The interface retains:
 - A readable list of future expected money in and money out, with visible bank freshness and uncertainty.
 
 **The existing full Ledger has not been erased.** Before the reset, an identical copy of the original default branch (commit `53975e8672ab56fb5b29bf14ff94dc1746987928`) was saved to [`backup/full-ledger-before-balance-planner-2026-10-19`](https://github.com/markbobthomas/household-ledger/tree/backup/full-ledger-before-balance-planner-2026-10-19).
+
+## Historical prediction audit
+
+Open **Prediction accuracy** and click **Run historical check**. The app tests up to six completed months on the selected account. For each month, it reconstructs predictions from transactions that had posted by the preceding month-end. Current recurring confirmations, future transactions and current card-statement settings are **not** applied retroactively.
+
+It reports (1) how many predicted dated payments matched posted bank transactions, (2) how many repeatable posted transactions were captured, and (3) mortgage/bill misses, amount changes, extra/duplicate forecasts. Only candidate repeating bills and predictable payroll are eligible; ordinary shopping, gas and variable expenses are excluded. A test month with insufficient prior transaction-history coverage or no posted bank activity is skipped, not counted as a perfect forecast. If there is insufficient history, the panel says so rather than inventing a score.
+
+This audits **amount and date predictions**, not an account's historical bank balance (past statement-balance snapshots are not available). Full-statement credit-card autopay is not scored without archived statement balances; observed historical card settlements are counted separately. Partial or missing bank sync history can still affect results. The report stays in temporary browser memory, no new records or adjustment settings are saved, and no external analytics service is called. The Real/Plaid and Demo modes use the same algorithm.
+
+The historical regression suite is `node tests/planner-backtest-smoke.cjs`; GitHub Actions also run the browser and existing mortgage/statement tests.
 
 ## Safety and infrastructure
 
@@ -29,6 +40,7 @@ The separate `render.yaml` blueprint currently describes the **fictional hosted 
 
 - `index.html`, `planner.css`, `planner.js`: the new, intentionally small interface.
 - `planner-intelligence.js`: conservative exact-amount repeat filter, validated calendar spacing and forecast dates, cadence-aware staleness limits, and durable confirm/exclude decisions.
+- `planner-backtest.js`: read-only walk-forward test engine that computes historical recurring-payment match and coverage statistics.
 - `pilot/server.cjs`, `pilot/data-source.js`, `pilot/index.html`: existing authenticated Plaid server and bank connection flow.
 - `account-forecast.js`, `forecast-ledger.js`, `forecast.js`, `payment-obligations.js`, `ledger-data.js`, `accounting.js`: retained read-only calculation and classification machinery.
 - `tests/planner-browser.cjs`, `tests/planner-parity.cjs`: new planner-focused browser and source-parity checks.
