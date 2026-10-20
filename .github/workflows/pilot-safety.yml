@@ -39,6 +39,7 @@ jobs:
           node tests/every-four-weeks-smoke.cjs
           node tests/planner-recurring-confirmation-smoke.cjs
           node tests/planner-opt-out-smoke.cjs
+          node tests/planner-merchant-streams-smoke.cjs
           node tests/planner-missing-mortgage-smoke.cjs
           node tests/planner-history-smoke.cjs
           node tests/history-any-recurring-smoke.cjs
