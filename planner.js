@@ -109,7 +109,13 @@ function forecastFor(s){
    _forecastOriginalAccountId:e.accountId,_forecastOriginalMerchant:e.merchant,
    _forecastOriginalAmount:e.amount
   })).filter(e=>e.date>asOf&&e.date<=shiftDay(asOf,90)),
-  plans:padded.plans
+  plans:padded.plans.map(p=>({
+   ...p,_postedView:tools.applySeries({
+    date:p.anchorDate,amount:p.amount,merchant:p.merchant,
+    fromAccountId:p.fromAccountId,toAccountId:p.toAccountId
+   },p.anchorDate,tools.manualSeriesKey(p.seriesRuleId),
+   state().predictions?.futureSeriesEdits||{})
+  }))
  };
  const manual=tools.postedCoverage(adjusted,confirmed,rows,accounts,asOf);
  const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
