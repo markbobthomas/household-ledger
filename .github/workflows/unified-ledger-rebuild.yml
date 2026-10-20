@@ -20,7 +20,22 @@ jobs:
           node --check pilot/server.cjs
           node --check pilot/data-source.js
           node tests/planner-core-smoke.cjs
+          node tests/planner-parity.cjs
           node tests/planner-recurrence-integration-smoke.cjs
+          node tests/planner-history-smoke.cjs
+          node tests/history-any-recurring-smoke.cjs
+          node tests/planner-early-recurrence-smoke.cjs
+          node tests/recurrence-early-dedupe-smoke.cjs
+          node tests/planner-routine-smoke.cjs
+          node tests/planner-backtest-smoke.cjs
+          node tests/planner-transactions-smoke.cjs
+          node tests/planner-series-smoke.cjs
+          node tests/planner-recurring-confirmation-smoke.cjs
+          node tests/planner-missing-mortgage-smoke.cjs
+          node tests/planner-income-smoke.cjs
+          node tests/mortgage-prediction-smoke.cjs
+          node tests/recurrence-reconcile-smoke.cjs
+          node tests/payment-obligations-smoke.cjs
           node tests/pilot-security-smoke.cjs
           node tests/pilot-plaid-flow.cjs
           node tests/card-statement-cycles-smoke.cjs
