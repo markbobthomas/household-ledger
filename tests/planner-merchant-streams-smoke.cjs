@@ -18,7 +18,9 @@ const electric=[
  row('w1','2026-08-05','ACME PAYROLL DEPOSIT',2990.10,'income'),
  row('w2','2026-09-05','ACME PAYROLL DEPOSIT',3111.40,'income'),
  row('w3','2026-10-05','ACME PAYROLL DEPOSIT',3050.55,'income')
-],other=[row('o1','2026-09-12','PSE ELECTRIC BILL',160,'expense','savings'),
+],other=[
+ row('o0','2026-08-12','PSE ELECTRIC BILL',155,'expense','savings'),
+ row('o1','2026-09-12','PSE ELECTRIC BILL',160,'expense','savings'),
  row('o2','2026-10-12','PSE ELECTRIC BILL',170,'expense','savings')];
 const history=[...electric,...salary,...other],historyBefore=JSON.stringify(history);
 const forecast=p=>C.materialize(snapshot,history,p,T,P,90);
