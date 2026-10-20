@@ -227,7 +227,8 @@ const {chromium,webkit}=require('playwright');
    await go('settings');
    const rejected=page.locator('[aria-label="Not recurring decisions"]');
    assert.match(await rejected.innerText(),/Mortgage/,'Rejected recurrence remains visible and reversible');
-   await rejected.locator('[data-restore-recurrence]').filter({hasText:'Allow predictions'}).first().click();
+   await rejected.locator('.future-skip-line').filter({hasText:'Mortgage'})
+    .locator('[data-restore-recurrence]').first().click();
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=2,
     'Allow predictions restores the original auto-inferred schedule');
@@ -245,7 +246,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
     'Not recurring survives browser reload and forecast regeneration');
    await go('settings');
-   await page.locator('[aria-label="Not recurring decisions"] [data-restore-recurrence]').first().click();
+   await page.locator('[aria-label="Not recurring decisions"] .future-skip-line')
+    .filter({hasText:'Mortgage'}).locator('[data-restore-recurrence]').first().click();
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=2,
     'User can undo the false rejection from Settings');
