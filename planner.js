@@ -632,7 +632,6 @@ function transactionsPage(bundle,s){
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
    (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
    (showNewTransaction?newTransactionForm(s):'')+
-   missingMortgagePanel(bundle)+
    (lines||'<div class="empty-visual">No predicted transactions for this selection. Add one or choose another account.</div>')+
    undo+
    '<p class="audit-footnote">Forecast-only changes recalculate balance predictions for affected accounts. Actual bank transactions remain untouched. Card payments and account transfers are represented once and affect both linked accounts.</p>'+
