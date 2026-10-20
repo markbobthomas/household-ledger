@@ -3,7 +3,7 @@
 A focused, main-checking-first cash planning tool. The interface is organized into three focused tabs rather than the earlier budget, merchant, itemization, Insights and Reviews screens and implements the owner's planning decisions:
 
 - Main checking is the default focus, and a different cash account can be selected as the saved **main account**.
-- Automatically suggest **three-or-more evidence-based recurring payments** only when the latest observed amounts agree to the cent and dates are consistent; bills, mortgage, insurance and subscriptions qualify, while incidental shopping, groceries, gas and variable-amount spending do **not**.
+- Evaluate **every posted payment** for a potential repeating pattern, regardless of merchant name or bank transaction category. Clear fixed obligations may be estimated from one identifiable payment; other merchants can qualify after two exact-amount, reliably timed payments. Ordinary incidental purchases require more evidence and uncertain transactions go to Reviews without affecting projected balances.
 - Present each suggested account/merchant pattern for a one-time **Confirm** or **Not repeating** choice; save this preference with the existing encrypted Real planning adjustments and reopen review if the amount materially changes.
 - Plan a credit-card's **full-statement autopay** with an explicit paying checking account. Enter actual last statement amount, close date, withdrawal and due dates. Following statements remain unconfirmed estimates.
 - Show **month-end available cash after dated payments**, **lowest balance in 90 days**, and **first projected negative balance date**.
@@ -35,6 +35,14 @@ The same cycle start/end and due/withdrawal dates advance month by month, respec
 **Limits:** This is a partial projection, not a bank-issued statement or guaranteed future amount. It only knows current connected posted transactions and identified future charges; it does not invent unknown groceries/shopping, fees, interest, carried debt or merchant refunds. An incorrectly linked account or incomplete Plaid history can affect the estimate. Nothing in Settings changes the bank's actual autopay instructions.
 
 Regression: `node tests/card-statement-cycles-smoke.cjs` and `node tests/payment-obligations-smoke.cjs`.
+
+## Universal recurring-payment detection (October 2026)
+
+The early-recurrence detector now examines **every settled outgoing payment and recognized income** from connected accounts, rather than reserving accelerated detection for mortgages. It also considers outgoing ACH debits that Plaid labels as transfers, provided there is no paired household-account movement. Clearly named fixed monthly obligations such as rent, subscriptions, and loan payments can be estimated from one recent posting; less recognizable merchants qualify with two consecutive exact-amount payments following a plausible schedule. Retail shopping and grocery purchases require three exact, correctly spaced observations before they enter the automatic forecast; weaker evidence—including a single ordinary purchase, uncertain payment frequency, changed amounts, and likely internal transfers—appears in **Reviews** for explicit user confirmation rather than automatically changing a balance.
+
+The scanner recognizes weekly, biweekly, monthly, quarterly, semiannual, and annual billing intervals using the *observed spacing*, not simply the calendar day or merchant category. Reviews can offer a user-editable schedule from any recent expense or deposit, including unmatched bank-transfers; confirmed, paired internal transfers remain two-sided movements rather than fake expenses. Single generic payments are **not** treated as proven recurring withdrawals. Owner-confirmed dates and amounts override automated estimates, and a competing different-amount transaction from the same merchant is never silently erased merely because its dates overlap.
+
+Reviews prioritizes transactions with demonstrated cadence and recognizable bills over speculative one-off purchases. Suggestions are provisional, not payment instructions; bank transaction records remain read-only. Tests cover generic merchant names, card isolation, wrongly classified ACH debits, cross-cycle timing, groceries after two versus three observations, user overrides, same-merchant different-dollar obligations, exclusions, and no-double-debit behavior.
 
 ## Early auto-recurring detection and duplicate protection
 
