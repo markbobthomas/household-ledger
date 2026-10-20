@@ -28,7 +28,8 @@ try{
 }catch{}
 let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
 let activeTab='overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
-let lastMissingMortgages=[];
+let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
+let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -147,7 +148,10 @@ function forecastFor(s){
  const missingMortgages=window.HouseholdPlannerIntelligence.missingMortgages(
   rows,forecastAccount,accounts,asOf,
   {dismissed:state().predictions?.mortgageReviewDismissals||[]});
- return {forecast,routines,payments,projection:forecastAccount,rows,events,missingMortgages};
+ const historyCandidates=window.HouseholdPlannerHistory.candidates(
+  rows,accounts,asOf,personal,forecastAccount.events);
+ return {forecast,routines,payments,projection:forecastAccount,rows,events,
+  missingMortgages,historyCandidates};
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function selected(s){
@@ -741,6 +745,8 @@ function render(){
  const projection=bundle?.projection||null,selectedSource=selected(s);
  lastSuggestions=bundle?.routines?.review||[];
  lastMissingMortgages=bundle?.missingMortgages||[];
+ lastHistoryRows=bundle?.rows||[];
+ lastReviewCandidates=bundle?.historyCandidates||[];
  if(selectedSource)selectedAccount=selectedSource.id;
  const derived=projection?.accounts.find(x=>x.id===String(selectedAccount));
  const statuses=projection?.diagnostics||{};
