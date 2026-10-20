@@ -297,33 +297,75 @@ function routineReviewPanel(bundle){
   '<p class="lead">These exact amounts recur on recognizable dates. They are included as estimates while you review them. A single confirmation is saved for future months; if the amount changes, the app asks again.</p>'+
   '<div class="routine-review-list">'+lines+'</div></section>';
 }
-function autopayPanel(s){
+function cardStatementPreview(s,bundle,cardId){
+ const next=(bundle?.payments?.statements||[]).filter(x=>String(x.cardId)===String(cardId))
+  .sort((a,b)=>a.withdrawalDate.localeCompare(b.withdrawalDate)).slice(0,2);
+ if(!next.length)return '<p class="card-preview-placeholder">Save the billing period and payment dates to see projected statements.</p>';
+ return '<div class="card-statement-previews">'+next.map((p,i)=>
+  '<div class="card-statement-preview" aria-label="'+escapeHTML(p.cardName)+' statement estimate">'+
+   '<div class="card-preview-top"><span>'+(i===0?'NEXT STATEMENT':'FOLLOWING STATEMENT')+
+    '</span><span class="status-tag '+(p.confirmed?'good':'warn')+'">'+
+    (p.confirmed?'OWNER-ENTERED':'ESTIMATE')+'</span></div>'+
+   '<strong class="card-preview-amount">'+cash(p.statementBalance)+'</strong>'+
+   '<div class="card-preview-line"><span>Billing period</span><strong>'+
+    escapeHTML(dayLabel(p.periodStart))+' – '+escapeHTML(dayLabel(p.periodEnd))+'</strong></div>'+
+   '<div class="card-preview-line"><span>Payment due</span><strong>'+
+    escapeHTML(dateLong(p.dueDate))+'</strong></div>'+
+   '<div class="card-preview-line"><span>Auto withdrawal</span><strong>'+
+    (p.autopayEnabled?escapeHTML(dayLabel(p.withdrawalDate))+' · '+escapeHTML(p.fromName):
+     'Not scheduled')+'</strong></div>'+
+   '<div class="card-preview-line"><span>Posted purchases − refunds</span><strong>'+
+    cash(p.bankPurchases)+'</strong></div>'+
+   '<div class="card-preview-line"><span>Scheduled future card charges</span><strong>'+
+    cash(p.estimatedCharges)+'</strong></div>'+
+   (p.pendingExcluded?'<p class="card-preview-caveat">'+p.pendingExcluded+
+    ' pending card transaction(s) excluded until posted.</p>':'')+
+   '<p class="card-preview-caveat">'+(p.confirmed?
+    'Amount entered from the issued statement; actual bank withdrawal still unconfirmed.':
+    'Partial estimate. Unplanned purchases, interest, fees and any carried balance may change the final bill.')+
+   '</p></div>').join('')+'</div>';
+}
+function autopayPanel(s,bundle){
  const cards=activeAccounts(s).filter(a=>accountType(a)==='credit'),
   cashAccounts=activeAccounts(s).filter(a=>accountType(a)==='cash'),
   rules=state().predictions?.paymentRules||{};
- const options=value=>cashAccounts.map(a=>'<option value="'+escapeHTML(a.id)+'" '+(String(value)===String(a.id)?'selected':'')+'>'+escapeHTML(a.name)+'</option>').join('');
+ const options=value=>cashAccounts.map(a=>'<option value="'+escapeHTML(a.id)+'" '+
+  (String(value)===String(a.id)?'selected':'')+'>'+escapeHTML(a.name)+'</option>').join('');
  const forms=cards.map(a=>{
   const v=rules[a.id]||{},configured=Boolean(rules[a.id]);
+  const oldClose=v.billingEndDate||v.lastStatementClose||'';
+  const oldStart=v.billingStartDate||(oldClose?
+   shiftDay(window.HouseholdPaymentObligations.closeFor(
+    window.HouseholdPaymentObligations.plus(oldClose,-1).slice(0,7),
+    Number(v.closingDay||oldClose.slice(8,10))),1):'');
+  const paying=v.fromAccountId||state().predictions?.primaryAccountId||cashAccounts[0]?.id;
   return '<form class="card-rule-form" data-card-rule="'+escapeHTML(a.id)+'">'+
    '<div class="section-title"><h2>'+escapeHTML(a.name)+'</h2>'+
-    badge({label:configured?'PAYMENT SAVED':'SETUP NEEDED',css:configured?'good':'warn'})+'</div>'+
-   '<p class="lead">The next payment uses your actual issued statement balance. Later statements are estimates, not confirmed bank amounts.</p>'+
+    badge({label:configured?(v.autopayEnabled===false?'STATEMENT ONLY':'AUTOPAY PLANNED'):'SETUP NEEDED',
+     css:configured?'good':'warn'})+'</div>'+
+   '<p class="lead">Enter the start and end of one full billing cycle. We estimate this card’s next bill from posted card purchases, refunds, and known recurring charges.</p>'+
    '<div class="card-fields">'+
-   '<label>Paying checking account<select name="fromAccountId" required>'+options(v.fromAccountId||state().predictions?.primaryAccountId||cashAccounts[0]?.id)+'</select></label>'+
-   '<label>Latest statement close<input name="lastStatementClose" type="date" value="'+escapeHTML(v.lastStatementClose||'')+'" required></label>'+
-   '<label>Latest statement balance ($)<input name="lastStatementBalance" type="number" min="0" step=".01" value="'+escapeHTML(v.lastStatementBalance??'')+'" required></label>'+
-   '<label>Next checking withdrawal<input name="nextPaymentDate" type="date" value="'+escapeHTML(v.nextPaymentDate||'')+'" required></label>'+
-   '<label>Credit card due date<input name="nextDueDate" type="date" value="'+escapeHTML(v.nextDueDate||v.nextPaymentDate||'')+'" required></label>'+
-   '</div><div class="card-form-actions"><button type="submit" class="btn primary">'+
-    (configured?'Update statement':'Save full-statement autopay')+'</button>'+
+   '<label>Billing period starts<input name="billingStartDate" type="date" value="'+escapeHTML(oldStart)+'" required></label>'+
+   '<label>Billing period ends / statement closes<input name="billingEndDate" type="date" value="'+escapeHTML(oldClose)+'" required></label>'+
+   '<label>Statement payment due date<input name="nextDueDate" type="date" value="'+escapeHTML(v.nextDueDate||v.nextPaymentDate||'')+'" required></label>'+
+   '<label>Autopay withdrawal date<input name="nextPaymentDate" type="date" value="'+escapeHTML(v.nextPaymentDate||'')+'" required></label>'+
+   '<label>Autopay status<select name="autopayEnabled"><option value="yes"'+(v.autopayEnabled!==false?' selected':'')+'>Full-statement autopay</option>'+
+    '<option value="no"'+(v.autopayEnabled===false?' selected':'')+'>Not on autopay · estimate only</option></select></label>'+
+   '<label>Autopay funding account<select name="fromAccountId">'+options(paying)+'</select></label>'+
+   '<label>Issued statement balance (optional, $)<input name="lastStatementBalance" type="number" min="0" step=".01" value="'+escapeHTML(v.lastStatementBalance??'')+'" placeholder="Calculated automatically"></label>'+
+   '</div>'+
+   cardStatementPreview(s,bundle,a.id)+
+   '<div class="card-form-actions"><button type="submit" class="btn primary">'+
+    (configured?'Update billing cycle':'Save billing cycle')+'</button>'+
     (configured?'<button type="button" class="btn" data-remove-card-rule="'+escapeHTML(a.id)+'">Remove schedule</button>':'')+
-    '<span class="status-tag">FULL STATEMENT · PLAN ONLY</span></div></form>';
+    '<span class="status-tag">FORECAST ONLY · NO BANK PAYMENT INITIATED</span></div></form>';
  }).join('');
  const missing=cards.filter(a=>!rules[a.id]);
- return '<details class="panel planner-settings" id="card-autopay"><summary>Credit-card payment setup '+
-  '<span class="status-tag '+(missing.length?'warn':'good')+'">'+(cards.length?missing.length+' NEED SETUP':'CONNECT A CARD')+'</span></summary>'+
-  '<p class="lead">A purchase raises card debt, not checking withdrawals. Only the card payment reduces the paying checking account. Nothing here initiates a bank payment.</p>'+
-  (cards.length?forms:'<p class="lead">No cards connected yet. Add one from Bank connections.</p>')+'</details>';
+ return '<details class="panel planner-settings" id="card-autopay"><summary>Credit-card statements & autopay '+
+  '<span class="status-tag '+(missing.length?'warn':'good')+'">'+
+   (cards.length?missing.length+' NEED SETUP':'CONNECT A CARD')+'</span></summary>'+
+  '<p class="lead">Configure each card separately. The selected account funds only that card’s predicted autopay. Transactions already on the card affect card debt; the checking withdrawal is added only when its card payment is due.</p>'+
+  (cards.length?forms:'<p class="lead">No credit cards connected yet. Add one from Bank connections.</p>')+'</details>';
 }
 function auditPanel(account){
  const report=auditAccount===String(account.id)?audit:null;
@@ -604,7 +646,7 @@ function settingsPage(bundle,s,chosen){
    '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Transactions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
    '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
    '</section>'+
-  auditPanel(chosen)+routineReviewPanel(bundle)+autopayPanel(s)+connectionPanel(s,bundle)+'</div>';
+  auditPanel(chosen)+routineReviewPanel(bundle)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
