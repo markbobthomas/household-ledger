@@ -33,7 +33,7 @@ let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,re
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
- if(live())return window.HouseholdLiveSource.persist(liveState)
+ if(live())return window.HouseholdLiveSource.persistForecast(liveState.predictions||{})
  else {
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
@@ -1100,22 +1100,31 @@ document.addEventListener('click',async e=>{
  if(main){
   const current=activeAccounts(snapshot()).find(a=>String(a.id)===main.dataset.setMain);
   if(!current||!isChecking(current)){setNotice('Choose a checking account as your main account');return}
-  state().predictions.primaryAccountId=current.id;selectedAccount=current.id;savePlanning();render();return;
+  try{
+   await commitForecastChange(()=>{state().predictions.primaryAccountId=current.id});
+   selectedAccount=current.id;latestError='';render();
+  }catch(err){setNotice('Main account setting could not be saved: '+String(err.message||err))}
+  return;
  }
  const confirm=e.target.closest('[data-confirm-routine],[data-reject-routine]');
  if(confirm){
   const key=confirm.dataset.confirmRoutine||confirm.dataset.rejectRoutine;
   const candidate=lastSuggestions.find(x=>x.key===key);
   if(!candidate){setNotice('That suggested payment changed. Refresh the plan and try again.');return}
-  try{window.HouseholdPlannerIntelligence.saveDecision(state(),candidate,
-   confirm.hasAttribute('data-confirm-routine')?'confirmed':'excluded');savePlanning();render()}
-  catch(err){setNotice(err.message)}
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerIntelligence.saveDecision(state(),candidate,
+    confirm.hasAttribute('data-confirm-routine')?'confirmed':'excluded'));
+   latestError='';render();
+  }catch(err){setNotice('Recurring payment decision could not be saved: '+String(err.message||err))}
   return;
  }
  const remove=e.target.closest('[data-remove-card-rule]');
  if(remove){
-  window.HouseholdLedgerData.removeCardPaymentRule(state(),remove.dataset.removeCardRule);
-  savePlanning();render();document.getElementById('card-autopay')?.setAttribute('open','');return;
+  try{
+   await commitForecastChange(()=>window.HouseholdLedgerData.removeCardPaymentRule(state(),remove.dataset.removeCardRule));
+   latestError='';render();document.getElementById('card-autopay')?.setAttribute('open','');
+  }catch(err){setNotice('Card payment schedule could not be saved: '+String(err.message||err))}
+  return;
  }
  const account=e.target.closest('[data-account-id]');
  if(account){selectedAccount=account.dataset.accountId;render();return}
@@ -1126,7 +1135,7 @@ async function commitForecastChange(action){
  try{
   const result=action();
   const saved=await savePlanning();
-  if(live()&&!saved)throw Error('Could not save your changes on the private bank server. Try again.');
+  if(live()&&(!saved||saved.saved!==true))throw Error('The predicted transaction was not saved. Please try again.');
   return result;
  }catch(err){current.predictions=JSON.parse(before);throw err}
 }
