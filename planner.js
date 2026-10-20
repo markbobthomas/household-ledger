@@ -26,8 +26,8 @@ try{
  }
 }catch{}
 let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
-let audit=null,auditAccount=null,auditError='';
-function clearAudit(){audit=null;auditAccount=null;auditError=''}
+let audit=null,auditAccount=null,auditError='',auditMeta=null;
+function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
  if(live()){window.HouseholdLiveSource.persist(liveState)}
  else {
@@ -249,6 +249,7 @@ function autopayPanel(s){
 }
 function auditPanel(account){
  const report=auditAccount===String(account.id)?audit:null;
+ const meta=auditAccount===String(account.id)?auditMeta:null;
  const issues=report?.issues||[];
  const issueLine=item=>'<div class="audit-issue"><strong>'+escapeHTML(item.merchant||'Expected payment')+
   '</strong><span>'+escapeHTML(dateLong(item.date))+' · '+escapeHTML(item.kind)+
@@ -272,14 +273,17 @@ function auditPanel(account){
     issues.map(issueLine).join('')+
     (report.issueCount>issues.length?'<p class="audit-footnote">Showing '+issues.length+' of '+report.issueCount+' issues.</p>':'')+
     '</div>':'<p class="audit-footnote">No missed or duplicate routine payments were found in the eligible history.</p>');
- return '<details class="panel planner-settings" id="accuracy-audit" aria-label="Historical prediction accuracy">'+
+ return '<details class="panel planner-settings" id="accuracy-audit" aria-label="Historical prediction accuracy"'+(report||meta?' open':'')+'>'+
   '<summary>Prediction accuracy <span class="status-tag">OPTIONAL CHECK</span></summary>'+
   '<p class="lead">Test earlier forecasts against payments that later posted. Each month is tested using only transactions already known before that month.</p>'+
+  (meta?'<p class="audit-run-status" role="status" aria-live="polite">'+
+   escapeHTML('Check '+meta.number+(auditError?' failed':' completed')+' · '+meta.checkedAt+
+    (meta.number>1&&!auditError?(meta.unchanged?' · Results unchanged':' · Results updated'):'')+'.')+'</p>':'')+
   (auditError&&auditAccount===String(account.id)?'<p class="audit-footnote">'+escapeHTML(auditError)+'</p>':'')+
   result+
   '<div class="card-form-actions"><button type="button" class="btn" data-run-backtest>'+
    (report?'Run check again':'Run historical check')+'</button></div>'+
-  '<p class="audit-footnote">Checks dates and amounts, not historical bank balances. It excludes variable shopping and cannot verify old card statements without historical statement records. Nothing is saved or sent to another service.</p></details>';
+  '<p class="audit-footnote">Checks dates and amounts, not historical bank balances. It excludes variable shopping and cannot verify old card statements without historical statement records. A recheck uses the bank history already loaded; to include new bank transactions in Real mode, use Refresh bank first. Nothing is saved or sent to another service.</p></details>';
 }
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
@@ -342,22 +346,40 @@ function render(){
   '</details></section>'+
   auditPanel(selectedSource)+routineReviewPanel(bundle)+autopayPanel(s)+connectionPanel(s,bundle);
 }
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
  const runAudit=e.target.closest('[data-run-backtest]');
  if(runAudit){
   const s=snapshot(),chosen=selected(s);
   if(!chosen)return;
-  auditAccount=String(chosen.id);
+  const accountId=String(chosen.id),prior=auditAccount===accountId?audit:null;
+  const previousNumber=auditAccount===accountId?Number(auditMeta?.number||0):0;
+  // Tell the user the button responded before a potentially long audit
+  // recalculates several months of bank transactions.
+  runAudit.disabled=true;runAudit.textContent='Checking…';
+  await new Promise(resolve=>setTimeout(resolve,20));
+  auditAccount=accountId;
   try{
-   audit=window.HouseholdPlannerBacktest.build(state(),s.asOf||dateToday(),auditAccount,
+   const updated=window.HouseholdPlannerBacktest.build(state(),s.asOf||dateToday(),accountId,
     {model,forecast:window.HouseholdForecast,ledger:window.HouseholdForecastLedger,
      planner:window.HouseholdPlannerIntelligence},
     {months:6,accounts:activeAccounts(s)});
-   auditError='';
-  }catch(err){audit=null;auditError='The historical check could not be completed: '+String(err.message||err)}
-  render();
-  const panel=$('accuracy-audit');panel?.setAttribute('open','');
+   auditMeta={number:previousNumber+1,checkedAt:new Date().toLocaleString('en-US'),
+    unchanged:prior!==null&&JSON.stringify(prior)===JSON.stringify(updated)};
+   audit=updated;auditError='';
+  }catch(err){
+   audit=null;auditError='The historical check could not be completed: '+String(err.message||err);
+   auditMeta={number:previousNumber+1,checkedAt:new Date().toLocaleString('en-US'),unchanged:false};
+  }
+  // Update just the audit, so a rerun does not redraw the chart, reset
+  // the page, or make the freshly completed result appear unresponsive.
+  const existing=$('accuracy-audit');
+  if(existing&&String(selected(s)?.id)===accountId){
+   existing.outerHTML=auditPanel(chosen);
+  }else render();
+  const panel=$('accuracy-audit');
+  if(panel)panel.open=true;
   if(runAudit.id==='audit-launch')panel?.scrollIntoView({behavior:'smooth',block:'start'});
+  else panel?.querySelector('[data-run-backtest]')?.focus({preventScroll:true});
   return;
  }
  const main=e.target.closest('[data-set-main]');
