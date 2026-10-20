@@ -102,21 +102,28 @@ function nextDate(last,frequency,asOf){
  return d>asOf?d:null;
 }
 function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
- const dismissed=preferences.historyPatternDecisions||{},rules=preferences.futureRecurringRules||[];
+ const dismissed=preferences.historyPatternDecisions||{},rules=preferences.futureRecurringRules||[],
+  excluded=preferences.plannerRoutineDecisions||{};
  const groups=new Map();
  for(const t of records||[]){
-  if(!canPlan(t)||t.pending||Number(t.amount)<=0||
-   !['income','expense'].includes(t.type)||t.date>asOf)continue;
-  const aid=accountOf(t,accounts);
-  if(!aid)continue;
-  const name=norm(t.merchant||t.name);
+  if(!canPlan(t)||t.pending||Number(t.amount)<=0||t.date>asOf||
+   // Paired transfers already move between linked accounts, not bills.
+   t.pairedTransactionId)continue;
+  // Bank feeds sometimes misclassify ACH bills as transfers. Both outgoing
+  // and incoming unpaired entries are reviewable, but an incoming transfer
+  // must never be silently assumed to be earned income.
+  const kind=t.type==='transfer'?
+   (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':null):
+   t.type;
+  if(!['expense','income','refund'].includes(kind))continue;
+  const aid=accountOf(t,accounts),name=norm(t.merchant||t.name);
   if(!name)continue;
   const account=(accounts||[]).find(a=>String(a.id)===aid);
-  if(!account||['credit','loan'].includes(String(account.accountType||account.type||'').toLowerCase())&&t.type==='income')
-   continue;
-  const key=[aid,t.type,name,String(amount(t.amount))].map(encodeURIComponent).join('|');
+  if(!account||String(account.accountType||account.type||'').toLowerCase()==='loan')continue;
+  if(String(account.accountType||account.type||'').toLowerCase()==='credit'&&kind==='income')continue;
+  const key=[aid,kind,name,String(amount(t.amount))].map(encodeURIComponent).join('|');
   if(!groups.has(key))groups.set(key,{key,accountId:aid,accountName:account.name||aid,
-   merchant:String(t.merchant||t.name),amount:Number(t.amount),type:t.type,rows:[]});
+   merchant:String(t.merchant||t.name),amount:Number(t.amount),type:kind,rows:[]});
   groups.get(key).rows.push(t);
  }
  const result=[];
@@ -125,41 +132,49 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
   const latest=g.rows.at(-1),age=diff(asOf,latest.date);
   const bill=namesBill.test(g.merchant)||g.rows.some(pfcRecurring)||
    ['Housing','Insurance','Subscriptions','Utilities'].includes(latest.category);
-  const frequency=guessFrequency(g.rows);
-  // Two dated payments are enough for review, one with unequivocal bill
-  // semantics is enough for an owner prompt. Never repeat random shopping.
-  if(!frequency&&!bill)continue;
-  const cadence=frequency||'monthly';
+  const frequency=guessFrequency(g.rows),cadence=frequency||'monthly';
   const tolerance={weekly:18,biweekly:35,monthly:75,quarterly:125,
    semiannual:210,annual:400}[cadence];
-  if(age>tolerance)continue;
+  // A single recent payment from *any* merchant can be offered for
+  // confirmation, but never forecasts money by itself without clear
+  // recurring evidence. Older ordinary one-offs do not clutter Reviews.
+  if(age>(g.rows.length===1&&!bill?45:tolerance))continue;
   if(dismissed[g.key]==='dismissed')continue;
-  if(rules.some(r=>r.kind==='event'&&r.originalAccountId===g.accountId&&
-   r.originalType===g.type&&Math.abs(Number(r.matchAmount)-g.amount)<.011&&
-   (r.matchNames||[]).includes(norm(g.merchant))))continue;
+  const sourceType=latest.type;
+  const aliases=[g.accountId,g.accountName,latest.account,latest.accountId]
+   .map(String).filter(Boolean);
+  if(aliases.some(a=>[g.type,sourceType].some(kind=>{
+   const decision=excluded[[kind,a,norm(g.merchant)].join('|')];
+   return decision?.status==='excluded'&&Math.abs(Number(decision.amount)-g.amount)<.011;
+  })))continue;
+  if(rules.some(r=>r.kind==='event'&&
+   String(r.originalAccountId||r.accountId)===g.accountId&&
+   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant))))continue;
   const upcoming=nextDate(latest.date,cadence,asOf);
   if(!upcoming||diff(upcoming,asOf)>90)continue;
-  const projected=(forecastEvents||[]).some(e=>{
-   const name=norm(e.merchant),id=accountOf(e,accounts);
-   const same=id===g.accountId&&e.date>asOf&&
-    (name===norm(g.merchant))&&Math.abs(Number(e.amount)-g.amount)<.011;
-   return same;
-  });
+  const projected=(forecastEvents||[]).some(e=>
+   accountOf(e,accounts)===g.accountId&&e.date>asOf&&
+   norm(e.merchant)===norm(g.merchant)&&Math.abs(Number(e.amount)-g.amount)<.011);
   if(projected)continue;
-  const strong=Boolean(frequency)&&g.rows.length>=3&&g.rows.every(t=>amount(t.amount)===amount(g.amount));
+  const strong=Boolean(frequency)&&g.rows.length>=3;
   result.push({key:g.key,accountId:g.accountId,accountName:g.accountName,
    merchant:g.merchant,amount:g.amount,type:g.type,
-   frequency:cadence,confidence:strong?'Medium':g.rows.length>=2?'Low':'Needs confirmation',
+   frequency:cadence,confidence:strong?'Medium':frequency?'Low':'Needs confirmation',
    examples:g.rows.slice(-6).reverse().map(t=>({
     id:String(t.id||''),date:t.date,amount:Number(t.amount),merchant:String(t.merchant||'')
    })),
    occurrences:g.rows.length,lastDate:latest.date,nextDate:upcoming,
-   reason:g.rows.length===1?'One identifiable bill; recurrence not yet established':
-    !frequency?'Repeated bill amount, but calendar timing varies; choose the schedule':
-    'Two or more payments with matching account, merchant, amount and timing'});
+   reason:g.rows.length===1?bill?
+     'One identifiable bill; confirm whether and how often it repeats':
+     'One bank payment; no repeating pattern established yet':
+    !frequency?'Payments share an amount but timing is uncertain; choose a schedule':
+    'Matching account, merchant, amount and recurring timing',
+   // Rank coherent patterns before the many single, unproven purchases.
+   _priority:(frequency?3:bill?2:1)});
  }
- return result.sort((a,b)=>a.nextDate.localeCompare(b.nextDate)||
-  b.amount-a.amount).slice(0,80);
+ return result.sort((a,b)=>b._priority-a._priority||
+  b.occurrences-a.occurrences||b.lastDate.localeCompare(a.lastDate)||
+  b.amount-a.amount).slice(0,100).map(({_priority,...item})=>item);
 }
 const api={candidates,guessFrequency,nextDate,canPlan,accountOf,draftFor,isMortgage};
 root.HouseholdPlannerHistory=api;
