@@ -195,12 +195,12 @@ const quarterly=[
 assert.deepEqual(R.infer(quarterly,snapshot).events.map(e=>e.date),['2027-01-03'],
  'Quarterly evidence cannot create three extra monthly charges');
 const annual=[
- tx('a1','2025-11-08','Membership Annual',99),
- tx('a2','2026-11-08','Membership Annual',99)
+ tx('a1','2025-01-08','Membership Annual',99),
+ tx('a2','2026-01-08','Membership Annual',99)
 ];
 assert.deepEqual(R.infer(annual,{accounts,asOf:'2026-11-20'}).events.map(e=>e.date),
- ['2027-11-08'].filter(x=>x<='2027-02-18'),
- 'An annual obligation is not turned into a monthly debit');
+ ['2027-01-08'],
+ 'An annual obligation lands exactly once when its next renewal enters the 90-day forecast');
 const genericAch=[
  tx('ach1','2026-09-15','GENERIC ACH PAYEE',160,'transfer',{cashDirection:'out'}),
  tx('ach2','2026-10-15','GENERIC ACH PAYEE',160,'transfer',{cashDirection:'out'})
