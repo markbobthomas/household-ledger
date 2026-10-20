@@ -180,7 +180,7 @@ function hero(a,derived,asOf){
    '<small>'+(fresh&&lowDate?escapeHTML(dayLabel(lowDate)):'Confirm bank balance first')+'</small></div>'+
   '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · day '+horizon)+'</span>'+
    '<strong class="'+(fresh&&firstNegative?'low':'')+'">'+
-    (fresh?(isCash?(firstNegative?escapeHTML(dateLong(firstNegative.date)):'None from dated payments'):cash(derived.series.at(-1)?.balance)):'Unverified')+'</strong>'+
+    (fresh?(isCash?(firstNegative?escapeHTML(dateLong(firstNegative.date)):'None from dated payments'):cash(horizonSeries.at(-1)?.balance)):'Unverified')+'</strong>'+
    '<small>'+(isCash&&firstNegative?'Projected cash below $0 · not a guaranteed outcome':
     isCash?'Excludes unplanned purchases and unconfirmed costs':'Future card charges remain estimates')+'</small></div>'+
   '</div></section>';
@@ -527,7 +527,7 @@ document.addEventListener('click',async e=>{
   activeTab=view.dataset.view;
   editingKey='';showNewTransaction=false;transactionNotice='';
   render();
-  window.scrollTo({top:0,behavior:'instant'});
+  window.scrollTo({top:0,behavior:'auto'});
   return;
  }
  if(e.target.closest('[data-show-new]')){
