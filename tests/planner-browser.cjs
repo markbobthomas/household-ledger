@@ -433,36 +433,40 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#refresh-bank').click();
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
-  await page.locator('.sidebar [data-view="reviews"]').click();
-  const unresolved=page.locator('.missing-mortgages').first();
-  assert.match(await unresolved.innerText(),/Mortgage Servicer X|\$2,000/,
-   'One real posted $2,000 mortgage triggers a missing-payment warning');
-  await unresolved.locator('[data-review-mortgage]').click();
-  const mortgageForm=page.locator('#future-new-form');
-  assert.equal(await mortgageForm.locator('[name=amount]').inputValue(),'2000',
-   'The actual bank mortgage amount is carried into the proposed rule');
-  assert.equal(await mortgageForm.locator('[name=accountId]').inputValue(),'checking-real',
-   'The existing payer is selected, never a different checking account');
-  assert.equal(await mortgageForm.locator('[name=date]').inputValue(),'2026-11-15',
-   'The next proposed payment is shown as an editable future date');
-  assert.equal(await mortgageForm.locator('[name=frequency]').inputValue(),'monthly',
-   'Mortgage is suggested monthly but must be saved by the owner');
+  await page.locator('.sidebar [data-view="transactions"]').click();
+  const predictedMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
+  assert.ok(await predictedMortgage.count()>=1,
+   'One strongly identified actual $2,000 mortgage is forecast automatically without three months');
+  const predictedDatesBefore=await predictedMortgage.count();
+  assert.equal(predictedDatesBefore,3,'Automatic mortgage estimate appears once per upcoming month');
+  await page.locator('.sidebar [data-view="history"]').click();
+  const actualMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage Servicer X'}).first();
+  await actualMortgage.locator('[data-history-plan]').click();
+  const mortgageForm=page.locator('.history-schedule-form');
+  assert.equal(await mortgageForm.locator('[name=amount]').inputValue(),'2000');
+  assert.equal(await mortgageForm.locator('[name=accountId]').inputValue(),'checking-real');
+  assert.equal(await mortgageForm.locator('[name=date]').inputValue(),'2026-11-15');
+  assert.equal(await mortgageForm.locator('[name=frequency]').inputValue(),'monthly');
+  // The manual due date must supersede inferred November 15, not create
+  // a second monthly $2,000 checking withdrawal.
+  await mortgageForm.locator('[name=date]').fill('2026-11-25');
   failNextForecast=true;
   await mortgageForm.locator('button[type=submit]').click();
   await mortgageForm.locator('[role=alert]').getByText(/Forecast settings temporarily unavailable/).waitFor();
-  assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage Servicer X'}).count(),0,
-   'Failed save rolls back the forecast rather than showing a phantom confirmed mortgage');
+  assert.ok(await page.locator('.history-schedule-form').count()===1,
+   'Failed save leaves the recurring confirmation editable for retry');
   await mortgageForm.locator('button[type=submit]').click();
-  await page.locator('.future-notice').getByText(/Recurring payment created/).waitFor();
-  assert.equal(legacyAdjustmentCalls,0,
-   'Creating a predicted bill never uses the legacy bank/category adjustments endpoint');
-  assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage Servicer X'}).count()>0,true,
-   'Confirming the missing mortgage inserts a future $2,000 debit');
-  assert.equal(await page.locator('.missing-mortgages').count(),0,
-   'A confirmed mortgage no longer appears as an omitted payment');
+  await page.locator('.history-page .future-notice').getByText(/Saved recurring forecast/).waitFor();
+  assert.equal(legacyAdjustmentCalls,0,'Saving future predictions never resubmits Plaid categories');
   assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
    r.merchant==='Mortgage Servicer X'&&r.amount===2000&&r.accountId==='checking-real')),
-   'The recovered real-bank mortgage is saved only as a private user-confirmed forecast');
+   'Mortgage rule saved as private prediction, not bank-transaction change');
+  await page.locator('.sidebar [data-view="transactions"]').click();
+  const singleMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
+  assert.equal(await singleMortgage.count(),2,
+   'November and December have one user-confirmed mortgage each, without the inferred duplicate');
+  assert.match(await singleMortgage.first().innerText(),/Nov 25/,
+   'Owner-selected mortgage date takes priority over the historical posting day');
   await page.locator('.sidebar [data-view="reviews"]').click();
   const storageCandidate=page.locator('.review-candidate').filter({hasText:'Storage Unit Monthly'}).first();
   await storageCandidate.locator('[data-review-candidate]').click();
