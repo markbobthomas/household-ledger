@@ -100,6 +100,32 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
     .futureTransactionEdits?.[key]?.amount,predictionKey),originalAmount+75,
     'One-off prediction edits save without changing posted transactions');
+   const afterFirst=page.locator('.future-item').filter({hasText:'Mortgage'}).first();
+   await afterFirst.locator('[data-edit-future]').click();
+   const seriesForm=page.locator('.future-edit-form');
+   assert.equal(await seriesForm.locator('input[name="scope"][value="all"]').count(),1,
+    'Recurring mortgage editor offers an all-future option');
+   await seriesForm.locator('input[name="scope"][value="all"]').check();
+   const newAmount=originalAmount+125;
+   await seriesForm.locator('[name=amount]').fill(String(newAmount));
+   await seriesForm.locator('button[type=submit]').click();
+   await page.locator('.future-notice').getByText(/every future occurrence/i).waitFor();
+   assert.equal(await page.evaluate(()=>Object.values(
+    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
+   ).some(x=>x.amount===newAmount)),true,
+    'Series edit is persisted and survives generation of next-month forecasts');
+   const futureMortgageRows=page.locator('.future-item').filter({hasText:'Mortgage'});
+   if(await futureMortgageRows.count()>1){
+    const repeated=await futureMortgageRows.locator('.future-amount').allInnerTexts();
+    assert.ok(repeated.every(t=>t.includes(newAmount.toLocaleString('en-US'))),
+     'Visible mortgage months adopt the same new series amount');
+   }
+   await futureMortgageRows.first().locator('[data-edit-future]').click();
+   assert.ok(await page.locator('[data-reset-series]').count(),'Entire repeating rule can be reset');
+   await page.locator('[data-reset-series]').click();
+   assert.equal(await page.evaluate(()=>Object.keys(
+    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
+   ).length),0,'Reset all future restores automatic recurring forecasts');
    await page.locator('[data-show-new]').click();
    await page.locator('#future-new-form [name=merchant]').fill('One-time home repair');
    await page.locator('#future-new-form [name=amount]').fill('125');
