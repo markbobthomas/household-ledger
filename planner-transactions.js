@@ -267,9 +267,29 @@ function isNotRecurring(preferences,accountId,type,merchant){
  return Boolean((preferences?.futureRecurrenceExclusions||{})[recurrenceKey(accountId,type,merchant)]);
 }
 function restoreRecurrence(state,key){
- const p=ensure(state);
- if(!p.futureRecurrenceExclusions?.[key])throw Error('This recurrence is not currently excluded');
+ const p=ensure(state),entry=p.futureRecurrenceExclusions?.[key];
+ if(!entry)throw Error('This recurrence is not currently excluded');
  delete p.futureRecurrenceExclusions[key];
+ // Older app versions tracked rejected suggestions in two independent
+ // preference maps. Clear matching legacy rejections too, so Allow predictions
+ // always means the recurrence can actually be considered again.
+ for(const old of Object.keys(p.historyPatternDecisions||{})){
+  const parts=old.split('|').map(x=>{try{return decodeURIComponent(x)}catch{return x}});
+  if(parts[0]===entry.accountId&&parts[1]===entry.type&&
+   sourceMerchant(parts[2])===sourceMerchant(entry.merchant))
+   delete p.historyPatternDecisions[old];
+ }
+ for(const old of Object.keys(p.plannerRoutineDecisions||{})){
+  const parts=old.split('|');
+  if(parts[1]===entry.accountId&&parts[0]===entry.type&&
+   sourceMerchant(parts[2])===sourceMerchant(entry.merchant))
+   delete p.plannerRoutineDecisions[old];
+ }
+ p.mortgageReviewDismissals=(p.mortgageReviewDismissals||[]).filter(old=>{
+  const parts=old.split('|').map(x=>{try{return decodeURIComponent(x)}catch{return x}});
+  return !(parts[1]===entry.accountId&&
+   sourceMerchant(parts[2])===sourceMerchant(entry.merchant));
+ });
  return key;
 }
 function stopRecurrence(state,row){
