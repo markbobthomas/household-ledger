@@ -694,6 +694,7 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page"><div class="page-heading"><div><h2>Actual transaction history</h2>'+
   '<p>Every transaction retrieved from your connected accounts. These are bank records—not predictions.</p></div>'+
   '<span class="status-tag">'+records.length+' TRANSACTIONS</span></div>'+
+  (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft?repeatingReviewForm(s):'')+
   '<section class="panel"><form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
