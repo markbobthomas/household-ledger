@@ -289,7 +289,8 @@ function postedCoverage(generated,rules,records,accounts,asOf){
   const type=kind==='movement'?'transfer':item.type;
   const tolerance=r.frequency==='weekly'?2:r.frequency==='biweekly'?3:6;
   const possible=posted.find(t=>!used.has(String(t.id))&&
-   t.type===type&&accountRef(t.accountId||t.account,accounts)===account&&
+   t.type===(kind==='event'?(r.originalType||type):type)&&
+   accountRef(t.accountId||t.account,accounts)===account&&
    (r.matchNames||[]).includes(merchantKey(t.merchant))&&
    Math.min(Math.abs(Number(t.amount)-Number(r.amount)),
     Math.abs(Number(t.amount)-Number(r.matchAmount)))<.011&&
