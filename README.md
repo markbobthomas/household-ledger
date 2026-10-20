@@ -36,6 +36,14 @@ The same cycle start/end and due/withdrawal dates advance month by month, respec
 
 Regression: `node tests/card-statement-cycles-smoke.cjs` and `node tests/payment-obligations-smoke.cjs`.
 
+## Forecast-only saves are independent from bank transaction updates
+
+Confirming a recurring payment in **History** or **Reviews**, editing future payments, adjusting a card schedule, and choosing a main account now persist only the planner's `predictions` settings via the authenticated `POST /api/ledger/forecasts` endpoint. The old `/api/ledger/adjustments` path included saved transaction category overrides and could reject a perfectly valid forecast update if one of those overrides referred to a deleted or otherwise unavailable transaction. The forecast endpoint does **not** resubmit categories, raw Plaid transactions, balances, or provider tokens. It validates the forecast payload, preserves other settings, encrypts the saved state using the existing private storage, and acknowledges saves before the interface considers a user-confirmed forecast persisted.
+
+The interface reports meaningful forecast-save errors and restores the prior prediction settings on failure. Failed requests remain retryable; subsequent saves and bank refreshes are not blocked by a stale rejected write. Private bank transactions remain read-only. The backend connection is used only as durable, authenticated storage for the *user's forecast preferences*, not as a way of changing their account or sending payments.
+
+Regression coverage: `node tests/forecast-only-save-smoke.cjs`, `node tests/forecast-client-save-smoke.cjs`, and the Real-mode browser scenario in `tests/planner-browser.cjs`.
+
 ## Two dedicated tabs: actual History and payment Reviews
 
 **History** lists every retrieved actual bank transaction (posted and pending), newest first, with account filtering, merchant/date/amount search and progressive loading for larger histories. The bank facts stay read-only. For settled expenses and income, **Make recurring** opens a proposed forecast with the source merchant, selected account, dollar amount, expected next date and frequency, editable before saving. It saves only `predictions.futureRecurringRules`, never a bank transaction.
