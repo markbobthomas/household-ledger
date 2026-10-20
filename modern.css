@@ -1305,7 +1305,7 @@ select.recurring-value:hover{border-bottom-style:solid}
 }
 
 /* Projected overages: make both projected amount and explicit overage visibly red. */
-.budget-row-projection.over-budget,.budget-overview-projection.over-budget,.budget-entry .budget-overage,.budget-overview-projection .budget-overage,.category-insight-values .budget-overage{color:#c62828!important;font-weight:750}
+.budget-row-projection.over-budget,.budget-overview-projection.over-budget,.budget-entry .budget-overage,.budget-overview-projection .budget-overage,.category-insight-values .budget-overage{color:#b42332!important;font-weight:750}
 
 /* A compact, independently auditable list of actual forecast records. */
 .prediction-ledger{margin:16px 0 20px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
