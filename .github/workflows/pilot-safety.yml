@@ -18,6 +18,7 @@ jobs:
           node --check pilot/server.cjs
           node --check pilot/data-source.js
           node --check payment-obligations.js
+          node --check planner-intelligence.js
           node --check sandbox/server.cjs
       - name: Smoke test authentication, health and no-credentials startup
         run: |
@@ -25,4 +26,5 @@ jobs:
           node tests/pilot-plaid-flow.cjs
           node tests/recurrence-reconcile-smoke.cjs
           node tests/payment-obligations-smoke.cjs
+          node tests/planner-routine-smoke.cjs
           node tests/mortgage-prediction-smoke.cjs

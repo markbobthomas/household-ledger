@@ -24,6 +24,8 @@ jobs:
       - name: Verify balance planner, bank data integrity and mobile layout
         run: |
           node --check planner.js
+          node --check planner-intelligence.js
           node tests/planner-browser.cjs
+          node tests/planner-routine-smoke.cjs
           node tests/payment-obligations-smoke.cjs
           node tests/mortgage-prediction-smoke.cjs

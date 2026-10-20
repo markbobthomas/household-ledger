@@ -81,3 +81,40 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 @media(max-width:1150px){.content{padding:28px 25px 60px}.sidebar{width:160px}.shell{margin-left:160px}.hero{gap:18px}.hero-stats{padding-left:18px}}
 @media(max-width:780px){.sidebar{display:none}.shell{margin:0}.content{padding:22px 16px 70px}.mobile-titlebar{display:flex;background:var(--nav);color:#fff;padding:14px 18px;align-items:center;justify-content:space-between;font:700 12px var(--mono)}.mobile-titlebar span{color:#a9b6c5}.topbar{flex-direction:column;align-items:stretch;gap:12px;margin-bottom:8px}.top-actions{justify-content:flex-start}.hero{grid-template-columns:1fr;padding:20px;gap:15px}.hero-stats{border-left:0;border-top:1px solid var(--line);padding:15px 0 0}.account-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.account-tile{min-height:96px;padding:12px}.account-tile .account-amount{font-size:17px}.small-grid{grid-template-columns:1fr}.panel{padding:17px}.list-head{grid-template-columns:65px minmax(0,1fr) 95px;gap:7px}.list-head span:last-child{display:none}.payment-line{grid-template-columns:65px minmax(0,1fr) 95px;gap:7px;padding:12px 0}.payment-date{font-size:10px}.payment-value{font-size:12px}.after-value{grid-column:2 / -1;display:block;text-align:left}.after-value small{margin-left:8px}.notice{align-items:start;flex-direction:column}.balance-main{letter-spacing:-1px}}
 @media(max-width:390px){.account-strip{grid-template-columns:1fr 1fr;gap:7px}.account-tile .account-amount{font-size:15px}.hero-stats{grid-template-columns:1fr 1fr}.metric strong{font-size:17px}}
+
+/* Confirm-once repeat review, main account and read-only card autopay planning */
+.hero .hero-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:17px 20px}
+.hero .metric-wide{grid-column:1 / -1;padding-top:12px;border-top:1px solid var(--line)}
+.hero .metric-wide strong{font-size:19px}
+.routine-review-list{margin-top:18px;display:flex;flex-direction:column}
+.routine-review-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
+.routine-review-line:last-child{border-bottom:0}
+.routine-review-line>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.routine-review-line strong{font-size:13px;overflow-wrap:anywhere}
+.routine-review-line>strong{font:750 14px var(--mono);white-space:nowrap}
+.routine-review-line small{font-size:11px;color:var(--muted)}
+.routine-actions{display:flex;align-items:center;gap:6px}
+.routine-actions .btn{font-size:11px;padding:8px 11px}
+.planner-settings{padding-bottom:20px}
+.planner-settings>summary{cursor:pointer;font-size:13px;font-weight:730;min-height:32px}
+.planner-settings>summary .status-tag{margin-left:12px}
+.card-rule-form{margin-top:20px;padding-top:19px;border-top:1px solid var(--line)}
+.card-rule-form .lead{max-width:750px;margin:0 0 14px}
+.card-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:13px}
+.card-fields label{display:flex;flex-direction:column;font-size:11px;font-weight:650;gap:5px;color:#506070}
+.card-fields input,.card-fields select{height:40px;min-width:0;width:100%;border:1px solid #cbd3dd;border-radius:4px;padding:6px 10px;color:var(--ink);background:#fff;font:13px var(--mono)}
+.card-fields input:focus,.card-fields select:focus{outline:2px solid #a2b9e5;outline-offset:1px}
+.card-form-actions{margin:16px 0 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.account-tile[aria-pressed=true]{background:#f8faff}
+.account-tile:focus-visible,.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media(max-width:1050px){
+ .routine-review-line{grid-template-columns:minmax(0,1fr) auto}
+ .routine-actions{grid-column:1 / -1}
+}
+@media(max-width:780px){
+ .routine-review-line{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ .routine-actions{grid-column:1 / -1;flex-wrap:wrap}
+ .hero .hero-stats{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+ .hero .metric strong{font-size:18px}
+ .card-fields{grid-template-columns:minmax(0,1fr)}
+}

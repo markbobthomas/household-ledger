@@ -21,3 +21,4 @@ jobs:
         run: |
           node --check planner.js
           node tests/planner-parity.cjs
+          node tests/planner-routine-smoke.cjs
