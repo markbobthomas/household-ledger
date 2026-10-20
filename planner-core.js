@@ -22,6 +22,11 @@ const twiceDates=(from,slots,end)=>{const dates=[];
 const next=(s,f,n)=>f==='weekly'?add(s,n*7):f==='biweekly'?add(s,n*14):
  monthDate(s,n*({monthly:1,quarterly:3,semiannual:6,annual:12}[f]||1));
 const signature=(accountId,type,merchant)=>[accountId,type,norm(merchant)].map(encodeURIComponent).join('|');
+const suppressed=(prefs,accountId,type,merchant)=>Boolean(
+ prefs?.futureRecurrenceExclusions?.[signature(accountId,type,merchant)]);
+const suppressedRecurrence=(prefs,e)=>suppressed(prefs,
+ e._forecastOriginalAccountId||e.accountId,e._forecastOriginalType||e.type,
+ e._forecastOriginalMerchant||e.merchant);
 const billName=/\b(?:mortgage|mtg|home loan|rent|lease payment|loan payment|auto loan|car payment|subscription|membership|autopay|recurring|monthly fee|insurance premium|netflix|spotify|hulu|daycare|tuition)\b/i;
 const variableName=/\b(?:safeway|costco|walmart|amazon|grocery|supermarket|target|restaurant|coffee|starbucks|fuel|gas station|shell|chevron|uber|lyft)\b/i;
 const internalName=/\b(?:transfer to|transfer from|savings transfer|account transfer|xfer|credit card payment|payment to visa|payment to mastercard)\b/i;
@@ -98,7 +103,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
   ]==='dismissed')||(prefs.mortgageReviewDismissals||[]).includes(
    ['mortgage',g.accountId,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|'));
-  if(blocked)continue;
+  if(blocked||suppressed(prefs,g.accountId,g.kind,g.merchant))continue;
   const owners=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
    (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
@@ -154,7 +159,10 @@ const eventKey=(tools,e)=>tools.keyEvent(e.id,e.accountId);
 function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const asOf=snapshot.asOf,end=horizon(asOf,days),accounts=snapshot.accounts||[];
  if(!valid(asOf)||!tools||!Array.isArray(accounts))throw Error('Valid snapshot and forecast tools required');
- const detected=analyze(rows,accounts,asOf,prefs,days),rules=prefs.futureRecurringRules||[],
+ const detected=analyze(rows,accounts,asOf,prefs,days),
+  rules=(prefs.futureRecurringRules||[]).filter(r=>!suppressed(prefs,
+   r.originalAccountId||r.accountId||r.fromAccountId,
+   r.kind==='movement'?'transfer':r.type,r.originalMerchant||r.merchant)),
   series=prefs.futureSeriesEdits||{},edits=prefs.futureTransactionEdits||{},
   extras=prefs.futureTransactionAdds||[],entries=[],ids=new Set(),checks=[],warnings=[];
  const seen=(e)=>{if(ids.has(e.id)){checks.push({id:e.id,reason:'Duplicate future ledger ID'});return}
@@ -165,9 +173,12 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  // Explicit rules come first, and always own their original bank series.
  const generated=tools.generatedRecurring(rules,add(asOf,-32),add(end,32));
  const ownerEntries=generated.events.map(e=>{
-  const base=e._seriesDate||e.date,changed=tools.applySeries(e,base,e._seriesKey,series);
-  return {...changed,_seriesDate:base,_forecastOriginalMerchant:e.merchant,
-   _forecastOriginalAccountId:e.accountId,_forecastOriginalAmount:e.amount};
+  const base=e._seriesDate||e.date,changed=tools.applySeries(e,base,e._seriesKey,series),
+   rule=rules.find(r=>r.id===e.ruleId);
+  return {...changed,_seriesDate:base,
+   _forecastOriginalMerchant:rule?.originalMerchant||e.merchant,
+   _forecastOriginalAccountId:rule?.originalAccountId||e.accountId,
+   _forecastOriginalType:rule?.type||e.type,_forecastOriginalAmount:rule?.matchAmount||e.amount};
  });
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
@@ -177,7 +188,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
   if(adjusted.date<=asOf||adjusted.date>end)continue;
   seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
-   _forecastOriginalAccountId:event.accountId,_forecastOriginalAmount:event.amount});
+   _forecastOriginalAccountId:event.accountId,_forecastOriginalType:event.type,
+   _forecastOriginalAmount:event.amount});
  }
  // One-off forecast additions are independent of Plaid facts.
  for(const e of extras){
@@ -209,7 +221,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const suppressed=new Set((payment.suppressedExpectedIds||[]).map(String));
  const finalEvents=adjust(adjusted.filter(e=>!suppressed.has(String(e.id)))
   .concat((payment.billEvents||[]).filter(e=>!ownerFor(e))))
-  .filter(e=>e.type!=='transfer');
+  .filter(e=>e.type!=='transfer'&&(e.source==='manual'||!suppressedRecurrence(prefs,e)));
  // All account-to-account movements use ONE linked record.
  const movementRules=covered.plans.map(m=>({...m,date:m.anchorDate,
   fromAccountId:m.fromAccountId,toAccountId:m.toAccountId,
@@ -297,6 +309,9 @@ function project(snapshot,ledger,days=90){
   if(!account||!account.valid){diagnostics.unassigned.push({id:entry.id,accountId:aid});return;}
   const x={id:entry.id,accountId:String(aid),date:entry.date,amount:round(entry.amount),
    merchant:entry.merchant||'Future payment',type:entry.type||'transfer',kind,
+   sourceAccountId:entry._forecastOriginalAccountId||entry.accountId||entry.fromAccountId||null,
+   sourceMerchant:entry._forecastOriginalMerchant||entry.merchant||null,
+   sourceType:entry._forecastOriginalType||entry.type||null,
    transferGroupId:group,predictionKey:group?null:'event|'+encodeURIComponent(String(entry.id))+'|'+encodeURIComponent(String(aid)),
    seriesKey:entry._seriesKey||entry.seriesKey||null,baseDate:entry._seriesDate||entry.baseDate||entry.date,
    cadence:entry.cadence||null,recurringRuleId:entry.ruleId||entry.recurringRuleId||null,
