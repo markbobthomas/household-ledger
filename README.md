@@ -18,6 +18,16 @@ The interface retains:
 
 **The existing full Ledger has not been erased.** Before the reset, an identical copy of the original default branch (commit `53975e8672ab56fb5b29bf14ff94dc1746987928`) was saved to [`backup/full-ledger-before-balance-planner-2026-10-19`](https://github.com/markbobthomas/household-ledger/tree/backup/full-ledger-before-balance-planner-2026-10-19).
 
+## Confirm a recurring payment when automatic detection misses it
+
+Any dated future transaction can now be converted into a repeating forecast from **Transactions → Edit → This and all future payments**. Choose a frequency (weekly, every two weeks, twice a month, monthly, quarterly, semiannual or annual) and save. These controls are available even if the prediction engine did **not** recognize a recurring pattern. For a bill missing from the entire future list, choose **+ Add transaction**, enter the account, merchant, amount and date, and select **Repeat** rather than One time.
+
+For previously unrecognized payments, the editor offers **Help identify matching past payments**. It lists safe candidates with the same merchant, amount, bank account and transaction direction. The user can tick actual examples to explicitly confirm which historical payments belong to this series. If none match, the user can still define the frequency and amount manually, rather than have the planner guess. This does not edit bank history or assume that every incoming transfer is payroll.
+
+The confirmed schedule is saved under `predictions.futureRecurringRules` and generates dated transactions for the entire forecast window and successive windows. When the original predicted charge is recognized, it is suppressed in favor of the owner-confirmed one, matching its **original** merchant/account/amount and original calendar pattern even when the new forecast shifts dates or amounts. The app never charges the same expected expense twice solely because the user corrected its recurrence. Per-payment exceptions remain supported; edits to one of the later confirmed recurring occurrences retain the earlier dates. Confirmed recurrence on a linked transfer updates both account legs. **Stop repeating** removes the confirmed rule and restores any historical automatic predictions that remain eligible.
+
+Tests: `node tests/planner-recurring-confirmation-smoke.cjs`, `node tests/planner-series-smoke.cjs`, and the browser regression suite.
+
 ## Three-tab planning workspace
 
 - **Overview** (default): summary of bank-reported current balances, projected month-end cash, lowest balance in the selected 30/60/90-day horizon, a short balance curve, and the next five expected movements. Select a main account to change the focus; click **View all and edit** to jump to Transactions.
