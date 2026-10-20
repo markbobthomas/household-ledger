@@ -20,7 +20,9 @@ const monthly=(dateValue,n,day)=>{
 };
 const mortgageText=/\b(?:mortgage|mtg|home loan|home mtg|pennymac|loandepot|newrez|shellpoint|mr cooper)\b/i;
 const recurringBill=/\b(?:mortgage|mtg|home loan|rent|loan payment|car payment|insurance|premium|membership|subscription|internet|cellular|phone plan|tuition|daycare|utility|electric|water|sewer|netflix|spotify|hulu|gym)\b/i;
-const variableShopping=/\b(?:costco|safeway|walmart|amazon|grocery|target|restaurant|starbucks|fuel|gas station|chevron|shell)\b/i;
+const variableShopping=/\b(?:costco|safeway|walmart|amazon|grocery|target|restaurant|starbucks|fuel|gas station|chevron|shell|coffee|uber|lyft)\b/i;
+const obviousInternalTransfer=/\b(?:transfer to|transfer from|account transfer|savings transfer|xfer|credit card payment|payment to visa|payment to mastercard)\b/i;
+const singleFixedBill=/\b(?:mortgage|mtg|home loan|rent|lease payment|loan payment|car payment|subscription|membership|autopay|monthly fee|recurring|netflix|spotify|hulu|gym|daycare|tuition)\b/i;
 const pfc=t=>t.personal_finance_category||t.source?.personalFinanceCategory||{};
 const isMortgage=t=>mortgageText.test(String(t.merchant||''))||
  /MORTGAGE|HOME_LOAN/.test(String(pfc(t).detailed||'').toUpperCase())||
@@ -32,7 +34,10 @@ const accountId=(t,accounts)=>{
 };
 const actualKind=t=>{
  if(t.type==='expense'||t.type==='income')return t.type;
- if(t.type==='transfer'&&t.cashDirection==='out'&&!t.pairedTransactionId&&isMortgage(t))return 'expense';
+ // A bank may call an ordinary payment an ACH transfer. Only unpaired
+ // outgoing debits can be considered expenses; never turn a genuine paired
+ // account-to-account transfer into a second cash withdrawal.
+ if(t.type==='transfer'&&t.cashDirection==='out'&&!t.pairedTransactionId)return 'expense';
  return null;
 };
 const bankEligible=(t,accounts,asOf)=>{
@@ -55,6 +60,34 @@ const isStrongSource=t=>{
   recurringBill.test(String(t.merchant||''))||
   ['Housing','Insurance','Subscriptions','Utilities','Kids & Family'].includes(t.category);
 };
+// Two equally priced, same-merchant bank transactions must demonstrate a
+// plausible cadence. A matching calendar day alone never proves a schedule.
+const cadenceBetween=(a,b)=>{
+ const gap=dayDiff(b,a),months=monthNumber(b)-monthNumber(a),
+  spread=Math.abs(Number(b.slice(-2))-Number(a.slice(-2)));
+ if(Math.abs(gap-7)<=1)return 'weekly';
+ if(Math.abs(gap-14)<=2)return 'biweekly';
+ if(months===1&&spread<=5)return 'monthly';
+ if(months===3&&spread<=5)return 'quarterly';
+ if(months===6&&spread<=5)return 'semiannual';
+ if(months===12&&spread<=5)return 'annual';
+ return null;
+};
+const recentEnough=(cadence,age)=>age<=({
+ weekly:17,biweekly:31,monthly:66,quarterly:125,semiannual:215,annual:400
+}[cadence]||66);
+const nextOccurrence=(last,cadence,n)=>cadence==='weekly'?shift(last,n*7):
+ cadence==='biweekly'?shift(last,n*14):
+ monthly(last,n*({monthly:1,quarterly:3,semiannual:6,annual:12}[cadence]||1),
+ Number(last.slice(-2)));
+const clearlyMonthlyFromOne=t=>{
+ const p=pfc(t),detail=String(p.detailed||'').toUpperCase(),
+  name=String(t.merchant||'');
+ // A lone insurance, utility or payroll payment may be annual, variable,
+ // or biweekly. Leave those in Reviews until their schedule is evidenced.
+ return isMortgage(t)||singleFixedBill.test(name)||
+  /SUBSCRIPTIONS|RECURRING|MORTGAGE|RENT_PAYMENT/.test(detail);
+};
 function infer(records,snapshot,predictions={},options={}){
  const accounts=snapshot.accounts||[],asOf=String(snapshot.asOf||''),days=Number(options.days||90);
  if(!date(asOf))return {events:[],review:[],diagnostics:[]};
@@ -72,18 +105,25 @@ function infer(records,snapshot,predictions={},options={}){
  const excluded=predictions.plannerRoutineDecisions||{},dismissed=predictions.historyPatternDecisions||{};
  for(const g of groups.values()){
   const rows=g.rows.sort((a,b)=>a.date.localeCompare(b.date)),last=rows.at(-1),
-   amount=cents(last.amount),same=rows.filter(t=>cents(t.amount)===amount),
-   lastTwo=same.slice(-2),months=lastTwo.map(t=>t.date.slice(0,7)),
-   step=lastTwo.length===2?monthNumber(months[1])-monthNumber(months[0]):0,
-   spread=lastTwo.length===2?Math.abs(Number(lastTwo[1].date.slice(-2))-
-    Number(lastTwo[0].date.slice(-2))):Infinity,
-   multipleInMonth=rows.filter(t=>t.date.slice(0,7)===last.date.slice(0,7)).length>1,
-   mortgage=isMortgage(last),strong=isStrongSource(last),
-   twoConsecutive=step===1&&spread<=5&&!multipleInMonth,
-   recent=dayDiff(asOf,last.date)<=66,
-   singleMortgage=mortgage&&rows.length===1&&dayDiff(asOf,last.date)<=50,
-   matchedMonths=twoConsecutive&&lastTwo.length===2&&recent;
-  // An explicit not-recurring decision is never overridden by auto inference.
+   amount=cents(last.amount),recentRows=rows.slice(-3),
+   matchingLast=rows.length>=2&&cents(rows.at(-2).amount)===amount,
+   cadence=matchingLast?cadenceBetween(rows.at(-2).date,last.date):null,
+   age=dayDiff(asOf,last.date),
+   single=rows.length===1&&age<=50&&clearlyMonthlyFromOne(last),
+   schedule=cadence||'monthly',
+   recurring=Boolean(cadence)&&recentEnough(cadence,age),
+   irregular=variableShopping.test(g.merchant),
+   transferUncertain=rows.some(t=>t.type==='transfer'&&
+    obviousInternalTransfer.test(String(t.merchant||''))),
+   threeConsistent=recentRows.length===3&&recentRows.every(t=>cents(t.amount)===amount)&&
+    cadenceBetween(recentRows[0].date,recentRows[1].date)===cadence&&
+    cadenceBetween(recentRows[1].date,recentRows[2].date)===cadence,
+   sameMonthExtra=['monthly','quarterly','semiannual','annual'].includes(schedule)&&
+    rows.filter(t=>t.date.slice(0,7)===last.date.slice(0,7)).length>1,
+   matched=recurring&&!sameMonthExtra,
+   high=single||matched&&(!irregular||threeConsistent)&&!transferUncertain;
+  // Existing user decisions win over new inferences, even if they moved
+  // the day, amount, or converted an ACH transfer into an expense.
   const aliases=[g.accountId,last.account,last.accountId,
    ...(accounts||[]).filter(a=>String(a.id)===g.accountId)
     .flatMap(a=>[a.name,a.transactionAccount])].map(String).filter(Boolean);
@@ -104,37 +144,32 @@ function infer(records,snapshot,predictions={},options={}){
     [norm(r.originalMerchant||r.merchant)];
    return names.includes(norm(last.merchant));
   });
-  // A user-confirmed rule is authoritative even if its due date has moved
-  // outside the original posting month; do not resurrect an old inference.
   if(blocked||manuallyScheduled)continue;
-  // A one-off vague expense is not reliable, and two similar store visits are
-  // a REVIEW item, not a guaranteed $X bill.
-  if(!singleMortgage&&!matchedMonths)continue;
-  const high=singleMortgage||(matchedMonths&&strong);
-  const observed=matchedMonths?lastTwo.length:1;
-  if(!high){
+  if(!single&&!recurring)continue;
+  // A multi-charge merchant, store visits that lack a third observation,
+  // or an unpaired transfer that looks internal goes to Reviews.
+  if(!high||sameMonthExtra){
    review.push({accountId:g.accountId,merchant:g.merchant,amount:amount/100,
-    reason:'Only two matching payments, merchant is not an identified fixed bill',
-    observed,frequency:'monthly',date:monthly(last.date,1,Number(last.date.slice(-2)))});
+    reason:sameMonthExtra?'Several payments to the same merchant within one cycle':
+     transferUncertain?'Unpaired bank transfer needs account confirmation':
+     'Repeating amount needs more evidence before automatic forecasting',
+    observed:rows.length,frequency:schedule,
+    date:nextOccurrence(last,schedule,1)});
    continue;
   }
-  if(rows.some(t=>t.date.slice(0,7)===last.date.slice(0,7)&&cents(t.amount)!==amount)){
-   review.push({accountId:g.accountId,merchant:g.merchant,amount:amount/100,
-    reason:'Multiple payments to the same merchant in one month',observed,
-    frequency:'monthly'});
-   continue;
-  }
-  // Do not invent a future monthly payment from a payment last seen years
-  // ago, or from a partial set of non-monthly historical transactions.
-  const anchorDay=Number(last.date.slice(-2));
-  for(let n=0;n<4;n++){
-   const when=monthly(last.date,n+1,anchorDay);
-   if(when<=asOf||when>through)continue;
+  const observed=single?1:threeConsistent?3:2;
+  // Generate the full 90-day horizon for every supported frequency.
+  // Quarterly and annual payments are never silently made monthly.
+  for(let n=1;n<=110;n++){
+   const when=nextOccurrence(last,schedule,n);
+   if(when>through)break;
+   if(when<=asOf)continue;
    events.push({id:'auto-fixed|'+g.key+'|'+when,
     date:when,amount:amount/100,merchant:g.merchant,accountId:g.accountId,
-    account:g.accountId,type:g.kind,category:last.category||'Housing',
-    source:'early-bank-inference',cadence:'monthly',observations:observed,
-    planConfidence:singleMortgage?'strong-mortgage-evidence':'strong-two-payment-evidence',
+    account:g.accountId,type:g.kind,category:last.category||'Other',
+    source:'early-bank-inference',cadence:schedule,observations:observed,
+    planConfidence:single?(isMortgage(last)?'strong-mortgage-evidence':'single-identified-payment'):
+     'strong-repeating-payment-evidence',
     originalSourceType:last.type,originalRecordId:String(last.id||'')});
   }
  }
