@@ -8,7 +8,7 @@ assert.ok(html.includes('Know your balance before the bill.'),'New purpose is ex
 assert.ok(html.includes('id="ledger-mode-switch"'),'Private Plaid and Demo share one mode switch');
 assert.ok(html.includes('id="planner-main"'),'Both sources use same planner rendering');
 assert.ok(html.includes('planner.js'),'Both sources use same planner code, not separate inconsistent apps');
-for(const dependency of ['bank-feed.js','ledger-data.js','accounting.js','forecast.js','forecast-ledger.js','account-forecast.js','payment-obligations.js'])
+for(const dependency of ['bank-feed.js','ledger-data.js','accounting.js','forecast.js','forecast-ledger.js','account-forecast.js','payment-obligations.js','planner-transactions.js'])
  assert.ok(html.includes(dependency),'Essential read-only forecast capability preserved: '+dependency);
 assert.ok(script.includes('HouseholdForecastLedger.build')&&script.includes('HouseholdAccountForecast.build'),
  'Forecast derived from the existing engine, not fabricated UI-only numbers');
