@@ -231,6 +231,22 @@ const {chromium,webkit}=require('playwright');
    'Payroll has positive deposit direction rather than a transfer or expense');
   assert.match(await page.locator('.transactions-page').innerText(),/Credit-card payment/,
    'A confirmed full-statement card payment is a dated checking withdrawal');
+  const cardSeries=page.locator('.future-item').filter({hasText:'Credit-card payment'}).first();
+  await cardSeries.locator('[data-edit-future]').click();
+  const cardSeriesForm=page.locator('.future-edit-form');
+  assert.equal(await cardSeriesForm.locator('input[name=scope][value=all]').count(),1,
+   'Card autopay supports a linked all-future edit');
+  await cardSeriesForm.locator('input[name=scope][value=all]').check();
+  await cardSeriesForm.locator('[name=amount]').fill('1275');
+  await cardSeriesForm.locator('button[type=submit]').click();
+  await page.locator('.future-notice').getByText(/every future occurrence/i).waitFor();
+  assert.ok(writes.some(x=>Object.values(x.predictions?.futureSeriesEdits||{})
+   .some(v=>v.amount===1275)),'Recurring card payments persist only as private adjustments');
+  const recurringCardRows=page.locator('.future-item').filter({hasText:'Credit-card payment'});
+  assert.ok(await recurringCardRows.count()>=2,'Two future card cycles are visible');
+  const matchingAmounts=await recurringCardRows.locator('.future-amount').allInnerTexts();
+  assert.ok(matchingAmounts.every(t=>t.includes('$1,275')),
+   'Both checking-to-card transfers use the new recurring payment amount');
   await page.locator('[data-show-new]').click();
   await page.locator('#future-new-form [name=merchant]').fill('One-time plumbing');
   await page.locator('#future-new-form [name=amount]').fill('175');
