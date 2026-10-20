@@ -90,4 +90,42 @@ assert.equal(afterAutopay.diagnostics.pairedMovements.filter(x=>x.date==='2026-1
  'Exactly one two-sided card settlement');
 assert.equal(afterAutopay.household.conservationDifference,0,'Transfer preserves household net worth');
 
+
+function projected(merchant,cadence,amount,date,account='Checking'){
+ return {id:'test-'+merchant,merchant,type:'expense',account,category:'Housing',
+  amount,date,cadence,source:'historical'};
+}
+function evidenceFor(merchant,dates,amount){
+ return dates.map(d=>tx('expense',merchant,'Checking','Housing',amount,d,'LOAN_PAYMENTS'));
+}
+const quarterlyName='Quarterly home insurance';
+const quarterlyHistory=evidenceFor(quarterlyName,['2026-01-15','2026-04-15','2026-07-15'],400);
+const quarter=I.project(M.migrate({}),quarterlyHistory,
+ [projected(quarterlyName,'quarterly',400,'2026-10-15')],'2026-10-01');
+assert.equal(quarter.events.length,1,
+ 'Three matching payments every three months are a valid quarterly routine');
+assert.equal(I.project(M.migrate({}),quarterlyHistory,
+ [projected(quarterlyName,'monthly',400,'2026-10-15')],'2026-10-01').events.length,0,
+ 'Quarterly charges never masquerade as monthly expenses');
+const skippedMonths=evidenceFor('Unreliable mortgage',['2026-03-03','2026-05-03','2026-07-03'],2000);
+assert.equal(I.project(M.migrate({}),skippedMonths,
+ [projected('Unreliable mortgage','monthly',2000,'2026-10-03')],'2026-10-01').events.length,0,
+ 'A matching payment on alternating months is not a monthly pattern');
+const annualName='Annual home insurance';
+const annualHistory=evidenceFor(annualName,['2023-11-11','2024-11-11','2025-11-11'],900);
+assert.equal(I.project(M.migrate({}),annualHistory,
+ [projected(annualName,'annual',900,'2026-11-11')],'2026-10-19').events.length,1,
+ 'Annual bills remain eligible when their most recent payment is over 90 days old');
+const oldHistory=evidenceFor('Old mortgage',['2025-01-02','2025-02-02','2025-03-02'],2500);
+assert.equal(I.project(M.migrate({}),oldHistory,
+ [projected('Old mortgage','monthly',2500,'2026-11-02')],'2026-10-19').events.length,0,
+ 'A lapsed mortgage-like debit is not forecast indefinitely');
+assert.equal(I.project(M.migrate({}),records,
+ [projected('Mortgage','monthly',2500,'2026-11-18')],asOf).events.length,0,
+ 'A forecast on a different calendar day cannot borrow another schedule\'s evidence');
+const offsetHistory=evidenceFor('Twice in one month',['2026-08-02','2026-08-16','2026-09-02'],800);
+assert.equal(I.project(M.migrate({}),offsetHistory,
+ [projected('Twice in one month','monthly',800,'2026-11-02')],asOf).events.length,0,
+ 'Three payments are insufficient when they span only two calendar months');
+
 console.log('PASS fixed recurring commitments only; account/merchant confirm once; changed amounts prompt again; excluded subscriptions; bi-monthly payroll; card purchases do not debit checking; full-statement autopay debits once');
