@@ -52,13 +52,29 @@ function isChecking(a){return accountType(a)==='cash'&&
 function freshness(a){const status=a.balanceStatus;return status==='fresh'||status==='simulated'}
 function sourceTag(){if(requestedReal()&&!live())return window.HouseholdLiveSource?.error?'REAL · UNAVAILABLE':'CONNECTING';return live()?'REAL BANK':'DEMO DATA'}
 function activeAccounts(s){return Array.isArray(s?.accounts)?s.accounts:[]}
+function forecastForPayments(events,s){
+ const accounts=activeAccounts(s),edits=state().predictions?.futureTransactionEdits||{};
+ const extras=state().predictions?.futureTransactionAdds||[];
+ const resolve=value=>{
+  const raw=String(value||'');
+  const match=accounts.filter(a=>String(a.id)===raw||String(a.name)===raw||
+   String(a.transactionAccount||'')===raw);
+  return match.length===1?String(match[0].id):raw;
+ };
+ const keyFor=e=>window.HouseholdPlannerTransactions.keyEvent(e.id,resolve(e.accountId||e.account));
+ const amended=(events||[]).flatMap(e=>{
+  const edit=edits[keyFor(e)];
+  return edit?.skipped?[]:[edit?{...e,...edit}:e];
+ });
+ return [...amended,...extras.filter(e=>e.type!=='transfer')];
+}
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  const rows=model.records(state()),asOf=s.asOf||dateToday();
  const forecast=window.HouseholdForecastLedger.build(state(),rows,asOf,90,
   window.HouseholdForecast,model);
  const routines=window.HouseholdPlannerIntelligence.project(state(),rows,forecast.events,asOf);
- const payments=window.HouseholdPaymentObligations.build(s,rows,routines.events,state().predictions||{},{days:90});
+ const payments=window.HouseholdPaymentObligations.build(s,rows,forecastForPayments(routines.events,s),state().predictions||{},{days:90});
  const suppress=new Set(payments.suppressedExpectedIds||[]);
  const cardPlans=payments.plans||[];
  const rawPlans=state().predictions?.accountMovements||[];
@@ -380,9 +396,9 @@ function newTransactionForm(s){
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
-  transactionFilter==='all'||r.kind==='movement'?
-   transactionFilter==='all'||r.fromAccountId===transactionFilter||r.toAccountId===transactionFilter:
-   r.accountId===transactionFilter);
+  transactionFilter==='all'||(r.kind==='movement'?
+   r.fromAccountId===transactionFilter||r.toAccountId===transactionFilter:
+   r.accountId===transactionFilter));
  const opts=accountSelect(accounts,transactionFilter,'transactionFilter',true);
  const lines=visible.map(row=>{
   const paired=row.kind==='movement',incoming=row.type==='income'||row.type==='refund',
