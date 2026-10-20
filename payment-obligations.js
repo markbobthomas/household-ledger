@@ -21,6 +21,20 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
  const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],suppressedExpectedIds=[];
+ const settled=new Map(records.filter(t=>t&&t.id).map(t=>[String(t.id),t]));
+ const alreadyPaid=(from,card,due,close,amount)=>{
+  if(!from||!(amount>0))return false;
+  return records.some(t=>{
+   if(!t||t.pending||t.type!=='transfer'||t.accountingKind!=='card_payment'||
+    t.cashDirection!=='out'||!t.pairedTransactionId||
+    t.date<=close||t.date>asOf||Math.abs((Date.parse(t.date)-Date.parse(due))/86400000)>7||
+    Math.abs(Number(t.amount)-amount)>.011)return false;
+   const other=settled.get(String(t.pairedTransactionId));
+   return other&&!other.pending&&other.type==='transfer'&&
+    matchesAccount(t,from)&&matchesAccount(other,card)&&
+    other.cashDirection==='in'&&Math.abs(Number(other.amount)-amount)<.011;
+  });
+ };
  const matchesAccount=(row,account)=>{
   const key=String(row.accountId||row.account||''),id=String(account.id);
   if(key===id)return true;
@@ -94,18 +108,19 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    if(n===0&&!cycleRows.length&&!predictedRows.length&&!confirmedFirst)
     warnings.push(card.name+': no settled card transactions found in '+cycleStart+' to '+
      cycleClose+'. Verify the bank history before using this estimate.');
+   const paid=autopay&&alreadyPaid(from,card,due,cycleClose,amount);
    const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
     dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
-    autopayEnabled:autopay,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
+    autopayEnabled:autopay,alreadyPaid:paid,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
     incompleteFuture:cycleClose>asOf};
    statements.push(statement);
    // A statement preview exists even when autopay is disabled. Only a
    // confirmed full-statement autopay rule schedules a checking withdrawal.
-   if(amount>0&&autopay){
+   if(amount>0&&autopay&&!paid){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
      anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay'};
     plans.push(plan);
