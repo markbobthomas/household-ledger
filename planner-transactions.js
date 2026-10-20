@@ -104,7 +104,7 @@ function applySeries(source,baseDate,seriesKey,rules){
 function saveSeriesEdit(state,seriesKey,baseDate,data,accounts,asOf,cadence,kind){
  if(!seriesKey||typeof seriesKey!=='string'||seriesKey.length>600||
   !['event','movement'].includes(kind))throw Error('This transaction is not an editable recurring series');
- if(!validDate(baseDate)||baseDate<=asOf)throw Error('Select a future recurring payment');
+ if(!validDate(baseDate))throw Error('Select a valid repeating payment date');
  const fields=kind==='movement'?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
  const supported=['monthly','quarterly','semiannual','annual','weekly','every 2 weeks','biweekly','twice monthly','3 / month','4 / month','5 / month'];
  if(!supported.includes(cadence))throw Error('Recurring frequency is not known; edit just this payment');
