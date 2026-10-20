@@ -145,6 +145,33 @@ const {chromium,webkit}=require('playwright');
    await go('transactions');
    assert.ok(await page.getByText('One-time home repair').count(),
     'New transaction is retained after browser reload');
+   const unrecognized=page.locator('.future-item').filter({hasText:'One-time home repair'}).first();
+   await unrecognized.locator('[data-edit-future]').click();
+   const manualEditor=page.locator('.future-edit-form');
+   assert.equal(await manualEditor.locator('input[name=scope][value=all]').count(),1,
+    'Even a non-recurring manual transaction can be promoted to a recurring series');
+   await manualEditor.locator('input[name=scope][value=all]').check();
+   await manualEditor.locator('[data-frequency]').selectOption('monthly');
+   await manualEditor.locator('button[type=submit]').click();
+   await page.locator('.future-notice').getByText(/Recurring schedule/i).waitFor();
+   assert.ok(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count()>=2,
+    'The confirmed recurring schedule generates multiple future payments');
+   assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules?.some(x=>x.merchant==='One-time home repair'&&x.frequency==='monthly')),
+    'Explicitly confirmed recurrence is saved, independent of detection');
+   const recurringRepair=page.locator('.future-item').filter({hasText:'One-time home repair'}).first();
+   await recurringRepair.locator('[data-edit-future]').click();
+   await page.locator('.future-edit-form [data-remove-recurring]').click();
+   assert.equal(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count(),1,
+    'Stopping recurrence returns to the original single user-added payment');
+   await page.locator('[data-show-new]').click();
+   await page.locator('#future-new-form [name=merchant]').fill('New monthly subscription');
+   await page.locator('#future-new-form [name=amount]').fill('18');
+   await page.locator('#future-new-form [name=date]').fill('2026-11-15');
+   await page.locator('#future-new-form [data-frequency]').selectOption('monthly');
+   await page.locator('#future-new-form button[type=submit]').click();
+   assert.ok(await page.locator('.future-item').filter({hasText:'New monthly subscription'}).count()>=2,
+    'Add transaction can create a recurring set without any historical examples');
 
    assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
