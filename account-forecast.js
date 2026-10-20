@@ -136,7 +136,7 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
  const seenEventIds=new Map();
  const projected=[...(Array.isArray(expectedEvents)?expectedEvents:[]),
   ...extra.filter(e=>e.type!=='transfer')].filter(e=>e&&e.enabled!==false).map((e,i)=>{
-   const key=eventKey(e.id||'unnamed-'+i,resolve(e.accountId||e.account)||'');
+   const key=eventKey(e.id||'unnamed-'+i,e._forecastOriginalAccountId||resolve(e.accountId||e.account)||'');
    const edit=forecastEdits[key];
    if(edit?.skipped)return null;
    const updated=edit?{...e,...edit}:e;
