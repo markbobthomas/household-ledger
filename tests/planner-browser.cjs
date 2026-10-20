@@ -55,6 +55,21 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
     'History can propose future recurrence based on an actual bank record');
    await page.locator('[data-cancel-review-form]').click();
+   const historyTransfer=page.locator('.history-actual-row').filter({hasText:'Transfer to Savings'}).first();
+   assert.equal(await historyTransfer.locator('[data-history-plan]').count(),1,
+    'Every actual bank transfer has a Make recurring action');
+   await historyTransfer.locator('[data-history-plan]').click();
+   const transferDraft=page.locator('.history-schedule-form');
+   assert.equal(await transferDraft.locator('[name=type]').inputValue(),'expense',
+    'An unmatched outgoing bank transfer is proposed as an expense, not blocked');
+   assert.equal(await transferDraft.locator('[name=type] option[value=transfer]').count(),1,
+    'Owner may instead mark a genuine linked household transfer');
+   await transferDraft.locator('[name=type]').selectOption('transfer');
+   assert.equal(await transferDraft.locator('[name=fromAccountId]').isVisible(),true,
+    'Linked transfers require an explicit funding account');
+   assert.equal(await transferDraft.locator('[name=toAccountId]').isVisible(),true,
+    'Linked transfers require an explicit receiving account');
+   await page.locator('[data-cancel-review-form]').click();
    await go('reviews');
    const demoMortgage=page.locator('.routine-review-line').filter({hasText:'Mortgage'});
    await demoMortgage.waitFor();
@@ -232,6 +247,10 @@ const {chromium,webkit}=require('playwright');
     name:'Storage Unit Monthly',merchant:'Storage Unit Monthly',amount:79,pending:false,
     category:{primary:'GENERAL_MERCHANDISE',detailed:'GENERAL_MERCHANDISE_OTHER_GENERAL_MERCHANDISE',
      confidence_level:'HIGH'}});
+  transactions.push({id:'unclassified-ach-mortgage',accountId:'checking-real',
+   date:'2026-09-14',name:'House Loan ACH Unrecognized',merchant:'House Loan ACH Unrecognized',
+   amount:2000,pending:false,
+   category:{primary:'TRANSFER_OUT',detailed:'TRANSFER_OUT_OTHER_TRANSFER_OUT',confidence_level:'LOW'}});
   transactions.push({id:'one-missing-mortgage',accountId:'checking-real',
    date:'2026-09-15',name:'Mortgage Servicer X',merchant:'Mortgage Servicer X',
    amount:2000,pending:false,
@@ -302,6 +321,13 @@ const {chromium,webkit}=require('playwright');
   await page.locator('.sidebar [data-view="history"]').click();
   assert.match(await page.locator('.history-page').innerText(),/Home Mortgage ACH/,
    'Plaid posted mortgage visible separately from future predictions');
+  const ambiguousMortgage=page.locator('.history-actual-row').filter({hasText:'House Loan ACH Unrecognized'}).first();
+  await ambiguousMortgage.locator('[data-history-plan]').click();
+  const uncertainForm=page.locator('.history-schedule-form');
+  assert.equal(await uncertainForm.locator('[name=type]').inputValue(),'expense',
+   'An actual misclassified ACH mortgage can be scheduled as a checking withdrawal');
+  assert.equal(await uncertainForm.locator('[name=amount]').inputValue(),'2000');
+  await uncertainForm.locator('[data-cancel-review-form]').click();
   await page.locator('.sidebar [data-view="reviews"]').click();
   const lowConfidence=page.locator('.review-candidate').filter({hasText:'Storage Unit Monthly'}).first();
   assert.equal(await lowConfidence.count(),1,
