@@ -898,7 +898,7 @@ if(page==='insights'){
   '<i class="actual" style="width:'+spentWidth.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecastWidth.toFixed(2)+'%"></i></div>'+
   '<div class="budget-heading"><span class="budget-category-meta">Budget <button type="button" class="editable-value" data-inline-budget="'+esc(category)+'" data-amount="'+limit+'" aria-label="Edit '+esc(category)+' monthly budget cap">'+(limit?money(limit):'Set cap')+'</button></span>'+
   '<span class="budget-category-meta budget-row-projection '+(limit&&(currentMonth?f.projectedTotal:f.actual)>limit?'over-budget':'')+'">'+
-  (currentMonth?'Projected '+money(f.projectedTotal):'Recorded '+money(f.actual))+
+  (currentMonth?'Projected '+money(f.projectedTotal):'Completed month · Recorded '+money(f.actual))+
   (limit&&(currentMonth?f.projectedTotal:f.actual)>limit?
    '<strong class="budget-overage"> · '+money((currentMonth?f.projectedTotal:f.actual)-limit)+' over</strong>':'')+
   '</span></div></div><span class="chevron" aria-hidden="true">⌄</span></summary>'+
@@ -1424,7 +1424,7 @@ function updateBudgetAmountUI(category,amount,button){
  const current=budgetMonth===today().slice(0,7),projected=current?f.projectedTotal:f.actual;
  if(target){
   target.classList.toggle('over-budget',Boolean(limit&&projected>limit));
-  target.innerHTML=(current?'Projected ':'Recorded ')+money(projected)+
+  target.innerHTML=(current?'Projected ':'Completed month · Recorded ')+money(projected)+
    (limit&&projected>limit?'<strong class="budget-overage"> · '+money(projected-limit)+' over</strong>':'');
  }
  // Category caps are editable inline; keep the overall cap and bar synchronized immediately.
