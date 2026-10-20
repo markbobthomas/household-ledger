@@ -61,17 +61,21 @@ function draftFor(row,records,accounts,asOf){
   // incoming deposit/refund, and let the user explicitly change the type.
   type=row.cashDirection==='in'?(credit(sourceAccount)?'refund':'income'):'expense';
  }
- const exact=(records||[]).filter(t=>canPlan(t)&&!t.pending&&
-  accountOf(t,accounts)===sourceAccount&&t.type===row.type&&
-  Math.abs(Number(t.amount)-Number(row.amount))<.011&&
-  norm(t.merchant)===norm(row.merchant)).sort((a,b)=>a.date.localeCompare(b.date));
- const frequency=guessFrequency(exact)||'monthly',last=exact.at(-1)||row;
+ // An ACH income may be labeled "transfer" by Plaid and payroll, power,
+ // water and other regular streams often have a different amount each month.
+ const direction=t=>t.type==='transfer'&&!t.pairedTransactionId?
+  (t.cashDirection==='in'?'income':t.cashDirection==='out'?'expense':null):t.type;
+ const evidence=(records||[]).filter(t=>canPlan(t)&&!t.pending&&
+  accountOf(t,accounts)===sourceAccount&&direction(t)===type&&
+  norm(t.merchant||t.name)===norm(row.merchant||row.name))
+  .sort((a,b)=>a.date.localeCompare(b.date));
+ const frequency=guessFrequency(evidence)||'monthly',last=evidence.at(-1)||row;
  return {accountId:sourceAccount,merchant:String(row.merchant||row.name||'Bank transaction'),
   amount:Number(row.amount)||0,type,originalType:row.type,
   cashDirection:row.cashDirection||null,frequency,
   nextDate:nextDate(last.date,frequency,asOf),sourceRow:row,
   sourcePending:Boolean(row.pending),fromAccountId,toAccountId,
-  linkedTransfer:linked,examples:exact.filter(t=>Number(t.amount)>0).slice(-8).map(x=>String(x.id))};
+  linkedTransfer:linked,examples:evidence.filter(t=>Number(t.amount)>0).slice(-8).map(x=>String(x.id))};
 }
 function guessFrequency(history){
  const ts=[...(history||[])].sort((a,b)=>a.date.localeCompare(b.date));
