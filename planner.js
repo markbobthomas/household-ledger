@@ -863,6 +863,17 @@ function render(){
   root.innerHTML='<section class="panel"><div class="empty-visual">No bank balance forecast is being displayed until the Real connection is verified.</div></section>';return}
  let bundle=null,error=null;
  try{bundle=forecastFor(s)}catch(e){error=String(e.message||e)}
+ // Actual bank history must remain usable even if the separate future
+ // balance projection cannot be calculated or needs a repaired account.
+ if(!bundle&&['history','reviews'].includes(activeTab)){
+  try{
+   const rows=model.records(state()),accounts=activeAccounts(s),asOf=s.asOf||dateToday();
+   bundle={rows,historyCandidates:window.HouseholdPlannerHistory.candidates(
+    rows,accounts,asOf,state().predictions||{},[]),
+    routines:{review:[]},missingMortgages:window.HouseholdPlannerIntelligence.missingMortgages(
+    rows,null,accounts,asOf,{dismissed:state().predictions?.mortgageReviewDismissals||[]})};
+  }catch(_error){/* The visible forecast error remains available above. */}
+ }
  const projection=bundle?.projection||null,selectedSource=selected(s);
  lastSuggestions=bundle?.routines?.review||[];
  lastMissingMortgages=bundle?.missingMortgages||[];
