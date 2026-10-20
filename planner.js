@@ -900,22 +900,31 @@ document.addEventListener('submit',async e=>{
   error.textContent=String(err.message||err);
  }
 });
-document.addEventListener('submit',e=>{
+document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-card-rule]');
  if(!form)return;
  e.preventDefault();
+ const button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
  try{
   const cardId=form.dataset.cardRule,fields=Object.fromEntries(new FormData(form));
   const banks=activeAccounts(snapshot());
   const card=banks.find(a=>String(a.id)===cardId&&accountType(a)==='credit');
   const from=banks.find(a=>String(a.id)===fields.fromAccountId&&accountType(a)==='cash');
-  if(!card||!from)throw Error('Select a linked card and a checking payment source');
-  if(fields.nextPaymentDate<=dateToday())throw Error('The next withdrawal date must be in the future');
-  if(fields.nextPaymentDate>fields.nextDueDate)throw Error('The planned withdrawal should not be after the card due date');
-  const rule={...fields,closingDay:Number(fields.lastStatementClose.slice(-2)),method:'statement'};
-  window.HouseholdLedgerData.setCardPaymentRule(state(),cardId,rule);
-  savePlanning();render();document.getElementById('card-autopay')?.setAttribute('open','');
- }catch(err){setNotice(err.message);document.getElementById('card-autopay')?.setAttribute('open','')}
+  if(!card||fields.autopayEnabled==='yes'&&!from)
+   throw Error('Select the card and the checking/savings account that pays it');
+  if(fields.nextPaymentDate<=dateToday())throw Error('Enter the next future withdrawal date');
+  if(fields.nextPaymentDate>fields.nextDueDate)
+   throw Error('The payment should not be after the card due date');
+  const rule={...fields,closingDay:Number(fields.billingEndDate.slice(-2)),
+   lastStatementClose:fields.billingEndDate,method:'statement'};
+  await commitForecastChange(()=>window.HouseholdLedgerData.setCardPaymentRule(state(),cardId,rule));
+  latestError='';render();document.getElementById('card-autopay')?.setAttribute('open','');
+ }catch(err){
+  if(button)button.disabled=false;
+  let error=form.querySelector('.future-form-error');
+  if(!error){error=document.createElement('p');error.className='future-form-error';error.setAttribute('role','alert');form.appendChild(error)}
+  error.textContent=String(err.message||err);
+ }
 });
 document.addEventListener('change',e=>{
  if(e.target.name==='scope'){
