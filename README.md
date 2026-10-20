@@ -30,6 +30,16 @@ When a future credit-card payment or transfer is edited, the balance engine post
 
 Regression checks: `node tests/planner-transactions-smoke.cjs` and the existing planner browser, mortgage and card-payment suites.
 
+## Recurring income and paycheck safety
+
+The Real/Plaid importer and the shared historical reconciliation engine recognize explicitly identified **payroll / salary / direct-deposit income**, including deposits Plaid places under generic `TRANSFER_IN` when merchant evidence is strong. Plaid `INCOME_WAGES` evidence is also recognized. Unlabeled ACH credits, transfers between household checking/savings, card settlements, refunds, and cash advances are **not** assumed to be earned income.
+
+Recurring monthly, twice-monthly and biweekly income can enter the 90-day balance forecast when dates and history substantiate it. Bills still require exact-cent recurring amounts. Earned income that changes by up to 10% across the latest three comparable paychecks may use the **lowest** recent paycheck as a conservative dated estimate; greater variance remains excluded.
+
+The **Overview > Expected income** section reports the number and total of dated income estimates for the selected account. If none qualify, it explains whether posted income exists but has no reliable recurrence, unverified inbound transfers are present, or bank paychecks have not been recognized. On the **Transactions** page, a missing deposit can be planned manually without changing the underlying Plaid bank records.
+
+Regression tests: `node tests/planner-income-smoke.cjs` covers Plaid-coded payroll, exact and slightly variable monthly earnings, first-and-fifteenth and biweekly deposits, ordinary internal transfers and card payment exclusions.
+
 ## Historical prediction audit
 
 Select your checking account and click **Check accuracy** in the main header. The planner runs the historical check immediately, scrolls to **Prediction accuracy**, and expands the report. Alternatively, open the optional **Prediction accuracy** panel and click **Run historical check**. The app tests up to six completed months on the selected account. For each month, it reconstructs predictions from transactions that had posted by the preceding month-end. Current recurring confirmations, future transactions and current card-statement settings are **not** applied retroactively.
