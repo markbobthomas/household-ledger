@@ -347,6 +347,7 @@ function futureRows(bundle,s){
    fromAccountId:String(p.fromAccountId),toAccountId:String(p.toAccountId),
    from:labels.get(String(p.fromAccountId))||p.fromAccountId,
    to:labels.get(String(p.toAccountId))||p.toAccountId,
+   seriesKey:p.seriesKey||null,baseDate:p.baseDate||p.date,cadence:p.cadence||null,
    addedId:p.id.startsWith('future|future-add|')?p.id.slice(7):null});
  }
  for(const e of projection.events||[]){
@@ -359,6 +360,7 @@ function futureRows(bundle,s){
     e.kind==='card_purchase'?'expense':e.type==='refund'?'refund':
     e.type==='income'?'income':'expense',
    cashDirection:e.kind==='transfer_in'?'in':'out',
+   seriesKey:e.seriesKey||null,baseDate:e.baseDate||e.date,cadence:e.cadence||null,
    addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
  }
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
@@ -385,15 +387,27 @@ function editorFor(row,s){
   common+
   '<label>Transfer direction<select name="cashDirection"><option value="out"'+(row.cashDirection==='out'?' selected':'')+
    '>Money out</option><option value="in"'+(row.cashDirection==='in'?' selected':'')+'>Money in</option></select></label>';
+ const hasSeries=Boolean(row.seriesKey&&row.cadence&&!row.addedId);
+ const currentSeries=hasSeries?state().predictions?.futureSeriesEdits?.[row.seriesKey]:null;
+ const scope=hasSeries?'<fieldset class="future-scope"><legend>Apply changes to</legend>'+
+  '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
+  '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
+  '<p>Use the second option to change a recurring '+(isMovement?'transfer or card payment':'bill or deposit')+
+  ' across future months. Dates, amount, and account details apply to the series; past posted bank transactions do not change.</p>'+
+  '</fieldset>':'<p class="audit-footnote">This payment is not part of an editable recurring series.</p>';
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
+  scope+
   '<div class="future-fields">'+fields+'</div>'+
-  '<p class="audit-footnote">Changes only this predicted occurrence, not the bank transaction or repeating rule. '+
-   (isMovement?'Both linked accounts update together.':'')+'</p>'+
+  '<p class="audit-footnote">'+(hasSeries?'Individual exceptions can still be edited separately. ':'')+
+   (isMovement?'Both linked accounts update together. ':'')+
+   'Forecast edits never change actual bank transactions.</p>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Save changes</button>'+
    '<button class="btn" type="button" data-cancel-future>Cancel</button>'+
    (row.addedId?'<button class="btn" type="button" data-remove-added="'+escapeHTML(row.addedId)+'">Remove</button>':
     '<button class="btn" type="button" data-skip-future="'+escapeHTML(row.key)+'">Skip this occurrence</button>')+
-   '<button class="btn" type="button" data-restore-future="'+escapeHTML(row.key)+'">Reset</button></div></form>';
+   '<button class="btn" type="button" data-restore-future="'+escapeHTML(row.key)+'">Reset this occurrence</button>'+
+   (currentSeries?'<button class="btn" type="button" data-reset-series="'+escapeHTML(row.seriesKey)+'">Reset all future changes</button>':'')+
+   '</div></form>';
 }
 function newTransactionForm(s){
  const accounts=activeAccounts(s),primary=selected(s)?.id||accounts[0]?.id,
@@ -430,7 +444,8 @@ function transactionsPage(bundle,s){
   return '<article class="future-item" data-future-item="'+escapeHTML(row.key)+'">'+
    '<div class="future-row"><div class="future-date">'+escapeHTML(dayLabel(row.date))+'</div>'+
    '<div class="future-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-   '<small>'+escapeHTML(desc)+'</small></div>'+
+   '<small>'+escapeHTML(desc)+(row.seriesKey?' · Recurring':'')+
+    (row.seriesKey&&state().predictions?.futureSeriesEdits?.[row.seriesKey]?' · SERIES EDITED':'')+'</small></div>'+
    '<div class="future-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':paired?'↔ ':'−')+cash(row.amount)+'</div>'+
    '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">'+
     (canEdit?'Close':'Edit')+'</button></div>'+
@@ -446,7 +461,7 @@ function transactionsPage(bundle,s){
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
   '<div class="page-heading"><div><h2>Future transactions</h2>'+
-   '<p>All dated predictions for the next '+horizon+' days. Edit one occurrence at a time.</p></div>'+
+   '<p>All dated predictions for the next '+horizon+' days. Choose whether an edit affects one payment or its entire recurring series.</p></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -617,6 +632,14 @@ document.addEventListener('click',async e=>{
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
+ const resetRecurring=e.target.closest('[data-reset-series]');
+ if(resetRecurring){
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.resetSeries(state(),resetRecurring.dataset.resetSeries));
+   editingKey='';transactionNotice='Recurring schedule restored to its original forecast.';render();
+  }catch(err){transactionNotice=String(err.message||err);render()}
+  return;
+ }
  const runAudit=e.target.closest('[data-run-backtest]');
  if(runAudit){
   const s=snapshot(),chosen=selected(s);
@@ -700,8 +723,27 @@ document.addEventListener('submit',async e=>{
   }
   if(form.hasAttribute('data-future-edit-form')){
    const key=form.dataset.futureEditForm;
-   await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
-   editingKey='';transactionNotice='Forecast transaction updated.';
+   const row=futureRows(forecastFor(s),s).find(item=>item.key===key);
+   if(!row)throw Error('Forecast changed. Reopen the payment and try again.');
+   if(fields.scope==='all'){
+    if(!row.seriesKey)throw Error('This payment does not have an editable repeating schedule');
+    await commitForecastChange(()=>{
+     // A new whole-series instruction supersedes visible single-occurrence
+     // corrections for this series, instead of leaving conflicting values.
+     const result=planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,
+      asOf,row.cadence,row.kind);
+     const edits=state().predictions.futureTransactionEdits||{};
+     for(const other of futureRows(forecastFor(s),s)){
+      if(other.seriesKey===row.seriesKey&&other.baseDate>=row.baseDate)delete edits[other.key];
+     }
+     return result;
+    });
+    transactionNotice='Updated this recurring payment and every future occurrence.';
+   }else{
+    await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
+    transactionNotice='Updated only this predicted payment.';
+   }
+   editingKey='';
   }else if(form.hasAttribute('data-future-new-form')){
    await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
    showNewTransaction=false;transactionNotice='Future transaction added to the selected account.';
