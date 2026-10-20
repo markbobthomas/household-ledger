@@ -6,14 +6,22 @@
 <meta name="theme-color" content="#151b21">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Household Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=audit3">
+<link rel="stylesheet" href="planner.css?v=tab1">
 </head>
 <body>
 <aside class="sidebar" aria-label="Main navigation">
   <a class="brand" href="./">HL <span>/ PLAN</span></a>
-  <button class="side-link active" type="button" aria-current="page" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+  <button class="side-link active" type="button" data-view="overview" aria-current="page">
     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 19H21M4 15L10 10L15 13L20 5"/><path d="M16 5H20V9"/></svg>
-    <span>Balance plan</span>
+    <span>Overview</span>
+  </button>
+  <button class="side-link" type="button" data-view="transactions">
+    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6H20M4 12H20M4 18H20"/></svg>
+    <span>Transactions</span>
+  </button>
+  <button class="side-link" type="button" data-view="settings">
+    <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22M5 5L7.5 7.5M16.5 16.5L19 19M19 5L16.5 7.5M7.5 16.5L5 19"/></svg>
+    <span>Settings</span>
   </button>
   <div class="sidebar-bottom">READ-ONLY BANK DATA<br>PLANNING FOCUSED<br>FORECASTS ARE ESTIMATES</div>
 </aside>
@@ -36,6 +44,11 @@
       <a class="btn" id="bank-connect" href="/bank-connect" hidden>Bank connections</a>
     </div>
   </header>
+  <nav class="planner-tabs" aria-label="Planner pages">
+    <button type="button" class="tab-link active" data-view="overview" aria-current="page">Overview</button>
+    <button type="button" class="tab-link" data-view="transactions">Transactions</button>
+    <button type="button" class="tab-link" data-view="settings">Settings</button>
+  </nav>
   <div id="planner-notice" aria-live="polite"></div>
   <div id="planner-main" aria-live="polite"><div class="panel">Preparing your balance plan…</div></div>
   <footer class="planner-footer"><span>HOUSEHOLD LEDGER · BALANCE PLANNER</span><span>Bank facts are read-only · Forecasts do not move money</span></footer>
@@ -51,7 +64,8 @@
 <script src="payment-obligations.js"></script>
 <script src="planner-intelligence.js?v=phase2"></script>
 <script src="planner-backtest.js?v=audit1"></script>
-<script src="planner.js?v=audit3"></script>
+<script src="planner-transactions.js?v=tab1"></script>
+<script src="planner.js?v=tab1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>
