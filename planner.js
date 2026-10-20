@@ -913,6 +913,62 @@ document.addEventListener('click',async e=>{
   window.scrollTo({top:0,behavior:'auto'});
   return;
  }
+ const fromHistory=e.target.closest('[data-history-plan]');
+ if(fromHistory){
+  const account=fromHistory.dataset.historyAccount;
+  const row=lastHistoryRows.find(t=>String(t.id)===fromHistory.dataset.historyPlan&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
+  if(!row||!window.HouseholdPlannerHistory.canPlan(row)){
+   setNotice('That posted transaction is no longer available for review.');return;
+  }
+  const matching=lastHistoryRows.filter(t=>window.HouseholdPlannerHistory.canPlan(t)&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account&&
+   t.type===row.type&&Math.abs(Number(t.amount)-Number(row.amount))<.011&&
+   String(t.merchant||'').toLowerCase().trim()===String(row.merchant||'').toLowerCase().trim())
+   .sort((a,b)=>a.date.localeCompare(b.date));
+  const frequency=window.HouseholdPlannerHistory.guessFrequency(matching)||'monthly';
+  const last=matching.at(-1)||row;
+  recurringDraft={accountId:account,merchant:row.merchant,type:row.type,
+   amount:row.amount,frequency,nextDate:window.HouseholdPlannerHistory.nextDate(
+    last.date,frequency,snapshot().asOf),sourceRow:row,
+   examples:matching.slice(-8).map(x=>String(x.id))};
+  reviewNotice='';render();
+  return;
+ }
+ const reviewCandidate=e.target.closest('[data-review-candidate]');
+ if(reviewCandidate){
+  const candidate=lastReviewCandidates.find(x=>x.key===reviewCandidate.dataset.reviewCandidate);
+  if(!candidate){setNotice('Review candidates changed. Refresh bank history.');return}
+  const source=lastHistoryRows.find(t=>String(t.id)===candidate.examples[0]?.id);
+  recurringDraft={accountId:candidate.accountId,merchant:candidate.merchant,
+   type:candidate.type,amount:candidate.amount,frequency:candidate.frequency,
+   nextDate:candidate.nextDate,sourceRow:source,
+   examples:candidate.examples.map(x=>x.id)};
+  reviewNotice='';render();
+  return;
+ }
+ const dismissCandidate=e.target.closest('[data-dismiss-candidate]');
+ if(dismissCandidate){
+  const item=lastReviewCandidates.find(x=>x.key===dismissCandidate.dataset.dismissCandidate);
+  if(!item){setNotice('This suggestion is no longer available.');return}
+  try{
+   await commitForecastChange(()=>{
+    state().predictions.historyPatternDecisions??={};
+    state().predictions.historyPatternDecisions[item.key]='dismissed';
+   });
+   recurringDraft=null;reviewNotice='Marked '+item.merchant+' as not recurring.';render();
+  }catch(err){setNotice(String(err.message||err))}
+  return;
+ }
+ if(e.target.closest('[data-cancel-review-form]')){
+  recurringDraft=null;render();return;
+ }
+ if(e.target.closest('[data-history-more]')){
+  historyLimit+=90;render();return;
+ }
+ if(e.target.closest('[data-clear-history-search]')){
+  historySearch='';historyLimit=90;render();return;
+ }
  const mortgageReview=e.target.closest('[data-review-mortgage]');
  if(mortgageReview){
   const m=lastMissingMortgages.find(x=>x.id===mortgageReview.dataset.reviewMortgage);
