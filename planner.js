@@ -944,6 +944,7 @@ document.addEventListener('click',async e=>{
     last.date,frequency,snapshot().asOf),sourceRow:row,
    examples:matching.slice(-8).map(x=>String(x.id))};
   reviewNotice='';render();
+  document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
  const reviewCandidate=e.target.closest('[data-review-candidate]');
@@ -956,6 +957,7 @@ document.addEventListener('click',async e=>{
    nextDate:candidate.nextDate,sourceRow:source,
    examples:candidate.examples.map(x=>x.id)};
   reviewNotice='';render();
+  document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
  const dismissCandidate=e.target.closest('[data-dismiss-candidate]');
