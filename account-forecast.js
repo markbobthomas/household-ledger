@@ -109,7 +109,7 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
    predictionKey:original._forecastKey||(groupId?movementKey(groupId):null),
    fromAccountId:original.fromAccountId||null,toAccountId:original.toAccountId||null,
    seriesKey:original._seriesKey||null,baseDate:original._seriesDate||date,
-   cadence:original.cadence||null};
+   cadence:original.cadence||null,recurringRuleId:original.ruleId||null};
   if(!postings.has(date))postings.set(date,[]);
   postings.get(date).push(row);householdEvents.push(row);
   return true;
@@ -224,8 +224,10 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
    }
    const movement={id:'plan|'+String(p.id)+'|'+when,date:when,amount,
     fromAccountId:from,toAccountId:to,source:'user plan',status,
-    seriesKey:seriesTools?.seriesPlan?.(p)||null,baseDate:when,
-    cadence:p.origin==='card-autopay'?'monthly':p.frequency==='biweekly'?'every 2 weeks':p.frequency};
+    seriesKey:p.seriesRuleId?seriesTools?.manualSeriesKey?.(p.seriesRuleId):seriesTools?.seriesPlan?.(p)||null,
+    baseDate:when,cadence:p.seriesRuleId?options.futureRecurringRules?.find(r=>r.id===p.seriesRuleId)?.frequency:
+     p.origin==='card-autopay'?'monthly':p.frequency==='biweekly'?'every 2 weeks':p.frequency,
+    recurringRuleId:p.seriesRuleId||null};
    movements.push(movement);
    if(status==='returned'){
     const reversalDate=String(p.reversalDate||'');
@@ -294,7 +296,8 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const kind=from.type==='credit'||to.type==='credit'?'card_payment':'internal_transfer';
   const details={id:m.id,merchant:m.merchant||(kind==='card_payment'?'Credit-card payment':'Account transfer'),
    type:'transfer',fromAccountId:from.id,toAccountId:to.id,
-   _seriesKey:m.seriesKey||null,_seriesDate:m.baseDate||m.date,cadence:m.cadence||null};
+   _seriesKey:m.seriesKey||null,_seriesDate:m.baseDate||m.date,cadence:m.cadence||null,
+   recurringRuleId:m.recurringRuleId||null};
   post(from.id,m.date,'transfer_out',m.amount,details,m.id);
   post(to.id,m.date,'transfer_in',m.amount,details,m.id);
   diagnostics.pairedMovements.push({...m,kind,amount:round(m.amount)});
