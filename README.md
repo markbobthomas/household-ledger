@@ -44,6 +44,14 @@ The interface reports meaningful forecast-save errors and restores the prior pre
 
 Regression coverage: `node tests/forecast-only-save-smoke.cjs`, `node tests/forecast-client-save-smoke.cjs`, and the Real-mode browser scenario in `tests/planner-browser.cjs`.
 
+## Make recurring from *any* actual transaction
+
+In **History**, every retrieved bank transaction now has a **Make recurring** action, including loans the bank described as ACH transfers, transfers between household accounts, refunds, and pending charges. The bank's original classification does **not** restrict what you may forecast. The confirmation form gives you a choice of future **Expense / withdrawal**, **Deposit / income**, **Refund / credit**, or **Transfer between two linked accounts**, plus an editable amount, frequency, and next date. An unmatched outgoing ACH transfer defaults to a future expense (appropriate when the source is actually a mortgage); an incoming transfer defaults to a deposit or a credit-card refund. A verified, paired transfer suggests both its paying and receiving accounts so the balance forecast moves the money once instead of double counting it. Pending and zero-amount rows are selectable, but the user must explicitly enter a positive proposed future amount and a valid date.
+
+Automatic Reviews remain conservative: transfers, refunds, and pending transactions do not become low-confidence recurring predictions merely because users are now free to plan them manually. Reclassifying a source transfer for a **future** expense never changes the bank's read-only source classification. Posted coverage uses the original bank type when reconciling a confirmed recurring bill, preventing a duplicate forecast for a mortgage that Plaid historically labeled transfer.
+
+Regression: `node tests/history-any-recurring-smoke.cjs` plus desktop/iPhone browser checks.
+
 ## Two dedicated tabs: actual History and payment Reviews
 
 **History** lists every retrieved actual bank transaction (posted and pending), newest first, with account filtering, merchant/date/amount search and progressive loading for larger histories. The bank facts stay read-only. For settled expenses and income, **Make recurring** opens a proposed forecast with the source merchant, selected account, dollar amount, expected next date and frequency, editable before saving. It saves only `predictions.futureRecurringRules`, never a bank transaction.
