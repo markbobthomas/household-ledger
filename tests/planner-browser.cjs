@@ -57,8 +57,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.routine-review-line').filter({hasText:'Mortgage'}).count(),0,
     'Confirmed recurring mortgage stays confirmed after page reload');
    const auditDetails=page.locator('#accuracy-audit');
-   await auditDetails.locator('summary').click();
-   await auditDetails.locator('[data-run-backtest]').click();
+   assert.equal(await page.locator('#audit-launch').isVisible(),true,'One-click audit is visible in the main planner');
+   await page.locator('#audit-launch').click();
+   assert.ok(await auditDetails.getAttribute('open')!==null,'One click expands the audit results');
    assert.match(await auditDetails.innerText(),/Prediction accuracy/);
    assert.match(await auditDetails.innerText(),/historical check|Not enough complete historical months|Correct dated forecasts/i,
     'Historical audit is read-only and explains coverage');
@@ -118,7 +119,7 @@ const {chromium,webkit}=require('playwright');
   });
   let refreshed=0;
   await page.route('**/api/sync',r=>{refreshed++;return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'})});
-  await page.goto(privateUrl,{waitUntil:'load'});
+  await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
@@ -152,8 +153,9 @@ const {chromium,webkit}=require('playwright');
   assert.ok(writes.some(x=>x.predictions?.plannerRoutineDecisions?.['expense|checking-real|home mortgage ach']?.status==='confirmed'),
    'Confirmed mortgage schedule persists in private encrypted adjustments');
   const auditReal=page.locator('#accuracy-audit');
-  await auditReal.locator('summary').click();
-  await auditReal.locator('[data-run-backtest]').click();
+  assert.equal(await page.locator('#audit-launch').isVisible(),true);
+  await page.locator('#audit-launch').click();
+  assert.ok(await auditReal.getAttribute('open')!==null,'Real bank audit expands using one click');
   assert.match(await auditReal.innerText(),/Prediction accuracy/);
   assert.match(await auditReal.innerText(),/Historical|historical|months|history/i,
    'Private Real bank data is processed in memory by the same audit');
