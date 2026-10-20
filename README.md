@@ -36,6 +36,16 @@ The same cycle start/end and due/withdrawal dates advance month by month, respec
 
 Regression: `node tests/card-statement-cycles-smoke.cjs` and `node tests/payment-obligations-smoke.cjs`.
 
+## Missing mortgage review from actual bank history
+
+The strict automatic recurrence engine deliberately requires three similar monthly payments and a sufficiently complete recent history. That protects against fictional charges but can omit a real bill when a Plaid connection has only one or two months of history.
+
+The planner independently checks **actual settled bank transactions** for mortgage descriptions or Plaid mortgage codes. If a recent mortgage is not present in the forecast, an explicit **Possible missing mortgage — not in forecast** panel appears on Overview, Transactions and Settings. It lists the **real dollar amount and paying account**, a suggested next monthly date based on the last posting day, and up to four source transaction examples. **Review and schedule** opens a prefilled but editable monthly payment form; **nothing enters the balance forecast until the user saves it**. **Not recurring** dismisses false positives persistently. The detector ignores stale mortgage activity, credit-card purchases, and mortgages already represented in the projected schedule. Bank source records are unchanged.
+
+The app cannot infer a mortgage from a fully unrecognized merchant with no mortgage-specific bank category, or from transactions that the bank has not synced at all. In those cases use **Transactions → Add transaction** and enter the mortgage manually. The review date is a suggested **posting** date, not a verified lender due date.
+
+Regression: `node tests/planner-missing-mortgage-smoke.cjs`.
+
 ## Confirm a recurring payment when automatic detection misses it
 
 Any dated future transaction can now be converted into a repeating forecast from **Transactions → Edit → This and all future payments**. Choose a frequency (weekly, every two weeks, twice a month, monthly, quarterly, semiannual or annual) and save. These controls are available even if the prediction engine did **not** recognize a recurring pattern. For a bill missing from the entire future list, choose **+ Add transaction**, enter the account, merchant, amount and date, and select **Repeat** rather than One time.
