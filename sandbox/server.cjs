@@ -8,7 +8,7 @@ const STATE_PATH=process.env.SANDBOX_FIXTURE_STATE_PATH||'/var/data/sandbox-fixt
 const {createService,remoteTransport,PlaidError}=require('./plaid-service.cjs');
 const {fixtureTransport}=require('./fixture.cjs');
 const ROOT=path.resolve(__dirname,'..');
-const ALLOWED_ROOT=/^(?:index\.html|modern\.css|planner\.css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)\.js)$/;
+const ALLOWED_ROOT=/^(?:index\.html|modern\.css|planner\.css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)\.js)$/;
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 function createServer({service}={}){
  const api=service||createService({
