@@ -31,12 +31,13 @@ let activeTab='overview',transactionFilter='all',editingKey='',showNewTransactio
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
- if(live()){window.HouseholdLiveSource.persist(liveState)}
+ if(live())return window.HouseholdLiveSource.persist(liveState)
  else {
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds}));
+  return true;
  }
 }
 function requestedReal(){return available()&&localStorage.getItem('household-ledger-view-mode')==='real'}
@@ -501,6 +502,52 @@ function render(){
   activeTab==='transactions'?transactionsPage(bundle,s):overviewPage(bundle,s,selectedSource,derived,fresh);
 }
 document.addEventListener('click',async e=>{
+ const view=e.target.closest('[data-view]');
+ if(view){
+  activeTab=view.dataset.view;
+  editingKey='';showNewTransaction=false;transactionNotice='';
+  render();
+  window.scrollTo({top:0,behavior:'instant'});
+  return;
+ }
+ if(e.target.closest('[data-show-new]')){
+  showNewTransaction=true;editingKey='';transactionNotice='';render();
+  $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});return;
+ }
+ if(e.target.closest('[data-cancel-new]')){
+  showNewTransaction=false;transactionNotice='';render();return;
+ }
+ if(e.target.closest('[data-cancel-future]')){editingKey='';render();return}
+ const edit=e.target.closest('[data-edit-future]');
+ if(edit){editingKey=editingKey===edit.dataset.editFuture?'':edit.dataset.editFuture;
+  showNewTransaction=false;transactionNotice='';render();return}
+ const skip=e.target.closest('[data-skip-future]');
+ if(skip){
+  const row=futureRows(forecastFor(snapshot()),snapshot()).find(r=>r.key===skip.dataset.skipFuture);
+  if(!row)return;
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.skip(state(),row.key,
+    {label:row.merchant,date:row.date,accountId:row.accountId||row.fromAccountId}));
+   editingKey='';transactionNotice='Skipped '+row.merchant+' on '+dateLong(row.date)+'.';render();
+  }catch(err){transactionNotice=String(err.message||err);render()}
+  return;
+ }
+ const restore=e.target.closest('[data-restore-future]');
+ if(restore){
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.restore(state(),restore.dataset.restoreFuture));
+   editingKey='';transactionNotice='Forecast occurrence restored.';render();
+  }catch(err){transactionNotice=String(err.message||err);render()}
+  return;
+ }
+ const removeAdded=e.target.closest('[data-remove-added]');
+ if(removeAdded){
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeAdded(state(),removeAdded.dataset.removeAdded));
+   editingKey='';transactionNotice='Added transaction removed.';render();
+  }catch(err){transactionNotice=String(err.message||err);render()}
+  return;
+ }
  const runAudit=e.target.closest('[data-run-backtest]');
  if(runAudit){
   const s=snapshot(),chosen=selected(s);
@@ -561,6 +608,43 @@ document.addEventListener('click',async e=>{
  if(account){selectedAccount=account.dataset.accountId;render();return}
  if(e.target.closest('#refresh-bank')){window.HouseholdLiveSource?.refresh();return}
 });
+async function commitForecastChange(action){
+ const current=state(),before=JSON.stringify(current.predictions||{});
+ try{
+  const result=action();
+  const saved=await savePlanning();
+  if(live()&&!saved)throw Error('Could not save your changes on the private bank server. Try again.');
+  return result;
+ }catch(err){current.predictions=JSON.parse(before);throw err}
+}
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-cushion-form]');
+ if(!form)return;
+ e.preventDefault();
+ const button=form.querySelector('button[type="submit"]');
+ if(button)button.disabled=true;
+ const fields=Object.fromEntries(new FormData(form));
+ try{
+  const s=snapshot(),accounts=activeAccounts(s),asOf=s.asOf||dateToday(),planner=window.HouseholdPlannerTransactions;
+  if(form.hasAttribute('data-future-edit-form')){
+   const key=form.dataset.futureEditForm;
+   await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
+   editingKey='';transactionNotice='Forecast transaction updated.';
+  }else if(form.hasAttribute('data-future-new-form')){
+   await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
+   showNewTransaction=false;transactionNotice='Future transaction added to the selected account.';
+  }else{
+   await commitForecastChange(()=>model.setCashCushion(state(),fields.cashCushion));
+   transactionNotice='Safety threshold saved.';
+  }
+  render();
+ }catch(err){
+  if(button)button.disabled=false;
+  let error=form.querySelector('.future-form-error');
+  if(!error){error=document.createElement('p');error.className='future-form-error';error.setAttribute('role','alert');form.appendChild(error)}
+  error.textContent=String(err.message||err);
+ }
+});
 document.addEventListener('submit',e=>{
  const form=e.target.closest('[data-card-rule]');
  if(!form)return;
@@ -579,6 +663,15 @@ document.addEventListener('submit',e=>{
  }catch(err){setNotice(err.message);document.getElementById('card-autopay')?.setAttribute('open','')}
 });
 document.addEventListener('change',e=>{
+ if(e.target.id==='transaction-filter'){
+  transactionFilter=e.target.value;editingKey='';showNewTransaction=false;render();return;
+ }
+ if(e.target.id==='new-future-type'){
+  const transfer=e.target.value==='transfer',form=e.target.closest('form');
+  form?.querySelectorAll('.future-transfer-only').forEach(el=>el.hidden=!transfer);
+  const ordinary=form?.querySelector('.new-standard-account');if(ordinary)ordinary.hidden=transfer;
+  return;
+ }
  if(e.target.id==='horizon'){
   const x=Number(e.target.value);
   if([30,60,90].includes(x)){horizon=x;render()}
