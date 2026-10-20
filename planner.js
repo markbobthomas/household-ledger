@@ -300,31 +300,49 @@ function routineReviewPanel(bundle){
 function cardStatementPreview(s,bundle,cardId){
  const next=(bundle?.payments?.statements||[]).filter(x=>String(x.cardId)===String(cardId))
   .sort((a,b)=>a.withdrawalDate.localeCompare(b.withdrawalDate)).slice(0,2);
- if(!next.length)return '<p class="card-preview-placeholder">Save the billing period and payment dates to see projected statements.</p>';
+ if(!next.length)return '<p class="card-preview-placeholder">Save the billing period and payment dates to see posted spending and projected card payments.</p>';
  return '<div class="card-statement-previews">'+next.map((p,i)=>
   '<div class="card-statement-preview" aria-label="'+escapeHTML(p.cardName)+' statement estimate">'+
-   '<div class="card-preview-top"><span>'+(i===0?'NEXT STATEMENT':'FOLLOWING STATEMENT')+
+   '<div class="card-preview-top"><span>'+(i===0?'NEXT CARD BILL':'FOLLOWING CARD BILL')+
     '</span><span class="status-tag '+(p.confirmed?'good':'warn')+'">'+
-    (p.confirmed?'OWNER-ENTERED':'ESTIMATE')+'</span></div>'+
+    (p.confirmed?'ISSUED AMOUNT ENTERED':'PAYMENT ESTIMATE')+'</span></div>'+
    '<strong class="card-preview-amount">'+cash(p.statementBalance)+'</strong>'+
    '<div class="card-preview-line"><span>Billing period</span><strong>'+
     escapeHTML(dayLabel(p.periodStart))+' – '+escapeHTML(dayLabel(p.periodEnd))+'</strong></div>'+
-   '<div class="card-preview-line"><span>Payment due</span><strong>'+
-    escapeHTML(dateLong(p.dueDate))+'</strong></div>'+
-   '<div class="card-preview-line"><span>Auto withdrawal</span><strong>'+
-    (p.alreadyPaid?'Already posted · '+escapeHTML(p.fromName):
-     p.autopayEnabled?escapeHTML(dayLabel(p.withdrawalDate))+' · '+escapeHTML(p.fromName):
-     'Not scheduled')+'</strong></div>'+
-   '<div class="card-preview-line"><span>Posted purchases − refunds</span><strong>'+
-    cash(p.bankPurchases)+'</strong></div>'+
-   '<div class="card-preview-line"><span>Scheduled future card charges</span><strong>'+
+   '<div class="card-preview-line"><span>Period status</span><strong>'+
+    (p.periodComplete?'Closed · all retrieved posted charges':'Open · posted charges to date')+'</strong></div>'+
+   '<div class="card-preview-line"><span>Actual posted purchases</span><strong>'+cash(p.purchases)+'</strong></div>'+
+   '<div class="card-preview-line"><span>Actual posted refunds</span><strong>−'+cash(p.refunds)+'</strong></div>'+
+   '<div class="card-preview-line"><span>Actual net period spending</span><strong>'+cash(p.actualPeriodNet)+'</strong></div>'+
+   '<div class="card-preview-line"><span>Unposted predicted card spending</span><strong>'+
     cash(p.estimatedCharges)+'</strong></div>'+
+   '<div class="card-preview-line"><span>Payment due date</span><strong>'+
+    escapeHTML(dateLong(p.dueDate))+'</strong></div>'+
+   '<div class="card-preview-line"><span>Payment status</span><strong>'+
+    (p.alreadyPaid?'Actual posted '+escapeHTML(dayLabel(p.actualPaymentDate))+' · '+cash(p.actualPaymentAmount):
+     p.autopayEnabled?'Planned '+escapeHTML(dayLabel(p.withdrawalDate))+' · '+escapeHTML(p.fromName):
+     'No autopay · no withdrawal planned')+'</strong></div>'+
+   (p.alreadyPaid&&Math.abs(p.actualPaymentAmount-p.amount)>.011?
+    '<p class="card-preview-caveat">Posted payment differs from the estimate. Review any remaining balance on the card.</p>':'')+
+   (!p.alreadyPaid&&p.lastPostedPayment?
+    '<p class="card-preview-caveat">Last actual card payment: '+
+     escapeHTML(dayLabel(p.lastPostedPayment.date))+' · '+cash(p.lastPostedPayment.amount)+
+     ' from '+escapeHTML(p.fromName)+'.</p>':'')+
+   '<details class="card-actual-transactions"><summary>Review '+p.postedTransactions.length+
+    ' actual card transactions in this period</summary>'+
+    (p.postedTransactions.length?p.postedTransactions.map(t=>
+     '<div class="card-actual-line"><span>'+escapeHTML(dayLabel(t.date))+
+      ' · '+escapeHTML(t.merchant)+'</span><strong>'+
+      (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
+     '<p>No settled card purchases or refunds found for this cycle.</p>')+
+    '</details>'+
    (p.pendingExcluded?'<p class="card-preview-caveat">'+p.pendingExcluded+
     ' pending card transaction(s) excluded until posted.</p>':'')+
    '<p class="card-preview-caveat">'+(p.confirmed?
-    'Amount entered from the issued statement; actual bank withdrawal still unconfirmed.':
-    'Partial estimate. Unplanned purchases, interest, fees and any carried balance may change the final bill.')+
-   '</p></div>').join('')+'</div>';
+    'Issued statement amount supplied by you. Actual card purchases are listed separately.':
+    'The actual net charges are based on retrieved posted bank transactions. The payment estimate can differ due to prior balances, fees, interest or unplanned future card purchases.')+
+   ' Future autopay dates are user-entered plans; actual dates become known when the bank posts the payment.</p>'+
+  '</div>').join('')+'</div>';
 }
 function autopayPanel(s,bundle){
  const cards=activeAccounts(s).filter(a=>accountType(a)==='credit'),
@@ -349,7 +367,7 @@ function autopayPanel(s,bundle){
    '<label>Billing period starts<input name="billingStartDate" type="date" value="'+escapeHTML(oldStart)+'" required></label>'+
    '<label>Billing period ends / statement closes<input name="billingEndDate" type="date" value="'+escapeHTML(oldClose)+'" required></label>'+
    '<label>Statement payment due date<input name="nextDueDate" type="date" value="'+escapeHTML(v.nextDueDate||v.nextPaymentDate||'')+'" required></label>'+
-   '<label>Autopay withdrawal date<input name="nextPaymentDate" type="date" value="'+escapeHTML(v.nextPaymentDate||'')+'" required></label>'+
+   '<label>Planned autopay withdrawal date (until bank posts it)<input name="nextPaymentDate" type="date" value="'+escapeHTML(v.nextPaymentDate||'')+'" required></label>'+
    '<label>Autopay status<select name="autopayEnabled"><option value="yes"'+(v.autopayEnabled!==false?' selected':'')+'>Full-statement autopay</option>'+
     '<option value="no"'+(v.autopayEnabled===false?' selected':'')+'>Not on autopay · estimate only</option></select></label>'+
    '<label>Autopay funding account<select name="fromAccountId">'+options(paying)+'</select></label>'+
