@@ -129,7 +129,14 @@ async function start(port=Number(env.PORT||8788)){
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js)$/;
   if(req.method==='GET'&&(requestPath==='/'||allowed.test(staticPath))){
    const name=staticPath||'index.html';
-   let body=await fs.readFile(path.resolve(__dirname,'..',name));
+   let body;
+   try{body=await fs.readFile(path.resolve(__dirname,'..',name))}
+   catch(error){
+    // Never crash the bank server on a browser request for a missing asset.
+    if(error.code==='ENOENT')return respond(404,{error:'Static asset not found'});
+    process.stderr.write('Static read failed: '+String(error.code||'unknown').slice(0,30)+'\n');
+    return respond(500,{error:'Static asset temporarily unavailable'});
+   }
    if(name==='index.html')body=Buffer.from(body.toString('utf8').replace('</head>','<script src="/pilot/data-source.js"></script></head>'));
    res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
    return res.end(body);
