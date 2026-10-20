@@ -302,8 +302,8 @@ const {chromium,webkit}=require('playwright');
    'Real checking starts at bank-reported available cash, not credit card debt');
   assert.match(await page.locator('.income-status').innerText(),/PREDICTED/i,
    'Recurring payroll categorized by Plaid as TRANSFER_IN now reaches projected income');
-  assert.match(await page.locator('.income-status').innerText(),/\$3,100/,
-   'Income summary includes recognized deposited paycheck amount');
+  assert.match(await page.locator('.income-status').innerText(),/3 dated deposits · \$9,300/,
+   'Income summary accurately totals three inferred $3,100 future paychecks');
   assert.match(await page.locator('.overview-upcoming-item').first().innerText(),/Home Mortgage ACH/,
    'Real mortgage history produces expected future cash withdrawals');
   assert.ok(await page.locator('.overview-upcoming-item').count()>=1);
