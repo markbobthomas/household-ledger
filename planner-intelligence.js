@@ -57,9 +57,18 @@ function stableEvidence(group,event,asOf){
   recent=group.filter(t=>Math.abs(Number(t.date.slice(-2))-expectedDay)<=3).slice(-6);
  }
  if(recent.length<3)return {stable:false,reason:'fewer than three matching pay dates'};
- const last=recent.slice(-3),amount=cents(last[0].amount);
- if(!(amount>0)||last.some(t=>cents(t.amount)!==amount))return {stable:false,reason:'amount has changed'};
- if(cents(event.amount)!==amount)return {stable:false,reason:'expected amount differs from posted pattern'};
+ const last=recent.slice(-3),amounts=last.map(t=>cents(t.amount)),amount=amounts[0];
+ const isIncome=event.type==='income';
+ // Strict to the cent for bills; earnings can vary slightly from taxes or
+ // hours. Use the lowest observed paycheck, never an optimistic median.
+ const low=Math.min(...amounts),high=Math.max(...amounts),vary=isIncome&&low!==high;
+ if(!(low>0))return {stable:false,reason:'invalid payment amount'};
+ if(!isIncome&&amounts.some(n=>n!==amount))return {stable:false,reason:'amount has changed'};
+ if(isIncome&&high/low>1.10)return {stable:false,reason:'paycheck amount varies by more than 10%'};
+ if(isIncome&&Math.abs(cents(event.amount)-low)>Math.max(1,low*.1))
+  return {stable:false,reason:'expected income amount differs from posted history'};
+ if(!isIncome&&cents(event.amount)!==amount)
+  return {stable:false,reason:'expected amount differs from posted pattern'};
  const months=new Set(last.map(t=>t.date.slice(0,7)));
  let calendar=false,interval=false;
  const monthlyStep={monthly:1,'twice monthly':1,quarterly:3,semiannual:6,annual:12}[cadence];
@@ -94,8 +103,8 @@ function stableEvidence(group,event,asOf){
  const maxAge=interval?(cadence==='weekly'?24:38):
   monthlyStep===12?400:monthlyStep===6?205:monthlyStep===3?115:70;
  const recently=gap(asOf,lastDate)<=maxAge;
- return {stable:recently,reason:recently?'stable repeating amount':'no recent posted evidence',
-  amount:amount/100,frequency:cadence,observed:group.length,key:identity(event),
+ return {stable:recently,reason:recently?(vary?'recurring paycheck with slightly variable amount':'stable repeating amount'):'no recent posted evidence',
+  amount:(isIncome?low:amount)/100,variableIncome:vary,frequency:cadence,observed:group.length,key:identity(event),
   mostRecentDate:lastDate,category:event.category};
 }
 function acceptedManual(event){
@@ -145,9 +154,12 @@ function project(state,records,events,asOf){
   if(!confirmed&&!suggestions.has(key)){
    suggestions.set(key,{key,merchant:e.merchant,account:account(e),type:e.type,category:e.category,
     amount:evidence.amount,frequency:evidence.frequency,slot:e.slot,
-    observed:evidence.observed,next:e.date,last:evidence.mostRecentDate});
+    observed:evidence.observed,next:e.date,last:evidence.mostRecentDate,
+    ...(evidence.variableIncome?{note:'Paycheck amount varies slightly; planning uses the lowest recent amount.'}:{})});
   }
-  future.push({...e,planConfidence:confirmed?'confirmed':'suggested',routineKey:key});
+  future.push({...e,amount:e.type==='income'&&evidence.variableIncome?evidence.amount:e.amount,
+   planConfidence:evidence.variableIncome?'variable-paycheck-estimate':confirmed?'confirmed':'suggested',
+   routineKey:key});
  }
  const result={events:future,review:[...suggestions.values()].sort((a,b)=>
   a.next.localeCompare(b.next)||a.merchant.localeCompare(b.merchant)),
