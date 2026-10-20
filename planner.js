@@ -416,7 +416,8 @@ function transactionsPage(bundle,s){
    (canEdit?editorFor(row,s):'')+'</article>';
  }).join('');
  const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([k,v])=>
-  v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter));
+  v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter||
+   String(v.toAccountId)===transactionFilter));
  const undo=skipped.length?'<details class="details future-skipped"><summary>'+
   skipped.length+' skipped forecast occurrence(s) — restore</summary>'+
   skipped.map(([key,v])=>'<div class="future-skip-line">'+escapeHTML(v.label||'Predicted transaction')+
