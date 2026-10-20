@@ -1118,6 +1118,52 @@ async function commitForecastChange(action){
  }catch(err){current.predictions=JSON.parse(before);throw err}
 }
 document.addEventListener('submit',async e=>{
+ const form=e.target.closest('[data-history-filter]');
+ if(!form)return;
+ e.preventDefault();
+ const fields=Object.fromEntries(new FormData(form));
+ historySearch=String(fields.search||'').trim().slice(0,100);
+ historyAccount=String(fields.historyAccount||'all');
+ historyLimit=90;
+ render();
+});
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest('[data-history-recurring-form]');
+ if(!form)return;
+ e.preventDefault();
+ const button=form.querySelector('button[type="submit"]');
+ if(button)button.disabled=true;
+ try{
+  const draft=recurringDraft;
+  if(!draft)throw Error('Select a posted bank payment again');
+  const fields=Object.fromEntries(new FormData(form));
+  if(fields.date>shiftDay(snapshot().asOf,90))
+   throw Error('Next payment must fall within the 90-day planning window');
+  if(fields.type!==draft.type)
+   throw Error('The payment type must match the selected bank transaction');
+  const candidate={
+   kind:'event',accountId:draft.accountId,type:draft.type,amount:draft.amount,
+   merchant:draft.merchant,date:draft.sourceRow?.date||draft.nextDate,
+   sourceAmount:draft.amount,originalMerchant:draft.merchant
+  };
+  await commitForecastChange(()=>window.HouseholdPlannerTransactions.defineRecurring(
+   state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
+   model.records(state()),draft.examples||[]));
+  const origin=draft.merchant;
+  recurringDraft=null;reviewNotice='Saved recurring forecast for '+origin+'.';
+  transactionNotice=reviewNotice;
+  render();
+ }catch(err){
+  if(button)button.disabled=false;
+  let message=form.querySelector('.future-form-error');
+  if(!message){
+   message=document.createElement('p');message.className='future-form-error';
+   message.setAttribute('role','alert');form.appendChild(message);
+  }
+  message.textContent=String(err.message||err);
+ }
+});
+document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-cushion-form]');
  if(!form)return;
  e.preventDefault();
@@ -1208,6 +1254,9 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('change',e=>{
+ if(e.target.name==='historyAccount'){
+  historyAccount=e.target.value;historyLimit=90;render();return;
+ }
  if(e.target.name==='scope'){
   const form=e.target.closest('[data-future-edit-form]');
   const section=form?.querySelector('.future-repeat-fields');
