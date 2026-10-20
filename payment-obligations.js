@@ -107,7 +107,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     warnings.push(label+': multiple competing predicted withdrawals near '+due+'; review for duplicates');
    }
    const e={id:'bill|'+b.id+'|'+due,accountId:account.id,account:account.name,
-    type:'expense',amount,date:due,merchant:label,category:b.category||'Housing',source:'owner-bill'};
+    type:'expense',amount,date:due,merchant:label,category:b.category||'Housing',source:'owner-bill',
+    frequency:b.frequency,billId:b.id,cadence:b.frequency==='monthly'?'monthly':null};
    billEvents.push(e);
    obligations.push({id:e.id,date:due,amount,fromAccountId:account.id,merchant:label,
     kind:'automatic_bill',confidence:'entered schedule / amount estimate'});
