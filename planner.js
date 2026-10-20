@@ -98,7 +98,14 @@ function forecastFor(s){
     merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
     amount:event._forecastOriginalAmount??event.amount,
     accountId:event._forecastOriginalAccountId||event.accountId},accounts));
- const manual=tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90));
+ const generated=tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90));
+ const manual={plans:generated.plans,
+  events:generated.events.map(e=>({
+   ...tools.applySeries(e,e.date,e._seriesKey,state().predictions?.futureSeriesEdits||{}),
+   _seriesKey:e._seriesKey,_seriesDate:e.date,
+   _forecastOriginalAccountId:e.accountId,_forecastOriginalMerchant:e.merchant,
+   _forecastOriginalAmount:e.amount
+  }))};
  const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
  const existingAdds=(state().predictions?.futureTransactionAdds||[]).filter(e=>
   !confirmed.some(r=>r.sourceAddedId===e.id)&&!matching(e,e.type==='transfer'?'movement':'event'));
