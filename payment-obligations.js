@@ -58,6 +58,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    (!explicit&&!validAmount(rule.lastStatementBalance))){
    warnings.push(card.name+': billing dates or next payment dates need confirmation');continue;
   }
+  if(!autopay)warnings.push(card.name+': statement is estimated, but no automatic withdrawal is scheduled. Choose a payment account if this card is paid from checking.');
   const method=rule.method||'statement',hasIssued=validAmount(rule.lastStatementBalance);
   if(!['statement','minimum','fixed'].includes(method)||
     method==='minimum'&&!validAmount(rule.minimumAmount)||
