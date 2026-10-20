@@ -154,7 +154,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
    return decision?.status==='excluded'&&Math.abs(Number(decision.amount)-g.amount)<.011;
   })))continue;
   const existingRules=rules.filter(r=>r.kind==='event'&&
-   String(r.originalAccountId||r.accountId)===g.accountId&&r.type===g.type&&
+   String(r.originalAccountId||r.accountId)===g.accountId&&(!r.type||r.type===g.type)&&
    (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
   // Manual plan owns bank stream no matter the latest bill amount. An
   // unexpected electric charge or NET paycheck is not another recurrence.
