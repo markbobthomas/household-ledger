@@ -38,7 +38,9 @@ const actualKind=t=>{
 const bankEligible=(t,accounts,asOf)=>{
  if(!t||t.pending||!date(t.date)||t.date>asOf||!(Number(t.amount)>0)||t.pairedTransactionId)return false;
  const id=accountId(t,accounts),a=(accounts||[]).find(x=>String(x.id)===id);
- if(!a||['credit','loan'].includes(String(a.accountType||a.type||'').toLowerCase()))return false;
+ if(!a||String(a.accountType||a.type||'').toLowerCase()==='loan')return false;
+ const credit=String(a.accountType||a.type||'').toLowerCase()==='credit';
+ if(credit&&actualKind(t)!=='expense')return false;
  return Boolean(actualKind(t));
 };
 const isStrongSource=t=>{
@@ -82,7 +84,13 @@ function infer(records,snapshot,predictions={},options={}){
    Math.abs(cents(ownerDecision.amount)-amount)<=1||dismissed[
     [g.accountId,last.type,norm(last.merchant),String(amount)].map(encodeURIComponent).join('|')
    ]==='dismissed';
-  if(blocked)continue;
+  const manuallyScheduled=(predictions.futureRecurringRules||[]).some(r=>
+   r.kind==='event'&&String(r.originalAccountId||r.accountId)===g.accountId&&
+   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(last.merchant))&&
+   Math.abs(cents(r.matchAmount??r.amount)-amount)<=100);
+  // A user-confirmed rule is authoritative even if its due date has moved
+  // outside the original posting month; do not resurrect an old inference.
+  if(blocked||manuallyScheduled)continue;
   // A one-off vague expense is not reliable, and two similar store visits are
   // a REVIEW item, not a guaranteed $X bill.
   if(!singleMortgage&&!matchedMonths)continue;
