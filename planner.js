@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','mortgageReviewDismissals'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','mortgageReviewDismissals','historyPatternDecisions'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -40,7 +40,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   mortgageReviewDismissals:p.mortgageReviewDismissals}));
+   mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions}));
   return true;
  }
 }
@@ -811,7 +811,12 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  const notes=events.map(e=>'<div class="overview-upcoming-item"><span>'+escapeHTML(dayLabel(e.date))+
   '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span></div>').join('');
  return '<div class="planner-page overview-page">'+
-  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+missingMortgagePanel(bundle)+incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
+  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
+  ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length)?
+    '<section class="panel review-spotlight"><div><strong>Recurring payments may need review</strong>'+
+    '<p>Potential missed bills or deposits found in bank history.</p></div>'+
+    '<button type="button" class="btn" data-view="reviews">Review suggestions</button></section>':'')+
+  incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
    '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
@@ -835,7 +840,7 @@ function settingsPage(bundle,s,chosen){
    '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Transactions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
    '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
    '</section>'+
-  missingMortgagePanel(bundle)+auditPanel(chosen)+routineReviewPanel(bundle)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
+  auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
@@ -895,13 +900,15 @@ function render(){
  let important=(derived?.events||[]).filter(e=>['expense','transfer_out'].includes(e.kind));
  const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
+  activeTab==='history'?historyPage(bundle,s):
+  activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):overviewPage(bundle,s,selectedSource,derived,fresh);
 }
 document.addEventListener('click',async e=>{
  const view=e.target.closest('[data-view]');
  if(view){
   activeTab=view.dataset.view;
-  editingKey='';showNewTransaction=false;transactionNotice='';
+  editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   render();
   window.scrollTo({top:0,behavior:'auto'});
   return;
