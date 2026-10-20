@@ -1046,10 +1046,8 @@ document.addEventListener('click',async e=>{
   await new Promise(resolve=>setTimeout(resolve,20));
   auditAccount=accountId;
   try{
-   const updated=window.HouseholdPlannerBacktest.build(state(),s.asOf||dateToday(),accountId,
-    {model,forecast:window.HouseholdForecast,ledger:window.HouseholdForecastLedger,
-     planner:window.HouseholdPlannerIntelligence},
-    {months:6,accounts:activeAccounts(s)});
+   const updated=window.HouseholdFutureLedger.backtest(
+    model.records(state()),activeAccounts(s),s.asOf||dateToday(),accountId,6);
    auditMeta={number:previousNumber+1,checkedAt:new Date().toLocaleString('en-US'),
     unchanged:prior!==null&&JSON.stringify(prior)===JSON.stringify(updated)};
    audit=updated;auditError='';
