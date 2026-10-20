@@ -566,7 +566,8 @@ function missingMortgagePanel(bundle){
 }
 function newTransactionForm(s){
  const accounts=activeAccounts(s),primary=selected(s)?.id||accounts[0]?.id,
-  defaultAccount=transactionFilter!=='all'?transactionFilter:primary;
+  defaultAccount=mortgageDraft?.accountId||(transactionFilter!=='all'?transactionFilter:primary),
+  preset=mortgageDraft;
  return '<form class="future-new-form panel" id="future-new-form" data-future-new-form>'+
   '<div class="section-title"><h2>Add predicted transaction</h2><span class="status-tag">FORECAST ONLY</span></div>'+
   '<p class="lead">Add a dated future expense, deposit, refund or a transfer between your accounts. No money moves.</p>'+
@@ -574,16 +575,17 @@ function newTransactionForm(s){
   '<label>Transaction type<select name="type" id="new-future-type">'+
    '<option value="expense">Withdrawal / purchase</option><option value="income">Deposit</option>'+
    '<option value="refund">Refund</option><option value="transfer">Transfer between accounts</option></select></label>'+
-  '<label>Description<input name="merchant" maxlength="160" placeholder="e.g. Property tax" required></label>'+
+  '<label>Description<input name="merchant" maxlength="160" placeholder="e.g. Property tax" value="'+escapeHTML(preset?.merchant||'')+'" required></label>'+
   '<label class="new-standard-account">Account'+accountSelect(accounts,defaultAccount,'accountId')+'</label>'+
   '<label class="future-transfer-only" hidden>From account'+accountSelect(accounts,defaultAccount,'fromAccountId')+'</label>'+
   '<label class="future-transfer-only" hidden>To account'+accountSelect(accounts,accounts.find(a=>String(a.id)!==String(defaultAccount))?.id||defaultAccount,'toAccountId')+'</label>'+
   '<label>Date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+
-   escapeHTML(shiftDay(s.asOf,1))+'" required></label>'+
-  '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00"></label>'+
-  '<label>Repeat'+frequencyChoices('once',true)+'</label>'+
+   escapeHTML(preset?.nextDate||shiftDay(s.asOf,1))+'" required></label>'+
+  '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00" value="'+escapeHTML(preset?.amount??'')+'"></label>'+
+  '<label>Repeat'+frequencyChoices(preset?'monthly':'once',true)+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
-  '</div><p class="audit-footnote">If auto-detection missed a bill or paycheck, select a frequency here to add every future occurrence, not just one date.</p>'+
+  '</div><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
+   'If auto-detection missed a bill or paycheck, select a frequency here to add every future occurrence, not just one date.</p>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
@@ -626,6 +628,7 @@ function transactionsPage(bundle,s){
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
    (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
    (showNewTransaction?newTransactionForm(s):'')+
+   missingMortgagePanel(bundle)+
    (lines||'<div class="empty-visual">No predicted transactions for this selection. Add one or choose another account.</div>')+
    undo+
    '<p class="audit-footnote">Forecast-only changes recalculate balance predictions for affected accounts. Actual bank transactions remain untouched. Card payments and account transfers are represented once and affect both linked accounts.</p>'+
@@ -688,7 +691,7 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  const notes=events.map(e=>'<div class="overview-upcoming-item"><span>'+escapeHTML(dayLabel(e.date))+
   '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span></div>').join('');
  return '<div class="planner-page overview-page">'+
-  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
+  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+missingMortgagePanel(bundle)+incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
    '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
@@ -712,7 +715,7 @@ function settingsPage(bundle,s,chosen){
    '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Transactions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
    '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
    '</section>'+
-  auditPanel(chosen)+routineReviewPanel(bundle)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
+  missingMortgagePanel(bundle)+auditPanel(chosen)+routineReviewPanel(bundle)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
