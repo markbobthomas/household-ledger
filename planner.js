@@ -417,12 +417,14 @@ function futureRows(bundle,s){
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
 }
 function cadenceOption(cadence){
- return {'weekly':'weekly','every 2 weeks':'biweekly',biweekly:'biweekly',monthly:'monthly',
+ return {'weekly':'weekly','every 2 weeks':'biweekly',biweekly:'biweekly',
+  'every 4 weeks':'every-4-weeks','every-4-weeks':'every-4-weeks',monthly:'monthly',
   'twice monthly':'twice-monthly','twice-monthly':'twice-monthly',quarterly:'quarterly',
   semiannual:'semiannual',annual:'annual'}[String(cadence||'').toLowerCase()]||'monthly';
 }
 function frequencyChoices(value,includeOnce=false){
  const labels={once:'One time',weekly:'Every week',biweekly:'Every 2 weeks',
+  'every-4-weeks':'Every 4 weeks (28 days)',
   'twice-monthly':'Twice monthly (two dates)',monthly:'Every month',
   quarterly:'Every 3 months',semiannual:'Every 6 months',annual:'Every year'};
  return '<select name="frequency" data-frequency>'+Object.entries(labels)
