@@ -115,6 +115,24 @@ const linked=C.materialize(snapshot,sourceDifferent,transferIncome.predictions,T
 assert.equal(linked.ledger.filter(e=>e.type==='income'&&e.accountId==='checking').length,3,
  'Incoming ACH deposit with variable amount produces only one confirmed paycheck series');
 assert.equal(linked.ledger.some(e=>e.merchant==='PAYROLL EFT'),false);
+const doubleAlias={predictions:{}};
+const firstAlias=T.defineRecurring(doubleAlias,{date:'2026-11-18',merchant:'Home Electric Estimate',
+ amount:155,type:'expense',accountId:'checking',frequency:'monthly'},
+ accounts,asOf,null,electric,['e1','e2']);
+const otherAlias=T.defineRecurring(doubleAlias,{date:'2026-11-20',merchant:'Electricity Envelope',
+ amount:175,type:'expense',accountId:'checking',frequency:'monthly'},
+ accounts,asOf,null,electric,['e3']);
+assert.equal(otherAlias.id,firstAlias.id,
+ 'Two different forecast labels tied to the same selected bank merchant update one rule');
+assert.equal(doubleAlias.predictions.futureRecurringRules.length,1,
+ 'Different aliases cannot create two debit schedules for the same selected bank history');
+const grocery=[
+ row('g1','2026-08-08','Safeway Grocery',72),
+ row('g2','2026-09-08','Safeway Grocery',91),
+ row('g3','2026-10-08','Safeway Grocery',60)
+];
+assert.equal(C.analyze(grocery,accounts,asOf).automatic.length,0,
+ 'Monthly variable grocery shopping is not automatically considered a fixed future bill');
 const sanity=linked.projection.household.conservationDifference;
 assert.equal(sanity,0,'Projected balance reconciles after payroll corrections');
 console.log('PASS variable utility and income identity; 3-history averaging, owner precedence, bank alias matching, monthly paid-once logic and Plaid transfer income');
