@@ -101,11 +101,12 @@ const {chromium,webkit}=require('playwright');
     .futureTransactionEdits?.[key]?.amount,predictionKey),originalAmount+75,
     'One-off prediction edits save without changing posted transactions');
    const afterFirst=page.locator('.future-item').filter({hasText:'Mortgage'}).first();
-   await afterFirst.locator('[data-edit-future]').click();
+   await afterFirst.locator('[data-edit-series]').click();
    const seriesForm=page.locator('.future-edit-form');
    assert.equal(await seriesForm.locator('input[name="scope"][value="all"]').count(),1,
     'Recurring mortgage editor offers an all-future option');
-   await seriesForm.locator('input[name="scope"][value="all"]').check();
+   assert.equal(await seriesForm.locator('input[name="scope"][value="all"]').isChecked(),true,
+    'Edit all future opens with the recurring-payment choice selected');
    const newAmount=originalAmount+125;
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
@@ -232,11 +233,11 @@ const {chromium,webkit}=require('playwright');
   assert.match(await page.locator('.transactions-page').innerText(),/Credit-card payment/,
    'A confirmed full-statement card payment is a dated checking withdrawal');
   const cardSeries=page.locator('.future-item').filter({hasText:'Credit-card payment'}).first();
-  await cardSeries.locator('[data-edit-future]').click();
+  await cardSeries.locator('[data-edit-series]').click();
   const cardSeriesForm=page.locator('.future-edit-form');
   assert.equal(await cardSeriesForm.locator('input[name=scope][value=all]').count(),1,
    'Card autopay supports a linked all-future edit');
-  await cardSeriesForm.locator('input[name=scope][value=all]').check();
+  assert.equal(await cardSeriesForm.locator('input[name=scope][value=all]').isChecked(),true);
   await cardSeriesForm.locator('[name=amount]').fill('1275');
   await cardSeriesForm.locator('button[type=submit]').click();
   await page.locator('.future-notice').getByText(/every future occurrence/i).waitFor();
