@@ -37,6 +37,7 @@ jobs:
           node tests/planner-missing-mortgage-smoke.cjs
           node tests/planner-history-smoke.cjs
           node tests/forecast-only-save-smoke.cjs
+          node tests/forecast-client-save-smoke.cjs
           node tests/planner-income-smoke.cjs
           node tests/payment-obligations-smoke.cjs
           node tests/card-statement-cycles-smoke.cjs
