@@ -784,12 +784,36 @@ document.addEventListener('click',async e=>{
   window.scrollTo({top:0,behavior:'auto'});
   return;
  }
+ const mortgageReview=e.target.closest('[data-review-mortgage]');
+ if(mortgageReview){
+  const m=lastMissingMortgages.find(x=>x.id===mortgageReview.dataset.reviewMortgage);
+  if(!m){setNotice('Mortgage history changed. Refresh and try again.');return}
+  mortgageDraft={...m};activeTab='transactions';transactionFilter=m.accountId;
+  showNewTransaction=true;editingKey='';transactionNotice='';
+  render();
+  $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});
+  return;
+ }
+ const mortgageDismiss=e.target.closest('[data-dismiss-mortgage]');
+ if(mortgageDismiss){
+  const m=lastMissingMortgages.find(x=>x.id===mortgageDismiss.dataset.dismissMortgage);
+  if(!m){setNotice('Mortgage history changed. Refresh and try again.');return}
+  try{
+   await commitForecastChange(()=>{
+    state().predictions.mortgageReviewDismissals??=[];
+    if(!state().predictions.mortgageReviewDismissals.includes(m.id))
+     state().predictions.mortgageReviewDismissals.push(m.id);
+   });
+   mortgageDraft=null;render();
+  }catch(err){setNotice(String(err.message||err))}
+  return;
+ }
  if(e.target.closest('[data-show-new]')){
-  showNewTransaction=true;editingKey='';transactionNotice='';render();
+  showNewTransaction=true;mortgageDraft=null;editingKey='';transactionNotice='';render();
   $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});return;
  }
  if(e.target.closest('[data-cancel-new]')){
-  showNewTransaction=false;transactionNotice='';render();return;
+  showNewTransaction=false;mortgageDraft=null;transactionNotice='';render();return;
  }
  if(e.target.closest('[data-cancel-future]')){editingKey='';render();return}
  const edit=e.target.closest('[data-edit-future]');
@@ -959,7 +983,7 @@ document.addEventListener('submit',async e=>{
     await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
     transactionNotice='Future transaction added to the selected account.';
    }
-   showNewTransaction=false;
+   showNewTransaction=false;mortgageDraft=null;
   }else{
    await commitForecastChange(()=>model.setCashCushion(state(),fields.cashCushion));
    transactionNotice='Safety threshold saved.';
