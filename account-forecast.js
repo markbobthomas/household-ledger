@@ -105,12 +105,19 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const a=byId.get(accountId);
   if(!a?.valid){diagnostics.unverifiedAccounts.push({id:original.id||null,accountId,reason:'No verified account balance/type'});return false}
   const row={accountId,date,kind,amount:round(amount),id:original.id||null,merchant:original.merchant||original.description||'Expected event',
-   type:original.type||kind,description:original.description||'',transferGroupId:groupId};
+   type:original.type||kind,description:original.description||'',transferGroupId:groupId,
+   predictionKey:original._forecastKey||(groupId?movementKey(groupId):null),
+   fromAccountId:original.fromAccountId||null,toAccountId:original.toAccountId||null};
   if(!postings.has(date))postings.set(date,[]);
   postings.get(date).push(row);householdEvents.push(row);
   return true;
  };
  const historical=Array.isArray(options.records)?options.records:[];
+ const forecastEdits=options.futureTransactionEdits||{},extra=Array.isArray(options.futureTransactionAdds)?
+  options.futureTransactionAdds:[];
+ const encode=x=>encodeURIComponent(String(x));
+ const eventKey=(id,accountId)=>'event|'+encode(id)+'|'+encode(accountId);
+ const movementKey=id=>'movement|'+encode(id);
  const rowById=new Map(historical.map(t=>[String(t.id),t]));
  const historicalPartners=new Map();
  for(const row of historical){
@@ -124,10 +131,16 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   historicalPartners.get(lookup).add(other);
  }
  const seenEventIds=new Map();
- const projected=(Array.isArray(expectedEvents)?expectedEvents:[]).filter(e=>
-  e&&iso(e.date)&&e.date>asOf&&e.date<=through&&Number.isFinite(Number(e.amount))&&Number(e.amount)>0&&e.enabled!==false)
-  .map((e,i)=>({...e,_accountId:resolve(e.accountId||e.account),_eventIndex:i}))
-  .filter(e=>{
+ const projected=[...(Array.isArray(expectedEvents)?expectedEvents:[]),
+  ...extra.filter(e=>e.type!=='transfer')].filter(e=>e&&e.enabled!==false).map((e,i)=>{
+   const key=eventKey(e.id||'unnamed-'+i,resolve(e.accountId||e.account)||'');
+   const edit=forecastEdits[key];
+   if(edit?.skipped)return null;
+   const updated=edit?{...e,...edit}:e;
+   return {...updated,_forecastKey:key,_accountId:resolve(updated.accountId||updated.account),
+    _eventIndex:i};
+  }).filter(e=>e&&iso(e.date)&&e.date>asOf&&e.date<=through&&
+   Number.isFinite(Number(e.amount))&&Number(e.amount)>0).filter(e=>{
    if(e.id===undefined||e.id===null||e.id==='')return true;
    const id=String(e.id),signature=[e.date,e._accountId,e.type,e.cashDirection,e.amount].join('|');
    if(!seenEventIds.has(id)){seenEventIds.set(id,signature);return true}
@@ -224,6 +237,12 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
    }
   }
  }
+ // Extra owner-entered future transfers share both account legs, exactly once.
+ for(const entry of extra.filter(e=>e.type==='transfer')){
+  movements.push({id:'future|'+entry.id,date:entry.date,amount:Number(entry.amount),
+   fromAccountId:String(entry.fromAccountId),toAccountId:String(entry.toAccountId),source:'future add',
+   merchant:'Account transfer'});
+ }
  // Explicit movement replaces a standalone inferred leg that describes the
  // very same money leaving or entering one of its account endpoints.
  for(const e of candidates){
@@ -249,7 +268,15 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   });
   if(replaces){coveredEvents.add(e._eventIndex);diagnostics.suppressedDuplicates.push({id:e.id,reason:'Paired movement already projected'})}
  }
- for(const m of movements){
+ for(const original of movements){
+  const change=forecastEdits[movementKey(original.id)];
+  if(change?.skipped)continue;
+  const m=change?{...original,...change}:original;
+  if(!iso(m.date)||m.date<=asOf||m.date>through||!(Number(m.amount)>0)||
+    !byId.has(String(m.fromAccountId))||!byId.has(String(m.toAccountId))||
+    m.fromAccountId===m.toAccountId){
+   diagnostics.unassigned.push({id:m.id,reason:'Invalid edited future transfer'});continue;
+  }
   if(!byId.get(m.fromAccountId)?.valid||!byId.get(m.toAccountId)?.valid){
    diagnostics.unverifiedAccounts.push({id:m.id,reason:'Transfer accounts require verified balances'});continue;
   }
@@ -258,8 +285,10 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   movementSignatures.add(k);
   const from=byId.get(m.fromAccountId),to=byId.get(m.toAccountId);
   const kind=from.type==='credit'||to.type==='credit'?'card_payment':'internal_transfer';
-  post(from.id,m.date,'transfer_out',m.amount,{id:m.id,merchant:kind==='card_payment'?'Credit-card payment':'Account transfer',type:'transfer'},m.id);
-  post(to.id,m.date,'transfer_in',m.amount,{id:m.id,merchant:kind==='card_payment'?'Credit-card payment':'Account transfer',type:'transfer'},m.id);
+  const details={id:m.id,merchant:m.merchant||(kind==='card_payment'?'Credit-card payment':'Account transfer'),
+   type:'transfer',fromAccountId:from.id,toAccountId:to.id};
+  post(from.id,m.date,'transfer_out',m.amount,details,m.id);
+  post(to.id,m.date,'transfer_in',m.amount,details,m.id);
   diagnostics.pairedMovements.push({...m,kind,amount:round(m.amount)});
  }
  for(const e of projected){
