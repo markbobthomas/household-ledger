@@ -19,6 +19,7 @@ const account=t=>String(t.accountId||t.account||'');
 const routineCategory=new Set(['Housing','Insurance','Subscriptions','Utilities','Kids & Family']);
 const billDescription=/\b(?:mortgage|rent|home loan|mtg|loan payment|auto loan|car payment|insurance|premium|subscription|membership|internet|electric|water|sewer|utility|daycare|tuition|cellular|phone plan)\b/i;
 const irregularName=/\b(?:costco|safeway|walmart|target|amazon|grocery|groceries|fuel|restaurant|coffee|starbucks|shell|chevron|uber|lyft)\b/i;
+const mortgageName=/\b(?:mortgage|mtg|home\s+loan|pennymac|loandepot|newrez|shellpoint|mr\s+cooper)\b/i;
 function identity(event){
  const slot=event.slot!==undefined&&String(event.cadence||'').toLowerCase()==='twice monthly'?'|slot:'+String(event.slot):'';
  return [event.type,account(event),clean(event.merchant)].join('|')+slot;
@@ -124,6 +125,14 @@ function project(state,records,events,asOf){
    periodic(e.merchant,e.category,providerPfc);
   if(!allowed||!evidence.stable){
    suppressed.push({id:e.id,merchant:e.merchant,reason:!allowed?'not a routine bill':evidence.reason});
+   // If a potentially large mortgage was forecast by the historical engine
+   // but rejected by this safety layer, do not leave an unexplained hole in
+   // the cash projection. Keep the charge excluded, and tell the owner why.
+   const mortgage= mortgageName.test(String(e.merchant||''))||
+    /MORTGAGE/.test(String(providerPfc?.detailed||'').toUpperCase());
+   if(allowed&&!evidence.stable&&e.type==='expense'&&mortgage&&
+      !warnings.some(w=>w.key===key))
+    warnings.push({key,merchant:e.merchant,reason:evidence.reason});
    continue;
   }
   const decision=decisions[key];
