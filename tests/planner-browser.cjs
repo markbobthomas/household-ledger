@@ -310,7 +310,8 @@ const {chromium,webkit}=require('playwright');
   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
   const setMain=page.locator('[data-set-main="checking-real"]');
   if(await setMain.count())await setMain.click();
-  await page.locator('[aria-label="Selected account projection"]').getByText('MAIN ACCOUNT').waitFor();
+  await page.locator('[aria-label="Selected account projection"] .status-tag.good')
+   .filter({hasText:/^MAIN ACCOUNT$/}).waitFor();
   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/MAIN ACCOUNT/,
    'The chosen checking account becomes the persistent primary focus');
   await page.locator('.sidebar [data-view="history"]').click();
