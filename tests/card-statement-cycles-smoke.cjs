@@ -65,7 +65,7 @@ assert.deepEqual(plan.plans.map(x=>[x.fromAccountId,x.toAccountId,x.amount]).sor
 const projection=Forecast.build(snapshot,forecast,plan.plans,{days:90,records:posted});
 assert.equal(projection.diagnostics.pairedMovements.length,3,'Each autopay is a single two-sided transfer');
 const byId=Object.fromEntries(projection.accounts.map(x=>[x.id,x]));
-assert.equal(byId.checking.closing,3780);
+assert.equal(byId.checking.closing,3080,'Other forecast checking expenses are included once, separately from credit card bills');
 assert.equal(byId.savings.closing,760);
 assert.equal(byId.visa.closing,150,'Card debt includes future purchases and decreases on actual autopay day');
 assert.equal(byId.amex.closing,410);
