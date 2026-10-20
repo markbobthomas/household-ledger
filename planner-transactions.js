@@ -199,13 +199,26 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  // Account and amount are required; two different paying accounts, or a
  // real internal transfer and an expense, must remain separate.
  if(!reference?.recurringRuleId){
-  const duplicates=p.futureRecurringRules.filter(r=>
+  const sameMerchant=p.futureRecurringRules.filter(r=>
    r.kind===(transfer?'movement':'event')&&
    String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
    (!transfer||String(r.toAccountId)===String(fields.toAccountId))&&
-   merchantKey(r.originalMerchant||r.merchant)===merchantKey(originalMerchant)&&
+   (merchantKey(r.originalMerchant||r.merchant)===merchantKey(originalMerchant)||
+    (r.matchNames||[]).includes(merchantKey(originalMerchant))));
+  const exact=sameMerchant.filter(r=>
    Math.abs(Number(r.matchAmount??r.amount)-originalAmount)<.011);
-  if(duplicates.length===1)id=duplicates[0].id;
+  if(exact.length>1||sameMerchant.length>1)
+   throw Error('Several recurring schedules already exist for this merchant and account. Review them before adding another.');
+  if(exact.length===1)id=exact[0].id;
+  else if(sameMerchant.length===1){
+   const oldAmount=Number(sameMerchant[0].matchAmount??sameMerchant[0].amount);
+   const change=Math.abs(oldAmount-originalAmount)/Math.max(oldAmount,originalAmount,1);
+   if(change>.25)
+    throw Error('A different recurring amount already exists for this merchant and account. Edit its existing recurring schedule before adding another.');
+   // One unique recurring item whose monthly amount shifted modestly:
+   // update its existing rule rather than creating a second debit.
+   id=sameMerchant[0].id;
+  }
  }
  const old=p.futureRecurringRules.find(r=>r.id===id);
  const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
@@ -229,7 +242,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   }[reference?.cadence]||reference?.cadence||frequency),
   originalMerchant:old?.originalMerchant||originalMerchant,
   originalType:old?.originalType||originalType,
-  matchAmount:old?.matchAmount??round(originalAmount),
+  matchAmount:round(originalAmount),
   matchNames:[...new Set([...(old?.matchNames||[]),...names])],
   exampleIds:[...new Set([...(old?.exampleIds||[]),...chosen])],
   ...(old?.sourceAddedId||reference?.addedId?{sourceAddedId:old?.sourceAddedId||reference?.addedId}:{}),
