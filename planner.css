@@ -118,3 +118,17 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
  .hero .metric strong{font-size:18px}
  .card-fields{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Optional, read-only historical forecast accuracy check */
+.audit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
+.audit-grid>div{display:flex;flex-direction:column;gap:5px;padding:13px 14px;background:var(--panel-alt,#f6f8fa);border:1px solid var(--line);border-radius:5px;min-width:0}
+.audit-grid span{font-size:11px;color:var(--muted)}
+.audit-grid strong{font:700 19px var(--mono);color:var(--ink)}
+.audit-grid small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.audit-footnote{font-size:12px;line-height:1.65;color:var(--muted);margin:14px 0}
+.audit-issues{padding-top:12px;border-top:1px solid var(--line)}
+.audit-issues h3{font-size:13px;margin:0 0 8px}
+.audit-issue{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+.audit-issue strong{font-size:12px}
+.audit-issue span{color:var(--muted);text-align:right}
+@media(max-width:780px){.audit-grid{grid-template-columns:1fr}.audit-issue{flex-direction:column;gap:4px}.audit-issue span{text-align:left}}
