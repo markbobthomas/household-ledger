@@ -438,14 +438,50 @@ function frequencyChoices(value,includeOnce=false){
   .map(([key,label])=>'<option value="'+key+'"'+(key===value?' selected':'')+'>'+
     escapeHTML(label)+'</option>').join('')+'</select>';
 }
-function historicalExamples(row,records,s){
- const examples=window.HouseholdPlannerTransactions.findExamples(records,row,activeAccounts(s));
- if(!examples.length)return '<p class="audit-footnote">No clear historical examples were matched. Select a frequency and the app will use your schedule and merchant/amount instead.</p>';
- return '<details class="future-examples"><summary>Help identify the matching past payments ('+
-  examples.length+' found)</summary><p>Select examples belonging to this same recurring payment. They help the app recognize the correct merchant and amount.</p>'+
-  examples.map(t=>'<label><input type="checkbox" name="examples" value="'+escapeHTML(t.id)+'"> '+
-   escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+' · '+cash(t.amount)+'</label>').join('')+
+// Select posted bank examples to teach one forecast which Plaid payee names
+// belong to it. Amounts may vary. All selection stays in forecast settings.
+function historyLinkField(selected=[]){
+ return '<details class="future-examples future-history-link" data-history-link open>'+
+  '<summary>Link related actual transactions (optional)</summary>'+
+  '<p class="audit-footnote">Choose previous deposits or bills that belong to THIS schedule, even if the amount or bank description differs. This prevents duplicate predictions. The app never changes the posted transactions.</p>'+
+  '<label>Search bank description<input type="search" data-history-link-search placeholder="Search payroll, utility company, or payee"></label>'+
+  '<div data-history-link-results></div>'+
   '</details>';
+}
+function checkedHistoryIds(form){
+ try{return new Set(JSON.parse(form?.dataset?.linkedExampleIds||'[]'))}catch{return new Set()}
+}
+function linkedHistoryIds(form){return [...checkedHistoryIds(form)]}
+function updateHistoryLinks(form){
+ const wrapper=form?.querySelector('[data-history-link]');if(!wrapper||wrapper.hidden)return;
+ const accounts=activeAccounts(snapshot()),tools=window.HouseholdPlannerTransactions,
+  search=String(wrapper.querySelector('[data-history-link-search]')?.value||'').trim(),
+  transfer=form.querySelector('[name=type]')?.value==='transfer',
+  accountId=String(form.querySelector('[name='+ (transfer?'fromAccountId':'accountId')+']')?.value||''),
+  merchant=form.querySelector('[name=merchant]')?.value||'',
+  kind=transfer?'movement':'event',type=transfer?'transfer':form.querySelector('[name=type]')?.value||'expense',
+  chosen=checkedHistoryIds(form),matches=tools.findExamples(model.records(state()),
+   {kind,accountId,fromAccountId:accountId,type,merchant},accounts,search),
+  shown=new Map([...matches].map(t=>[String(t.id),t])),
+  original=model.records(state());
+ // Don't discard user-selected aliases when searching for more bank names.
+ for(const id of chosen){
+  if(!shown.has(id)){
+   const row=original.find(t=>String(t.id)===id);
+   if(row)shown.set(id,{id:String(row.id),date:row.date,merchant:row.merchant,
+    amount:row.amount,accountId,type:row.type});
+  }
+ }
+ const holder=wrapper.querySelector('[data-history-link-results]');
+ holder.innerHTML='<p class="audit-footnote">'+chosen.size+
+  ' bank transaction'+(chosen.size===1?'':'s')+' linked · '+
+  matches.length+' possible match'+(matches.length===1?'':'es')+
+  ' · select only entries for this payment</p>'+
+  ([...shown.values()].map(t=>'<label class="future-history-choice"><input type="checkbox" name="examples" data-history-example value="'+escapeHTML(t.id)+'"'+
+   (chosen.has(String(t.id))?' checked':'')+'> '+
+   escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+
+   ' · '+cash(t.amount)+'</label>').join('')||
+   '<p class="audit-footnote">No matching posted bank transactions. Try a different payee search, or save without linking.</p>');
 }
 function editorFor(row,s,records){
  const accounts=activeAccounts(s),isMovement=row.kind==='movement';
@@ -475,13 +511,13 @@ function editorFor(row,s,records){
  const scope='<fieldset class="future-scope"><legend>Apply changes to</legend>'+
   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
   '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
-  '<p>Even if this payment was not detected as recurring, you can define its schedule. We will predict matching future payments by account, merchant, amount and frequency.</p>'+
+  '<p>Even if this payment was not detected as recurring, you can define its schedule. We match recurring bank history by account, payee, timing and money direction. Amounts can vary; your confirmed schedule takes priority.</p>'+
   '</fieldset>'+
   '<div class="future-repeat-fields" hidden>'+
    '<div class="future-fields"><label>Repeat frequency'+frequencyChoices(cadence)+'</label>'+
    '<label class="future-second-day"'+(cadence==='twice-monthly'?'':' hidden')+'>Second day of month (1–31)'+
     '<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(selectedRule?.secondDay||15)+'"></label></div>'+
-   (!row.seriesKey?historicalExamples(row,records,s):'')+
+   historyLinkField()+
   '</div>';
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
   scope+
@@ -542,7 +578,8 @@ function newTransactionForm(s){
   '<label>Repeat'+frequencyChoices(preset?'monthly':'once',true)+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
   '</div><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
-   'If auto-detection missed a bill or paycheck, select a frequency here to add every future occurrence, not just one date.</p>'+
+   'If auto-detection missed a bill or paycheck, select a frequency here. Link its actual bank history below so different amounts or payee names count as one schedule.</p>'+
+  '<div class="future-history-container" data-new-history-link hidden>'+historyLinkField()+'</div>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
@@ -625,6 +662,7 @@ function repeatingReviewForm(s){
   '<label>Repeat'+frequencyChoices(d.frequency||'monthly')+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input name="secondDay" type="number" min="1" max="31" value="15"></label>'+
   '</div>'+
+  historyLinkField(d.examples||[])+
   '<p class="audit-footnote">For actual account-to-account transfers, select Transfer and two connected accounts. Otherwise use Expense or Deposit. Only the future forecast changes; the original bank record is never edited or duplicated.</p>'+
   '<div class="future-form-actions"><button type="submit" class="btn primary">Save recurring forecast</button>'+
   '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
@@ -929,6 +967,12 @@ function render(){
   activeTab==='history'?historyPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):overviewPage(bundle,s,selectedSource,derived,fresh);
+ for(const form of root.querySelectorAll('form:has([data-history-link])')){
+  if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples){
+   form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
+  }
+  updateHistoryLinks(form);
+ }
 }
 document.addEventListener('click',async e=>{
  const view=e.target.closest('[data-view]');
@@ -1211,7 +1255,7 @@ document.addEventListener('submit',async e=>{
   };
   await commitForecastChange(()=>window.HouseholdPlannerTransactions.defineRecurring(
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
-   model.records(state()),linked?[]:draft.examples||[]));
+   model.records(state()),linked?[]:linkedHistoryIds(form)));
   const origin=draft.merchant;
   recurringDraft=null;reviewNotice='Saved recurring forecast for '+origin+'.';
   transactionNotice=reviewNotice;
@@ -1243,12 +1287,13 @@ document.addEventListener('submit',async e=>{
    const row=futureRows(forecastFor(s),s).find(item=>item.key===key);
    if(!row)throw Error('Forecast changed. Reopen the payment and try again.');
    if(fields.scope==='all'){
-    const examples=new FormData(form).getAll('examples');
+    const examples=linkedHistoryIds(form);
     await commitForecastChange(()=>{
      const existingRows=futureRows(forecastFor(s),s);
      const existingCadence=cadenceOption(row.cadence);
      const useSeries=Boolean(row.seriesKey&&
-      fields.frequency===existingCadence&&row.cadence&&!row.addedId);
+      fields.frequency===existingCadence&&row.cadence&&!row.addedId&&
+      !form.dataset.historyLinksChanged);
      const saveCadence=row.cadence==='twice-monthly'?'twice monthly':row.cadence;
      const result=useSeries?
       planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,saveCadence,row.kind):
@@ -1271,7 +1316,8 @@ document.addEventListener('submit',async e=>{
    editingKey='';
   }else if(form.hasAttribute('data-future-new-form')){
    if(fields.frequency&&fields.frequency!=='once'){
-    await commitForecastChange(()=>planner.defineRecurring(state(),fields,accounts,asOf));
+    await commitForecastChange(()=>planner.defineRecurring(state(),fields,accounts,asOf,
+     null,model.records(state()),linkedHistoryIds(form)));
     transactionNotice='Recurring payment created. Future occurrences were added to the forecast.';
    }else{
     await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
@@ -1316,12 +1362,33 @@ document.addEventListener('submit',async e=>{
   error.textContent=String(err.message||err);
  }
 });
+document.addEventListener('input',e=>{
+ if(e.target.matches?.('[data-history-link-search],[data-future-new-form] [name=merchant],'+
+  '[data-future-edit-form] [name=merchant],[data-history-recurring-form] [name=merchant]')){
+  const form=e.target.closest('form');updateHistoryLinks(form);
+ }
+});
 document.addEventListener('change',e=>{
+ if(e.target.matches?.('[data-history-example]')){
+  const form=e.target.closest('form'),chosen=checkedHistoryIds(form),
+   id=e.target.value;
+  if(e.target.checked)chosen.add(id);else chosen.delete(id);
+  form.dataset.linkedExampleIds=JSON.stringify([...chosen]);
+  form.dataset.historyLinksChanged='1';
+  updateHistoryLinks(form);return;
+ }
+ if(e.target.matches?.('[data-new-history-link] [data-frequency]')){
+  const form=e.target.closest('form'),holder=form?.querySelector('[data-new-history-link]');
+  if(holder){holder.hidden=e.target.value==='once';updateHistoryLinks(form)}
+ }
+ if(e.target.matches?.('[data-history-link]')||e.target.name==='accountId'||
+  e.target.name==='fromAccountId'||e.target.name==='type')updateHistoryLinks(e.target.closest('form'));
  if(e.target.id==='history-recurrence-type'){
   const form=e.target.closest('form'),transfer=e.target.value==='transfer';
   form?.querySelectorAll('.history-transfer-only').forEach(el=>el.hidden=!transfer);
   const single=form?.querySelector('.history-single-account');
   if(single)single.hidden=transfer;
+  updateHistoryLinks(form);
   return;
  }
  if(e.target.name==='historyAccount'){
@@ -1331,12 +1398,15 @@ document.addEventListener('change',e=>{
   const form=e.target.closest('[data-future-edit-form]');
   const section=form?.querySelector('.future-repeat-fields');
   if(section)section.hidden=e.target.value!=='all';
+  if(e.target.value==='all')updateHistoryLinks(form);
   return;
  }
  if(e.target.matches?.('[data-frequency]')){
   const form=e.target.closest('form');
   const second=form?.querySelector('.future-second-day');
   if(second)second.hidden=e.target.value!=='twice-monthly';
+  const holder=form?.querySelector('[data-new-history-link]');
+  if(holder){holder.hidden=e.target.value==='once';updateHistoryLinks(form)}
   return;
  }
  if(e.target.id==='transaction-filter'){
@@ -1346,6 +1416,7 @@ document.addEventListener('change',e=>{
   const transfer=e.target.value==='transfer',form=e.target.closest('form');
   form?.querySelectorAll('.future-transfer-only').forEach(el=>el.hidden=!transfer);
   const ordinary=form?.querySelector('.new-standard-account');if(ordinary)ordinary.hidden=transfer;
+  updateHistoryLinks(form);
   return;
  }
  if(e.target.id==='horizon'){
