@@ -233,16 +233,22 @@ function dedupeEvents(events,accounts=[],options={}){
      reason:'Close forecast payments from the same source need confirmation'});
     kept.push(item);continue;
    }
-   // Exact source identity and dates are stronger than amount. A manually
-   // adjusted obligation replaces a stale inferred amount, not both.
+   // Amount differences are not proof of a duplicate. Only an explicit
+   // owner-edited schedule may replace a different auto-inferred amount
+   // for the same merchant and billing month. Competing bank engines must
+   // not silently erase distinct payments from one merchant.
    const keep=matches[0];
-   if(Math.abs(cents(item.amount)-cents(keep.amount))>1){
-    const ratio=Math.abs(Number(item.amount)-Number(keep.amount))/
-     Math.max(Number(item.amount),Number(keep.amount));
-    // Never merge two different amounts without a uniquely identified
-    // bill. Same merchant and <=20% variance can be a rate change.
-    if(ratio>.2&&!mortgageEvent(item)&&item.merchant!==keep.merchant){
-     conflicts.push({a:item.id,b:keep.id,reason:'Competing amounts: needs review'});
+   if(!sameAmount){
+    const explicit=x=>x.source==='user-recurring'||x._forecastExtra||
+     x.source==='owner-bill'||x.source==='manual'||x.source==='future-add';
+    const inferred=x=>x.source==='early-bank-inference'||
+     x.source==='historical'||x.source==='bank-inferred';
+    const ownerOverride=(explicit(item)&&inferred(keep)||
+     explicit(keep)&&inferred(item))&&
+     item.date.slice(0,7)===keep.date.slice(0,7);
+    if(!ownerOverride){
+     conflicts.push({a:item.id,b:keep.id,merchant:item.merchant,
+      reason:'Same merchant and date but different amounts: needs review'});
      kept.push(item);continue;
     }
    }
