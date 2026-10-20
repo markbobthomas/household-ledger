@@ -23,9 +23,9 @@ const oldDec={type:'expense',merchant:'Home Insurance',accountId:'checking',amou
 assert.ok(T.matchesRecurring(saved,oldDec,accounts),'Suppress old November/December predicted charges after date shift');
 assert.ok(!T.matchesRecurring(saved,{...oldDec,amount:400},accounts),'Do not suppress a distinct recurring amount at same merchant');
 assert.ok(!T.matchesRecurring(saved,{...oldDec,accountId:'credit'},accounts),'Do not suppress other account');
-const generated=T.generatedRecurring(state.predictions.futureRecurringRules,asOf,'2027-01-17');
-assert.deepEqual(generated.events.map(e=>e.date),['2026-11-20','2026-12-20']);
-const projection=A.build(snapshot,generated.events,generated.plans,{days:90,seriesTools:T,futureRecurringRules:state.predictions.futureRecurringRules});
+const generated=T.generatedRecurring(state.predictions.futureRecurringRules,asOf,'2027-01-27');
+assert.deepEqual(generated.events.map(e=>e.date),['2026-11-20','2026-12-20','2027-01-20']);
+const projection=A.build(snapshot,generated.events,generated.plans,{days:100,seriesTools:T,futureRecurringRules:state.predictions.futureRecurringRules});
 assert.deepEqual(projection.events.filter(e=>e.kind==='expense').map(e=>e.amount),[250,250,250],
  'Generates three payments within 90 days');
 assert.equal(projection.accounts[0].closing,9250);
