@@ -114,36 +114,40 @@ async function html(){return fs.readFile(path.join(__dirname,'index.html'),'utf8
 async function start(port=Number(env.PORT||8788)){
  await load();
  const server=http.createServer(async(req,res)=>{
+  // Route on the URL pathname; tracking/query parameters are not bank actions.
+  const requestPath=new URL(req.url,'http://localhost').pathname;
   const respond=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data))};
-  if(req.url==='/healthz'&&req.method==='GET')return respond(200,{ok:true,mode:'multi-account-private'});
+  if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{ok:true,mode:'multi-account-private'});
   const expected=Buffer.from('pilot:'+env.PILOT_PASSWORD).toString('base64');
   const provided=String(req.headers.authorization||'').replace(/^Basic /,'');
   const equal=provided.length===expected.length&&crypto.timingSafeEqual(Buffer.from(provided),Buffer.from(expected));
   if(!equal){res.writeHead(401,{'WWW-Authenticate':'Basic realm="Private bank pilot"','Cache-Control':'no-store'});return res.end('Authentication required')}
   const origin=req.headers.origin,host=req.headers.host;
   if(origin&&new URL(origin).host!==host)return respond(403,{error:'Origin rejected'});
-  if(req.method==='GET'&&req.url==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
-  const staticPath=req.url.split('?')[0].slice(1);
+  if(req.method==='GET'&&requestPath==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
+  const staticPath=requestPath.slice(1);
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|bank-feed|feed-health|cashflow|recurring|reviews|accuracy-fixture|accuracy-fixture-holdout|accuracy-fixture-seasonal|accuracy-lab|stress-lab|readiness-lab)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js)$/;
-  if(req.method==='GET'&&(req.url==='/'||allowed.test(staticPath))){
-   const name=req.url.split('?')[0].slice(1)||'index.html';
+  if(req.method==='GET'&&(requestPath==='/'||allowed.test(staticPath))){
+   const name=staticPath||'index.html';
    let body=await fs.readFile(path.resolve(__dirname,'..',name));
    if(name==='index.html')body=Buffer.from(body.toString('utf8').replace('</head>','<script src="/pilot/data-source.js"></script></head>'));
    res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
    return res.end(body);
   }
-  if(req.method==='GET'&&req.url==='/api/ledger'){
+  if(req.method==='GET'&&requestPath==='/api/ledger'){
    if(!state.items.length)return respond(200,{connected:false,account:null,accounts:[],transactions:[],adjustments:{}});
    // No truncation: all imported records for the selected accounts.
    return respond(200,{connected:true,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,
     transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object').sort((a,b)=>String(b.date).localeCompare(String(a.date))),
     adjustments:state.ledgerAdjustments||{}});
   }
-  if(req.method==='GET'&&req.url==='/api/status')return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
+  if(req.method==='GET'&&requestPath==='/api/status')return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
+  // Unknown browser navigation should be a 404, not a misleading bank-action error.
+  if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   try{
-   if(req.url==='/api/ledger/adjustments'){
+   if(requestPath==='/api/ledger/adjustments'){
     if(!state.items.length)return respond(409,{error:'No bank account connected'});
     if(!body||typeof body!=='object'||Array.isArray(body))return respond(400,{error:'Invalid preferences'});
     const allowed=['categoryOverrides','predictions','reviews','learning','customCategories'];
@@ -160,12 +164,12 @@ async function start(port=Number(env.PORT||8788)){
     state.ledgerAdjustments=Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]]));
     await save();return respond(200,{saved:true});
    }
-   if(req.url==='/api/link-token'){
+   if(requestPath==='/api/link-token'){
     const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-private-household'},
      client_name:'Household Ledger',products:['transactions'],country_codes:['US'],language:'en'});
     return respond(200,{link_token:t.link_token});
    }
-   if(req.url==='/api/exchange'){
+   if(requestPath==='/api/exchange'){
     if(!body.publicToken||!Array.isArray(body.accountIds)&&!body.accountId)throw Error('Choose at least one account');
     const ids=[...new Set((Array.isArray(body.accountIds)?body.accountIds:[body.accountId]).map(String))];
     if(!ids.length||ids.length>30)throw Error('Choose 1–30 accounts');
@@ -185,8 +189,8 @@ async function start(port=Number(env.PORT||8788)){
     }catch(error){state.items=state.items.filter(i=>i.id!==x.item_id);await save();throw error}
     finally{if(!retained)try{await plaid('/item/remove',{access_token:x.access_token})}catch{}}
    }
-   if(req.url==='/api/sync'){await sync();return respond(200,{ok:true,accounts:state.accounts.length})}
-   if(req.url==='/api/disconnect'){
+   if(requestPath==='/api/sync'){await sync();return respond(200,{ok:true,accounts:state.accounts.length})}
+   if(requestPath==='/api/disconnect'){
     for(const item of state.items)await plaid('/item/remove',{access_token:item.token});
     state=freshState();await save();return respond(200,{ok:true});
    }
