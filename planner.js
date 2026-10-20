@@ -967,7 +967,8 @@ function render(){
   activeTab==='history'?historyPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):overviewPage(bundle,s,selectedSource,derived,fresh);
- for(const form of root.querySelectorAll('form:has([data-history-link])')){
+ for(const form of (typeof root.querySelectorAll==='function'?
+  root.querySelectorAll('form:has([data-history-link])'):[])){
   if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples){
    form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
   }
