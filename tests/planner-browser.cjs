@@ -218,6 +218,37 @@ const {chromium,webkit}=require('playwright');
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'State Farm Insurance'}).count()>=1,
     'History-to-forecast confirmation creates future payments');
+   const inferredMortgage=page.locator('.future-item').filter({hasText:'Mortgage'}).first();
+   assert.ok(await inferredMortgage.count()>0);
+   await inferredMortgage.locator('[data-edit-future]').click();
+   await page.locator('.future-edit-form [data-remove-recurring]').click();
+   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
+    'Not recurring stops all inferred mortgage occurrences, not just one payment');
+   await go('settings');
+   const rejected=page.locator('[aria-label="Not recurring decisions"]');
+   assert.match(await rejected.innerText(),/Mortgage/,'Rejected recurrence remains visible and reversible');
+   await rejected.locator('[data-restore-recurrence]').filter({hasText:'Allow predictions'}).first().click();
+   await go('transactions');
+   assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=2,
+    'Allow predictions restores the original auto-inferred schedule');
+   await go('history');
+   const mortgageHistory=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
+   assert.ok(await mortgageHistory.locator('[data-stop-history-recurrence]').count()>0,
+    'History also permits rejecting a recognized recurrence');
+   await mortgageHistory.locator('[data-stop-history-recurrence]').click();
+   await page.locator('.history-actual-row').filter({hasText:'Mortgage'})
+    .first().locator('[data-restore-recurrence]').waitFor();
+   await go('transactions');
+   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0);
+   await page.reload({waitUntil:'load'});
+   await go('transactions');
+   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
+    'Not recurring survives browser reload and forecast regeneration');
+   await go('settings');
+   await page.locator('[aria-label="Not recurring decisions"] [data-restore-recurrence]').first().click();
+   await go('transactions');
+   assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=2,
+    'User can undo the false rejection from Settings');
 
    assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
