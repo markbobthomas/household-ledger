@@ -15,8 +15,23 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   assert.equal((await get('/api/status',true)).status,200);
   assert.equal(JSON.parse((await get('/api/status',true)).body).connected,false);
   const ledger=await get('/',true);assert.equal(ledger.status,200);assert.match(ledger.body,/Household Ledger/,'Existing Ledger is served in live mode');
+  for(const route of ['/?utm_source=chatgpt.com','/?utm_source=chatgpt.com&ref=planner','/index.html?ref=planner']){
+   const result=await get(route,true);
+   assert.equal(result.status,200,'Homepage navigation must ignore harmless query parameters: '+route);
+   assert.match(result.body,/planner-backtest[.]js/,'Embedded historical audit loads from private bank planner');
+  }
+  const broken=await get('/not-a-route?utm_source=chatgpt.com',true);
+  assert.equal(broken.status,404,'Unknown browser links return Not found, not an API action-header error');
+  assert.equal((await get('/api/ledger?source=browser',false)).status,401,'Query parameters do not bypass authentication');
   const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect accounts/,'Plaid authorization available on same website');
   assert.equal((await get('/pilot/data-source.js',true)).status,200);
+  const denied=await new Promise((resolve,reject)=>{
+   const req=http.request({hostname:'127.0.0.1',port,path:'/api/ledger/adjustments?ref=planner',
+    method:'POST',headers:{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64'),
+     'Content-Type':'application/json'}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode))});
+   req.on('error',reject);req.end('{}');
+  });
+  assert.equal(denied,403,'Protected bank actions still require the explicit action header');
   assert.ok(!(await get('/api/status',true)).body.includes('test-placeholder'),'Secrets absent from responses');
   console.log('PASS isolated pilot authentication, healthcheck, empty state, no leaked Plaid credentials');
  }finally{child.kill();fs.rmSync(dir,{recursive:true,force:true})}
