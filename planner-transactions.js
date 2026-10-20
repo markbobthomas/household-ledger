@@ -283,7 +283,9 @@ function postedCoverage(generated,rules,records,accounts,asOf){
   t.date<=asOf&&Number(t.amount)>0&&String(t.id||''));
  function covered(item,id,kind){
   const r=byId.get(id);if(!r)return false;
-  const date=String(item.date||item.anchorDate||''),account=String(kind==='movement'?item.fromAccountId:item.accountId);
+  const effective=kind==='movement'&&item._postedView?item._postedView:item;
+  const date=String(effective.date||effective.anchorDate||item.anchorDate||''),
+   account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
   const type=kind==='movement'?'transfer':item.type;
   const tolerance=r.frequency==='weekly'?2:r.frequency==='biweekly'?3:6;
   const possible=posted.find(t=>!used.has(String(t.id))&&
