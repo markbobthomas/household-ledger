@@ -83,6 +83,27 @@ const distinctMortgage={...scheduled,id:'other-loan',merchant:'Home mortgage SEC
  amount:3500};
 const distinct=R.dedupeEvents([scheduled,distinctMortgage],accounts);
 assert.equal(distinct.events.length,2,'Two unrelated home loans with different amounts must never collapse');
+const sameLenderOtherMortgage={...scheduled,id:'second-mortgage',
+ merchant:'Mortgage Second Property',amount:2000};
+const otherLoan=R.dedupeEvents([scheduled,sameLenderOtherMortgage],accounts);
+assert.equal(otherLoan.events.length,2,
+ 'Two $2,000 mortgages with distinct lender descriptions must remain two bills');
+const separateSameMerchant=[
+ {id:'first-post',date:'2026-11-10',accountId:'checking',merchant:'School Tuition',
+  type:'expense',amount:500,source:'historical'},
+ {id:'second-post',date:'2026-11-13',accountId:'checking',merchant:'School Tuition',
+  type:'expense',amount:500,source:'historical'}
+];
+const uncertainSameSource=R.dedupeEvents(separateSameMerchant,accounts);
+assert.equal(uncertainSameSource.events.length,2,
+ 'Two close, distinct posted tuition bills cannot silently be erased');
+assert.equal(uncertainSameSource.conflicts.length,1,
+ 'Close same-source expenses get an explicit Reviews warning');
+const renamed={...scheduled,id:'renamed-mortgage',merchant:'ACH HOME NOTE',
+ originalMerchant:'Home Mortgage ACH',date:'2026-11-15',source:'historical'};
+const renameResult=R.dedupeEvents([scheduled,renamed],accounts);
+assert.equal(renameResult.events.length,1,
+ 'Explicitly linked former merchant name still consolidates duplicated mortgage predictions');
 const differentAccount={...scheduled,id:'checking-two',accountId:'savings'};
 assert.equal(R.dedupeEvents([scheduled,differentAccount],accounts).events.length,2,
  'Mortgage debit in separate account cannot be merged');
