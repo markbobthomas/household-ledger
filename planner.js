@@ -118,7 +118,8 @@ function forecastFor(s){
  const forecastAccount=window.HouseholdAccountForecast.build(s,events,[...manualPlans,...cardPlans,...manual.plans],
   {days:90,records:rows,futureTransactionEdits:personal.futureTransactionEdits||{},
    futureTransactionAdds:existingAdds,
-   futureSeriesEdits:personal.futureSeriesEdits||{},seriesTools:window.HouseholdPlannerTransactions});
+   futureSeriesEdits:personal.futureSeriesEdits||{},futureRecurringRules:confirmed,
+   seriesTools:window.HouseholdPlannerTransactions});
  return {forecast,routines,payments,projection:forecastAccount,rows,events};
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
@@ -360,6 +361,7 @@ function futureRows(bundle,s){
    from:labels.get(String(p.fromAccountId))||p.fromAccountId,
    to:labels.get(String(p.toAccountId))||p.toAccountId,
    seriesKey:p.seriesKey||null,baseDate:p.baseDate||p.date,cadence:p.cadence||null,
+   recurringRuleId:p.recurringRuleId||null,
    addedId:p.id.startsWith('future|future-add|')?p.id.slice(7):null});
  }
  for(const e of projection.events||[]){
@@ -373,11 +375,35 @@ function futureRows(bundle,s){
     e.type==='income'?'income':'expense',
    cashDirection:e.kind==='transfer_in'?'in':'out',
    seriesKey:e.seriesKey||null,baseDate:e.baseDate||e.date,cadence:e.cadence||null,
+   recurringRuleId:e.recurringRuleId||null,
    addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
  }
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
 }
-function editorFor(row,s){
+function cadenceOption(cadence){
+ return {'weekly':'weekly','every 2 weeks':'biweekly',biweekly:'biweekly',monthly:'monthly',
+  'twice monthly':'twice-monthly','twice-monthly':'twice-monthly',quarterly:'quarterly',
+  semiannual:'semiannual',annual:'annual'}[String(cadence||'').toLowerCase()]||'monthly';
+}
+function frequencyChoices(value,includeOnce=false){
+ const labels={once:'One time',weekly:'Every week',biweekly:'Every 2 weeks',
+  'twice-monthly':'Twice monthly (two dates)',monthly:'Every month',
+  quarterly:'Every 3 months',semiannual:'Every 6 months',annual:'Every year'};
+ return '<select name="frequency" data-frequency>'+Object.entries(labels)
+  .filter(([key])=>includeOnce||key!=='once')
+  .map(([key,label])=>'<option value="'+key+'"'+(key===value?' selected':'')+'>'+
+    escapeHTML(label)+'</option>').join('')+'</select>';
+}
+function historicalExamples(row,records,s){
+ const examples=window.HouseholdPlannerTransactions.findExamples(records,row,activeAccounts(s));
+ if(!examples.length)return '<p class="audit-footnote">No clear historical examples were matched. Select a frequency and the app will use your schedule and merchant/amount instead.</p>';
+ return '<details class="future-examples"><summary>Help identify the matching past payments ('+
+  examples.length+' found)</summary><p>Select examples belonging to this same recurring payment. They help the app recognize the correct merchant and amount.</p>'+
+  examples.map(t=>'<label><input type="checkbox" name="examples" value="'+escapeHTML(t.id)+'"> '+
+   escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+' · '+cash(t.amount)+'</label>').join('')+
+  '</details>';
+}
+function editorFor(row,s,records){
  const accounts=activeAccounts(s),isMovement=row.kind==='movement';
  const kind=row.type||'expense',date=row.date,merchant=row.merchant;
  const options=['expense','income','refund','transfer'].map(type=>
@@ -399,18 +425,24 @@ function editorFor(row,s){
   common+
   '<label>Transfer direction<select name="cashDirection"><option value="out"'+(row.cashDirection==='out'?' selected':'')+
    '>Money out</option><option value="in"'+(row.cashDirection==='in'?' selected':'')+'>Money in</option></select></label>';
- const hasSeries=Boolean(row.seriesKey&&row.cadence&&!row.addedId);
- const currentSeries=hasSeries?state().predictions?.futureSeriesEdits?.[row.seriesKey]:null;
- const scope=hasSeries?'<fieldset class="future-scope"><legend>Apply changes to</legend>'+
+ const currentSeries=row.seriesKey?state().predictions?.futureSeriesEdits?.[row.seriesKey]:null;
+ const selectedRule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
+ const cadence=selectedRule?.frequency||cadenceOption(row.cadence);
+ const scope='<fieldset class="future-scope"><legend>Apply changes to</legend>'+
   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
   '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
-  '<p>Use the second option to change a recurring '+(isMovement?'transfer or card payment':'bill or deposit')+
-  ' across future months. Dates, amount, and account details apply to the series; past posted bank transactions do not change.</p>'+
-  '</fieldset>':'<p class="audit-footnote">This payment is not part of an editable recurring series.</p>';
+  '<p>Even if this payment was not detected as recurring, you can define its schedule. We will predict matching future payments by account, merchant, amount and frequency.</p>'+
+  '</fieldset>'+
+  '<div class="future-repeat-fields" hidden>'+
+   '<div class="future-fields"><label>Repeat frequency'+frequencyChoices(cadence)+'</label>'+
+   '<label class="future-second-day"'+(cadence==='twice-monthly'?'':' hidden')+'>Second day of month (1–31)'+
+    '<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(selectedRule?.secondDay||15)+'"></label></div>'+
+   (!row.seriesKey?historicalExamples(row,records,s):'')+
+  '</div>';
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
   scope+
   '<div class="future-fields">'+fields+'</div>'+
-  '<p class="audit-footnote">'+(hasSeries?'Individual exceptions can still be edited separately. ':'')+
+  '<p class="audit-footnote">Individual exceptions and repeating rules are separate. '+
    (isMovement?'Both linked accounts update together. ':'')+
    'Forecast edits never change actual bank transactions.</p>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Save changes</button>'+
@@ -419,6 +451,7 @@ function editorFor(row,s){
     '<button class="btn" type="button" data-skip-future="'+escapeHTML(row.key)+'">Skip this occurrence</button>')+
    '<button class="btn" type="button" data-restore-future="'+escapeHTML(row.key)+'">Reset this occurrence</button>'+
    (currentSeries?'<button class="btn" type="button" data-reset-series="'+escapeHTML(row.seriesKey)+'">Reset all future changes</button>':'')+
+   (selectedRule?'<button class="btn" type="button" data-remove-recurring="'+escapeHTML(selectedRule.id)+'">Stop repeating</button>':'')+
    '</div></form>';
 }
 function newTransactionForm(s){
@@ -438,7 +471,10 @@ function newTransactionForm(s){
   '<label>Date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+
    escapeHTML(shiftDay(s.asOf,1))+'" required></label>'+
   '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00"></label>'+
-  '</div><div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
+  '<label>Repeat'+frequencyChoices('once',true)+'</label>'+
+  '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
+  '</div><p class="audit-footnote">If auto-detection missed a bill or paycheck, select a frequency here to add every future occurrence, not just one date.</p>'+
+  '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
 function transactionsPage(bundle,s){
@@ -462,7 +498,7 @@ function transactionsPage(bundle,s){
    '<div class="future-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':paired?'↔ ':'−')+cash(row.amount)+'</div>'+
    '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">'+
     (canEdit?'Close':'Edit')+'</button></div>'+
-   (canEdit?editorFor(row,s):'')+'</article>';
+   (canEdit?editorFor(row,s,bundle?.rows||[]):'')+'</article>';
  }).join('');
  const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([k,v])=>
   v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter||
