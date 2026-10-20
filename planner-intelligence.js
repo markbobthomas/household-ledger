@@ -10,6 +10,8 @@
 'use strict';
 const DAY=86400000;
 const cents=n=>Math.round(Number(n)*100);
+const monthIndex=s=>Number(s.slice(0,4))*12+Number(s.slice(5,7));
+const lastDay=s=>new Date(Date.UTC(Number(s.slice(0,4)),Number(s.slice(5,7)),0)).getUTCDate();
 const clean=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
 const gap=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/DAY);
@@ -58,24 +60,39 @@ function stableEvidence(group,event,asOf){
  if(!(amount>0)||last.some(t=>cents(t.amount)!==amount))return {stable:false,reason:'amount has changed'};
  if(cents(event.amount)!==amount)return {stable:false,reason:'expected amount differs from posted pattern'};
  const months=new Set(last.map(t=>t.date.slice(0,7)));
- let calendar=false;
- if(['monthly','twice monthly','quarterly','semiannual','annual'].includes(cadence)||/^\d+ \/ month$/.test(cadence)){
+ let calendar=false,interval=false;
+ const monthlyStep={monthly:1,'twice monthly':1,quarterly:3,semiannual:6,annual:12}[cadence];
+ if(monthlyStep){
   const days=last.map(t=>Number(t.date.slice(-2)));
   const spread=Math.max(...days)-Math.min(...days);
-  // Same calendar-day within normal banking/posting shifts. Two monthly
-  // installments per month are addressed by a distinct forecast slot.
-  calendar=months.size>=3&&spread<=6;
+  // Same posted calendar day alone is not enough: three January/April/July
+  // bills are quarterly evidence, not evidence of a monthly debit.
+  calendar=months.size===3&&spread<=6&&last.slice(1).every((t,i)=>
+   monthIndex(t.date)-monthIndex(last[i].date)===monthlyStep);
+  if(calendar){
+   const projectedDay=Number(event.date.slice(-2));
+   const ordered=[...days].sort((a,b)=>a-b),center=ordered[1];
+   const atMonthEnd=last.every(t=>lastDay(t.date.slice(0,7))-Number(t.date.slice(-2))<=3);
+   const forecastAtEnd=lastDay(event.date.slice(0,7))-projectedDay<=3;
+   if(Math.abs(projectedDay-center)>6&&!(atMonthEnd&&forecastAtEnd))
+    calendar=false;
+  }
  }
- let interval=false;
  if(['weekly','every 2 weeks','biweekly'].includes(cadence)){
   const step=cadence==='weekly'?7:14;
-  interval=last.slice(1).every((t,i)=>Math.abs(gap(t.date,last[i].date)-step)<=2);
+  const lastDate=last.at(-1).date;
+  const forecastGap=gap(event.date,lastDate),deviation=((forecastGap%step)+step)%step;
+  interval=last.slice(1).every((t,i)=>Math.abs(gap(t.date,last[i].date)-step)<=2)&&
+   forecastGap>0&&Math.min(deviation,step-deviation)<=2;
  }
- // Two paychecks per month may be 1st/15th, not three different months
- // on the exact same day. Let a user-verified explicit schedule handle it.
+ // A second/third monthly transaction under the same merchant is not
+ // a three-month history. Unsupported multi-payment cadences stay excluded
+ // unless a user confirms an explicit schedule.
  if(!calendar&&!interval)return {stable:false,reason:'repeat timing is not yet consistent'};
  const lastDate=last.at(-1).date;
- const recently=gap(asOf,lastDate)<=Math.max(90,interval?45:90);
+ const maxAge=interval?(cadence==='weekly'?24:38):
+  monthlyStep===12?400:monthlyStep===6?205:monthlyStep===3?115:70;
+ const recently=gap(asOf,lastDate)<=maxAge;
  return {stable:recently,reason:recently?'stable repeating amount':'no recent posted evidence',
   amount:amount/100,frequency:cadence,observed:group.length,key:identity(event),
   mostRecentDate:lastDate,category:event.category};
