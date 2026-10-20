@@ -162,15 +162,18 @@ function dedupeEvents(events,accounts=[],options={}){
     !sameBill(item,keep))return false;
    const close=Math.abs(dayDiff(item.date,keep.date))<=
     (['weekly','biweekly'].includes(String(item.cadence))?2:5);
-   const auto=[item,keep].some(x=>x.source==='early-bank-inference');
-   const explicit=[item,keep].some(x=>x.source==='user-recurring'||x._forecastExtra||
-    x.source==='owner-bill'||x.source==='manual');
+   const explicitSource=x=>x.source==='user-recurring'||x._forecastExtra||
+    x.source==='owner-bill'||x.source==='manual'||x.source==='future-add';
+   const inferredSource=x=>x.source==='early-bank-inference'||
+    x.source==='historical'||x.source==='bank-inferred';
+   const inferredAndExplicit=explicitSource(item)&&inferredSource(keep)||
+    explicitSource(keep)&&inferredSource(item);
    // A monthly due date can be deliberately moved by the owner, well
    // beyond the bank's historical posting day. It must replace (not join)
    // the automatic debit for that *same billing month*, but only where the
    // overlapping inference is a single monthly obligation.
    const sameMonth=item.date.slice(0,7)===keep.date.slice(0,7);
-   return close||(auto&&explicit&&sameMonth&&
+   return close||(inferredAndExplicit&&sameMonth&&
     norm(item.merchant)===norm(keep.merchant));
   });
   if(matches.length===1){
