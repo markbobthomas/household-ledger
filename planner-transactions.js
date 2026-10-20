@@ -249,7 +249,59 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   ...(old?.sourceKey||reference?.key?{sourceKey:old?.sourceKey||reference?.key}:{})};
  const index=p.futureRecurringRules.findIndex(r=>r.id===id);
  if(index<0)p.futureRecurringRules.push(rule);else p.futureRecurringRules[index]=rule;
+ // Explicit confirmation reverses any earlier "Not recurring" decision for
+ // this precise merchant, account and movement direction.
+ delete p.futureRecurrenceExclusions?.[recurrenceKey(
+  rule.originalAccountId,rule.kind==='movement'?'transfer':rule.type,rule.originalMerchant)];
  return rule;
+}
+/* One authoritative, account-scoped opt-out for bank-derived recurrence.
+ * Unlike a one-off skip, this lasts through every refresh and amount change.
+ * No rule here edits, deletes, or annotates a posted Plaid transaction. */
+const sourceMerchant=value=>merchantKey(value);
+const recurrenceKey=(accountId,type,merchant)=>[String(accountId||''),String(type||''),sourceMerchant(merchant)]
+ .map(encodeURIComponent).join('|');
+const recurringType=row=>row.kind==='movement'?'transfer':row.sourceType==='transfer'?
+ (row.type==='income'?'income':'expense'):(row.sourceType||row.type||'expense');
+function isNotRecurring(preferences,accountId,type,merchant){
+ return Boolean((preferences?.futureRecurrenceExclusions||{})[recurrenceKey(accountId,type,merchant)]);
+}
+function restoreRecurrence(state,key){
+ const p=ensure(state);
+ if(!p.futureRecurrenceExclusions?.[key])throw Error('This recurrence is not currently excluded');
+ delete p.futureRecurrenceExclusions[key];
+ return key;
+}
+function stopRecurrence(state,row){
+ if(!row||!['event','movement'].includes(row.kind))throw Error('Choose a recurring forecast');
+ const p=ensure(state),rule=(p.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
+ const accountId=String(rule?.originalAccountId||rule?.accountId||rule?.fromAccountId||
+  row.sourceAccountId||row.accountId||row.fromAccountId||'');
+ const merchant=String(rule?.originalMerchant||row.sourceMerchant||row.merchant||'');
+ const type=rule?(rule.kind==='movement'?'transfer':rule.type):recurringType(row);
+ if(!accountId||!sourceMerchant(merchant)||!['expense','income','refund','transfer'].includes(type))
+  throw Error('This forecast has no identifiable recurring source');
+ const key=recurrenceKey(accountId,type,merchant);
+ p.futureRecurrenceExclusions??={};
+ p.futureRecurrenceExclusions[key]={accountId,type,merchant};
+ const remove=(p.futureRecurringRules||[]).filter(r=>
+  String(r.originalAccountId||r.accountId||r.fromAccountId)===accountId&&
+  (r.kind==='movement'?'transfer':r.type)===type&&
+  sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant));
+ const ids=new Set(remove.map(r=>r.id));
+ p.futureRecurringRules=p.futureRecurringRules.filter(r=>!ids.has(r.id));
+ const keys=new Set([row.seriesKey,...remove.map(r=>manualSeriesKey(r.id))].filter(Boolean));
+ const signature=[accountId,type,sourceMerchant(merchant)].map(encodeURIComponent).join('|');
+ for(const k of Object.keys(p.futureSeriesEdits||{})){
+  if(keys.has(k)||k.startsWith('series|'+signature+'|'))delete p.futureSeriesEdits[k];
+ }
+ for(const k of Object.keys(p.futureTransactionEdits||{})){
+  if(!k.startsWith('event|')&&!k.startsWith('movement|'))continue;
+  let entry;try{entry=decodeURIComponent(k.split('|')[1]||'')}catch{continue}
+  if([...ids].some(id=>entry.startsWith('user|'+id+'|'))||
+   entry.startsWith('auto|series|'+signature+'|'))delete p.futureTransactionEdits[k];
+ }
+ return {key,accountId,type,merchant,removedRules:ids.size};
 }
 function removeRecurring(state,id){
  const p=ensure(state),index=p.futureRecurringRules.findIndex(r=>r.id===id);
@@ -332,7 +384,8 @@ function postedCoverage(generated,rules,records,accounts,asOf){
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,findExamples,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring,postedCoverage};
+ frequencies,findExamples,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring,postedCoverage,
+ recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
