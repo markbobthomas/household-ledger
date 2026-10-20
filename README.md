@@ -50,6 +50,7 @@ Legacy forecasting files remain in Git for historical test compatibility but are
 - Weekly, biweekly, twice-monthly, monthly, quarterly, semiannual, and annual patterns are supported. Changes, unclear transfers, inconsistent timing, and other doubtful patterns belong in **Reviews**.
 - A single incidental retail purchase does not become a new predicted debit or flood Reviews.
 - An owner's confirmed recurring rule **supersedes the matching inferred series**. Individual exceptions and all-future edits are applied to the ledger, not to actual bank transactions.
+- **Not recurring** in Future Transactions or History stops every inferred or confirmed occurrence for the original account, merchant, and direction, even if the predicted amount or name was edited. Settings lists those exclusions with **Allow predictions** to undo an error. A rejected pattern stays rejected after a Plaid refresh; posted bank history is never changed.
 - The ledger is regenerated when a bank feed refreshes, but saved user decisions persist through the authenticated forecast-only endpoint. Real bank transaction records are never written to client localStorage.
 - A paired household transfer is one ledger movement applied once to each associated account. Credit-card statement payment is a linked movement, not a second purchase. No payments are initiated.
 

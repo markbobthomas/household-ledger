@@ -139,7 +139,9 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
   // confirmation, but never forecasts money by itself without clear
   // recurring evidence. Older ordinary one-offs do not clutter Reviews.
   if(age>(g.rows.length===1&&!bill?45:tolerance))continue;
-  if(dismissed[g.key]==='dismissed')continue;
+  if(dismissed[g.key]==='dismissed'||
+   preferences.futureRecurrenceExclusions?.[
+    [g.accountId,g.type,norm(g.merchant)].map(encodeURIComponent).join('|')])continue;
   const sourceType=latest.type;
   const aliases=[g.accountId,g.accountName,latest.account,latest.accountId]
    .map(String).filter(Boolean);
