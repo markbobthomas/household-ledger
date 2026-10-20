@@ -1,41 +1,54 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
-const html=read('index.html'),script=read('planner.js'),privateServer=read('pilot/server.cjs'),sandbox=read('sandbox/server.cjs');
-const archivedNav=['data-page="budgets"','data-page="transactions"','data-page="insights"','data-page="reviews"','data-page="settings"'];
-assert.ok(archivedNav.every(nav=>!html.includes(nav)),'Old six-tab UI is absent from new app');
-assert.ok(html.includes('Know your balance before the bill.'),'New purpose is explicit');
-assert.ok(html.includes('id="ledger-mode-switch"'),'Private Plaid and Demo share one mode switch');
-assert.ok(html.includes('id="planner-main"'),'Both sources use same planner rendering');
-assert.ok(html.includes('planner.js'),'Both sources use same planner code, not separate inconsistent apps');
-for(const dependency of ['bank-feed.js','ledger-data.js','accounting.js','forecast.js','forecast-ledger.js','account-forecast.js','payment-obligations.js','planner-transactions.js'])
- assert.ok(html.includes(dependency),'Essential read-only forecast capability preserved: '+dependency);
-assert.ok(script.includes('HouseholdForecastLedger.build')&&script.includes('HouseholdAccountForecast.build'),
- 'Forecast derived from the existing engine, not fabricated UI-only numbers');
-assert.ok(script.includes('getSnapshot')&&script.includes('HouseholdLiveSource.bind'),
- 'Demo and Real select bank snapshots but share projections');
-assert.ok(privateServer.includes('pilot[/]data-source[.]js')&&privateServer.includes('planner[.]css')&&privateServer.includes('planner|'),
- 'Private Render preserves authorized source adapter and can serve new planner');
-assert.ok(sandbox.includes('planner\\.css')&&sandbox.includes('planner|'),
- 'Existing Render Sandbox fixture can serve new planner without exposing private bank data');
-assert.ok(script.includes('enterUnavailable()'),'Unavailable Real mode has no Demo fallback');
-const M=require('../ledger-data.js'),F=require('../forecast.js'),L=require('../forecast-ledger.js'),A=require('../account-forecast.js');
+const html=read('index.html'),script=read('planner.js'),
+ privateServer=read('pilot/server.cjs'),sandbox=read('sandbox/server.cjs');
+assert.ok(html.includes('Know your balance before the bill.'));
+assert.ok(html.includes('id="ledger-mode-switch"'));
+assert.ok(html.includes('id="planner-main"'));
+assert.ok(html.includes('planner-core.js'),'Only one forecasting engine is loaded');
+for(const obsolete of ['forecast.js','forecast-ledger.js','account-forecast.js',
+ 'planner-intelligence.js','planner-recurrence.js','planner-backtest.js'])
+ assert.ok(!html.includes('src="'+obsolete),
+  'Legacy parallel forecasting engine is not loaded: '+obsolete);
+for(const dependency of ['bank-feed.js','ledger-data.js','accounting.js',
+ 'payment-obligations.js','planner-transactions.js','planner-history.js','planner-core.js'])
+ assert.ok(html.includes(dependency),'Missing shared UI asset '+dependency);
+assert.ok(script.includes('HouseholdFutureLedger.materialize')&&
+ !script.includes('HouseholdForecastLedger.build'),
+ 'All balances must derive from one canonical future ledger');
+assert.ok(script.includes('HouseholdLiveSource.bind')&&script.includes('getSnapshot'),
+ 'Demo and real read separate bank sources but share one planner');
+assert.ok(privateServer.includes('planner-core|bank-feed')&&
+ sandbox.includes('planner-core|bank-feed'),
+ 'Private and Sandbox hosts must serve the unified planning module');
+assert.ok(script.includes('enterUnavailable()'),
+ 'A failed private bank connection must not silently show fictional accounts');
+const M=require('../ledger-data.js'),C=require('../planner-core.js'),
+ T=require('../planner-transactions.js'),P=require('../payment-obligations.js');
 const entries=[
- {id:'pay-1',date:'2026-07-01',merchant:'Payroll',type:'income',category:'Other',account:'Checking',amount:2500},
- {id:'pay-2',date:'2026-08-01',merchant:'Payroll',type:'income',category:'Other',account:'Checking',amount:2500},
- {id:'pay-3',date:'2026-09-01',merchant:'Payroll',type:'income',category:'Other',account:'Checking',amount:2500},
- {id:'rent-1',date:'2026-07-05',merchant:'Mortgage',type:'expense',category:'Housing',account:'Checking',amount:1800},
- {id:'rent-2',date:'2026-08-05',merchant:'Mortgage',type:'expense',category:'Housing',account:'Checking',amount:1800},
- {id:'rent-3',date:'2026-09-05',merchant:'Mortgage',type:'expense',category:'Housing',account:'Checking',amount:1800}
+ {id:'pay-1',date:'2026-08-01',merchant:'Employer Payroll',type:'income',category:'Other',
+  accountId:'checking',amount:2500,pending:false},
+ {id:'pay-2',date:'2026-09-01',merchant:'Employer Payroll',type:'income',category:'Other',
+  accountId:'checking',amount:2500,pending:false},
+ {id:'rent-1',date:'2026-08-05',merchant:'Mortgage',type:'expense',category:'Housing',
+  accountId:'checking',amount:1800,pending:false},
+ {id:'rent-2',date:'2026-09-05',merchant:'Mortgage',type:'expense',category:'Housing',
+  accountId:'checking',amount:1800,pending:false}
 ];
-const data=M.migrate({transactions:entries}),asOf='2026-10-19',rows=M.records(data);
-const expected=L.build(data,rows,asOf,60,F,M).events;
-const base={asOf,accounts:[{id:'checking',name:'Checking',accountType:'checking',current:7000,available:6900,transactionAccount:'Checking'}]};
-const demo=A.build({...base,mode:'demo'},expected,[],{days:60,records:rows});
-const real=A.build({...base,mode:'plaid',connected:true,
- accounts:base.accounts.map(a=>({...a,balanceAsOf:'2026-10-19T09:00:00Z'}))},expected,[],{days:60,records:rows});
-assert.deepEqual(real.accounts[0].series.map(x=>x.balance),demo.accounts[0].series.map(x=>x.balance),
- 'Same source facts and events produce identical numerical Demo and Real balance trajectories');
-assert.ok(real.accounts[0].balanceStatus==='fresh'&&demo.accounts[0].balanceStatus==='simulated',
- 'Bank provenance and freshness remain distinguished');
-console.log('PASS new single-purpose planner: shared Demo/Real forecast engine and same financial outputs, private authenticated bank adapter retained, no legacy analysis navigation');
+const data=M.migrate({transactions:entries}),rows=M.records(data),asOf='2026-10-19',
+ account={id:'checking',name:'Checking',accountType:'checking',
+  current:7000,available:6900,transactionAccount:'Checking'};
+const demo=C.materialize({asOf,mode:'demo',accounts:[{...account,simulated:true}]},
+ rows,data.predictions,T,P,90);
+const real=C.materialize({asOf,mode:'plaid',connected:true,
+ accounts:[{...account,balanceAsOf:'2026-10-19T09:00:00Z',simulated:false}]},
+ rows,data.predictions,T,P,90);
+assert.deepEqual(real.ledger.map(e=>[e.id,e.date,e.amount]),
+ demo.ledger.map(e=>[e.id,e.date,e.amount]));
+assert.deepEqual(real.projection.accounts[0].series.map(x=>x.balance),
+ demo.projection.accounts[0].series.map(x=>x.balance),
+ 'Same future ledger generates exactly the same Demo and Real balances');
+assert.equal(real.projection.accounts[0].balanceStatus,'fresh');
+assert.equal(demo.projection.accounts[0].balanceStatus,'simulated');
+console.log('PASS one future ledger powers Demo and Real; legacy engines are not loaded; private Plaid adapter and bank protection retained');
