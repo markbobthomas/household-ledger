@@ -70,19 +70,13 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await transferDraft.locator('[name=toAccountId]').isVisible(),true,
     'Linked transfers require an explicit receiving account');
    await page.locator('[data-cancel-review-form]').click();
-   await go('reviews');
-   const demoMortgage=page.locator('.routine-review-line').filter({hasText:'Mortgage'});
-   await demoMortgage.waitFor();
-   await demoMortgage.locator('[data-confirm-routine]').click();
-   assert.equal(await page.locator('.routine-review-line').filter({hasText:'Mortgage'}).count(),0,
-    'Confirming a routine once removes its repeated confirmation prompts');
-   assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
-    ?.plannerRoutineDecisions?.['expense|Checking|mortgage']?.status==='confirmed'),
-    'Confirm once survives a reload without storing bank facts');
+   await go('transactions');
+   assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
+    'One authoritative auto-detected mortgage appears in the future ledger');
    await page.reload({waitUntil:'load'});
-   await go('reviews');
-   assert.equal(await page.locator('.routine-review-line').filter({hasText:'Mortgage'}).count(),0,
-    'Confirmed recurring mortgage stays confirmed after page reload');
+   await go('transactions');
+   assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
+    'Refreshing does not erase bank-derived future predictions');
    await go('settings');
    const auditDetails=page.locator('#accuracy-audit');
    assert.equal(await page.locator('#audit-launch').isVisible(),true,'One-click audit is visible in the main planner');
