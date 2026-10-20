@@ -167,7 +167,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
    reason:g.rows.length===1?bill?
      'One identifiable bill; confirm whether and how often it repeats':
      'One bank payment; no repeating pattern established yet':
-    !frequency?'Payments share an amount but timing is uncertain; choose a schedule':
+    !frequency?'Repeated amount, but calendar timing varies; choose a schedule':
     'Matching account, merchant, amount and recurring timing',
    // Rank coherent patterns before the many single, unproven purchases.
    _priority:(frequency?3:bill?2:1)});
