@@ -90,110 +90,12 @@ function forecastForPayments(events,s,additions){
 }
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
- const rows=model.records(state()),asOf=s.asOf||dateToday();
- const forecast=window.HouseholdForecastLedger.build(state(),rows,asOf,90,
-  window.HouseholdForecast,model);
- const routines=window.HouseholdPlannerIntelligence.project(state(),rows,forecast.events,asOf);
- const tools=window.HouseholdPlannerTransactions,accounts=activeAccounts(s),
-  confirmed=state().predictions?.futureRecurringRules||[],
-  normalizeMerchant=m=>String(m||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),
-  resolveAccount=value=>{
-   const raw=String(value||''),found=accounts.filter(a=>
-    [a.id,a.name,a.transactionAccount].some(k=>String(k||'')===raw));
-   return found.length===1?String(found[0].id):raw;
-  },
-  ownerCovers=(event,kind)=>confirmed.some(rule=>{
-   if(rule.kind!==(kind==='movement'?'movement':'event'))return false;
-   const account=resolveAccount(event._forecastOriginalAccountId||
-    event.accountId||event.account||event.fromAccountId);
-   const merchant=normalizeMerchant(event._forecastOriginalMerchant||event.merchant);
-   const amount=Number(event._forecastOriginalAmount??event.amount);
-   if(!merchant||String(rule.originalAccountId)!==account||!(amount>0))return false;
-   if(rule.kind==='movement'&&String(rule.toAccountId)!==String(event.toAccountId))return false;
-   return (rule.matchNames||[normalizeMerchant(rule.originalMerchant||rule.merchant)]).includes(merchant)&&
-    Math.abs(Number(rule.matchAmount??rule.amount)-amount)<.011;
-  }),
-  matching=(event,kind)=>ownerCovers(event,kind)||
-   confirmed.some(rule=>tools.matchesRecurring(rule,
-    {...event,kind,date:event._seriesDate||event.baseDate||event.anchorDate||event.date,
-     merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
-     amount:event._forecastOriginalAmount??event.amount,
-     accountId:event._forecastOriginalAccountId||event.accountId},accounts));
- // Existing user-defined schedule is authoritative even when the old bank
- // engine is still projecting a different due day, or source type changed
- // between expense and ACH transfer. Do not re-prompt to confirm it.
- routines.review=(routines.review||[]).filter(item=>!ownerCovers({
-  accountId:item.account,merchant:item.merchant,amount:item.amount
- },'event'));
- // Expand the source-date window before applying an edited due date.
- // E.g. a bill originally due Nov 2 but moved to Nov 20 must remain visible
- // on Nov 18, even though the *original* Nov 2 date has passed.
- const padded=tools.generatedRecurring(confirmed,shiftDay(asOf,-32),shiftDay(asOf,122));
- const adjusted={
-  events:padded.events.map(e=>({
-   ...tools.applySeries(e,e.date,e._seriesKey,state().predictions?.futureSeriesEdits||{}),
-   _seriesKey:e._seriesKey,_seriesDate:e.date,
-   _forecastOriginalAccountId:e.accountId,_forecastOriginalMerchant:e.merchant,
-   _forecastOriginalAmount:e.amount
-  })).filter(e=>e.date>asOf&&e.date<=shiftDay(asOf,90)),
-  plans:padded.plans.map(p=>({
-   ...p,_postedView:tools.applySeries({
-    date:p.anchorDate,amount:p.amount,merchant:p.merchant,
-    fromAccountId:p.fromAccountId,toAccountId:p.toAccountId
-   },p.anchorDate,tools.manualSeriesKey(p.seriesRuleId),
-   state().predictions?.futureSeriesEdits||{})
-  }))
- };
- const manual=tools.postedCoverage(adjusted,confirmed,rows,accounts,asOf);
- const auto=window.HouseholdPlannerRecurrence.infer(rows,s,state().predictions||{},{days:90});
- const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
- const existingAdds=(state().predictions?.futureTransactionAdds||[]).filter(e=>
-  !confirmed.some(r=>r.sourceAddedId===e.id)&&!matching(e,e.type==='transfer'?'movement':'event'));
- const deduper=window.HouseholdPlannerRecurrence;
- const firstPass=deduper.dedupeEvents([
-  ...recurring,...auto.events,...manual.events,
-  ...existingAdds.filter(e=>e.type!=='transfer').map(e=>({...e,_forecastExtra:true}))
- ],accounts);
- // Card statements read each planned charge once. An owner-entered future
- // transaction always takes priority over inferred copies of that same bill.
- const cardExpected=firstPass.events.filter(e=>!e._forecastExtra);
- const cardAdds=firstPass.events.filter(e=>e._forecastExtra);
- const payments=window.HouseholdPaymentObligations.build(s,rows,
-  forecastForPayments(cardExpected,s,cardAdds),
-  state().predictions||{},{days:90});
- const suppress=new Set(payments.suppressedExpectedIds||[]);
- const cardPlans=(payments.plans||[]).filter(p=>!matching({...p,date:p.anchorDate},'movement'));
- const rawPlans=state().predictions?.accountMovements||[];
- const manualPlans=rawPlans.filter(p=>{
-  if(matching({...p,date:p.anchorDate||p.date,merchant:p.merchant||'Account transfer'},'movement'))return false;
-  const dates=window.HouseholdAccountForecast.occurrences(p,asOf,shiftDay(asOf,90));
-  const duplicate=cardPlans.some(card=>card.fromAccountId===p.fromAccountId&&card.toAccountId===p.toAccountId&&
-   dates.some(date=>Math.abs(dayDelta(date,card.anchorDate))<=3));
-  return !duplicate;
- });
- const finalPass=deduper.dedupeEvents([
-  ...firstPass.events.filter(e=>!suppress.has(String(e.id))),
-  ...recurringEvents(payments.billEvents,s).filter(e=>!matching(e,'event'))
- ],accounts);
- const events=finalPass.events.filter(e=>!e._forecastExtra);
- const finalAdds=finalPass.events.filter(e=>e._forecastExtra).map(({_forecastExtra,...e})=>e)
-  .concat(existingAdds.filter(e=>e.type==='transfer'));
- const personal=state().predictions||{};
- const forecastAccount=window.HouseholdAccountForecast.build(s,events,[...manualPlans,...cardPlans,...manual.plans],
-  {days:90,records:rows,futureTransactionEdits:personal.futureTransactionEdits||{},
-   futureTransactionAdds:finalAdds,
-   futureSeriesEdits:personal.futureSeriesEdits||{},futureRecurringRules:confirmed,
-   seriesTools:window.HouseholdPlannerTransactions});
- const duplicateChecks=[...firstPass.removed,...finalPass.removed];
- const duplicateConflicts=[...firstPass.conflicts,...finalPass.conflicts];
- const missingMortgages=window.HouseholdPlannerIntelligence.missingMortgages(
-  rows,forecastAccount,accounts,asOf,
-  {dismissed:state().predictions?.mortgageReviewDismissals||[]});
- const historyCandidates=window.HouseholdPlannerHistory.candidates(
-  rows,accounts,asOf,personal,forecastAccount.events);
- return {forecast,routines,payments,projection:forecastAccount,rows,events,
-  missingMortgages,historyCandidates,automaticRecurrence:auto,
-  duplicateChecks,duplicateConflicts};
+ // The only planning entry point: normalize Plaid history, materialize one
+ // editable future ledger, then calculate all balances from those entries.
+ // Older inference and category forecast engines do not feed balances.
+ return window.HouseholdFutureLedger.materialize(
+  s,model.records(state()),state().predictions||{},
+  window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,90);
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function selected(s){
