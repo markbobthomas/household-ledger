@@ -84,8 +84,8 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
     !internalName.test(g.merchant),
    category=String(metadata(t).detailed||'').toUpperCase(),
    unpairedTransfer=g.rows.some(r=>r.type==='transfer'),
-   transferRisk=unpairedTransfer&&(internalName.test(g.merchant)||
-    g.kind==='income'||/TRANSFER/.test(category)&&!trusted(t)),
+   transferRisk=internalName.test(g.merchant)||
+    unpairedTransfer&&(g.kind==='income'||/TRANSFER/.test(category)&&!trusted(t)),
    multiCycle=f&&!['weekly','biweekly','twice-monthly'].includes(f)&&
     g.rows.filter(r=>r.date.slice(0,7)===t.date.slice(0,7)).length>1,
    enough=one||spaced&&(twice||f3||(!variableName.test(g.merchant)&&!transferRisk)),
