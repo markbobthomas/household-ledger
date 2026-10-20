@@ -364,7 +364,66 @@ function project(snapshot,ledger,days=90){
    conservationDifference:round(endRow.net-net0-(earned-spent)),
    complete:diagnostics.unassigned.length===0&&diagnostics.unmatchedTransfers.length===0}};
 }
-const api={analyze,materialize,project,accountId,cadence};
+// Backtesting uses the SAME historical prediction engine as the live plan.
+// It never applies today's saved overrides to earlier months.
+function backtest(records,accounts,asOf,account,months=6){
+ const target=String(account),input=(records||[]).filter(r=>!r.pending&&valid(r.date)&&r.date<=asOf),
+  accountRows=input.filter(r=>accountId(r,accounts)===target),
+  totals={predicted:0,eligible:0,matched:0,changed:0,missed:0,extra:0,duplicates:0,drift:0},
+  issues=[],windows=[],endMonth=month(asOf,-1);
+ let excludedWindows=0,cardSettlements=0;
+ for(let offset=Math.max(1,months)-1;offset>=0;offset--){
+  const current=month(endMonth,-offset),cutoff=monthDate(current,0,1);
+  const prior=add(cutoff,-1),end=monthDate(current,1,1),endDate=add(end,-1),
+   training=accountRows.filter(r=>r.date<=prior),
+   actual=accountRows.filter(r=>r.date>=cutoff&&r.date<=endDate),
+   historyMonths=new Set(training.map(r=>r.date.slice(0,7)));
+  if(historyMonths.size<2||!actual.length){excludedWindows++;continue;}
+  const detected=analyze(training,accounts,prior,{},diff(endDate,prior)),
+   candidates=detected.automatic.filter(e=>e.accountId===target),
+   eligibleNames=new Set([...detected.review,...candidates].map(e=>
+    signature(e.accountId,e.type||e.kind,e.merchant)));
+  const eligible=actual.filter(r=>
+   ['income','expense'].includes(direction(r))&&
+   eligibleNames.has(signature(target,direction(r),r.merchant)));
+  const used=new Set();let matched=0,changed=0,missed=0,drift=0;
+  for(const row of eligible){
+   const compare=candidates.map((e,j)=>({e,j,days:Math.abs(diff(e.date,row.date)),
+    dollars:Math.abs(cents(e.amount)-cents(row.amount))}))
+    .filter(x=>!used.has(x.j)&&norm(x.e.merchant)===norm(row.merchant)&&
+     x.e.type===direction(row)&&x.days<=5)
+    .sort((a,b)=>a.days-b.days||a.dollars-b.dollars);
+   if(!compare.length){missed++;issues.push({kind:'missed',merchant:row.merchant,
+     date:row.date,actual:row.amount});continue;}
+   const best=compare.find(x=>x.dollars<=1)||compare[0];used.add(best.j);
+   if(best.dollars<=1){matched++;if(best.days>2)drift++;}
+   else {changed++;issues.push({kind:'amount changed',merchant:row.merchant,
+    date:row.date,actual:row.amount,expected:best.e.amount});}
+  }
+  let extra=0,duplicates=0;
+  for(let i=0;i<candidates.length;i++)if(!used.has(i)){
+   const pred=candidates[i],duplicate=candidates.some((other,j)=>j!==i&&
+    norm(other.merchant)===norm(pred.merchant)&&other.date===pred.date&&
+    Math.abs(cents(other.amount)-cents(pred.amount))<=1);
+   if(duplicate)duplicates++;else extra++;
+   issues.push({kind:duplicate?'duplicate':'unmatched forecast',merchant:pred.merchant,
+    date:pred.date,expected:pred.amount});
+  }
+  totals.predicted+=candidates.length;totals.eligible+=eligible.length;
+  totals.matched+=matched;totals.changed+=changed;totals.missed+=missed;
+  totals.extra+=extra;totals.duplicates+=duplicates;totals.drift+=drift;
+  cardSettlements+=actual.filter(r=>r.type==='transfer'&&
+   /card payment|payment to visa|payment thank you/i.test(r.merchant||'')).length;
+  windows.push({month:current,predicted:candidates.length,eligible:eligible.length,
+   matched,changed,missed,extra,duplicates});
+ }
+ const status=windows.length&&(totals.predicted||totals.eligible)?'evaluated':'insufficient-history';
+ return {status,accountId:target,periods:windows.map(w=>w.month),windows,excludedWindows,
+  totals,matchRate:totals.predicted?Math.round(totals.matched/totals.predicted*100):null,
+  coverageRate:totals.eligible?Math.round(totals.matched/totals.eligible*100):null,
+  issues:issues.slice(0,12),issueCount:issues.length,cardSettlements};
+}
+const api={analyze,materialize,project,backtest,accountId,cadence};
 root.HouseholdFutureLedger=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
