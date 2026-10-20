@@ -22,12 +22,13 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','mortgageReviewDismissals'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
 let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
-let activeTab='overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='';
+let activeTab='overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
+let lastMissingMortgages=[];
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -37,7 +38,8 @@ function savePlanning(){
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
-   futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules}));
+   futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
+   mortgageReviewDismissals:p.mortgageReviewDismissals}));
   return true;
  }
 }
@@ -142,7 +144,10 @@ function forecastFor(s){
    futureTransactionAdds:existingAdds,
    futureSeriesEdits:personal.futureSeriesEdits||{},futureRecurringRules:confirmed,
    seriesTools:window.HouseholdPlannerTransactions});
- return {forecast,routines,payments,projection:forecastAccount,rows,events};
+ const missingMortgages=window.HouseholdPlannerIntelligence.missingMortgages(
+  rows,forecastAccount,accounts,asOf,
+  {dismissed:state().predictions?.mortgageReviewDismissals||[]});
+ return {forecast,routines,payments,projection:forecastAccount,rows,events,missingMortgages};
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function selected(s){
@@ -710,6 +715,7 @@ function render(){
  try{bundle=forecastFor(s)}catch(e){error=String(e.message||e)}
  const projection=bundle?.projection||null,selectedSource=selected(s);
  lastSuggestions=bundle?.routines?.review||[];
+ lastMissingMortgages=bundle?.missingMortgages||[];
  if(selectedSource)selectedAccount=selectedSource.id;
  const derived=projection?.accounts.find(x=>x.id===String(selectedAccount));
  const statuses=projection?.diagnostics||{};
@@ -718,6 +724,8 @@ function render(){
  const caution=[
   ...(missingCards.length?['Credit-card payment schedule not set for '+missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.']:[]),
   ...((bundle?.payments?.warnings||[]).slice(0,3)),
+  ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>
+   'An actual '+cash(m.amount)+' mortgage payment from '+m.account+' is not in the forecast. Review its proposed recurring schedule below.')),
   ...((bundle?.routines?.warnings||[]).slice(0,2).map(w=>
    'Possible mortgage withdrawal not included: '+w.merchant+' ('+w.reason+'). Confirm its recurrence before relying on the projected balance.')),
   ...((bundle?.forecast?.suppressedDuplicates||[]).length?['Older overlapping one-time forecasts were excluded to avoid duplicate payments.']:[]),
