@@ -149,11 +149,12 @@ const account=e=>e.accountId||e.account||'';
 const mortgageEvent=e=>mortgageText.test(String(e.merchant||''))||
   /MORTGAGE/.test(String(e.category||'').toUpperCase());
 const sameBill=(a,b)=>{
- const an=norm(a.merchant),bn=norm(b.merchant);
- if(an&&an===bn)return true;
- // Exact same account, close date, amount, and both unmistakably mortgage.
- return mortgageEvent(a)&&mortgageEvent(b)&&
-  Math.abs(cents(a.amount)-cents(b.amount))<=Math.max(500,Math.min(cents(a.amount),cents(b.amount))*.02);
+ // The same lender can service different mortgages. Never merge two bills
+ // just because their descriptions contain "mortgage" and amounts coincide.
+ const aliases=x=>[x.merchant,x.originalMerchant,x._forecastOriginalMerchant]
+  .map(norm).filter(Boolean);
+ const aNames=aliases(a),bNames=aliases(b);
+ return aNames.some(name=>bNames.includes(name));
 };
 const weight=e=>e.source==='user-recurring'?100:
  e.source==='future-add'||String(e.id||'').startsWith('future-add|')?95:
@@ -187,6 +188,16 @@ function dedupeEvents(events,accounts=[],options={}){
     norm(item.merchant)===norm(keep.merchant));
   });
   if(matches.length===1){
+   const candidate=matches[0],sameSource=String(item.source||'')===String(candidate.source||''),
+    sameDate=item.date===candidate.date,
+    sameAmount=Math.abs(cents(item.amount)-cents(candidate.amount))<=1;
+   if(sameSource&&(!sameDate||!sameAmount)){
+    // Separate same-source charges could be legitimate; preserve both
+    // instead of silently erasing a mortgage installment or payday.
+    conflicts.push({id:item.id,merchant:item.merchant,matching:candidate.id,
+     reason:'Close forecast payments from the same source need confirmation'});
+    kept.push(item);continue;
+   }
    // Exact source identity and dates are stronger than amount. A manually
    // adjusted obligation replaces a stale inferred amount, not both.
    const keep=matches[0];
