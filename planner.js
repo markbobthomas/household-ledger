@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -36,7 +36,8 @@ function savePlanning(){
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
-   futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds}));
+   futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
+   futureSeriesEdits:p.futureSeriesEdits}));
   return true;
  }
 }
@@ -52,6 +53,21 @@ function isChecking(a){return accountType(a)==='cash'&&
 function freshness(a){const status=a.balanceStatus;return status==='fresh'||status==='simulated'}
 function sourceTag(){if(requestedReal()&&!live())return window.HouseholdLiveSource?.error?'REAL · UNAVAILABLE':'CONNECTING';return live()?'REAL BANK':'DEMO DATA'}
 function activeAccounts(s){return Array.isArray(s?.accounts)?s.accounts:[]}
+function recurringEvents(events,s){
+ const accounts=activeAccounts(s),tools=window.HouseholdPlannerTransactions,
+  series=state().predictions?.futureSeriesEdits||{};
+ const findAccount=raw=>{
+  const value=String(raw||'');
+  const options=accounts.filter(a=>[a.id,a.transactionAccount,a.name]
+   .some(alias=>String(alias||'')===value));
+  return options.length===1?String(options[0].id):value;
+ };
+ return (events||[]).map(e=>{
+  const originalAccount=findAccount(e.accountId||e.account),key=tools.seriesEvent(e,originalAccount);
+  return {...tools.applySeries(e,e.date,key,series),
+   _seriesKey:key,_seriesDate:e.date,_forecastOriginalAccountId:originalAccount};
+ });
+}
 function forecastForPayments(events,s){
  const accounts=activeAccounts(s),edits=state().predictions?.futureTransactionEdits||{};
  const extras=state().predictions?.futureTransactionAdds||[];
@@ -74,7 +90,8 @@ function forecastFor(s){
  const forecast=window.HouseholdForecastLedger.build(state(),rows,asOf,90,
   window.HouseholdForecast,model);
  const routines=window.HouseholdPlannerIntelligence.project(state(),rows,forecast.events,asOf);
- const payments=window.HouseholdPaymentObligations.build(s,rows,forecastForPayments(routines.events,s),state().predictions||{},{days:90});
+ const recurring=recurringEvents(routines.events,s);
+ const payments=window.HouseholdPaymentObligations.build(s,rows,forecastForPayments(recurring,s),state().predictions||{},{days:90});
  const suppress=new Set(payments.suppressedExpectedIds||[]);
  const cardPlans=payments.plans||[];
  const rawPlans=state().predictions?.accountMovements||[];
@@ -84,11 +101,12 @@ function forecastFor(s){
    dates.some(date=>Math.abs(dayDelta(date,card.anchorDate))<=3));
   return !duplicate;
  });
- const events=[...routines.events.filter(e=>!suppress.has(String(e.id))),...payments.billEvents];
+ const events=[...recurring.filter(e=>!suppress.has(String(e.id))),...recurringEvents(payments.billEvents,s)];
  const personal=state().predictions||{};
  const forecastAccount=window.HouseholdAccountForecast.build(s,events,[...manualPlans,...cardPlans],
   {days:90,records:rows,futureTransactionEdits:personal.futureTransactionEdits||{},
-   futureTransactionAdds:personal.futureTransactionAdds||[]});
+   futureTransactionAdds:personal.futureTransactionAdds||[],
+   futureSeriesEdits:personal.futureSeriesEdits||{},seriesTools:window.HouseholdPlannerTransactions});
  return {forecast,routines,payments,projection:forecastAccount,rows,events};
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
