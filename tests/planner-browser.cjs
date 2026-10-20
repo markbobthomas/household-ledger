@@ -206,6 +206,10 @@ const {chromium,webkit}=require('playwright');
   const dates=['2026-06-02','2026-07-02','2026-08-02','2026-09-02','2026-10-02'];
   const transactions=dates.map((date,i)=>({id:'mort-'+i,accountId:'checking-real',
    date,name:'Home Mortgage ACH',merchant:'Home Mortgage ACH',amount:2590,pending:false,category:mortgagePfc}));
+  transactions.push({id:'one-missing-mortgage',accountId:'checking-real',
+   date:'2026-09-15',name:'Mortgage Servicer X',merchant:'Mortgage Servicer X',
+   amount:2000,pending:false,
+   category:{primary:'LOAN_PAYMENTS',detailed:'LOAN_PAYMENTS_MORTGAGE_PAYMENT',confidence_level:'HIGH'}});
   transactions.push({id:'card-purchase',accountId:'credit-real',date:'2026-10-10',
    name:'Grocery Card Charge',merchant:'Grocery Card Charge',amount:300,pending:false,
    category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'HIGH'}});
@@ -349,6 +353,28 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#refresh-bank').click();
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
+  const unresolved=page.locator('.missing-mortgages').first();
+  assert.match(await unresolved.innerText(),/Mortgage Servicer X|\$2,000/,
+   'One real posted $2,000 mortgage triggers a missing-payment warning');
+  await unresolved.locator('[data-review-mortgage]').click();
+  const mortgageForm=page.locator('#future-new-form');
+  assert.equal(await mortgageForm.locator('[name=amount]').inputValue(),'2000',
+   'The actual bank mortgage amount is carried into the proposed rule');
+  assert.equal(await mortgageForm.locator('[name=accountId]').inputValue(),'checking-real',
+   'The existing payer is selected, never a different checking account');
+  assert.equal(await mortgageForm.locator('[name=date]').inputValue(),'2026-11-15',
+   'The next proposed payment is shown as an editable future date');
+  assert.equal(await mortgageForm.locator('[name=frequency]').inputValue(),'monthly',
+   'Mortgage is suggested monthly but must be saved by the owner');
+  await mortgageForm.locator('button[type=submit]').click();
+  await page.locator('.future-notice').getByText(/Recurring payment created/).waitFor();
+  assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage Servicer X'}).count()>0,true,
+   'Confirming the missing mortgage inserts a future $2,000 debit');
+  assert.equal(await page.locator('.missing-mortgages').count(),0,
+   'A confirmed mortgage no longer appears as an omitted payment');
+  assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
+   r.merchant==='Mortgage Servicer X'&&r.amount===2000&&r.accountId==='checking-real')),
+   'The recovered real-bank mortgage is saved only as a private user-confirmed forecast');
   const storage=await page.evaluate(()=>({...localStorage}));
   assert.equal(Object.keys(storage).some(k=>JSON.stringify(storage[k]).includes('mort-4')),false,
    'Raw Real bank transactions are not written to localStorage');
