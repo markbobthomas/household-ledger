@@ -111,7 +111,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant))continue;
   const owners=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
-   r.type===g.kind&&
+   (!r.type||r.type===g.kind)&&
    (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
   // A confirmed recurring rule OWNS the entire historical stream. Different
   // amounts are normal for utilities and payroll and must not create another
@@ -173,7 +173,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   ids.add(e.id);entries.push(e)};
  const ownerFor=(e)=>rules.some(r=>r.kind==='event'&&
   String(r.originalAccountId||r.accountId)===String(e.accountId)&&
-  r.type===e.type&&
+  (!r.type||r.type===e.type)&&
   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(
    e._forecastOriginalMerchant||e.merchant)));
  // Explicit rules come first, and always own their original bank series.
