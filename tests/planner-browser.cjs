@@ -115,7 +115,7 @@ const {chromium,webkit}=require('playwright');
    const originalAmount=Number(await editor.locator('[name=amount]').inputValue());
    await editor.locator('[name=amount]').fill(String(originalAmount+75));
    await editor.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/updated/).waitFor();
+   await page.locator('.future-notice').getByText(/updated/i).waitFor();
    assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
     .futureTransactionEdits?.[key]?.amount,predictionKey),originalAmount+75,
     'One-off prediction edits save without changing posted transactions');
@@ -134,7 +134,7 @@ const {chromium,webkit}=require('playwright');
    const newAmount=originalAmount+125;
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/every future occurrence/i).waitFor();
+   await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
    assert.equal(await page.evaluate(()=>Object.values(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
    ).some(x=>x.amount===newAmount)),true,
