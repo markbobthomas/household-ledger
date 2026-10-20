@@ -349,7 +349,7 @@ function editorFor(row,s){
   '<option value="'+type+'"'+(kind===type?' selected':'')+'>'+
   ({expense:'Withdrawal / purchase',income:'Deposit',refund:'Refund',transfer:'Single-account transfer'}[type])+'</option>').join('');
  const keys='<input type="hidden" name="key" value="'+escapeHTML(row.key)+'">';
- const common='<label>Date<input type="date" name="date" value="'+escapeHTML(date)+'" min="'+
+ const common='<label>Date<input type="date" name="date" value="'+escapeHTML(date)+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" min="'+
   escapeHTML(shiftDay(s.asOf,1))+'" required></label>'+
   '<label>Amount ($)<input type="number" name="amount" min="0.01" max="999999999" step="0.01" value="'+
    escapeHTML(row.amount)+'" required></label>';
@@ -388,7 +388,7 @@ function newTransactionForm(s){
   '<label class="new-standard-account">Account'+accountSelect(accounts,defaultAccount,'accountId')+'</label>'+
   '<label class="future-transfer-only" hidden>From account'+accountSelect(accounts,defaultAccount,'fromAccountId')+'</label>'+
   '<label class="future-transfer-only" hidden>To account'+accountSelect(accounts,accounts.find(a=>String(a.id)!==String(defaultAccount))?.id||defaultAccount,'toAccountId')+'</label>'+
-  '<label>Date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+'" value="'+
+  '<label>Date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+
    escapeHTML(shiftDay(s.asOf,1))+'" required></label>'+
   '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00"></label>'+
   '</div><div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
@@ -446,7 +446,7 @@ function overviewPage(bundle,s,chosen,derived,fresh){
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
    '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
-   '<p class="chart-caption">Dates and fixed recurring commitments only; daily discretionary purchases are not forecast.</p></section>'+
+   '<p class="chart-caption">This balance projection includes dated fixed recurring commitments; variable day-to-day purchases are not forecast.</p></section>'+
   '<section class="panel"><div class="section-title"><h2>Next five expected movements</h2>'+
    '<button type="button" class="btn" data-view="transactions">View all and edit</button></div>'+
    (notes||'<p class="lead">No upcoming dated transactions identified.</p>')+
@@ -642,6 +642,9 @@ document.addEventListener('submit',async e=>{
  const fields=Object.fromEntries(new FormData(form));
  try{
   const s=snapshot(),accounts=activeAccounts(s),asOf=s.asOf||dateToday(),planner=window.HouseholdPlannerTransactions;
+  if(form.hasAttribute('data-future-new-form')||form.hasAttribute('data-future-edit-form')){
+   if(fields.date>shiftDay(asOf,horizon))throw Error('Choose a date within the next '+horizon+' forecast days.');
+  }
   if(form.hasAttribute('data-future-edit-form')){
    const key=form.dataset.futureEditForm;
    await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
