@@ -452,7 +452,12 @@ function render(){
  mode.value=requestedReal()?'real':'demo';
  $('source-type').textContent=sourceTag();
  $('refresh-bank').hidden=!live();
- $('audit-launch').hidden=busy||!activeAccounts(s).length;
+ $('audit-launch').hidden=busy||!activeAccounts(s).length||activeTab!=='settings';
+ document.querySelectorAll('[data-view]').forEach(button=>{
+  const active=button.dataset.view===activeTab;
+  button.classList.toggle('active',active);
+  if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+ });
  $('bank-connect').hidden=!available();
  $('horizon').value=String(horizon);
  if(busy){$('planner-notice').innerHTML='<div class="notice'+(window.HouseholdLiveSource?.error?' danger':'')+'"><div><strong>Real bank information is not available yet.</strong> '+
@@ -492,19 +497,8 @@ function render(){
  const cashProjection=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
  let important=(derived?.events||[]).filter(e=>['expense','transfer_out'].includes(e.kind));
  const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
- root.innerHTML=hero(selectedSource,derived,s.asOf)+
-  accountCards(s,projection,selectedSource)+
-  '<section class="panel" aria-label="Projected balance curve"><div class="section-title"><h2>Balance trajectory</h2>'+
-  '<p>Next '+horizon+' days · '+escapeHTML(derived?.name||selectedSource.name)+'</p></div>'+
-  (derived&&fresh?miniChart(cashProjection,s.asOf):'<div class="empty-visual">The trajectory is withheld until a usable, up-to-date starting balance is available.</div>')+
-  '<p class="chart-caption">An illustrative day-by-day projection from dated transactions and saved schedules. It is not a bank guarantee, and unplanned purchases can lower actual cash.</p></section>'+
-  '<section class="panel timeline-panel" aria-label="Expected cash movements"><div class="section-title">'+
-  '<h2>Upcoming money in and out</h2><p>'+important.length+' withdrawals · '+income.length+' deposits or transfers</p></div>'+
-  movementRows(selectedSource,derived||{events:[],series:[]},s,bundle?.routines)+
-  '<details class="details"><summary>What is included in this forecast?</summary>'+
-  '<p>Dates and amounts come from historical recurrence detection and any previously saved planning rules. The starting balance is reported by the bank in Real mode. A credit card purchase increases card debt, not checking withdrawals. Credit card payments are transfers between accounts, not spending twice. A projected deposit is not confirmed until posted.</p>'+
-  '</details></section>'+
-  auditPanel(selectedSource)+routineReviewPanel(bundle)+autopayPanel(s)+connectionPanel(s,bundle);
+ root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
+  activeTab==='transactions'?transactionsPage(bundle,s):overviewPage(bundle,s,selectedSource,derived,fresh);
 }
 document.addEventListener('click',async e=>{
  const runAudit=e.target.closest('[data-run-backtest]');
