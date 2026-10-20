@@ -121,11 +121,22 @@ function forecastFor(s){
   }))
  };
  const manual=tools.postedCoverage(adjusted,confirmed,rows,accounts,asOf);
+ const auto=window.HouseholdPlannerRecurrence.infer(rows,s,state().predictions||{},{days:90});
  const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
  const existingAdds=(state().predictions?.futureTransactionAdds||[]).filter(e=>
   !confirmed.some(r=>r.sourceAddedId===e.id)&&!matching(e,e.type==='transfer'?'movement':'event'));
+ const deduper=window.HouseholdPlannerRecurrence;
+ const firstPass=deduper.dedupeEvents([
+  ...recurring,...auto.events,...manual.events,
+  ...existingAdds.filter(e=>e.type!=='transfer').map(e=>({...e,_forecastExtra:true}))
+ ],accounts);
+ // Card statements read each planned charge once. An owner-entered future
+ // transaction always takes priority over inferred copies of that same bill.
+ const cardExpected=firstPass.events.filter(e=>!e._forecastExtra);
+ const cardAdds=firstPass.events.filter(e=>e._forecastExtra);
  const payments=window.HouseholdPaymentObligations.build(s,rows,
-  forecastForPayments([...recurring,...manual.events],s,existingAdds),state().predictions||{},{days:90});
+  forecastForPayments(cardExpected,s,cardAdds),
+  state().predictions||{},{days:90});
  const suppress=new Set(payments.suppressedExpectedIds||[]);
  const cardPlans=(payments.plans||[]).filter(p=>!matching({...p,date:p.anchorDate},'movement'));
  const rawPlans=state().predictions?.accountMovements||[];
@@ -136,22 +147,29 @@ function forecastFor(s){
    dates.some(date=>Math.abs(dayDelta(date,card.anchorDate))<=3));
   return !duplicate;
  });
- const events=[...recurring.filter(e=>!suppress.has(String(e.id))),
-  ...recurringEvents(payments.billEvents,s).filter(e=>!matching(e,'event')),
-  ...manual.events];
+ const finalPass=deduper.dedupeEvents([
+  ...firstPass.events.filter(e=>!suppress.has(String(e.id))),
+  ...recurringEvents(payments.billEvents,s).filter(e=>!matching(e,'event'))
+ ],accounts);
+ const events=finalPass.events.filter(e=>!e._forecastExtra);
+ const finalAdds=finalPass.events.filter(e=>e._forecastExtra).map(({_forecastExtra,...e})=>e)
+  .concat(existingAdds.filter(e=>e.type==='transfer'));
  const personal=state().predictions||{};
  const forecastAccount=window.HouseholdAccountForecast.build(s,events,[...manualPlans,...cardPlans,...manual.plans],
   {days:90,records:rows,futureTransactionEdits:personal.futureTransactionEdits||{},
-   futureTransactionAdds:existingAdds,
+   futureTransactionAdds:finalAdds,
    futureSeriesEdits:personal.futureSeriesEdits||{},futureRecurringRules:confirmed,
    seriesTools:window.HouseholdPlannerTransactions});
+ const duplicateChecks=[...firstPass.removed,...finalPass.removed];
+ const duplicateConflicts=[...firstPass.conflicts,...finalPass.conflicts];
  const missingMortgages=window.HouseholdPlannerIntelligence.missingMortgages(
   rows,forecastAccount,accounts,asOf,
   {dismissed:state().predictions?.mortgageReviewDismissals||[]});
  const historyCandidates=window.HouseholdPlannerHistory.candidates(
   rows,accounts,asOf,personal,forecastAccount.events);
  return {forecast,routines,payments,projection:forecastAccount,rows,events,
-  missingMortgages,historyCandidates};
+  missingMortgages,historyCandidates,automaticRecurrence:auto,
+  duplicateChecks,duplicateConflicts};
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function selected(s){
