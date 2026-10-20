@@ -107,12 +107,15 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const row={accountId,date,kind,amount:round(amount),id:original.id||null,merchant:original.merchant||original.description||'Expected event',
    type:original.type||kind,description:original.description||'',transferGroupId:groupId,
    predictionKey:original._forecastKey||(groupId?movementKey(groupId):null),
-   fromAccountId:original.fromAccountId||null,toAccountId:original.toAccountId||null};
+   fromAccountId:original.fromAccountId||null,toAccountId:original.toAccountId||null,
+   seriesKey:original._seriesKey||null,baseDate:original._seriesDate||date,
+   cadence:original.cadence||null};
   if(!postings.has(date))postings.set(date,[]);
   postings.get(date).push(row);householdEvents.push(row);
   return true;
  };
  const historical=Array.isArray(options.records)?options.records:[];
+ const seriesEdits=options.futureSeriesEdits||{},seriesTools=options.seriesTools||null;
  const forecastEdits=options.futureTransactionEdits||{},extra=Array.isArray(options.futureTransactionAdds)?
   options.futureTransactionAdds:[];
  const encode=x=>encodeURIComponent(String(x));
@@ -220,7 +223,9 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
     continue;
    }
    const movement={id:'plan|'+String(p.id)+'|'+when,date:when,amount,
-    fromAccountId:from,toAccountId:to,source:'user plan',status};
+    fromAccountId:from,toAccountId:to,source:'user plan',status,
+    seriesKey:seriesTools?.seriesPlan?.(p)||null,baseDate:when,
+    cadence:p.origin==='card-autopay'?'monthly':p.frequency==='biweekly'?'every 2 weeks':p.frequency};
    movements.push(movement);
    if(status==='returned'){
     const reversalDate=String(p.reversalDate||'');
@@ -271,7 +276,8 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
  for(const original of movements){
   const change=forecastEdits[movementKey(original.id)];
   if(change?.skipped)continue;
-  const m=change?{...original,...change}:original;
+  let m=change?{...original,...change}:original;
+  if(m.seriesKey&&seriesTools?.applySeries)m=seriesTools.applySeries(m,original.baseDate||original.date,m.seriesKey,seriesEdits);
   if(!iso(m.date)||m.date<=asOf||m.date>through||!(Number(m.amount)>0)||
     !byId.has(String(m.fromAccountId))||!byId.has(String(m.toAccountId))||
     m.fromAccountId===m.toAccountId){
@@ -286,7 +292,8 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const from=byId.get(m.fromAccountId),to=byId.get(m.toAccountId);
   const kind=from.type==='credit'||to.type==='credit'?'card_payment':'internal_transfer';
   const details={id:m.id,merchant:m.merchant||(kind==='card_payment'?'Credit-card payment':'Account transfer'),
-   type:'transfer',fromAccountId:from.id,toAccountId:to.id};
+   type:'transfer',fromAccountId:from.id,toAccountId:to.id,
+   _seriesKey:m.seriesKey||null,_seriesDate:m.baseDate||m.date,cadence:m.cadence||null};
   post(from.id,m.date,'transfer_out',m.amount,details,m.id);
   post(to.id,m.date,'transfer_in',m.amount,details,m.id);
   diagnostics.pairedMovements.push({...m,kind,amount:round(m.amount)});
