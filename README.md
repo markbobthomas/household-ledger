@@ -20,7 +20,7 @@ The interface retains:
 
 ## Historical prediction audit
 
-Open **Prediction accuracy** and click **Run historical check**. The app tests up to six completed months on the selected account. For each month, it reconstructs predictions from transactions that had posted by the preceding month-end. Current recurring confirmations, future transactions and current card-statement settings are **not** applied retroactively.
+Select your checking account and click **Check accuracy** in the main header. The planner runs the historical check immediately, scrolls to **Prediction accuracy**, and expands the report. Alternatively, open the optional **Prediction accuracy** panel and click **Run historical check**. The app tests up to six completed months on the selected account. For each month, it reconstructs predictions from transactions that had posted by the preceding month-end. Current recurring confirmations, future transactions and current card-statement settings are **not** applied retroactively.
 
 It reports (1) how many predicted dated payments matched posted bank transactions, (2) how many repeatable posted transactions were captured, and (3) mortgage/bill misses, amount changes, extra/duplicate forecasts. Only candidate repeating bills and predictable payroll are eligible; ordinary shopping, gas and variable expenses are excluded. A test month with insufficient prior transaction-history coverage or no posted bank activity is skipped, not counted as a perfect forecast. If there is insufficient history, the panel says so rather than inventing a score.
 
