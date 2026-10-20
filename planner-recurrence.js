@@ -143,9 +143,23 @@ function dedupeEvents(events,accounts=[],options={}){
  const kept=[],removed=[],conflicts=[];
  for(const item of sorted){
   const acct=accountId(item,accounts),type=eventType(item);
-  const matches=kept.filter(keep=>accountId(keep,accounts)===acct&&
-   eventType(keep)===type&&Math.abs(dayDiff(item.date,keep.date))<=
-    (['weekly','biweekly'].includes(String(item.cadence))?2:5)&&sameBill(item,keep));
+  const matches=kept.filter(keep=>{
+   if(accountId(keep,accounts)!==acct||eventType(keep)!==type||
+    !sameBill(item,keep))return false;
+   const close=Math.abs(dayDiff(item.date,keep.date))<=
+    (['weekly','biweekly'].includes(String(item.cadence))?2:5);
+   const auto=[item,keep].some(x=>x.source==='early-bank-inference');
+   const explicit=[item,keep].some(x=>x.source==='user-recurring'||x._forecastExtra||
+    x.source==='owner-bill'||x.source==='manual');
+   // A monthly due date can be deliberately moved by the owner, well
+   // beyond the bank's historical posting day. It must replace (not join)
+   // the automatic debit for that *same billing month*, but only where the
+   // overlapping inference is a single monthly obligation.
+   const sameMonth=item.date.slice(0,7)===keep.date.slice(0,7);
+   return close||(auto&&explicit&&sameMonth&&
+    Math.abs(cents(item.amount)-cents(keep.amount))<=
+     Math.max(100,Math.min(cents(item.amount),cents(keep.amount))*.08));
+  });
   if(matches.length===1){
    // Exact source identity and dates are stronger than amount. A manually
    // adjusted obligation replaces a stale inferred amount, not both.
