@@ -1,6 +1,6 @@
 # Household Ledger — Balance Planner
 
-A focused, main-checking-first cash planning tool. The default interface replaces the earlier budget, merchant, itemization, Insights and Reviews screens and now implements the owner's initial planning decisions:
+A focused, main-checking-first cash planning tool. The interface is organized into three focused tabs rather than the earlier budget, merchant, itemization, Insights and Reviews screens and implements the owner's planning decisions:
 
 - Main checking is the default focus, and a different cash account can be selected as the saved **main account**.
 - Automatically suggest **three-or-more evidence-based recurring payments** only when the latest observed amounts agree to the cent and dates are consistent; bills, mortgage, insurance and subscriptions qualify, while incidental shopping, groceries, gas and variable-amount spending do **not**.
@@ -17,6 +17,18 @@ The interface retains:
 - A readable list of future expected money in and money out, with visible bank freshness and uncertainty.
 
 **The existing full Ledger has not been erased.** Before the reset, an identical copy of the original default branch (commit `53975e8672ab56fb5b29bf14ff94dc1746987928`) was saved to [`backup/full-ledger-before-balance-planner-2026-10-19`](https://github.com/markbobthomas/household-ledger/tree/backup/full-ledger-before-balance-planner-2026-10-19).
+
+## Three-tab planning workspace
+
+- **Overview** (default): summary of bank-reported current balances, projected month-end cash, lowest balance in the selected 30/60/90-day horizon, a short balance curve, and the next five expected movements. Select a main account to change the focus; click **View all and edit** to jump to Transactions.
+- **Transactions**: chronological predicted transactions from **all linked accounts**, filterable by account. The page lists both manually planned and inferred future transactions, including income, bills, card purchases and paired card/account transfers. Click **Edit** to change one *future occurrence* (amount, date, description, account or type where appropriate); **Skip this occurrence** to exclude an inferred movement or **Reset/Restore** to return to the source-derived forecast. Click **+ Add transaction** to create a dated withdrawal, deposit, refund or linked transfer between two connected accounts, or **Remove** to delete a manually added one. All calculations immediately update account projections. The visible list respects the selected 30/60/90-day horizon; the app does not allow adding an invisible future date beyond it.
+- **Settings**: recurring-payment confirmations, credit-card statement payment setup, cash-cushion warning threshold, private bank connection, and the on-demand historical prediction audit.
+
+Forecast overrides are stored in `predictions.futureTransactionEdits` and one-off additions in `predictions.futureTransactionAdds`. Existing bank facts remain immutable. The Demo saves only **fictional planning settings** in localStorage; Real saves planning adjustments through the encrypted private server. No Plaid token or real bank transaction is stored in localStorage.
+
+When a future credit-card payment or transfer is edited, the balance engine posts one paired movement, updating both accounts exactly once. Editing a future card purchase also flows into later *estimated* statement-payment calculations. Editing an inferred recurring occurrence does not silently rewrite the entire repeating rule; routine confirmation/schedule settings remain separate. The app never initiates payments.
+
+Regression checks: `node tests/planner-transactions-smoke.cjs` and the existing planner browser, mortgage and card-payment suites.
 
 ## Historical prediction audit
 
@@ -41,6 +53,7 @@ The separate `render.yaml` blueprint currently describes the **fictional hosted 
 - `index.html`, `planner.css`, `planner.js`: the new, intentionally small interface.
 - `planner-intelligence.js`: conservative exact-amount repeat filter, validated calendar spacing and forecast dates, cadence-aware staleness limits, and durable confirm/exclude decisions.
 - `planner-backtest.js`: read-only walk-forward test engine that computes historical recurring-payment match and coverage statistics.
+- `planner-transactions.js`: validates and persists forecast-only one-off edits, additions, skipped occurrences, and paired-account movement edits.
 - `pilot/server.cjs`, `pilot/data-source.js`, `pilot/index.html`: existing authenticated Plaid server and bank connection flow.
 - `account-forecast.js`, `forecast-ledger.js`, `forecast.js`, `payment-obligations.js`, `ledger-data.js`, `accounting.js`: retained read-only calculation and classification machinery.
 - `tests/planner-browser.cjs`, `tests/planner-parity.cjs`: new planner-focused browser and source-parity checks.
