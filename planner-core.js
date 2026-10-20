@@ -15,6 +15,10 @@ const index=s=>Number(s.slice(0,4))*12+Number(s.slice(5,7));
 const month=(s,n)=>new Date(Date.UTC(+s.slice(0,4),+s.slice(5,7)-1+n,1,12)).toISOString().slice(0,7);
 const monthDate=(s,n,day=+s.slice(8,10))=>{const m=month(s,n);
  return m+'-'+String(Math.min(day,new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate())).padStart(2,'0')};
+const twiceDates=(from,slots,end)=>{const dates=[];
+ for(let m=0;m<8;m++)for(const day of slots){
+  const d=monthDate(from,m,day);if(d>from&&d<=end)dates.push(d);
+ }return dates.sort();};
 const next=(s,f,n)=>f==='weekly'?add(s,n*7):f==='biweekly'?add(s,n*14):
  monthDate(s,n*({monthly:1,quarterly:3,semiannual:6,annual:12}[f]||1));
 const signature=(accountId,type,merchant)=>[accountId,type,norm(merchant)].map(encodeURIComponent).join('|');
@@ -62,21 +66,29 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   g.rows.sort((a,b)=>a.date.localeCompare(b.date));
   const t=g.rows.at(-1),age=diff(asOf,t.date),amount=cents(t.amount),
    same=g.rows.filter(r=>cents(r.amount)===amount),
-   lastTwo=same.slice(-2),f=lastTwo.length===2?cadence(lastTwo[0].date,lastTwo[1].date):null,
+   lastTwo=same.slice(-2),lastFour=same.slice(-4),
+   twice=lastFour.length===4&&
+    lastFour[0].date.slice(0,7)===lastFour[1].date.slice(0,7)&&
+    lastFour[2].date.slice(0,7)===lastFour[3].date.slice(0,7)&&
+    index(lastFour[2].date)-index(lastFour[0].date)===1&&
+    Math.abs(+lastFour[0].date.slice(-2)-+lastFour[2].date.slice(-2))<=2&&
+    Math.abs(+lastFour[1].date.slice(-2)-+lastFour[3].date.slice(-2))<=2,
+   slots=twice?[+lastFour[2].date.slice(-2),+lastFour[3].date.slice(-2)]:null,
+   f=twice?'twice-monthly':lastTwo.length===2?cadence(lastTwo[0].date,lastTwo[1].date):null,
    f3=same.length>=3&&f&&cadence(same.at(-3).date,same.at(-2).date)===f,
    recent={weekly:17,biweekly:31,monthly:66,quarterly:125,semiannual:215,annual:400},
-   spaced=Boolean(f)&&age<=recent[f]&&
+   spaced=Boolean(f)&&age<=(twice?40:recent[f])&&
     // Never treat a mixed-price recent payment as an older constant-price pattern.
-    g.rows.at(-2)===lastTwo[0]&&g.rows.at(-1)===lastTwo[1],
+    g.rows.at(-2)===lastTwo[0]&&g.rows.at(-1)===lastTwo[1]&&(twice||same.length<3||f3),
    one=g.rows.length===1&&age<=50&&trusted(t)&&g.kind==='expense'&&
     !internalName.test(g.merchant),
    category=String(metadata(t).detailed||'').toUpperCase(),
    unpairedTransfer=g.rows.some(r=>r.type==='transfer'),
    transferRisk=unpairedTransfer&&(internalName.test(g.merchant)||
     g.kind==='income'||/TRANSFER/.test(category)&&!trusted(t)),
-   multiCycle=f&&!['weekly','biweekly'].includes(f)&&
+   multiCycle=f&&!['weekly','biweekly','twice-monthly'].includes(f)&&
     g.rows.filter(r=>r.date.slice(0,7)===t.date.slice(0,7)).length>1,
-   enough=one||spaced&&(f3||(!variableName.test(g.merchant)&&!transferRisk)),
+   enough=one||spaced&&(twice||f3||(!variableName.test(g.merchant)&&!transferRisk)),
    planDate=next(t.date,f||'monthly',1);
   const aliases=[g.accountId,g.accountName,t.account,t.accountId].map(String).filter(Boolean);
   const blocked=aliases.some(a=>[g.kind,t.type].some(type=>{
@@ -105,9 +117,9 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
     !transferRisk&&g.kind!=='refund';
    if(auto){
     const series='series|'+g.id+'|'+(f||'monthly'),freq=f||'monthly';
-    for(let n=1;n<=110;n++){
-     const when=next(t.date,freq,n);
-     if(when>end)break;
+    const dates=twice?twiceDates(t.date,slots,end):
+     Array.from({length:110},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
+    for(const when of dates){
      if(when<=asOf)continue;
      automatic.push({id:'auto|'+series+'|'+when,date:when,amount:money(t.amount),
       merchant:g.merchant,accountId:g.accountId,type:g.kind,category:t.category||'Other',
@@ -120,7 +132,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   }
   // Reviews represent candidates only. Nothing here changes a balance.
   if(age<=(g.rows.length===1&&!trusted(t)?45:recent[f||'monthly']||75)&&
-   (g.rows.length>=2||trusted(t)||age<=30))
+   (g.rows.length>=2||trusted(t)))
    review.push(reviewItem(g,same,f,t,planDate));
  }
  review.sort((a,b)=>b.priority-a.priority||b.occurrences-a.occurrences||
@@ -204,8 +216,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   recurringRuleId:m.seriesRuleId,seriesKey:tools.manualSeriesKey(m.seriesRuleId),
   baseDate:m.anchorDate}));
  const plans=[...movementRules,...(payment.plans||[]).filter(p=>
-  !rules.some(r=>r.kind==='movement'&&r.fromAccountId===p.fromAccountId&&
-   r.toAccountId===p.toAccountId&&Math.abs(diff(r.anchorDate,p.anchorDate))<=31))
+  !movementRules.some(m=>m.fromAccountId===p.fromAccountId&&
+   m.toAccountId===p.toAccountId&&m.date.slice(0,7)===p.anchorDate.slice(0,7)))
   .map(p=>({...p,date:p.anchorDate,seriesKey:tools.seriesPlan(p),
    baseDate:p.anchorDate,recurringRuleId:p.seriesRuleId||null}))];
  for(const e of extras.filter(x=>x.type==='transfer'&&x.date>asOf&&x.date<=end))
