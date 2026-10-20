@@ -579,7 +579,7 @@ function transactionsPage(bundle,s){
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
   '<div class="page-heading"><div><h2>Future transactions</h2>'+
-   '<p>All dated predictions for the next '+horizon+' days. Any payment can be made recurring, even when the bank history is unclear.</p></div>'+
+   '<p>All dated predictions for the next '+horizon+' days. Select Edit to change a payment or choose Not recurring to remove an incorrectly detected repeating payment.</p></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
