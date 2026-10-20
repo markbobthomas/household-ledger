@@ -62,6 +62,11 @@ async function browserCheck(browser,options,url,mobile){
   const payment=table.locator('tr').filter({hasText:'Credit Card Payment'}).first();
   assert.match((await payment.innerText()).toLowerCase(),/card payment/);
   await page.locator(mobile?'.mobile-top-nav [data-page=overview]':'aside [data-page=overview]').click();
+  if(await page.locator('.account-projection-list').count()===0){
+   const summary=await page.locator('#view').innerText();
+   throw Error('Sandbox account forecast panel missing after Overview navigation. Tab: '+await page.locator('#title').innerText()+
+    '; errors: '+errors.join(' | ')+'; visible text: '+summary.slice(0,650));
+  }
   assert.match(await page.locator('.account-projection-list').innerText(),/Test Rewards Card/);
   assert.ok(await page.locator('.account-projection-row').count()>=6);
   await page.locator(nav).click();
