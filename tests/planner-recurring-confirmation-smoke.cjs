@@ -56,4 +56,21 @@ assert.throws(()=>T.defineRecurring(state,{date:'2026-11-10',merchant:'Bad',amou
 assert.throws(()=>T.defineRecurring(state,{date:'2026-11-10',merchant:'Bad',amount:4,
  type:'expense',accountId:'checking',frequency:'monthly'},accounts,asOf,reference,
  examples,['wrong-amount']),/same amount/);
+const earlyRule=T.defineRecurring(state,{date:'2026-11-02',merchant:'Early Posted Mortgage',
+ amount:2000,accountId:'checking',type:'expense',frequency:'monthly'},accounts,asOf);
+const earlyGenerated=T.generatedRecurring([earlyRule],'2026-10-30','2026-12-12');
+const afterBankPosting=T.postedCoverage(earlyGenerated,[earlyRule],[
+ {id:'actual-mortgage',date:'2026-10-29',amount:2000,merchant:'Early Posted Mortgage',
+  accountId:'checking',type:'expense',pending:false}
+],accounts,'2026-10-30');
+assert.equal(afterBankPosting.events.some(e=>e.date==='2026-11-02'),false,
+ 'A posted debit within 6 days of the forecast must not be debited again');
+assert.equal(afterBankPosting.events.some(e=>e.date==='2026-12-02'),true,
+ 'A posted November payment must not cancel December mortgage');
+const otherAccountPosted=T.postedCoverage(earlyGenerated,[earlyRule],[
+ {id:'other-card',date:'2026-10-29',amount:2000,merchant:'Early Posted Mortgage',
+  accountId:'credit',type:'expense',pending:false}
+],accounts,'2026-10-30');
+assert.equal(otherAccountPosted.events.some(e=>e.date==='2026-11-02'),true,
+ 'Posted payments from another account must never cover checking forecasts');
 console.log('PASS explicitly confirmed recurring schedule: exact account/merchant/amount examples, moved-date dedupe, generated months, edit/stop, twice-monthly pay, linked transfers, validation');
