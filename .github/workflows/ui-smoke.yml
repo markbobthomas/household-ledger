@@ -2,6 +2,8 @@ name: Browser interaction test
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 concurrency:
   group: planner-browser-${{ github.ref }}
