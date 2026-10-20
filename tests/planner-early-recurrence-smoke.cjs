@@ -23,6 +23,13 @@ assert.equal(mortgage.type,'transfer','Bank row source remains unchanged');
 const two=[tx('x1','2026-09-05','Netflix subscription',20),tx('x2','2026-10-05','Netflix subscription',20)];
 assert.equal(R.infer(two,snapshot).events.length,3,
  'Two exact recent monthly subscription bills enter the forecast without waiting for third month');
+const cardBills=two.map((t,i)=>({...t,id:'card-'+i,accountId:'credit'}));
+assert.equal(R.infer(cardBills,snapshot).events.length,3,
+ 'Two card subscriptions enter the credit-card forecast without debiting checking at purchase time');
+assert.equal(R.infer([mortgage],snapshot,{futureRecurringRules:[{
+ kind:'event',originalAccountId:'checking',matchNames:['home mortgage ach'],matchAmount:2000,
+ frequency:'monthly',anchorDate:'2026-12-15',merchant:'Home Mortgage ACH',amount:2000
+}]}).events.length,0,'Owner recurring schedule suppresses auto version even when next date moved to December');
 assert.equal(R.infer([
  tx('g1','2026-09-08','Safeway',97),tx('g2','2026-10-08','Safeway',97)
 ],snapshot).events.length,0,
