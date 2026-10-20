@@ -250,3 +250,47 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .mortgage-examples summary{cursor:pointer;color:var(--blue);font-weight:700}
 .mortgage-examples div{padding-top:6px;color:var(--muted)}
 @media(max-width:680px){.mortgage-review{align-items:flex-start;flex-direction:column}.mortgage-review-actions{width:100%}}
+
+/* Bank-sourced History + lower-threshold Reviews. Keep data legible on iPhone. */
+.planner-tabs{display:flex;flex-wrap:wrap;gap:5px}
+.history-filters{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:0 0 14px}
+.history-filters label{font-size:11px;min-width:160px;flex:1;display:flex;flex-direction:column;gap:6px;color:var(--muted);font-weight:650}
+.history-filters input,.history-filters select{width:100%;min-height:37px;padding:8px 10px;border:1px solid #c8d0d9;background:#fff;border-radius:4px;color:var(--ink)}
+.history-count{font-size:11px;color:var(--muted);margin:12px 0 8px}
+.history-actual-row{display:grid;grid-template-columns:72px minmax(0,1fr) 105px 126px;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.history-actual-row:last-of-type{border-bottom:0}
+.history-actual-date{color:var(--muted);font:650 11px var(--mono)}
+.history-actual-description{min-width:0;display:flex;flex-direction:column;gap:4px}
+.history-actual-description strong{font-size:12px;overflow-wrap:anywhere}
+.history-actual-description small{color:var(--muted);font-size:11px}
+.history-actual-amount{font:700 12px var(--mono);text-align:right;white-space:nowrap}
+.history-actual-amount.incoming{color:#397250}
+.history-actual-amount.outgoing{color:#914050}
+.history-actual-row .btn{font-size:11px;padding:8px;white-space:nowrap}
+.history-more{text-align:center;margin-top:17px}
+.review-candidate{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.review-candidate:last-of-type{border-bottom:0}
+.review-candidate-main{flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.review-candidate-main>strong{font-size:13px;overflow-wrap:anywhere}
+.review-candidate-main small{font-size:11px;color:var(--muted)}
+.review-candidate-amount{font:750 13px var(--mono);white-space:nowrap}
+.review-candidate-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.review-candidate-actions .btn{font-size:11px}
+.review-examples{margin-top:7px;font-size:11px}
+.review-examples summary{cursor:pointer;font-weight:650;color:var(--blue)}
+.review-examples div{padding-top:6px;color:var(--muted)}
+.review-warning{font-size:12px;color:#785e38;border-top:1px solid var(--line);padding:10px 0;margin:0}
+.review-spotlight{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.review-spotlight p{font-size:11px;color:var(--muted);margin:5px 0 0}
+.history-schedule-form{border-color:#bfcada}
+.history-schedule-form .future-fields{margin-top:16px}
+@media(max-width:780px){
+ .planner-tabs{gap:3px;justify-content:space-between}
+ .planner-tabs .tab-link{flex:1 1 29%;font-size:11px;padding:9px 6px}
+ .history-actual-row{grid-template-columns:56px minmax(0,1fr) 92px;gap:7px;padding:12px 0}
+ .history-actual-row .btn{grid-column:2/-1;justify-self:start;margin-top:0}
+ .history-actual-description small{font-size:10px}
+ .history-actual-amount{font-size:11px}
+ .review-candidate-actions{width:100%}
+ .review-spotlight{align-items:start;flex-direction:column}
+}
