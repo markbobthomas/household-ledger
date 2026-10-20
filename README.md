@@ -45,8 +45,8 @@ Legacy forecasting files remain in Git for historical test compatibility but are
 
 ## Predictive rules
 
-- Every settled payment is analyzed by **stable account, merchant, amount, timing, and transaction direction**; not by an isolated mortgage-specific branch.
-- A clearly recognizable fixed monthly bill may enter the forecast after one recent posted payment. Two exact-amount well-timed payments can establish other routines; variable shopping needs stronger evidence.
+- Every settled payment is analyzed by **bank account, merchant identity, posting cadence and money direction**. Dollar amounts are not part of recurring-payment identity: a utility or paycheck remains one stream even when the amount changes.
+- Clearly identifiable monthly bills can forecast from one recent posting. Stable patterns can forecast automatically; variable utilities and net pay use the average of the latest three relevant actual transactions when repeated timing supports the inference. Ordinary variable shopping requires stronger proof. An owner-confirmed amount overrides automatic estimates.
 - Weekly, biweekly, twice-monthly, monthly, quarterly, semiannual, and annual patterns are supported. Changes, unclear transfers, inconsistent timing, and other doubtful patterns belong in **Reviews**.
 - A single incidental retail purchase does not become a new predicted debit or flood Reviews.
 - An owner's confirmed recurring rule **supersedes the matching inferred series**. Individual exceptions and all-future edits are applied to the ledger, not to actual bank transactions.
@@ -56,7 +56,7 @@ Legacy forecasting files remain in Git for historical test compatibility but are
 
 ## What can be edited?
 
-Open **Future Transactions** to edit one future payment, change a recurring schedule, skip/restore an occurrence, or add a new dated transaction. Open **History** to turn *any actual transaction* into a confirmed recurring forecast without changing its bank classification. **Reviews** holds unconfirmed possible repeats. **Settings** holds card payment assumptions, warnings, and an optional historical prediction accuracy audit that now tests the *same new engine*.
+Open **Future Transactions** to edit one future payment, change a recurring schedule, skip/restore an occurrence, or add a new dated transaction. To link an estimated utility bill or recurring paycheck to its real Plaid history, choose a recurring frequency and expand **Link related actual transactions**. Search the actual bank payee, select the relevant historical payments (different amounts are fine), and save. This creates **one** manually controlled schedule instead of a competing auto-prediction. When an earlier payment posts in its billing cycle, that cycle is not forecast again. Open **History** to turn *any actual transaction* into a confirmed recurring forecast without changing its bank classification. **Reviews** holds unconfirmed possible repeats. **Settings** holds card payment assumptions, warnings, and an optional historical prediction accuracy audit that now tests the *same new engine*.
 
 ## Security and deployment
 
