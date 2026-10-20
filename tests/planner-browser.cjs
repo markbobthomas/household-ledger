@@ -209,6 +209,10 @@ const {chromium,webkit}=require('playwright');
   transactions.push({id:'card-purchase',accountId:'credit-real',date:'2026-10-10',
    name:'Grocery Card Charge',merchant:'Grocery Card Charge',amount:300,pending:false,
    category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'HIGH'}});
+  for(const month of ['2026-06','2026-07','2026-08','2026-09'])
+   transactions.push({id:'card-month-'+month,accountId:'credit-real',date:month+'-10',
+    name:'Grocery Card Charge',merchant:'Grocery Card Charge',amount:300,pending:false,
+    category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'HIGH'}});
   for(const month of ['2026-06','2026-07','2026-08','2026-09','2026-10'])
    transactions.push({id:'income-'+month,accountId:'checking-real',date:month+'-12',
     name:'ACME Employer Payroll',merchant:'ACME Employer Payroll',amount:-3100,pending:false,
@@ -252,11 +256,18 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#card-autopay > summary').click();
   const cardForm=page.locator('[data-card-rule="credit-real"]');
   await cardForm.locator('[name=fromAccountId]').selectOption('checking-real');
-  await cardForm.locator('[name=lastStatementClose]').fill('2026-10-18');
+  await cardForm.locator('[name=billingStartDate]').fill('2026-09-19');
+  await cardForm.locator('[name=billingEndDate]').fill('2026-10-18');
   await cardForm.locator('[name=lastStatementBalance]').fill('1200');
   await cardForm.locator('[name=nextPaymentDate]').fill('2026-11-11');
   await cardForm.locator('[name=nextDueDate]').fill('2026-11-12');
   await cardForm.locator('button[type=submit]').click();
+  await cardForm.locator('.card-statement-preview').first().getByText('$1,200.00').waitFor();
+  assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Household Checking/,
+   'Private bank card statement previews identify the paying account');
+  await page.locator('.sidebar [data-view="overview"]').click();
+  assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
+   'Overview shows the next card statement and due date');
   await page.locator('.sidebar [data-view="transactions"]').click();
   assert.match(await page.locator('.transactions-page').innerText(),/ACME Employer Payroll/,
    'Predicted payroll is listed as an editable future deposit for checking');
