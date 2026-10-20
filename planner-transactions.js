@@ -137,15 +137,17 @@ const accountRef=(value,accounts)=>{
 };
 function findExamples(records,reference,accounts){
  const account=reference.kind==='movement'?String(reference.fromAccountId):String(reference.accountId);
- const names=new Set([merchantKey(reference.merchant)]);
- const amount=Number(reference.amount||0),type=reference.type||'transfer';
+ const amount=Number(reference.amount||0),type=reference.type||'transfer',
+  name=merchantKey(reference.merchant),head=name.split(' ').find(word=>word.length>3)||name;
  return (records||[]).filter(t=>!t.pending&&validDate(t.date)&&
-  accountRef(t.accountId||t.account,accounts)===account&&
-  merchantKey(t.merchant)&&names.has(merchantKey(t.merchant))&&
+  accountRef(t.accountId||t.account,accounts)===account&&merchantKey(t.merchant)&&
   (type==='transfer'?t.type==='transfer':t.type===type)&&
-  Math.abs(Number(t.amount)-amount)<.011).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8)
-  .map(t=>({id:String(t.id),date:t.date,merchant:String(t.merchant),amount:Number(t.amount),
-    accountId:account,type:t.type}));
+  Math.abs(Number(t.amount)-amount)<.011).sort((a,b)=>{
+   const score=t=>merchantKey(t.merchant)===name?2:
+    merchantKey(t.merchant).includes(head)&&head.length>3?1:0;
+   return score(b)-score(a)||b.date.localeCompare(a.date);
+  }).slice(0,10).map(t=>({id:String(t.id),date:t.date,
+   merchant:String(t.merchant),amount:Number(t.amount),accountId:account,type:t.type}));
 }
 const monthAt=(anchor,offset,day)=>{
  const [y,m]=anchor.slice(0,7).split('-').map(Number),d=new Date(Date.UTC(y,m-1+offset,1,12));
@@ -226,6 +228,12 @@ function removeRecurring(state,id){
  const p=ensure(state),index=p.futureRecurringRules.findIndex(r=>r.id===id);
  if(index<0)throw Error('Recurring rule no longer exists');
  p.futureRecurringRules.splice(index,1);
+ delete p.futureSeriesEdits[manualSeriesKey(id)];
+ // Individual exceptions to a removed rule must not reappear if it is
+ // subsequently recreated with the same stable identity.
+ const prefix=encodeURIComponent('user|'+id+'|');
+ for(const key of Object.keys(p.futureTransactionEdits||{}))
+  if(key.includes(prefix))delete p.futureTransactionEdits[key];
 }
 function generatedRecurring(rules,asOf,through){
  const events=[],plans=[];
