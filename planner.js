@@ -645,8 +645,10 @@ function upcomingCardBills(bundle,s){
   (earliest.map(p=>'<div class="card-bill-row"><div><strong>'+escapeHTML(p.cardName)+
     '</strong><small>Cycle closes '+escapeHTML(dayLabel(p.closingDate))+
     ' · Due '+escapeHTML(dayLabel(p.dueDate))+
-    (p.alreadyPaid?' · Autopay posted from '+escapeHTML(p.fromName):
-     p.autopayEnabled?' · Paid from '+escapeHTML(p.fromName):' · No autopay')+
+    (p.alreadyPaid?' · Paid '+escapeHTML(dayLabel(p.actualPaymentDate))+
+      ' · '+cash(p.actualPaymentAmount)+' from '+escapeHTML(p.fromName):
+     p.autopayEnabled?' · Planned '+escapeHTML(dayLabel(p.withdrawalDate))+
+      ' from '+escapeHTML(p.fromName):' · No autopay')+
     (p.estimated?' · Estimated':' · Entered statement')+'</small></div>'+
     '<strong>'+cash(p.statementBalance)+'</strong></div>').join('')||
     '<p class="lead">No card statement forecasts are configured yet. Set up each card in Settings.</p>')+
