@@ -312,7 +312,8 @@ function cardStatementPreview(s,bundle,cardId){
    '<div class="card-preview-line"><span>Payment due</span><strong>'+
     escapeHTML(dateLong(p.dueDate))+'</strong></div>'+
    '<div class="card-preview-line"><span>Auto withdrawal</span><strong>'+
-    (p.autopayEnabled?escapeHTML(dayLabel(p.withdrawalDate))+' · '+escapeHTML(p.fromName):
+    (p.alreadyPaid?'Already posted · '+escapeHTML(p.fromName):
+     p.autopayEnabled?escapeHTML(dayLabel(p.withdrawalDate))+' · '+escapeHTML(p.fromName):
      'Not scheduled')+'</strong></div>'+
    '<div class="card-preview-line"><span>Posted purchases − refunds</span><strong>'+
     cash(p.bankPurchases)+'</strong></div>'+
@@ -626,7 +627,8 @@ function upcomingCardBills(bundle,s){
   (earliest.map(p=>'<div class="card-bill-row"><div><strong>'+escapeHTML(p.cardName)+
     '</strong><small>Cycle closes '+escapeHTML(dayLabel(p.closingDate))+
     ' · Due '+escapeHTML(dayLabel(p.dueDate))+
-    (p.autopayEnabled?' · Paid from '+escapeHTML(p.fromName):' · No autopay')+
+    (p.alreadyPaid?' · Autopay posted from '+escapeHTML(p.fromName):
+     p.autopayEnabled?' · Paid from '+escapeHTML(p.fromName):' · No autopay')+
     (p.estimated?' · Estimated':' · Entered statement')+'</small></div>'+
     '<strong>'+cash(p.statementBalance)+'</strong></div>').join('')||
     '<p class="lead">No card statement forecasts are configured yet. Set up each card in Settings.</p>')+
