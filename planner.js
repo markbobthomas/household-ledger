@@ -288,6 +288,7 @@ function render(){
  mode.value=requestedReal()?'real':'demo';
  $('source-type').textContent=sourceTag();
  $('refresh-bank').hidden=!live();
+ $('audit-launch').hidden=busy||!activeAccounts(s).length;
  $('bank-connect').hidden=!available();
  $('horizon').value=String(horizon);
  if(busy){$('planner-notice').innerHTML='<div class="notice'+(window.HouseholdLiveSource?.error?' danger':'')+'"><div><strong>Real bank information is not available yet.</strong> '+
@@ -354,7 +355,9 @@ document.addEventListener('click',e=>{
     {months:6,accounts:activeAccounts(s)});
    auditError='';
   }catch(err){audit=null;auditError='The historical check could not be completed: '+String(err.message||err)}
-  render();$('accuracy-audit')?.setAttribute('open','');
+  render();
+  const panel=$('accuracy-audit');panel?.setAttribute('open','');
+  if(runAudit.id==='audit-launch')panel?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
  const main=e.target.closest('[data-set-main]');
