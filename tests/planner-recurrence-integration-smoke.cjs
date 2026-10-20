@@ -42,6 +42,14 @@ sandbox.createHouseholdLedgerDemo=()=>{
   merchant:'Home Mortgage ACH',accountId:'demo-checking',account:'Checking',
   amount:2000,type:'transfer',cashDirection:'out',
   category:'Other',pending:false,demo:true
+ },{
+  id:'generic-bank-first',date:'2026-09-09',merchant:'ABC Draft 984',
+  accountId:'demo-checking',account:'Checking',amount:82.35,
+  type:'expense',category:'Other',pending:false,demo:true
+ },{
+  id:'generic-bank-second',date:'2026-10-09',merchant:'ABC Draft 984',
+  accountId:'demo-checking',account:'Checking',amount:82.35,
+  type:'expense',category:'Other',pending:false,demo:true
  }];
  return original;
 };
@@ -66,6 +74,8 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.equal(occurrences(initial),3,
   'One posted mortgage automatically creates November, December, January without review');
  assert.match(initial,/Nov 15/);
+ assert.equal((initial.match(/ABC Draft 984/g)||[]).length,3,
+  'Unfamiliar merchant with two real equal monthly payments appears automatically');
  assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
   'A bank-derived mortgage must not be absent from the future schedule');
  await click('[data-view]',{view:'history'});
@@ -96,5 +106,22 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.equal(again.futureRecurringRules.length,1,'Second confirmation updates existing rule');
  await click('[data-view]',{view:'transactions'});
  assert.equal(occurrences(future()),2,'Repeated save still only debits checking once per month');
- console.log('PASS one-month mortgage appears automatically; owner adjusts due date; 1 debit/month; repeated confirmation never duplicates saved rule; bank history preserved');
+ // Repeat the exact same owner-confirmation scenario for an UNKNOWN merchant.
+ // Its category/name provides no fixed-bill shortcut, so detection genuinely
+ // depends on the two observed exact-amount calendar payments.
+ await click('[data-view]',{view:'history'});
+ await click('[data-history-plan]',{
+  historyPlan:'generic-bank-second',historyAccount:'demo-checking'});
+ await submit({merchant:'ABC Draft 984',accountId:'demo-checking',
+  date:'2026-11-26',amount:'84',type:'expense',frequency:'monthly'});
+ const genericSaved=JSON.parse(store['household-planner-sample-settings-v1']||'{}');
+ assert.equal(genericSaved.futureRecurringRules.length,2,
+  'Confirming unrelated generic payment creates one separate recurring rule');
+ await click('[data-view]',{view:'transactions'});
+ const genericAfter=future();
+ assert.equal((genericAfter.match(/ABC Draft 984/g)||[]).length,2,
+  'Owner-modified generic payment occurs once in each future month, not additionally on old inferred dates');
+ assert.match(genericAfter,/Nov 26/);
+ assert.doesNotMatch(genericAfter,/Nov 9[^<]*.*ABC Draft 984/);
+ console.log('PASS mortgage and general-merchant automatic forecasting; owner edits due date and amount; no duplicate bills; bank history unchanged');
 })().catch(e=>{console.error(e);process.exitCode=1});
