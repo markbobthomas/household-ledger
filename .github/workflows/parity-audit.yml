@@ -24,6 +24,7 @@ jobs:
           node --check planner-transactions.js
           node --check account-forecast.js
           node tests/planner-parity.cjs
+          node tests/card-statement-cycles-smoke.cjs
           node tests/planner-routine-smoke.cjs
           node tests/planner-backtest-smoke.cjs
           node tests/planner-transactions-smoke.cjs
