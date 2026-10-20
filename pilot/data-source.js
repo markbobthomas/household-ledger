@@ -25,12 +25,14 @@ function record(t,account){
  const name=String(t.merchant||t.name||'Bank transaction').slice(0,250);
  const code=String(pfc?.primary||'').toUpperCase(),lower=name.toLowerCase();
  const incoming=amount<0,card=account.type==='credit';
- // Credit settlements, mortgage/loan payments and transfers are cash
- // movements, not new household purchases or earned wages.
- const payment=/\b(payment thank you|autopay payment|automatic payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(name);
- const transfer=/^(?:TRANSFER_IN|TRANSFER_OUT|LOAN_PAYMENTS)$/.test(code)||
+ const obligation=root.HouseholdCategorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
+ // External mortgage and other bank-coded loan installments are cash bills,
+ // NOT internal account transfers. Card settlements remain transfers.
+ const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(name)||
+   code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
+ const transfer=/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
   lower.includes('transfer to ')||lower.includes('transfer from ')||payment;
- const type=transfer?'transfer':card&&incoming?'refund':incoming?'income':'expense';
+ const type=transfer?'transfer':incoming&&(card||obligation?.isBill)?'refund':incoming?'income':'expense';
  const row={id:String(t.id),date:t.date,merchant:name,description:'Bank-imported transaction',amount:Math.abs(amount),
   type,account:account.name,accountId:account.id,pending:!!t.pending,category:'Other',
   ...(transfer?{cashDirection:incoming?'in':'out'}:{}),personal_finance_category:pfc,

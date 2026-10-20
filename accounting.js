@@ -68,6 +68,14 @@ function initialKind(t,account){
  const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
    cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
  if(payment)return 'card_payment';
+ // Plaid can code mortgage/loan withdrawals as LOAN_PAYMENTS. They are external
+ // bills leaving checking, not transfers between connected household accounts.
+ // This also reinterprets existing read-only records imported as "transfer".
+ const obligation=root.HouseholdCategorization?.loanBill?.(t);
+ if(!isCard&&account?.type!=='loan'&&obligation?.isBill){
+  if(dir==='out')return 'loan_payment';
+  if(dir==='in')return 'refund'; // A returned loan payment is never earned income.
+ }
  if(transferText.test(name))return 'internal_transfer';
  if(t.type==='transfer')return 'internal_transfer';
  if(refundText.test(name)&&dir==='in')return 'refund';
@@ -158,7 +166,7 @@ function reconcile(state){
    }
   }else if(t.accountingKind==='unclassified_card_credit'){
    t.type='transfer';t.reconciliationStatus='needs-review';
-  }else if(t.accountingKind==='purchase')t.type='expense';
+  }else if(t.accountingKind==='purchase'||t.accountingKind==='loan_payment')t.type='expense';
   else if(t.accountingKind==='income')t.type='income';
   else {t.type='transfer';t.reconciliationStatus='needs-review'}
   if(!t.pending){

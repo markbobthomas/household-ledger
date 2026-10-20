@@ -1306,3 +1306,18 @@ select.recurring-value:hover{border-bottom-style:solid}
 
 /* Projected overages: make both projected amount and explicit overage visibly red. */
 .budget-row-projection.over-budget,.budget-overview-projection.over-budget,.budget-entry .budget-overage,.budget-overview-projection .budget-overage,.category-insight-values .budget-overage{color:#c62828!important;font-weight:750}
+
+/* A compact, independently auditable list of actual forecast records. */
+.prediction-ledger{margin:16px 0 20px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.prediction-ledger .section-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.prediction-ledger .section-top h3{font-size:12px}
+.prediction-ledger .section-top>strong{font:700 15px var(--mono)}
+.prediction-ledger>details{margin:10px 0}
+.prediction-ledger>details>summary{cursor:pointer;min-height:38px;padding:10px 0;font-weight:700}
+.prediction-ledger-list{display:flex;flex-direction:column;margin:4px 0 8px}
+.prediction-ledger-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}
+.prediction-ledger-row span{display:flex;flex-direction:column;min-width:0;gap:3px}
+.prediction-ledger-row span>strong{font-size:13px;overflow-wrap:anywhere}
+.prediction-ledger-row small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.prediction-ledger-row>strong{font:700 13px var(--mono);white-space:nowrap}
+@media(max-width:700px){.prediction-ledger{margin:10px 0}.prediction-ledger-row{align-items:start}.prediction-ledger-row small{max-width:220px}}

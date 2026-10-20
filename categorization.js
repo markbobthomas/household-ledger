@@ -10,6 +10,26 @@ const confidence={VERY_HIGH:0.99,HIGH:0.93,MEDIUM:0.75,LOW:0.4,UNKNOWN:0};
 const nameOf=t=>String(t?.merchant_name||t?.merchant||t?.name||t?.description||'').toLowerCase().trim()
  .replace(/^(?:refund|reversal|return|returned|credit|purchase return)\s*[:#-]?\s*/,'');
 const safeWord=(s,r)=>r.test(s);
+
+/* Bank-coded loan repayments are withdrawals, not internal transfers.
+ * Card settlements and explicit own-account transfers are different: never
+ * count either a second time as a household expense. Plaid PFC detail and
+ * recognizable lender descriptions can identify an external mortgage bill.
+ */
+function loanBill(t){
+ const pfc=t?.personal_finance_category||t?.personalFinanceCategory||
+   t?.source?.personalFinanceCategory||t?.source?.personal_finance_category||t?.category;
+ const primary=String(pfc?.primary||'').toUpperCase(),detail=String(pfc?.detailed||'').toUpperCase();
+ const name=nameOf(t),loanCode=primary==='LOAN_PAYMENTS';
+ const mortgage=/\b(?:mortgage|mtg|home\s+loan|home\s+mtg|pennymac|loandepot|newrez|shellpoint|mr\.?\s+cooper)\b/i.test(name)||
+   /(?:MORTGAGE|HOME_LOAN|HOME_EQUITY)/.test(detail);
+ const creditCode=/(?:CREDIT_CARD|CARD_PAYMENT)/.test(detail);
+ const cardName=/\b(?:credit\s+card|cardmember|visa|mastercard|amex|american\s+express|discover\s+card|card\s+autopay|cc\s+pymt)\b/i.test(name);
+ const internal=/\b(?:transfer\s+(?:to|from)|internal\s+transfer|xfer\s+(?:to|from))\b/i.test(name);
+ const isBill=(loanCode||mortgage)&&!creditCode&&!cardName&&!internal;
+ return {isBill,isMortgage:isBill&&mortgage,isCardSettlement:creditCode||cardName};
+}
+
 function pfcCategory(pfc){
  if(!pfc||typeof pfc!=='object')return null;
  const primary=String(pfc.primary||'').toUpperCase(),detailed=String(pfc.detailed||'').toUpperCase();
@@ -62,6 +82,8 @@ function merchantCategory(t){
  return null;
 }
 function classify(t){
+ const obligation=loanBill(t);
+ if(obligation.isMortgage)return {category:'Housing',method:'mortgage-payment',confidence:.93,confidenceLevel:'RULE'};
  const src=t?.source||{};
  const pfc=t?.personal_finance_category||t?.personalFinanceCategory||
   src.personalFinanceCategory||src.personal_finance_category;
@@ -74,7 +96,7 @@ function classify(t){
   confidenceLevel:'RULE'};
  return {category:'Other',method:'unclassified',confidence:0,confidenceLevel:'UNKNOWN'};
 }
-const api={classify,pfcCategory,merchantCategory,CATEGORIES};
+const api={classify,pfcCategory,merchantCategory,loanBill,CATEGORIES};
 root.HouseholdCategorization=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

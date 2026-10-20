@@ -81,7 +81,12 @@ function resolution(state,t){
  const explicit=state.categoryOverrides?.[t.id];
  if(explicit)return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
  const original=t.category||'Other';
- const bankCategory=t.source?.provider==='plaid'&&['expense','refund'].includes(t.type)?
+ // Re-evaluate old Plaid mortgage rows even if an earlier import mislabeled
+ // the loan withdrawal as a transfer. Keep the original bank record unchanged.
+ const legacyMortgage=t.source?.provider==='plaid'&&t.type==='transfer'&&
+  Categorization.loanBill?.(t)?.isMortgage&&Number(t.source?.plaidAmount)>0;
+ const bankCategory=t.source?.provider==='plaid'&&
+  (['expense','refund'].includes(t.type)||legacyMortgage)?
   Categorization.classify(t):null;
  const inferred=original==='Other'&&bankCategory?.category&&bankCategory.category!=='Other'?bankCategory.category:original;
  const origin=original!=='Other'&&t.source?.provider==='plaid'?

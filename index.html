@@ -311,6 +311,27 @@ function paymentSetupMarkup(snapshot){
   (bills?'<div class="payment-saved-list">'+bills+'</div>':'')+
   '<p class="prediction-note">When a matching forecast already covers the same merchant, amount and date, the explicit bill is not added twice. Review other potential duplicates.</p></div></details>';
 }
+function predictionAuditMarkup(future){
+ const expenses=future.events.filter(e=>e.type==='expense'&&e.enabled!==false).sort((a,b)=>a.date.localeCompare(b.date));
+ const total=expenses.reduce((n,e)=>n+Number(e.amount||0),0);
+ const historical=entries().filter(t=>t.type==='expense'&&!t.pending&&t.date<=today());
+ const mortgage=s=>/\b(?:mortgage|mtg|home\s+loan|pennymac|loandepot|newrez|shellpoint|mr\.?\s+cooper)\b/i.test(String(s||''));
+ const mortgageRows=historical.filter(t=>mortgage(t.merchant));
+ const expectedMortgage=expenses.filter(t=>mortgage(t.merchant));
+ const status=mortgageRows.length?
+   (expectedMortgage.length?'Recognized '+mortgageRows.length+' recorded mortgage payment(s); '+expectedMortgage.length+' future mortgage withdrawal(s) predicted.':
+    'Mortgage found in recorded spending, but no future mortgage withdrawal is predicted. Review its recurrence or create a single monthly mortgage schedule below.'):
+   'No transaction was clearly identified as a mortgage by its bank description. Other loan payments may still be predicted under their own merchant names.';
+ const next=expenses.slice(0,12).map(e=>'<div class="prediction-ledger-row"><span><strong>'+esc(e.merchant)+'</strong><small>'+esc(e.category||'Other')+' · '+esc(e.date)+' · '+esc(e.account||e.accountId||'Account not assigned')+'</small></span>'+
+   '<strong>'+money(e.amount)+'</strong></div>').join('');
+ return '<section class="prediction-ledger" aria-label="Dated payment predictions">'+
+  '<div class="section-top"><h3>Predicted bank and card purchases · next 90 days</h3><strong>'+expenses.length+' dated · '+money(total)+'</strong></div>'+
+  '<p class="prediction-note">'+esc(status)+'</p>'+
+  (expenses.length?'<details><summary>See the predicted transaction list</summary><div class="prediction-ledger-list">'+next+'</div>'+
+    (expenses.length>12?'<p class="prediction-note">First 12 of '+expenses.length+' predictions shown. See Budget or Explore cash flow for the complete dated ledger.</p>':'')+'</details>':
+   '<p class="account-forecast-warning">No dated purchase or bill predictions were generated. Forecast totals may be incomplete. Check recurrence status in Activity and verify the bank has synced sufficient months.</p>')+
+  '<p class="prediction-note">Predictions are calculated from posted transactions and saved schedules, not new bank records. Already-paid bills are excluded from future dated predictions.</p></section>';
+}
 function accountForecastMarkup(snapshot,multi){
  const moneyType=a=>a.type==='credit'?'Owed':'Cash';
  const opening=a=>a.openingCurrent;
@@ -477,7 +498,7 @@ function cashFlowCard(){
  if(liveMode&&forecastUnavailable)return '<div class="cash-panel" id="cashflow" aria-label="90-day forecast unavailable"><h3>90-day cash forecast unavailable</h3>'+
   '<p class="prediction-note">'+esc(forecastUnavailable)+'</p>'+
   '<p class="prediction-note">The last bank-reported balance remains visible above, but must not be treated as verified available cash today. No substitute balance has been invented.</p>'+
-  '<button type="button" class="btn" data-refresh-bank>Refresh bank data</button></div>'+paymentSetupMarkup(snapshot)+accountForecastMarkup(snapshot,multi);
+  '<button type="button" class="btn" data-refresh-bank>Refresh bank data</button></div>'+predictionAuditMarkup(future)+paymentSetupMarkup(snapshot)+accountForecastMarkup(snapshot,multi);
  const feedText=feed.connected?(feed.lastSuccessfulSync?'Last reported sync '+feed.lastSuccessfulSync:'No verified bank sync timestamp'):'Demo only · bank not connected';
  const feedMarkup='<div class="feed-health" role="status"><strong>Bank feed health · '+esc(feed.status.replace(/-/g,' '))+'</strong><span>'+esc(feedText)+'</span>'+
   '<small>'+esc(feed.warnings.join(' ')||feed.disclaimer)+'</small></div>';
@@ -509,7 +530,7 @@ function cashFlowCard(){
  '<div class="cash-primary-date">Lowest on '+esc(cashDateLabel(f.lowestDate,true))+'</div></div>'+
  '<div class="cash-secondary"><div><span class="sub">'+(liveMode?(f.balanceBasis==='available'?'Bank-reported available · forecast start':'Bank-reported current · forecast start'):'Available now')+'</span><strong>'+money(f.opening)+'</strong></div>'+
  '<div><span class="sub">In 90 days</span><strong>'+money(f.closing)+'</strong></div></div></div>'+
- cashChart(f.series,f.lowestDate)+paymentCoverageMarkup(snapshot,multi,payment)+feedMarkup+paymentSetupMarkup(snapshot)+accountForecastMarkup(snapshot,multi)+incomeWarning+riskDisplay+controls+
+ cashChart(f.series,f.lowestDate)+predictionAuditMarkup(future)+paymentCoverageMarkup(snapshot,multi,payment)+feedMarkup+paymentSetupMarkup(snapshot)+accountForecastMarkup(snapshot,multi)+incomeWarning+riskDisplay+controls+
  '<div class="cash-status">90 days · '+future.events.length+' scheduled items including directed transfers · Undated spending excluded from chart line</div>'+
  '<details class="cash-detail"><summary>Explore 90-day cash flow</summary>'+
  '<div class="cash-table-wrap cash-days-wrap"><table class="cash-table daily-cash-table"><thead>'+
@@ -589,7 +610,7 @@ function recurrenceRulesMarkup(category){
 }
 
 function predictedCategoryMarkup(f,category,month){
- if(month!==today().slice(0,7))return'';
+ if(month<today().slice(0,7))return'';
  return '<div class="expected-section"><div class="section-top"><h3>Expected transactions <span class="expected-count">'+f.active.length+' active</span></h3><strong class="expected-total">'+money(f.additional)+'</strong></div>'+
   (f.expected.length?f.expected.map(expectedTransactionMarkup).join(''):'<div class="empty">No reliable future transactions detected for this category.</div>')+
   '<details class="expected-add"><summary>+ Add an expected transaction</summary>'+
@@ -807,7 +828,7 @@ function finishReview(){save();render();window.scrollTo({top:0,left:0,behavior:'
 function budgetBounds(month){const [year,monthNum]=month.split('-').map(Number),endDay=new Date(year,monthNum,0).getDate(),start=month+'-01',end=month+'-'+String(endDay).padStart(2,'0');const label=new Date(year,monthNum-1,1).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+new Date(year,monthNum-1,endDay).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});return {start,end,label}}function render(){unifiedCache=null;const demoCount=data.transactions.filter(t=>t.source?.provider==='demo').length;el('demo-banner').innerHTML=liveMode?'<div class="demo-banner"><strong>REAL BANK · PLAID</strong></div>':window.HouseholdLiveSource?.loading?'<div class="demo-banner"><strong>CONNECTING REAL BANK</strong></div>':demoCount?'<div class="demo-banner"><strong>DEMO</strong></div>':'';const title=page.charAt(0).toUpperCase()+page.slice(1);el('title').textContent=title;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let months=[...new Set([...entries().map(t=>String(t.date).slice(0,7)),today().slice(0,7),...(period==='all'?[]:[period])].filter(m=>/^\d{4}-\d{2}$/.test(m)&&+m.slice(5,7)>=1&&+m.slice(5,7)<=12))].sort().reverse();
 const categoryMonthView=page==='budgets'||page==='insights'&&insightMode==='categories';
 if(categoryMonthView){
-  const now=new Date(),recent=Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-i,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')});
+  const now=new Date(),recent=Array.from({length:15},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()+2-i,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')});
   const choices=[...new Set([...months,...recent,budgetMonth])].sort().reverse();
   const bounds=budgetBounds(budgetMonth);
   el('period').innerHTML=choices.map(m=>'<option value="'+m+'" '+(budgetMonth===m?'selected':'')+'>'+new Date(Number(m.slice(0,4)),Number(m.slice(5,7))-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</option>').join('');
@@ -871,7 +892,7 @@ if(page==='insights'){
 }if(page==='budgets'){
  // Exactly the same category catalog and per-month data as Insights > Categories.
  const month=budgetMonth,categoryGroups=categoryMonthRows(month),
- {label:budgetDates}=budgetBounds(month),currentMonth=month===today().slice(0,7);
+ {label:budgetDates}=budgetBounds(month),currentMonth=month>=today().slice(0,7);
  const totals=categoryGroups.reduce((sum,{f,limit})=>{sum.actual+=Number(f.actual)||0;sum.expected+=Number(f.additional)||0;sum.limit+=limit;return sum},{actual:0,expected:0,limit:0});
  const used=totals.limit?Math.min(100,Math.max(0,totals.actual/totals.limit*100)):0;
  const forecast=totals.limit?Math.min(Math.max(0,100-used),Math.max(0,totals.expected/totals.limit*100)):0;
@@ -910,7 +931,7 @@ if(page==='insights'){
     '<p class="prediction-note">These are categorized here, but do not increase spent or the Overall Budget until the bank posts them.</p>'+table(pending)+'</div>':'')+
   (notSpending.length?'<div class="recorded-section budget-excluded-section"><div class="section-top"><h3>Categorized activity · not counted as spending</h3></div>'+
     '<p class="prediction-note">These manually categorized items are transfers, incoming funds, or future-dated records, not posted spending. Bank source facts are unchanged.</p>'+table(notSpending)+'</div>':'')+
-  (currentMonth?'<p class="prediction-note">Automatic predictions based on '+f.historyMonths.length+' historical months; never guaranteed. Monthly category expected amount = sum of active dated predictions.</p>':'')+
+  (currentMonth?'<p class="prediction-note">Automatic predictions based on '+f.historyMonths.length+' historical months; never guaranteed. The forecast includes dated events within the next 90 days, so the final visible month can be partial.</p>':'')+
   '</div></details></div>';
  }).join('')+'</div>';
 }

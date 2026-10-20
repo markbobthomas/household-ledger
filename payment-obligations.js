@@ -89,18 +89,22 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    if(!due||due>through)break;
    if(due<=asOf)continue;
    const label=String(b.name||'Automatic payment').trim();
-   // An explicit bill replaces a same-account recurring bank-derived estimate
-   // only when the merchant/amount/date all agree (no competing second withdrawal).
+   // One mortgage is one checking withdrawal, even when the owner calls the
+   // saved bill "Mortgage" and Plaid calls it "Home Mortgage ACH" or "PENNYMAC".
+   // Reconcile by funding account, date proximity and mortgage semantics.
    const normalized=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+   const mortgage=s=>/\b(?:mortgage|mtg|home\s+loan|pennymac|loandepot|newrez|shellpoint|mr\s+cooper)\b/i.test(String(s||''));
    const sameMerchant=expected.filter(t=>t.type==='expense'&&matchesAccount(t,account)&&
-    Math.abs(Date.parse(t.date)-Date.parse(due))<=3*86400000&&normalized(t.merchant)===normalized(label));
+    Math.abs(Date.parse(t.date)-Date.parse(due))<=6*86400000&&
+    (normalized(t.merchant)===normalized(label)||mortgage(t.merchant)&&mortgage(label)));
    if(sameMerchant.length===1){
     if(Math.abs(Number(sameMerchant[0].amount)-amount)<.011)continue;
-    // Owner-entered mortgage/bill amount is authoritative for forecasting;
-    // suppress only an unambiguous old recurring estimate for the same bill.
+    // When bank history and the owner disagree on the bill amount, use one
+    // owner-entered estimate and flag the disagreement for confirmation.
     if(sameMerchant[0].id)suppressedExpectedIds.push(String(sameMerchant[0].id));
+    warnings.push(label+': entered amount differs from the bank-derived recurring estimate for '+due+'. Review before relying on the projected balance.');
    }else if(sameMerchant.length>1){
-    warnings.push(label+': multiple competing predicted payments near '+due+'; review duplicates');
+    warnings.push(label+': multiple competing predicted withdrawals near '+due+'; review for duplicates');
    }
    const e={id:'bill|'+b.id+'|'+due,accountId:account.id,account:account.name,
     type:'expense',amount,date:due,merchant:label,category:b.category||'Housing',source:'owner-bill'};
