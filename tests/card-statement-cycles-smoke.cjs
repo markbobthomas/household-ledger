@@ -108,4 +108,21 @@ assert.throws(()=>Model.setCardPaymentRule(state,'visa',{
  billingStartDate:'2026-10-19',billingEndDate:'2026-11-18',
  nextPaymentDate:'2026-12-18',nextDueDate:'2026-12-13',fromAccountId:'checking'
 }),/valid billing period/);
+// If bank history shows an early completed, paired card payment, the bank
+// opening balances already include it: never schedule the same autopay twice.
+const earlySnapshot={...snapshot,asOf:'2026-11-11'};
+const postedPayment=[
+ {id:'checking-paid',date:'2026-11-10',type:'transfer',accountingKind:'card_payment',
+  cashDirection:'out',accountId:'checking',amount:700,pairedTransactionId:'visa-paid'},
+ {id:'visa-paid',date:'2026-11-10',type:'transfer',accountingKind:'card_payment',
+  cashDirection:'in',accountId:'visa',amount:700,pairedTransactionId:'checking-paid'}
+];
+const actual=Payments.build(earlySnapshot,postedPayment,[],issued.predictions,{days:30});
+assert.equal(actual.statements[0].alreadyPaid,true,'Confirmed posted payment recognized before scheduled date');
+assert.equal(actual.plans.length,0,'No second checking withdrawal after posted card autopay');
+const wrongAccount=Payments.build(earlySnapshot,postedPayment.map(t=>
+ ({...t,accountId:t.accountId==='checking'?'savings':t.accountId})),[],
+ issued.predictions,{days:30});
+assert.ok(wrongAccount.plans.some(x=>x.amount===700),
+ 'Do not suppress a card bill when source checking account does not match');
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
