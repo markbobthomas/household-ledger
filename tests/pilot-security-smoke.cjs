@@ -25,6 +25,7 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   assert.equal((await get('/api/ledger?source=browser',false)).status,401,'Query parameters do not bypass authentication');
   const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect accounts/,'Plaid authorization available on same website');
   assert.equal((await get('/pilot/data-source.js',true)).status,200);
+  assert.equal((await get('/planner-transactions.js',true)).status,200,'Protected server serves forecast-only editing module');
   const denied=await new Promise((resolve,reject)=>{
    const req=http.request({hostname:'127.0.0.1',port,path:'/api/ledger/adjustments?ref=planner',
     method:'POST',headers:{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64'),
