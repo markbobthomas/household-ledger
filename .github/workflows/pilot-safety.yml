@@ -36,6 +36,7 @@ jobs:
           node tests/planner-backtest-smoke.cjs
           node tests/planner-transactions-smoke.cjs
           node tests/planner-series-smoke.cjs
+          node tests/every-four-weeks-smoke.cjs
           node tests/planner-recurring-confirmation-smoke.cjs
           node tests/planner-missing-mortgage-smoke.cjs
           node tests/planner-history-smoke.cjs
