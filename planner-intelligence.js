@@ -27,7 +27,7 @@ function identity(event){
 function baseIdentity(event){return [event.type,account(event),clean(event.merchant)].join('|')}
 function periodic(name,category,sourcePfc){
  const p=sourcePfc||{},primary=String(p.primary||'').toUpperCase(),detailed=String(p.detailed||'').toUpperCase();
- const named=billDescription.test(String(name||''));
+ const named=billDescription.test(String(name||''))||mortgageName.test(String(name||''));
  if(irregularName.test(String(name||''))&&!named&&primary!=='SUBSCRIPTIONS')return false;
  return routineCategory.has(String(category))||named||primary==='SUBSCRIPTIONS'||
   /(?:SUBSCRIPTION|RECURRING|INSURANCE|UTILITIES|RENT|MORTGAGE|LOAN_PAYMENT)/.test(detailed);
