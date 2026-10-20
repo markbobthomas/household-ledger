@@ -98,11 +98,12 @@ function forecastFor(s){
     merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
     amount:event._forecastOriginalAmount??event.amount,
     accountId:event._forecastOriginalAccountId||event.accountId},accounts));
+ const manual=tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90));
  const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
  const existingAdds=(state().predictions?.futureTransactionAdds||[]).filter(e=>
   !confirmed.some(r=>r.sourceAddedId===e.id)&&!matching(e,e.type==='transfer'?'movement':'event'));
  const payments=window.HouseholdPaymentObligations.build(s,rows,
-  forecastForPayments(recurring,s,existingAdds),state().predictions||{},{days:90});
+  forecastForPayments([...recurring,...manual.events],s,existingAdds),state().predictions||{},{days:90});
  const suppress=new Set(payments.suppressedExpectedIds||[]);
  const cardPlans=(payments.plans||[]).filter(p=>!matching({...p,date:p.anchorDate},'movement'));
  const rawPlans=state().predictions?.accountMovements||[];
@@ -113,7 +114,6 @@ function forecastFor(s){
    dates.some(date=>Math.abs(dayDelta(date,card.anchorDate))<=3));
   return !duplicate;
  });
- const manual=tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90));
  const events=[...recurring.filter(e=>!suppress.has(String(e.id))),
   ...recurringEvents(payments.billEvents,s).filter(e=>!matching(e,'event')),
   ...manual.events];
