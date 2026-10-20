@@ -276,8 +276,9 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
  for(const original of movements){
   const change=forecastEdits[movementKey(original.id)];
   if(change?.skipped)continue;
-  let m=change?{...original,...change}:original;
-  if(m.seriesKey&&seriesTools?.applySeries)m=seriesTools.applySeries(m,original.baseDate||original.date,m.seriesKey,seriesEdits);
+  const seriesApplied=original.seriesKey&&seriesTools?.applySeries?
+   seriesTools.applySeries(original,original.baseDate||original.date,original.seriesKey,seriesEdits):original;
+  const m=change?{...seriesApplied,...change}:seriesApplied;
   if(!iso(m.date)||m.date<=asOf||m.date>through||!(Number(m.amount)>0)||
     !byId.has(String(m.fromAccountId))||!byId.has(String(m.toAccountId))||
     m.fromAccountId===m.toAccountId){
