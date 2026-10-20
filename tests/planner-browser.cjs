@@ -269,6 +269,16 @@ const {chromium,webkit}=require('playwright');
   await cardForm.locator('.card-statement-preview').first().getByText('$1,200.00').waitFor();
   assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Household Checking/,
    'Private bank card statement previews identify the paying account');
+  assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),
+   /Actual posted purchases|Actual net period spending/,
+   'Statement preview identifies factual posted card purchases separately from guesses');
+  const actualEntries=cardForm.locator('.card-statement-preview').first().locator('.card-actual-transactions');
+  assert.ok(await actualEntries.count(),'Actual card transactions can be inspected line by line');
+  await actualEntries.locator('summary').click();
+  assert.match(await actualEntries.innerText(),/Grocery Card Charge|Netflix subscription/,
+   'Posted card charges are individually auditable for their billing period');
+  assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Planned/,
+   'Before bank posts withdrawal, its date is explicitly a plan, not actual history');
   await page.locator('.sidebar [data-view="overview"]').click();
   assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
    'Overview shows the next card statement and due date');
