@@ -1303,3 +1303,6 @@ select.recurring-value:hover{border-bottom-style:solid}
 @media(max-width:700px){
  .budget-row-projection .budget-overage,.budget-overview-projection .budget-overage{display:block;margin-top:3px}
 }
+
+/* Projected overages: make both projected amount and explicit overage visibly red. */
+.budget-row-projection.over-budget,.budget-overview-projection.over-budget,.budget-entry .budget-overage,.budget-overview-projection .budget-overage,.category-insight-values .budget-overage{color:#c62828!important;font-weight:750}
