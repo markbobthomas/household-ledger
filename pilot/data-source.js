@@ -127,6 +127,24 @@ function panel(){
   '<p>Real data is stored on the private server, separate from fictional data. Only your mode preference is stored on this device.</p>'+
   '<a href="/bank-connect">Connect, sync or disconnect bank account</a>'+statusText()+'</section>';
 }
+function persistForecast(predictions){
+ if(!live)return Promise.reject(new Error('Connect Real Bank mode to save private forecast settings'));
+ // Snapshot immediately, before a user can make another forecast edit.
+ // Encrypted planning preferences are distinct from the read-only source
+ // bank transactions and from historical category corrections.
+ const body={predictions:JSON.parse(JSON.stringify(predictions||{}))};
+ const task=writeQueue.catch(()=>{}).then(()=>request('/forecasts',body));
+ writeQueue=task;
+ return task.then(result=>{
+  if(!result||result.saved!==true||result.scope!=='predictions')
+   throw Error('The forecast update was not acknowledged');
+  lastError='';
+  return result;
+ }).catch(error=>{
+  lastError='The predicted transaction could not be saved: '+error.message;
+  throw new Error(lastError);
+ });
+}
 function persist(data){
  if(!live)return;
  const body={categoryOverrides:data.categoryOverrides||{},predictions:data.predictions||{},
@@ -148,6 +166,6 @@ function bind(callbacks){
  if(localStorage.getItem(MODE)==='real')enter();
 }
 if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
-root.HouseholdLiveSource={bind,panel,persist,enterReal:enter,refresh,mode:selection,
+root.HouseholdLiveSource={bind,panel,persist,persistForecast,enterReal:enter,refresh,mode:selection,
  get loading(){return loading},get error(){return lastError}};
 })(typeof window!=='undefined'?window:globalThis);
