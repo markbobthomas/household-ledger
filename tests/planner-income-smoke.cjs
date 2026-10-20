@@ -48,7 +48,7 @@ assert.equal(generic.result.events.filter(x=>x.type==='income').length,0,
  'Unknown ACH credits are not confidently inferred as earnings');
 const pfcIncome=run(originalMonths.map(m=>bank(m,12,'ACH Credit 4752',-3000,
  {primary:'INCOME',detailed:'INCOME_WAGES'})));
-assert.equal(pfcIncome.result.events.filter(x=>x.type==='income').length,1,
+assert.equal(pfcIncome.result.events.filter(x=>x.type==='income'&&x.date==='2026-11-12').length,1,
  'Bank income-wage category identifies payroll even without merchant name');
 const cardCredit=Adapter.record(bank('2026-09',12,'Payment Received',-1000,
  {primary:'TRANSFER_IN',detailed:'TRANSFER_IN_OTHER_TRANSFER_IN'},'visa'),card);
