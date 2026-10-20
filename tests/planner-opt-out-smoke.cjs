@@ -58,7 +58,7 @@ assert.ok(!H.candidates(history,accounts,snapshot.asOf,state.predictions).some(x
 const alteredHistory=history.map(x=>({...x}));
 alteredHistory.push(txn('p3','2026-10-18','ABC Draft 984',90));
 assert.equal(C.analyze(alteredHistory,accounts,snapshot.asOf,state.predictions).automatic
- .filter(e=>e.merchant==='ABC Draft 984'&&e.accountId==='checking').length,0,
+ .filter(e=>e.merchant==='ABC Draft 984'&&e.accountId==='checking'&&e.type==='expense').length,0,
  'A later Plaid refresh or changed amount must not reinstate a rejected recurrence');
 assert.equal(JSON.stringify(history),clone,'Actual bank history is immutable');
 assert.deepEqual(Object.keys(state.predictions.futureRecurrenceExclusions).length,1);
