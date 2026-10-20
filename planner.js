@@ -439,6 +439,36 @@ function transactionsPage(bundle,s){
    '<p class="audit-footnote">Forecast-only changes recalculate balance predictions for affected accounts. Actual bank transactions remain untouched. Card payments and account transfers are represented once and affect both linked accounts.</p>'+
   '</section></div>';
 }
+function incomeStatus(bundle,s,chosen,derived){
+ const through=shiftDay(s.asOf,horizon),from=shiftDay(s.asOf,-100);
+ const incoming=(derived?.events||[]).filter(t=>t.kind==='income'&&t.date>s.asOf&&t.date<=through);
+ const recent=(bundle?.rows||[]).filter(t=>!t.pending&&t.date>=from&&t.date<=s.asOf&&
+  (String(t.accountId||'')===String(chosen.id)||
+   !t.accountId&&String(t.account||'')===String(chosen.transactionAccount||chosen.name)));
+ const earned=recent.filter(t=>t.type==='income');
+ const unlabeled=recent.filter(t=>t.type==='transfer'&&t.cashDirection==='in');
+ const amount=incoming.reduce((sum,t)=>sum+Number(t.amount||0),0);
+ let detail;
+ if(incoming.length){
+  detail=incoming.length+' dated deposit'+(incoming.length===1?'':'s')+' · '+cash(amount)+
+   ' expected through '+dateLong(through)+'. These are estimates, not bank-issued payment confirmations.';
+ }else if(earned.length){
+  detail=earned.length+' income deposit'+(earned.length===1?' was':'s were')+
+   ' found in the last 100 days, but none qualified as a predictable future date and amount.';
+ }else if(unlabeled.length){
+  detail=unlabeled.length+' incoming transfer'+(unlabeled.length===1?' is':'s are')+
+   ' visible in the last 100 days, but transfers are not assumed to be payroll.';
+ }else{
+  detail='No recognizable paychecks were found in the last 100 days for this account. Check your bank history and refresh if needed.';
+ }
+ return '<section class="panel income-status" aria-label="Income prediction status">'+
+  '<div><div class="section-title"><h2>Expected income</h2>'+
+   '<span class="status-tag '+(incoming.length?'good':'warn')+'">'+
+    (incoming.length?incoming.length+' PREDICTED':'NOT DETECTED')+'</span></div>'+
+   '<p>'+escapeHTML(detail)+'</p></div>'+
+  '<button type="button" class="btn" data-view="transactions">Review / add income</button>'+
+  '</section>';
+}
 function overviewPage(bundle,s,chosen,derived,fresh){
  const series=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
  const events=(derived?.events||[]).filter(x=>x.date>s.asOf&&x.date<=shiftDay(s.asOf,horizon))
@@ -446,7 +476,7 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  const notes=events.map(e=>'<div class="overview-upcoming-item"><span>'+escapeHTML(dayLabel(e.date))+
   '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span></div>').join('');
  return '<div class="planner-page overview-page">'+
-  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
+  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+incomeStatus(bundle,s,chosen,derived)+
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
    '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
