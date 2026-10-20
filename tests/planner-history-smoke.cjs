@@ -27,6 +27,13 @@ const obscure=tx('pfc1','2026-09-16','XYZ FINANCE',2000,'checking','expense',{
 });
 assert.equal(H.candidates([obscure],accounts,asOf,{},[]).length,1,
  'Plaid loan mortgage detail raises even opaque bank descriptions for review');
+const irregular=H.candidates([
+ tx('ins1','2026-08-03','Monthly Insurance',123),
+ tx('ins2','2026-09-24','Monthly Insurance',123)
+],accounts,asOf,{},[]);
+assert.equal(irregular.length,1,'Two bill payments still enter Reviews even when dates drift substantially');
+assert.equal(irregular[0].confidence,'Low');
+assert.match(irregular[0].reason,/calendar timing varies/);
 assert.equal(H.candidates([tx('g1','2026-09-17','Safeway',84)],accounts,asOf,{},[]).length,0,
  'One ordinary grocery visit is not treated as monthly bill');
 assert.equal(H.candidates([tx('g1','2026-09-17','Safeway',84),tx('g2','2026-10-17','Safeway',84)],
