@@ -84,16 +84,26 @@ function infer(records,snapshot,predictions={},options={}){
    singleMortgage=mortgage&&rows.length===1&&dayDiff(asOf,last.date)<=50,
    matchedMonths=twoConsecutive&&lastTwo.length===2&&recent;
   // An explicit not-recurring decision is never overridden by auto inference.
-  const original=[g.kind,accountId(last,accounts),norm(last.merchant)].join('|');
-  const ownerDecision=excluded[original];
-  const blocked=ownerDecision?.status==='excluded'&&
-   Math.abs(cents(ownerDecision.amount)-amount)<=1||dismissed[
-    [g.accountId,last.type,norm(last.merchant),String(amount)].map(encodeURIComponent).join('|')
-   ]==='dismissed';
-  const manuallyScheduled=(predictions.futureRecurringRules||[]).some(r=>
-   r.kind==='event'&&String(r.originalAccountId||r.accountId)===g.accountId&&
-   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(last.merchant))&&
-   Math.abs(cents(r.matchAmount??r.amount)-amount)<=100);
+  const aliases=[g.accountId,last.account,last.accountId,
+   ...(accounts||[]).filter(a=>String(a.id)===g.accountId)
+    .flatMap(a=>[a.name,a.transactionAccount])].map(String).filter(Boolean);
+  const keys=new Set(aliases.flatMap(a=>[
+   [g.kind,a,norm(last.merchant)].join('|'),
+   [last.type,a,norm(last.merchant)].join('|')]));
+  const rejected=[...keys].some(key=>excluded[key]?.status==='excluded'&&
+   Math.abs(cents(excluded[key].amount)-amount)<=1);
+  const dismissedInReviews=[g.kind,last.type].some(kind=>dismissed[
+   [g.accountId,kind,norm(last.merchant),String(amount)].map(encodeURIComponent).join('|')
+  ]==='dismissed');
+  const dismissedMortgage=(predictions.mortgageReviewDismissals||[]).includes(
+   ['mortgage',g.accountId,norm(last.merchant),String(amount)].map(encodeURIComponent).join('|'));
+  const blocked=rejected||dismissedInReviews||dismissedMortgage;
+  const manuallyScheduled=(predictions.futureRecurringRules||[]).some(r=>{
+   if(r.kind!=='event'||String(r.originalAccountId||r.accountId)!==g.accountId)return false;
+   const names=Array.isArray(r.matchNames)?r.matchNames:
+    [norm(r.originalMerchant||r.merchant)];
+   return names.includes(norm(last.merchant));
+  });
   // A user-confirmed rule is authoritative even if its due date has moved
   // outside the original posting month; do not resurrect an old inference.
   if(blocked||manuallyScheduled)continue;
