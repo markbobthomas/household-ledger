@@ -148,8 +148,11 @@ function hero(a,derived,asOf){
  const status=textForStatus(derived),fresh=freshness(derived),isCash=!credit;
  const opening=credit?derived.openingCurrent:derived.openingAvailable??derived.openingCurrent;
  const safety=Number(state().predictions?.cashCushion??500);
- const lowest=derived.minimum,lowDate=derived.lowestDate;
- const firstNegative=isCash?(derived.series||[]).find(d=>Number.isFinite(d.balance)&&d.balance<0):null;
+ const horizonSeries=(derived.series||[]).filter(d=>d.date<=shiftDay(asOf,horizon));
+ const validPoints=horizonSeries.filter(d=>Number.isFinite(d.balance));
+ const lowPoint=validPoints.length?validPoints.reduce((a,b)=>a.balance<=b.balance?a:b):null;
+ const lowest=lowPoint?.balance,lowDate=lowPoint?.date;
+ const firstNegative=isCash?horizonSeries.find(d=>Number.isFinite(d.balance)&&d.balance<0):null;
  const year=+asOf.slice(0,4),month=+asOf.slice(5,7);
  const endOfMonth=asOf.slice(0,7)+'-'+String(new Date(Date.UTC(year,month,0)).getUTCDate()).padStart(2,'0');
  const monthPoint=(derived.series||[]).filter(d=>d.date<=endOfMonth).at(-1);
@@ -172,10 +175,10 @@ function hero(a,derived,asOf){
    '<strong class="'+(fresh&&isCash&&monthBalance<0?'low':'')+'">'+
     (fresh?cash(monthBalance):'Unverified')+'</strong>'+
    '<small>'+escapeHTML(dayLabel(endOfMonth))+' · includes expected deposits</small></div>'+
-  '<div class="metric"><span>'+(credit?'Lowest debt · next 90 days':'Lowest balance · next 90 days')+'</span>'+
+  '<div class="metric"><span>'+(credit?'Lowest debt · next '+horizon+' days':'Lowest balance · next '+horizon+' days')+'</span>'+
    '<strong class="'+(below?'low':'')+'">'+(fresh?cash(lowest):'Unverified')+'</strong>'+
    '<small>'+(fresh&&lowDate?escapeHTML(dayLabel(lowDate)):'Confirm bank balance first')+'</small></div>'+
-  '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · day 90')+'</span>'+
+  '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · day '+horizon')+'</span>'+
    '<strong class="'+(fresh&&firstNegative?'low':'')+'">'+
     (fresh?(isCash?(firstNegative?escapeHTML(dateLong(firstNegative.date)):'None from dated payments'):cash(derived.series.at(-1)?.balance)):'Unverified')+'</strong>'+
    '<small>'+(isCash&&firstNegative?'Projected cash below $0 · not a guaranteed outcome':
