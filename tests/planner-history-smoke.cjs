@@ -51,8 +51,8 @@ assert.equal(H.candidates([tx('wrong','2026-09-03','Home Mortgage ACH',2000,'sav
  accounts,asOf,{},[]).length,1,'Separate bank accounts are never merged');
 assert.equal(H.candidates([{...mortgage[0],pending:true}],accounts,asOf,{},[]).length,0,
  'Pending payments do not establish repeating evidence');
-assert.equal(H.canPlan(tx('refund','2026-10-11','Tax refund',2000,'checking','refund')),false,
- 'One-off refunds cannot be turned into recurring income by accident');
+assert.equal(H.canPlan(tx('refund','2026-10-11','Tax refund',2000,'checking','refund')),true,
+ 'Every historical refund offers a manual Make recurring action');
 const chosen=two[0];
 const rule=T.defineRecurring(store,{
  date:chosen.nextDate,merchant:chosen.merchant,amount:chosen.amount,type:'expense',
