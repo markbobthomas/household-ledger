@@ -159,7 +159,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
   const strong=Boolean(frequency)&&g.rows.length>=3;
   result.push({key:g.key,accountId:g.accountId,accountName:g.accountName,
    merchant:g.merchant,amount:g.amount,type:g.type,
-   frequency:cadence,confidence:strong?'Medium':frequency?'Low':'Needs confirmation',
+   frequency:cadence,confidence:strong?'Medium':g.rows.length>=2?'Low':'Needs confirmation',
    examples:g.rows.slice(-6).reverse().map(t=>({
     id:String(t.id||''),date:t.date,amount:Number(t.amount),merchant:String(t.merchant||'')
    })),
