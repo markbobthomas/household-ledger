@@ -34,8 +34,11 @@ const irregular=H.candidates([
 assert.equal(irregular.length,1,'Two bill payments still enter Reviews even when dates drift substantially');
 assert.equal(irregular[0].confidence,'Low');
 assert.match(irregular[0].reason,/calendar timing varies/);
-assert.equal(H.candidates([tx('g1','2026-09-17','Safeway',84)],accounts,asOf,{},[]).length,0,
- 'One ordinary grocery visit is not treated as monthly bill');
+const singleGrocery=H.candidates([tx('g1','2026-09-17','Safeway',84)],accounts,asOf,{},[]);
+assert.equal(singleGrocery.length,1,
+ 'Every recent payment, including an ordinary purchase, may be proposed for review');
+assert.equal(singleGrocery[0].confidence,'Needs confirmation',
+ 'A lone grocery purchase must never be presented as a confirmed recurring bill');
 assert.equal(H.candidates([tx('g1','2026-09-17','Safeway',84),tx('g2','2026-10-17','Safeway',84)],
  accounts,asOf,{},[]).length,1,'Two identical expenses at monthly spacing are low confidence');
 assert.equal(H.candidates([tx('old1','2025-01-02','Mortgage',2000),
@@ -68,4 +71,41 @@ assert.equal(H.candidates(mortgage,accounts,asOf,store.predictions,[]).length,0,
  'Confirmed source recurring bill disappears from Reviews');
 assert.ok(I.missingMortgages(mortgage,{},accounts,asOf).length>0,
  'Missing mortgage helper remains available independently');
+const obscureSingle=H.candidates([
+ tx('unknown-one','2026-10-10','Bluebird Services',157.42)
+],accounts,asOf,{},[]);
+assert.equal(obscureSingle.length,1,'Every recent generic merchant is considered for Reviews');
+assert.equal(obscureSingle[0].type,'expense');
+assert.equal(obscureSingle[0].frequency,'monthly',
+ 'With no cadence evidence, the proposed date is editable, not assumed certain');
+const unpairedACH=H.candidates([
+ tx('ach-first','2026-09-09','Bluebird ACH',157.42,'checking','transfer',{cashDirection:'out'}),
+ tx('ach-second','2026-10-09','Bluebird ACH',157.42,'checking','transfer',{cashDirection:'out'})
+],accounts,asOf,{},[]);
+assert.equal(unpairedACH.length,1,
+ 'Outgoing ACH transfers get the same recurring review logic as expenses');
+assert.equal(unpairedACH[0].type,'expense','Unpaired ACH debit is suggested as an expense');
+const matchedHousehold=H.candidates([
+ tx('paired','2026-10-09','Transfer to Savings',300,'checking','transfer',
+  {cashDirection:'out',pairedTransactionId:'bank-other'})
+],accounts,asOf,{},[]);
+assert.equal(matchedHousehold.length,0,'Verified linked transfers cannot become double counted bills');
+const noDouble=H.candidates([
+ tx('a','2026-09-09','Bluebird Services',157.42),
+ tx('b','2026-10-09','Bluebird Services',157.42)
+],accounts,asOf,{futureRecurringRules:[{
+ kind:'event',originalAccountId:'checking',originalMerchant:'Bluebird Services',
+ merchant:'Bluebird Services',matchNames:['bluebird services'],
+ matchAmount:157.42,amount:160,frequency:'monthly',date:'2026-11-24'
+}]},[]);
+assert.equal(noDouble.length,0,
+ 'User-confirmed generic schedule excludes old automatic/review variants after date and amount edits');
+const ranked=H.candidates([
+ tx('known1','2026-09-06','Storage Payment',82),
+ tx('known2','2026-10-06','Storage Payment',82),
+ tx('oneoff','2026-10-18','Snack Stop',13.5)
+],accounts,asOf,{},[]);
+assert.equal(ranked[0].merchant,'Storage Payment',
+ 'Evidence-backed repeating payments appear ahead of speculative one-offs');
+
 console.log('PASS History/Reviews: two-payment discovery, single obvious bill, conservative queue, account isolation, no false debit, manual confirmation, persistence and deduplication');
