@@ -194,9 +194,9 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
    secondDay===Number(fields.date.slice(-2)))throw Error('Choose a different second payday (1–31)');
  }
  const p=ensure(state);
- const baseAccount=reference?.kind==='movement'?String(reference.fromAccountId):
-  String(reference?.accountId||fields.accountId);
- const originalMerchant=reference?.originalMerchant||reference?.merchant||fields.merchant;
+ const baseAccount=reference?.kind==='movement'?String(reference.sourceAccountId||reference.fromAccountId):
+  String(reference?.sourceAccountId||reference?.accountId||fields.accountId);
+ const originalMerchant=reference?.originalMerchant||reference?.sourceMerchant||reference?.merchant||fields.merchant;
  const originalAmount=Number(reference?.sourceAmount??reference?.amount??fields.amount);
  // A Plaid ACH classified as transfer can still be an expense or paycheck.
  const originalType=reference?.originalType||reference?.sourceType||reference?.type||fields.type;
@@ -397,11 +397,13 @@ function postedCoverage(generated,rules,records,accounts,asOf){
    account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
   const type=kind==='movement'?'transfer':item.type;
   const tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
+  const sameBillingCycle=t=>['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
+   t.date.slice(0,7)===date.slice(0,7);
   const possible=posted.find(t=>!used.has(String(t.id))&&
    sameDirection(t,kind==='event'?r.type:'transfer')&&
    accountRef(t.accountId||t.account,accounts)===account&&
    (r.matchNames||[]).includes(merchantKey(t.merchant||t.name))&&
-   Math.abs(daysBetween(t.date,date))<=tolerance);
+   (Math.abs(daysBetween(t.date,date))<=tolerance||sameBillingCycle(t)));
   if(!possible)return false;
   used.add(String(possible.id));return true;
  }
