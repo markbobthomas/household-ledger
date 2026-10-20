@@ -6,12 +6,15 @@ if(!env.PILOT_PASSWORD||env.PILOT_PASSWORD.length<20||!env.PILOT_ENCRYPTION_KEY|
  throw Error('Missing pilot password (20+ characters), encryption key, or Plaid credentials');
 const key=crypto.createHash('sha256').update(env.PILOT_ENCRYPTION_KEY).digest();
 const file=env.PILOT_STATE_PATH||'/var/data/pilot.enc';
+// Forecast preferences live beside the bank snapshot, but save independently.
+// This avoids encrypting and rewriting every Plaid transaction for one edit.
+const forecastFile=file+'.forecasts';
 const HOST={production:'https://production.plaid.com',sandbox:'https://sandbox.plaid.com'}[env.PLAID_ENV||'production'];
 if(!HOST)throw Error('PLAID_ENV must be production or sandbox');
 const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const stamp=()=>new Date().toISOString();
 const freshState=()=>({items:[],transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}});
-let state=freshState();
+let state=freshState(),forecastWrites=Promise.resolve();
 function normalizeState(){
  if(!Array.isArray(state.items))state.items=[];
  if(state.item?.token&&state.accountId&&!state.items.some(i=>i.id===state.item.id))
@@ -22,17 +25,45 @@ function normalizeState(){
  state.accounts=Array.isArray(state.accounts)?state.accounts:[];
  state.ledgerAdjustments=state.ledgerAdjustments||{};
 }
+function encrypted(value){
+ const iv=crypto.randomBytes(12),c=crypto.createCipheriv('aes-256-gcm',key,iv);
+ const data=Buffer.concat([c.update(Buffer.from(JSON.stringify(value))),c.final()]);
+ return JSON.stringify({iv:iv.toString('base64'),tag:c.getAuthTag().toString('base64'),
+  data:data.toString('base64')});
+}
+function decrypted(text){
+ const b=JSON.parse(text),d=crypto.createDecipheriv('aes-256-gcm',key,Buffer.from(b.iv,'base64'));
+ d.setAuthTag(Buffer.from(b.tag,'base64'));
+ return JSON.parse(Buffer.concat([d.update(Buffer.from(b.data,'base64')),d.final()]).toString());
+}
 async function load(){
- try{const b=JSON.parse(await fs.readFile(file,'utf8'));const d=crypto.createDecipheriv('aes-256-gcm',key,Buffer.from(b.iv,'base64'));d.setAuthTag(Buffer.from(b.tag,'base64'));state=JSON.parse(Buffer.concat([d.update(Buffer.from(b.data,'base64')),d.final()]).toString());normalizeState()}
+ try{state=decrypted(await fs.readFile(file,'utf8'));normalizeState()}
  catch(e){if(e.code!=='ENOENT')throw e}
+ // Existing users start with their previous encrypted predictions in pilot.enc.
+ // Once a forecast is saved separately, this tiny file is authoritative.
+ try{
+  const predictions=decrypted(await fs.readFile(forecastFile,'utf8'));
+  if(!predictions||typeof predictions!=='object'||Array.isArray(predictions))
+   throw Error('Invalid encrypted forecast preferences');
+  state.ledgerAdjustments.predictions=predictions;
+ }catch(e){if(e.code!=='ENOENT')throw e}
+}
+async function atomicEncryptedWrite(filename,value){
+ await fs.mkdir(path.dirname(filename),{recursive:true});
+ const temporary=filename+'.tmp';
+ await fs.writeFile(temporary,encrypted(value),{mode:0o600});
+ await fs.rename(temporary,filename);
 }
 async function save(){
- const iv=crypto.randomBytes(12),c=crypto.createCipheriv('aes-256-gcm',key,iv),b=Buffer.from(JSON.stringify(state));
- const ciphertext=Buffer.concat([c.update(b),c.final()]);
- await fs.mkdir(path.dirname(file),{recursive:true});
- const tmp=file+'.tmp';
- await fs.writeFile(tmp,JSON.stringify({iv:iv.toString('base64'),tag:c.getAuthTag().toString('base64'),data:ciphertext.toString('base64')}),{mode:0o600});
- await fs.rename(tmp,file);
+ await atomicEncryptedWrite(file,state);
+}
+// One small encrypted write per forecast edit. The full encrypted bank ledger
+// is neither touched nor read, and concurrent browser saves are serialized.
+async function saveForecast(predictions){
+ const write=forecastWrites.catch(()=>{}).then(()=>atomicEncryptedWrite(forecastFile,predictions));
+ forecastWrites=write.catch(()=>{});
+ await write;
+ state.ledgerAdjustments.predictions=predictions;
 }
 async function plaid(endpoint,body){
  const resp=await fetch(HOST+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,client_id:env.PLAID_CLIENT_ID,secret:env.PLAID_SECRET}),signal:AbortSignal.timeout(25000)});
@@ -165,14 +196,8 @@ async function start(port=Number(env.PORT||8788)){
        !body.predictions||typeof body.predictions!=='object'||
        Array.isArray(body.predictions))
      return respond(400,{error:'Invalid forecast preferences'});
-    const previous=state.ledgerAdjustments.predictions;
-    state.ledgerAdjustments.predictions=body.predictions;
-    try{await save()}catch(error){
-     // An unsuccessful write must not be reported as a saved prediction.
-     if(previous===undefined)delete state.ledgerAdjustments.predictions;
-     else state.ledgerAdjustments.predictions=previous;
-     throw error;
-    }
+    // All bank facts are untouched. A retry of this snapshot is idempotent.
+    await saveForecast(body.predictions);
     return respond(200,{saved:true,scope:'predictions'});
    }
    if(requestPath==='/api/ledger/adjustments'){
@@ -190,7 +215,11 @@ async function start(port=Number(env.PORT||8788)){
     }
     // Never permit source records, Plaid tokens, or provider balances in adjustment writes.
     state.ledgerAdjustments=Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]]));
-    await save();return respond(200,{saved:true});
+    await save();
+    // Keep compatibility with the older adjustments route, while the new
+    // app only writes future-ledger settings through /forecasts.
+    if(body.predictions!==undefined)await saveForecast(body.predictions);
+    return respond(200,{saved:true});
    }
    if(requestPath==='/api/link-token'){
     const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-private-household'},
@@ -220,7 +249,11 @@ async function start(port=Number(env.PORT||8788)){
    if(requestPath==='/api/sync'){await sync();return respond(200,{ok:true,accounts:state.accounts.length})}
    if(requestPath==='/api/disconnect'){
     for(const item of state.items)await plaid('/item/remove',{access_token:item.token});
-    state=freshState();await save();return respond(200,{ok:true});
+    await forecastWrites;
+    state=freshState();await save();
+    // An old household's saved schedules must not attach to a new bank link.
+    try{await fs.unlink(forecastFile)}catch(e){if(e.code!=='ENOENT')throw e}
+    return respond(200,{ok:true});
    }
    return respond(404,{error:'Unknown action'});
   }catch(e){return respond(400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140)})}
