@@ -31,6 +31,7 @@
       <select id="ledger-mode-switch" class="mode-box" aria-label="Bank data source"><option value="demo">Demo</option><option value="real">Real / Plaid</option></select>
       <label for="horizon" style="font-size:11px;color:var(--muted)">Horizon</label>
       <select id="horizon" class="mode-box" aria-label="Forecast days"><option value="30">30 days</option><option value="60">60 days</option><option value="90" selected>90 days</option></select>
+      <button class="btn primary" type="button" id="audit-launch" data-run-backtest hidden>Check accuracy</button>
       <button class="btn" type="button" id="refresh-bank" hidden>Refresh bank</button>
       <a class="btn" id="bank-connect" href="/bank-connect" hidden>Bank connections</a>
     </div>
