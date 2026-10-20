@@ -48,7 +48,8 @@ function skip(state,key,details={}){
   throw Error('Unknown future transaction');
  ensure(state).futureTransactionEdits[key]={skipped:true,
   label:String(details.label||'Future transaction').slice(0,160),
-  date:String(details.date||''),accountId:String(details.accountId||'')};
+  date:String(details.date||''),accountId:String(details.accountId||''),
+  toAccountId:String(details.toAccountId||'')};
 }
 function restore(state,key){delete ensure(state).futureTransactionEdits[key]}
 function add(state,data,accounts,asOf){
