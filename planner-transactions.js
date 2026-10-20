@@ -274,9 +274,35 @@ function matchesRecurring(rule,event,accounts){
   .some(d=>Math.abs(daysBetween(d,date))<=
    (rule.sourceFrequency==='weekly'?2:rule.sourceFrequency==='biweekly'?3:6));
 }
+
+/* Source bank balances already include posted transactions. One posted payment
+ * can cover at most one future scheduled occurrence; never forecast it again. */
+function postedCoverage(generated,rules,records,accounts,asOf){
+ const byId=new Map((rules||[]).map(r=>[r.id,r]));
+ const used=new Set(),posted=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&
+  t.date<=asOf&&Number(t.amount)>0&&String(t.id||''));
+ function covered(item,id,kind){
+  const r=byId.get(id);if(!r)return false;
+  const date=String(item.date||item.anchorDate||''),account=String(kind==='movement'?item.fromAccountId:item.accountId);
+  const type=kind==='movement'?'transfer':item.type;
+  const tolerance=r.frequency==='weekly'?2:r.frequency==='biweekly'?3:6;
+  const possible=posted.find(t=>!used.has(String(t.id))&&
+   t.type===type&&accountRef(t.accountId||t.account,accounts)===account&&
+   (r.matchNames||[]).includes(merchantKey(t.merchant))&&
+   Math.min(Math.abs(Number(t.amount)-Number(r.amount)),
+    Math.abs(Number(t.amount)-Number(r.matchAmount)))<.011&&
+   Math.abs(daysBetween(t.date,date))<=tolerance);
+  if(!possible)return false;
+  used.add(String(possible.id));return true;
+ }
+ return {
+  events:(generated.events||[]).filter(e=>!covered(e,e.ruleId,'event')),
+  plans:(generated.plans||[]).filter(p=>!covered(p,p.seriesRuleId,'movement'))
+ };
+}
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,findExamples,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring};
+ frequencies,findExamples,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring,postedCoverage};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
