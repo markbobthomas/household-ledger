@@ -25,8 +25,54 @@ const accountOf=(t,accounts)=>{
  const found=(accounts||[]).filter(a=>[a.id,a.name,a.transactionAccount].some(k=>String(k||'')===raw));
  return found.length===1?String(found[0].id):raw;
 };
-const canPlan=t=>t&&!t.pending&&validDate(t.date)&&
- ['expense','income'].includes(t.type)&&Number(t.amount)>0;
+// Every real bank record is eligible to become a *proposal*, even when it
+// was classified as a transfer/refund or is still pending. Actual posting
+// evidence for automatic discovery remains stricter (settled, positive value).
+const canPlan=t=>Boolean(t&&validDate(t.date)&&
+ ['expense','income','refund','transfer'].includes(t.type)&&
+ Number.isFinite(Number(t.amount))&&Number(t.amount)>=0);
+const isMortgage=t=>{
+ const p=t.personal_finance_category||t.source?.personalFinanceCategory||{};
+ return /\b(mortgage|mtg|home loan|pennymac|loandepot|newrez|shellpoint|mr cooper)\b/i.test(String(t.merchant||''))||
+  /MORTGAGE/.test(String(p.detailed||'').toUpperCase())||
+  t.accountingKind==='loan_payment';
+};
+function draftFor(row,records,accounts,asOf){
+ if(!canPlan(row))throw Error('This bank transaction has no valid date or amount');
+ const sourceAccount=accountOf(row,accounts);
+ if(!(accounts||[]).some(a=>String(a.id)===sourceAccount))
+  throw Error('The bank account for this transaction is not connected');
+ const credit=id=>String((accounts||[]).find(a=>String(a.id)===id)?.accountType||
+  (accounts||[]).find(a=>String(a.id)===id)?.type||'').toLowerCase()==='credit';
+ const counterpart=(records||[]).find(t=>row.pairedTransactionId&&
+  String(t.id)===String(row.pairedTransactionId)&&!t.pending);
+ const peerAccount=counterpart?accountOf(counterpart,accounts):'';
+ const linked=Boolean(row.type==='transfer'&&counterpart&&peerAccount&&peerAccount!==sourceAccount&&
+  (accounts||[]).some(a=>String(a.id)===peerAccount));
+ let type=row.type,fromAccountId=sourceAccount,toAccountId=peerAccount||'';
+ if(linked){
+  const out=row.cashDirection==='out'||counterpart.cashDirection==='in';
+  fromAccountId=out?sourceAccount:peerAccount;
+  toAccountId=out?peerAccount:sourceAccount;
+  type='transfer';
+ }else if(row.type==='transfer'){
+  // A non-paired ACH debit is not proof of a transfer between two of the
+  // user's connected accounts. Treat as an outgoing bill suggestion, or
+  // incoming deposit/refund, and let the user explicitly change the type.
+  type=row.cashDirection==='in'?(credit(sourceAccount)?'refund':'income'):'expense';
+ }
+ const exact=(records||[]).filter(t=>canPlan(t)&&!t.pending&&
+  accountOf(t,accounts)===sourceAccount&&t.type===row.type&&
+  Math.abs(Number(t.amount)-Number(row.amount))<.011&&
+  norm(t.merchant)===norm(row.merchant)).sort((a,b)=>a.date.localeCompare(b.date));
+ const frequency=guessFrequency(exact)||'monthly',last=exact.at(-1)||row;
+ return {accountId:sourceAccount,merchant:String(row.merchant||row.name||'Bank transaction'),
+  amount:Number(row.amount)||0,type,originalType:row.type,
+  cashDirection:row.cashDirection||null,frequency,
+  nextDate:nextDate(last.date,frequency,asOf),sourceRow:row,
+  sourcePending:Boolean(row.pending),fromAccountId,toAccountId,
+  linkedTransfer:linked,examples:exact.slice(-8).map(x=>String(x.id))};
+}
 function guessFrequency(history){
  const ts=[...(history||[])].sort((a,b)=>a.date.localeCompare(b.date));
  if(ts.length<2)return null;
@@ -59,7 +105,8 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
  const dismissed=preferences.historyPatternDecisions||{},rules=preferences.futureRecurringRules||[];
  const groups=new Map();
  for(const t of records||[]){
-  if(!canPlan(t)||t.date>asOf)continue;
+  if(!canPlan(t)||t.pending||Number(t.amount)<=0||
+   !['income','expense'].includes(t.type)||t.date>asOf)continue;
   const aid=accountOf(t,accounts);
   if(!aid)continue;
   const name=norm(t.merchant||t.name);
@@ -114,7 +161,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
  return result.sort((a,b)=>a.nextDate.localeCompare(b.nextDate)||
   b.amount-a.amount).slice(0,80);
 }
-const api={candidates,guessFrequency,nextDate,canPlan,accountOf};
+const api={candidates,guessFrequency,nextDate,canPlan,accountOf,draftFor,isMortgage};
 root.HouseholdPlannerHistory=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
