@@ -615,6 +615,23 @@ function incomeStatus(bundle,s,chosen,derived){
   '<button type="button" class="btn" data-view="transactions">Review / add income</button>'+
   '</section>';
 }
+function upcomingCardBills(bundle,s){
+ const all=(bundle?.payments?.statements||[]),cards=activeAccounts(s).filter(a=>accountType(a)==='credit');
+ if(!cards.length)return '';
+ const earliest=cards.map(c=>all.find(p=>String(p.cardId)===String(c.id))).filter(Boolean)
+  .sort((a,b)=>a.withdrawalDate.localeCompare(b.withdrawalDate));
+ return '<section class="panel upcoming-card-bills" aria-label="Upcoming credit card statements">'+
+  '<div class="section-title"><h2>Upcoming credit-card bills</h2>'+
+   '<button type="button" class="btn" data-view="settings">Set billing dates and autopay</button></div>'+
+  (earliest.map(p=>'<div class="card-bill-row"><div><strong>'+escapeHTML(p.cardName)+
+    '</strong><small>Cycle closes '+escapeHTML(dayLabel(p.closingDate))+
+    ' · Due '+escapeHTML(dayLabel(p.dueDate))+
+    (p.autopayEnabled?' · Paid from '+escapeHTML(p.fromName):' · No autopay')+
+    (p.estimated?' · Estimated':' · Entered statement')+'</small></div>'+
+    '<strong>'+cash(p.statementBalance)+'</strong></div>').join('')||
+    '<p class="lead">No card statement forecasts are configured yet. Set up each card in Settings.</p>')+
+  '<p class="audit-footnote">Based on posted and known future charges only. Unplanned card spending, interest, fees and carried balances may change the actual bill.</p></section>';
+}
 function overviewPage(bundle,s,chosen,derived,fresh){
  const series=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
  const events=(derived?.events||[]).filter(x=>x.date>s.asOf&&x.date<=shiftDay(s.asOf,horizon))
@@ -622,7 +639,7 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  const notes=events.map(e=>'<div class="overview-upcoming-item"><span>'+escapeHTML(dayLabel(e.date))+
   '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span></div>').join('');
  return '<div class="planner-page overview-page">'+
-  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+incomeStatus(bundle,s,chosen,derived)+
+  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
    '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
