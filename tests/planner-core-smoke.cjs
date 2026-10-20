@@ -139,4 +139,16 @@ assert.equal(card.projection.plans.filter(p=>p.toAccountId==='visa').length>0,tr
 assert.equal(card.projection.events.filter(e=>e.transferGroupId&&e.accountId==='checking').length,
  card.projection.plans.filter(p=>p.toAccountId==='visa').length,
  'Checking pays the card once per planned autopay');
+const autopays=card.projection.plans.filter(p=>p.toAccountId==='visa');
+assert.ok(autopays.every(p=>p.cadence==='monthly'&&p.seriesKey==='autopay|visa'),
+ 'Card payment occurrences retain one monthly recurring series key');
+const revisedCard={predictions:structuredClone(cardState.predictions)};
+T.saveSeriesEdit(revisedCard,autopays[0].seriesKey,autopays[0].baseDate,{
+ date:autopays[0].date,amount:675,merchant:'Visa autopay',
+ fromAccountId:'checking',toAccountId:'visa'
+},accounts,snapshot.asOf,'monthly','movement');
+const adjustedCard=C.materialize(snapshot,history,revisedCard.predictions,T,P,90);
+assert.ok(adjustedCard.projection.plans.filter(p=>p.toAccountId==='visa')
+ .every(p=>p.amount===675),
+ 'Editing card autopay for all future dates replaces each linked payment amount once');
 console.log('PASS unified future ledger: automatic recurrence, reviews, immutable Plaid, owner overrides, one-time edits, linked transfers, cash/card balances, and autopay');
