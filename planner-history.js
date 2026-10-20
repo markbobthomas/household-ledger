@@ -154,16 +154,11 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
    return decision?.status==='excluded'&&Math.abs(Number(decision.amount)-g.amount)<.011;
   })))continue;
   const existingRules=rules.filter(r=>r.kind==='event'&&
-   String(r.originalAccountId||r.accountId)===g.accountId&&
+   String(r.originalAccountId||r.accountId)===g.accountId&&r.type===g.type&&
    (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
-  // A confirmed schedule suppresses its original bank evidence, even if
-  // the owner edited amount/date. But a NEW posted amount needs review
-  // rather than silently trusting a now-outdated payment estimate.
-  if(existingRules.some(r=>Math.abs(Number(r.matchAmount??r.amount)-g.amount)<.011||
-   Math.abs(Number(r.amount)-g.amount)<.011))continue;
-  if(existingRules.length&&(records||[]).some(t=>!t.pending&&
-   accountOf(t,accounts)===g.accountId&&norm(t.merchant||t.name)===norm(g.merchant)&&
-   t.date>latest.date))continue;
+  // Manual plan owns bank stream no matter the latest bill amount. An
+  // unexpected electric charge or NET paycheck is not another recurrence.
+  if(existingRules.length)continue;
   const upcoming=nextDate(latest.date,cadence,asOf);
   if(!upcoming||diff(upcoming,asOf)>90)continue;
   const projected=(forecastEvents||[]).some(e=>
@@ -179,12 +174,12 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
    })),
    occurrences:g.rows.length,lastDate:latest.date,nextDate:upcoming,
    reason:existingRules.length?
-     'New bank amount differs from an existing confirmed schedule; review that schedule before changing your forecast':
+     'This payee is already connected to a confirmed recurring forecast':
      g.rows.length===1?bill?
      'One identifiable bill; confirm whether and how often it repeats':
      'One bank payment; no repeating pattern established yet':
     !frequency?'Repeated amount, but calendar timing varies; choose a schedule':
-    'Matching account, merchant, amount and recurring timing',
+    'Matching bank account, payee and recurring timing (amounts can vary)',
    // Rank coherent patterns before the many single, unproven purchases.
    _priority:(frequency?3:bill?2:1)});
  }
