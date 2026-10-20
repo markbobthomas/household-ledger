@@ -786,7 +786,7 @@ function reviewsPage(bundle,s){
    '<small>'+escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency)+
     ' · '+p.occurrences+' actual payment'+(p.occurrences===1?'':'s')+
     ' · Next suggested '+escapeHTML(dayLabel(p.nextDate))+'</small>'+
-   '<small>'+escapeHTML(p.reason)+' · '+escapeHTML(p.confidence)+' confidence</small>'+
+   '<small>'+escapeHTML(p.reason)+' · '+escapeHTML(p.confidence==='Needs confirmation'?'Needs confirmation':p.confidence+' confidence')+'</small>'+
    '<details class="review-examples"><summary>View matching bank transactions</summary>'+
     p.examples.map(t=>'<div>'+escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+
      ' · '+cash(t.amount)+'</div>').join('')+'</details></div>'+
@@ -822,7 +822,7 @@ function reviewsPage(bundle,s){
    '</section>':'')+
   (weak.length?'<section class="panel"><div class="section-title"><h2>Potential recurring payments</h2>'+
    '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
-   '<p class="lead">These payments matched with as few as two past transactions, or one clearly identified bill. Confirm the frequency and next date before they affect your balance forecast.</p>'+
+   '<p class="lead">All recent payments are checked, including unfamiliar merchants and outgoing ACH debits. A single payment is a possibility, not proof of recurrence. Confirm amount, frequency and next date before uncertain items affect your balance.</p>'+
    cards+'</section>':'')+
   (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div>'+
    '<p class="lead">No uncertain recurring payment patterns currently need a decision. You can still review any posted transaction in History and make it recurring.</p>'+
@@ -891,13 +891,13 @@ function overviewPage(bundle,s,chosen,derived,fresh){
   accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
   ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length||bundle?.automaticRecurrence?.review?.length||bundle?.duplicateConflicts?.length)?
     '<section class="panel review-spotlight"><div><strong>Recurring payments may need review</strong>'+
-    '<p>Potential missed bills or deposits found in bank history.</p></div>'+
+    '<p>Recent bank transactions may repeat. Confirm uncertain patterns before they affect your balance.</p></div>'+
     '<button type="button" class="btn" data-view="reviews">Review suggestions</button></section>':'')+
   incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
    '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
-   '<p class="chart-caption">This balance projection includes dated fixed recurring commitments; variable day-to-day purchases are not forecast.</p></section>'+
+   '<p class="chart-caption">This balance projection includes evidenced recurring payments and confirmed schedules. One-off purchases are not projected automatically.</p></section>'+
   '<section class="panel"><div class="section-title"><h2>Next five expected movements</h2>'+
    '<button type="button" class="btn" data-view="transactions">View all and edit</button></div>'+
    (notes||'<p class="lead">No upcoming dated transactions identified.</p>')+
