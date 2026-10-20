@@ -172,7 +172,7 @@ function recurrenceDates(rule,asOf,through){
 }
 function manualSeriesKey(ruleId){return 'user-series|'+encodeURIComponent(String(ruleId))}
 function defineRecurring(state,data,accounts,asOf,reference=null,records=[],selectedExampleIds=[]){
- const transfer=reference?.kind==='movement'||data.type==='paired-transfer';
+ const transfer=reference?reference.kind==='movement':data.type==='transfer';
  const fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
  const frequency=String(data.frequency||'');
  if(!frequencies.has(frequency))throw Error('Choose how often this payment repeats');
@@ -206,6 +206,11 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
   originalAccountId:old?.originalAccountId||baseAccount,
+  sourceAnchorDate:old?.sourceAnchorDate||reference?.baseDate||reference?.date||fields.date,
+  sourceFrequency:old?.sourceFrequency||({
+   'every 2 weeks':'biweekly','twice monthly':'twice-monthly','3 / month':null,
+   '4 / month':null,'5 / month':null
+  }[reference?.cadence]||reference?.cadence||frequency),
   originalMerchant:old?.originalMerchant||originalMerchant,
   originalType:old?.originalType||originalType,
   matchAmount:old?.matchAmount??round(originalAmount),
@@ -252,9 +257,14 @@ function matchesRecurring(rule,event,accounts){
  const sameName=(rule.matchNames||[]).includes(merchantKey(event.merchant));
  if(!sameName||Math.abs(Number(event.amount)-Number(rule.matchAmount))>.011)return false;
  const date=String(event.date||event.anchorDate||'');
- if(!validDate(date)||date<rule.anchorDate&&daysBetween(rule.anchorDate,date)>7)return false;
- return recurrenceDates(rule,shift(date,-7),shift(date,7))
-  .some(d=>Math.abs(daysBetween(d,date))<=Math.min(rule.frequency==='weekly'?2:rule.frequency==='biweekly'?3:6,6));
+ if(!validDate(date)||date<rule.sourceAnchorDate&&daysBetween(rule.sourceAnchorDate,date)>7)return false;
+ const sourceSchedule=frequencies.has(rule.sourceFrequency)?{
+  ...rule,frequency:rule.sourceFrequency,anchorDate:rule.sourceAnchorDate,
+  secondDay:rule.sourceSecondDay||rule.secondDay
+ }:rule;
+ return recurrenceDates(sourceSchedule,shift(date,-7),shift(date,7))
+  .some(d=>Math.abs(daysBetween(d,date))<=
+   (rule.sourceFrequency==='weekly'?2:rule.sourceFrequency==='biweekly'?3:6));
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
