@@ -182,6 +182,17 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#future-new-form button[type=submit]').click();
    assert.ok(await page.locator('.future-item').filter({hasText:'New monthly subscription'}).count()>=2,
     'Add transaction can create a recurring set without any historical examples');
+   await go('history');
+   const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
+   await insuranceHistory.locator('[data-history-plan]').click();
+   await page.locator('.history-schedule-form [name=frequency]').selectOption('monthly');
+   await page.locator('.history-schedule-form button[type=submit]').click();
+   assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules?.some(r=>r.merchant==='State Farm Insurance')),
+    'History creates user-confirmed recurring forecasts in saved planning preferences');
+   await go('transactions');
+   assert.ok(await page.locator('.future-item').filter({hasText:'State Farm Insurance'}).count()>=1,
+    'History-to-forecast confirmation creates future payments');
 
    assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
@@ -216,6 +227,11 @@ const {chromium,webkit}=require('playwright');
   const dates=['2026-06-02','2026-07-02','2026-08-02','2026-09-02','2026-10-02'];
   const transactions=dates.map((date,i)=>({id:'mort-'+i,accountId:'checking-real',
    date,name:'Home Mortgage ACH',merchant:'Home Mortgage ACH',amount:2590,pending:false,category:mortgagePfc}));
+  for(const month of ['2026-08','2026-09'])
+   transactions.push({id:'storage-'+month,accountId:'checking-real',date:month+'-09',
+    name:'Storage Unit Monthly',merchant:'Storage Unit Monthly',amount:79,pending:false,
+    category:{primary:'GENERAL_MERCHANDISE',detailed:'GENERAL_MERCHANDISE_OTHER_GENERAL_MERCHANDISE',
+     confidence_level:'HIGH'}});
   transactions.push({id:'one-missing-mortgage',accountId:'checking-real',
    date:'2026-09-15',name:'Mortgage Servicer X',merchant:'Mortgage Servicer X',
    amount:2000,pending:false,
@@ -270,6 +286,11 @@ const {chromium,webkit}=require('playwright');
   assert.match(await page.locator('.history-page').innerText(),/Home Mortgage ACH/,
    'Plaid posted mortgage visible separately from future predictions');
   await page.locator('.sidebar [data-view="reviews"]').click();
+  const lowConfidence=page.locator('.review-candidate').filter({hasText:'Storage Unit Monthly'}).first();
+  assert.equal(await lowConfidence.count(),1,
+   'Two identical posted payments appear in Reviews at low confidence');
+  assert.match(await lowConfidence.innerText(),/Low confidence/,
+   'A two-payment guess is not immediately added to checking withdrawals');
   const confirmMortgage=page.locator('.routine-review-line').filter({hasText:'Home Mortgage ACH'});
   await confirmMortgage.locator('[data-confirm-routine]').click();
   assert.equal(await page.locator('.routine-review-line').filter({hasText:'Home Mortgage ACH'}).count(),0,
@@ -390,6 +411,19 @@ const {chromium,webkit}=require('playwright');
   assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
    r.merchant==='Mortgage Servicer X'&&r.amount===2000&&r.accountId==='checking-real')),
    'The recovered real-bank mortgage is saved only as a private user-confirmed forecast');
+  await page.locator('.sidebar [data-view="reviews"]').click();
+  const storageCandidate=page.locator('.review-candidate').filter({hasText:'Storage Unit Monthly'}).first();
+  await storageCandidate.locator('[data-review-candidate]').click();
+  const storageForm=page.locator('.history-schedule-form');
+  assert.equal(await storageForm.locator('[name=amount]').inputValue(),'79');
+  assert.equal(await storageForm.locator('[name=accountId]').inputValue(),'checking-real');
+  assert.equal(await storageForm.locator('[name=frequency]').inputValue(),'monthly');
+  await storageForm.locator('button[type=submit]').click();
+  assert.equal(await page.locator('.review-candidate').filter({hasText:'Storage Unit Monthly'}).count(),0,
+   'Confirmed two-payment recurring pattern leaves Reviews');
+  assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
+   r.merchant==='Storage Unit Monthly'&&r.amount===79&&r.accountId==='checking-real')),
+   'Low-confidence candidate becomes a saved private rule only after approval');
   const storage=await page.evaluate(()=>({...localStorage}));
   assert.equal(Object.keys(storage).some(k=>JSON.stringify(storage[k]).includes('mort-4')),false,
    'Raw Real bank transactions are not written to localStorage');
