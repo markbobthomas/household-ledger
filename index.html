@@ -327,6 +327,8 @@ function predictionAuditMarkup(future){
  return '<section class="prediction-ledger" aria-label="Dated payment predictions">'+
   '<div class="section-top"><h3>Predicted bank and card purchases · next 90 days</h3><strong>'+expenses.length+' dated · '+money(total)+'</strong></div>'+
   '<p class="prediction-note">'+esc(status)+'</p>'+
+  (future.suppressedDuplicates?.length?'<p class="prediction-note">'+future.suppressedDuplicates.length+
+   ' older one-time forecast(s) overlap recognized recurring payments and have been excluded from the dated cash forecast to prevent double booking.</p>':'')+
   (expenses.length?'<details><summary>See the predicted transaction list</summary><div class="prediction-ledger-list">'+next+'</div>'+
     (expenses.length>12?'<p class="prediction-note">First 12 of '+expenses.length+' predictions shown. See Budget or Explore cash flow for the complete dated ledger.</p>':'')+'</details>':
    '<p class="account-forecast-warning">No dated purchase or bill predictions were generated. Forecast totals may be incomplete. Check recurrence status in Activity and verify the bank has synced sufficient months.</p>')+
@@ -576,7 +578,7 @@ function expectedTransactionMarkup(e){
  const manual=e.source==='manual';
  return '<details class="expected-tx" data-expected="'+esc(e.id)+'"><summary class="expected-summary">'+
   '<span class="expected-date">'+esc(cashDateLabel(e.date))+'</span>'+
-  '<span class="expected-info"><strong>'+esc(e.merchant)+'</strong><small>'+esc(manual?'Added prediction':(e.cadence+' · '+e.evidence+' historical months · '+e.confidence+' confidence'+(e.seasonal?' · Seasonal amount':'')))+(e.adjusted?' · Adjusted':'')+(e.enabled===false?' · Excluded':e.date<=today()?' · Past due':'')+'</small></span>'+
+  '<span class="expected-info"><strong>'+esc(e.merchant)+'</strong><small>'+esc(manual?'Added prediction':(e.cadence+' · '+e.evidence+' historical months · '+e.confidence+' confidence'+(e.seasonal?' · Seasonal amount':'')))+(e.adjusted?' · Adjusted':'')+(e.suppressedBy?' · Already covered by a manually added prediction':e.enabled===false?' · Excluded':e.date<=today()?' · Past due':'')+'</small></span>'+
   '<button type="button" class="expected-value editable-value '+(active?'':'excluded')+'" data-inline-expected="'+esc(e.id)+'" data-amount="'+Number(e.amount)+'" aria-label="Edit expected amount for '+esc(e.merchant)+'">'+money(e.amount)+'</button><span class="expected-action">⌄</span></summary>'+
   '<form class="expected-inline-form" data-expected-form="'+esc(e.id)+'"><p class="prediction-note">Prediction only. This does not change a bank transaction.</p>'+
   (manual?'<label>Merchant<input type="text" name="merchant" maxlength="130" required value="'+esc(e.merchant)+'"></label>':'')+

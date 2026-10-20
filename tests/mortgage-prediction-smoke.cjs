@@ -85,4 +85,29 @@ assert.equal(F.forecast(earlyRows,'2026-11','Housing','2026-10-31',earlyRules).e
  'A mortgage already withdrawn just before the new month is not projected twice');
 assert.equal(F.forecast(earlyRows,'2026-12','Housing','2026-10-31',earlyRules).expected.length,1,
  'Suppressing the prepaid installment does not erase following months');
+// Before the classifier repair, the owner may have manually added a future
+// mortgage expense. That manual entry must now replace, not ADD TO, the
+// newly discovered mortgage prediction in Budget, Insights and cash flow.
+const preExistingManual=M.migrate({accounts:state.accounts,transactions:state.transactions,predictions:state.predictions});
+M.saveManualExpected(preExistingManual,{category:'Housing',merchant:'Mortgage',date:'2026-11-01',amount:2590});
+const merged=L.build(preExistingManual,M.records(preExistingManual),asOf,90,F,M);
+const novMerged=merged.categoryViews['2026-11|Housing'];
+assert.equal(novMerged.active.length,1,'Historical detection plus an older manually entered mortgage is one expected November payment');
+assert.equal(novMerged.additional,2590,'Duplicate does not inflate November projected budget');
+assert.ok(novMerged.expected.some(x=>x.suppressedBy&&x.enabled===false),
+ 'The automatic duplicate remains visible for audit, but is not counted');
+assert.equal(merged.events.filter(x=>x.type==='expense'&&x.date.startsWith('2026-11')).length,1,
+ 'Overview projected checking cannot double-debit a manually entered mortgage');
+// A one-time projected mortgage that was added before automatic detection
+// must not silently double debit checking after the classifier improves.
+const preExistingOneTime=M.migrate({accounts:state.accounts,transactions:state.transactions,
+ predictions:{...state.predictions,cashFlowEvents:[{id:'event|older-mortgage',date:'2026-11-02',
+ amount:2590,type:'expense',description:'Mortgage',accountId:'checking'}]}});
+const oneTimeForecast=L.build(preExistingOneTime,M.records(preExistingOneTime),asOf,90,F,M);
+assert.equal(oneTimeForecast.events.filter(x=>x.type==='expense'&&x.date.startsWith('2026-11')).length,1,
+ 'An older one-time mortgage forecast is not added to the bank-derived recurring mortgage');
+assert.equal(oneTimeForecast.suppressedDuplicates.length,1,
+ 'The suppressed older one-time estimate has an auditable explanation');
+assert.equal(oneTimeForecast.categoryViews['2026-11|Housing'].additional,2590,
+ 'Budget and cash flow use the same single mortgage estimate');
 console.log('PASS external mortgage LOAN_PAYMENTS classification, historical recovery, 3 monthly predictions, posted suppression, card/transfer exclusions, duplicate recurrence and manual mortgage reconciliation');

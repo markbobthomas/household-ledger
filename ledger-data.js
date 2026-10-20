@@ -182,11 +182,31 @@ function removeManualExpected(state,id){
 function expectedForCategory(state,detected,month,category,today){
  const limit=month+'-01',cutoff=month+'-31';
  const overrides=state.predictions.expectedTransactionOverrides||{};
- const rows=[...(detected||[]).map(x=>{
+ const automatic=(detected||[]).map(x=>{
   const o=overrides[x.id];
   return {...x,date:o?.date||x.date,amount:o?.amount??x.amount,enabled:o?.enabled!==false,adjusted:Boolean(o)};
- }),...(state.predictions.manualExpectedTransactions||[]).filter(x=>x.category===category&&x.date>=limit&&x.date<=cutoff)];
- // A disabled item remains visible for review, but never inflates the forecast.
+ });
+ const manual=(state.predictions.manualExpectedTransactions||[])
+  .filter(x=>x.category===category&&x.date>=limit&&x.date<=cutoff).map(x=>({...x}));
+ // Existing manually scheduled bills must not start counting twice merely
+ // because enough new bank history now supports an automatic recurrence.
+ // Suppress only an unambiguous same-merchant / same-mortgage match.
+ const normalized=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ const mortgage=s=>/\b(?:mortgage|mtg|home\s+loan|pennymac|loandepot|newrez|shellpoint|mr\s+cooper)\b/i.test(String(s||''));
+ for(const owner of manual.filter(x=>x.enabled!==false)){
+  const candidates=automatic.filter(x=>x.enabled!==false&&validDate(x.date)&&
+   Math.abs(Date.parse(x.date)-Date.parse(owner.date))<=6*86400000&&
+   (normalized(x.merchant)===normalized(owner.merchant)||
+     category==='Housing'&&mortgage(x.merchant)&&mortgage(owner.merchant)));
+  if(candidates.length===1){
+   candidates[0].enabled=false;
+   candidates[0].suppressedBy=owner.id;
+   candidates[0].suppressionReason='An existing manual prediction already covers this recurring bill';
+  }
+ }
+ const rows=[...automatic,...manual];
+ // A disabled or automatically suppressed item remains visible for review,
+ // but never inflates Budget or the account cash forecast.
  // An edited historical prediction moved to another month stays attached to
  // its original month; the user can reset it or make a new forecast event.
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));

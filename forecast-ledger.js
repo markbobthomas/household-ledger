@@ -23,7 +23,7 @@ function build(state,records,asOf,days,forecast,dataModel){
   return directive?.mode==='schedule'&&['in','out'].includes(directive.cashDirection)?
     {...t,cashDirection:directive.cashDirection}:t;
  });
- const events=[],categoryViews={},risk=[];
+ const events=[],categoryViews={},risk=[],suppressedDuplicates=[];
 
 const toDate=s=>new Date(s+'T12:00:00Z');
 function priorMonth(base,n){
@@ -112,6 +112,28 @@ function calcUndatedRisk(rows,asOf,events,state){
   if(item.date<=asOf||item.date>end||!['income','expense'].includes(item.type)||!(Number(item.amount)>0))continue;
   if(known.has(item.id))continue;
   known.add(item.id);
+  // A previous one-time mortgage entry cannot become a SECOND debit when bank
+  // history later establishes a monthly recurrence. Keep the source forecast
+  // editable, but suppress its duplicate dated cash event transparently.
+  const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const mortgage=s=>/\b(?:mortgage|mtg|home\s+loan|pennymac|loandepot|newrez|shellpoint|mr\s+cooper)\b/i.test(String(s||''));
+  const relevantAccounts=[...new Set(events.filter(e=>e.type===item.type).map(e=>String(e.accountId||e.account||'')))];
+  const manualAccount=String(item.accountId||'');
+  const matches=events.filter(e=>{
+   if(e.type!==item.type||Math.abs(Date.parse(e.date)-Date.parse(item.date))>6*86400000)return false;
+   const existingAccount=String(e.accountId||e.account||'');
+   const manualKnown=manualAccount&&manualAccount!=='Unknown';
+   const accountMatch=manualKnown?(existingAccount===manualAccount||
+      (state.accounts||[]).some(a=>String(a.id)===manualAccount&&String(a.name)===existingAccount)):
+      relevantAccounts.length===1;
+   return accountMatch&&(norm(e.merchant)===norm(item.description)||
+     e.category==='Housing'&&mortgage(e.merchant)&&mortgage(item.description));
+  });
+  if(matches.length===1){
+   suppressedDuplicates.push({id:item.id,matchedEventId:matches[0].id,date:item.date,
+    reason:'Existing recurring bill is already scheduled; one-time forecast not charged a second time'});
+   continue;
+  }
   events.push({id:item.id,date:item.date,amount:Number(item.amount),type:item.type,category:'One-time forecast',
    merchant:item.description||'One-time forecast',description:'User forecast',accountId:item.accountId||'',source:'manual',postingStatus:item.type==='income'?'unconfirmed':undefined,confirmed:false});
  }
@@ -122,7 +144,7 @@ function calcUndatedRisk(rows,asOf,events,state){
   const subset=records.filter(t=>String(t.account||t.accountId||'Unknown')===accountName);
   uncertaintyByAccount[accountName]=calcUndatedRisk(subset,asOf,events.filter(t=>String(t.account||t.accountId||'Unknown')===accountName),state);
  }
- return {asOf,through:end,events,categoryViews,risk,uncertainty,uncertaintyByAccount,months,
+ return {asOf,through:end,events,categoryViews,risk,suppressedDuplicates,uncertainty,uncertaintyByAccount,months,
    totalIncome:round(events.filter(e=>e.type==='income').reduce((n,e)=>n+e.amount,0)),
    totalExpense:round(events.filter(e=>e.type==='expense').reduce((n,e)=>n+e.amount,0))};
 }
