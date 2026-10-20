@@ -39,6 +39,7 @@ jobs:
           node tests/planner-history-smoke.cjs
           node tests/history-any-recurring-smoke.cjs
           node tests/planner-early-recurrence-smoke.cjs
+          node tests/recurrence-early-dedupe-smoke.cjs
           node tests/planner-recurrence-integration-smoke.cjs
           node tests/forecast-only-save-smoke.cjs
           node tests/forecast-client-save-smoke.cjs
