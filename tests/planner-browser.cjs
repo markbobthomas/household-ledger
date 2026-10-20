@@ -105,7 +105,7 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.hero-footnote').first().innerText(),/debt/);
    await page.locator('#horizon').selectOption('90');
    await go('transactions');
-   await page.locator('#transaction-filter').selectOption({label:'Everyday Checking'});
+   await page.locator('#transaction-filter').selectOption('demo-checking');
    assert.ok(await page.locator('.future-item').count()>0,'All scheduled transactions are editable on separate page');
    const row=page.locator('.future-item').filter({hasText:'Mortgage'}).first();
    assert.ok(await row.count()>0,'Mortgage prediction is available in future transactions');
