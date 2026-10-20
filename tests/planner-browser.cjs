@@ -56,6 +56,12 @@ const {chromium,webkit}=require('playwright');
    await page.reload({waitUntil:'load'});
    assert.equal(await page.locator('.routine-review-line').filter({hasText:'Mortgage'}).count(),0,
     'Confirmed recurring mortgage stays confirmed after page reload');
+   const auditDetails=page.locator('#accuracy-audit');
+   await auditDetails.locator('summary').click();
+   await auditDetails.locator('[data-run-backtest]').click();
+   assert.match(await auditDetails.innerText(),/Prediction accuracy/);
+   assert.match(await auditDetails.innerText(),/historical check|Not enough complete historical months|Correct dated forecasts/i,
+    'Historical audit is read-only and explains coverage');
    await page.locator('#horizon').selectOption('30');
    assert.match(await page.locator('.chart-caption').innerText(),/projection/i);
    assert.match(await page.locator('[aria-label="Projected balance curve"] .section-title').innerText(),/30 days/);
@@ -145,6 +151,12 @@ const {chromium,webkit}=require('playwright');
    'Card full-statement autopay setting persists through private adjustment API');
   assert.ok(writes.some(x=>x.predictions?.plannerRoutineDecisions?.['expense|checking-real|home mortgage ach']?.status==='confirmed'),
    'Confirmed mortgage schedule persists in private encrypted adjustments');
+  const auditReal=page.locator('#accuracy-audit');
+  await auditReal.locator('summary').click();
+  await auditReal.locator('[data-run-backtest]').click();
+  assert.match(await auditReal.innerText(),/Prediction accuracy/);
+  assert.match(await auditReal.innerText(),/Historical|historical|months|history/i,
+   'Private Real bank data is processed in memory by the same audit');
   await page.locator('.account-tile').filter({hasText:'Household Visa'}).click();
   assert.equal(await page.locator('.balance-main').innerText(),'$1,200.00',
    'Selecting a card switches to debt without reducing checking');
