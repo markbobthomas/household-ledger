@@ -21,11 +21,13 @@ const DEMO_SETTINGS='household-planner-sample-settings-v1';
 try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
-  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion'];
+  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
+    'futureTransactionEdits','futureTransactionAdds'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
 let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
+let activeTab='overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -33,7 +35,8 @@ function savePlanning(){
  else {
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
-   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion}));
+   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
+   futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds}));
  }
 }
 function requestedReal(){return available()&&localStorage.getItem('household-ledger-view-mode')==='real'}
@@ -65,8 +68,10 @@ function forecastFor(s){
   return !duplicate;
  });
  const events=[...routines.events.filter(e=>!suppress.has(String(e.id))),...payments.billEvents];
+ const personal=state().predictions||{};
  const forecastAccount=window.HouseholdAccountForecast.build(s,events,[...manualPlans,...cardPlans],
-  {days:90,records:rows});
+  {days:90,records:rows,futureTransactionEdits:personal.futureTransactionEdits||{},
+   futureTransactionAdds:personal.futureTransactionAdds||[]});
  return {forecast,routines,payments,projection:forecastAccount,rows,events};
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
