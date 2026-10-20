@@ -207,12 +207,16 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
   // Anchor cadence to the most recent completed calendar months. Permit one
   // isolated missing billing month ONLY when longer source evidence supports
   // it, and flag the resulting estimate for Review instead of asserting High.
-  const relevant=group.filter(t=>t.date>=shiftMonth(today.slice(0,7),-8)&&t.date<today.slice(0,7)+'-01');
+  // At a month-end cutoff, that whole month is already bank history.
+  // On a partial current month, exclude it to prevent biased detection.
+  const trainingThrough=today===today.slice(0,7)+'-'+String(endDay(today.slice(0,7))).padStart(2,'0')?
+   shiftMonth(today.slice(0,7),1):today.slice(0,7);
+  const relevant=group.filter(t=>t.date>=shiftMonth(today.slice(0,7),-8)&&t.date<trainingThrough+'-01');
   const observed=[...new Set(relevant.map(t=>t.date.slice(0,7)))].sort();
   if(observed.length<2)return;
   const bill=mode==='income'||mode==='transfer'||group.some(likelyBill);
   const latest=observed[observed.length-1];
-  const lastGap=monthIndex(today.slice(0,7))-monthIndex(latest);
+  const lastGap=monthIndex(trainingThrough)-monthIndex(latest);
   if(lastGap>2)return;
   const byMonth=new Map(observed.map(m=>[m,monthRecords(relevant,m).sort((a,b)=>a.date.localeCompare(b.date))]));
   const recentMonths=observed.slice(-3);
