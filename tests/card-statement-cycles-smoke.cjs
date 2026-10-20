@@ -110,11 +110,11 @@ assert.throws(()=>Model.setCardPaymentRule(state,'visa',{
 }),/valid billing period/);
 // If bank history shows an early completed, paired card payment, the bank
 // opening balances already include it: never schedule the same autopay twice.
-const earlySnapshot={...snapshot,asOf:'2026-11-11'};
+const earlySnapshot={...snapshot,asOf:'2026-11-10'};
 const postedPayment=[
- {id:'checking-paid',date:'2026-11-10',type:'transfer',accountingKind:'card_payment',
+ {id:'checking-paid',date:'2026-11-09',type:'transfer',accountingKind:'card_payment',
   cashDirection:'out',accountId:'checking',amount:700,pairedTransactionId:'visa-paid'},
- {id:'visa-paid',date:'2026-11-10',type:'transfer',accountingKind:'card_payment',
+ {id:'visa-paid',date:'2026-11-09',type:'transfer',accountingKind:'card_payment',
   cashDirection:'in',accountId:'visa',amount:700,pairedTransactionId:'checking-paid'}
 ];
 const actual=Payments.build(earlySnapshot,postedPayment,[],issued.predictions,{days:30});
