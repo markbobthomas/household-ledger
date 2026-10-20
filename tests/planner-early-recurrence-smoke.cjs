@@ -157,6 +157,13 @@ const rent=tx('rent-one','2026-10-02','Apartment Rent',1450);
 assert.deepEqual(R.infer([rent],snapshot).events.map(e=>e.date).slice(0,2),
  ['2026-11-02','2026-12-02'],
  'One clearly recurring rent payment is eligible without mortgage-specific naming');
+const plaidLoan=tx('auto-loan','2026-10-07','XYZ SERVICER 321',425,'transfer',{
+ cashDirection:'out',personal_finance_category:{
+  primary:'LOAN_PAYMENTS',detailed:'LOAN_PAYMENTS_AUTO_LOAN'
+ }
+});
+assert.equal(R.infer([plaidLoan],snapshot).events.length,3,
+ 'Plaid-identified car loan forecasts after one posting even if merchant name is opaque');
 const obscureBill=[
  tx('obscure-1','2026-09-09','ABC Draft 984',82.35),
  tx('obscure-2','2026-10-09','ABC Draft 984',82.35)
