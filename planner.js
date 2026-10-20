@@ -751,7 +751,11 @@ function reviewsPage(bundle,s){
    return String(aid||r.account)===p.accountId&&normalize(r.merchant)===normalize(p.merchant)&&
     Math.abs(r.amount-p.amount)<.011;
   }));
- const count=regular.length+mortgages.length+weak.length;
+ const autoLow=(bundle?.automaticRecurrence?.review||[]).filter(a=>
+  !weak.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant))&&
+  !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
+ const duplicates=bundle?.duplicateConflicts||[];
+ const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length;
  const cards=weak.map(p=>
   '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
    '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
@@ -775,6 +779,19 @@ function reviewsPage(bundle,s){
   (recurringDraft?repeatingReviewForm(s):'')+
   (mortgages.length?missingMortgagePanel(bundle):'')+
   (regular.length?routineReviewPanel(bundle):'')+
+  (autoLow.length?'<section class="panel"><div class="section-title"><h2>Uncertain repeating payments</h2>'+
+   '<span class="status-tag warn">'+autoLow.length+' NEEDS REVIEW</span></div>'+
+   '<p class="lead">Two matching withdrawals were observed, but the merchant is not clearly a fixed monthly bill. These are not yet deducted from predicted balances. Open History to confirm a recurring schedule.</p>'+
+   autoLow.map(p=>'<div class="review-candidate"><div class="review-candidate-main"><strong>'+
+    escapeHTML(p.merchant)+'</strong><small>'+cash(p.amount)+' · '+escapeHTML(p.reason)+
+    '</small></div><button type="button" class="btn" data-view="history">Review in History</button></div>').join('')+
+   '</section>':'')+
+  (duplicates.length?'<section class="panel"><div class="section-title"><h2>Ambiguous predicted payments</h2>'+
+   '<span class="status-tag warn">'+duplicates.length+' NEEDS REVIEW</span></div>'+
+   '<p class="lead">Possible duplicate predictions cannot be matched confidently. Review them before relying on the projected balance.</p>'+
+   duplicates.map(d=>'<div class="review-candidate"><span>'+escapeHTML(d.merchant||d.reason||'Competing forecast payments')+
+    '</span><button type="button" class="btn" data-view="transactions">Review predicted payments</button></div>').join('')+
+   '</section>':'')+
   (weak.length?'<section class="panel"><div class="section-title"><h2>Potential recurring payments</h2>'+
    '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
    '<p class="lead">These payments matched with as few as two past transactions, or one clearly identified bill. Confirm the frequency and next date before they affect your balance forecast.</p>'+
@@ -844,7 +861,7 @@ function overviewPage(bundle,s,chosen,derived,fresh){
   '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span></div>').join('');
  return '<div class="planner-page overview-page">'+
   accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
-  ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length)?
+  ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length||bundle?.automaticRecurrence?.review?.length||bundle?.duplicateConflicts?.length)?
     '<section class="panel review-spotlight"><div><strong>Recurring payments may need review</strong>'+
     '<p>Potential missed bills or deposits found in bank history.</p></div>'+
     '<button type="button" class="btn" data-view="reviews">Review suggestions</button></section>':'')+
