@@ -27,6 +27,12 @@ assert.equal(R.infer(two,snapshot).events.length,3,
 const cardBills=two.map((t,i)=>({...t,id:'card-'+i,accountId:'credit'}));
 assert.equal(R.infer(cardBills,snapshot).events.length,3,
  'Two card subscriptions enter the credit-card forecast without debiting checking at purchase time');
+const wages=[
+ tx('income-1','2026-09-12','ACME Payroll',3100,'income'),
+ tx('income-2','2026-10-12','ACME Payroll',3100,'income')
+];
+assert.equal(R.infer(wages,snapshot).events.length,3,
+ 'Two identical genuine paychecks qualify for early fixed recurring deposits');
 assert.equal(R.infer([mortgage],snapshot,{futureRecurringRules:[{
  kind:'event',originalAccountId:'checking',matchNames:['home mortgage ach'],matchAmount:2000,
  frequency:'monthly',anchorDate:'2026-12-15',merchant:'Home Mortgage ACH',amount:2000
