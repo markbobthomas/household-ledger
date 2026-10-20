@@ -23,4 +23,5 @@ jobs:
         run: |
           node tests/pilot-security-smoke.cjs
           node tests/pilot-plaid-flow.cjs
+          node tests/recurrence-reconcile-smoke.cjs
           node tests/payment-obligations-smoke.cjs

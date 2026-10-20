@@ -29,6 +29,8 @@ jobs:
           node tests/category-budget-smoke.cjs
           node tests/inline-edit-smoke.cjs
           node tests/inline-category-smoke.cjs
+          node tests/recurrence-reconcile-smoke.cjs
+          node tests/budget-overage-smoke.cjs
           node tests/activity-recurring-smoke.cjs
           node tests/reconciliation-phase1-smoke.cjs
           node tests/reconciliation-phase3-stress.cjs

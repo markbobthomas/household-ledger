@@ -90,7 +90,7 @@ function gridStats(){const a=expense(),income=sum(rows().filter(x=>x.type==='inc
 function recurringControl(t,detected){
  if(!['expense','income','transfer'].includes(t.type))
   return '<span class="recurring-na" title="Recurrence is available for spending, income and transfers">—</span>';
- const key=window.HouseholdForecast.patternKey(t.type,t.type==='income'||t.type==='transfer'?'Income':t.category,
+ const key=Model.recurringRuleKey(data,t.type,t.type==='income'||t.type==='transfer'?'Income':t.category,
   String(t.accountId||t.account||'Unknown'),t.merchant);
  const rule=data.predictions.patternRules?.[key];
  const freq=rule?.mode==='schedule'?rule.frequency:rule?.mode==='monthly'?'monthly':null;
@@ -839,7 +839,8 @@ if(page==='insights'){
         '<small>'+posted.length+' posted transaction'+(posted.length===1?'':'s')+
         (pending.length?' · '+pending.length+' pending':'')+'</small></div>'+
        '<div class="category-insight-values"><strong>'+money(f.actual)+' spent</strong>'+
-        '<small>'+money(f.additional)+' expected · '+(limit?money(limit)+' cap':'No budget cap')+'</small></div>'+
+        '<small>'+money(f.additional)+' expected · '+(limit?money(limit)+' cap':'No budget cap')+'</small>'+
+       (limit&&f.projectedTotal>limit?'<small class="budget-overage">'+money(f.projectedTotal-limit)+' projected over budget</small>':'')+'</div>'+
        '<span class="chevron" aria-hidden="true">⌄</span></summary>'+
        '<div class="drill-expanded"><div class="sub">Posted spending · '+money(f.actual)+' · '+esc(budgetMonth)+'</div>'+
        (posted.length?table(posted):'<p class="prediction-note">No posted expenses in this month. The category is still available in Budget and Activity.</p>')+
@@ -877,7 +878,9 @@ if(page==='insights'){
  const overall='<section class="panel" aria-label="Overall monthly budget"><div class="section-top"><h3>Overall budget</h3><strong>'+money(totals.actual)+' spent</strong></div>'+
  '<div class="budget-progress" role="img" aria-label="Overall budget: '+esc(money(totals.actual))+' spent, '+esc(money(totals.expected))+' expected, total budget '+esc(money(totals.limit))+'">'+
  '<i class="actual" style="width:'+used.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecast.toFixed(2)+'%"></i></div>'+
- '<div class="budget-heading"><span class="budget-category-meta">Combined budget '+money(totals.limit)+'</span><span class="budget-category-meta '+(totals.limit&&totals.actual+totals.expected>totals.limit?'over-budget':'')+'">'+(currentMonth?'Expected total '+money(totals.actual+totals.expected):'Recorded total '+money(totals.actual))+'</span></div>'+
+ '<div class="budget-heading"><span class="budget-category-meta">Combined budget '+money(totals.limit)+'</span><span class="budget-category-meta budget-overview-projection '+(totals.limit&&(currentMonth?totals.actual+totals.expected:totals.actual)>totals.limit?'over-budget':'')+'">'+(currentMonth?'Projected total '+money(totals.actual+totals.expected):'Recorded total '+money(totals.actual))+
+ (totals.limit&&(currentMonth?totals.actual+totals.expected:totals.actual)>totals.limit?
+ '<strong class="budget-overage"> · '+money((currentMonth?totals.actual+totals.expected:totals.actual)-totals.limit)+' over</strong>':'')+'</span></div>'+
  '<p class="prediction-note">Sum of all category budgets. Posted spending and expected payments are separate. Pending charges appear under their categories but do not count until posted. Bank balances are unchanged.</p></section>';
  html=overall+'<div class="panel"><div class="section-top"><h3>Monthly budgets</h3><span class="budget-summary-meta">'+esc(budgetDates)+'</span></div>'+
  categoryCreationForm()+
@@ -894,8 +897,11 @@ if(page==='insights'){
   '<div class="budget-progress" role="img" aria-label="'+esc(category)+': '+esc(money(f.actual))+' spent, '+esc(money(f.additional))+' expected transactions, budget '+esc(limit?money(limit):'not set')+'">'+
   '<i class="actual" style="width:'+spentWidth.toFixed(2)+'%"></i><i class="forecast" style="width:'+forecastWidth.toFixed(2)+'%"></i></div>'+
   '<div class="budget-heading"><span class="budget-category-meta">Budget <button type="button" class="editable-value" data-inline-budget="'+esc(category)+'" data-amount="'+limit+'" aria-label="Edit '+esc(category)+' monthly budget cap">'+(limit?money(limit):'Set cap')+'</button></span>'+
-  '<span class="budget-category-meta '+(limit&&currentMonth&&f.projectedTotal>limit?'over-budget':'')+'">'+
-  (currentMonth?'Expected '+money(f.projectedTotal):'Completed month')+'</span></div></div><span class="chevron" aria-hidden="true">⌄</span></summary>'+
+  '<span class="budget-category-meta budget-row-projection '+(limit&&(currentMonth?f.projectedTotal:f.actual)>limit?'over-budget':'')+'">'+
+  (currentMonth?'Projected '+money(f.projectedTotal):'Recorded '+money(f.actual))+
+  (limit&&(currentMonth?f.projectedTotal:f.actual)>limit?
+   '<strong class="budget-overage"> · '+money((currentMonth?f.projectedTotal:f.actual)-limit)+' over</strong>':'')+
+  '</span></div></div><span class="chevron" aria-hidden="true">⌄</span></summary>'+
   '<div class="drill-expanded"><div class="section-top"><h3>'+esc(category)+' · '+esc(month)+'</h3><small class="budget-target-note">Edit the underlined cap above · applies to every month</small></div>'+
   predictedCategoryMarkup(f,category,month)+recurrenceRulesMarkup(category)+
   '<div class="recorded-section"><div class="section-top"><h3>Recorded transactions</h3><strong>'+money(f.actual)+'</strong></div>'+
@@ -1240,7 +1246,7 @@ function bindActivityRecurrenceEdits(){
    if(!record)return;
    const category=Model.categoryFor(data,record.id);
    const account=String(record.accountId||record.account||'Unknown');
-   const key=window.HouseholdForecast.patternKey(record.type,
+   const key=Model.recurringRuleKey(data,record.type,
     record.type==='income'||record.type==='transfer'?'Income':category,account,record.merchant);
    const selected=select.value;
    if(selected==='choose'||selected==='trust')return;
@@ -1414,8 +1420,13 @@ function updateBudgetAmountUI(category,amount,button){
  bar.querySelector('.forecast').style.width=expected.toFixed(2)+'%';
  bar.setAttribute('aria-label',category+': '+money(f.actual)+' spent, '+money(f.additional)+
   ' expected transactions, budget '+(limit?money(limit):'not set'));
- item.querySelector('.budget-heading:last-child .budget-category-meta:last-child')
-  ?.classList.toggle('over-budget',Boolean(limit&&budgetMonth===today().slice(0,7)&&f.projectedTotal>limit));
+ const target=item.querySelector('.budget-row-projection');
+ const current=budgetMonth===today().slice(0,7),projected=current?f.projectedTotal:f.actual;
+ if(target){
+  target.classList.toggle('over-budget',Boolean(limit&&projected>limit));
+  target.innerHTML=(current?'Projected ':'Recorded ')+money(projected)+
+   (limit&&projected>limit?'<strong class="budget-overage"> · '+money(projected-limit)+' over</strong>':'');
+ }
  // Category caps are editable inline; keep the overall cap and bar synchronized immediately.
  const overall=document.querySelector('section[aria-label="Overall monthly budget"]');
  if(overall){
@@ -1436,8 +1447,10 @@ function updateBudgetAmountUI(category,amount,button){
   const summary=overall.querySelectorAll('.budget-heading .budget-category-meta');
   if(summary[0])summary[0].textContent='Combined budget '+money(totals.limit);
   if(summary[1]){
-   summary[1].textContent=budgetMonth===today().slice(0,7)?'Expected total '+money(totals.actual+totals.expected):'Recorded total '+money(totals.actual);
-   summary[1].classList.toggle('over-budget',Boolean(totals.limit&&totals.actual+totals.expected>totals.limit));
+   const current=budgetMonth===today().slice(0,7),projected=current?totals.actual+totals.expected:totals.actual;
+   summary[1].classList.toggle('over-budget',Boolean(totals.limit&&projected>totals.limit));
+   summary[1].innerHTML=(current?'Projected total ':'Recorded total ')+money(projected)+
+    (totals.limit&&projected>totals.limit?'<strong class="budget-overage"> · '+money(projected-totals.limit)+' over</strong>':'');
   }
  }
 }

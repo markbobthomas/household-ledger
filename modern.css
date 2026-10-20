@@ -1290,3 +1290,16 @@ select.recurring-value:hover{border-bottom-style:solid}
 .statement-row strong{font-size:13px}
 .statement-row>div:last-child strong{font:700 16px var(--mono)}
 @media(max-width:700px){.statement-row{flex-direction:column;gap:8px}.statement-row>div:last-child{text-align:left}}
+
+/* Budget alert: make both the total and the size of the overage unmistakable. */
+.budget-row-projection.over-budget,.budget-overview-projection.over-budget,
+.budget-entry .budget-overage,.budget-overview-projection .budget-overage,
+.category-insight-values .budget-overage{
+ color:#b42332!important;
+ font-weight:800;
+}
+.budget-overage{font-family:var(--mono);font-size:inherit;font-variant-numeric:tabular-nums}
+.budget-row-projection.over-budget,.budget-overview-projection.over-budget{overflow-wrap:anywhere}
+@media(max-width:700px){
+ .budget-row-projection .budget-overage,.budget-overview-projection .budget-overage{display:block;margin-top:3px}
+}

@@ -73,18 +73,31 @@ function nextRuleDue(rule,asOf,firstDate){
 function analyze(transactions,asOf,patternRules={}){
  const current=dateOnly(asOf)?asOf:iso(new Date()),rules=patternRules||{};
  const groups=new Map();
+ const knownRules=Object.keys(rules);
  for(const tx of transactions||[]){
-  // Pending charges are not additional posted evidence for a recurring payment.
   if(tx.type!=='expense'||tx.pending||!dateOnly(tx.date)||tx.date>current||
      !Number.isFinite(Number(tx.amount))||+tx.amount<=0)continue;
-  const key=ruleKey(tx),directive=rules[key],tag=classify(tx.merchant,tx.category);
-  if(!tag&&!directive)continue;
-  if(!groups.has(key))groups.set(key,{id:key,ruleKey:key,merchant:String(tx.merchant).trim(),
-    category:tx.category,kind:tag||'bill',account:tx.account||'',transactions:[]});
-  const group=groups.get(key);
-  group.transactions.push(tx);
-  if(tag==='subscription')group.kind='subscription';
+  const account=String(tx.accountId||tx.account||'Unknown');
+  const identity=account+'|'+normalize(tx.merchant),key=ruleKey(tx);
+  const sibling=knownRules.filter(other=>{
+   const fields=other.split('|');
+   return fields.length===4&&fields[0]===encodeURIComponent('expense')&&
+    fields[2]===encodeURIComponent(account)&&
+    fields[3]===encodeURIComponent(normalize(tx.merchant));
+  }).at(-1);
+  const directive=rules[key]||rules[sibling],tag=classify(tx.merchant,tx.category);
+  if(!groups.has(identity))groups.set(identity,{id:identity,ruleKey:sibling||key,merchant:String(tx.merchant).trim(),
+   category:tx.category,kind:tag||'bill',account:tx.account||'',transactions:[],recognised:false,lastSeen:''});
+  const g=groups.get(identity);g.transactions.push(tx);
+  if(tag||directive)g.recognised=true;
+  if(tag==='subscription')g.kind='subscription';
+  if(!g.lastSeen||tx.date>=g.lastSeen){
+   g.lastSeen=tx.date;g.category=tx.category;g.merchant=String(tx.merchant).trim();
+   g.account=tx.account||account;
+   if(!sibling)g.ruleKey=key;
+  }
  }
+ for(const [id,g] of groups)if(!g.recognised)groups.delete(id);
  const confirmed=[],review=[],suppressed=[];
  for(const g of groups.values()){
   const txs=g.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));

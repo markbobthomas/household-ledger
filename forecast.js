@@ -86,6 +86,27 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
  const today=String(asOf||new Date().toLocaleDateString('en-CA')).slice(0,10);
  const all=(Array.isArray(transactions)?transactions:[]).filter(t=>!skip(t)&&t.date<=today);
  const expenseMode=mode==='expense';
+ // Recurrence identity survives a category edit in another month. Category
+ // labels of posted bank rows remain untouched; only inference evidence is
+ // grouped under the latest posted category for each account + merchant.
+ const latestCategory=new Map();
+ if(expenseMode)for(const tx of all.filter(t=>t.type==='expense')
+  .sort((x,y)=>x.date.localeCompare(y.date)||String(x.id).localeCompare(String(y.id)))){
+  latestCategory.set(accountKey(tx)+'|'+normalize(tx.merchant),tx.category);
+ }
+ const evidence=expenseMode?all.map(tx=>tx.type==='expense'&&
+  latestCategory.has(accountKey(tx)+'|'+normalize(tx.merchant))?
+  {...tx,category:latestCategory.get(accountKey(tx)+'|'+normalize(tx.merchant))}:tx):all;
+ // Old four-field rules may have a former category. Project them into the
+ // current category for analysis, rather than creating a second subscription.
+ const effectiveRules={...(patternRules||{})};
+ if(expenseMode)for(const [key,rule] of Object.entries(patternRules||{})){
+  const parts=key.split('|');
+  if(parts.length!==4||decodeURIComponent(parts[0])!=='expense')continue;
+  const identity=decodeURIComponent(parts[2])+'|'+decodeURIComponent(parts[3]);
+  const current=latestCategory.get(identity);
+  if(current)effectiveRules[patternKey('expense',current,decodeURIComponent(parts[2]),decodeURIComponent(parts[3]))]=rule;
+ }
  const match=t=>t.type===mode&&(expenseMode?t.category===category:mode==='transfer'?t.cashDirection===flow:true);
  const actualRows=all.filter(t=>match(t)&&t.date.slice(0,7)===month);
  // Refunds reduce recorded spending, but they are never recurring deposits.
@@ -100,7 +121,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
  if(month<today.slice(0,7))return result;
  const past=coverage(all,today.slice(0,7));
  result.historyMonths=past;
- const forced=Object.entries(patternRules||{}).some(([key,value])=>
+ const forced=Object.entries(effectiveRules).some(([key,value])=>
    (value?.mode==='monthly'&&!(mode==='transfer'&&flow==='in')||
     value?.mode==='schedule'&&(mode!=='transfer'||(value.cashDirection||'out')===flow))&&
    key.startsWith([mode,category||'Income'].map(encodeURIComponent).join('|')+'|'));
@@ -113,8 +134,8 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
  if(syncGap){result.diagnostics.warning='Recent complete month missing: possible sync gap. Predictions are provisional and need review';
   result.diagnostics.syncGap=true;}
  const windowStart=shiftMonth(today.slice(0,7),-24);
- const records=all.filter(t=>match(t)&&t.date<=today&&(t.date>=windowStart||
-  patternRules[patternKey(t.type,t.type==='income'?'Income':t.type==='transfer'?'Income':t.category,accountKey(t),t.merchant)]?.mode==='schedule'));
+ const records=evidence.filter(t=>match(t)&&t.date<=today&&(t.date>=windowStart||
+  effectiveRules[patternKey(t.type,t.type==='income'?'Income':t.type==='transfer'?'Income':t.category,accountKey(t),t.merchant)]?.mode==='schedule'));
  const groups=new Map();
  for(const t of records){
   const key=accountKey(t)+'|'+normalize(t.merchant);
@@ -264,7 +285,7 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
   const key=normalize(group[0].merchant);
   if(!key)continue;
   const keyOfRule=[mode,category||'Income',accountKey(group[0]),key].map(encodeURIComponent).join('|');
-  const directive=patternRules[keyOfRule];
+  const directive=effectiveRules[keyOfRule];
   if(directive?.mode==='none')continue;
   if(directive?.mode==='schedule'){
    if(mode==='transfer'&&(directive.cashDirection||'out')!==flow)continue;

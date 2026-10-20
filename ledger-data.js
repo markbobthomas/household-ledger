@@ -187,21 +187,44 @@ function expectedForCategory(state,detected,month,category,today){
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
 }
 
+/* A recurrence belongs to the account and merchant, not to a calendar month
+ * or the historical spending category. Preserve existing four-part keys while
+ * resolving an older category to the one saved schedule. */
+function recurringRuleKey(state,type,category,account,merchant){
+ const clean=String(merchant||'').toLowerCase().replace(/\s+/g,' ').replace(/(?:\s*[-#*]\s*\d{3,})$/,'').trim();
+ const key=[type,category,account,clean].map(encodeURIComponent).join('|');
+ const sibling=Object.keys(state?.predictions?.patternRules||{}).filter(candidate=>{
+  const parts=candidate.split('|');
+  return parts.length===4&&parts[0]===encodeURIComponent(type)&&
+   parts[2]===encodeURIComponent(account)&&parts[3]===encodeURIComponent(clean);
+ });
+ return sibling.includes(key)?key:sibling.at(-1)||key;
+}
 function setPatternRule(state,key,rule){
  if(typeof key!=='string'||!key||key.length>600)throw Error('Invalid pattern key');
  state.predictions.patternRules??={};
+ // Merge legacy rules created under different categories for the same
+ // account/merchant. Exactly one forecast instruction can survive.
+ const parts=key.split('|');
+ const siblings=parts.length===4?Object.keys(state.predictions.patternRules).filter(other=>{
+  const p=other.split('|');
+  return p.length===4&&p[0]===parts[0]&&p[2]===parts[2]&&p[3]===parts[3];
+ }):[];
  const clearForecastEdits=()=>{
   const parts=key.split('|');
   if(parts.length!==4)return;
   for(const id of Object.keys(state.predictions.expectedTransactionOverrides||{})){
    const p=id.split('|');
-   if(p[0]==='hist'&&p.length>=6&&p[2]===parts[1]&&p[3]===parts[2]&&p[4]===parts[3])
+   // Historical forecast IDs include the month and category; clear edits
+   // made under any former category for this same recurrence identity.
+   if(p[0]==='hist'&&p.length>=6&&p[3]===parts[2]&&p[4]===parts[3])
     delete state.predictions.expectedTransactionOverrides[id];
   }
  };
- if(rule===null){clearForecastEdits();delete state.predictions.patternRules[key];return}
+ const mergeSiblingRules=()=>{for(const other of siblings)if(other!==key)delete state.predictions.patternRules[other]};
+ if(rule===null){clearForecastEdits();for(const other of new Set([key,...siblings]))delete state.predictions.patternRules[other];return}
  if(!rule||!['none','monthly','trust','schedule'].includes(rule.mode))throw Error('Invalid recurrence decision');
- if(rule.mode==='none'){state.predictions.patternRules[key]={mode:'none'};return}
+ if(rule.mode==='none'){clearForecastEdits();mergeSiblingRules();state.predictions.patternRules[key]={mode:'none'};return}
  if(rule.mode==='schedule'){
   const allowed=['weekly','biweekly','monthly','quarterly','semiannual','annual'];
   const anchorDate=String(rule.anchorDate||'');
@@ -210,7 +233,7 @@ function setPatternRule(state,key,rule){
      !Number.isInteger(day)||day<1||day>31||
      !Number.isFinite(amount)||amount<=0||amount>999999999)
     throw Error('Choose a valid recurring frequency, starting date, day and amount');
-  clearForecastEdits();
+  clearForecastEdits();mergeSiblingRules();
   const isTransfer=key.split('|')[0]==='transfer';
   const cashDirection=isTransfer?rule.cashDirection:null;
   if(isTransfer&&!['in','out'].includes(cashDirection))
@@ -224,13 +247,13 @@ function setPatternRule(state,key,rule){
      !Number.isFinite(Number(rule.amount))||Number(rule.amount)<=0||
      !Number.isInteger(Number(rule.day))||Number(rule.day)<1||Number(rule.day)>31)
      throw Error('Invalid confirmed recurrence');
-  state.predictions.patternRules[key]={mode:'trust',cadence:rule.cadence,day:Number(rule.day),
+  mergeSiblingRules();state.predictions.patternRules[key]={mode:'trust',cadence:rule.cadence,day:Number(rule.day),
     amount:round(rule.amount),confirmedAt:new Date().toISOString(),source:'review'};
   return;
  }
  if(!Number.isInteger(Number(rule.day))||Number(rule.day)<1||Number(rule.day)>31||
    !Number.isFinite(Number(rule.amount))||Number(rule.amount)<=0)throw Error('Invalid recurring amount or date');
- clearForecastEdits();
+ clearForecastEdits();mergeSiblingRules();
  state.predictions.patternRules[key]={mode:'monthly',day:Number(rule.day),amount:round(rule.amount)};
 }
 function setStreamOverride(state,key,override){
@@ -421,7 +444,7 @@ function setCashCushion(state,amount){
  if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
  state.predictions.cashCushion=round(amount);
 }
-const api={VERSION,migrate,records,categories,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
+const api={VERSION,migrate,records,categories,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
