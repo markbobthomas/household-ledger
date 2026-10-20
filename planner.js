@@ -178,7 +178,7 @@ function hero(a,derived,asOf){
   '<div class="metric"><span>'+(credit?'Lowest debt · next '+horizon+' days':'Lowest balance · next '+horizon+' days')+'</span>'+
    '<strong class="'+(below?'low':'')+'">'+(fresh?cash(lowest):'Unverified')+'</strong>'+
    '<small>'+(fresh&&lowDate?escapeHTML(dayLabel(lowDate)):'Confirm bank balance first')+'</small></div>'+
-  '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · day '+horizon')+'</span>'+
+  '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · day '+horizon)+'</span>'+
    '<strong class="'+(fresh&&firstNegative?'low':'')+'">'+
     (fresh?(isCash?(firstNegative?escapeHTML(dateLong(firstNegative.date)):'None from dated payments'):cash(derived.series.at(-1)?.balance)):'Unverified')+'</strong>'+
    '<small>'+(isCash&&firstNegative?'Projected cash below $0 · not a guaranteed outcome':
