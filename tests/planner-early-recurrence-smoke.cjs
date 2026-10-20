@@ -144,11 +144,11 @@ assert.equal(existingRule.predictions.futureRecurringRules.length,1,
  'Modest rate change updates same recurring mortgage rather than saving another debit');
 assert.equal(updated.id,firstRule.id,'Revised amount retains same rule identity');
 assert.equal(updated.matchAmount,2180,'The original bank evidence fingerprint follows the newest amount');
-assert.throws(()=>T.defineRecurring(existingRule,{...data,amount:3100},accounts,asOf,null,[],[]),
- /different recurring amount already exists/,
- 'Large apparent changes to same recurring merchant must be resolved against its existing rule');
+const largeChange=T.defineRecurring(existingRule,{...data,amount:3100},accounts,asOf,null,[],[]);
+assert.equal(largeChange.id,firstRule.id,
+ 'A larger variable monthly amount updates the existing recurring merchant instead of creating another stream');
 assert.equal(existingRule.predictions.futureRecurringRules.length,1,
- 'Rejected competing new amount does not create a duplicate mortgage rule');
+ 'Only one mortgage rule survives even after a substantial amount correction');
 T.defineRecurring(existingRule,{...data,accountId:'savings'},accounts,asOf,null,[],[]);
 assert.equal(existingRule.predictions.futureRecurringRules.length,2,
  'Mortgage on another paying account is not mistakenly folded into the first');
