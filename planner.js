@@ -638,6 +638,122 @@ function transactionsPage(bundle,s){
    '<p class="audit-footnote">Forecast-only changes recalculate balance predictions for affected accounts. Actual bank transactions remain untouched. Card payments and account transfers are represented once and affect both linked accounts.</p>'+
   '</section></div>';
 }
+
+function repeatingReviewForm(s){
+ if(!recurringDraft)return '';
+ const d=recurringDraft,accounts=activeAccounts(s),
+  date=d.nextDate&&d.nextDate>s.asOf?d.nextDate:shiftDay(s.asOf,1);
+ return '<form class="panel history-schedule-form" data-history-recurring-form>'+
+  '<div class="section-title"><h2>Confirm recurring payment</h2><span class="status-tag">FORECAST ONLY</span></div>'+
+  '<p class="lead">Check the next date and frequency. The historical bank payment itself cannot be edited.</p>'+
+  '<div class="future-fields">'+
+  '<label>Merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(d.merchant)+'"></label>'+
+  '<label>Type<select name="type"><option value="expense"'+(d.type==='expense'?' selected':'')+
+   '>Payment</option><option value="income"'+(d.type==='income'?' selected':'')+'>Deposit</option></select></label>'+
+  '<label>Account'+accountSelect(accounts,d.accountId,'accountId')+'</label>'+
+  '<label>Next expected date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+
+   '" max="'+escapeHTML(shiftDay(s.asOf,90))+'" required value="'+escapeHTML(date)+'"></label>'+
+  '<label>Amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(d.amount)+'"></label>'+
+  '<label>Repeat'+frequencyChoices(d.frequency||'monthly')+'</label>'+
+  '<label class="future-second-day" hidden>Second day of month (1–31)<input name="secondDay" type="number" min="1" max="31" value="15"></label>'+
+  '</div>'+
+  '<p class="audit-footnote">Confirming creates future predictions from this recurring pattern. It does not initiate a payment or modify bank records.</p>'+
+  '<div class="future-form-actions"><button type="submit" class="btn primary">Save recurring forecast</button>'+
+    '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
+}
+function historyPage(bundle,s){
+ const accounts=activeAccounts(s),records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
+  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+ const filtered=records.filter(t=>{
+  const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
+  if(historyAccount!=='all'&&historyAccount!==aid)return false;
+  if(!historySearch)return true;
+  return [t.merchant,t.description,t.date,t.category,t.account,t.amount]
+   .some(v=>String(v||'').toLowerCase().includes(historySearch.toLowerCase()));
+ });
+ const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
+ const savedRules=state().predictions?.futureRecurringRules||[];
+ const rows=visible.map(t=>{
+  const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
+  const incoming=['income','refund'].includes(t.type)||
+   t.type==='transfer'&&t.cashDirection==='in';
+  const posted=!t.pending;
+  const linked=savedRules.some(r=>r.kind==='event'&&String(r.originalAccountId)===aid&&
+   r.originalType===t.type&&Math.abs(Number(r.matchAmount)-Number(t.amount))<.011&&
+   (r.matchNames||[]).includes(String(t.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()));
+  const actionable=posted&&window.HouseholdPlannerHistory.canPlan(t);
+  const action=actionable?'<button class="btn" type="button" data-history-plan="'+escapeHTML(String(t.id))+
+   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit forecast':'Make recurring')+'</button>':'';
+  return '<div class="history-actual-row" data-historical-transaction="'+escapeHTML(String(t.id))+'">'+
+   '<span class="history-actual-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
+   '<div class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
+   '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
+    (t.pending?' · Pending':' · Posted')+(linked?' · Recurring confirmed':'')+'</small></div>'+
+   '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':'−')+cash(t.amount)+'</strong>'+
+   action+'</div>';
+ }).join('');
+ return '<div class="planner-page history-page"><div class="page-heading"><div><h2>Actual transaction history</h2>'+
+  '<p>Every transaction retrieved from your connected accounts. These are bank records—not predictions.</p></div>'+
+  '<span class="status-tag">'+records.length+' TRANSACTIONS</span></div>'+
+  (recurringDraft?repeatingReviewForm(s):'')+
+  '<section class="panel"><form class="history-filters" data-history-filter>'+
+   '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
+   '<label>Search transactions<input name="search" type="search" value="'+escapeHTML(historySearch)+
+    '" placeholder="Merchant, date, amount"></label>'+
+   '<button class="btn" type="submit">Search</button>'+
+   (historySearch?'<button type="button" class="btn" data-clear-history-search>Clear</button>':'')+
+   '</form><p class="history-count">'+filtered.length+' actual records match. Showing '+visible.length+
+    ' newest '+(filtered.length>historyLimit?'— load older records below.':'records.')+'</p>'+
+   (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
+   (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
+   '<p class="audit-footnote">Make recurring turns a selected historical payment into a proposed future schedule, not an edit to the source bank transaction. Transfers and refunds are displayed but are not assumed to recur.</p></section></div>';
+}
+function reviewsPage(bundle,s){
+ const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
+  accounts=activeAccounts(s),normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ const weak=(bundle?.historyCandidates||[]).filter(p=>
+  !mortgages.some(m=>m.accountId===p.accountId&&normalize(m.merchant)===normalize(p.merchant)&&
+   Math.abs(m.amount-p.amount)<.011)&&
+  !regular.some(r=>{
+   const aid=accounts.find(a=>[a.id,a.name,a.transactionAccount].some(k=>String(k)===String(r.account)))?.id;
+   return String(aid||r.account)===p.accountId&&normalize(r.merchant)===normalize(p.merchant)&&
+    Math.abs(r.amount-p.amount)<.011;
+  }));
+ const count=regular.length+mortgages.length+weak.length;
+ const cards=weak.map(p=>
+  '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
+   '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
+   '<small>'+escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency)+
+    ' · '+p.occurrences+' actual payment'+(p.occurrences===1?'':'s')+
+    ' · Next suggested '+escapeHTML(dayLabel(p.nextDate))+'</small>'+
+   '<small>'+escapeHTML(p.reason)+' · '+escapeHTML(p.confidence)+' confidence</small>'+
+   '<details class="review-examples"><summary>View matching bank transactions</summary>'+
+    p.examples.map(t=>'<div>'+escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+
+     ' · '+cash(t.amount)+'</div>').join('')+'</details></div>'+
+   '<strong class="review-candidate-amount">'+cash(p.amount)+'</strong>'+
+   '<div class="review-candidate-actions"><button class="btn primary" type="button" data-review-candidate="'+
+     escapeHTML(p.key)+'">Review and confirm</button>'+
+    '<button class="btn" type="button" data-dismiss-candidate="'+escapeHTML(p.key)+
+     '">Not recurring</button></div></article>').join('');
+ const concerns=(bundle?.payments?.warnings||[]).slice(0,8);
+ return '<div class="planner-page reviews-page"><div class="page-heading"><div><h2>Needs review</h2>'+
+  '<p>We check bank history aggressively, but uncertain patterns need your decision before becoming future bills.</p></div>'+
+  '<span class="status-tag">'+count+' PAYMENT'+(count===1?'':'S')+' TO REVIEW</span></div>'+
+  (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
+  (recurringDraft?repeatingReviewForm(s):'')+
+  (mortgages.length?missingMortgagePanel(bundle):'')+
+  (regular.length?routineReviewPanel(bundle):'')+
+  (weak.length?'<section class="panel"><div class="section-title"><h2>Potential recurring payments</h2>'+
+   '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
+   '<p class="lead">These payments matched with as few as two past transactions, or one clearly identified bill. Confirm the frequency and next date before they affect your balance forecast.</p>'+
+   cards+'</section>':'')+
+  (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div>'+
+   '<p class="lead">No uncertain recurring payment patterns currently need a decision. You can still review any posted transaction in History and make it recurring.</p>'+
+   '<button type="button" class="btn" data-view="history">View actual transactions</button></section>':'')+
+  (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
+    concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
+  '</div>';
+}
 function incomeStatus(bundle,s,chosen,derived){
  const through=shiftDay(s.asOf,horizon),from=shiftDay(s.asOf,-100);
  const incoming=(derived?.events||[]).filter(t=>t.kind==='income'&&t.date>s.asOf&&t.date<=through);
