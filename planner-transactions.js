@@ -106,7 +106,7 @@ function saveSeriesEdit(state,seriesKey,baseDate,data,accounts,asOf,cadence,kind
   !['event','movement'].includes(kind))throw Error('This transaction is not an editable recurring series');
  if(!validDate(baseDate))throw Error('Select a valid repeating payment date');
  const fields=kind==='movement'?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
- const supported=['monthly','quarterly','semiannual','annual','weekly','every 2 weeks','biweekly','twice monthly','3 / month','4 / month','5 / month'];
+ const supported=['monthly','quarterly','semiannual','annual','weekly','every 2 weeks','biweekly','every-4-weeks','twice monthly','3 / month','4 / month','5 / month'];
  if(!supported.includes(cadence))throw Error('Recurring frequency is not known; edit just this payment');
  const offset=Math.round((new Date(fields.date+'T12:00:00Z')-new Date(baseDate+'T12:00:00Z'))/86400000);
  if(Math.abs(offset)>31)throw Error('The new payment date must be within 31 days of its current date');
@@ -127,7 +127,7 @@ function resetSeries(state,seriesKey){
 /* User-defined recurrence is authoritative when automatic inference cannot
  * find a reliable series. Rule identity includes account/type/source merchant;
  * individual bank transactions and their categories are never modified. */
-const frequencies=new Set(['weekly','biweekly','twice-monthly','monthly','quarterly','semiannual','annual']);
+const frequencies=new Set(['weekly','biweekly','every-4-weeks','twice-monthly','monthly','quarterly','semiannual','annual']);
 const merchantKey=value=>clean(value).replace(/[^a-z0-9]+/g,' ').trim();
 const daysBetween=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
 const accountRef=(value,accounts)=>{
@@ -157,8 +157,8 @@ const monthAt=(anchor,offset,day)=>{
 function recurrenceDates(rule,asOf,through){
  const dates=[],start=rule.anchorDate;
  if(!validDate(start)||!frequencies.has(rule.frequency))return dates;
- if(['weekly','biweekly'].includes(rule.frequency)){
-  const step=rule.frequency==='weekly'?7:14,n=Math.max(0,Math.ceil(daysBetween(asOf,start)/step));
+ if(['weekly','biweekly','every-4-weeks'].includes(rule.frequency)){
+  const step=rule.frequency==='weekly'?7:rule.frequency==='biweekly'?14:28,n=Math.max(0,Math.ceil(daysBetween(asOf,start)/step));
   for(let i=n;i<n+60;i++){const d=shift(start,i*step);if(d>through)break;if(d>asOf&&d>=start)dates.push(d)}
  }else{
   const spacing={monthly:1,'twice-monthly':1,quarterly:3,semiannual:6,annual:12}[rule.frequency];
@@ -237,7 +237,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   originalAccountId:old?.originalAccountId||baseAccount,
   sourceAnchorDate:old?.sourceAnchorDate||reference?.baseDate||reference?.date||fields.date,
   sourceFrequency:old?.sourceFrequency||({
-   'every 2 weeks':'biweekly','twice monthly':'twice-monthly','3 / month':null,
+   'every 2 weeks':'biweekly','every 4 weeks':'every-4-weeks','twice monthly':'twice-monthly','3 / month':null,
    '4 / month':null,'5 / month':null
   }[reference?.cadence]||reference?.cadence||frequency),
   originalMerchant:old?.originalMerchant||originalMerchant,
@@ -299,7 +299,7 @@ function matchesRecurring(rule,event,accounts){
  }:rule;
  return recurrenceDates(sourceSchedule,shift(date,-7),shift(date,7))
   .some(d=>Math.abs(daysBetween(d,date))<=
-   (rule.sourceFrequency==='weekly'?2:rule.sourceFrequency==='biweekly'?3:6));
+   (rule.sourceFrequency==='weekly'?2:['biweekly','every-4-weeks'].includes(rule.sourceFrequency)?3:6));
 }
 
 /* Source bank balances already include posted transactions. One posted payment
@@ -314,7 +314,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
   const date=String(effective.date||effective.anchorDate||item.anchorDate||''),
    account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
   const type=kind==='movement'?'transfer':item.type;
-  const tolerance=r.frequency==='weekly'?2:r.frequency==='biweekly'?3:6;
+  const tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
   const possible=posted.find(t=>!used.has(String(t.id))&&
    t.type===(kind==='event'?(r.originalType||type):type)&&
    accountRef(t.accountId||t.account,accounts)===account&&

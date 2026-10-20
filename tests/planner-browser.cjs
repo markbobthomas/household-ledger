@@ -191,6 +191,22 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#future-new-form button[type=submit]').click();
    assert.ok(await page.locator('.future-item').filter({hasText:'New monthly subscription'}).count()>=2,
     'Add transaction can create a recurring set without any historical examples');
+   await page.locator('[data-show-new]').click();
+   const everyFourForm=page.locator('#future-new-form');
+   await everyFourForm.locator('[name=merchant]').fill('Every 4 weeks test payment');
+   await everyFourForm.locator('[name=amount]').fill('55');
+   await everyFourForm.locator('[name=date]').fill('2026-11-01');
+   assert.equal(await everyFourForm.locator('option[value="every-4-weeks"]').innerText(),
+    'Every 4 weeks (28 days)','Monthly and every 4 weeks have different scheduling choices');
+   await everyFourForm.locator('[data-frequency]').selectOption('every-4-weeks');
+   await everyFourForm.locator('button[type=submit]').click();
+   const fourWeekRows=page.locator('.future-item').filter({hasText:'Every 4 weeks test payment'});
+   assert.deepEqual(await fourWeekRows.locator('.future-date').allInnerTexts(),
+    ['Nov 1','Nov 29','Dec 27'],
+    'The actual future ledger moves forward 28 days per occurrence, rather than on calendar months');
+   assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules?.some(x=>x.merchant==='Every 4 weeks test payment'&&x.frequency==='every-4-weeks')),
+    'Every-four-weeks schedules persist as one confirmed recurrence');
    await go('history');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
    await insuranceHistory.locator('[data-history-plan]').click();
