@@ -67,6 +67,12 @@ const movedResults=R.dedupeEvents([scheduled,moved],accounts);
 assert.equal(movedResults.events.length,1,
  'Owner can deliberately move mortgage more than 5 days while replacing the same monthly debit');
 assert.equal(movedResults.events[0].date,'2026-11-25');
+const changedPrice={...manual,id:'owner-new-amount',date:'2026-11-27',amount:2600};
+const changedResult=R.dedupeEvents([scheduled,changedPrice],accounts);
+assert.equal(changedResult.events.length,1,
+ 'When owner changes both mortgage payment amount and due date, the old auto estimate is removed');
+assert.equal(changedResult.events[0].amount,2600,
+ 'Forecast uses owner-confirmed revised amount, never stale $2,000 auto amount');
 const distinctMortgage={...scheduled,id:'other-loan',merchant:'Home mortgage SECOND',
  amount:3500};
 const distinct=R.dedupeEvents([scheduled,distinctMortgage],accounts);
