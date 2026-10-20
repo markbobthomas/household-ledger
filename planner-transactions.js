@@ -135,19 +135,28 @@ const accountRef=(value,accounts)=>{
  const found=(accounts||[]).filter(a=>[a.id,a.name,a.transactionAccount].some(x=>String(x||'')===v));
  return found.length===1?String(found[0].id):v;
 };
-function findExamples(records,reference,accounts){
- const account=reference.kind==='movement'?String(reference.fromAccountId):String(reference.accountId);
- const amount=Number(reference.amount||0),type=reference.type||'transfer',
-  name=merchantKey(reference.merchant),head=name.split(' ').find(word=>word.length>3)||name;
- return (records||[]).filter(t=>!t.pending&&validDate(t.date)&&
-  accountRef(t.accountId||t.account,accounts)===account&&merchantKey(t.merchant)&&
-  (type==='transfer'?t.type==='transfer':t.type===type)&&
-  Math.abs(Number(t.amount)-amount)<.011).sort((a,b)=>{
-   const score=t=>merchantKey(t.merchant)===name?2:
-    merchantKey(t.merchant).includes(head)&&head.length>3?1:0;
+// Account + cash direction + merchant identity determine a recurring stream.
+ // The payment amount is evidence for estimation, never part of its identity.
+const bankDirection=t=>t.type==='transfer'&&!t.pairedTransactionId?
+ (t.cashDirection==='in'?'income':t.cashDirection==='out'?'expense':null):t.type;
+const sameDirection=(t,type)=>bankDirection(t)===type||
+ (type==='transfer'&&t.type==='transfer'&&Boolean(t.pairedTransactionId));
+function findExamples(records,reference,accounts,search=''){
+ const account=reference.kind==='movement'?String(reference.fromAccountId):String(reference.accountId),
+  type=reference.kind==='movement'?'transfer':reference.type||'expense',
+  name=merchantKey(reference.sourceMerchant||reference.merchant),
+  query=merchantKey(search),head=name.split(' ').find(word=>word.length>3)||name;
+ return (records||[]).filter(t=>!t.pending&&validDate(t.date)&&Number(t.amount)>0&&
+  accountRef(t.accountId||t.account,accounts)===account&&sameDirection(t,type)&&
+  merchantKey(t.merchant||t.name)&&(query?
+   merchantKey(t.merchant||t.name).includes(query):true)).sort((a,b)=>{
+   const score=t=>{const merchant=merchantKey(t.merchant||t.name);
+    return merchant===name?3:merchant.includes(name)&&name.length>3?2:
+     merchant.includes(head)&&head.length>3?1:0};
    return score(b)-score(a)||b.date.localeCompare(a.date);
-  }).slice(0,10).map(t=>({id:String(t.id),date:t.date,
-   merchant:String(t.merchant),amount:Number(t.amount),accountId:account,type:t.type}));
+  }).slice(0,16).map(t=>({id:String(t.id),date:t.date,
+   merchant:String(t.merchant||t.name),amount:Number(t.amount),
+   accountId:account,type:t.type,bankDirection:bankDirection(t)}));
 }
 const monthAt=(anchor,offset,day)=>{
  const [y,m]=anchor.slice(0,7).split('-').map(Number),d=new Date(Date.UTC(y,m-1+offset,1,12));
@@ -189,7 +198,9 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   String(reference?.accountId||fields.accountId);
  const originalMerchant=reference?.originalMerchant||reference?.merchant||fields.merchant;
  const originalAmount=Number(reference?.sourceAmount??reference?.amount??fields.amount);
- const originalType=reference?.type||fields.type;
+ // A Plaid ACH classified as transfer can still be an expense or paycheck.
+ const originalType=reference?.originalType||reference?.sourceType||reference?.type||fields.type;
+ const forecastType=transfer?'transfer':fields.type;
  let id=reference?.recurringRuleId||'manual|'+[transfer?'movement':'event',
   baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),round(originalAmount)]
   .map(encodeURIComponent).join('|');
@@ -205,20 +216,12 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
    (!transfer||String(r.toAccountId)===String(fields.toAccountId))&&
    (merchantKey(r.originalMerchant||r.merchant)===merchantKey(originalMerchant)||
     (r.matchNames||[]).includes(merchantKey(originalMerchant))));
-  const exact=sameMerchant.filter(r=>
-   Math.abs(Number(r.matchAmount??r.amount)-originalAmount)<.011);
-  if(exact.length>1||sameMerchant.length>1)
-   throw Error('Several recurring schedules already exist for this merchant and account. Review them before adding another.');
-  if(exact.length===1)id=exact[0].id;
-  else if(sameMerchant.length===1){
-   const oldAmount=Number(sameMerchant[0].matchAmount??sameMerchant[0].amount);
-   const change=Math.abs(oldAmount-originalAmount)/Math.max(oldAmount,originalAmount,1);
-   if(change>.25)
-    throw Error('A different recurring amount already exists for this merchant and account. Edit its existing recurring schedule before adding another.');
-   // One unique recurring item whose monthly amount shifted modestly:
-   // update its existing rule rather than creating a second debit.
-   id=sameMerchant[0].id;
-  }
+  // Only one confirmed series per source merchant/account/direction. The bill
+  // may change dramatically (seasonal utilities or deductions on a paycheck).
+  // Never manufacture a second series just because the amount changed.
+  const sameType=sameMerchant.filter(r=>(r.kind==='movement'?'transfer':r.type)===forecastType);
+  if(sameType.length>1)throw Error('Multiple schedules exist for this merchant. Review existing schedules before editing.');
+  if(sameType.length===1)id=sameType[0].id;
  }
  const old=p.futureRecurringRules.find(r=>r.id===id);
  const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
@@ -227,10 +230,16 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const chosen=[...new Set((selectedExampleIds||[]).map(String))];
  const examples=chosen.map(id=>candidates.find(t=>String(t.id)===id));
  if(examples.some(t=>!t))throw Error('One of the historical examples is no longer available');
- if(examples.some(t=>Math.abs(Number(t.amount)-originalAmount)>.011||
-  (transfer?t.type!=='transfer':t.type!==originalType)))
-  throw Error('Select examples of the same amount and transaction type');
- const names=[originalMerchant,...examples.map(t=>t.merchant)].map(merchantKey).filter(Boolean);
+ if(examples.some(t=>!sameDirection(t,forecastType)))
+  throw Error('Linked bank transactions must be from the same account and cash direction');
+ // Automatically connect unambiguous same-name posted history, even when
+ // transaction amounts vary. Selecting bank examples also connects different
+ // Plaid descriptions to the same manually named utility or paycheck.
+ const autoLinks=candidates.filter(t=>sameDirection(t,forecastType)&&
+  merchantKey(t.merchant||t.name)===merchantKey(originalMerchant));
+ const evidence=[...new Map([...autoLinks,...examples].map(t=>[String(t.id),t])).values()];
+ const names=[originalMerchant,...evidence.map(t=>t.merchant||t.name)]
+  .map(merchantKey).filter(Boolean);
  if(!names.length)throw Error('Enter a merchant name');
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
@@ -243,8 +252,9 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   originalMerchant:old?.originalMerchant||originalMerchant,
   originalType:old?.originalType||originalType,
   matchAmount:round(originalAmount),
+  // Saved bank-example merchant aliases become a stable source identity.
   matchNames:[...new Set([...(old?.matchNames||[]),...names])],
-  exampleIds:[...new Set([...(old?.exampleIds||[]),...chosen])],
+  exampleIds:[...new Set([...(old?.exampleIds||[]),...evidence.map(t=>String(t.id))])],
   ...(old?.sourceAddedId||reference?.addedId?{sourceAddedId:old?.sourceAddedId||reference?.addedId}:{}),
   ...(old?.sourceKey||reference?.key?{sourceKey:old?.sourceKey||reference?.key}:{})};
  const index=p.futureRecurringRules.findIndex(r=>r.id===id);
@@ -360,9 +370,9 @@ function matchesRecurring(rule,event,accounts){
  const eventKind=event.kind==='movement'?'movement':'event';
  if(kind!==eventKind)return false;
  if(kind==='movement'&&String(event.toAccountId)!==String(rule.toAccountId))return false;
- if(kind==='event'&&event.type!==rule.originalType)return false;
+ if(kind==='event'&&event.type!==rule.type)return false;
  const sameName=(rule.matchNames||[]).includes(merchantKey(event.merchant));
- if(!sameName||Math.abs(Number(event.amount)-Number(rule.matchAmount))>.011)return false;
+ if(!sameName)return false;
  const date=String(event.date||event.anchorDate||'');
  if(!validDate(date)||date<rule.sourceAnchorDate&&daysBetween(rule.sourceAnchorDate,date)>7)return false;
  const sourceSchedule=frequencies.has(rule.sourceFrequency)?{
@@ -388,11 +398,9 @@ function postedCoverage(generated,rules,records,accounts,asOf){
   const type=kind==='movement'?'transfer':item.type;
   const tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
   const possible=posted.find(t=>!used.has(String(t.id))&&
-   t.type===(kind==='event'?(r.originalType||type):type)&&
+   sameDirection(t,kind==='event'?r.type:'transfer')&&
    accountRef(t.accountId||t.account,accounts)===account&&
-   (r.matchNames||[]).includes(merchantKey(t.merchant))&&
-   Math.min(Math.abs(Number(t.amount)-Number(r.amount)),
-    Math.abs(Number(t.amount)-Number(r.matchAmount)))<.011&&
+   (r.matchNames||[]).includes(merchantKey(t.merchant||t.name))&&
    Math.abs(daysBetween(t.date,date))<=tolerance);
   if(!possible)return false;
   used.add(String(possible.id));return true;
@@ -404,7 +412,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,findExamples,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring,postedCoverage,
+ frequencies,findExamples,bankDirection,sameDirection,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring,postedCoverage,
  recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
