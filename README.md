@@ -36,6 +36,14 @@ The same cycle start/end and due/withdrawal dates advance month by month, respec
 
 Regression: `node tests/card-statement-cycles-smoke.cjs` and `node tests/payment-obligations-smoke.cjs`.
 
+## Two dedicated tabs: actual History and payment Reviews
+
+**History** lists every retrieved actual bank transaction (posted and pending), newest first, with account filtering, merchant/date/amount search and progressive loading for larger histories. The bank facts stay read-only. For settled expenses and income, **Make recurring** opens a proposed forecast with the source merchant, selected account, dollar amount, expected next date and frequency, editable before saving. It saves only `predictions.futureRecurringRules`, never a bank transaction.
+
+**Reviews** centralizes uncertain patterns, existing stable-routine confirmations, and missing mortgage warnings. A new separate bank-history scanner detects **two exact-amount payments on a compatible recurring calendar/weekly schedule** (rather than waiting for three) and also offers a review for one clearly recognizable bill or Plaid recurring/mortgage category. These low-confidence findings do **not** debit the future balance until the user chooses **Review and confirm** and saves the frequency and next payment date. **Not recurring** stores a dismissal under `predictions.historyPatternDecisions`, which survives browser refresh and private Real mode through existing saved prediction adjustments. A new amount becomes a new review candidate. The existing three-observation model may still predict confidently recurring payments, and they are also reviewed in the Reviews tab rather than Settings.
+
+The scanner is conservative about pending transactions, refunds, internal transfers, unrelated cards and accounts, lapsed activity, source gaps and already scheduled predictions. Confirmed manual recurring rules supersede matching inferred predictions to avoid duplicate withdrawals. Neither the History list nor the review queue is written to client localStorage in Real mode. Regression: `node tests/planner-history-smoke.cjs` and the desktop Chromium/iPhone WebKit UI test.
+
 ## Missing mortgage review from actual bank history
 
 The strict automatic recurrence engine deliberately requires three similar monthly payments and a sufficiently complete recent history. That protects against fictional charges but can omit a real bill when a Plaid connection has only one or two months of history.
@@ -60,7 +68,9 @@ Tests: `node tests/planner-recurring-confirmation-smoke.cjs`, `node tests/planne
 
 - **Overview** (default): summary of bank-reported current balances, projected month-end cash, lowest balance in the selected 30/60/90-day horizon, a short balance curve, and the next five expected movements. Select a main account to change the focus; click **View all and edit** to jump to Transactions.
 - **Transactions**: chronological predicted transactions from **all linked accounts**, filterable by account. The page lists both manually planned and inferred future transactions, including income, bills, card purchases and paired card/account transfers. Click **Edit** to choose **This payment only** or **This and all future payments** for an identified recurring series. The recurring option saves a continuing forecast rule for that account and merchant, rather than only changing the three months currently visible. Change its amount, payment date, description, or applicable funding account; monthly rules use the chosen day of the month and twice-monthly/biweekly schedules retain their spacing. A recurring card autopay remains a linked, two-account movement. **Reset all future changes** restores automatic forecasts; **Reset this occurrence** removes a single exception. **Skip this occurrence** excludes only that one dated prediction. Click **+ Add transaction** to create a dated withdrawal, deposit, refund or linked transfer between two connected accounts, or **Remove** to delete a manually added one. All calculations immediately update account projections. The visible list respects the selected 30/60/90-day horizon; the app does not allow adding an invisible future date beyond it.
-- **Settings**: recurring-payment confirmations, credit-card statement payment setup, cash-cushion warning threshold, private bank connection, and the on-demand historical prediction audit.
+- **History**: bank-posted and pending transactions, account/search filters and user-confirmed conversion to recurring forecasts.
+- **Reviews**: low-confidence two-payment recurrence candidates, identified one-off bills, routine confirmations and missing mortgages.
+- **Settings**: credit-card statement payment setup, cash-cushion warning threshold, private bank connection, and the on-demand historical prediction audit.
 
 Forecast overrides are stored in `predictions.futureTransactionEdits` and one-off additions in `predictions.futureTransactionAdds`. Existing bank facts remain immutable. The Demo saves only **fictional planning settings** in localStorage; Real saves planning adjustments through the encrypted private server. No Plaid token or real bank transaction is stored in localStorage.
 
