@@ -1040,10 +1040,9 @@ document.addEventListener('click',async e=>{
   if(!chosen)return;
   const accountId=String(chosen.id),prior=auditAccount===accountId?audit:null;
   const previousNumber=auditAccount===accountId?Number(auditMeta?.number||0):0;
-  // Tell the user the button responded before a potentially long audit
-  // recalculates several months of bank transactions.
+  // The unified walk-forward check is fast and synchronous. Render its
+  // result before the click finishes; never leave a stale closed panel.
   runAudit.disabled=true;runAudit.textContent='Checking…';
-  await new Promise(resolve=>setTimeout(resolve,20));
   auditAccount=accountId;
   try{
    const updated=window.HouseholdFutureLedger.backtest(
