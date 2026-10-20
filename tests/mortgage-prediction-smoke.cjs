@@ -75,4 +75,14 @@ assert.equal(revised.accounts[0].series.find(x=>x.date==='2026-11-01').balance,1
 assert.equal(revised.accounts[0].series.find(x=>x.date==='2026-11-02').balance,11500-2630,
  'Bank-estimated mortgage is not charged on the following day');
 assert.equal(JSON.stringify(state.transactions),immutable,'No bank record changed from all classification, rule, or forecast operations');
+// A bank may post November's mortgage on October 30. That cash has already
+// left checking and must not be deducted again on the expected November date.
+const early=M.migrate({accounts:state.accounts,transactions:[...state.transactions,
+ {...rawMortgage[4],id:'nov-paid-early',date:'2026-10-30'}]});
+M.setPatternRule(early,august,{mode:'schedule',frequency:'monthly',anchorDate:'2026-07-02',day:2,amount:2590});
+const earlyRows=M.records(early),earlyRules=early.predictions.patternRules;
+assert.equal(F.forecast(earlyRows,'2026-11','Housing','2026-10-31',earlyRules).expected.length,0,
+ 'A mortgage already withdrawn just before the new month is not projected twice');
+assert.equal(F.forecast(earlyRows,'2026-12','Housing','2026-10-31',earlyRules).expected.length,1,
+ 'Suppressing the prepaid installment does not erase following months');
 console.log('PASS external mortgage LOAN_PAYMENTS classification, historical recovery, 3 monthly predictions, posted suppression, card/transfer exclusions, duplicate recurrence and manual mortgage reconciliation');

@@ -343,10 +343,14 @@ function infer(transactions,month,category,asOf,mode='expense',patternRules={},f
  result.diagnostics.patternCount=groups.size;
  // One-to-one posted matching, per account and merchant, prevents duplicate
  // predictions after an early/late actual payment.
+ // Match posted charges on either side of a calendar-month boundary.
+ // An early November mortgage withdrawn on Oct 30 is ALREADY reflected in
+ // checking and must not be forecast a second time for November 2.
+ const postedMatches=evidence.filter(t=>match(t)&&t.date<=today);
  const taken=new Set(),expected=[];
  for(const c of candidates.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant))){
   let best=null,bestDistance=Infinity;
-  for(const t of actualRows){
+  for(const t of postedMatches){
    if(taken.has(t.id)||accountKey(t)!==c.account||normalize(t.merchant)!==normalize(c.merchant))continue;
    const distance=Math.abs(dayDiff(t.date,c.date));
    const tolerance=c.cadence==='weekly'?2:c.cadence==='every 2 weeks'?3:7;
