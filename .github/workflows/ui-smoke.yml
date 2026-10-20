@@ -4,7 +4,7 @@ on:
     branches: [main]
   workflow_dispatch:
 concurrency:
-  group: ledger-browser-${{ github.ref }}
+  group: planner-browser-${{ github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
@@ -17,51 +17,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install Playwright
+      - name: Install Chromium and iPhone WebKit
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium webkit
-      - name: Verify interactive price bands in Chromium
+      - name: Verify balance planner, bank data integrity and mobile layout
         run: |
-          python3 -m http.server 8765 --bind 127.0.0.1 &
-          sleep 2
-          node tests/price-band-smoke.cjs
-          node tests/category-budget-smoke.cjs
-          node tests/inline-edit-smoke.cjs
-          node tests/inline-category-smoke.cjs
-          node tests/recurrence-reconcile-smoke.cjs
-          node tests/budget-overage-smoke.cjs
-          node tests/activity-recurring-smoke.cjs
-          node tests/reconciliation-phase1-smoke.cjs
-          node tests/reconciliation-phase3-stress.cjs
-          node tests/conservative-categorization-phase2.cjs
-          node tests/overall-budget-smoke.cjs
+          node --check planner.js
+          node tests/planner-browser.cjs
           node tests/payment-obligations-smoke.cjs
-          node tests/one-account-ledger-browser.cjs
-          node tests/card-payment-browser.cjs
-          node tests/mortgage-prediction-browser.cjs
-          node tests/accounting-phaseA-smoke.cjs
-          node tests/account-forecast-phaseB-smoke.cjs
-          node tests/account-reliability-phaseC-smoke.cjs
-          node tests/hosted-sandbox-smoke.cjs
-          node tests/sandbox-categorization-smoke.cjs
-          node tests/sandbox-phaseD-smoke.cjs
-          node tests/sandbox-phaseD-ui-smoke.cjs
-          node tests/cashflow-smoke.cjs
-          node tests/design-smoke.cjs
-          node tests/navigation-overview-smoke.cjs
-          node tests/settings-geometry-diagnostic.cjs
-          node tests/mobile-safari-smoke.cjs
-          node tests/recurring-smoke.cjs
-          node tests/current-month-smoke.cjs
-          node tests/ledger-readonly-smoke.cjs
-          node tests/expected-spending-smoke.cjs
-          node tests/prediction-phase1-smoke.cjs
-          node tests/unified-forecast-smoke.cjs
-          node tests/reviews-smoke.cjs
-          node tests/reviews-count-tabs-smoke.cjs
-          node tests/learning-phase3-smoke.cjs
-          node tests/accuracy-phase4-smoke.cjs
-          node tests/phase41-smoke.cjs
-          node tests/phase42-smoke.cjs
-          node tests/phase43-smoke.cjs
+          node tests/mortgage-prediction-smoke.cjs

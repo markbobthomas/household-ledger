@@ -1,179 +1,32 @@
-# Household Ledger
+# Household Ledger — Balance Planner
 
-A privacy-conscious household-finance web app with a **source-of-truth ledger** and **editable forecasts**, currently published at:
+A focused, account-by-account cash planning tool. The new default interface replaces the earlier budget, merchant, itemization, Insights and Reviews screens with three essentials:
 
-https://markbobthomas.github.io/household-ledger/
+- Bank-reported checking, savings and credit-card balances.
+- A clearly labeled **provisional** 30/60/90-day balance trajectory derived from dated forecasts.
+- A readable list of future expected money in and money out, with visible bank freshness and uncertainty.
 
+**The existing full Ledger has not been erased.** Before the reset, an identical copy of the original default branch (commit `53975e8672ab56fb5b29bf14ff94dc1746987928`) was saved to [`backup/full-ledger-before-balance-planner-2026-10-19`](https://github.com/markbobthomas/household-ledger/tree/backup/full-ledger-before-balance-planner-2026-10-19).
 
-## Navigation: Budget, Overview and default opening tab
+## Safety and infrastructure
 
-The main navigation now has **six sections**: **Budget**, **Overview**, **Activity**, **Insights**, **Reviews**, and **Settings**.
+GitHub ownership, the GitHub Pages demo pipeline, the existing Render services, the private password-protected Plaid connection routes, and the encrypted server-side bank source store are retained.
 
-- **Budget** is the default opening tab and focuses only on monthly category budgets. The existing editable limits, actual/expected bars, category-level predicted transactions and recurring merchant rules are unchanged.
-- **Overview** houses the separate 90-day cash projection, account balances and credit-card liabilities, payment and transfer planner, forecast details, and reconciliation checks. This uses the exact same underlying predicted events as Budget; no second independent forecast is created.
-- Open **Settings → Menu preferences → Default opening tab** to choose any of the six sections as the opening page. The selection takes effect on your next reload or visit and is saved in this browser's local storage under `household-ledger-default-page`. It defaults to Budget when unset or invalid. This setting does not change bank transactions or forecasts and does not connect Plaid.
-- On iPhone, both the sticky top navigation and fixed bottom navigation include all six sections. Budget and Overview remain separated at every screen size.
+This reset changes the **frontend**, not the authenticated bank connector or existing encrypted transaction records. There is no banking migration or credential re-entry required by this commit. The new interface does not write real bank data to browser localStorage. Existing historical and planning adjustments remain in the existing server-backed state and can still influence draft predictions. No mortgage, income or credit-card prediction should be considered a guaranteed future payment.
 
-## Data integrity design (v2)
+The separate `render.yaml` blueprint currently describes the **fictional hosted Sandbox**; it is not a replacement for an independently configured private Real/Plaid service. In the public Pages and fictional Sandbox modes, balances are sample data. Only a correctly configured private service can show live bank data.
 
-**The ledger is read-only in the interface.** You cannot manually create, edit or delete posted transaction amounts, merchant names, dates, transaction types, account identifiers or recorded bank balances.
+## Files
 
-The stored data now has four distinct parts:
+- `index.html`, `planner.css`, `planner.js`: the new, intentionally small interface.
+- `pilot/server.cjs`, `pilot/data-source.js`, `pilot/index.html`: existing authenticated Plaid server and bank connection flow.
+- `account-forecast.js`, `forecast-ledger.js`, `forecast.js`, `payment-obligations.js`, `ledger-data.js`, `accounting.js`: retained read-only calculation and classification machinery.
+- `tests/planner-browser.cjs`, `tests/planner-parity.cjs`: new planner-focused browser and source-parity checks.
 
-| Field | Purpose | May the user edit it? |
-| --- | --- | --- |
-| `transactions[]` | Original immutable source records: date, merchant, amount, type, account, stable ID and `source` provenance | **No** |
-| `categoryOverrides` | Category corrections keyed by the source record's stable transaction ID | **Yes, category only** |
-| `predictions` | Monthly budget targets, dated expected-transaction overrides and manual forecast items, plus 90-day balance assumptions | **Yes** |
-| `sync` | Source synchronization metadata, including the future Plaid cursor | **No, provider-managed** |
+Older analysis and budgeting source files/tests remain in Git history and in the backup branch. They are **not loaded** by the new page. New design decisions—how to identify obligations, statement handling, income estimates, low-balance thresholds, account funding and alert rules—are intentionally deferred until the owner answers six planning questions.
 
-The UI uses `HouseholdLedgerData.records(state)` to merge base source transactions with category overrides **for display and analysis only**. Category edits never rewrite `transactions[]`.
+## Test
 
-The source records carry `source.provider` and `source.providerTransactionId`. Demo data is marked `demo`; older browser entries are marked `legacy-unverified` and must **not** be mistaken for bank-verified records. The v1 localStorage data is migrated in place without losing the original transaction rows or budget targets. Only a properly authenticated future backend may designate imported records as Plaid source data.
+The GitHub Actions workflows check the new demo and private-Real planner layouts, mobile browser usability, bank-feed security, statement and mortgage accounting invariants, source parity, and existing reconciliation invariants. No actual Plaid credentials are used in automated browser tests.
 
-### Predictions are not transactions
-
-- Monthly budget targets remain editable, while expected category spending is now the **sum of dated, merchant-specific predicted transactions**. Expand a category to inspect the expected date, merchant, amount, evidence and confidence for each item, and edit/omit/reset it inline.
-- Inference scans up to six recent calendar months, requires history in the latest completed month, and generally needs two or three observed months with stable merchant, account, posting dates and amounts. Weekly and every-two-week charges are identified from regular intervals even when the count varies across months. Bank-paid transactions are suppressed to avoid counting them twice. Future one-time expected expenses can be added to a category as **predictions only**.
-- **No generic undisclosed catch-all transaction** is inserted into monthly category estimates; irregular spending without a defensible expected date is omitted and may make projections optimistic. Amounts/dates are estimates, not commitments.
-- The 90-day bank-balance projection supports changes to predicted recurring bill/paycheck amounts and schedule, predicted daily spending and one-time forecast-only events.
-- These changes affect projected values, never recorded bank activity or the starting balance.
-- Recurring detection and merchant/category analytics use the effective categories while preserving the original records.
-
-`ledger-data.js` defines the data schema, migration, categorization and prediction methods and a provider-only `applyPlaidSync()` normalization/reconciliation contract. `cashflow.js` applies forecast overrides without incorporating them into actuals.
-
-### Current data limitations
-
-There is **no live Plaid connection**, login, bank synchronization or secure bank backend yet. The simulated starting bank balance and transactions used in the 90-day demo forecast remain fictional and segregated from local records. Bank statement/manual transaction creation/import and arbitrary backup restoration have been removed from the interface. The browser still has old imported records from earlier versions, but they are labeled **unverified**.
-
-A static GitHub Pages app is **not tamper-proof**: local storage can be changed outside the app. Production integrity requires authoritative transaction storage and auditability on a secure authenticated backend, plus Plaid webhooks and transaction reconciliation. See [Plaid integration plan](PLAID_INTEGRATION_PLAN.md).
-
-## Privacy and backup
-
-This public GitHub repository does not include personal financial data. Transactions and category/prediction preferences currently remain in each device's browser storage; there is no cross-device synchronization. Settings provides a **read-only JSON export** for safekeeping, not a tool for restoring or fabricating ledger transactions. Exports are unencrypted—store privately.
-
-## Developer tests
-
-The GitHub Actions workflow `.github/workflows/ui-smoke.yml` executes Playwright tests for budget/merchant drill-downs, read-only categorization, the cash-flow engine, recurring detection and mobile/desktop layout. `tests/ledger-readonly-smoke.cjs` additionally verifies historical data migration, Plaid upsert/pending reconciliation, category overrides and separation of forecast changes from original source records.
-
-### Historic aggregate adjustment compatibility
-
-Earlier category-level `categoryForecasts` overrides are preserved in local storage for backward compatibility but **are not included** in the new dated category totals. This avoids silently creating an invented lump-sum transaction on an arbitrary date. Individual expected payments can be edited in each category instead.
-
-## Reviews: action-oriented uncertainty queue
-
-The new **Reviews** tab automatically creates review tasks from source transaction history and dated spending predictions. The queue is recalculated from the current facts when a page loads or an item changes; it is not a static list.
-
-- **Category reviews:** Expenses marked `Other` or lacking a category; provider-labeled category confidence under 70%; merchants with inconsistent category assignments; ambiguous home-improvement demo records. Tasks consider source rows from the preceding 90 days, excluding unrelated income/transfers.
-- **Prediction reviews:** Dated merchant predictions labeled `Medium` or `Pattern` rather than `High`. Shows date, projected amount and supporting historical months. Evidence without a sufficiently defensible dated prediction is not fabricated.
-- **Decisions:** Confirm a category, change its category, confirm a prediction, edit its expected amount/date, or exclude a prediction. Confirmation creates a review-decision record; changing a category creates a category override; changing a forecast creates an expected-transaction override. None rewrite source bank transactions.
-- **Persistence:** Review confirmations are stored under `reviews.categoryConfirmed` and `reviews.predictionConfirmed`. If a source transaction changes, its category confirmation is reconsidered; if an automatically inferred predicted date, amount or evidence changes, its confirmation is reconsidered. Explicit user prediction edits are already resolved.
-- **Simulated data:** The fictional sample ledger includes **Home Depot** purchases, where Housing versus Shopping is ambiguous, plus repeating merchant purchases with lower prediction confidence. These are flagged as *Demo* tasks, even when the demo ledger was created in an earlier version. No fake bank record is inserted merely to show Reviews.
-
-Filter **All / Categories / Predictions** to work through the tasks. The dedicated mobile layout has the fifth **Reviews** tab in both top and bottom navigation.
-
-## Phase 1: Longer-history pattern detection (October 2026)
-
-Phase 1 improves the local inference engine in `forecast.js`; it does **not** activate Plaid or change any source transaction values.
-
-- Scans up to 24 calendar months of dated, nonpending records. It supports stable weekly, every-two-week, twice-monthly, monthly, quarterly, semiannual and annual patterns, including an independent `forecastIncome()` API for paychecks (not yet connected to the 90-day bank simulator).
-- Bills and subscriptions can tolerate several days of posting drift and modest amount variation. Variable utilities can use a same-season prior-year reference when there is sufficient history. Annual patterns require two years; quarterly/six-month cycles require repeated evidence.
-- It only presents future estimated charges after the calculation's as-of date and attempts to match already-paid transactions to avoid double-counting.
-- The calendar schedule is **conservative** for shopping: irregular merchant visits are not given fictional exact transaction dates. An `unscheduled` risk estimate exposes a historical range of nondated spending; it is **informational** and excluded from the hot-pink dated-payments total.
-- Forecast evidence and cadence appear beneath each expandable expected transaction. Confidence labels are heuristics, **not calibrated percentages**. Source data may be incomplete or stale.
-- A deterministic, completely fictitious 25-month dataset is in `tests/fixtures/household-25months.cjs` (541 simulated records). `tests/prediction-phase1-smoke.cjs` verifies the engine detects real patterns, avoids seasonal/quarterly false positives, ignores unseen future transactions, and does not create a dated expense for inconsistent grocery purchases.
-
-**The demo app still uses its existing three-month fictional ledger; the 25-month fixture exists only for automated tests and is never inserted into user browser storage.** This avoids overwriting household financial data and preserves the current sample's transaction IDs.
-
-**Next:** Phase 2 — make Budget, Reviews, Insights and the 90-day cash-flow chart share the same dated forecast events and override decisions. See [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) for the complete saved phases.
-
-## Three-cycle recurrence decisions and Phase 2 unified forecast
-
-A **three-charge monthly pattern** (the same merchant and account in three consecutive historical months, within three calendar days and with essentially identical amounts) is treated as **High** recurrence evidence regardless of the merchant's category. Less regular bills and shopping use stricter heuristics and can still trigger Reviews; confidence labels remain uncalibrated.
-
-In **Budget → expand category → Manage recurring merchant rules**, a user can explicitly mark a historically observed merchant as **not recurring**, restore **automatic detection**, or **establish a monthly recurring charge** with a chosen day and amount. Detected expected items also offer a quick **Not recurring** action. These decisions live in `predictions.patternRules`, keyed by transaction type, category, account and normalized merchant. They do not rewrite bank records. A user can establish a monthly schedule from even a single prior charge. An explicit decision takes precedence over the detector; updating the rule clears obsolete per-payment overrides for that merchant.
-
-**Phase 2:** `forecast-ledger.js` is now the single source for dated future income/expense events (including category prediction overrides and user-added one-time estimates). The app's Budget, the upcoming forecast in Insights, the Reviews uncertainty queue and the 90-day cash-flow simulator use the same candidate schedules. A change to an expected payment in Budget immediately changes the cash-flow chart and projected low balance on the same date. The 90-day simulation no longer has a separate monthly bill detector; its older calculation remains as a compatibility fallback only for isolated engine tests.
-
-The bank balance is still fictional. Nondateable everyday spending is disclosed as an uncertainty range **outside** the scheduled events rather than silently charging a fictitious amount per day. Transfers and credit-card settlements are intentionally not forecast as purchases. The demo-balance projection is isolated from browser records that cannot be established as belonging to the fictional account. If real accounts are introduced, account-aware balance/transfer treatment and source reconciliation must be validated through Plaid before claiming real-world reliability.
-
-**Next recommended phase:** Phase 3 — learn reusable categorization and schedule decisions from Reviews. See `DEVELOPMENT_ROADMAP.md`. Phase 4 (backtesting) and Plaid remain future steps.
-
-## Phase 3: Learning from Reviews (October 2026)
-
-**The read-only bank ledger stays authoritative.** Reviewing a category or a repeated payment creates a separate, reversible learning decision. Rules are stored in browser-local data and do not modify original source fields.
-
-### Category rules
-- In **Reviews**, confirm or change a transaction's category and leave **Remember this decision for similar transactions** selected. The Activity category editor also offers an optional **Remember this merchant** choice.
-- Rules are scoped to the **account, transaction type and normalized merchant**. If the merchant has consistently one category and the user explicitly saves the rule, subsequent *unclassified or low-confidence expense transactions* can receive that category automatically. Specific high-confidence provider categories are never overwritten.
-- Multi-purpose merchants (e.g. Amazon, Costco, Walmart, Home Depot, PayPal) and merchants with conflicting historical categories receive **suggestion-only** rules. Reviewers still decide each ambiguous purchase.
-- If new provider data conflicts with an automatic rule, that rule stops silently classifying the merchant and a review can reopen. The user can remove any learned rule in **Reviews → Learned rules**. Individual manual category corrections remain unchanged.
-- Every auto-classified record carries its classification provenance and can still be individually corrected.
-- Existing data migrates from v2 to v3: `learning.categoryRules` and a small `learning.ruleHistory` are added, without replacing transactions.
-
-### Prediction learning
-- **Confirm estimate** in Reviews teaches the model to *trust the historical recurring pattern*, without permanently freezing future amounts or dates. Confirmed subscriptions and bills can update from newer bank history.
-- Strong changes in expected amount, posting day or cadence trigger an **uncertainty review** rather than continued silent confirmation.
-- Editing an individual predicted payment still changes only that date's forecast; for monthly payments there is an explicit opt-in to apply the changed date and amount to future monthly charges.
-- Manual recurring / not-recurring rules from Phase 2 remain in effect, and all learned recurrence rules can be restored to automatic mode from **Reviews → Learned rules**.
-
-### Boundaries and accuracy
-Confidence labels remain uncalibrated heuristics. Confirmed history reduces *repeated requests*, but does not prove a particular future charge or amount is correct. Rules stored in browser-local storage do not sync across devices and are not tamper-proof until the secure backend exists. The next phase will measure performance using held-out historical transactions.
-
-See [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) for Phase 4, **automated accuracy backtesting**, then Plaid later when chosen by the user.
-
-## Phase 4 — Historical accuracy laboratory (completed October 17, 2026)
-
-Open **Insights → Accuracy** to see the prediction accuracy of the **fictional** 25-month household scenario. The lab does not use actual user transactions, connected accounts or browser localStorage. `accuracy-fixture.js` contains 25 months of invented records with a *separate, hidden* label identifying which events are truly recurring; the fixture is never added to the live ledger.
-
-`accuracy-lab.js` evaluates 12 monthly start dates (August 2025 through July 2026) using 90-day holdout windows. For each date the model receives only transactions at or before that date, with future records and hidden truth labels stripped. It then compares expected dated charges/deposits to actual later recurring events using one-to-one matching by merchant, account, direction and up to 2–5 days of posting-date tolerance.
-
-The Accuracy screen includes event-level precision/recall, missed charges, false predictions, matched-date and amount errors, event and spending coverage, breakdowns by category/cadence/confidence, and cash-balance errors after 30, 60 and 90 days. Cash-balance scores derive from a mathematically anchored **invented** bank balance; transfer withdrawals still affect checking cash but do not count as spending. Future irregular purchases have real cash effects even when no exact dated transaction was predicted.
-
-**Fictional baseline (not real-world accuracy):** precision 89.12%; recall 58.95%; expense-dollar coverage 29.8%; 30/60/90-day balance MAEs about $1,483 / $7,753 / $7,782. These are not sufficiently reliable for safe-to-spend decisions. Predictions often miss recurring payments beyond the near month, especially semiannual/annual items and income scheduling. No model confidence level is a calibrated probability.
-
-A deterministic regression baseline is in `tests/accuracy-regression-baseline.json`, checked by `tests/accuracy-phase4-smoke.cjs`. Tests verify zero forward-looking data access, accuracy reproducibility, one-to-one payment matching, mobile view compatibility, and untouched source records. **All 14 browser tests passed** on the implemented Phase 4 version.
-
-**Recommended next:** Phase 4.1, an accuracy-improvement pass targeting 60/90-day schedule coverage, transfers, irregular-spend uncertainty and additional held-out scenarios. The complete <a href="DEVELOPMENT_ROADMAP.md">roadmap</a> keeps Plaid deferred until the user requests it.
-
-
-## Phase 4.1 — Improve 90-day forecasting and evaluate independently
-
-**Implemented, October 17, 2026.** The recurring pattern detector now uses the latest fully observed calendar months as its reference even when forecasting the second and third months ahead. Monthly bills, semimonthly paychecks and stable repeated charges now extend across the whole 90-day horizon, while weekly and every-two-week streams retain date cadence and no-lookahead safeguards.
-
-Only historical transactions with a **known outgoing cash direction** may produce forecast transfer withdrawals. These are account-specific cash movements, not expenses; ambiguous-direction transfers are deliberately omitted rather than guessed. For example, a Checking-to-Savings transfer reduces the Checking balance but does not count as grocery spending, and an incoming Savings-side counterpart does not get added to Checking again.
-
-An **account-specific non-dated spending scenario** estimates likely irregular spending from the last three to six fully observed months of residual expense patterns. It uses a median for a central illustration and percentile bounds for a range; it never inserts a fake future transaction, changes a recorded transaction, or alters the dated pink Budget forecast. The Budget chart continues to show the scheduled-only line, and a separate explanatory box shows the possible 90-day ending balance after illustrative irregular spending.
-
-The **Insights → Accuracy** tab evaluates the original fictional household **and an independently generated second fictional household** with two accounts, irregular purchases, changed bills and internal transfers. Results are not bank-verified or externally validated. In twelve overlapping simulated historical 90-day windows per household:
-
-| Fictional test | Recurring precision | Recurring recall | 90-day balance error, dated only | 90-day error, irregular scenario |
-| --- | ---: | ---: | ---: | ---: |
-| Original fixture, before Phase 4.1 | 89.12% | 58.95% | $7,781.64 | not available |
-| Original fixture, after Phase 4.1 | 100% | 98.95% | $2,190.69 | $403.30 |
-| Independent second fixture, after Phase 4.1 | 99.36% | 93.23% | $1,379.17 | $915.11 |
-
-Numbers are mean absolute checking-balance errors; the irregular-spending scenario is an analytical balance estimate, not a predicted payment. The original and second households are synthetic and are **not sufficient evidence of real household reliability**. Annual renewals, new and disrupted merchants, and incomplete bank feeds still require stress testing. Tests are wired to continuous integration with a fixed baseline and 15 browser smoke tests.
-
-**Next:** Phase 4.2: stress-test the detector on disrupted history, shifted due dates, refunds, interrupted paychecks, missing statements and more genuinely varied households, then decide whether to evaluate historical statements in a separate consented read-only test environment. Plaid remains deferred.
-
-
-## Phase 4.2 — Adversarial reliability lab (October 17, 2026)
-
-The **Insights → Accuracy** tab now includes a stress-test section with eight deliberately difficult synthetic events. Each scenario runs on two fictional households at three historical prediction dates (48 disruption trials); none of these records, classifications, or bank events are ever imported into the live ledger.
-
-The stress tests independently examine one-quarter of history missing, an entire missed bank-sync month, delayed posting dates, late future payments, abruptly interrupted payroll, renamed merchant descriptions, unanticipated refunds, and the two sides of a Checking-to-Savings transfer. The predictor receives only historical transactions available by each simulated date. It is scored against actual future transactions held separate from its training input.
-
-**Safety improvements:** A single missing billing month can retain a provisional monthly payment or twice-monthly income prediction, but confidence is downgraded and the reason is surfaced in Reviews. Substantial date drift is handled cautiously; repeated refund credits are not interpreted as paychecks. A two-sided Savings transfer must not double-count Checking cash, and long-canceled repeating patterns stay excluded.
-
-**Important measured weaknesses on disrupted fictional cases:**
-
-- Dropping about 25% of historical rows reduces repeating-event recall to **80.9%**, with ~$6,982 additional 90-day balance error.
-- Hiding the entire latest month reduces recall to **51.0%**, with ~$4,312 additional 90-day balance error.
-- Delaying historical posting dates reduces recall to **62.1%**. Merchant renaming and posting delays also lower event matching.
-- Unexpectedly stopped income can create **~$25,492 more 90-day balance error** even when repeating-transaction recall stays high. Expected paychecks are **not guaranteed deposits**.
-- A nominally “High” confidence label matched **~86%** of the time in the selected synthetic stress audit. Confidence labels are heuristics, **not calibrated probabilities**.
-
-A dedicated stress baseline is stored at \`tests/phase42-stress-baseline.json\` and evaluated by \`tests/phase42-smoke.cjs\`, including PC and iPhone browser checks. The feature does not connect banks, write to bank ledger transactions, or make real-world accuracy claims.
-
-**Recommended next:** Phase 4.3 — bank-feed health indicators, clearly pending/unconfirmed future income, stronger multi-account/reversal cases and (only with explicit consent) a completely separate read-only historical statement evaluation sandbox. Plaid remains deferred.
+This application **does not initiate or schedule bank payments**. It predicts balances and shows uncertainties.

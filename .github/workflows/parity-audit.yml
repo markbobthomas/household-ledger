@@ -4,22 +4,20 @@ on:
     branches: [main]
   workflow_dispatch:
 concurrency:
-  group: ledger-parity-${{ github.ref }}
+  group: planner-parity-${{ github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install browser
+      - name: Verify same planner and forecast engine for Demo and Real
         run: |
-          npm install --no-save playwright
-          npx playwright install --with-deps chromium
-      - name: Measure existing Ledger feature parity
-        run: node tests/demo-real-feature-parity-audit.cjs
+          node --check planner.js
+          node tests/planner-parity.cjs

@@ -73,7 +73,7 @@ function prepare(payload){
  return {state,snapshot,account:banks[0],accounts:banks};
 }
 async function enter(){
- if(loading)return;loading=true;lastError='';
+ if(loading)return;loading=true;lastError='';localStorage.setItem(MODE,'real');
  // The last preference is Real: do not briefly show fictional balances or
  // "bank not connected" while the authenticated bank snapshot loads.
  host.render();
@@ -82,7 +82,15 @@ async function enter(){
   host.enterReal(data.state,data.snapshot);
   loadedAccount=data.account;live=true;
   localStorage.setItem(MODE,'real');
- }catch(e){lastError=e.message;host.enterDemo();live=false;localStorage.setItem(MODE,'demo')}
+ }catch(e){
+  // Never silently show fictional balances after an explicit Real choice.
+  lastError=e.message;live=false;loadedAccount=null;
+  if(typeof host.enterUnavailable==='function'){
+   host.enterUnavailable();localStorage.setItem(MODE,'real');
+  }else{
+   host.enterDemo();localStorage.setItem(MODE,'demo');
+  }
+ }
  finally{loading=false;host.render()}
 }
 async function refresh(){
@@ -112,7 +120,7 @@ function panel(){
   '<select id="ledger-mode-switch" aria-label="Choose demo or real data source"'+(loading?' disabled':'')+'>'+
    '<option value="demo"'+(!live&&!loading?' selected':'')+'>Demo / simulated</option>'+
    '<option value="real"'+(live||loading?' selected':'')+'>Real / Plaid</option></select>'+
-  '<p>Both modes use the same Ledger pages, category controls, budgets, forecasts and Insights. Bank transactions and balances cannot be edited.</p>'+
+  '<p>Both modes show the same focused balance planner. Bank transactions and balances remain read-only; only future projections change.</p>'+
   '<p>Real data is stored on the private server, separate from fictional data. Only your mode preference is stored on this device.</p>'+
   '<a href="/bank-connect">Connect, sync or disconnect bank account</a>'+statusText()+'</section>';
 }
