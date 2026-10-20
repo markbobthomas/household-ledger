@@ -27,7 +27,7 @@ try{
  }
 }catch{}
 let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
-let activeTab='overview',transactionFilter='all',editingKey='',editingScope='one',showNewTransaction=false,transactionNotice='';
+let activeTab='overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -390,8 +390,8 @@ function editorFor(row,s){
  const hasSeries=Boolean(row.seriesKey&&row.cadence&&!row.addedId);
  const currentSeries=hasSeries?state().predictions?.futureSeriesEdits?.[row.seriesKey]:null;
  const scope=hasSeries?'<fieldset class="future-scope"><legend>Apply changes to</legend>'+
-  '<label><input type="radio" name="scope" value="one"'+(editingScope==='one'?' checked':'')+'> This payment only</label>'+
-  '<label><input type="radio" name="scope" value="all"'+(editingScope==='all'?' checked':'')+'> This and all future payments</label>'+
+  '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
+  '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
   '<p>Use the second option to change a recurring '+(isMovement?'transfer or card payment':'bill or deposit')+
   ' across future months. Dates, amount, and account details apply to the series; past posted bank transactions do not change.</p>'+
   '</fieldset>':'<p class="audit-footnote">This payment is not part of an editable recurring series.</p>';
@@ -446,7 +446,6 @@ function transactionsPage(bundle,s){
    '<div class="future-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
    '<small>'+escapeHTML(desc)+(row.seriesKey?' · Recurring':'')+
     (row.seriesKey&&state().predictions?.futureSeriesEdits?.[row.seriesKey]?' · SERIES EDITED':'')+'</small>'+
-    (row.seriesKey?'<button type="button" class="future-series-link" data-edit-series="'+escapeHTML(row.key)+'">Edit all future</button>':'')+
    '</div>'+
    '<div class="future-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':paired?'↔ ':'−')+cash(row.amount)+'</div>'+
    '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">'+
@@ -532,7 +531,7 @@ function settingsPage(bundle,s,chosen){
   '<section class="panel mini-panel" aria-label="Recurring forecast changes">'+
    '<div class="section-title"><h2>Recurring payment changes</h2>'+
     '<span class="status-tag">'+Object.keys(state().predictions?.futureSeriesEdits||{}).length+' CUSTOMIZED</span></div>'+
-   '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Transactions and choose <strong>Edit all future</strong> for that recurring payment.</p>'+
+   '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Transactions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
    '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
    '</section>'+
   auditPanel(chosen)+routineReviewPanel(bundle)+autopayPanel(s)+connectionPanel(s,bundle)+'</div>';
@@ -609,14 +608,9 @@ document.addEventListener('click',async e=>{
   showNewTransaction=false;transactionNotice='';render();return;
  }
  if(e.target.closest('[data-cancel-future]')){editingKey='';render();return}
- const editAll=e.target.closest('[data-edit-series]');
- if(editAll){
-  editingKey=editAll.dataset.editSeries;editingScope='all';
-  showNewTransaction=false;transactionNotice='';render();return;
- }
  const edit=e.target.closest('[data-edit-future]');
  if(edit){editingKey=editingKey===edit.dataset.editFuture?'':edit.dataset.editFuture;
-  editingScope='one';showNewTransaction=false;transactionNotice='';render();return}
+  showNewTransaction=false;transactionNotice='';render();return}
  const skip=e.target.closest('[data-skip-future]');
  if(skip){
   const row=futureRows(forecastFor(snapshot()),snapshot()).find(r=>r.key===skip.dataset.skipFuture);
