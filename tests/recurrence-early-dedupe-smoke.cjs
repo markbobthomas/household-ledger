@@ -50,6 +50,14 @@ const excluded={plannerRoutineDecisions:{'expense|checking|home mortgage ach':
  {status:'excluded',amount:2000,frequency:'monthly'}}};
 assert.equal(R.infer([obligation],s,excluded,{days:90}).events.length,0,
  'User exclusion is authoritative');
+const oldAlias={plannerRoutineDecisions:{'expense|Household Checking|home mortgage ach':{
+ status:'excluded',amount:2000,frequency:'monthly'}}};
+assert.equal(R.infer([obligation],s,oldAlias,{days:90}).events.length,0,
+ 'An earlier user exclusion stored with account name must stay authoritative');
+const earlierMortgageKey=['mortgage','checking','home mortgage ach','200000']
+ .map(encodeURIComponent).join('|');
+assert.equal(R.infer([obligation],s,{mortgageReviewDismissals:[earlierMortgageKey]},{days:90}).events.length,0,
+ 'A previously dismissed missing mortgage must not silently reappear in the cash forecast');
 const historyKey=['checking','expense','home mortgage ach','200000'].map(encodeURIComponent).join('|');
 assert.equal(R.infer([obligation],s,{historyPatternDecisions:{[historyKey]:'dismissed'}},{days:90}).events.length,0,
  'A not-recurring decision from Reviews is respected');
@@ -65,6 +73,9 @@ const overlapping=R.dedupeEvents([inferred,manual],accounts);
 assert.equal(overlapping.events.length,1);
 assert.equal(overlapping.events[0].id,'owner');
 assert.equal(overlapping.removed.length,1);
+const changedManual={...confirmed,futureRecurringRules:[{...confirmed.futureRecurringRules[0],amount:2500}]};
+assert.equal(R.infer([obligation],s,changedManual,{days:90}).events.length,0,
+ 'A revised manually planned mortgage amount prevents stale bank-dollar duplicate');
 const otherAccount={...inferred,accountId:'savings',id:'different-account'};
 assert.equal(R.dedupeEvents([inferred,otherAccount],accounts).events.length,2,
  'Same-dollar bills on different bank accounts are not duplicates');
