@@ -70,8 +70,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
  for(const g of groups.values()){
   g.rows.sort((a,b)=>a.date.localeCompare(b.date));
   const t=g.rows.at(-1),age=diff(asOf,t.date),amount=cents(t.amount),
-   same=g.rows.filter(r=>cents(r.amount)===amount),
-   lastTwo=same.slice(-2),lastFour=same.slice(-4),
+   latest=g.rows.slice(-3),lastTwo=g.rows.slice(-2),lastFour=g.rows.slice(-4),
    twice=lastFour.length===4&&
     lastFour[0].date.slice(0,7)===lastFour[1].date.slice(0,7)&&
     lastFour[2].date.slice(0,7)===lastFour[3].date.slice(0,7)&&
@@ -80,11 +79,9 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
     Math.abs(+lastFour[1].date.slice(-2)-+lastFour[3].date.slice(-2))<=2,
    slots=twice?[+lastFour[2].date.slice(-2),+lastFour[3].date.slice(-2)]:null,
    f=twice?'twice-monthly':lastTwo.length===2?cadence(lastTwo[0].date,lastTwo[1].date):null,
-   f3=same.length>=3&&f&&cadence(same.at(-3).date,same.at(-2).date)===f,
+   f3=g.rows.length>=3&&f&&cadence(g.rows.at(-3).date,g.rows.at(-2).date)===f,
    recent={weekly:17,biweekly:31,monthly:66,quarterly:125,semiannual:215,annual:400},
-   spaced=Boolean(f)&&age<=(twice?40:recent[f])&&
-    // Never treat a mixed-price recent payment as an older constant-price pattern.
-    g.rows.at(-2)===lastTwo[0]&&g.rows.at(-1)===lastTwo[1]&&(twice||same.length<3||f3),
+   spaced=Boolean(f)&&age<=(twice?40:recent[f])&&(twice||g.rows.length<3||f3),
    one=g.rows.length===1&&age<=50&&trusted(t)&&g.kind==='expense'&&
     !internalName.test(g.merchant),
    category=String(metadata(t).detailed||'').toUpperCase(),
@@ -93,7 +90,11 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
     unpairedTransfer&&(g.kind==='income'||/TRANSFER/.test(category)&&!trusted(t)),
    multiCycle=f&&!['weekly','biweekly','twice-monthly'].includes(f)&&
     g.rows.filter(r=>r.date.slice(0,7)===t.date.slice(0,7)).length>1,
-   enough=one||spaced&&(twice||f3||(!variableName.test(g.merchant)&&!transferRisk)),
+   varying=latest.some(r=>cents(r.amount)!==amount),
+   // Variable bills and paychecks are one series. Predict one amount per
+   // scheduled date using a small rolling average, not one per amount.
+   estimate=money(latest.reduce((total,r)=>total+Number(r.amount),0)/latest.length),
+   enough=one||spaced&&(twice||f3||(!variableName.test(g.merchant)&&!transferRisk&&!varying)),
    planDate=next(t.date,f||'monthly',1);
   const aliases=[g.accountId,g.accountName,t.account,t.accountId].map(String).filter(Boolean);
   const blocked=aliases.some(a=>[g.kind,t.type].some(type=>{
@@ -106,14 +107,12 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant))continue;
   const owners=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
+   r.type===g.kind&&
    (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
-  if(owners.length){
-   const changed=!owners.some(r=>Math.abs(Number(r.matchAmount??r.amount)-t.amount)<.011||
-    Math.abs(Number(r.amount)-t.amount)<.011);
-   if(changed&&age<=75)review.push({...reviewItem(g,same,f,t,planDate),
-    reason:'New bank amount differs from your confirmed schedule; review before updating it'});
-   continue;
-  }
+  // A confirmed recurring rule OWNS the entire historical stream. Different
+  // amounts are normal for utilities and payroll and must not create another
+  // forecast or a false warning for every monthly statement.
+  if(owners.length)continue;
   // The same merchant/month may contain two genuine bills. Do not pick one
   // automatically or erase a competing charge because its name is similar.
   if(multiCycle){conflicts.push({merchant:g.merchant,reason:'Multiple same-merchant payments this cycle'});}
@@ -126,11 +125,12 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
      Array.from({length:110},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
     for(const when of dates){
      if(when<=asOf)continue;
-     automatic.push({id:'auto|'+series+'|'+when,date:when,amount:money(t.amount),
+     automatic.push({id:'auto|'+series+'|'+when,date:when,amount:estimate,
       merchant:g.merchant,accountId:g.accountId,type:g.kind,category:t.category||'Other',
       source:'historical',cadence:freq,_seriesKey:series,_seriesDate:when,
       planConfidence:one?'identified-single-bill':'observed-recurring-pattern',
-      historicalIds:same.slice(-3).map(x=>String(x.id||''))});
+      amountEstimate:varying?'recent-history-average':'last-posted-amount',
+      historicalIds:latest.map(x=>String(x.id||''))});
     }
     continue;
    }
@@ -138,7 +138,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   // Reviews represent candidates only. Nothing here changes a balance.
   if(age<=(g.rows.length===1&&!trusted(t)?45:recent[f||'monthly']||75)&&
    (g.rows.length>=2||trusted(t)))
-   review.push(reviewItem(g,same,f,t,planDate));
+   review.push(reviewItem(g,g.rows,f,t,planDate));
  }
  review.sort((a,b)=>b.priority-a.priority||b.occurrences-a.occurrences||
   b.lastDate.localeCompare(a.lastDate));
@@ -169,7 +169,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   ids.add(e.id);entries.push(e)};
  const ownerFor=(e)=>rules.some(r=>r.kind==='event'&&
   String(r.originalAccountId||r.accountId)===String(e.accountId)&&
-  (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(e.merchant)));
+  r.type===e.type&&
+  (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(
+   e._forecastOriginalMerchant||e.merchant)));
  // Explicit rules come first, and always own their original bank series.
  const generated=tools.generatedRecurring(rules,add(asOf,-32),add(end,32));
  const ownerEntries=generated.events.map(e=>{
