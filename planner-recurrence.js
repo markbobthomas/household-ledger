@@ -44,10 +44,16 @@ const bankEligible=(t,accounts,asOf)=>{
  return Boolean(actualKind(t));
 };
 const isStrongSource=t=>{
- const p=pfc(t),detail=String(p.detailed||'').toUpperCase();
- return isMortgage(t)||/SUBSCRIPTIONS|INSURANCE|RENT_AND_UTILITIES|RENT|LOAN_PAYMENT|RECURRING/.test(detail)||
- recurringBill.test(String(t.merchant||''))||
- ['Housing','Insurance','Subscriptions','Utilities','Kids & Family'].includes(t.category);
+ const p=pfc(t),detail=String(p.detailed||'').toUpperCase(),
+  primary=String(p.primary||'').toUpperCase();
+ const payroll=t.type==='income'&&
+  (/INCOME_WAGES|PAYROLL|SALARY|WAGES/.test(detail)||primary==='INCOME'&&
+   /payroll|salary|wages|paycheck/i.test(String(t.merchant||''))||
+   /payroll|salary|paycheck|employer deposit/i.test(String(t.merchant||'')));
+ return payroll||isMortgage(t)||
+  /SUBSCRIPTIONS|INSURANCE|RENT_AND_UTILITIES|RENT|LOAN_PAYMENT|RECURRING/.test(detail)||
+  recurringBill.test(String(t.merchant||''))||
+  ['Housing','Insurance','Subscriptions','Utilities','Kids & Family'].includes(t.category);
 };
 function infer(records,snapshot,predictions={},options={}){
  const accounts=snapshot.accounts||[],asOf=String(snapshot.asOf||''),days=Number(options.days||90);
