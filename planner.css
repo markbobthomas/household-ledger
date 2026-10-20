@@ -133,3 +133,56 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .audit-issue strong{font-size:12px}
 .audit-issue span{color:var(--muted);text-align:right}
 @media(max-width:780px){.audit-grid{grid-template-columns:1fr}.audit-issue{flex-direction:column;gap:4px}.audit-issue span{text-align:left}}
+
+/* Three-tab planning workspace */
+.planner-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 22px}
+.tab-link{border:0;border-bottom:2px solid transparent;background:transparent;padding:12px 17px;color:#74808a;font-weight:700;font-size:13px;min-height:44px}
+.tab-link:hover{color:var(--ink);background:#f5f7f9}
+.tab-link.active{color:#254f9d;border-bottom-color:#315ebd}
+.page-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 20px}
+.page-heading h2{font-size:22px;font-weight:750;letter-spacing:-.5px;margin:0}
+.page-heading p{margin:5px 0 0;font-size:12px;color:var(--muted)}
+.overview-page .overview-chart .chart-wrap svg{max-height:175px}
+.overview-upcoming-item{display:grid;grid-template-columns:70px minmax(0,1fr) auto;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);font-size:12px}
+.overview-upcoming-item:last-child{border-bottom:0}
+.overview-upcoming-item span{color:var(--muted)}
+.overview-upcoming-item strong{overflow-wrap:anywhere}
+.overview-upcoming-item span:last-child{font:700 12px var(--mono);color:var(--ink)}
+.future-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:17px;border-bottom:1px solid var(--line)}
+.future-toolbar label{display:flex;align-items:center;gap:12px;color:#596b7c;font-size:12px;font-weight:700}
+.future-toolbar select{min-width:180px;max-width:100%;height:37px;padding:5px 11px;border:1px solid #cbd3d9;border-radius:4px;background:#fff}
+.future-row{display:grid;grid-template-columns:65px minmax(0,1fr) 115px 70px;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.future-item:has(.future-edit-form)>.future-row{border-bottom:0}
+.future-date{font:700 11px var(--mono);color:#6c7884}
+.future-description{min-width:0;display:flex;flex-direction:column;gap:3px}
+.future-description strong{font-size:13px;overflow-wrap:anywhere}
+.future-description small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.future-amount{font:700 13px var(--mono);text-align:right;white-space:nowrap}
+.future-amount.incoming{color:#367050}
+.future-amount.outgoing{color:#323f4d}
+.future-new-form{margin:18px 0!important;background:#f9fafc}
+.future-new-form .section-title{margin-bottom:6px}
+.future-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:13px;margin-top:15px}
+.future-fields label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;color:#506070;min-width:0}
+.future-fields input,.future-fields select{height:40px;min-width:0;width:100%;border:1px solid #cbd3dd;border-radius:4px;padding:7px 9px;color:var(--ink);background:#fff;font:12px var(--mono)}
+.future-edit-form{border-bottom:1px solid var(--line);background:#f7f9fc;margin:0 -11px 12px;padding:15px 13px;border-radius:4px}
+.future-form-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0 0}
+.future-form-error{color:#9d2535;font-size:12px;font-weight:650;margin:10px 0}
+.future-notice{font-size:12px;color:#315d45;border-left:3px solid #7cb39a;background:#f1f8f4;padding:9px 12px}
+.future-skipped{margin:14px 0}
+.future-skip-line{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;font-size:12px;border-bottom:1px solid var(--line)}
+.cash-cushion-label{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px}
+.cash-cushion-label input{max-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:4px}
+#cushion-form{display:flex;align-items:center;gap:15px;flex-wrap:wrap}
+@media(max-width:880px){.sidebar .side-link{display:none}}
+@media(min-width:881px){.planner-tabs{display:none}}
+@media(max-width:780px){
+ .future-row{grid-template-columns:60px minmax(0,1fr) auto;gap:7px}
+ .future-row>.btn{grid-column:3}
+ .future-date{font-size:10px}
+ .future-amount{grid-column:2;text-align:left}
+ .future-row>.btn{grid-row:1 / 3;align-self:center}
+ .future-toolbar{flex-wrap:wrap}
+ .future-toolbar select{min-width:140px}
+ .page-heading h2{font-size:20px}
+}
