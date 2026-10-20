@@ -847,10 +847,11 @@ function render(){
  if(!bundle&&['history','reviews'].includes(activeTab)){
   try{
    const rows=model.records(state()),accounts=activeAccounts(s),asOf=s.asOf||dateToday();
-   bundle={rows,historyCandidates:window.HouseholdPlannerHistory.candidates(
-    rows,accounts,asOf,state().predictions||{},[]),
-    routines:{review:[]},missingMortgages:window.HouseholdPlannerIntelligence.missingMortgages(
-    rows,null,accounts,asOf,{dismissed:state().predictions?.mortgageReviewDismissals||[]})};
+   const candidates=window.HouseholdFutureLedger.analyze(
+    rows,accounts,asOf,state().predictions||{},90);
+   bundle={rows,historyCandidates:candidates.review,
+    routines:{review:[]},missingMortgages:[],
+    automaticRecurrence:{review:[]},duplicateConflicts:candidates.conflicts};
   }catch(_error){/* The visible forecast error remains available above. */}
  }
  const projection=bundle?.projection||null,selectedSource=selected(s);
@@ -1074,18 +1075,6 @@ document.addEventListener('click',async e=>{
    await commitForecastChange(()=>{state().predictions.primaryAccountId=current.id});
    selectedAccount=current.id;latestError='';render();
   }catch(err){setNotice('Main account setting could not be saved: '+String(err.message||err))}
-  return;
- }
- const confirm=e.target.closest('[data-confirm-routine],[data-reject-routine]');
- if(confirm){
-  const key=confirm.dataset.confirmRoutine||confirm.dataset.rejectRoutine;
-  const candidate=lastSuggestions.find(x=>x.key===key);
-  if(!candidate){setNotice('That suggested payment changed. Refresh the plan and try again.');return}
-  try{
-   await commitForecastChange(()=>window.HouseholdPlannerIntelligence.saveDecision(state(),candidate,
-    confirm.hasAttribute('data-confirm-routine')?'confirmed':'excluded'));
-   latestError='';render();
-  }catch(err){setNotice('Recurring payment decision could not be saved: '+String(err.message||err))}
   return;
  }
  const remove=e.target.closest('[data-remove-card-rule]');
