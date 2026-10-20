@@ -154,6 +154,27 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   try{
+   if(requestPath==='/api/ledger/forecasts'){
+    // Forecast rules are not edits to Plaid transactions, balances, or
+    // classification overrides. Persist them separately to prevent an
+    // unrelated stale category override from blocking a confirmed payment.
+    if(!state.items.length)return respond(409,{error:'Connect a bank account before saving a private forecast'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+       Object.keys(body).length!==1||
+       !Object.prototype.hasOwnProperty.call(body,'predictions')||
+       !body.predictions||typeof body.predictions!=='object'||
+       Array.isArray(body.predictions))
+     return respond(400,{error:'Invalid forecast preferences'});
+    const previous=state.ledgerAdjustments.predictions;
+    state.ledgerAdjustments.predictions=body.predictions;
+    try{await save()}catch(error){
+     // An unsuccessful write must not be reported as a saved prediction.
+     if(previous===undefined)delete state.ledgerAdjustments.predictions;
+     else state.ledgerAdjustments.predictions=previous;
+     throw error;
+    }
+    return respond(200,{saved:true,scope:'predictions'});
+   }
    if(requestPath==='/api/ledger/adjustments'){
     if(!state.items.length)return respond(409,{error:'No bank account connected'});
     if(!body||typeof body!=='object'||Array.isArray(body))return respond(400,{error:'Invalid preferences'});
