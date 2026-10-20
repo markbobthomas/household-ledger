@@ -290,6 +290,161 @@ function auditPanel(account){
    (report?'Run check again':'Run historical check')+'</button></div>'+
   '<p class="audit-footnote">Checks dates and amounts, not historical bank balances. It excludes variable shopping and cannot verify old card statements without historical statement records. A recheck uses the bank history already loaded; to include new bank transactions in Real mode, use Refresh bank first. Nothing is saved or sent to another service.</p></details>';
 }
+function accountSelect(accounts,value,name,allowAll=false){
+ return '<select name="'+escapeHTML(name)+'" '+(name==='transactionFilter'?'id="transaction-filter" data-transaction-filter':'')+'>'+
+  (allowAll?'<option value="all"'+(value==='all'?' selected':'')+'>All accounts</option>':'')+
+  accounts.map(a=>'<option value="'+escapeHTML(a.id)+'"'+(String(value)===String(a.id)?' selected':'')+'>'+
+   escapeHTML(a.name)+'</option>').join('')+'</select>';
+}
+function futureRows(bundle,s){
+ const accounts=activeAccounts(s),labels=new Map(accounts.map(a=>[String(a.id),a.name]));
+ const rows=[],projection=bundle?.projection;
+ if(!projection)return rows;
+ const monthEnd=shiftDay(s.asOf,horizon);
+ for(const p of projection.plans||[]){
+  if(p.date<=s.asOf||p.date>monthEnd)continue;
+  const key=window.HouseholdPlannerTransactions.keyMovement(p.id);
+  rows.push({key,kind:'movement',id:p.id,date:p.date,amount:p.amount,
+   merchant:p.merchant||(p.kind==='card_payment'?'Credit-card payment':'Account transfer'),
+   fromAccountId:String(p.fromAccountId),toAccountId:String(p.toAccountId),
+   from:labels.get(String(p.fromAccountId))||p.fromAccountId,
+   to:labels.get(String(p.toAccountId))||p.toAccountId,
+   addedId:p.id.startsWith('future|future-add|')?p.id.slice(7):null});
+ }
+ for(const e of projection.events||[]){
+  if(e.transferGroupId||e.date<=s.asOf||e.date>monthEnd)continue;
+  const accountId=String(e.accountId||'');
+  const key=e.predictionKey||window.HouseholdPlannerTransactions.keyEvent(e.id,accountId);
+  rows.push({key,kind:'event',id:String(e.id||''),date:e.date,amount:e.amount,
+   merchant:e.merchant||'Expected transaction',accountId,account:labels.get(accountId)||accountId,
+   type:e.type==='transfer'?'transfer':e.kind==='card_refund'?'refund':
+    e.kind==='card_purchase'?'expense':e.type==='refund'?'refund':
+    e.type==='income'?'income':'expense',
+   cashDirection:e.kind==='transfer_in'?'in':'out',
+   addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
+ }
+ return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
+}
+function editorFor(row,s){
+ const accounts=activeAccounts(s),isMovement=row.kind==='movement';
+ const kind=row.type||'expense',date=row.date,merchant=row.merchant;
+ const options=['expense','income','refund','transfer'].map(type=>
+  '<option value="'+type+'"'+(kind===type?' selected':'')+'>'+
+  ({expense:'Withdrawal / purchase',income:'Deposit',refund:'Refund',transfer:'Single-account transfer'}[type])+'</option>').join('');
+ const keys='<input type="hidden" name="key" value="'+escapeHTML(row.key)+'">';
+ const common='<label>Date<input type="date" name="date" value="'+escapeHTML(date)+'" min="'+
+  escapeHTML(shiftDay(s.asOf,1))+'" required></label>'+
+  '<label>Amount ($)<input type="number" name="amount" min="0.01" max="999999999" step="0.01" value="'+
+   escapeHTML(row.amount)+'" required></label>';
+ const fields=isMovement?
+  '<label>From account'+accountSelect(accounts,row.fromAccountId,'fromAccountId')+'</label>'+
+  '<label>To account'+accountSelect(accounts,row.toAccountId,'toAccountId')+'</label>'+
+  '<label>Description<input name="merchant" maxlength="160" value="'+escapeHTML(merchant)+'" required></label>'+
+  common:
+  '<label>Description<input name="merchant" maxlength="160" value="'+escapeHTML(merchant)+'" required></label>'+
+  '<label>Transaction type<select name="type">'+options+'</select></label>'+
+  '<label>Account'+accountSelect(accounts,row.accountId,'accountId')+'</label>'+
+  common+
+  '<label>Transfer direction<select name="cashDirection"><option value="out"'+(row.cashDirection==='out'?' selected':'')+
+   '>Money out</option><option value="in"'+(row.cashDirection==='in'?' selected':'')+'>Money in</option></select></label>';
+ return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
+  '<div class="future-fields">'+fields+'</div>'+
+  '<p class="audit-footnote">Changes only this predicted occurrence, not the bank transaction or repeating rule. '+
+   (isMovement?'Both linked accounts update together.':'')+'</p>'+
+  '<div class="future-form-actions"><button class="btn primary" type="submit">Save changes</button>'+
+   '<button class="btn" type="button" data-cancel-future>Cancel</button>'+
+   (row.addedId?'<button class="btn" type="button" data-remove-added="'+escapeHTML(row.addedId)+'">Remove</button>':
+    '<button class="btn" type="button" data-skip-future="'+escapeHTML(row.key)+'">Skip this occurrence</button>')+
+   '<button class="btn" type="button" data-restore-future="'+escapeHTML(row.key)+'">Reset</button></div></form>';
+}
+function newTransactionForm(s){
+ const accounts=activeAccounts(s),primary=selected(s)?.id||accounts[0]?.id,
+  defaultAccount=transactionFilter!=='all'?transactionFilter:primary;
+ return '<form class="future-new-form panel" id="future-new-form" data-future-new-form>'+
+  '<div class="section-title"><h2>Add predicted transaction</h2><span class="status-tag">FORECAST ONLY</span></div>'+
+  '<p class="lead">Add a dated future expense, deposit, refund or a transfer between your accounts. No money moves.</p>'+
+  '<div class="future-fields">'+
+  '<label>Transaction type<select name="type" id="new-future-type">'+
+   '<option value="expense">Withdrawal / purchase</option><option value="income">Deposit</option>'+
+   '<option value="refund">Refund</option><option value="transfer">Transfer between accounts</option></select></label>'+
+  '<label>Description<input name="merchant" maxlength="160" placeholder="e.g. Property tax" required></label>'+
+  '<label class="new-standard-account">Account'+accountSelect(accounts,defaultAccount,'accountId')+'</label>'+
+  '<label class="future-transfer-only" hidden>From account'+accountSelect(accounts,defaultAccount,'fromAccountId')+'</label>'+
+  '<label class="future-transfer-only" hidden>To account'+accountSelect(accounts,accounts.find(a=>String(a.id)!==String(defaultAccount))?.id||defaultAccount,'toAccountId')+'</label>'+
+  '<label>Date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+'" value="'+
+   escapeHTML(shiftDay(s.asOf,1))+'" required></label>'+
+  '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00"></label>'+
+  '</div><div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
+  '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
+}
+function transactionsPage(bundle,s){
+ const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
+  transactionFilter==='all'||r.kind==='movement'?
+   transactionFilter==='all'||r.fromAccountId===transactionFilter||r.toAccountId===transactionFilter:
+   r.accountId===transactionFilter);
+ const opts=accountSelect(accounts,transactionFilter,'transactionFilter',true);
+ const lines=visible.map(row=>{
+  const paired=row.kind==='movement',incoming=row.type==='income'||row.type==='refund',
+   desc=paired?row.from+' → '+row.to:row.account+' · '+
+    (row.type==='income'?'Deposit':row.type==='refund'?'Refund':
+     row.type==='transfer'?(row.cashDirection==='in'?'Transfer in':'Transfer out'):'Withdrawal / card purchase');
+  const canEdit=editingKey===row.key;
+  return '<article class="future-item" data-future-item="'+escapeHTML(row.key)+'">'+
+   '<div class="future-row"><div class="future-date">'+escapeHTML(dayLabel(row.date))+'</div>'+
+   '<div class="future-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+   '<small>'+escapeHTML(desc)+'</small></div>'+
+   '<div class="future-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':paired?'↔ ':'−')+cash(row.amount)+'</div>'+
+   '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">'+
+    (canEdit?'Close':'Edit')+'</button></div>'+
+   (canEdit?editorFor(row,s):'')+'</article>';
+ }).join('');
+ const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([k,v])=>
+  v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter));
+ const undo=skipped.length?'<details class="details future-skipped"><summary>'+
+  skipped.length+' skipped forecast occurrence(s) — restore</summary>'+
+  skipped.map(([key,v])=>'<div class="future-skip-line">'+escapeHTML(v.label||'Predicted transaction')+
+   ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
+   escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
+ return '<div class="planner-page transactions-page">'+
+  '<div class="page-heading"><div><h2>Future transactions</h2>'+
+   '<p>All dated predictions for the next '+horizon+' days. Edit one occurrence at a time.</p></div>'+
+   '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
+  '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
+   '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
+   (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
+   (showNewTransaction?newTransactionForm(s):'')+
+   (lines||'<div class="empty-visual">No predicted transactions for this selection. Add one or choose another account.</div>')+
+   undo+
+   '<p class="audit-footnote">Forecast-only changes recalculate balance predictions for affected accounts. Actual bank transactions remain untouched. Card payments and account transfers are represented once and affect both linked accounts.</p>'+
+  '</section></div>';
+}
+function overviewPage(bundle,s,chosen,derived,fresh){
+ const series=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
+ const events=(derived?.events||[]).filter(x=>x.date>s.asOf&&x.date<=shiftDay(s.asOf,horizon))
+  .sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
+ const notes=events.map(e=>'<div class="overview-upcoming-item"><span>'+escapeHTML(dayLabel(e.date))+
+  '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span></div>').join('');
+ return '<div class="planner-page overview-page">'+
+  accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
+  '<section class="panel overview-chart" aria-label="Projected balance curve">'+
+   '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
+   (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
+   '<p class="chart-caption">Dates and fixed recurring commitments only; daily discretionary purchases are not forecast.</p></section>'+
+  '<section class="panel"><div class="section-title"><h2>Next five expected movements</h2>'+
+   '<button type="button" class="btn" data-view="transactions">View all and edit</button></div>'+
+   (notes||'<p class="lead">No upcoming dated transactions identified.</p>')+
+   '</section></div>';
+}
+function settingsPage(bundle,s,chosen){
+ return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
+  '<h2>Settings</h2><p>Review recurring payments, your cash cushion, account connections and historical accuracy.</p></div></div>'+
+  '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
+   '<form id="cushion-form" data-cushion-form><label class="cash-cushion-label">Low-balance warning threshold ($)'+
+    '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+
+     escapeHTML(state().predictions?.cashCushion??500)+'" required></label>'+
+    '<button class="btn primary" type="submit">Save threshold</button></form></section>'+
+  auditPanel(chosen)+routineReviewPanel(bundle)+autopayPanel(s)+connectionPanel(s,bundle)+'</div>';
+}
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
  if(!root)return;
