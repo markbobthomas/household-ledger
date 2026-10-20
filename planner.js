@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','mortgageReviewDismissals','historyPatternDecisions'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -40,7 +40,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions}));
+   futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions}));
   return true;
  }
 }
@@ -398,6 +398,9 @@ function futureRows(bundle,s){
    to:labels.get(String(p.toAccountId))||p.toAccountId,
    seriesKey:p.seriesKey||null,baseDate:p.baseDate||p.date,cadence:p.cadence||null,
    recurringRuleId:p.recurringRuleId||null,
+   sourceAccountId:String(p.sourceAccountId||p.fromAccountId||''),
+   sourceMerchant:p.sourceMerchant||p.merchant,
+   sourceType:p.sourceType||'transfer',
    addedId:p.id.startsWith('future|future-add|')?p.id.slice(7):null});
  }
  for(const e of projection.events||[]){
@@ -412,6 +415,9 @@ function futureRows(bundle,s){
    cashDirection:e.kind==='transfer_in'?'in':'out',
    seriesKey:e.seriesKey||null,baseDate:e.baseDate||e.date,cadence:e.cadence||null,
    recurringRuleId:e.recurringRuleId||null,
+   sourceAccountId:String(e.sourceAccountId||e.accountId||''),
+   sourceMerchant:e.sourceMerchant||e.merchant,
+   sourceType:e.sourceType||e.type,
    addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
  }
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
@@ -489,7 +495,8 @@ function editorFor(row,s,records){
     '<button class="btn" type="button" data-skip-future="'+escapeHTML(row.key)+'">Skip this occurrence</button>')+
    '<button class="btn" type="button" data-restore-future="'+escapeHTML(row.key)+'">Reset this occurrence</button>'+
    (currentSeries?'<button class="btn" type="button" data-reset-series="'+escapeHTML(row.seriesKey)+'">Reset all future changes</button>':'')+
-   (selectedRule?'<button class="btn" type="button" data-remove-recurring="'+escapeHTML(selectedRule.id)+'">Stop repeating</button>':'')+
+   ((row.seriesKey||selectedRule)&&!(row.seriesKey||'').startsWith('autopay|')?
+    '<button class="btn" type="button" data-remove-recurring="'+escapeHTML(row.key)+'">Not recurring</button>':'')+
    '</div></form>';
 }
 function missingMortgagePanel(bundle){
@@ -641,13 +648,26 @@ function historyPage(bundle,s){
   const linked=savedRules.some(r=>String(r.originalAccountId)===aid&&
    r.originalType===t.type&&Math.abs(Number(r.matchAmount)-Number(t.amount))<.011&&
    (r.matchNames||[]).includes(String(t.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()));
+  const kind=t.type==='transfer'&&!t.pairedTransactionId?
+   (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':'transfer'):t.type;
+  const tools=window.HouseholdPlannerTransactions;
+  const rejectedKey=tools.recurrenceKey(aid,kind,t.merchant);
+  const rejected=Boolean(state().predictions?.futureRecurrenceExclusions?.[rejectedKey]);
+  const predicted=futureRows(bundle,s).some(r=>r.kind==='event'&&
+   String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
+   tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey);
   const action='<button class="btn" type="button" data-history-plan="'+escapeHTML(String(t.id))+
-   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit forecast':'Make recurring')+'</button>';
+   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit forecast':'Make recurring')+'</button>'+
+   (rejected?'<button class="btn" type="button" data-restore-recurrence="'+escapeHTML(rejectedKey)+
+    '">Allow predictions</button>':linked||predicted?
+    '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
+    '" data-history-account="'+escapeHTML(aid)+'">Not recurring</button>':'');
   return '<div class="history-actual-row" data-historical-transaction="'+escapeHTML(String(t.id))+'">'+
    '<span class="history-actual-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
    '<div class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
-    (t.pending?' · Pending':' · Posted')+(linked?' · Recurring confirmed':'')+'</small></div>'+
+    (t.pending?' · Pending':' · Posted')+(linked?' · Recurring confirmed':'')+
+    (rejected?' · NOT RECURRING':'')+'</small></div>'+
    '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':'−')+cash(t.amount)+'</strong>'+
    action+'</div>';
  }).join('');
@@ -815,6 +835,19 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+
      escapeHTML(state().predictions?.cashCushion??500)+'" required></label>'+
     '<button class="btn primary" type="submit">Save threshold</button></form></section>'+
+  '<section class="panel mini-panel" aria-label="Not recurring decisions">'+
+   '<div class="section-title"><h2>Not recurring</h2><span class="status-tag">'+
+    Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length+' EXCLUDED</span></div>'+
+   '<p>These merchants are excluded from automatic recurring predictions for the selected account and direction. Your actual bank transactions are unchanged. Choose Allow predictions to undo a mistake; manually created schedules can be added again from History or Transactions.</p>'+
+   Object.entries(state().predictions?.futureRecurrenceExclusions||{}).map(([key,item])=>
+    '<div class="future-skip-line"><strong>'+escapeHTML(item.merchant)+'</strong> · '+
+     escapeHTML(activeAccounts(s).find(a=>String(a.id)===String(item.accountId))?.name||item.accountId)+
+     ' · '+escapeHTML(item.type)+
+     ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
+     '">Allow predictions</button></div>').join('')+
+   (!Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
+     '<p class="audit-footnote">No recurring patterns have been excluded.</p>':'')+
+   '</section>'+
   '<section class="panel mini-panel" aria-label="Recurring forecast changes">'+
    '<div class="section-title"><h2>Recurring payment changes</h2>'+
     '<span class="status-tag">'+Object.keys(state().predictions?.futureSeriesEdits||{}).length+' CUSTOMIZED</span></div>'+
@@ -923,6 +956,42 @@ document.addEventListener('click',async e=>{
   document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
+ const restorePattern=e.target.closest('[data-restore-recurrence]');
+ if(restorePattern){
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.restoreRecurrence(
+    state(),restorePattern.dataset.restoreRecurrence));
+   recurringDraft=null;
+   reviewNotice='Automatic recurrence detection is allowed again for this merchant.';
+   transactionNotice=reviewNotice;
+   render();
+  }catch(err){setNotice(String(err.message||err))}
+  return;
+ }
+ const stopHistory=e.target.closest('[data-stop-history-recurrence]');
+ if(stopHistory){
+  const aid=stopHistory.dataset.historyAccount;
+  const row=lastHistoryRows.find(t=>String(t.id)===stopHistory.dataset.stopHistoryRecurrence&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===aid);
+  if(!row){setNotice('That bank transaction is no longer available.');return}
+  const kind=row.type==='transfer'?
+   (row.cashDirection==='out'?'expense':row.cashDirection==='in'?'income':'transfer'):row.type;
+  const saved=(state().predictions?.futureRecurringRules||[]).find(r=>
+   String(r.originalAccountId||r.accountId||r.fromAccountId)===aid&&
+   String(r.originalMerchant||r.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()===
+    String(row.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()&&
+   (r.kind==='movement'?'transfer':r.type)===kind);
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),{
+    kind:saved?.kind==='movement'?'movement':'event',accountId:aid,type:kind,
+    merchant:row.merchant,recurringRuleId:saved?.id||null
+   }));
+   recurringDraft=null;reviewNotice='Marked '+row.merchant+
+    ' as not recurring. All future predictions were removed.';
+   render();
+  }catch(err){setNotice(String(err.message||err))}
+  return;
+ }
  const reviewCandidate=e.target.closest('[data-review-candidate]');
  if(reviewCandidate){
   const candidate=lastReviewCandidates.find(x=>x.key===reviewCandidate.dataset.reviewCandidate);
@@ -941,11 +1010,11 @@ document.addEventListener('click',async e=>{
   const item=lastReviewCandidates.find(x=>x.key===dismissCandidate.dataset.dismissCandidate);
   if(!item){setNotice('This suggestion is no longer available.');return}
   try{
-   await commitForecastChange(()=>{
-    state().predictions.historyPatternDecisions??={};
-    state().predictions.historyPatternDecisions[item.key]='dismissed';
-   });
-   recurringDraft=null;reviewNotice='Marked '+item.merchant+' as not recurring.';render();
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),{
+    kind:'event',accountId:item.accountId,type:item.type,merchant:item.merchant
+   }));
+   recurringDraft=null;reviewNotice='Marked '+item.merchant+
+    ' as not recurring. You can reverse this in Settings.';render();
   }catch(err){setNotice(String(err.message||err))}
   return;
  }
@@ -1023,9 +1092,13 @@ document.addEventListener('click',async e=>{
  }
  const removeRecurring=e.target.closest('[data-remove-recurring]');
  if(removeRecurring){
+  const row=futureRows(forecastFor(snapshot()),snapshot())
+   .find(r=>r.key===removeRecurring.dataset.removeRecurring);
+  if(!row){setNotice('The recurring schedule changed. Open Transactions and try again.');return}
   try{
-   await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeRecurring(state(),removeRecurring.dataset.removeRecurring));
-   editingKey='';transactionNotice='Recurring schedule stopped. Automatic forecasts are restored if the bank history supports them.';render();
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),row));
+   editingKey='';transactionNotice='Marked '+row.merchant+
+    ' as not recurring. All predicted occurrences were removed. Restore it in Settings or History.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
