@@ -86,7 +86,7 @@ const clearlyMonthlyFromOne=t=>{
  // A lone insurance, utility or payroll payment may be annual, variable,
  // or biweekly. Leave those in Reviews until their schedule is evidenced.
  return isMortgage(t)||singleFixedBill.test(name)||
-  /SUBSCRIPTIONS|RECURRING|MORTGAGE|RENT_PAYMENT/.test(detail);
+  /SUBSCRIPTIONS|RECURRING|MORTGAGE|RENT_PAYMENT|RENT_AND_UTILITIES_RENT|LOAN_PAYMENTS_AUTO|AUTO_LOAN|LOAN_PAYMENT/.test(detail);
 };
 function infer(records,snapshot,predictions={},options={}){
  const accounts=snapshot.accounts||[],asOf=String(snapshot.asOf||''),days=Number(options.days||90);
