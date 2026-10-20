@@ -32,7 +32,7 @@ const {chromium,webkit}=require('playwright');
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
-   assert.equal(await page.locator('.side-link').count(),3,'Three focused planning pages replace legacy navigation');
+   assert.equal(await page.locator('.side-link').count(),5,'Five pages separate predicted bills, actual History and Reviews');
    const go=tab=>page.locator(mobile?'.planner-tabs [data-view="'+tab+'"]':'.sidebar [data-view="'+tab+'"]').click();
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
@@ -46,7 +46,16 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 90 days/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
-   await go('settings');
+   await go('history');
+   assert.match(await page.locator('.history-page').innerText(),/Actual transaction history/);
+   assert.ok(await page.locator('.history-actual-row').count()>20,
+    'All loaded bank records can be inspected individually');
+   const demoHistoricalMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
+   await demoHistoricalMortgage.locator('[data-history-plan]').click();
+   assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
+    'History can propose future recurrence based on an actual bank record');
+   await page.locator('[data-cancel-review-form]').click();
+   await go('reviews');
    const demoMortgage=page.locator('.routine-review-line').filter({hasText:'Mortgage'});
    await demoMortgage.waitFor();
    await demoMortgage.locator('[data-confirm-routine]').click();
@@ -56,9 +65,10 @@ const {chromium,webkit}=require('playwright');
     ?.plannerRoutineDecisions?.['expense|Checking|mortgage']?.status==='confirmed'),
     'Confirm once survives a reload without storing bank facts');
    await page.reload({waitUntil:'load'});
-   await go('settings');
+   await go('reviews');
    assert.equal(await page.locator('.routine-review-line').filter({hasText:'Mortgage'}).count(),0,
     'Confirmed recurring mortgage stays confirmed after page reload');
+   await go('settings');
    const auditDetails=page.locator('#accuracy-audit');
    assert.equal(await page.locator('#audit-launch').isVisible(),true,'One-click audit is visible in the main planner');
    await page.locator('#audit-launch').click();
@@ -256,11 +266,15 @@ const {chromium,webkit}=require('playwright');
   if(await setMain.count())await setMain.click();
   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/MAIN ACCOUNT/,
    'The chosen checking account becomes the persistent primary focus');
-  await page.locator('.sidebar [data-view="settings"]').click();
+  await page.locator('.sidebar [data-view="history"]').click();
+  assert.match(await page.locator('.history-page').innerText(),/Home Mortgage ACH/,
+   'Plaid posted mortgage visible separately from future predictions');
+  await page.locator('.sidebar [data-view="reviews"]').click();
   const confirmMortgage=page.locator('.routine-review-line').filter({hasText:'Home Mortgage ACH'});
   await confirmMortgage.locator('[data-confirm-routine]').click();
   assert.equal(await page.locator('.routine-review-line').filter({hasText:'Home Mortgage ACH'}).count(),0,
    'A repeated mortgage is confirmed once rather than every month');
+  await page.locator('.sidebar [data-view="settings"]').click();
   await page.locator('#card-autopay > summary').click();
   const cardForm=page.locator('[data-card-rule="credit-real"]');
   await cardForm.locator('[name=fromAccountId]').selectOption('checking-real');
@@ -353,6 +367,7 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#refresh-bank').click();
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
+  await page.locator('.sidebar [data-view="reviews"]').click();
   const unresolved=page.locator('.missing-mortgages').first();
   assert.match(await unresolved.innerText(),/Mortgage Servicer X|\$2,000/,
    'One real posted $2,000 mortgage triggers a missing-payment warning');
