@@ -63,6 +63,17 @@ const {chromium,webkit}=require('playwright');
    assert.match(await auditDetails.innerText(),/Prediction accuracy/);
    assert.match(await auditDetails.innerText(),/historical check|Not enough complete historical months|Correct dated forecasts/i,
     'Historical audit is read-only and explains coverage');
+   await auditDetails.locator('.audit-run-status').getByText(/Check 1 completed/).waitFor();
+   assert.equal(await page.evaluate(()=>{window.__auditTestGraph=document.querySelector('.chart-wrap svg');return !!window.__auditTestGraph}),true);
+   await auditDetails.locator('[data-run-backtest]').click();
+   await auditDetails.locator('.audit-run-status').getByText(/Check 2 completed/).waitFor();
+   assert.match(await auditDetails.locator('.audit-run-status').innerText(),/Results unchanged/,
+    'Repeated audit visibly completes even when the underlying history has not changed');
+   assert.ok(await auditDetails.getAttribute('open')!==null,
+    'Repeating from inside the audit leaves the result expanded');
+   assert.equal(await page.evaluate(()=>window.__auditTestGraph===document.querySelector('.chart-wrap svg')),true,
+    'Rerunning the audit does not redraw the balance chart');
+   assert.equal(await auditDetails.locator('[data-run-backtest]').innerText(),'Run check again');
    await page.locator('#horizon').selectOption('30');
    assert.match(await page.locator('.chart-caption').innerText(),/projection/i);
    assert.match(await page.locator('[aria-label="Projected balance curve"] .section-title').innerText(),/30 days/);
@@ -159,6 +170,15 @@ const {chromium,webkit}=require('playwright');
   assert.match(await auditReal.innerText(),/Prediction accuracy/);
   assert.match(await auditReal.innerText(),/Historical|historical|months|history/i,
    'Private Real bank data is processed in memory by the same audit');
+  await auditReal.locator('.audit-run-status').getByText(/Check 1 completed/).waitFor();
+  await auditReal.locator('[data-run-backtest]').click();
+  await auditReal.locator('.audit-run-status').getByText(/Check 2 completed/).waitFor();
+  assert.match(await auditReal.locator('.audit-run-status').innerText(),/Results unchanged/,
+   'Rerun in Real mode communicates no change instead of appearing unresponsive');
+  assert.ok(await auditReal.getAttribute('open')!==null,
+   'Real-mode rerun retains the expanded audit section');
+  assert.match(await auditReal.innerText(),/Refresh bank first/,
+   'An audit recheck clearly distinguishes recalculation from fetching new Plaid data');
   await page.locator('.account-tile').filter({hasText:'Household Visa'}).click();
   assert.equal(await page.locator('.balance-main').innerText(),'$1,200.00',
    'Selecting a card switches to debt without reducing checking');
