@@ -9,12 +9,26 @@ const today=()=>new Date().toLocaleDateString('en-CA');
 const statusText=()=>lastError?'<p role="alert">'+esc(lastError)+'</p>':'';
 const selection=()=>live?'real':'demo';
 async function request(path,body){
- const response=await fetch('/api/ledger'+path,{cache:'no-store',
+ const url='/api/ledger'+path,options={cache:'no-store',credentials:'same-origin',
   method:body===undefined?'GET':'POST',
   headers:body===undefined?{}:{'Content-Type':'application/json','X-Pilot-Action':'1'},
-  ...(body===undefined?{}:{body:JSON.stringify(body)})});
+  ...(body===undefined?{}:{body:JSON.stringify(body)})};
+ let response;
+ try{response=await fetch(url,options)}
+ catch(error){
+  // Safari calls a dropped connection "Load failed". Repeating a complete
+  // forecast-settings snapshot is safe: it neither adds another bill nor
+  // mutates bank data. Retry only transport failures, not rejected edits.
+  if(path!=='/forecasts')throw error;
+  if(typeof setTimeout==='function')await new Promise(resolve=>setTimeout(resolve,450));
+  try{response=await fetch(url,options)}
+  catch{
+   throw Error('Connection to the private bank server was interrupted. Your save was not confirmed. Keep this page open and try Save again.');
+  }
+ }
+ if(response.status===401)throw Error('Private bank session needs to be reopened. Reload the private bank page and sign in.');
  const ct=response.headers.get('content-type')||'';
- if(!ct.includes('application/json'))throw Error('Bank server returned an unexpected response. Wait for Render to finish deploying.');
+ if(!ct.includes('application/json'))throw Error('The private bank server is temporarily unavailable or updating. Try saving again after reopening the page.');
  let result;try{result=await response.json()}catch{throw Error('Bank server response could not be read')}
  if(!response.ok)throw Error(result.error||'Bank server request failed');
  return result;
