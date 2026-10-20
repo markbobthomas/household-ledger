@@ -801,6 +801,10 @@ function reviewsPage(bundle,s){
   '<span class="status-tag">'+count+' PAYMENT'+(count===1?'':'S')+' TO REVIEW</span></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft?repeatingReviewForm(s):'')+
+  ((bundle?.duplicateChecks||[]).length?'<p class="audit-footnote">Duplicate protection: '+
+    (bundle.duplicateChecks.length)+' overlapping forecast entr'+
+    (bundle.duplicateChecks.length===1?'y was':'ies were')+
+    ' automatically consolidated. Bank transactions were not changed.</p>':'')+
   (mortgages.length?missingMortgagePanel(bundle):'')+
   (regular.length?routineReviewPanel(bundle):'')+
   (autoLow.length?'<section class="panel"><div class="section-title"><h2>Uncertain repeating payments</h2>'+
