@@ -55,6 +55,21 @@ const cardIssuer=/\b(?:amex|american express|discover card|capital one card|chas
 const transferText=/\b(?:transfer (?:to|from)|internal transfer|account transfer|xfer (?:to|from)|transfer between|savings transfer|moving money)\b/i;
 const refundText=/\b(?:refund|reversal|chargeback|return credit|purchase return|merchant credit|returned purchase|credit adjustment)\b/i;
 const payrollText=/\b(?:payroll|salary|wages|paycheck|direct deposit|interest earned|dividend|deposit from employer)\b/i;
+/* Strong external income evidence takes priority over a generic Plaid
+ * TRANSFER_IN label, but never promotes ordinary account-to-account money. */
+function recognizedIncome(t,account){
+ const type=account?.type||t.accountType||t.account?.type;
+ if(type==='credit'||type==='loan')return false;
+ const description=String(t.merchant||t.name||'')+' '+String(t.description||'');
+ const pfc=t.personal_finance_category||t.source?.personalFinanceCategory||t.category;
+ const primary=String(pfc?.primary||'').toUpperCase(),
+  detailed=String(pfc?.detailed||'').toUpperCase();
+ const incoming=direction(t)==='in';
+ if(!incoming||refundText.test(description)||cardPayment.test(description))return false;
+ if(/\b(?:transfer (?:from|to) (?:my |own |the )?(?:checking|savings|account)|internal transfer|account transfer|savings transfer|cash advance)\b/i.test(description))return false;
+ return /^INCOME$/.test(primary)||/^INCOME_(?:WAGES|OTHER_INCOME|SOCIAL_SECURITY|RETIREMENT|BENEFITS)/.test(detailed)||
+  /\b(?:payroll|salary|wages|paycheck|pay\s*check|direct\s+dep(?:osit)?|employer\s+deposit|social\s+security\s+(?:deposit|benefit)|pension\s+(?:payment|deposit))\b/i.test(description);
+}
 function direction(t){
  const raw=t.source?.plaidAmount;
  if(Number.isFinite(Number(raw))&&raw!==null&&raw!==undefined&&raw!=='')
@@ -76,6 +91,7 @@ function initialKind(t,account){
   if(dir==='out')return 'loan_payment';
   if(dir==='in')return 'refund'; // A returned loan payment is never earned income.
  }
+ if(recognizedIncome(t,account))return 'income';
  if(transferText.test(name))return 'internal_transfer';
  if(t.type==='transfer')return 'internal_transfer';
  if(refundText.test(name)&&dir==='in')return 'refund';
@@ -192,7 +208,7 @@ function reconcile(state){
   needsReview:output.filter(t=>t.reconciliationStatus==='ambiguous'||t.reconciliationStatus==='needs-review').length
  }};
 }
-const api={accountType,registerAccounts,accountsFor,reconcile};
+const api={accountType,registerAccounts,accountsFor,reconcile,recognizedIncome};
 root.HouseholdAccounting=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
