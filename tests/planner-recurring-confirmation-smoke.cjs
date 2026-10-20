@@ -13,7 +13,7 @@ const examples=[
  {id:'wrong-amount',date:'2026-07-02',merchant:'Home Insurance',amount:400,accountId:'checking',type:'expense'}
 ];
 const suggested=T.findExamples(examples,reference,accounts);
-assert.deepEqual(suggested.map(e=>e.id),['posted-2','posted-1'],'Offer only matching merchant, exact amount, original account');
+assert.deepEqual(suggested.map(e=>e.id),['posted-2','posted-1','wrong-amount'],'Match posted utility history across different amounts on the original account');
 const saved=T.defineRecurring(state,{date:'2026-11-20',merchant:'Home Insurance',amount:250,
  type:'expense',accountId:'checking',frequency:'monthly'},accounts,asOf,reference,examples,['posted-1','posted-2']);
 assert.equal(saved.matchAmount,200,'Match old charges even though updated future charge is $250');
@@ -21,7 +21,7 @@ assert.equal(saved.sourceAnchorDate,'2026-11-02','Keep original expected schedul
 assert.deepEqual(T.recurrenceDates(saved,asOf,'2027-01-17'),['2026-11-20','2026-12-20']);
 const oldDec={type:'expense',merchant:'Home Insurance',accountId:'checking',amount:200,date:'2026-12-02',kind:'event'};
 assert.ok(T.matchesRecurring(saved,oldDec,accounts),'Suppress old November/December predicted charges after date shift');
-assert.ok(!T.matchesRecurring(saved,{...oldDec,amount:400},accounts),'Do not suppress a distinct recurring amount at same merchant');
+assert.ok(T.matchesRecurring(saved,{...oldDec,amount:400},accounts),'Variable utility amount belongs to the same named recurring bill');
 assert.ok(!T.matchesRecurring(saved,{...oldDec,accountId:'credit'},accounts),'Do not suppress other account');
 const generated=T.generatedRecurring(state.predictions.futureRecurringRules,asOf,'2027-01-27');
 assert.deepEqual(generated.events.map(e=>e.date),['2026-11-20','2026-12-20','2027-01-20']);
@@ -53,9 +53,10 @@ assert.throws(()=>T.defineRecurring(state,{date:'2026-11-10',merchant:'Bad',amou
  /second payday/);
 assert.throws(()=>T.defineRecurring(state,{date:'2026-11-10',merchant:'Bad',amount:4,
  type:'expense',accountId:'checking',frequency:'fortnightly'},accounts,asOf),/Choose how often/);
-assert.throws(()=>T.defineRecurring(state,{date:'2026-11-10',merchant:'Bad',amount:4,
+assert.ok(T.defineRecurring(state,{date:'2026-11-10',merchant:'Bad',amount:4,
  type:'expense',accountId:'checking',frequency:'monthly'},accounts,asOf,reference,
- examples,['wrong-amount']),/same amount/);
+ examples,['wrong-amount']).matchNames.includes('home insurance'),
+ 'Variable historical amounts may be linked deliberately without creating a second bill');
 const earlyRule=T.defineRecurring(state,{date:'2026-11-02',merchant:'Early Posted Mortgage',
  amount:2000,accountId:'checking',type:'expense',frequency:'monthly'},accounts,asOf);
 const earlyGenerated=T.generatedRecurring([earlyRule],'2026-10-30','2026-12-12');
