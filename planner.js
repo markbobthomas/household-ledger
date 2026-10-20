@@ -96,11 +96,35 @@ function forecastFor(s){
  const routines=window.HouseholdPlannerIntelligence.project(state(),rows,forecast.events,asOf);
  const tools=window.HouseholdPlannerTransactions,accounts=activeAccounts(s),
   confirmed=state().predictions?.futureRecurringRules||[],
-  matching=(event,kind)=>confirmed.some(rule=>tools.matchesRecurring(rule,
-   {...event,kind,date:event._seriesDate||event.baseDate||event.anchorDate||event.date,
-    merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
-    amount:event._forecastOriginalAmount??event.amount,
-    accountId:event._forecastOriginalAccountId||event.accountId},accounts));
+  normalizeMerchant=m=>String(m||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),
+  resolveAccount=value=>{
+   const raw=String(value||''),found=accounts.filter(a=>
+    [a.id,a.name,a.transactionAccount].some(k=>String(k||'')===raw));
+   return found.length===1?String(found[0].id):raw;
+  },
+  ownerCovers=(event,kind)=>confirmed.some(rule=>{
+   if(rule.kind!==(kind==='movement'?'movement':'event'))return false;
+   const account=resolveAccount(event._forecastOriginalAccountId||
+    event.accountId||event.account||event.fromAccountId);
+   const merchant=normalizeMerchant(event._forecastOriginalMerchant||event.merchant);
+   const amount=Number(event._forecastOriginalAmount??event.amount);
+   if(!merchant||String(rule.originalAccountId)!==account||!(amount>0))return false;
+   if(rule.kind==='movement'&&String(rule.toAccountId)!==String(event.toAccountId))return false;
+   return (rule.matchNames||[normalizeMerchant(rule.originalMerchant||rule.merchant)]).includes(merchant)&&
+    Math.abs(Number(rule.matchAmount??rule.amount)-amount)<.011;
+  }),
+  matching=(event,kind)=>ownerCovers(event,kind)||
+   confirmed.some(rule=>tools.matchesRecurring(rule,
+    {...event,kind,date:event._seriesDate||event.baseDate||event.anchorDate||event.date,
+     merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
+     amount:event._forecastOriginalAmount??event.amount,
+     accountId:event._forecastOriginalAccountId||event.accountId},accounts));
+ // Existing user-defined schedule is authoritative even when the old bank
+ // engine is still projecting a different due day, or source type changed
+ // between expense and ACH transfer. Do not re-prompt to confirm it.
+ routines.review=(routines.review||[]).filter(item=>!ownerCovers({
+  accountId:item.account,merchant:item.merchant,amount:item.amount
+ },'event'));
  // Expand the source-date window before applying an edited due date.
  // E.g. a bill originally due Nov 2 but moved to Nov 20 must remain visible
  // on Nov 18, even though the *original* Nov 2 date has passed.
