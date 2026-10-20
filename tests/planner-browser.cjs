@@ -383,7 +383,7 @@ const {chromium,webkit}=require('playwright');
   await cardSeriesForm.locator('button[type=submit]').click();
   await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
   assert.ok(writes.some(x=>Object.values(x.predictions?.futureSeriesEdits||{})
-   .some(v=>v.amount===1275)),'Recurring card payments persist only as private adjustments');
+   .some(v=>v.amount===1275)),'Recurring card payments persist only as private adjustments; recent forecast save: '+JSON.stringify(writes.at(-1)?.predictions?.futureRecurringRules?.slice(-1)||writes.at(-1)?.predictions?.futureSeriesEdits||{}).slice(0,750));
   const recurringCardRows=page.locator('.future-item').filter({hasText:'Credit-card payment'});
   assert.ok(await recurringCardRows.count()>=2,'Two future card cycles are visible');
   const matchingAmounts=await recurringCardRows.locator('.future-amount').allInnerTexts();
