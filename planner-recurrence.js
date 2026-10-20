@@ -165,8 +165,7 @@ function dedupeEvents(events,accounts=[],options={}){
    // overlapping inference is a single monthly obligation.
    const sameMonth=item.date.slice(0,7)===keep.date.slice(0,7);
    return close||(auto&&explicit&&sameMonth&&
-    Math.abs(cents(item.amount)-cents(keep.amount))<=
-     Math.max(100,Math.min(cents(item.amount),cents(keep.amount))*.08));
+    norm(item.merchant)===norm(keep.merchant));
   });
   if(matches.length===1){
    // Exact source identity and dates are stronger than amount. A manually
