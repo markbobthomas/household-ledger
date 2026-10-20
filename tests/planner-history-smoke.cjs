@@ -100,6 +100,18 @@ const noDouble=H.candidates([
 }]},[]);
 assert.equal(noDouble.length,0,
  'User-confirmed generic schedule excludes old automatic/review variants after date and amount edits');
+const changedConfirmed=H.candidates([
+ tx('prior-amount','2026-09-09','Bluebird Services',157.42),
+ tx('new-amount','2026-10-09','Bluebird Services',188)
+],accounts,asOf,{futureRecurringRules:[{
+ kind:'event',originalAccountId:'checking',originalMerchant:'Bluebird Services',
+ merchant:'Bluebird Services',matchNames:['bluebird services'],
+ matchAmount:157.42,amount:157.42,frequency:'monthly',date:'2026-11-09'
+}]},[]);
+assert.equal(changedConfirmed.length,1,
+ 'A new nonmortgage bill amount appears for review instead of being silently ignored');
+assert.equal(changedConfirmed[0].amount,188);
+assert.match(changedConfirmed[0].reason,/differs from an existing confirmed schedule/);
 const ranked=H.candidates([
  tx('known1','2026-09-06','Storage Payment',82),
  tx('known2','2026-10-06','Storage Payment',82),
