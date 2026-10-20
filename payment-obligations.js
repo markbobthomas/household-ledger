@@ -29,47 +29,83 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  };
  for(const [id,rule] of Object.entries(cards)){
   const card=byId.get(id),from=byId.get(String(rule.fromAccountId||''));
-  if(!card||!credit(card)||!from||!cash(from)){
-   warnings.push((card?.name||id)+': choose a connected checking/savings payment source');continue;
+  const autopay=rule.autopayEnabled!==false;
+  if(!card||!credit(card)){warnings.push('A configured credit card is not connected');continue}
+  if(autopay&&(!from||!cash(from))){
+   warnings.push(card.name+': select the checking/savings account paying this card');continue;
   }
-  if(!date(rule.nextPaymentDate)||!date(rule.lastStatementClose)||!Number.isInteger(Number(rule.closingDay))||
-   Number(rule.closingDay)<1||Number(rule.closingDay)>31||!validAmount(rule.lastStatementBalance)){
-   warnings.push(card.name+': statement amount, close date or payment date needs confirmation');continue;
+  const explicit=Boolean(rule.billingStartDate&&rule.billingEndDate);
+  const lastClose=String(explicit?rule.billingEndDate:rule.lastStatementClose||'');
+  const anchorStart=explicit?String(rule.billingStartDate):
+   shift(closeFor(plus(lastClose,-1).slice(0,7),rule.closingDay),1);
+  if(!date(lastClose)||!date(anchorStart)||!date(rule.nextPaymentDate)||
+   !date(rule.nextDueDate||rule.nextPaymentDate)||
+   !Number.isInteger(Number(rule.closingDay))||Number(rule.closingDay)<1||Number(rule.closingDay)>31||
+   (!explicit&&!validAmount(rule.lastStatementBalance))){
+   warnings.push(card.name+': billing dates or next payment dates need confirmation');continue;
   }
-  const method=rule.method||'statement';
-  if(!['statement','minimum','fixed'].includes(method)||method==='minimum'&&!validAmount(rule.minimumAmount)||
-   method==='fixed'&&!validAmount(rule.fixedAmount)){
-   warnings.push(card.name+': invalid autopay amount or method');continue;
+  const method=rule.method||'statement',hasIssued=validAmount(rule.lastStatementBalance);
+  if(!['statement','minimum','fixed'].includes(method)||
+    method==='minimum'&&!validAmount(rule.minimumAmount)||
+    method==='fixed'&&!validAmount(rule.fixedAmount)){
+   warnings.push(card.name+': invalid card payment method');continue;
   }
-  const lastClose=rule.lastStatementClose,amount0=Number(method==='statement'?rule.lastStatementBalance:
-   method==='minimum'?rule.minimumAmount:rule.fixedAmount);
-  if(rule.nextPaymentDate<=lastClose){warnings.push(card.name+': payment date must follow the statement close');continue}
-  for(let n=0;n<=12;n++){
-   const due=plus(rule.nextPaymentDate,n);
+  if(rule.nextPaymentDate<=lastClose){
+   warnings.push(card.name+': next autopay must follow the billing-period end');continue;
+  }
+  // The statement is calculated from the *card's own* settled purchases and
+  // refunds during each billing cycle, plus future explicitly predicted charges.
+  // An account balance is not itself a statement balance (it may carry debt).
+  for(let n=0;n<=18;n++){
+   const due=plus(rule.nextPaymentDate,n),actualDue=plus(String(rule.nextDueDate||rule.nextPaymentDate),n);
    if(due>through)break;
    if(due<=asOf)continue;
    const cycleClose=n===0?lastClose:closeFor(plus(lastClose,n).slice(0,7),rule.closingDay);
-   const prevClose=n===0?closeFor(plus(lastClose,-1).slice(0,7),rule.closingDay):
-    closeFor(plus(lastClose,n-1).slice(0,7),rule.closingDay);
-   const cycleRows=records.filter(t=>t.accountId===id&&!t.pending&&t.date>prevClose&&t.date<=cycleClose&&
-     ['expense','refund'].includes(t.type));
-   const bankPurchases=round(cycleRows.reduce((sum,t)=>sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
-   const futureCharges=round(expected.filter(t=>matchesAccount(t,card)&&t.date>prevClose&&
-     t.date<=cycleClose&&['expense','refund'].includes(t.type)).reduce((sum,t)=>sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
+   const cycleStart=n===0?anchorStart:
+    shift(closeFor(plus(lastClose,n-1).slice(0,7),rule.closingDay),1);
+   const matchesCard=t=>matchesAccount(t,card);
+   const cycleRows=records.filter(t=>matchesCard(t)&&!t.pending&&
+    t.date>=cycleStart&&t.date<=cycleClose&&t.date<=asOf&&
+    ['expense','refund'].includes(t.type));
+   const purchases=round(cycleRows.filter(t=>t.type==='expense')
+    .reduce((sum,t)=>sum+Number(t.amount),0));
+   const refunds=round(cycleRows.filter(t=>t.type==='refund')
+    .reduce((sum,t)=>sum+Number(t.amount),0));
+   const bankPurchases=round(purchases-refunds);
+   const pendingRows=records.filter(t=>matchesCard(t)&&t.pending&&
+    t.date>=cycleStart&&t.date<=cycleClose&&['expense','refund'].includes(t.type));
+   const predictedRows=expected.filter(t=>matchesCard(t)&&t.date>=cycleStart&&
+    t.date<=cycleClose&&t.date>asOf&&['expense','refund'].includes(t.type));
+   const futureCharges=round(predictedRows.reduce((sum,t)=>
+    sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
    const calculated=round(Math.max(0,bankPurchases+futureCharges));
-   // Never falsely claim a statement is verified by transactions. Carry the
-   // last confirmed amount as a deliberately conservative planning floor.
-   const estimated=Math.max(calculated,Number(rule.lastStatementBalance));
-   const amount=round(n===0?amount0:method==='statement'?estimated:amount0);
-   const confidence=n===0?'entered statement / review required':'estimate, not a bank-issued statement';
-   const actualDue=plus(String(rule.nextDueDate||rule.nextPaymentDate),n);
-   if(due>actualDue)warnings.push(card.name+': planned bank withdrawal '+due+' is after the card due date '+actualDue);
-   const statement={cardId:id,cardName:card.name,fromAccountId:from.id,fromName:from.name,
-    dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,statementBalance:n===0?Number(rule.lastStatementBalance):calculated,
-    bankPurchases,estimatedCharges:futureCharges,method,confidence,confirmed:n===0,estimated:n>0};
+   const legacy=!explicit;
+   // A known issued statement (optional) supersedes our calculation once.
+   // Legacy setups retain their old planning floor for subsequent cycles.
+   const confirmedFirst=n===0&&hasIssued;
+   const statementAmount=round(confirmedFirst?Number(rule.lastStatementBalance):
+    legacy&&hasIssued?Math.max(calculated,Number(rule.lastStatementBalance)):calculated);
+   const amount=round(method==='statement'?statementAmount:
+    method==='minimum'?Number(rule.minimumAmount):Number(rule.fixedAmount));
+   const confidence=confirmedFirst?'User-entered issued statement':
+    'Estimated from available card purchases, refunds and scheduled charges';
+   if(due>actualDue&&autopay)warnings.push(card.name+': planned checking withdrawal '+due+
+    ' falls after the due date '+actualDue);
+   if(n===0&&!cycleRows.length&&!predictedRows.length&&!hasIssued)
+    warnings.push(card.name+': no settled card transactions found in '+cycleStart+' to '+
+     cycleClose+'. Verify the bank history before using this estimate.');
+   const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
+    fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
+    dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,
+    statementBalance:statementAmount,bankPurchases,purchases,refunds,
+    estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
+    method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
+    autopayEnabled:autopay,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
+    incompleteFuture:cycleClose>asOf};
    statements.push(statement);
-   // Each card payment appears exactly once as one two-legged transfer.
-   if(amount>0){
+   // A statement preview exists even when autopay is disabled. Only a
+   // confirmed full-statement autopay rule schedules a checking withdrawal.
+   if(amount>0&&autopay){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
      anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay'};
     plans.push(plan);
