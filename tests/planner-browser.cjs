@@ -32,7 +32,8 @@ const {chromium,webkit}=require('playwright');
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
-   assert.equal(await page.locator('.side-link').count(),1,'Legacy Budget/Insights/Reviews navigation removed');
+   assert.equal(await page.locator('.side-link').count(),3,'Three focused planning pages replace legacy navigation');
+   const go=tab=>page.locator(mobile?'.planner-tabs [data-view="'+tab+'"]':'.sidebar [data-view="'+tab+'"]').click();
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
@@ -45,6 +46,7 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 90 days/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
+   await go('settings');
    const demoMortgage=page.locator('.routine-review-line').filter({hasText:'Mortgage'});
    await demoMortgage.waitFor();
    await demoMortgage.locator('[data-confirm-routine]').click();
@@ -54,6 +56,7 @@ const {chromium,webkit}=require('playwright');
     ?.plannerRoutineDecisions?.['expense|Checking|mortgage']?.status==='confirmed'),
     'Confirm once survives a reload without storing bank facts');
    await page.reload({waitUntil:'load'});
+   await go('settings');
    assert.equal(await page.locator('.routine-review-line').filter({hasText:'Mortgage'}).count(),0,
     'Confirmed recurring mortgage stays confirmed after page reload');
    const auditDetails=page.locator('#accuracy-audit');
@@ -64,22 +67,51 @@ const {chromium,webkit}=require('playwright');
    assert.match(await auditDetails.innerText(),/historical check|Not enough complete historical months|Correct dated forecasts/i,
     'Historical audit is read-only and explains coverage');
    await auditDetails.locator('.audit-run-status').getByText(/Check 1 completed/).waitFor();
-   assert.equal(await page.evaluate(()=>{window.__auditTestGraph=document.querySelector('.chart-wrap svg');return !!window.__auditTestGraph}),true);
+   assert.equal(await page.evaluate(()=>{window.__auditTestPage=document.querySelector('.settings-page .page-heading');return !!window.__auditTestPage}),true);
    await auditDetails.locator('[data-run-backtest]').click();
    await auditDetails.locator('.audit-run-status').getByText(/Check 2 completed/).waitFor();
    assert.match(await auditDetails.locator('.audit-run-status').innerText(),/Results unchanged/,
     'Repeated audit visibly completes even when the underlying history has not changed');
    assert.ok(await auditDetails.getAttribute('open')!==null,
     'Repeating from inside the audit leaves the result expanded');
-   assert.equal(await page.evaluate(()=>window.__auditTestGraph===document.querySelector('.chart-wrap svg')),true,
-    'Rerunning the audit does not redraw the balance chart');
+   assert.equal(await page.evaluate(()=>window.__auditTestPage===document.querySelector('.settings-page .page-heading')),true,
+    'Rerunning the audit does not redraw the surrounding settings page');
    assert.equal(await auditDetails.locator('[data-run-backtest]').innerText(),'Run check again');
+   await go('overview');
    await page.locator('#horizon').selectOption('30');
    assert.match(await page.locator('.chart-caption').innerText(),/projection/i);
    assert.match(await page.locator('[aria-label="Projected balance curve"] .section-title').innerText(),/30 days/);
    await page.locator('.account-tile').filter({hasText:'Rewards Visa'}).click();
    assert.match(await page.locator('.balance-main').innerText(),/\$810\.00/,'Credit card balance is shown as debt, not checking cash');
    assert.match(await page.locator('.hero-footnote').first().innerText(),/debt/);
+   await go('transactions');
+   assert.ok(await page.locator('.future-item').count()>0,'All scheduled transactions are editable on separate page');
+   const row=page.locator('.future-item').filter({hasText:'Mortgage'}).first();
+   assert.ok(await row.count()>0,'Mortgage prediction is available in future transactions');
+   const predictionKey=await row.getAttribute('data-future-item');
+   await row.locator('[data-edit-future]').click();
+   const editor=page.locator('.future-edit-form[data-future-edit-form]');
+   const originalAmount=Number(await editor.locator('[name=amount]').inputValue());
+   await editor.locator('[name=amount]').fill(String(originalAmount+75));
+   await editor.locator('button[type=submit]').click();
+   await page.locator('.future-notice').getByText(/updated/).waitFor();
+   assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureTransactionEdits?.[key]?.amount,predictionKey),originalAmount+75,
+    'One-off prediction edits save without changing posted transactions');
+   await page.locator('[data-show-new]').click();
+   await page.locator('#future-new-form [name=merchant]').fill('One-time home repair');
+   await page.locator('#future-new-form [name=amount]').fill('125');
+   await page.locator('#future-new-form [name=date]').fill('2026-11-20');
+   await page.locator('#future-new-form button[type=submit]').click();
+   await page.getByText('One-time home repair').first().waitFor();
+   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureTransactionAdds?.some(t=>t.merchant==='One-time home repair')),true,
+    'New per-account expense persists in demo without altering bank records');
+   await page.reload({waitUntil:'load'});
+   await go('transactions');
+   assert.ok(await page.getByText('One-time home repair').count(),
+    'New transaction is retained after browser reload');
+
    assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');
