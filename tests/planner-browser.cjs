@@ -207,6 +207,22 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
     .futureRecurringRules?.some(x=>x.merchant==='Every 4 weeks test payment'&&x.frequency==='every-4-weeks')),
     'Every-four-weeks schedules persist as one confirmed recurrence');
+   await page.locator('[data-show-new]').click();
+   const linkForm=page.locator('#future-new-form');
+   await linkForm.locator('[name=merchant]').fill('Insurance payment estimate');
+   await linkForm.locator('[data-frequency]').selectOption('monthly');
+   await linkForm.locator('[data-history-link-search]').fill('State Farm');
+   const postedInsurance=linkForm.locator('[data-history-example]').first();
+   await postedInsurance.waitFor();
+   assert.ok((await linkForm.locator('[data-history-link-results]').innerText()).includes('State Farm Insurance'),
+    'Any recurring schedule can search Plaid history by bank merchant name');
+   await postedInsurance.check();
+   assert.match(await linkForm.locator('[data-history-link-results]').innerText(),/1 bank transaction linked/,
+    'Owner can explicitly attach posted history even when the forecast payee name differs');
+   await linkForm.locator('[data-history-link-search]').fill('Insurance');
+   assert.equal(await linkForm.locator('[data-history-example]:checked').count(),1,
+    'Linked history persists while trying different payee searches');
+   await page.locator('[data-cancel-new]').click();
    await go('history');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
    await insuranceHistory.locator('[data-history-plan]').click();
