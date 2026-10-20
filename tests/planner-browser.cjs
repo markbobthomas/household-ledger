@@ -214,6 +214,10 @@ const {chromium,webkit}=require('playwright');
     name:'Grocery Card Charge',merchant:'Grocery Card Charge',amount:300,pending:false,
     category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'HIGH'}});
   for(const month of ['2026-06','2026-07','2026-08','2026-09','2026-10'])
+   transactions.push({id:'streaming-'+month,accountId:'credit-real',date:month+'-05',
+    name:'Netflix subscription',merchant:'Netflix subscription',amount:18,pending:false,
+    category:{primary:'SUBSCRIPTIONS',detailed:'SUBSCRIPTIONS_TV_AND_MOVIES',confidence_level:'HIGH'}});
+  for(const month of ['2026-06','2026-07','2026-08','2026-09','2026-10'])
    transactions.push({id:'income-'+month,accountId:'checking-real',date:month+'-12',
     name:'ACME Employer Payroll',merchant:'ACME Employer Payroll',amount:-3100,pending:false,
     category:{primary:'TRANSFER_IN',detailed:'TRANSFER_IN_OTHER_TRANSFER_IN',confidence_level:'HIGH'}});
