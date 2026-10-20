@@ -98,14 +98,20 @@ function forecastFor(s){
     merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
     amount:event._forecastOriginalAmount??event.amount,
     accountId:event._forecastOriginalAccountId||event.accountId},accounts));
- const generated=tools.postedCoverage(tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90)),confirmed,rows,accounts,asOf);
- const manual={plans:generated.plans,
-  events:generated.events.map(e=>({
+ // Expand the source-date window before applying an edited due date.
+ // E.g. a bill originally due Nov 2 but moved to Nov 20 must remain visible
+ // on Nov 18, even though the *original* Nov 2 date has passed.
+ const padded=tools.generatedRecurring(confirmed,shiftDay(asOf,-32),shiftDay(asOf,122));
+ const adjusted={
+  events:padded.events.map(e=>({
    ...tools.applySeries(e,e.date,e._seriesKey,state().predictions?.futureSeriesEdits||{}),
    _seriesKey:e._seriesKey,_seriesDate:e.date,
    _forecastOriginalAccountId:e.accountId,_forecastOriginalMerchant:e.merchant,
    _forecastOriginalAmount:e.amount
-  }))};
+  })).filter(e=>e.date>asOf&&e.date<=shiftDay(asOf,90)),
+  plans:padded.plans
+ };
+ const manual=tools.postedCoverage(adjusted,confirmed,rows,accounts,asOf);
  const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
  const existingAdds=(state().predictions?.futureTransactionAdds||[]).filter(e=>
   !confirmed.some(r=>r.sourceAddedId===e.id)&&!matching(e,e.type==='transfer'?'movement':'event'));
