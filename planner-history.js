@@ -81,7 +81,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
   const frequency=guessFrequency(g.rows);
   // Two dated payments are enough for review, one with unequivocal bill
   // semantics is enough for an owner prompt. Never repeat random shopping.
-  if(!frequency&&!(g.rows.length===1&&bill))continue;
+  if(!frequency&&!bill)continue;
   const cadence=frequency||'monthly';
   const tolerance={weekly:18,biweekly:35,monthly:75,quarterly:125,
    semiannual:210,annual:400}[cadence];
@@ -99,15 +99,16 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
    return same;
   });
   if(projected)continue;
-  const strong=g.rows.length>=3&&g.rows.every(t=>amount(t.amount)===amount(g.amount));
+  const strong=Boolean(frequency)&&g.rows.length>=3&&g.rows.every(t=>amount(t.amount)===amount(g.amount));
   result.push({key:g.key,accountId:g.accountId,accountName:g.accountName,
    merchant:g.merchant,amount:g.amount,type:g.type,
-   frequency:cadence,confidence:strong?'Medium':g.rows.length===2?'Low':'Needs confirmation',
+   frequency:cadence,confidence:strong?'Medium':g.rows.length>=2?'Low':'Needs confirmation',
    examples:g.rows.slice(-6).reverse().map(t=>({
     id:String(t.id||''),date:t.date,amount:Number(t.amount),merchant:String(t.merchant||'')
    })),
    occurrences:g.rows.length,lastDate:latest.date,nextDate:upcoming,
    reason:g.rows.length===1?'One identifiable bill; recurrence not yet established':
+    !frequency?'Repeated bill amount, but calendar timing varies; choose the schedule':
     'Two or more payments with matching account, merchant, amount and timing'});
  }
  return result.sort((a,b)=>a.nextDate.localeCompare(b.nextDate)||
