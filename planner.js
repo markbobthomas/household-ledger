@@ -98,7 +98,7 @@ function forecastFor(s){
     merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
     amount:event._forecastOriginalAmount??event.amount,
     accountId:event._forecastOriginalAccountId||event.accountId},accounts));
- const generated=tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90));
+ const generated=tools.postedCoverage(tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90)),confirmed,rows,accounts,asOf);
  const manual={plans:generated.plans,
   events:generated.events.map(e=>({
    ...tools.applySeries(e,e.date,e._seriesKey,state().predictions?.futureSeriesEdits||{}),
