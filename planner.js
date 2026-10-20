@@ -542,6 +542,28 @@ function editorFor(row,s,records){
    (selectedRule?'<button class="btn" type="button" data-remove-recurring="'+escapeHTML(selectedRule.id)+'">Stop repeating</button>':'')+
    '</div></form>';
 }
+function missingMortgagePanel(bundle){
+ const missing=bundle?.missingMortgages||[];
+ if(!missing.length)return '';
+ return '<section class="panel missing-mortgages" aria-label="Mortgage payments missing from forecast">'+
+  '<div class="section-title"><h2>Possible missing mortgage payment'+(missing.length>1?'s':'')+
+   '</h2><span class="status-tag warn">NOT IN FORECAST</span></div>'+
+  '<p class="lead">Bank history shows a possible mortgage missing from the plan. '+
+   'Review the next date, amount and paying account before it affects projected balances.</p>'+
+  missing.map(m=>'<div class="mortgage-review" data-mortgage-review="'+escapeHTML(m.id)+'">'+
+    '<div class="mortgage-review-info"><strong>'+escapeHTML(m.merchant)+' · '+cash(m.amount)+'</strong>'+
+     '<small>'+escapeHTML(m.account)+' · Last posted '+escapeHTML(dayLabel(m.lastDate))+
+      ' · Suggested next '+escapeHTML(dayLabel(m.nextDate))+'</small>'+
+     '<small>'+m.observed+' actual payment example'+(m.observed===1?'':'s')+' found</small>'+
+     '<details class="mortgage-examples"><summary>View posted examples</summary>'+
+      m.examples.map(t=>'<div>'+escapeHTML(dayLabel(t.date))+' · '+
+       escapeHTML(t.merchant)+' · '+cash(t.amount)+'</div>').join('')+'</details></div>'+
+    '<div class="mortgage-review-actions"><button type="button" class="btn primary" data-review-mortgage="'+
+     escapeHTML(m.id)+'">Review and schedule</button>'+
+     '<button type="button" class="btn" data-dismiss-mortgage="'+escapeHTML(m.id)+
+     '">Not recurring</button></div></div>').join('')+
+  '<p class="audit-footnote">Suggested next date uses the last bank posting day, not the lender’s due date. Confirm it before saving. Bank records are never changed.</p></section>';
+}
 function newTransactionForm(s){
  const accounts=activeAccounts(s),primary=selected(s)?.id||accounts[0]?.id,
   defaultAccount=transactionFilter!=='all'?transactionFilter:primary;
