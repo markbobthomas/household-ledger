@@ -1,0 +1,119 @@
+/* Historical bank records stay read-only. This scanner looks for actionable,
+ * lower-confidence repeating patterns and sends them to Reviews, never directly
+ * to the balance forecast. No user data leaves the browser. */
+(function(root){
+'use strict';
+const DAY=86400000;
+const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&Number.isFinite(Date.parse(s+'T12:00:00Z'));
+const amount=n=>Math.round(Number(n)*100);
+const diff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/DAY);
+const lastDay=m=>new Date(Date.UTC(Number(m.slice(0,4)),Number(m.slice(5,7)),0)).getUTCDate();
+const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
+const monthAt=(iso,n)=>{
+ const [y,m,d]=iso.split('-').map(Number);
+ const first=new Date(Date.UTC(y,m-1+n,1,12)),target=first.toISOString().slice(0,7);
+ return target+'-'+String(Math.min(d,lastDay(target))).padStart(2,'0');
+};
+const namesBill=/\b(?:mortgage|rent|loan|insurance|premium|subscription|membership|internet|electric|utilities|water|sewer|daycare|tuition|payroll|salary|paycheck|wireless|cellular|phone plan|autopay|gym|netflix|hulu|spotify)\b/i;
+const pfcRecurring=t=>{
+ const p=t.personal_finance_category||t.source?.personalFinanceCategory||{};
+ return /MORTGAGE|INSURANCE|SUBSCRIPTION|RECURRING|UTILITIES|RENT|LOAN_PAYMENT|INCOME_WAGES/.test(String(p.detailed||'').toUpperCase());
+};
+const accountOf=(t,accounts)=>{
+ const raw=String(t.accountId||t.account||'');
+ const found=(accounts||[]).filter(a=>[a.id,a.name,a.transactionAccount].some(k=>String(k||'')===raw));
+ return found.length===1?String(found[0].id):raw;
+};
+const canPlan=t=>t&&!t.pending&&validDate(t.date)&&
+ ['expense','income'].includes(t.type)&&Number(t.amount)>0;
+function guessFrequency(history){
+ const ts=[...(history||[])].sort((a,b)=>a.date.localeCompare(b.date));
+ if(ts.length<2)return null;
+ const gaps=ts.slice(1).map((t,i)=>diff(t.date,ts[i].date));
+ const recent=gaps.slice(-3),avg=recent.reduce((a,b)=>a+b,0)/recent.length;
+ const days=ts.slice(-Math.min(ts.length,4)).map(t=>Number(t.date.slice(-2)));
+ const spread=Math.max(...days)-Math.min(...days);
+ const choices=[
+  {frequency:'weekly',span:7,tolerance:2},
+  {frequency:'biweekly',span:14,tolerance:3},
+  {frequency:'monthly',span:30.44,tolerance:6},
+  {frequency:'quarterly',span:91.31,tolerance:9},
+  {frequency:'semiannual',span:182.6,tolerance:11},
+  {frequency:'annual',span:365.25,tolerance:16}
+ ];
+ return choices.find(c=>Math.abs(avg-c.span)<=c.tolerance&&
+  recent.every(d=>Math.abs(d-c.span)<=c.tolerance)&&
+  (!['monthly','quarterly','semiannual','annual'].includes(c.frequency)||spread<=7))?.frequency||null;
+}
+function nextDate(last,frequency,asOf){
+ if(!validDate(last)||!validDate(asOf))return null;
+ let d=last;
+ for(let i=0;i<56&&d<=asOf;i++){
+  d=frequency==='weekly'?addDays(d,7):frequency==='biweekly'?addDays(d,14):
+   monthAt(last,(i+1)*({monthly:1,quarterly:3,semiannual:6,annual:12}[frequency]||1));
+ }
+ return d>asOf?d:null;
+}
+function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
+ const dismissed=preferences.historyPatternDecisions||{},rules=preferences.futureRecurringRules||[];
+ const groups=new Map();
+ for(const t of records||[]){
+  if(!canPlan(t)||t.date>asOf)continue;
+  const aid=accountOf(t,accounts);
+  if(!aid)continue;
+  const name=norm(t.merchant||t.name);
+  if(!name)continue;
+  const account=(accounts||[]).find(a=>String(a.id)===aid);
+  if(!account||['credit','loan'].includes(String(account.accountType||account.type||'').toLowerCase())&&t.type==='income')
+   continue;
+  const key=[aid,t.type,name,String(amount(t.amount))].map(encodeURIComponent).join('|');
+  if(!groups.has(key))groups.set(key,{key,accountId:aid,accountName:account.name||aid,
+   merchant:String(t.merchant||t.name),amount:Number(t.amount),type:t.type,rows:[]});
+  groups.get(key).rows.push(t);
+ }
+ const result=[];
+ for(const g of groups.values()){
+  g.rows.sort((a,b)=>a.date.localeCompare(b.date));
+  const latest=g.rows.at(-1),age=diff(asOf,latest.date);
+  const bill=namesBill.test(g.merchant)||g.rows.some(pfcRecurring)||
+   ['Housing','Insurance','Subscriptions','Utilities'].includes(latest.category);
+  const frequency=guessFrequency(g.rows);
+  // Two dated payments are enough for review, one with unequivocal bill
+  // semantics is enough for an owner prompt. Never repeat random shopping.
+  if(!frequency&&!(g.rows.length===1&&bill))continue;
+  const cadence=frequency||'monthly';
+  const tolerance={weekly:18,biweekly:35,monthly:75,quarterly:125,
+   semiannual:210,annual:400}[cadence];
+  if(age>tolerance)continue;
+  if(dismissed[g.key]==='dismissed')continue;
+  if(rules.some(r=>r.kind==='event'&&r.originalAccountId===g.accountId&&
+   r.originalType===g.type&&Math.abs(Number(r.matchAmount)-g.amount)<.011&&
+   (r.matchNames||[]).includes(norm(g.merchant))))continue;
+  const upcoming=nextDate(latest.date,cadence,asOf);
+  if(!upcoming||diff(upcoming,asOf)>90)continue;
+  const projected=(forecastEvents||[]).some(e=>{
+   const name=norm(e.merchant),id=accountOf(e,accounts);
+   const same=id===g.accountId&&e.date>asOf&&
+    (name===norm(g.merchant))&&Math.abs(Number(e.amount)-g.amount)<.011;
+   return same;
+  });
+  if(projected)continue;
+  const strong=g.rows.length>=3&&g.rows.every(t=>amount(t.amount)===amount(g.amount));
+  result.push({key:g.key,accountId:g.accountId,accountName:g.accountName,
+   merchant:g.merchant,amount:g.amount,type:g.type,
+   frequency:cadence,confidence:strong?'Medium':g.rows.length===2?'Low':'Needs confirmation',
+   examples:g.rows.slice(-6).reverse().map(t=>({
+    id:String(t.id||''),date:t.date,amount:Number(t.amount),merchant:String(t.merchant||'')
+   })),
+   occurrences:g.rows.length,lastDate:latest.date,nextDate:upcoming,
+   reason:g.rows.length===1?'One identifiable bill; recurrence not yet established':
+    'Two or more payments with matching account, merchant, amount and timing'});
+ }
+ return result.sort((a,b)=>a.nextDate.localeCompare(b.nextDate)||
+  b.amount-a.amount).slice(0,80);
+}
+const api={candidates,guessFrequency,nextDate,canPlan,accountOf};
+root.HouseholdPlannerHistory=api;
+if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof window!=='undefined'?window:globalThis);
