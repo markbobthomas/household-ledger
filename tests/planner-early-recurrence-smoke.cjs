@@ -152,4 +152,88 @@ assert.equal(existingRule.predictions.futureRecurringRules.length,1,
 T.defineRecurring(existingRule,{...data,accountId:'savings'},accounts,asOf,null,[],[]);
 assert.equal(existingRule.predictions.futureRecurringRules.length,2,
  'Mortgage on another paying account is not mistakenly folded into the first');
+// Every payment is considered, not merely mortgage/insurance/brand keywords.
+const rent=tx('rent-one','2026-10-02','Apartment Rent',1450);
+assert.deepEqual(R.infer([rent],snapshot).events.map(e=>e.date).slice(0,2),
+ ['2026-11-02','2026-12-02'],
+ 'One clearly recurring rent payment is eligible without mortgage-specific naming');
+const obscureBill=[
+ tx('obscure-1','2026-09-09','ABC Draft 984',82.35),
+ tx('obscure-2','2026-10-09','ABC Draft 984',82.35)
+];
+assert.deepEqual(R.infer(obscureBill,snapshot).events.map(e=>e.date),
+ ['2026-11-09','2026-12-09','2027-01-09'],
+ 'Any same-amount monthly merchant can be forecast after two consistent posted payments');
+const irregularThree=[
+ tx('gro1','2026-08-08','Safeway',97),
+ tx('gro2','2026-09-08','Safeway',97),
+ tx('gro3','2026-10-08','Safeway',97)
+];
+assert.equal(R.infer(irregularThree,snapshot).events.length,3,
+ 'Even a normally irregular merchant may qualify if THREE exact calendar cycles are observed');
+const ordinarySingle=R.infer([tx('coffee1','2026-10-04','Local Coffee',12.5)],snapshot);
+assert.equal(ordinarySingle.events.length,0,
+ 'One unrecognized merchant must not become a fictional forecast automatically');
+const weekly=[
+ tx('w1','2026-10-06','Weekly Parking Pass',25),
+ tx('w2','2026-10-13','Weekly Parking Pass',25)
+];
+assert.deepEqual(R.infer(weekly,snapshot).events.slice(0,3).map(e=>e.date),
+ ['2026-10-27','2026-11-03','2026-11-10'],
+ 'A two-payment weekly pattern advances weekly, not monthly');
+const fortnight=[
+ tx('b1','2026-09-28','Housekeeper',80),
+ tx('b2','2026-10-12','Housekeeper',80)
+];
+assert.deepEqual(R.infer(fortnight,snapshot).events.slice(0,2).map(e=>e.date),
+ ['2026-10-26','2026-11-09'],
+ 'Biweekly generic merchant payments are not made monthly');
+const quarterly=[
+ tx('q1','2026-07-03','Town Fees',75),
+ tx('q2','2026-10-03','Town Fees',75)
+];
+assert.deepEqual(R.infer(quarterly,snapshot).events.map(e=>e.date),['2027-01-03'],
+ 'Quarterly evidence cannot create three extra monthly charges');
+const annual=[
+ tx('a1','2025-11-08','Membership Annual',99),
+ tx('a2','2026-11-08','Membership Annual',99)
+];
+assert.deepEqual(R.infer(annual,{accounts,asOf:'2026-11-20'}).events.map(e=>e.date),
+ ['2027-11-08'].filter(x=>x<='2027-02-18'),
+ 'An annual obligation is not turned into a monthly debit');
+const genericAch=[
+ tx('ach1','2026-09-15','GENERIC ACH PAYEE',160,'transfer',{cashDirection:'out'}),
+ tx('ach2','2026-10-15','GENERIC ACH PAYEE',160,'transfer',{cashDirection:'out'})
+];
+assert.equal(R.infer(genericAch,snapshot).events.length,3,
+ 'Two unpaired same-dollar ACH debits qualify even when bank calls them transfers');
+const suspectedSavings=[
+ tx('sv1','2026-09-15','Transfer to Savings',350,'transfer',{cashDirection:'out'}),
+ tx('sv2','2026-10-15','Transfer to Savings',350,'transfer',{cashDirection:'out'})
+];
+assert.equal(R.infer(suspectedSavings,snapshot).events.length,0,
+ 'Unverified transfers to another household account cannot be confidently charged as bills');
+assert.equal(R.infer(suspectedSavings,snapshot).review.length,1,
+ 'Possible account movements must reach Reviews for clarification');
+const manualGeneric={kind:'event',originalAccountId:'checking',
+ matchNames:['abc draft 984'],matchAmount:82.35,merchant:'ABC Draft 984',
+ accountId:'checking',amount:85,frequency:'monthly',anchorDate:'2026-11-25'};
+assert.equal(R.infer(obscureBill,snapshot,{futureRecurringRules:[manualGeneric]}).events.length,0,
+ 'A user-adjusted ordinary payment overrides bank inference even with changed date and amount');
+const autoGeneric=R.infer(obscureBill,snapshot).events[0];
+const changedGeneric={...autoGeneric,id:'owner-generic',source:'user-recurring',
+ amount:85,date:'2026-11-25'};
+const resolvedGeneric=R.dedupeEvents([autoGeneric,changedGeneric],accounts);
+assert.equal(resolvedGeneric.events.length,1,'Generic payments also get duplicate protection');
+assert.equal(resolvedGeneric.events[0].id,'owner-generic',
+ 'The owner-defined nonmortgage bill takes precedence after a date and amount edit');
+const unrelatedPrices=R.dedupeEvents([
+ {id:'a',source:'historical',date:'2026-11-10',merchant:'ABC Utility',
+  amount:40,type:'expense',accountId:'checking'},
+ {id:'b',source:'early-bank-inference',date:'2026-11-10',merchant:'ABC Utility',
+  amount:85,type:'expense',accountId:'checking'}
+],accounts);
+assert.equal(unrelatedPrices.events.length,2,
+ 'Different amounts of a generic merchant cannot be erased as duplicate bills');
+
 console.log('PASS direct early-mortgage / two-fixed-bill detection, low-confidence shopping exclusion, blocked/paired cases, manual-date override and cross-source dedupe safety');
