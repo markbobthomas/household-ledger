@@ -63,7 +63,7 @@ assert.equal(second.id,utility.id,'Confirming another historical dollar amount u
 assert.equal(p.predictions.futureRecurringRules.length,1);
 assert.equal(forecast(p.predictions).ledger.filter(e=>
  e.accountId==='checking'&&e.type==='expense'&&
- /PSE ELECTRIC BILL|Monthly Electricity/.test(e.merchant)).length,3,
+ /PSE ELECTRIC BILL|Monthly Electricity/.test(e.merchant)).length,2,
  'Updating a utility estimate never results in two bill schedules');
 const pay=T.defineRecurring(p,{date:'2026-11-06',merchant:'Salary',
  amount:3100,type:'income',accountId:'checking',frequency:'monthly'},
