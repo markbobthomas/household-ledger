@@ -100,7 +100,7 @@ assert.equal(transferred.projection.accounts.find(a=>a.id==='savings').closing,2
 assert.equal(transferred.projection.household.conservationDifference,0);
 const uncertain=C.analyze([tx('ordinary','2026-10-18','Restaurant 94',35)],accounts,snapshot.asOf);
 assert.equal(uncertain.automatic.length,0);
-assert.equal(uncertain.review.length,1,'One ordinary purchase is just a suggestion');
+assert.equal(uncertain.review.length,0,'A one-off restaurant purchase does not clutter Reviews');
 const dismissed={
  historyPatternDecisions:{[uncertain.review[0].key]:'dismissed'}
 };
