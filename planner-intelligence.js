@@ -178,7 +178,76 @@ function saveDecision(state,item,status){
   status,amount:Number(item.amount),frequency:String(item.frequency)
  };
 }
-const api={project,scan,stableEvidence,saveDecision,identity,periodic};
+
+/* A true recurring mortgage can be missing before the general detector finds
+ * three reliable months. Never silently insert an unverified $2k debit:
+ * surface recent, source-backed payment examples for owner confirmation.
+ * Suggestions are independent of the forecast inference preconditions. */
+function missingMortgages(records,projection,accounts,asOf,options={}){
+ if(!validDate(asOf))return [];
+ const byId=new Map((accounts||[]).map(a=>[String(a.id),a]));
+ const byAlias=value=>{
+  const raw=String(value||''),matches=(accounts||[]).filter(a=>
+   [a.id,a.name,a.transactionAccount].some(v=>String(v||'')===raw));
+  return matches.length===1?matches[0]:byId.get(raw)||null;
+ };
+ const pfcMortgage=t=>{
+  const p=t.personal_finance_category||t.personalFinanceCategory||t.source?.personalFinanceCategory||
+   t.source?.personal_finance_category||{};
+  return /\bMORTGAGE\b|HOME_LOAN|HOME_EQUITY/.test(String(p.detailed||'').toUpperCase());
+ };
+ const money=t=>Number(t.amount||0);
+ const groups=new Map();
+ for(const t of records||[]){
+  if(!t||t.pending||!validDate(t.date)||t.date>asOf||gap(asOf,t.date)>110||
+   t.type!=='expense'||money(t)<=0||
+   !(mortgageName.test(String(t.merchant||''))||pfcMortgage(t)))continue;
+  const account=byAlias(t.accountId||t.account);
+  if(!account||String(account.accountType||account.type||'').toLowerCase()==='credit')continue;
+  const amount=cents(money(t));
+  const merchant=clean(t.merchant||'Mortgage payment');
+  if(!merchant)continue;
+  const key=['mortgage',String(account.id),merchant,String(amount)].map(encodeURIComponent).join('|');
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(t);
+ }
+ const alreadyForecast=(accountId,merchant,amount)=>{
+  const rows=projection?.events||[];
+  return rows.some(e=>{
+   if(e.date<=asOf||gap(e.date,asOf)>90||!['expense','transfer_out'].includes(e.kind))return false;
+   const account=byAlias(e.accountId||e.account);
+   if(!account||String(account.id)!==accountId)return false;
+   const name=clean(e.merchant),sameMerchant=name===merchant;
+   // A renamed forecast bill may still be the same mortgage, not a second one.
+   const sameMortgage=mortgageName.test(name)&&mortgageName.test(merchant);
+   return sameMerchant||sameMortgage&&Math.abs(cents(e.amount)-amount)<=1000;
+  });
+ };
+ const dismissed=new Set(options.dismissed||[]);
+ const output=[];
+ for(const [id,group] of groups){
+  group.sort((a,b)=>b.date.localeCompare(a.date));
+  const latest=group[0],account=byAlias(latest.accountId||latest.account),
+   amount=cents(latest.amount),merchant=clean(latest.merchant);
+  if(!account||gap(asOf,latest.date)>70||dismissed.has(id)||
+   alreadyForecast(String(account.id),merchant,amount))continue;
+  let next=latest.date;
+  for(let i=0;i<5&&next<=asOf;i++){
+   const [y,m,d]=latest.date.split('-').map(Number);
+   const offset=i+1,first=new Date(Date.UTC(y,m-1+offset,1,12)),
+    last=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
+   next=first.toISOString().slice(0,7)+'-'+String(Math.min(d,last)).padStart(2,'0');
+  }
+  if(!validDate(next)||next<=asOf||gap(next,asOf)>90)continue;
+  output.push({id,accountId:String(account.id),account:account.name||String(account.id),
+   merchant:String(latest.merchant),amount:amount/100,lastDate:latest.date,nextDate:next,
+   observed:group.length,examples:group.slice(0,4).map(t=>({
+    id:String(t.id||''),date:t.date,amount:money(t),merchant:String(t.merchant||'')
+   }))});
+ }
+ return output.sort((a,b)=>a.nextDate.localeCompare(b.nextDate)||b.amount-a.amount).slice(0,8);
+}
+const api={project,scan,stableEvidence,saveDecision,identity,periodic,missingMortgages};
 root.HouseholdPlannerIntelligence=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
