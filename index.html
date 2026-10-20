@@ -19,6 +19,14 @@
     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6H20M4 12H20M4 18H20"/></svg>
     <span>Transactions</span>
   </button>
+  <button class="side-link" type="button" data-view="history">
+    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/><path d="M7 4v16"/></svg>
+    <span>History</span>
+  </button>
+  <button class="side-link" type="button" data-view="reviews">
+    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 9v5m0 3v1"/></svg>
+    <span>Reviews</span>
+  </button>
   <button class="side-link" type="button" data-view="settings">
     <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22M5 5L7.5 7.5M16.5 16.5L19 19M19 5L16.5 7.5M7.5 16.5L5 19"/></svg>
     <span>Settings</span>
@@ -47,6 +55,8 @@
   <nav class="planner-tabs" aria-label="Planner pages">
     <button type="button" class="tab-link active" data-view="overview" aria-current="page">Overview</button>
     <button type="button" class="tab-link" data-view="transactions">Transactions</button>
+    <button type="button" class="tab-link" data-view="history">History</button>
+    <button type="button" class="tab-link" data-view="reviews">Reviews</button>
     <button type="button" class="tab-link" data-view="settings">Settings</button>
   </nav>
   <div id="planner-notice" aria-live="polite"></div>
@@ -65,6 +75,7 @@
 <script src="planner-intelligence.js?v=mortgage2"></script>
 <script src="planner-backtest.js?v=audit1"></script>
 <script src="planner-transactions.js?v=learn3"></script>
+<script src="planner-history.js?v=history1"></script>
 <script src="planner.js?v=mortgage2"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
