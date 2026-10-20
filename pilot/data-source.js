@@ -30,8 +30,11 @@ function record(t,account){
  // NOT internal account transfers. Card settlements remain transfers.
  const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(name)||
    code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
- const transfer=/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
-  lower.includes('transfer to ')||lower.includes('transfer from ')||payment;
+ const earned=incoming&&!card&&root.HouseholdAccounting?.recognizedIncome?.({
+  merchant:name,personal_finance_category:pfc,source:{plaidAmount:amount}
+ },account);
+ const transfer=!earned&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
+  lower.includes('transfer to ')||lower.includes('transfer from ')||payment);
  const type=transfer?'transfer':incoming&&(card||obligation?.isBill)?'refund':incoming?'income':'expense';
  const row={id:String(t.id),date:t.date,merchant:name,description:'Bank-imported transaction',amount:Math.abs(amount),
   type,account:account.name,accountId:account.id,pending:!!t.pending,category:'Other',
@@ -144,6 +147,7 @@ function bind(callbacks){
  });
  if(localStorage.getItem(MODE)==='real')enter();
 }
+if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
 root.HouseholdLiveSource={bind,panel,persist,enterReal:enter,refresh,mode:selection,
  get loading(){return loading},get error(){return lastError}};
 })(typeof window!=='undefined'?window:globalThis);
