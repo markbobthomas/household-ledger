@@ -22,28 +22,32 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
  const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],suppressedExpectedIds=[];
  const settled=new Map(records.filter(t=>t&&t.id).map(t=>[String(t.id),t]));
- const alreadyPaid=(from,card,due,close,amount)=>{
-  if(!from||!(amount>0))return false;
-  return records.some(t=>{
-   if(!t||t.pending||t.type!=='transfer'||t.accountingKind!=='card_payment'||
-    t.cashDirection!=='out'||!t.pairedTransactionId||
-    t.date<=close||t.date>asOf||Math.abs((Date.parse(t.date)-Date.parse(due))/86400000)>7||
-    Math.abs(Number(t.amount)-amount)>.011)return false;
-   const other=settled.get(String(t.pairedTransactionId));
-   return other&&!other.pending&&other.type==='transfer'&&
-    matchesAccount(t,from)&&matchesAccount(other,card)&&
-    other.cashDirection==='in'&&Math.abs(Number(other.amount)-amount)<.011;
-  });
- };
  const matchesAccount=(row,account)=>{
   const key=String(row.accountId||row.account||''),id=String(account.id);
   if(key===id)return true;
   const aliases=accounts.filter(a=>String(a.name)===key||String(a.transactionAccount||'')===key);
   return aliases.length===1&&aliases[0].id===id;
  };
+ // Only actual, reconciled transfers between the chosen funding account and
+ // the particular card qualify as actual card payments. Amounts need not equal
+ // our estimate (which may not include unplanned charges or account credits).
+ const actualSettlements=(from,card)=>{
+  if(!from||!card)return [];
+  return records.filter(t=>{
+   if(!t||t.pending||t.type!=='transfer'||t.accountingKind!=='card_payment'||
+    t.cashDirection!=='out'||!t.pairedTransactionId||
+    !date(t.date)||t.date>asOf||!matchesAccount(t,from))return false;
+   const other=settled.get(String(t.pairedTransactionId));
+   return other&&!other.pending&&other.type==='transfer'&&
+    other.cashDirection==='in'&&matchesAccount(other,card)&&
+    Number(other.amount)>0&&Math.abs(Number(t.amount)-Number(other.amount))<.011;
+  }).map(t=>({id:String(t.id),date:t.date,amount:round(t.amount)}))
+   .sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
+ };
  for(const [id,rule] of Object.entries(cards)){
   const card=byId.get(id),from=byId.get(String(rule.fromAccountId||''));
   const autopay=rule.autopayEnabled!==false;
+  const postedPayments=actualSettlements(from,card);
   if(!card||!credit(card)){warnings.push('A configured credit card is not connected');continue}
   if(autopay&&(!from||!cash(from))){
    warnings.push(card.name+': select the checking/savings account paying this card');continue;
@@ -109,14 +113,28 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    if(n===0&&!cycleRows.length&&!predictedRows.length&&!confirmedFirst)
     warnings.push(card.name+': no settled card transactions found in '+cycleStart+' to '+
      cycleClose+'. Verify the bank history before using this estimate.');
-   const paid=autopay&&alreadyPaid(from,card,due,cycleClose,amount);
+   // Plaid posting date is factual; nextPaymentDate is only the user's
+   // configured future withdrawal date, not a bank-confirmed scheduled debit.
+   const postedForCycle=autopay?postedPayments.filter(t=>
+    t.date>cycleClose&&
+    Math.abs((Date.parse(t.date)-Date.parse(due))/86400000)<=7):[];
+   // One matching posted payment is enough to require reconciliation. Never
+   // schedule the full amount again when part/all may already have been paid.
+   const paid=postedForCycle.length>0;
+   const postedPaymentTotal=round(postedForCycle.reduce((n,t)=>n+t.amount,0));
+   if(paid&&Math.abs(postedPaymentTotal-amount)>.011)
+    warnings.push(card.name+': actual payment '+postedPaymentTotal.toFixed(2)+
+     ' differs from planned '+amount.toFixed(2)+'; confirm any remaining balance.');
+   const recentPostedPayment=postedPayments[0]||null;
    const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
     dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
-    autopayEnabled:autopay,alreadyPaid:paid,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
+    autopayEnabled:autopay,alreadyPaid:paid,actualPayments:postedForCycle,
+    actualPaymentAmount:postedPaymentTotal,actualPaymentDate:postedForCycle[0]?.date||null,
+    lastPostedPayment:recentPostedPayment,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
     incompleteFuture:cycleClose>asOf};
    statements.push(statement);
    // A statement preview exists even when autopay is disabled. Only a
