@@ -6,7 +6,7 @@ const validDate=s=>{const text=String(s||''),parsed=new Date(text+'T12:00:00Z');
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 const allowedTypes=new Set(['expense','income','refund','transfer']);
 const ensure=state=>{state.predictions??={};state.predictions.futureTransactionEdits??={};
- state.predictions.futureTransactionAdds??=[];state.predictions.futureSeriesEdits??={};return state.predictions};
+ state.predictions.futureTransactionAdds??=[];state.predictions.futureSeriesEdits??={};state.predictions.futureRecurringRules??=[];return state.predictions};
 const ids=accounts=>new Set((accounts||[]).map(a=>String(a.id)));
 const validAmount=v=>v!==''&&v!==null&&v!==undefined&&Number.isFinite(Number(v))&&Number(v)>0&&Number(v)<=999999999;
 const keyEvent=(id,accountId)=>'event|'+encodeURIComponent(String(id))+'|'+encodeURIComponent(String(accountId));
@@ -123,8 +123,142 @@ function saveSeriesEdit(state,seriesKey,baseDate,data,accounts,asOf,cadence,kind
 function resetSeries(state,seriesKey){
  delete ensure(state).futureSeriesEdits[seriesKey];
 }
+
+/* User-defined recurrence is authoritative when automatic inference cannot
+ * find a reliable series. Rule identity includes account/type/source merchant;
+ * individual bank transactions and their categories are never modified. */
+const frequencies=new Set(['weekly','biweekly','twice-monthly','monthly','quarterly','semiannual','annual']);
+const merchantKey=value=>clean(value).replace(/[^a-z0-9]+/g,' ').trim();
+const daysBetween=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
+const accountRef=(value,accounts)=>{
+ const v=String(value||'');
+ const found=(accounts||[]).filter(a=>[a.id,a.name,a.transactionAccount].some(x=>String(x||'')===v));
+ return found.length===1?String(found[0].id):v;
+};
+function findExamples(records,reference,accounts){
+ const account=reference.kind==='movement'?String(reference.fromAccountId):String(reference.accountId);
+ const names=new Set([merchantKey(reference.merchant)]);
+ const amount=Number(reference.amount||0),type=reference.type||'transfer';
+ return (records||[]).filter(t=>!t.pending&&validDate(t.date)&&
+  accountRef(t.accountId||t.account,accounts)===account&&
+  merchantKey(t.merchant)&&names.has(merchantKey(t.merchant))&&
+  (type==='transfer'?t.type==='transfer':t.type===type)&&
+  Math.abs(Number(t.amount)-amount)<.011).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8)
+  .map(t=>({id:String(t.id),date:t.date,merchant:String(t.merchant),amount:Number(t.amount),
+    accountId:account,type:t.type}));
+}
+const monthAt=(anchor,offset,day)=>{
+ const [y,m]=anchor.slice(0,7).split('-').map(Number),d=new Date(Date.UTC(y,m-1+offset,1,12));
+ const month=d.toISOString().slice(0,7);
+ return month+'-'+String(Math.min(day,monthEnd(month))).padStart(2,'0');
+};
+function recurrenceDates(rule,asOf,through){
+ const dates=[],start=rule.anchorDate;
+ if(!validDate(start)||!frequencies.has(rule.frequency))return dates;
+ if(['weekly','biweekly'].includes(rule.frequency)){
+  const step=rule.frequency==='weekly'?7:14,n=Math.max(0,Math.ceil(daysBetween(asOf,start)/step));
+  for(let i=n;i<n+60;i++){const d=shift(start,i*step);if(d>through)break;if(d>asOf&&d>=start)dates.push(d)}
+ }else{
+  const spacing={monthly:1,'twice-monthly':1,quarterly:3,semiannual:6,annual:12}[rule.frequency];
+  for(let i=0;i<=16;i+=spacing){
+   for(const day of rule.frequency==='twice-monthly'?[Number(start.slice(-2)),Number(rule.secondDay)]:[Number(start.slice(-2))]){
+    const d=monthAt(start,i,day);
+    if(d>=start&&d>asOf&&d<=through)dates.push(d);
+   }
+   if(monthAt(start,i,1)>through)break;
+  }
+ }
+ return [...new Set(dates)].sort();
+}
+function manualSeriesKey(ruleId){return 'user-series|'+encodeURIComponent(String(ruleId))}
+function defineRecurring(state,data,accounts,asOf,reference=null,records=[],selectedExampleIds=[]){
+ const transfer=reference?.kind==='movement'||data.type==='paired-transfer';
+ const fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
+ const frequency=String(data.frequency||'');
+ if(!frequencies.has(frequency))throw Error('Choose how often this payment repeats');
+ let secondDay=null;
+ if(frequency==='twice-monthly'){
+  secondDay=Number(data.secondDay);
+  if(!Number.isInteger(secondDay)||secondDay<1||secondDay>31||
+   secondDay===Number(fields.date.slice(-2)))throw Error('Choose a different second payday (1–31)');
+ }
+ const p=ensure(state);
+ const baseAccount=reference?.kind==='movement'?String(reference.fromAccountId):
+  String(reference?.accountId||fields.accountId);
+ const originalMerchant=reference?.originalMerchant||reference?.merchant||fields.merchant;
+ const originalAmount=Number(reference?.sourceAmount??reference?.amount??fields.amount);
+ const originalType=reference?.type||fields.type;
+ const id=reference?.recurringRuleId||'manual|'+[transfer?'movement':'event',
+  baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),round(originalAmount)]
+  .map(encodeURIComponent).join('|');
+ const old=p.futureRecurringRules.find(r=>r.id===id);
+ const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
+  accountRef(t.accountId||t.account,accounts)===baseAccount&&
+  merchantKey(t.merchant)&&Number(t.amount)>0);
+ const chosen=[...new Set((selectedExampleIds||[]).map(String))];
+ const examples=chosen.map(id=>candidates.find(t=>String(t.id)===id));
+ if(examples.some(t=>!t))throw Error('One of the historical examples is no longer available');
+ if(examples.some(t=>Math.abs(Number(t.amount)-originalAmount)>.011||
+  (transfer?t.type!=='transfer':t.type!==originalType)))
+  throw Error('Select examples of the same amount and transaction type');
+ const names=[originalMerchant,...examples.map(t=>t.merchant)].map(merchantKey).filter(Boolean);
+ if(!names.length)throw Error('Enter a merchant name');
+ const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
+  ...(secondDay?{secondDay}:{}),...fields,
+  originalAccountId:old?.originalAccountId||baseAccount,
+  originalMerchant:old?.originalMerchant||originalMerchant,
+  originalType:old?.originalType||originalType,
+  matchAmount:old?.matchAmount??round(originalAmount),
+  matchNames:[...new Set([...(old?.matchNames||[]),...names])],
+  exampleIds:[...new Set([...(old?.exampleIds||[]),...chosen])],
+  ...(old?.sourceAddedId||reference?.addedId?{sourceAddedId:old?.sourceAddedId||reference?.addedId}:{}),
+  ...(old?.sourceKey||reference?.key?{sourceKey:old?.sourceKey||reference?.key}:{})};
+ const index=p.futureRecurringRules.findIndex(r=>r.id===id);
+ if(index<0)p.futureRecurringRules.push(rule);else p.futureRecurringRules[index]=rule;
+ return rule;
+}
+function removeRecurring(state,id){
+ const p=ensure(state),index=p.futureRecurringRules.findIndex(r=>r.id===id);
+ if(index<0)throw Error('Recurring rule no longer exists');
+ p.futureRecurringRules.splice(index,1);
+}
+function generatedRecurring(rules,asOf,through){
+ const events=[],plans=[];
+ for(const r of rules||[]){
+  for(const d of recurrenceDates(r,asOf,through)){
+   if(r.kind==='movement'){
+    plans.push({id:'user|'+r.id+'|'+d,anchorDate:d,frequency:'once',
+     amount:r.amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
+     merchant:r.merchant,seriesRuleId:r.id,source:'user-recurring'});
+   }else{
+    events.push({id:'user|'+r.id+'|'+d,date:d,amount:r.amount,
+     merchant:r.merchant,accountId:r.accountId,type:r.type,category:'Confirmed recurring',
+     cashDirection:r.cashDirection,source:'user-recurring',cadence:r.frequency,
+     ruleId:r.id,_seriesKey:manualSeriesKey(r.id),_seriesDate:d});
+   }
+  }
+ }
+ return {events,plans};
+}
+function matchesRecurring(rule,event,accounts){
+ const account=accountRef(event.accountId||event.account||event.fromAccountId,accounts);
+ const sourceAccount=String(rule.originalAccountId);
+ if(account!==sourceAccount||!(Number(event.amount)>0))return false;
+ const kind=rule.kind==='movement'?'movement':'event';
+ const eventKind=event.kind==='movement'?'movement':'event';
+ if(kind!==eventKind)return false;
+ if(kind==='movement'&&String(event.toAccountId)!==String(rule.toAccountId))return false;
+ if(kind==='event'&&event.type!==rule.originalType)return false;
+ const sameName=(rule.matchNames||[]).includes(merchantKey(event.merchant));
+ if(!sameName||Math.abs(Number(event.amount)-Number(rule.matchAmount))>.011)return false;
+ const date=String(event.date||event.anchorDate||'');
+ if(!validDate(date)||date<rule.anchorDate&&daysBetween(rule.anchorDate,date)>7)return false;
+ return recurrenceDates(rule,shift(date,-7),shift(date,7))
+  .some(d=>Math.abs(daysBetween(d,date))<=Math.min(rule.frequency==='weekly'?2:rule.frequency==='biweekly'?3:6,6));
+}
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
- seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries};
+ seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
+ frequencies,findExamples,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
