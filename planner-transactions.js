@@ -4,7 +4,7 @@
 const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&
  new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
-const allowedTypes=new Set(['expense','income','refund']);
+const allowedTypes=new Set(['expense','income','refund','transfer']);
 const ensure=state=>{state.predictions??={};state.predictions.futureTransactionEdits??={};
  state.predictions.futureTransactionAdds??=[];return state.predictions};
 const ids=accounts=>new Set((accounts||[]).map(a=>String(a.id)));
@@ -19,9 +19,11 @@ function normalFields(data,accounts,asOf){
  if(!name)throw Error('Enter a transaction name');
  if(!validAmount(data.amount))throw Error('Enter a positive dollar amount');
  if(!allowedTypes.has(type))throw Error('Choose an expense, income or refund');
+ if(type==='transfer'&&!['in','out'].includes(String(data.cashDirection)))throw Error('Choose a transfer direction');
  if(type==='income'&&(accounts||[]).find(a=>String(a.id)===accountId)?.type==='credit')
   throw Error('For credit cards, use a refund instead of income');
- return {date,accountId,merchant:name,amount:round(amount),type};
+ return {date,accountId,merchant:name,amount:round(amount),type,
+  ...(type==='transfer'?{cashDirection:String(data.cashDirection)}:{})};
 }
 function transferFields(data,accounts,asOf){
  const date=String(data.date||''),fromAccountId=String(data.fromAccountId||''),
@@ -31,7 +33,8 @@ function transferFields(data,accounts,asOf){
  if(!known.has(fromAccountId)||!known.has(toAccountId)||fromAccountId===toAccountId)
   throw Error('Choose two different linked accounts for this transfer');
  if(!validAmount(data.amount))throw Error('Enter a positive dollar amount');
- return {date,amount:round(amount),fromAccountId,toAccountId};
+ return {date,amount:round(amount),fromAccountId,toAccountId,
+  merchant:String(data.merchant||'Account transfer').trim().slice(0,160)||'Account transfer'};
 }
 function saveEdit(state,key,data,accounts,asOf){
  if(typeof key!=='string'||key.length>600||!(/^(event|movement)\|/.test(key)))
@@ -40,17 +43,19 @@ function saveEdit(state,key,data,accounts,asOf){
   normalFields(data,accounts,asOf);
  ensure(state).futureTransactionEdits[key]=fields;return fields;
 }
-function skip(state,key){
+function skip(state,key,details={}){
  if(typeof key!=='string'||key.length>600||!(/^(event|movement)\|/.test(key)))
   throw Error('Unknown future transaction');
- ensure(state).futureTransactionEdits[key]={skipped:true};
+ ensure(state).futureTransactionEdits[key]={skipped:true,
+  label:String(details.label||'Future transaction').slice(0,160),
+  date:String(details.date||''),accountId:String(details.accountId||'')};
 }
 function restore(state,key){delete ensure(state).futureTransactionEdits[key]}
 function add(state,data,accounts,asOf){
  const transfer=data.type==='transfer';
  const fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
  const record={id:'future-add|'+Date.now().toString(36)+'|'+Math.random().toString(36).slice(2,10),
-  ...fields,...(transfer?{type:'transfer',merchant:'Account transfer'}:{})};
+  ...fields,...(transfer?{type:'transfer'}:{})};
  ensure(state).futureTransactionAdds.push(record);
  return record;
 }
@@ -58,7 +63,8 @@ function removeAdded(state,id){
  const p=ensure(state),index=p.futureTransactionAdds.findIndex(t=>t.id===id);
  if(index<0)throw Error('Added transaction not found');
  p.futureTransactionAdds.splice(index,1);
- delete p.futureTransactionEdits[keyMovement('plan|'+id+'|'+state.date)];
+ for(const key of Object.keys(p.futureTransactionEdits))if(key===keyEvent(id,(p.futureTransactionAdds||[]).accountId)||
+  key.startsWith(keyMovement('future|'+id)))delete p.futureTransactionEdits[key];
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded};
 root.HouseholdPlannerTransactions=api;
