@@ -71,7 +71,7 @@ function draftFor(row,records,accounts,asOf){
   cashDirection:row.cashDirection||null,frequency,
   nextDate:nextDate(last.date,frequency,asOf),sourceRow:row,
   sourcePending:Boolean(row.pending),fromAccountId,toAccountId,
-  linkedTransfer:linked,examples:exact.slice(-8).map(x=>String(x.id))};
+  linkedTransfer:linked,examples:exact.filter(t=>Number(t.amount)>0).slice(-8).map(x=>String(x.id))};
 }
 function guessFrequency(history){
  const ts=[...(history||[])].sort((a,b)=>a.date.localeCompare(b.date));
