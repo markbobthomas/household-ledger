@@ -73,4 +73,37 @@ const otherAccountPosted=T.postedCoverage(earlyGenerated,[earlyRule],[
 ],accounts,'2026-10-30');
 assert.equal(otherAccountPosted.events.some(e=>e.date==='2026-11-02'),true,
  'Posted payments from another account must never cover checking forecasts');
+// A shifted due date must survive a refresh between old and new dates.
+const shiftRule=T.defineRecurring(state,{date:'2026-11-02',merchant:'Moved Utility',
+ amount:140,accountId:'checking',type:'expense',frequency:'monthly'},accounts,asOf);
+T.saveSeriesEdit(state,T.manualSeriesKey(shiftRule.id),'2026-11-02',{
+ date:'2026-11-20',amount:140,accountId:'checking',type:'expense',
+ merchant:'Moved Utility'},accounts,asOf,'monthly','event');
+const newAsOf='2026-11-18';
+const extended=T.generatedRecurring([shiftRule],'2026-10-17','2027-03-18');
+const shiftedEvents=extended.events.map(e=>T.applySeries(e,e.date,e._seriesKey,state.predictions.futureSeriesEdits))
+ .filter(e=>e.date>newAsOf&&e.date<='2027-02-16');
+assert.ok(shiftedEvents.some(e=>e.date==='2026-11-20'),
+ 'Moved Nov 20 payment remains visible after the original Nov 2 date has passed');
+const coveredShift=T.postedCoverage({events:shiftedEvents,plans:[]},[shiftRule],[
+ {id:'early-new-date',date:'2026-11-17',amount:140,merchant:'Moved Utility',
+  accountId:'checking',type:'expense',pending:false}
+],accounts,newAsOf);
+assert.ok(!coveredShift.events.some(e=>e.date==='2026-11-20'),
+ 'Early posted bank debit suppresses the rescheduled due date');
+assert.ok(coveredShift.events.some(e=>e.date==='2026-12-20'),
+ 'December recurrence survives November posted-payment reconciliation');
+const movedTransfer=T.defineRecurring(state,{date:'2026-11-02',merchant:'Moved card payment',
+ amount:150,fromAccountId:'checking',toAccountId:'credit',type:'transfer',
+ frequency:'monthly'},accounts,asOf);
+T.saveSeriesEdit(state,T.manualSeriesKey(movedTransfer.id),'2026-11-02',{
+ date:'2026-11-20',amount:150,fromAccountId:'checking',toAccountId:'credit',
+ merchant:'Moved card payment'},accounts,asOf,'monthly','movement');
+const paddedTransfer=T.generatedRecurring([movedTransfer],'2026-10-17','2027-03-18');
+const updatedSnapshot={...snapshot,asOf:newAsOf};
+const shiftedPlan=A.build(updatedSnapshot,[],paddedTransfer.plans,{
+ days:90,seriesTools:T,futureSeriesEdits:state.predictions.futureSeriesEdits,
+ futureRecurringRules:[movedTransfer]});
+assert.ok(shiftedPlan.plans.some(p=>p.date==='2026-11-20'&&p.amount===150),
+ 'Moved linked transfer stays in balance forecast after its old date passes');
 console.log('PASS explicitly confirmed recurring schedule: exact account/merchant/amount examples, moved-date dedupe, generated months, edit/stop, twice-monthly pay, linked transfers, validation');
