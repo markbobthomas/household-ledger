@@ -63,8 +63,9 @@ function removeAdded(state,id){
  const p=ensure(state),index=p.futureTransactionAdds.findIndex(t=>t.id===id);
  if(index<0)throw Error('Added transaction not found');
  p.futureTransactionAdds.splice(index,1);
- for(const key of Object.keys(p.futureTransactionEdits))if(key===keyEvent(id,(p.futureTransactionAdds||[]).accountId)||
-  key.startsWith(keyMovement('future|'+id)))delete p.futureTransactionEdits[key];
+ for(const key of Object.keys(p.futureTransactionEdits))if(
+  key.startsWith('event|'+encodeURIComponent(String(id))+'|')||
+  key===keyMovement('future|'+id))delete p.futureTransactionEdits[key];
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded};
 root.HouseholdPlannerTransactions=api;
