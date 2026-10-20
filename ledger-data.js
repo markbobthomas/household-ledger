@@ -431,22 +431,42 @@ function applyPlaidSyncPages(state,batch){
 function setCardPaymentRule(state,accountId,rule){
  const id=String(accountId||'');
  if(!id||!rule||typeof rule!=='object')throw Error('Select a credit card');
- const dateOK=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
- const closingDay=Number(rule.closingDay),amount=Number(rule.lastStatementBalance);
- const method=String(rule.method||'statement'),due=String(rule.nextPaymentDate||''),closed=String(rule.lastStatementClose||'');
- const paymentDue=String(rule.nextDueDate||due);
- if(!String(rule.fromAccountId||'')||!dateOK(due)||!dateOK(paymentDue)||!dateOK(closed)||due<=closed||paymentDue<=closed||
+ const dateOK=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&
+  new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;
+ const days=(a,b)=>Math.round((Date.parse(b+'T12:00:00Z')-Date.parse(a+'T12:00:00Z'))/86400000);
+ const due=String(rule.nextPaymentDate||''),paymentDue=String(rule.nextDueDate||due);
+ const isCycle=Boolean(rule.billingStartDate||rule.billingEndDate);
+ const beginning=String(rule.billingStartDate||''),end=String(rule.billingEndDate||rule.lastStatementClose||'');
+ const closed=isCycle?end:String(rule.lastStatementClose||'');
+ const closingDay=Number(isCycle?end.slice(8,10):rule.closingDay);
+ const method=String(rule.method||'statement');
+ const hasIssued=rule.lastStatementBalance!==''&&rule.lastStatementBalance!=null;
+ const last=hasIssued?Number(rule.lastStatementBalance):null;
+ const autopayEnabled=rule.autopayEnabled===undefined?true:
+  rule.autopayEnabled===true||rule.autopayEnabled==='yes';
+ if(!dateOK(due)||!dateOK(paymentDue)||!dateOK(closed)||
+  due<=closed||paymentDue<=closed||due>paymentDue||
   !Number.isInteger(closingDay)||closingDay<1||closingDay>31||
-  !Number.isFinite(amount)||amount<0||amount>999999999||
-  !['statement','minimum','fixed'].includes(method))throw Error('Enter a valid statement close, next withdrawal date and balance');
+  !['statement','minimum','fixed'].includes(method)||
+  (hasIssued&&(!Number.isFinite(last)||last<0||last>999999999))||
+  (!isCycle&&!hasIssued)||
+  (isCycle&&(!dateOK(beginning)||beginning>end||
+   days(beginning,end)<20||days(beginning,end)>35))||
+  (autopayEnabled&&!String(rule.fromAccountId||'')))
+  throw Error('Enter a valid billing period, payment date, paying account and amount');
  const minimum=Number(rule.minimumAmount),fixed=Number(rule.fixedAmount);
  if(method==='minimum'&&(!Number.isFinite(minimum)||minimum<0)||
-  method==='fixed'&&(!Number.isFinite(fixed)||fixed<0))throw Error('Enter a valid autopay amount');
+  method==='fixed'&&(!Number.isFinite(fixed)||fixed<0))
+  throw Error('Enter a valid autopay amount');
  state.predictions.paymentRules??={};
- state.predictions.paymentRules[id]={fromAccountId:String(rule.fromAccountId),closingDay,
-  lastStatementClose:closed,nextPaymentDate:due,nextDueDate:paymentDue,lastStatementBalance:round(amount),method,
+ state.predictions.paymentRules[id]={
+  fromAccountId:String(rule.fromAccountId||''),autopayEnabled,closingDay,
+  ...(isCycle?{billingStartDate:beginning,billingEndDate:end}:{}),
+  lastStatementClose:closed,nextPaymentDate:due,nextDueDate:paymentDue,
+  lastStatementBalance:hasIssued?round(last):null,method,
   minimumAmount:Number.isFinite(minimum)?round(minimum):0,
-  fixedAmount:Number.isFinite(fixed)?round(fixed):0};
+  fixedAmount:Number.isFinite(fixed)?round(fixed):0
+ };
 }
 function removeCardPaymentRule(state,id){delete(state.predictions.paymentRules||{})[String(id)]}
 function savePaymentBill(state,bill){
