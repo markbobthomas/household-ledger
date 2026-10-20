@@ -65,7 +65,8 @@ function recurringEvents(events,s){
  return (events||[]).map(e=>{
   const originalAccount=findAccount(e.accountId||e.account),key=tools.seriesEvent(e,originalAccount);
   return {...tools.applySeries(e,e.date,key,series),
-   _seriesKey:key,_seriesDate:e.date,_forecastOriginalAccountId:originalAccount};
+   _seriesKey:key,_seriesDate:e.date,_forecastOriginalAccountId:originalAccount,
+   _forecastOriginalMerchant:e.merchant,_forecastOriginalAmount:e.amount};
  });
 }
 function forecastForPayments(events,s,additions){
@@ -94,7 +95,9 @@ function forecastFor(s){
   confirmed=state().predictions?.futureRecurringRules||[],
   matching=(event,kind)=>confirmed.some(rule=>tools.matchesRecurring(rule,
    {...event,kind,date:event._seriesDate||event.baseDate||event.anchorDate||event.date,
-    merchant:event.merchant||(kind==='movement'?'Credit-card payment':'')},accounts));
+    merchant:event._forecastOriginalMerchant||event.merchant||(kind==='movement'?'Credit-card payment':''),
+    amount:event._forecastOriginalAmount??event.amount,
+    accountId:event._forecastOriginalAccountId||event.accountId},accounts));
  const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
  const existingAdds=(state().predictions?.futureTransactionAdds||[]).filter(e=>
   !confirmed.some(r=>r.sourceAddedId===e.id)&&!matching(e,e.type==='transfer'?'movement':'event'));
@@ -510,7 +513,7 @@ function transactionsPage(bundle,s){
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
   '<div class="page-heading"><div><h2>Future transactions</h2>'+
-   '<p>All dated predictions for the next '+horizon+' days. Choose whether an edit affects one payment or its entire recurring series.</p></div>'+
+   '<p>All dated predictions for the next '+horizon+' days. Any payment can be made recurring, even when the bank history is unclear.</p></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -687,6 +690,14 @@ document.addEventListener('click',async e=>{
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
+ const removeRecurring=e.target.closest('[data-remove-recurring]');
+ if(removeRecurring){
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeRecurring(state(),removeRecurring.dataset.removeRecurring));
+   editingKey='';transactionNotice='Recurring schedule stopped. Automatic forecasts are restored if the bank history supports them.';render();
+  }catch(err){transactionNotice=String(err.message||err);render()}
+  return;
+ }
  const resetRecurring=e.target.closest('[data-reset-series]');
  if(resetRecurring){
   try{
@@ -781,27 +792,40 @@ document.addEventListener('submit',async e=>{
    const row=futureRows(forecastFor(s),s).find(item=>item.key===key);
    if(!row)throw Error('Forecast changed. Reopen the payment and try again.');
    if(fields.scope==='all'){
-    if(!row.seriesKey)throw Error('This payment does not have an editable repeating schedule');
+    const examples=new FormData(form).getAll('examples');
     await commitForecastChange(()=>{
-     // A new whole-series instruction supersedes visible single-occurrence
-     // corrections for this series, instead of leaving conflicting values.
-     const result=planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,
-      asOf,row.cadence,row.kind);
+     const existingRows=futureRows(forecastFor(s),s);
+     const existingCadence=cadenceOption(row.cadence);
+     const useSeries=Boolean(row.seriesKey&&!row.recurringRuleId&&
+      fields.frequency===existingCadence&&row.cadence&&!row.addedId);
+     const result=useSeries?
+      planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,row.cadence,row.kind):
+      planner.defineRecurring(state(),fields,accounts,asOf,row,model.records(state()),examples);
      const edits=state().predictions.futureTransactionEdits||{};
-     for(const other of futureRows(forecastFor(s),s)){
-      if(other.seriesKey===row.seriesKey&&other.baseDate>=row.baseDate)delete edits[other.key];
+     for(const other of existingRows){
+      if(other.key===row.key||row.seriesKey&&other.seriesKey===row.seriesKey&&other.baseDate>=row.baseDate)
+       delete edits[other.key];
      }
+     // Replacing inferred recurrence with an explicit schedule makes the old
+     // per-series edit unnecessary; the confirmed rule is authoritative.
+     if(!useSeries&&row.seriesKey)delete state().predictions.futureSeriesEdits?.[row.seriesKey];
      return result;
     });
-    transactionNotice='Updated this recurring payment and every future occurrence.';
+    transactionNotice='Saved recurring schedule. All matching future payments will be forecast.';
    }else{
     await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
     transactionNotice='Updated only this predicted payment.';
    }
    editingKey='';
   }else if(form.hasAttribute('data-future-new-form')){
-   await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
-   showNewTransaction=false;transactionNotice='Future transaction added to the selected account.';
+   if(fields.frequency&&fields.frequency!=='once'){
+    await commitForecastChange(()=>planner.defineRecurring(state(),fields,accounts,asOf));
+    transactionNotice='Recurring payment created. Future occurrences were added to the forecast.';
+   }else{
+    await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
+    transactionNotice='Future transaction added to the selected account.';
+   }
+   showNewTransaction=false;
   }else{
    await commitForecastChange(()=>model.setCashCushion(state(),fields.cashCushion));
    transactionNotice='Safety threshold saved.';
@@ -832,6 +856,18 @@ document.addEventListener('submit',e=>{
  }catch(err){setNotice(err.message);document.getElementById('card-autopay')?.setAttribute('open','')}
 });
 document.addEventListener('change',e=>{
+ if(e.target.name==='scope'){
+  const form=e.target.closest('[data-future-edit-form]');
+  const section=form?.querySelector('.future-repeat-fields');
+  if(section)section.hidden=e.target.value!=='all';
+  return;
+ }
+ if(e.target.matches?.('[data-frequency]')){
+  const form=e.target.closest('form');
+  const second=form?.querySelector('.future-second-day');
+  if(second)second.hidden=e.target.value!=='twice-monthly';
+  return;
+ }
  if(e.target.id==='transaction-filter'){
   transactionFilter=e.target.value;editingKey='';showNewTransaction=false;render();return;
  }
