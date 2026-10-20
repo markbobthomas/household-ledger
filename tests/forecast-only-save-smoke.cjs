@@ -35,6 +35,14 @@ function decrypt(){
  return JSON.parse(Buffer.concat([d.update(Buffer.from(o.data,'base64')),d.final()]).toString());
 }
 encrypt(initial);
+const bankBefore=fs.readFileSync(statePath,'utf8');
+const forecastPath=statePath+'.forecasts';
+function decryptForecast(){
+ const b=JSON.parse(fs.readFileSync(forecastPath,'utf8')),
+  d=crypto.createDecipheriv('aes-256-gcm',key,Buffer.from(b.iv,'base64'));
+ d.setAuthTag(Buffer.from(b.tag,'base64'));
+ return JSON.parse(Buffer.concat([d.update(Buffer.from(b.data,'base64')),d.final()]).toString());
+}
 const {start}=require('../pilot/server.cjs');
 (async()=>{
  let server;
@@ -67,16 +75,33 @@ const {start}=require('../pilot/server.cjs');
   assert.deepEqual(stored.transactions,transactions,'Plaid transaction source is byte-for-byte unchanged');
   assert.deepEqual(stored.accounts,initial.accounts,'Bank balances are unchanged');
   assert.deepEqual(stored.items,initial.items,'Plaid credentials/connections are unchanged');
-  assert.deepEqual(stored.ledgerAdjustments.predictions,planned,
-   'Saved predictions persisted in encrypted file');
-  assert.doesNotMatch(fs.readFileSync(statePath,'utf8'),/Mortgage Servicer/,
-   'Forecast and bank history are encrypted at rest');
+  assert.deepEqual(stored.ledgerAdjustments.predictions,initial.ledgerAdjustments.predictions,
+   'The old full Plaid snapshot must not be rewritten for one future-ledger change');
+  assert.equal(fs.readFileSync(statePath,'utf8'),bankBefore,
+   'The entire encrypted bank file remains byte-for-byte unchanged after editing a forecast');
+  assert.deepEqual(decryptForecast(),planned,
+   'Only future ledger preferences are persisted to a small encrypted file');
+  assert.doesNotMatch(fs.readFileSync(forecastPath,'utf8'),/Mortgage Servicer/,
+   'Forecast preferences remain encrypted at rest');
+  const retry=await request('/api/ledger/forecasts',{predictions:planned});
+  assert.equal(retry.status,200);
+  assert.deepEqual(decryptForecast(),planned,'Retrying a snapshot is idempotent');
   const invalid=await request('/api/ledger/forecasts',{predictions:planned,transactions:[]});
   assert.equal(invalid.status,400,'Forecast endpoint rejects attempted source-bank edits');
   const array=await request('/api/ledger/forecasts',{predictions:[]});
   assert.equal(array.status,400,'Only a prediction-settings object is allowed');
   assert.deepEqual(decrypt().transactions,transactions);
-  console.log('PASS forecast-only persistence survives stale bank categories; old adjustments rejected; encrypted rule survives reload; bank data and Plaid connections unchanged; invalid source edits blocked');
+  // A new Render process must retrieve forecasts from the independent file
+  // without modifying or migrating any bank facts.
+  await new Promise(resolve=>server.close(resolve));server=null;
+  server=await start(0);
+  const reloaded=await fetch('http://127.0.0.1:'+server.address().port+'/api/ledger',{
+   headers:{Authorization:auth}});
+  assert.equal(reloaded.status,200);
+  assert.deepEqual((await reloaded.json()).adjustments.predictions,planned,
+   'Latest separate preferences survive server restart');
+  assert.equal(fs.readFileSync(statePath,'utf8'),bankBefore);
+  console.log('PASS independent encrypted forecast saves, idempotent retry, restart recovery, immutable bank history and no stale category save');
  }finally{
   if(server)await new Promise(resolve=>server.close(resolve));
   fs.rmSync(temp,{recursive:true,force:true});
