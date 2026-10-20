@@ -641,24 +641,40 @@ function transactionsPage(bundle,s){
 function repeatingReviewForm(s){
  if(!recurringDraft)return '';
  const d=recurringDraft,accounts=activeAccounts(s),
-  date=d.nextDate&&d.nextDate>s.asOf?d.nextDate:shiftDay(s.asOf,1);
+  date=d.nextDate&&d.nextDate>s.asOf?d.nextDate:shiftDay(s.asOf,1),
+  transfer=d.type==='transfer',
+  otherAccount=accounts.find(a=>String(a.id)!==String(d.accountId))?.id||d.accountId;
+ const from=d.fromAccountId||d.accountId,to=d.toAccountId&&d.toAccountId!==from?
+  d.toAccountId:otherAccount;
  return '<form class="panel history-schedule-form" data-history-recurring-form>'+
-  '<div class="section-title"><h2>Confirm recurring payment</h2><span class="status-tag">FORECAST ONLY</span></div>'+
-  '<p class="lead">Check the next date and frequency. The historical bank payment itself cannot be edited.</p>'+
+  '<div class="section-title"><h2>Confirm recurring transaction</h2><span class="status-tag">FORECAST ONLY</span></div>'+
+  '<p class="lead">Every bank transaction can become a repeating forecast, even if the bank assigned the wrong transaction type. Choose how it should affect future account balances.</p>'+
+  (d.sourceRow?.type==='transfer'&&!transfer?
+   '<p class="history-type-explanation">The bank labeled this as a transfer without a confirmed matching household account. An outgoing ACH debit, such as a mortgage, is proposed as an expense. Change the future type if needed.</p>':'')+
+  (d.sourcePending?'<p class="history-type-explanation">This bank transaction is pending; its date or amount may change. Review both before scheduling.</p>':'')+
   '<div class="future-fields">'+
   '<label>Merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(d.merchant)+'"></label>'+
-  '<label>Type<select name="type"><option value="expense"'+(d.type==='expense'?' selected':'')+
-   '>Payment</option><option value="income"'+(d.type==='income'?' selected':'')+'>Deposit</option></select></label>'+
-  '<label>Account'+accountSelect(accounts,d.accountId,'accountId')+'</label>'+
+  '<label>Future transaction type<select name="type" id="history-recurrence-type">'+
+   '<option value="expense"'+(d.type==='expense'?' selected':'')+'>Expense / checking withdrawal</option>'+
+   '<option value="income"'+(d.type==='income'?' selected':'')+'>Deposit / income</option>'+
+   '<option value="refund"'+(d.type==='refund'?' selected':'')+'>Refund / account credit</option>'+
+   '<option value="transfer"'+(transfer?' selected':'')+'>Transfer between my connected accounts</option>'+
+   '</select></label>'+
+  '<label class="history-single-account"'+(transfer?' hidden':'')+'>Account'+accountSelect(accounts,d.accountId,'accountId')+'</label>'+
+  '<label class="history-transfer-only"'+(!transfer?' hidden':'')+'>From account'+
+   accountSelect(accounts,from,'fromAccountId')+'</label>'+
+  '<label class="history-transfer-only"'+(!transfer?' hidden':'')+'>To account'+
+   accountSelect(accounts,to,'toAccountId')+'</label>'+
   '<label>Next expected date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+
    '" max="'+escapeHTML(shiftDay(s.asOf,90))+'" required value="'+escapeHTML(date)+'"></label>'+
-  '<label>Amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(d.amount)+'"></label>'+
+  '<label>Amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+
+   escapeHTML(d.amount||'')+'"></label>'+
   '<label>Repeat'+frequencyChoices(d.frequency||'monthly')+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input name="secondDay" type="number" min="1" max="31" value="15"></label>'+
   '</div>'+
-  '<p class="audit-footnote">Confirming creates future predictions from this recurring pattern. It does not initiate a payment or modify bank records.</p>'+
+  '<p class="audit-footnote">For actual account-to-account transfers, select Transfer and two connected accounts. Otherwise use Expense or Deposit. Only the future forecast changes; the original bank record is never edited or duplicated.</p>'+
   '<div class="future-form-actions"><button type="submit" class="btn primary">Save recurring forecast</button>'+
-    '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
+  '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
 }
 function historyPage(bundle,s){
  const accounts=activeAccounts(s),records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
@@ -676,13 +692,11 @@ function historyPage(bundle,s){
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
    t.type==='transfer'&&t.cashDirection==='in';
-  const posted=!t.pending;
-  const linked=savedRules.some(r=>r.kind==='event'&&String(r.originalAccountId)===aid&&
+  const linked=savedRules.some(r=>String(r.originalAccountId)===aid&&
    r.originalType===t.type&&Math.abs(Number(r.matchAmount)-Number(t.amount))<.011&&
    (r.matchNames||[]).includes(String(t.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()));
-  const actionable=posted&&window.HouseholdPlannerHistory.canPlan(t);
-  const action=actionable?'<button class="btn" type="button" data-history-plan="'+escapeHTML(String(t.id))+
-   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit forecast':'Make recurring')+'</button>':'';
+  const action='<button class="btn" type="button" data-history-plan="'+escapeHTML(String(t.id))+
+   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit forecast':'Make recurring')+'</button>';
   return '<div class="history-actual-row" data-historical-transaction="'+escapeHTML(String(t.id))+'">'+
    '<span class="history-actual-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
    '<div class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
@@ -706,7 +720,7 @@ function historyPage(bundle,s){
     ' newest '+(filtered.length>historyLimit?'— load older records below.':'records.')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
-   '<p class="audit-footnote">Make recurring turns a selected historical payment into a proposed future schedule, not an edit to the source bank transaction. Transfers and refunds are displayed but are not assumed to recur.</p></section></div>';
+   '<p class="audit-footnote">Every historical transaction, including transfers, refunds and pending bank entries, can be turned into a proposed future schedule. Review its type, amount, and date. No bank transaction is changed and no payment is initiated.</p></section></div>';
 }
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
