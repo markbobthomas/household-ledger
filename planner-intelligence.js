@@ -194,7 +194,7 @@ function missingMortgages(records,projection,accounts,asOf,options={}){
  const pfcMortgage=t=>{
   const p=t.personal_finance_category||t.personalFinanceCategory||t.source?.personalFinanceCategory||
    t.source?.personal_finance_category||{};
-  return /\bMORTGAGE\b|HOME_LOAN|HOME_EQUITY/.test(String(p.detailed||'').toUpperCase());
+  return /(?:MORTGAGE|HOME_LOAN|HOME_EQUITY)/.test(String(p.detailed||'').toUpperCase());
  };
  const money=t=>Number(t.amount||0);
  const groups=new Map();
