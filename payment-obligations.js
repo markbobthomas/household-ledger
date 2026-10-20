@@ -82,7 +82,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const legacy=!explicit;
    // A known issued statement (optional) supersedes our calculation once.
    // Legacy setups retain their old planning floor for subsequent cycles.
-   const confirmedFirst=n===0&&hasIssued;
+   const confirmedFirst=n===0&&hasIssued&&cycleClose<=asOf;
    const statementAmount=round(confirmedFirst?Number(rule.lastStatementBalance):
     legacy&&hasIssued?Math.max(calculated,Number(rule.lastStatementBalance)):calculated);
    const amount=round(method==='statement'?statementAmount:
@@ -91,7 +91,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     'Estimated from available card purchases, refunds and scheduled charges';
    if(due>actualDue&&autopay)warnings.push(card.name+': planned checking withdrawal '+due+
     ' falls after the due date '+actualDue);
-   if(n===0&&!cycleRows.length&&!predictedRows.length&&!hasIssued)
+   if(n===0&&!cycleRows.length&&!predictedRows.length&&!confirmedFirst)
     warnings.push(card.name+': no settled card transactions found in '+cycleStart+' to '+
      cycleClose+'. Verify the bank history before using this estimate.');
    const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
