@@ -26,6 +26,8 @@ try{
  }
 }catch{}
 let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
+let audit=null,auditAccount=null,auditError='';
+function clearAudit(){audit=null;auditAccount=null;auditError=''}
 function savePlanning(){
  if(live()){window.HouseholdLiveSource.persist(liveState)}
  else {
@@ -245,6 +247,40 @@ function autopayPanel(s){
   '<p class="lead">A purchase raises card debt, not checking withdrawals. Only the card payment reduces the paying checking account. Nothing here initiates a bank payment.</p>'+
   (cards.length?forms:'<p class="lead">No cards connected yet. Add one from Bank connections.</p>')+'</details>';
 }
+function auditPanel(account){
+ const report=auditAccount===String(account.id)?audit:null;
+ const issues=report?.issues||[];
+ const issueLine=item=>'<div class="audit-issue"><strong>'+escapeHTML(item.merchant||'Expected payment')+
+  '</strong><span>'+escapeHTML(dateLong(item.date))+' · '+escapeHTML(item.kind)+
+  (item.actual!==undefined?' · posted '+cash(item.actual):'')+
+  (item.expected!==undefined?' · forecast '+cash(item.expected):'')+'</span></div>';
+ const result=!report?'':report.status==='insufficient-history'?
+  '<p class="audit-footnote">Not enough complete historical months to measure recurring-payment accuracy for this account. This is not a passing score.</p>':
+  '<div class="audit-grid">'+
+   '<div><span>Correct dated forecasts</span><strong>'+report.totals.matched+' / '+report.totals.predicted+'</strong><small>'+
+    (report.matchRate===null?'Not measurable':report.matchRate+'% matched')+'</small></div>'+
+   '<div><span>Eligible recurring payments found</span><strong>'+report.totals.matched+' / '+report.totals.eligible+'</strong><small>'+
+    (report.coverageRate===null?'Not measurable':report.coverageRate+'% captured')+'</small></div>'+
+   '<div><span>Needs investigation</span><strong>'+
+    (report.totals.missed+report.totals.changed+report.totals.extra+report.totals.duplicates)+
+    '</strong><small>'+report.totals.missed+' missed · '+report.totals.changed+' amount changes · '+
+    report.totals.extra+' unmatched · '+report.totals.duplicates+' duplicates</small></div></div>'+
+   '<p class="audit-footnote">Checked '+report.periods.map(escapeHTML).join(', ')+
+   '. '+report.excludedWindows+' month(s) skipped for insufficient bank-history coverage. '+
+   report.cardSettlements+' historical credit-card settlement(s) observed, but not scored without archived statement amounts.</p>'+
+   (issues.length?'<div class="audit-issues"><h3>Items to review</h3>'+
+    issues.map(issueLine).join('')+
+    (report.issueCount>issues.length?'<p class="audit-footnote">Showing '+issues.length+' of '+report.issueCount+' issues.</p>':'')+
+    '</div>':'<p class="audit-footnote">No missed or duplicate routine payments were found in the eligible history.</p>');
+ return '<details class="panel planner-settings" id="accuracy-audit" aria-label="Historical prediction accuracy">'+
+  '<summary>Prediction accuracy <span class="status-tag">OPTIONAL CHECK</span></summary>'+
+  '<p class="lead">Test earlier forecasts against payments that later posted. Each month is tested using only transactions already known before that month.</p>'+
+  (auditError&&auditAccount===String(account.id)?'<p class="audit-footnote">'+escapeHTML(auditError)+'</p>':'')+
+  result+
+  '<div class="card-form-actions"><button type="button" class="btn" data-run-backtest>'+
+   (report?'Run check again':'Run historical check')+'</button></div>'+
+  '<p class="audit-footnote">Checks dates and amounts, not historical bank balances. It excludes variable shopping and cannot verify old card statements without historical statement records. Nothing is saved or sent to another service.</p></details>';
+}
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
  if(!root)return;
@@ -303,9 +339,24 @@ function render(){
   '<details class="details"><summary>What is included in this forecast?</summary>'+
   '<p>Dates and amounts come from historical recurrence detection and any previously saved planning rules. The starting balance is reported by the bank in Real mode. A credit card purchase increases card debt, not checking withdrawals. Credit card payments are transfers between accounts, not spending twice. A projected deposit is not confirmed until posted.</p>'+
   '</details></section>'+
-  routineReviewPanel(bundle)+autopayPanel(s)+connectionPanel(s,bundle);
+  auditPanel(selectedSource)+routineReviewPanel(bundle)+autopayPanel(s)+connectionPanel(s,bundle);
 }
 document.addEventListener('click',e=>{
+ const runAudit=e.target.closest('[data-run-backtest]');
+ if(runAudit){
+  const s=snapshot(),chosen=selected(s);
+  if(!chosen)return;
+  auditAccount=String(chosen.id);
+  try{
+   audit=window.HouseholdPlannerBacktest.build(state(),s.asOf||dateToday(),auditAccount,
+    {model,forecast:window.HouseholdForecast,ledger:window.HouseholdForecastLedger,
+     planner:window.HouseholdPlannerIntelligence},
+    {months:6,accounts:activeAccounts(s)});
+   auditError='';
+  }catch(err){audit=null;auditError='The historical check could not be completed: '+String(err.message||err)}
+  render();$('accuracy-audit')?.setAttribute('open','');
+  return;
+ }
  const main=e.target.closest('[data-set-main]');
  if(main){
   const current=activeAccounts(snapshot()).find(a=>String(a.id)===main.dataset.setMain);
@@ -357,9 +408,9 @@ document.addEventListener('change',e=>{
 if(available()){
  window.HouseholdLiveSource.bind({
   render,
-  enterReal(newState,newSnapshot){liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;latestError=''},
-  enterDemo(){liveState=null;liveSnapshot=null;selectedAccount=null},
-  enterUnavailable(){liveState=null;liveSnapshot=null;selectedAccount=null}
+  enterReal(newState,newSnapshot){liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;latestError='';clearAudit()},
+  enterDemo(){liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()},
+  enterUnavailable(){liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()}
  });
 }else{
  $('ledger-mode-switch').querySelector('option[value="real"]').disabled=true;
