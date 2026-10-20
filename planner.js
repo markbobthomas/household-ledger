@@ -944,19 +944,13 @@ document.addEventListener('click',async e=>{
   const row=lastHistoryRows.find(t=>String(t.id)===fromHistory.dataset.historyPlan&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
   if(!row||!window.HouseholdPlannerHistory.canPlan(row)){
-   setNotice('That posted transaction is no longer available for review.');return;
+   setNotice('That bank transaction is no longer available for review.');return;
   }
-  const matching=lastHistoryRows.filter(t=>window.HouseholdPlannerHistory.canPlan(t)&&
-   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account&&
-   t.type===row.type&&Math.abs(Number(t.amount)-Number(row.amount))<.011&&
-   String(t.merchant||'').toLowerCase().trim()===String(row.merchant||'').toLowerCase().trim())
-   .sort((a,b)=>a.date.localeCompare(b.date));
-  const frequency=window.HouseholdPlannerHistory.guessFrequency(matching)||'monthly';
-  const last=matching.at(-1)||row;
-  recurringDraft={accountId:account,merchant:row.merchant,type:row.type,
-   amount:row.amount,frequency,nextDate:window.HouseholdPlannerHistory.nextDate(
-    last.date,frequency,snapshot().asOf),sourceRow:row,
-   examples:matching.slice(-8).map(x=>String(x.id))};
+  try{
+   recurringDraft=window.HouseholdPlannerHistory.draftFor(
+    row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+   reviewNotice='';
+  }catch(error){setNotice(String(error.message||error));return}
   reviewNotice='';render();
   document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
@@ -1175,16 +1169,23 @@ document.addEventListener('submit',async e=>{
   const fields=Object.fromEntries(new FormData(form));
   if(fields.date>shiftDay(snapshot().asOf,90))
    throw Error('Next payment must fall within the 90-day planning window');
-  if(fields.type!==draft.type)
-   throw Error('The payment type must match the selected bank transaction');
-  const candidate={
-   kind:'event',accountId:draft.accountId,type:draft.type,amount:draft.amount,
+  const linked=fields.type==='transfer',bankType=draft.originalType||draft.sourceRow?.type||draft.type;
+  // Future classification is chosen by the owner, not dictated by Plaid.
+  // For an actual household transfer, store both account legs as ONE plan,
+  // rather than predicting an outgoing debit and unrelated incoming credit.
+  const candidate=linked?{
+   kind:'movement',fromAccountId:fields.fromAccountId,toAccountId:fields.toAccountId,
+   type:'transfer',amount:draft.amount,merchant:draft.merchant,
+   date:draft.sourceRow?.date||draft.nextDate,sourceAmount:draft.amount,
+   originalMerchant:draft.merchant
+  }:{
+   kind:'event',accountId:draft.accountId,type:bankType,amount:draft.amount,
    merchant:draft.merchant,date:draft.sourceRow?.date||draft.nextDate,
    sourceAmount:draft.amount,originalMerchant:draft.merchant
   };
   await commitForecastChange(()=>window.HouseholdPlannerTransactions.defineRecurring(
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
-   model.records(state()),draft.examples||[]));
+   model.records(state()),linked?[]:draft.examples||[]));
   const origin=draft.merchant;
   recurringDraft=null;reviewNotice='Saved recurring forecast for '+origin+'.';
   transactionNotice=reviewNotice;
@@ -1290,6 +1291,13 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('change',e=>{
+ if(e.target.id==='history-recurrence-type'){
+  const form=e.target.closest('form'),transfer=e.target.value==='transfer';
+  form?.querySelectorAll('.history-transfer-only').forEach(el=>el.hidden=!transfer);
+  const single=form?.querySelector('.history-single-account');
+  if(single)single.hidden=transfer;
+  return;
+ }
  if(e.target.name==='historyAccount'){
   historyAccount=e.target.value;historyLimit=90;render();return;
  }
