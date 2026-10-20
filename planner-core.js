@@ -94,7 +94,11 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    // Variable bills and paychecks are one series. Predict one amount per
    // scheduled date using a small rolling average, not one per amount.
    estimate=money(latest.reduce((total,r)=>total+Number(r.amount),0)/latest.length),
-   enough=one||spaced&&(twice||f3||(!variableName.test(g.merchant)&&!transferRisk&&!varying)),
+   // Never infer variable purchases at grocery/retail merchants merely
+   // because they occurred near the same day three months in a row.
+   enough=one||spaced&&!transferRisk&&
+    (variableName.test(g.merchant)?!varying&&f3:
+     (twice||f3||!varying)),
    planDate=next(t.date,f||'monthly',1);
   const aliases=[g.accountId,g.accountName,t.account,t.accountId].map(String).filter(Boolean);
   const blocked=aliases.some(a=>[g.kind,t.type].some(type=>{
