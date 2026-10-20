@@ -154,14 +154,14 @@ function infer(records,snapshot,predictions={},options={}){
      transferUncertain?'Unpaired bank transfer needs account confirmation':
      'Repeating amount needs more evidence before automatic forecasting',
     observed:rows.length,frequency:schedule,
-    date:nextOccurrence(last,schedule,1)});
+    date:nextOccurrence(last.date,schedule,1)});
    continue;
   }
   const observed=single?1:threeConsistent?3:2;
   // Generate the full 90-day horizon for every supported frequency.
   // Quarterly and annual payments are never silently made monthly.
   for(let n=1;n<=110;n++){
-   const when=nextOccurrence(last,schedule,n);
+   const when=nextOccurrence(last.date,schedule,n);
    if(when>through)break;
    if(when<=asOf)continue;
    events.push({id:'auto-fixed|'+g.key+'|'+when,
