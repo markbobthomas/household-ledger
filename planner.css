@@ -228,3 +228,11 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .card-bill-row small{font-size:10px;color:var(--muted);line-height:1.5}
 .card-bill-row>strong{font:750 15px var(--mono);white-space:nowrap}
 @media(max-width:600px){.card-statement-previews{grid-template-columns:minmax(0,1fr)}.card-bill-row>strong{font-size:13px}}
+
+.card-actual-transactions{margin-top:13px;padding-top:10px;border-top:1px solid var(--line);font-size:11px}
+.card-actual-transactions summary{cursor:pointer;font-weight:700;color:#315ebd;line-height:1.5}
+.card-actual-transactions p{color:var(--muted);line-height:1.5}
+.card-actual-line{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);line-height:1.5}
+.card-actual-line:last-child{border-bottom:0}
+.card-actual-line span{overflow-wrap:anywhere;min-width:0}
+.card-actual-line strong{font:650 11px var(--mono);white-space:nowrap}
