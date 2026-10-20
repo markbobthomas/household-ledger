@@ -134,7 +134,9 @@ function persistForecast(predictions){
  // bank transactions and from historical category corrections.
  const body={predictions:JSON.parse(JSON.stringify(predictions||{}))};
  const task=writeQueue.catch(()=>{}).then(()=>request('/forecasts',body));
- writeQueue=task;
+ // A failed forecast save must reject its own action, but should not poison
+ // unrelated subsequent bank refreshes or later successful forecast saves.
+ writeQueue=task.catch(()=>{});
  return task.then(result=>{
   if(!result||result.saved!==true||result.scope!=='predictions')
    throw Error('The forecast update was not acknowledged');
