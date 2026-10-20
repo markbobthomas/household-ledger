@@ -167,14 +167,15 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
    'Real checking starts at bank-reported available cash, not credit card debt');
-  assert.match(await page.locator('[aria-label="Expected cash movements"]').innerText(),/Home Mortgage ACH/,
-   'Real mortgage history produces future cash withdrawals');
-  assert.ok(await page.locator('.payment-line').count()>=1);
+  assert.match(await page.locator('.overview-upcoming-item').first().innerText(),/Home Mortgage ACH/,
+   'Real mortgage history produces expected future cash withdrawals');
+  assert.ok(await page.locator('.overview-upcoming-item').count()>=1);
   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
   const setMain=page.locator('[data-set-main="checking-real"]');
   if(await setMain.count())await setMain.click();
   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/MAIN ACCOUNT/,
    'The chosen checking account becomes the persistent primary focus');
+  await page.locator('.sidebar [data-view="settings"]').click();
   const confirmMortgage=page.locator('.routine-review-line').filter({hasText:'Home Mortgage ACH'});
   await confirmMortgage.locator('[data-confirm-routine]').click();
   assert.equal(await page.locator('.routine-review-line').filter({hasText:'Home Mortgage ACH'}).count(),0,
@@ -187,12 +188,22 @@ const {chromium,webkit}=require('playwright');
   await cardForm.locator('[name=nextPaymentDate]').fill('2026-11-11');
   await cardForm.locator('[name=nextDueDate]').fill('2026-11-12');
   await cardForm.locator('button[type=submit]').click();
-  assert.match(await page.locator('[aria-label="Expected cash movements"]').innerText(),/Credit-card payment/,
+  await page.locator('.sidebar [data-view="transactions"]').click();
+  assert.match(await page.locator('.transactions-page').innerText(),/Credit-card payment/,
    'A confirmed full-statement card payment is a dated checking withdrawal');
+  await page.locator('[data-show-new]').click();
+  await page.locator('#future-new-form [name=merchant]').fill('One-time plumbing');
+  await page.locator('#future-new-form [name=amount]').fill('175');
+  await page.locator('#future-new-form [name=date]').fill('2026-11-23');
+  await page.locator('#future-new-form button[type=submit]').click();
+  await page.getByText('One-time plumbing').first().waitFor();
+  await page.locator('.sidebar [data-view="settings"]').click();
   for(let i=0;i<45&&!writes.some(x=>x.predictions?.paymentRules?.['credit-real']);i++)
    await new Promise(r=>setTimeout(r,80));
   assert.ok(writes.some(x=>x.predictions?.paymentRules?.['credit-real']?.fromAccountId==='checking-real'),
    'Card full-statement autopay setting persists through private adjustment API');
+  assert.ok(writes.some(x=>x.predictions?.futureTransactionAdds?.some(t=>t.merchant==='One-time plumbing')),
+   'One-off forecast additions persist as private adjustments, never as source transactions');
   assert.ok(writes.some(x=>x.predictions?.plannerRoutineDecisions?.['expense|checking-real|home mortgage ach']?.status==='confirmed'),
    'Confirmed mortgage schedule persists in private encrypted adjustments');
   const auditReal=page.locator('#accuracy-audit');
@@ -211,6 +222,7 @@ const {chromium,webkit}=require('playwright');
    'Real-mode rerun retains the expanded audit section');
   assert.match(await auditReal.innerText(),/Refresh bank first/,
    'An audit recheck clearly distinguishes recalculation from fetching new Plaid data');
+  await page.locator('.sidebar [data-view="overview"]').click();
   await page.locator('.account-tile').filter({hasText:'Household Visa'}).click();
   assert.equal(await page.locator('.balance-main').innerText(),'$1,200.00',
    'Selecting a card switches to debt without reducing checking');
