@@ -147,9 +147,17 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
    const decision=excluded[[kind,a,norm(g.merchant)].join('|')];
    return decision?.status==='excluded'&&Math.abs(Number(decision.amount)-g.amount)<.011;
   })))continue;
-  if(rules.some(r=>r.kind==='event'&&
+  const existingRules=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
-   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant))))continue;
+   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
+  // A confirmed schedule suppresses its original bank evidence, even if
+  // the owner edited amount/date. But a NEW posted amount needs review
+  // rather than silently trusting a now-outdated payment estimate.
+  if(existingRules.some(r=>Math.abs(Number(r.matchAmount??r.amount)-g.amount)<.011||
+   Math.abs(Number(r.amount)-g.amount)<.011))continue;
+  if(existingRules.length&&(records||[]).some(t=>!t.pending&&
+   accountOf(t,accounts)===g.accountId&&norm(t.merchant||t.name)===norm(g.merchant)&&
+   t.date>latest.date))continue;
   const upcoming=nextDate(latest.date,cadence,asOf);
   if(!upcoming||diff(upcoming,asOf)>90)continue;
   const projected=(forecastEvents||[]).some(e=>
@@ -164,7 +172,9 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
     id:String(t.id||''),date:t.date,amount:Number(t.amount),merchant:String(t.merchant||'')
    })),
    occurrences:g.rows.length,lastDate:latest.date,nextDate:upcoming,
-   reason:g.rows.length===1?bill?
+   reason:existingRules.length?
+     'New bank amount differs from an existing confirmed schedule; review that schedule before changing your forecast':
+     g.rows.length===1?bill?
      'One identifiable bill; confirm whether and how often it repeats':
      'One bank payment; no repeating pattern established yet':
     !frequency?'Repeated amount, but calendar timing varies; choose a schedule':
