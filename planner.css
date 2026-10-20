@@ -210,3 +210,21 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .future-examples p{font-size:11px;color:var(--muted);margin:9px 0}
 .future-examples label{display:flex;gap:9px;align-items:center;font-size:12px;margin:7px 0;cursor:pointer}
 .future-examples input{accent-color:#315ebd;width:16px;height:16px}
+
+/* Per-card statement forecasting; compact disclosure and account mapping. */
+.card-statement-previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:12px;margin-top:17px}
+.card-statement-preview{border:1px solid var(--line);border-radius:6px;background:var(--panel-alt,#f6f8fa);padding:15px 16px;min-width:0}
+.card-preview-top{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px;font-weight:750;letter-spacing:.04em;color:var(--muted)}
+.card-preview-amount{display:block;margin:8px 0 12px;font:750 25px var(--mono);color:var(--ink)}
+.card-preview-line{display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-top:7px;font-size:11px}
+.card-preview-line span{color:var(--muted);flex:1}
+.card-preview-line strong{font-size:11px;text-align:right;overflow-wrap:anywhere}
+.card-preview-caveat{margin:13px 0 0;font-size:10px;line-height:1.6;color:var(--muted)}
+.card-preview-placeholder{margin:13px 0;color:var(--muted);font-size:11px}
+.card-bill-row{padding:12px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:15px}
+.card-bill-row:last-of-type{border-bottom:0}
+.card-bill-row div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.card-bill-row div strong{font-size:12px}
+.card-bill-row small{font-size:10px;color:var(--muted);line-height:1.5}
+.card-bill-row>strong{font:750 15px var(--mono);white-space:nowrap}
+@media(max-width:600px){.card-statement-previews{grid-template-columns:minmax(0,1fr)}.card-bill-row>strong{font-size:13px}}
