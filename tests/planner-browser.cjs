@@ -135,9 +135,9 @@ const {chromium,webkit}=require('playwright');
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
    await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
-   assert.equal(await page.evaluate(()=>Object.values(
+   assert.equal(await page.evaluate(amount=>Object.values(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).some(x=>x.amount===newAmount)),true,
+   ).some(x=>x.amount===amount),newAmount),true,
     'Series edit is persisted and survives generation of next-month forecasts');
    const futureMortgageRows=page.locator('.future-item').filter({hasText:'Mortgage'});
    if(await futureMortgageRows.count()>1){
