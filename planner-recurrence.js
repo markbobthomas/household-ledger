@@ -72,8 +72,8 @@ function infer(records,snapshot,predictions={},options={}){
    multipleInMonth=rows.filter(t=>t.date.slice(0,7)===last.date.slice(0,7)).length>1,
    mortgage=isMortgage(last),strong=isStrongSource(last),
    twoConsecutive=step===1&&spread<=5&&!multipleInMonth,
-   recent=dayDiff(asOf,last.date)<=46,
-   singleMortgage=mortgage&&rows.length===1&&recent,
+   recent=dayDiff(asOf,last.date)<=66,
+   singleMortgage=mortgage&&rows.length===1&&dayDiff(asOf,last.date)<=50,
    matchedMonths=twoConsecutive&&lastTwo.length===2&&recent;
   // An explicit not-recurring decision is never overridden by auto inference.
   const original=[g.kind,accountId(last,accounts),norm(last.merchant)].join('|');
@@ -128,7 +128,8 @@ const sameBill=(a,b)=>{
  const an=norm(a.merchant),bn=norm(b.merchant);
  if(an&&an===bn)return true;
  // Exact same account, close date, amount, and both unmistakably mortgage.
- return mortgageEvent(a)&&mortgageEvent(b);
+ return mortgageEvent(a)&&mortgageEvent(b)&&
+  Math.abs(cents(a.amount)-cents(b.amount))<=Math.max(500,Math.min(cents(a.amount),cents(b.amount))*.02);
 };
 const weight=e=>e.source==='user-recurring'?100:
  e.source==='future-add'||String(e.id||'').startsWith('future-add|')?95:
