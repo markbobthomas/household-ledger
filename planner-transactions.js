@@ -190,9 +190,23 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const originalMerchant=reference?.originalMerchant||reference?.merchant||fields.merchant;
  const originalAmount=Number(reference?.sourceAmount??reference?.amount??fields.amount);
  const originalType=reference?.type||fields.type;
- const id=reference?.recurringRuleId||'manual|'+[transfer?'movement':'event',
+ let id=reference?.recurringRuleId||'manual|'+[transfer?'movement':'event',
   baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),round(originalAmount)]
   .map(encodeURIComponent).join('|');
+ // Different historical rows can be labeled expense vs ACH transfer, but
+ // refer to the same one mortgage payment. Reuse its existing rule instead
+ // of saving two recurring schedules with distinct source type identities.
+ // Account and amount are required; two different paying accounts, or a
+ // real internal transfer and an expense, must remain separate.
+ if(!reference?.recurringRuleId){
+  const duplicates=p.futureRecurringRules.filter(r=>
+   r.kind===(transfer?'movement':'event')&&
+   String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
+   (!transfer||String(r.toAccountId)===String(fields.toAccountId))&&
+   merchantKey(r.originalMerchant||r.merchant)===merchantKey(originalMerchant)&&
+   Math.abs(Number(r.matchAmount??r.amount)-originalAmount)<.011);
+  if(duplicates.length===1)id=duplicates[0].id;
+ }
  const old=p.futureRecurringRules.find(r=>r.id===id);
  const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
   accountRef(t.accountId||t.account,accounts)===baseAccount&&
