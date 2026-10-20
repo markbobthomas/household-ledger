@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -37,7 +37,7 @@ function savePlanning(){
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
-   futureSeriesEdits:p.futureSeriesEdits}));
+   futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules}));
   return true;
  }
 }
@@ -68,9 +68,9 @@ function recurringEvents(events,s){
    _seriesKey:key,_seriesDate:e.date,_forecastOriginalAccountId:originalAccount};
  });
 }
-function forecastForPayments(events,s){
+function forecastForPayments(events,s,additions){
  const accounts=activeAccounts(s),edits=state().predictions?.futureTransactionEdits||{};
- const extras=state().predictions?.futureTransactionAdds||[];
+ const extras=additions||state().predictions?.futureTransactionAdds||[];
  const resolve=value=>{
   const raw=String(value||'');
   const match=accounts.filter(a=>String(a.id)===raw||String(a.name)===raw||
@@ -90,22 +90,34 @@ function forecastFor(s){
  const forecast=window.HouseholdForecastLedger.build(state(),rows,asOf,90,
   window.HouseholdForecast,model);
  const routines=window.HouseholdPlannerIntelligence.project(state(),rows,forecast.events,asOf);
- const recurring=recurringEvents(routines.events,s);
- const payments=window.HouseholdPaymentObligations.build(s,rows,forecastForPayments(recurring,s),state().predictions||{},{days:90});
+ const tools=window.HouseholdPlannerTransactions,accounts=activeAccounts(s),
+  confirmed=state().predictions?.futureRecurringRules||[],
+  matching=(event,kind)=>confirmed.some(rule=>tools.matchesRecurring(rule,
+   {...event,kind,date:event._seriesDate||event.baseDate||event.anchorDate||event.date,
+    merchant:event.merchant||(kind==='movement'?'Credit-card payment':'')},accounts));
+ const recurring=recurringEvents(routines.events,s).filter(e=>!matching(e,'event'));
+ const existingAdds=(state().predictions?.futureTransactionAdds||[]).filter(e=>
+  !confirmed.some(r=>r.sourceAddedId===e.id)&&!matching(e,e.type==='transfer'?'movement':'event'));
+ const payments=window.HouseholdPaymentObligations.build(s,rows,
+  forecastForPayments(recurring,s,existingAdds),state().predictions||{},{days:90});
  const suppress=new Set(payments.suppressedExpectedIds||[]);
- const cardPlans=payments.plans||[];
+ const cardPlans=(payments.plans||[]).filter(p=>!matching({...p,date:p.anchorDate},'movement'));
  const rawPlans=state().predictions?.accountMovements||[];
  const manualPlans=rawPlans.filter(p=>{
+  if(matching({...p,date:p.anchorDate||p.date,merchant:p.merchant||'Account transfer'},'movement'))return false;
   const dates=window.HouseholdAccountForecast.occurrences(p,asOf,shiftDay(asOf,90));
   const duplicate=cardPlans.some(card=>card.fromAccountId===p.fromAccountId&&card.toAccountId===p.toAccountId&&
    dates.some(date=>Math.abs(dayDelta(date,card.anchorDate))<=3));
   return !duplicate;
  });
- const events=[...recurring.filter(e=>!suppress.has(String(e.id))),...recurringEvents(payments.billEvents,s)];
+ const manual=tools.generatedRecurring(confirmed,asOf,shiftDay(asOf,90));
+ const events=[...recurring.filter(e=>!suppress.has(String(e.id))),
+  ...recurringEvents(payments.billEvents,s).filter(e=>!matching(e,'event')),
+  ...manual.events];
  const personal=state().predictions||{};
- const forecastAccount=window.HouseholdAccountForecast.build(s,events,[...manualPlans,...cardPlans],
+ const forecastAccount=window.HouseholdAccountForecast.build(s,events,[...manualPlans,...cardPlans,...manual.plans],
   {days:90,records:rows,futureTransactionEdits:personal.futureTransactionEdits||{},
-   futureTransactionAdds:personal.futureTransactionAdds||[],
+   futureTransactionAdds:existingAdds,
    futureSeriesEdits:personal.futureSeriesEdits||{},seriesTools:window.HouseholdPlannerTransactions});
  return {forecast,routines,payments,projection:forecastAccount,rows,events};
 }
