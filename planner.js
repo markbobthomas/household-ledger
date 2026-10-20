@@ -796,10 +796,11 @@ document.addEventListener('submit',async e=>{
     await commitForecastChange(()=>{
      const existingRows=futureRows(forecastFor(s),s);
      const existingCadence=cadenceOption(row.cadence);
-     const useSeries=Boolean(row.seriesKey&&!row.recurringRuleId&&
+     const useSeries=Boolean(row.seriesKey&&
       fields.frequency===existingCadence&&row.cadence&&!row.addedId);
+     const saveCadence=row.cadence==='twice-monthly'?'twice monthly':row.cadence;
      const result=useSeries?
-      planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,row.cadence,row.kind):
+      planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,saveCadence,row.kind):
       planner.defineRecurring(state(),fields,accounts,asOf,row,model.records(state()),examples);
      const edits=state().predictions.futureTransactionEdits||{};
      for(const other of existingRows){
