@@ -150,6 +150,10 @@ const {chromium,webkit}=require('playwright');
   transactions.push({id:'card-purchase',accountId:'credit-real',date:'2026-10-10',
    name:'Grocery Card Charge',merchant:'Grocery Card Charge',amount:300,pending:false,
    category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'HIGH'}});
+  for(const month of ['2026-06','2026-07','2026-08','2026-09','2026-10'])
+   transactions.push({id:'income-'+month,accountId:'checking-real',date:month+'-12',
+    name:'ACME Employer Payroll',merchant:'ACME Employer Payroll',amount:-3100,pending:false,
+    category:{primary:'TRANSFER_IN',detailed:'TRANSFER_IN_OTHER_TRANSFER_IN',confidence_level:'HIGH'}});
   const realPayload={connected:true,accounts:[account,card],account,lastSync:'2026-10-19T09:00:00Z',
    transactions,adjustments:{}};
   const real=await chrome.newContext({httpCredentials:{username:'pilot',password:pass},viewport:{width:1280,height:900}});
@@ -169,6 +173,10 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
    'Real checking starts at bank-reported available cash, not credit card debt');
+  assert.match(await page.locator('.income-status').innerText(),/PREDICTED/i,
+   'Recurring payroll categorized by Plaid as TRANSFER_IN now reaches projected income');
+  assert.match(await page.locator('.income-status').innerText(),/\$3,100/,
+   'Income summary includes recognized deposited paycheck amount');
   assert.match(await page.locator('.overview-upcoming-item').first().innerText(),/Home Mortgage ACH/,
    'Real mortgage history produces expected future cash withdrawals');
   assert.ok(await page.locator('.overview-upcoming-item').count()>=1);
@@ -191,6 +199,10 @@ const {chromium,webkit}=require('playwright');
   await cardForm.locator('[name=nextDueDate]').fill('2026-11-12');
   await cardForm.locator('button[type=submit]').click();
   await page.locator('.sidebar [data-view="transactions"]').click();
+  assert.match(await page.locator('.transactions-page').innerText(),/ACME Employer Payroll/,
+   'Predicted payroll is listed as an editable future deposit for checking');
+  assert.match(await page.locator('.transactions-page').innerText(),/Deposit/,
+   'Payroll has positive deposit direction rather than a transfer or expense');
   assert.match(await page.locator('.transactions-page').innerText(),/Credit-card payment/,
    'A confirmed full-statement card payment is a dated checking withdrawal');
   await page.locator('[data-show-new]').click();
