@@ -259,9 +259,26 @@ const {chromium,webkit}=require('playwright');
   const page=await real.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/api/ledger',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(realPayload)}));
   const writes=[];
+  let failNextForecast=false,legacyAdjustmentCalls=0;
+  // Simulate a stale/invalid historical category override: it must NOT block
+  // saving a user-confirmed future bill.
   await page.route('**/api/ledger/adjustments',r=>{
-   writes.push(r.request().postDataJSON());
-   return r.fulfill({status:200,contentType:'application/json',body:'{"saved":true}'});
+   legacyAdjustmentCalls++;
+   return r.fulfill({status:400,contentType:'application/json',
+    body:'{"error":"Invalid category override"}'});
+  });
+  await page.route('**/api/ledger/forecasts',r=>{
+   const data=r.request().postDataJSON();
+   assert.deepEqual(Object.keys(data),['predictions'],
+    'The forecast API may only receive predictions, not bank records or category overrides');
+   if(failNextForecast){
+    failNextForecast=false;
+    return r.fulfill({status:503,contentType:'application/json',
+     body:'{"error":"Forecast settings temporarily unavailable"}'});
+   }
+   writes.push(data);
+   return r.fulfill({status:200,contentType:'application/json',
+    body:'{"saved":true,"scope":"predictions"}'});
   });
   let refreshed=0;
   await page.route('**/api/sync',r=>{refreshed++;return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'})});
@@ -402,8 +419,15 @@ const {chromium,webkit}=require('playwright');
    'The next proposed payment is shown as an editable future date');
   assert.equal(await mortgageForm.locator('[name=frequency]').inputValue(),'monthly',
    'Mortgage is suggested monthly but must be saved by the owner');
+  failNextForecast=true;
+  await mortgageForm.locator('button[type=submit]').click();
+  await mortgageForm.locator('[role=alert]').getByText(/Forecast settings temporarily unavailable/).waitFor();
+  assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage Servicer X'}).count(),0,
+   'Failed save rolls back the forecast rather than showing a phantom confirmed mortgage');
   await mortgageForm.locator('button[type=submit]').click();
   await page.locator('.future-notice').getByText(/Recurring payment created/).waitFor();
+  assert.equal(legacyAdjustmentCalls,0,
+   'Creating a predicted bill never uses the legacy bank/category adjustments endpoint');
   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage Servicer X'}).count()>0,true,
    'Confirming the missing mortgage inserts a future $2,000 debit');
   assert.equal(await page.locator('.missing-mortgages').count(),0,
