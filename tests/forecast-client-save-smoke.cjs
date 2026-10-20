@@ -9,7 +9,7 @@ const data={
   date:'2026-09-20',merchant:'Personal mortgage',amount:2000,pending:false}],
  adjustments:{categoryOverrides:{'old-deleted-id':'Housing'},predictions:{}}
 };
-let mode='demo',errorOnce=true;
+let mode='demo',errorOnce=true,networkFailureOnce=false,networkFailureAlways=false;
 const requests=[];
 function response(status,body){
  return {status,ok:status>=200&&status<300,
@@ -20,6 +20,8 @@ const fetch=async(uri,options={})=>{
  if(uri==='/api/ledger')return response(200,data);
  if(uri==='/api/ledger/adjustments')return response(400,{error:'Invalid category override'});
  if(uri!=='/api/ledger/forecasts')throw Error('Unexpected URL '+uri);
+ if(networkFailureAlways)throw new TypeError('Load failed');
+ if(networkFailureOnce){networkFailureOnce=false;throw new TypeError('Load failed')}
  if(errorOnce){errorOnce=false;return response(503,{error:'Forecast settings temporarily unavailable'})}
  return response(200,{saved:true,scope:'predictions'});
 };
@@ -62,5 +64,22 @@ vm.runInNewContext(script,{window:root,globalThis:root,document,localStorage,
  assert.ok(saves.every(x=>!JSON.stringify(JSON.parse(x.options.body)).includes('secret-transaction-not-to-send')),
   'Actual bank records never leave the browser as part of forecast saves');
  assert.equal(root.HouseholdLiveSource.error,'','Recovering from a transient save failure clears error state');
- console.log('PASS forecast-only client saves: error surfaced, rollback-compatible retry, queued snapshot isolation, no stale category overrides and no bank facts posted');
+ // Safari reports a transport interruption as "Load failed"; retrying the
+ // same forecast snapshot cannot add a second scheduled payment.
+ const beforeRetry=requests.filter(r=>r.uri==='/api/ledger/forecasts').length;
+ networkFailureOnce=true;
+ await root.HouseholdLiveSource.persistForecast(pending);
+ assert.equal(requests.filter(r=>r.uri==='/api/ledger/forecasts').length-beforeRetry,2,
+  'Exactly one automatic retry after a dropped Safari forecast request');
+ const last=requests.filter(r=>r.uri==='/api/ledger/forecasts').slice(-2);
+ assert.equal(last[0].options.body,last[1].options.body,
+  'A retry resends the same immutable snapshot, rather than recalculating another payment');
+ assert.equal(root.HouseholdLiveSource.error,'');
+ networkFailureAlways=true;
+ await assert.rejects(root.HouseholdLiveSource.persistForecast(pending),
+  /Your save was not confirmed.*try Save again/,
+  'If both requests fail, explain what happened and keep the edit retryable');
+ assert.equal(requests.filter(r=>r.uri==='/api/ledger/forecasts').length-beforeRetry,4,
+  'Failed transport is not retried indefinitely');
+ console.log('PASS private forecast client: encrypted-only edits, in-order writes, one idempotent Safari Load failed retry, and actionable connection errors');
 })().catch(e=>{console.error(e);process.exitCode=1});
