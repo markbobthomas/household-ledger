@@ -18,6 +18,16 @@ The interface retains:
 
 **The existing full Ledger has not been erased.** Before the reset, an identical copy of the original default branch (commit `53975e8672ab56fb5b29bf14ff94dc1746987928`) was saved to [`backup/full-ledger-before-balance-planner-2026-10-19`](https://github.com/markbobthomas/household-ledger/tree/backup/full-ledger-before-balance-planner-2026-10-19).
 
+## Credit-card billing cycle forecasts and linked autopay
+
+In **Settings → Credit-card statements & autopay**, configure **each connected credit card individually**. Enter the first/last dates of a real billing period (the end is the statement closing date), next payment due date, actual bank withdrawal date, and the checking/savings account that automatically pays that card. The **issued statement balance** is optional: if a statement was already issued, its entered amount takes precedence for that period. Otherwise the app estimates the statement from the connected card's settled charges less refunds within that period, plus verified or owner-defined future recurring purchases on that card before the statement closes. A pending purchase is not silently treated as posted.
+
+The same cycle start/end and due/withdrawal dates advance month by month, respecting short months and leap years. Each card shows a preview of the next statement amount, dates and funding account in Settings; the Overview also lists each card's next predicted bill. Cards without autopay can still show an estimated statement, but **no checking withdrawal is fabricated** and the planner warns about missing payment coverage. One completed bank transfer matched on both its checking and credit-card legs suppresses the corresponding predicted autopay so checking is never debited a second time.
+
+**Limits:** This is a partial projection, not a bank-issued statement or guaranteed future amount. It only knows current connected posted transactions and identified future charges; it does not invent unknown groceries/shopping, fees, interest, carried debt or merchant refunds. An incorrectly linked account or incomplete Plaid history can affect the estimate. Nothing in Settings changes the bank's actual autopay instructions.
+
+Regression: `node tests/card-statement-cycles-smoke.cjs` and `node tests/payment-obligations-smoke.cjs`.
+
 ## Confirm a recurring payment when automatic detection misses it
 
 Any dated future transaction can now be converted into a repeating forecast from **Transactions → Edit → This and all future payments**. Choose a frequency (weekly, every two weeks, twice a month, monthly, quarterly, semiannual or annual) and save. These controls are available even if the prediction engine did **not** recognize a recurring pattern. For a bill missing from the entire future list, choose **+ Add transaction**, enter the account, merchant, amount and date, and select **Repeat** rather than One time.
