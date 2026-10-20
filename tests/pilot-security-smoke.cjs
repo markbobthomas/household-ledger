@@ -34,6 +34,30 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   });
   assert.equal(denied,403,'Protected bank actions still require the explicit action header');
   assert.ok(!(await get('/api/status',true)).body.includes('test-placeholder'),'Secrets absent from responses');
-  console.log('PASS isolated pilot authentication, healthcheck, empty state, no leaked Plaid credentials');
+  // A stale browser/deploy can request a previously allowlisted static asset.
+  // Missing files must not terminate the private bank server process.
+  const partial=path.join(dir,'partial-deploy');
+  fs.mkdirSync(path.join(partial,'pilot'),{recursive:true});
+  fs.copyFileSync(path.join(__dirname,'../pilot/server.cjs'),path.join(partial,'pilot/server.cjs'));
+  fs.writeFileSync(path.join(partial,'index.html'),'<html><head></head><body>partial deployment</body></html>');
+  const altPort=port+1;
+  const partialChild=spawn(process.execPath,['pilot/server.cjs'],{
+   cwd:partial,env:{...env,PORT:String(altPort),PILOT_STATE_PATH:path.join(dir,'partial.enc')},stdio:'ignore'
+  });
+  const alternate=route=>new Promise((resolve,reject)=>{
+   http.get({hostname:'127.0.0.1',port:altPort,path:route,
+    headers:{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}},res=>{
+    res.resume();res.on('end',()=>resolve(res.statusCode));
+   }).on('error',reject);
+  });
+  try{
+   for(let i=0;i<100;i++){try{if(await alternate('/healthz')===200)break}catch{}
+    await new Promise(r=>setTimeout(r,50))}
+   assert.equal(await alternate('/healthz'),200);
+   assert.equal(await alternate('/planner.js'),404,'Absent asset should give 404, not kill server');
+   assert.equal(await alternate('/healthz'),200,'Server remains healthy after asset error');
+   assert.equal(await alternate('/'),200,'Homepage still serves after asset error');
+  }finally{partialChild.kill()}
+  console.log('PASS pilot auth, health, missing-asset crash protection and no leaked credentials');
  }finally{child.kill();fs.rmSync(dir,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
