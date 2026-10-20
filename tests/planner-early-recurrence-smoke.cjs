@@ -134,6 +134,21 @@ assert.equal(firstRule.id,replay.id,'Rule retains its stable ID for future edits
 assert.equal(replay.date,'2026-11-25','Reconfirmation can update future due date');
 assert.equal(R.infer([mortgage],snapshot,existingRule.predictions).events.length,0,
  'The saved rule completely blocks bank auto-inference even after date change');
+const changedSource={...data,amount:2180,date:'2026-11-29'};
+const changedBank=tx('mortgage-new-price','2026-10-15','Home Mortgage ACH',2180);
+const updated=T.defineRecurring(existingRule,changedSource,accounts,asOf,{
+ kind:'event',accountId:'checking',type:'expense',merchant:'Home Mortgage ACH',
+ amount:2180,date:'2026-10-15'
+},[changedBank],['mortgage-new-price']);
+assert.equal(existingRule.predictions.futureRecurringRules.length,1,
+ 'Modest rate change updates same recurring mortgage rather than saving another debit');
+assert.equal(updated.id,firstRule.id,'Revised amount retains same rule identity');
+assert.equal(updated.matchAmount,2180,'The original bank evidence fingerprint follows the newest amount');
+assert.throws(()=>T.defineRecurring(existingRule,{...data,amount:3100},accounts,asOf,null,[],[]),
+ /different recurring amount already exists/,
+ 'Large apparent changes to same recurring merchant must be resolved against its existing rule');
+assert.equal(existingRule.predictions.futureRecurringRules.length,1,
+ 'Rejected competing new amount does not create a duplicate mortgage rule');
 T.defineRecurring(existingRule,{...data,accountId:'savings'},accounts,asOf,null,[],[]);
 assert.equal(existingRule.predictions.futureRecurringRules.length,2,
  'Mortgage on another paying account is not mistakenly folded into the first');
