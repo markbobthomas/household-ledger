@@ -112,7 +112,8 @@ function saveSeriesEdit(state,seriesKey,baseDate,data,accounts,asOf,cadence,kind
  if(Math.abs(offset)>31)throw Error('The new payment date must be within 31 days of its current date');
  const monthly=['monthly','quarterly','semiannual','annual'].includes(cadence);
  const rule={startsOn:baseDate,cadence,dayOffset:offset,
-  calendarDay:monthly?Number(fields.date.slice(-2)):null,amount:fields.amount,
+  calendarDay:monthly&&fields.date.slice(0,7)===baseDate.slice(0,7)?Number(fields.date.slice(-2)):null,
+  amount:fields.amount,
   merchant:fields.merchant,
   ...(kind==='movement'?{fromAccountId:fields.fromAccountId,toAccountId:fields.toAccountId}:
    {accountId:fields.accountId,type:fields.type,...(fields.type==='transfer'?{cashDirection:fields.cashDirection}:{})})};
