@@ -101,11 +101,24 @@ assert.equal(transferred.projection.household.conservationDifference,0);
 const uncertain=C.analyze([tx('ordinary','2026-10-18','Restaurant 94',35)],accounts,snapshot.asOf);
 assert.equal(uncertain.automatic.length,0);
 assert.equal(uncertain.review.length,0,'A one-off restaurant purchase does not clutter Reviews');
-const dismissed={
- historyPatternDecisions:{[uncertain.review[0].key]:'dismissed'}
-};
-assert.equal(C.analyze([tx('ordinary','2026-10-18','Restaurant 94',35)],
- accounts,snapshot.asOf,dismissed).review.length,0);
+const repeatGrocery=[
+ tx('s1','2026-09-08','Safeway',97),
+ tx('s2','2026-10-08','Safeway',97)];
+const repeatReview=C.analyze(repeatGrocery,accounts,snapshot.asOf);
+assert.equal(repeatReview.review.length,1);
+const dismissed={historyPatternDecisions:{[repeatReview.review[0].key]:'dismissed'}};
+assert.equal(C.analyze(repeatGrocery,accounts,snapshot.asOf,dismissed).review.length,0,
+ 'Dismissed patterns stay dismissed');
+const twiceMonthly=[
+ tx('t1','2026-09-01','Employer Payroll',1400,'income'),
+ tx('t2','2026-09-15','Employer Payroll',1400,'income'),
+ tx('t3','2026-10-01','Employer Payroll',1400,'income'),
+ tx('t4','2026-10-15','Employer Payroll',1400,'income')
+];
+const twice=C.materialize(snapshot,twiceMonthly,{},T,P,90);
+assert.deepEqual(find(twice,'Employer Payroll').slice(0,4).map(x=>x.date),
+ ['2026-11-01','2026-11-15','2026-12-01','2026-12-15'],
+ 'Twice-monthly payroll retains two calendar dates, never drifts biweekly');
 const cardState={predictions:{paymentRules:{visa:{
  fromAccountId:'checking',method:'statement',closingDay:18,
  billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
