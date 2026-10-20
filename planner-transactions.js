@@ -1,8 +1,8 @@
 /* Editable future cash movements. Forecast-only adjustments, never bank source edits. */
 (function(root){
 'use strict';
-const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&
- new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;
+const validDate=s=>{const text=String(s||''),parsed=new Date(text+'T12:00:00Z');
+ return /^\d{4}-\d{2}-\d{2}$/.test(text)&&Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===text;};
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 const allowedTypes=new Set(['expense','income','refund','transfer']);
 const ensure=state=>{state.predictions??={};state.predictions.futureTransactionEdits??={};
