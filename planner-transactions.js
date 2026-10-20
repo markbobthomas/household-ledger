@@ -223,7 +223,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   if(sameType.length>1)throw Error('Multiple schedules exist for this merchant. Review existing schedules before editing.');
   if(sameType.length===1)id=sameType[0].id;
  }
- const old=p.futureRecurringRules.find(r=>r.id===id);
+ let old=p.futureRecurringRules.find(r=>r.id===id);
  const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
   accountRef(t.accountId||t.account,accounts)===baseAccount&&
   merchantKey(t.merchant)&&Number(t.amount)>0);
@@ -240,6 +240,20 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const evidence=[...new Map([...autoLinks,...examples].map(t=>[String(t.id),t])).values()];
  const names=[originalMerchant,...evidence.map(t=>t.merchant||t.name)]
   .map(merchantKey).filter(Boolean);
+ // The user may label a bill "Electric" while Plaid calls it "PSE".
+ // An explicitly linked bank payee must also merge with any existing rule
+ // that already owns that same bank payee, not create a duplicate schedule.
+ if(!reference?.recurringRuleId&&evidence.length){
+  const overlapping=p.futureRecurringRules.filter(r=>
+   r.kind===(transfer?'movement':'event')&&
+   String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
+   (r.kind==='movement'?'transfer':r.type)===forecastType&&
+   (r.matchNames||[merchantKey(r.originalMerchant||r.merchant)])
+    .some(name=>names.includes(name)));
+  if(overlapping.length>1||overlapping.length===1&&old&&old.id!==overlapping[0].id)
+   throw Error('Multiple recurring rules already share this bank payee. Review the existing schedules before making another.');
+  if(overlapping.length===1){id=overlapping[0].id;old=overlapping[0]}
+ }
  if(!names.length)throw Error('Enter a merchant name');
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
