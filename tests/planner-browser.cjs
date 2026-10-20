@@ -323,6 +323,8 @@ const {chromium,webkit}=require('playwright');
    'Plaid posted mortgage visible separately from future predictions');
   const ambiguousMortgage=page.locator('.history-actual-row').filter({hasText:'House Loan ACH Unrecognized'}).first();
   await ambiguousMortgage.locator('[data-history-plan]').click();
+  assert.match(await ambiguousMortgage.innerText(),/transfer/i,
+   'The source ACH entry really is a transfer, not a pre-classified mortgage expense');
   const uncertainForm=page.locator('.history-schedule-form');
   assert.equal(await uncertainForm.locator('[name=type]').inputValue(),'expense',
    'An actual misclassified ACH mortgage can be scheduled as a checking withdrawal');
