@@ -202,3 +202,6 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .future-scope label input{accent-color:#315ebd;width:16px;height:16px}
 .future-scope p{width:100%;margin:0;color:#6c7987;font-size:11px;line-height:1.5}
 @media(max-width:600px){.future-scope{gap:4px;align-items:stretch;flex-direction:column}}
+.future-series-link{font:650 11px var(--mono);border:0;background:transparent;color:#315ebd;padding:6px 0 2px;text-align:left;cursor:pointer;width:fit-content}
+.future-series-link:hover{text-decoration:underline}
+.future-series-link:focus-visible{outline:2px solid #315ebd;outline-offset:2px;border-radius:2px}
