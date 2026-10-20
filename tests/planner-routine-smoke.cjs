@@ -111,6 +111,11 @@ const skippedMonths=evidenceFor('Unreliable mortgage',['2026-03-03','2026-05-03'
 assert.equal(I.project(M.migrate({}),skippedMonths,
  [projected('Unreliable mortgage','monthly',2000,'2026-10-03')],'2026-10-01').events.length,0,
  'A matching payment on alternating months is not a monthly pattern');
+const missingMortgage=I.project(M.migrate({}),skippedMonths,
+ [projected('Unreliable mortgage','monthly',2000,'2026-10-03')],'2026-10-01');
+assert.equal(missingMortgage.warnings.length,1,
+ 'A potential mortgage omitted for inconsistent timing is explicitly flagged');
+assert.equal(missingMortgage.warnings[0].merchant,'Unreliable mortgage');
 const annualName='Annual home insurance';
 const annualHistory=evidenceFor(annualName,['2023-11-11','2024-11-11','2025-11-11'],900);
 assert.equal(I.project(M.migrate({}),annualHistory,
