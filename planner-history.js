@@ -115,7 +115,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
   const kind=t.type==='transfer'?
    (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':null):
    t.type;
-  if(!['expense','income','refund'].includes(kind))continue;
+  if(!['expense','income'].includes(kind))continue; // Refunds remain manually schedulable in History.
   const aid=accountOf(t,accounts),name=norm(t.merchant||t.name);
   if(!name)continue;
   const account=(accounts||[]).find(a=>String(a.id)===aid);

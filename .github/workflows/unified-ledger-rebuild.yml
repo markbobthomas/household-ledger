@@ -1,0 +1,58 @@
+name: Unified Future Ledger rebuild validation
+on:
+  push:
+    branches: [rebuild/unified-future-ledger]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate unified ledger and historic invariants
+        run: |
+          node --check planner-core.js
+          node --check planner.js
+          node --check pilot/server.cjs
+          node --check pilot/data-source.js
+          node tests/planner-core-smoke.cjs
+          node tests/planner-parity.cjs
+          node tests/planner-recurrence-integration-smoke.cjs
+          node tests/planner-history-smoke.cjs
+          node tests/history-any-recurring-smoke.cjs
+          node tests/planner-early-recurrence-smoke.cjs
+          node tests/recurrence-early-dedupe-smoke.cjs
+          node tests/planner-routine-smoke.cjs
+          node tests/planner-backtest-smoke.cjs
+          node tests/planner-transactions-smoke.cjs
+          node tests/planner-series-smoke.cjs
+          node tests/planner-recurring-confirmation-smoke.cjs
+          node tests/planner-missing-mortgage-smoke.cjs
+          node tests/planner-income-smoke.cjs
+          node tests/mortgage-prediction-smoke.cjs
+          node tests/recurrence-reconcile-smoke.cjs
+          node tests/payment-obligations-smoke.cjs
+          node tests/pilot-security-smoke.cjs
+          node tests/pilot-plaid-flow.cjs
+          node tests/card-statement-cycles-smoke.cjs
+          node tests/forecast-only-save-smoke.cjs
+          node tests/forecast-client-save-smoke.cjs
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browsers
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium webkit
+      - name: Test desktop and iPhone
+        run: |
+          node tests/planner-browser.cjs

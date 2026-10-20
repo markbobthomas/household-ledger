@@ -18,7 +18,7 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   for(const route of ['/?utm_source=chatgpt.com','/?utm_source=chatgpt.com&ref=planner','/index.html?ref=planner']){
    const result=await get(route,true);
    assert.equal(result.status,200,'Homepage navigation must ignore harmless query parameters: '+route);
-   assert.match(result.body,/planner-backtest[.]js/,'Embedded historical audit loads from private bank planner');
+   assert.match(result.body,/planner-core[.]js/,'Embedded private planner uses the same unified ledger and accuracy engine');
   }
   const broken=await get('/not-a-route?utm_source=chatgpt.com',true);
   assert.equal(broken.status,404,'Unknown browser links return Not found, not an API action-header error');
