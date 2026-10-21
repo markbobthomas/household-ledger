@@ -130,8 +130,8 @@ const moved=ledger.map(e=>e.merchant==='Home Mortgage ACH'?
  {...e,accountId:'other'}:e);
 const anotherBank=C.analyze({...opts,bundle:{...opts.bundle,ledger:moved},
  chosen:accounts[0],prefs:{paymentRules:{visa:rule}}});
-assert.equal(get(anotherBank,'mortgage','2026-11').status,'external',
- 'A mortgage forecast on savings must not be shown missing across the household');
+assert.equal(get(anotherBank,'mortgage','2026-11').status,'review',
+ 'An account mismatch requires review rather than claiming the mortgage is entirely missing');
 assert.match(get(anotherBank,'mortgage','2026-11').detail,/Savings/);
 const onFunding=C.analyze({...opts,bundle:{...opts.bundle,ledger:moved},
  chosen:accounts[1],prefs:{paymentRules:{visa:rule}}});
