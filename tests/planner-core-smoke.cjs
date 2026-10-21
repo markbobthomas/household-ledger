@@ -37,8 +37,8 @@ assert.equal(find(b,'Mystery Payment').length,0,'Pending entries are not evidenc
 assert.equal(find(b,'Netflix').every(x=>x.accountId==='visa'),true,
  'Credit-card purchases remain attached to their card');
 assert.equal(b.projection.accounts.find(a=>a.id==='checking').openingAvailable,4800);
-assert.equal(b.projection.accounts.find(a=>a.id==='visa').closing,654,
- 'Card purchases increase card liability without debiting checking again');
+assert.equal(b.projection.accounts.find(a=>a.id==='visa').closing,600,
+ 'Unconfigured credit card keeps its bank-reported debt, but future charges are gated until setup');
 assert.ok(b.historyCandidates.some(x=>x.merchant==='Safeway'),
  'Low-confidence patterns go to Reviews');
 const source=JSON.stringify(history);
