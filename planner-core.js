@@ -20,7 +20,11 @@ const twiceDates=(from,slots,end)=>{const dates=[];
   const d=monthDate(from,m,day);if(d>from&&d<=end)dates.push(d);
  }return dates.sort();};
 const next=(s,f,n)=>f==='weekly'?add(s,n*7):f==='biweekly'?add(s,n*14):
+ f==='every-4-weeks'?add(s,n*28):
  monthDate(s,n*({monthly:1,quarterly:3,semiannual:6,annual:12}[f]||1));
+const phaseOf=date=>Math.floor(Date.parse(date+'T12:00:00Z')/86400000)%28;
+const phaseDistance=(a,b)=>{const n=Math.abs(phaseOf(a)-phaseOf(b));return Math.min(n,28-n)};
+const phaseMatch=(a,b)=>valid(a)&&valid(b)&&phaseDistance(a,b)<=3;
 const signature=(accountId,type,merchant)=>[accountId,type,norm(merchant)].map(encodeURIComponent).join('|');
 const isExcludedPattern=(prefs,accountId,type,merchant)=>Boolean(
  prefs?.futureRecurrenceExclusions?.[signature(accountId,type,merchant)]);
@@ -140,22 +144,26 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    const auto=Boolean(one||spaced)&&enough&&!multiCycle&&
     !transferRisk&&g.kind!=='refund';
    if(auto){
-    const series='series|'+g.id+'|'+(f||'monthly'),freq=f||'monthly';
+    const rootSeries='series|'+g.id+'|',freq=f||'monthly';
+    // Two alternating biweekly deposits are two independent four-week
+    // schedules, 14 days apart. Each has its own ID, phase and dollar amount.
     const dates=twice?twiceDates(t.date,slots,end):
      Array.from({length:110},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
     for(const when of dates){
      if(when<=asOf)continue;
-     const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0;
-     // Following the last posted B paycheck, the NEXT deposit is A.
-     const forecastAmount=alternating?
-      (steps%2===1?payA:payB):estimate;
+     const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0,
+      fourWeekPhase=alternating,
+      series=rootSeries+(fourWeekPhase?'every-4-weeks|phase'+phaseOf(when):freq),
+      forecastAmount=fourWeekPhase?(steps%2===1?payA:payB):estimate;
      automatic.push({id:'auto|'+series+'|'+when,date:when,amount:forecastAmount,
       merchant:g.merchant,accountId:g.accountId,type:g.kind,category:t.category||'Other',
-      source:'historical',cadence:freq,_seriesKey:series,_seriesDate:when,
+      source:'historical',cadence:fourWeekPhase?'every-4-weeks':freq,
+      _seriesKey:series,_seriesDate:when,
       planConfidence:one?'identified-single-bill':'observed-recurring-pattern',
-      amountEstimate:alternating?'alternating-paychecks':
+      amountEstimate:fourWeekPhase?'four-week-paycheck':
        varying?'recent-history-average':'last-posted-amount',
-      historicalIds:(alternating?lastPaychecks:latest).map(x=>String(x.id||''))});
+      historicalIds:(fourWeekPhase?
+       lastPaychecks.filter(x=>phaseMatch(x.date,when)):latest).map(x=>String(x.id||''))});
     }
     continue;
    }
@@ -196,7 +204,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   String(r.originalAccountId||r.accountId)===String(e.accountId)&&
   (!r.type||r.type===e.type)&&
   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(
-   e._forecastOriginalMerchant||e.merchant)));
+   e._forecastOriginalMerchant||e.merchant))&&
+  (r.frequency!=='every-4-weeks'||!e.date||phaseMatch(r.anchorDate,e.date)));
  // Explicit rules come first, and always own their original bank series.
  const generated=tools.generatedRecurring(rules,add(asOf,-32),add(end,32));
  const ownerEntries=generated.events.map(e=>{
