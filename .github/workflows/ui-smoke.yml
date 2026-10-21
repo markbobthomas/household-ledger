@@ -25,12 +25,14 @@ jobs:
           npx playwright install --with-deps chromium webkit
       - name: Verify balance planner, bank data integrity and mobile layout
         run: |
+          node tests/pilot-remove-account-smoke.cjs
           node --check planner.js
           node --check planner-backtest.js
           node --check planner-transactions.js
           node --check account-forecast.js
           node --check planner-intelligence.js
           node tests/planner-browser.cjs
+          node tests/pilot-remove-account-browser.cjs
           node tests/planner-routine-smoke.cjs
           node tests/planner-backtest-smoke.cjs
           node tests/planner-transactions-smoke.cjs

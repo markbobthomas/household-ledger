@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Household Ledger · Bank connections</title><script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-<style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:0 18px;color:#1e293b}button{padding:12px 18px;border:1px solid #64748b;border-radius:8px;background:white;margin:3px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.panel{border:1px solid #cbd5e1;border-radius:12px;padding:18px;margin:14px 0}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0}strong{font-size:1.1em}.danger{color:#9f281e}label{display:block;margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:7px}input[type=checkbox]{transform:scale(1.2);margin-right:10px}#account-choices[hidden]{display:none}#status{white-space:pre-wrap}</style></head><body>
+<style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:0 18px;color:#1e293b}button{padding:12px 18px;border:1px solid #64748b;border-radius:8px;background:white;margin:3px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button.remove-account{border-color:#bc6e68;color:#9f281e;background:#fff9f8}.panel{border:1px solid #cbd5e1;border-radius:12px;padding:18px;margin:14px 0}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0}strong{font-size:1.1em}.danger{color:#9f281e}label{display:block;margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:7px}input[type=checkbox]{transform:scale(1.2);margin-right:10px}#account-choices[hidden]{display:none}#status{white-space:pre-wrap}</style></head><body>
 <h1>Bank connections</h1><p class="muted">Add checking, savings and credit cards to your existing Ledger. Adding another account never clears one already connected. Bank balances and transactions remain read-only. <a href="/">Return to Ledger</a>.</p>
 <div class="panel" id="status" role="status">Loading…</div>
 <button id="connect">+ Connect accounts</button><button id="sync">Refresh all banks</button>
@@ -11,7 +11,7 @@
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const money=n=>n==null?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
 const status=document.getElementById('status'),choices=document.getElementById('account-choices');
-let pendingToken=null,pendingAccounts=[];
+let pendingToken=null,pendingAccounts=[],lastAccounts=[],removalBusy=false;
 async function api(path,data){const r=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',
  headers:data===undefined?{}:{'Content-Type':'application/json','X-Pilot-Action':'1'},
  body:data===undefined?undefined:JSON.stringify(data),cache:'no-store'});
@@ -19,9 +19,19 @@ async function api(path,data){const r=await fetch('/api/'+path,{method:data===un
  const payload=await r.json();if(!r.ok)throw Error(payload.error||'Bank request failed');return payload}
 async function refresh(){
  try{const d=await api('status'),accounts=d.accounts||d.account?[...(d.accounts||[d.account])]:[],transactions=d.transactions||[];
+  lastAccounts=accounts;
   status.textContent=accounts.length?accounts.length+' connected account(s) · last successful sync '+(d.lastSync||'unknown'):'No bank accounts connected';
   document.getElementById('sync').disabled=!accounts.length;document.getElementById('disconnect').disabled=!accounts.length;
-  document.getElementById('report').innerHTML=accounts.map(a=>'<div class="panel"><h3>'+esc(a.name)+' ••'+esc(a.mask||'')+'</h3><p><strong>'+money(a.current)+'</strong> '+(a.type==='credit'?'card debt':'current balance')+' · '+money(a.available)+' available</p><p class="muted">Last observed '+esc(a.balanceObservedAt||'unknown')+' · '+esc(a.type)+'</p></div>').join('')+
+  const connections=[...new Set(accounts.map(a=>String(a.itemId||a.id)))];
+  document.getElementById('report').innerHTML=accounts.map(a=>
+   '<div class="panel"><h3>'+esc(a.name)+' ••'+esc(a.mask||'')+'</h3>'+
+   '<p><strong>'+money(a.current)+'</strong> '+(a.type==='credit'?'card debt':'current balance')+
+   ' · '+money(a.available)+' available</p>'+
+   '<p class="muted">Last observed '+esc(a.balanceObservedAt||'unknown')+' · '+esc(a.type)+
+   ' · Bank connection '+(connections.indexOf(String(a.itemId||a.id))+1)+'</p>'+
+   '<button type="button" class="remove-account" data-remove-account="'+esc(a.id)+
+   '" aria-label="Remove '+esc(a.name)+' ending '+esc(a.mask||'unknown')+'">Remove account</button>'+
+   '</div>').join('')+
    (accounts.length?'<div class="panel"><h3>Recent imported transactions ('+transactions.length+' shown)</h3><table><thead><tr><th>Date</th><th>Account</th><th>Merchant</th><th>Bank amount</th></tr></thead><tbody>'+
    transactions.slice(0,50).map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(accounts.find(a=>a.id===t.accountId)?.name||'')+'</td><td>'+esc(t.merchant)+'</td><td>'+money(t.amount)+'</td></tr>').join('')+'</tbody></table></div>':'');
  }catch(e){status.textContent=e.message}
@@ -49,6 +59,25 @@ document.getElementById('choices-form').onsubmit=async e=>{
 };
 document.getElementById('choices-cancel').onclick=()=>{pendingToken=null;pendingAccounts=[];choices.hidden=true;refresh()};
 document.getElementById('sync').onclick=async()=>{try{status.textContent='Refreshing all connected banks…';await api('sync',{});await refresh()}catch(e){status.textContent=e.message}};
+document.getElementById('report').addEventListener('click',async e=>{
+ const button=e.target.closest('[data-remove-account]');
+ if(!button||removalBusy)return;
+ const account=lastAccounts.find(a=>String(a.id)===button.dataset.removeAccount);
+ if(!account){status.textContent='That account is no longer listed. Refresh and try again.';return}
+ const last=lastAccounts.filter(a=>String(a.itemId)===String(account.itemId)).length===1;
+ const label=account.name+(account.mask?' ending '+account.mask:'');
+ if(!confirm('Remove '+label+' from Household Ledger?\\n\\nThis removes only its imported transactions and balance. Other accounts and saved forecast settings are preserved. '+
+  (last?'Its Plaid bank connection will also be disconnected.':'Other accounts using this Plaid bank connection will remain linked.')+
+  '\\n\\nYour actual bank account will NOT be closed.'))return;
+ removalBusy=true;button.disabled=true;
+ try{
+  status.textContent='Removing '+label+' from the private Ledger…';
+  const result=await api('accounts/remove',{accountId:String(account.id)});
+  await refresh();
+  status.textContent=label+' removed. '+result.remainingAccounts+' account(s) remain connected.';
+ }catch(error){status.textContent='Account was not removed: '+error.message;button.disabled=false}
+ finally{removalBusy=false}
+});
 document.getElementById('disconnect').onclick=async()=>{
  if(!confirm('Erase ALL connected institutions and imported bank data? This cannot be undone.'))return;
  try{status.textContent='Disconnecting…';await api('disconnect',{});await refresh()}catch(e){status.textContent=e.message}
