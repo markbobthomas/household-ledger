@@ -298,3 +298,58 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
  .review-candidate-actions{width:100%}
  .review-spotlight{align-items:start;flex-direction:column}
 }
+
+
+/* Summary · one interactive timeline and one honest coverage indicator */
+.summary-page{max-width:1100px;margin:0 auto}
+.summary-stage{border:1px solid #e5ebf0;border-radius:16px;padding:29px 34px 23px;background:linear-gradient(180deg,#fff 0%,#fff 65%,#fcfdff 100%)}
+.summary-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.summary-eyebrow{font:750 11px var(--mono);letter-spacing:1.7px;color:#6f7c89}
+.summary-account-picker{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--muted)}
+.summary-account-picker select{border:1px solid #dde4eb;background:#fff;border-radius:7px;max-width:220px;min-height:36px;color:var(--ink);font-weight:650;padding:6px 28px 6px 11px}
+.summary-ranges{display:flex;align-items:center;gap:4px;margin:20px 0 29px;padding:4px;border-radius:10px;background:#f4f6f9;width:max-content;max-width:100%}
+.summary-range{border:0;background:transparent;color:#718093;font:700 12px var(--mono);min-height:34px;min-width:44px;padding:6px 12px;border-radius:7px}
+.summary-range:hover{color:var(--ink);background:#e9eef5}
+.summary-range.active{color:#234d97;background:#fff;box-shadow:0 1px 4px #182d4d1b}
+.summary-numbers{display:flex;align-items:end;justify-content:space-between;gap:20px}
+.summary-overline,.summary-end span{font-size:12px;color:#778491;font-weight:620}
+.summary-low{font:760 clamp(36px,5vw,63px)/1.13 var(--mono);letter-spacing:-2.8px;color:#172b3a;margin:6px 0}
+.summary-low-alert{color:#aa3d47}
+.summary-date{color:#667585;font-size:12px}
+.summary-end{display:flex;flex-direction:column;text-align:right;gap:3px;padding-bottom:3px}
+.summary-end strong{font:730 clamp(19px,2.35vw,27px) var(--mono);letter-spacing:-1px;overflow-wrap:anywhere}
+.summary-end small{font-size:11px;color:#7b8996}
+.summary-plot{margin:20px -5px 0}
+.summary-plot svg{display:block;width:100%;height:auto;max-height:360px;touch-action:pan-y;cursor:crosshair;outline:none}
+.summary-plot svg:focus-visible{outline:2px solid #416fba;outline-offset:2px;border-radius:7px}
+.summary-axis{display:flex;justify-content:space-between;color:#8b97a4;font:11px var(--mono);padding:0 10px}
+.summary-peek{display:flex;justify-content:space-between;gap:14px;align-items:center;border-radius:9px;background:#f4f7fb;padding:13px 16px;margin-top:18px;min-height:58px}
+.summary-peek>div{display:flex;align-items:baseline;gap:15px;flex-wrap:wrap}
+.summary-peek [data-summary-peek-date]{font-size:12px;font-weight:650;color:#587086}
+.summary-peek strong{font:750 19px var(--mono);color:#172c3d}
+.summary-peek small{font-size:11px;color:#647588;text-align:right}
+.summary-caption{display:flex;justify-content:space-between;gap:12px;color:#8a96a1;font-size:11px;margin-top:13px}
+.summary-caption span{white-space:nowrap}
+.summary-trust{padding:23px 5px 0;color:#687685}
+.summary-trust-line{display:flex;gap:13px;align-items:center;flex-wrap:wrap;font-size:12px}
+.summary-trust-line>strong{color:#202e3b}
+.summary-risk{color:#ad4747}.summary-ok{color:#417357}
+.summary-review-link{border:0;background:none;color:#315ebd;text-decoration:underline;font-weight:700;padding:4px;min-height:30px}
+.summary-trust p{font-size:11px;color:#8995a1;margin:9px 0}
+.summary-empty{padding:80px 20px;color:#778491;text-align:center;font-size:13px;line-height:1.7}
+@media(max-width:780px){
+ .planner-tabs{overflow-x:auto;scrollbar-width:none;justify-content:flex-start}
+ .planner-tabs::-webkit-scrollbar{display:none}
+ .planner-tabs .tab-link{flex:0 0 auto;white-space:nowrap;padding:10px 14px;font-size:12px}
+ .summary-stage{padding:20px 17px 18px;border-radius:12px}
+ .summary-ranges{width:100%;justify-content:space-between;gap:1px;margin:19px 0 23px}
+ .summary-range{min-width:0;flex:1;padding:8px 2px;font-size:11px}
+ .summary-low{font-size:clamp(30px,8vw,42px);letter-spacing:-1.7px}
+ .summary-end strong{font-size:19px}
+ .summary-numbers{align-items:start}
+ .summary-caption span{display:none}
+ .summary-peek{align-items:flex-start;flex-direction:column;gap:6px}
+ .summary-peek small{text-align:left}
+ .summary-plot{margin:24px -3px 0}
+ .summary-account-picker select{max-width:160px}
+}
