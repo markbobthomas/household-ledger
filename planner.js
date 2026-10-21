@@ -27,7 +27,7 @@ try{
  }
 }catch{}
 let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
-let activeTab='overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
+let activeTab='summary',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
@@ -95,7 +95,7 @@ function forecastFor(s){
  // Older inference and category forecast engines do not feed balances.
  return window.HouseholdFutureLedger.materialize(
   s,model.records(state()),state().predictions||{},
-  window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,90);
+  window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon);
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function selected(s){
@@ -654,7 +654,7 @@ function transactionsPage(bundle,s){
    ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
-  '<div class="page-heading"><div><h2>Future transactions</h2>'+
+  '<div class="page-heading"><div><h2>Predictions</h2>'+
    '<p>All dated predictions for the next '+horizon+' days. Select Edit to change a payment or choose Not recurring to remove an incorrectly detected repeating payment.</p></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
@@ -904,6 +904,13 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    (notes||'<p class="lead">No upcoming dated transactions identified.</p>')+
    '</section></div>';
 }
+function summaryPage(bundle,s,chosen,derived,fresh){
+ return window.HouseholdPlannerSummary.render({
+  snapshot:s,chosen,derived,bundle,days:horizon,
+  prefs:state().predictions||{},accounts:activeAccounts(s),
+  fresh,ready:window.HouseholdPaymentObligations.ready
+ });
+}
 function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
   '<h2>Settings</h2><p>Review recurring payments, your cash cushion, account connections and historical accuracy.</p></div></div>'+
@@ -929,7 +936,7 @@ function settingsPage(bundle,s,chosen){
   '<section class="panel mini-panel" aria-label="Recurring forecast changes">'+
    '<div class="section-title"><h2>Recurring payment changes</h2>'+
     '<span class="status-tag">'+Object.keys(state().predictions?.futureSeriesEdits||{}).length+' CUSTOMIZED</span></div>'+
-   '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Transactions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
+   '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Predictions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
    '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
    '</section>'+
   auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
@@ -996,7 +1003,7 @@ function render(){
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
- $('planner-notice').innerHTML=note;
+ $('planner-notice').innerHTML=activeTab==='summary'&&!error&&!latestError?'':note;
  if(!selectedSource){root.innerHTML='<section class="panel"><h2>No connected accounts</h2><p>Add a bank account to start planning.</p>'+
   (available()?'<a class="btn primary" href="/bank-connect">Connect a bank</a>':'')+'</section>';return}
  const fresh=derived&&freshness(derived);
@@ -1006,7 +1013,8 @@ function render(){
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
   activeTab==='history'?historyPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
-  activeTab==='transactions'?transactionsPage(bundle,s):overviewPage(bundle,s,selectedSource,derived,fresh);
+  activeTab==='transactions'?transactionsPage(bundle,s):
+   activeTab==='summary'?summaryPage(bundle,s,selectedSource,derived,fresh):overviewPage(bundle,s,selectedSource,derived,fresh);
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('form:has([data-history-link])'):[])){
   if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples){
@@ -1018,6 +1026,12 @@ function render(){
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
 }
 document.addEventListener('click',async e=>{
+ const period=e.target.closest('[data-summary-days]');
+ if(period){
+  const days=Number(period.dataset.summaryDays);
+  if([30,60,90,120,180,360].includes(days)){horizon=days;render()}
+  return;
+ }
  const view=e.target.closest('[data-view]');
  if(view){
   activeTab=view.dataset.view;
@@ -1189,7 +1203,7 @@ document.addEventListener('click',async e=>{
  if(removeRecurring){
   const row=futureRows(forecastFor(snapshot()),snapshot())
    .find(r=>r.key===removeRecurring.dataset.removeRecurring);
-  if(!row){setNotice('The recurring schedule changed. Open Transactions and try again.');return}
+  if(!row){setNotice('The recurring schedule changed. Open Predictions and try again.');return}
   try{
    const result=await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),row));
    editingKey='';transactionNotice=result.autoSeries?
@@ -1484,9 +1498,12 @@ document.addEventListener('change',e=>{
   updateHistoryLinks(form);
   return;
  }
+ if(e.target.id==='summary-account'){
+  selectedAccount=e.target.value;render();return;
+ }
  if(e.target.id==='horizon'){
   const x=Number(e.target.value);
-  if([30,60,90].includes(x)){horizon=x;render()}
+  if([30,60,90,120,180,360].includes(x)){horizon=x;render()}
  }
 });
 if(available()){
