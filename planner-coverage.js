@@ -186,7 +186,7 @@ function categoryCandidates(row,items,accounts,chosen,excluded=[]){
   }
   if(row.id==='other-bills'&&e.kind==='transfer_out'&&
    credit(accounts.find(a=>asId(a.id)===asId(e.toAccountId))))continue;
-  if(row.id==='other-bills'&&saved.some(x=>matchesMortgageIdentity(e,x)))continue;
+  if(row.id!=='income'&&saved.some(x=>matchesMortgageIdentity(e,x)))continue;
   out.push(e);
  }
  const grouped=new Map();
@@ -205,23 +205,28 @@ function categoryCandidates(row,items,accounts,chosen,excluded=[]){
   .map(x=>({identity:x.identity,merchant:x.merchant,date:x.date,
    amount:x.amount,months:x.months.size,count:x.count}));
 }
-function recurrenceForLearned(events,prefs,months,identity){
+function recurrenceForLearned(events,prefs,months,identity,category){
  const first=events[0];
  if(!first)return {dates:[],confidence:false};
  const rule=(prefs?.futureRecurringRules||[]).find(r=>
   asId(r.id)===asId(identity.ruleId)||
   asId(identity.seriesKey)==='user-series|'+encodeURIComponent(asId(r.id)));
- let frequency=rule?.frequency||first.cadence||'';
+ const cardId=category?.startsWith('card|')?category.slice(5):null,
+  cardRule=cardId&&prefs?.paymentRules?.[cardId];
+ let frequency=rule?.frequency||first.cadence||
+  (cardRule?.nextPaymentDate?'monthly':'');
  if(!frequency&&events.length>=2){
   const dates=[...new Set(events.map(e=>e.date))].sort();
   const gaps=dates.slice(1).map((d,i)=>daysBetween(d,dates[i]));
-  if(gaps.length&&gaps.every(n=>n>=26&&n<=36))frequency='monthly';
+  if(gaps.length>=2&&gaps.every(n=>n>=27&&n<=29))frequency='every-4-weeks';
+  else if(gaps.length&&gaps.every(n=>n>=26&&n<=36))frequency='monthly';
   else if(gaps.length&&gaps.every(n=>n>=12&&n<=16))frequency='biweekly';
-  else if(gaps.length&&gaps.every(n=>n>=26&&n<=30))frequency='every-4-weeks';
  }
  // Every recurring deposit phase stays separate (two alternating paychecks).
  const seed=rule?.anchorDate&&date(rule.anchorDate)?rule.anchorDate:
-  [...events].sort((a,b)=>a.date.localeCompare(b.date))[0].date;
+  cardRule?.nextPaymentDate&&date(cardRule.nextPaymentDate)?
+   cardRule.nextPaymentDate:
+   [...events].sort((a,b)=>a.date.localeCompare(b.date))[0].date;
  const result=[],last=months.at(-1)?.end;
  const period={weekly:7,biweekly:14,'every-4-weeks':28};
  if(period[frequency]){
@@ -252,7 +257,7 @@ function learnedCoverage({row,chosen,months,accounts,prefs,projection,ledger}){
       nonCardDebit(e,accounts)&&
       (e.kind!=='transfer_out'||!credit(accounts.find(a=>
        asId(a.id)===asId(e.toAccountId)))));
-   return {identity,entries,expected:recurrenceForLearned(entries,prefs,months,identity)};
+   return {identity,entries,expected:recurrenceForLearned(entries,prefs,months,identity,row.id)};
   });
  const cells=months.map(m=>{
   const entries=tracked.flatMap(t=>t.entries.filter(e=>dayWithin(m,e.date)));
