@@ -201,7 +201,7 @@ function movementRows(a,derived,s,routine){
  const tags=new Map((routine?.events||[]).map(e=>[String(e.id),e.planConfidence]));
  const records=(derived.events||[]).filter(e=>e.date>s.asOf&&e.date<=cut).sort((x,y)=>x.date.localeCompare(y.date)||x.merchant.localeCompare(y.merchant));
  if(!records.length)return '<div class="forecast-empty"><h3>No dated movements to show yet</h3>'+
-  '<p>No repeating payments currently meet the stable-amount criteria for this account. Confirm a detected repeat below or add a card payment schedule.</p></div>';
+  '<p>No repeating payments currently qualify as confident dated forecasts for this account. Confirm a detected repeat below or add a card payment schedule.</p></div>';
  const first=records.slice(0,12),later=records.slice(12);
  const single=e=>{
   const day=derived.series.find(x=>x.date===e.date),ending=day?.balance;
@@ -414,6 +414,7 @@ function futureRows(bundle,s){
     e.type==='income'?'income':'expense',
    cashDirection:e.kind==='transfer_in'?'in':'out',
    seriesKey:e.seriesKey||null,baseDate:e.baseDate||e.date,cadence:e.cadence||null,
+   amountEstimate:e.amountEstimate||null,
    recurringRuleId:e.recurringRuleId||null,
    sourceAccountId:String(e.sourceAccountId||e.accountId||''),
    sourceMerchant:e.sourceMerchant||e.merchant,
@@ -578,7 +579,7 @@ function newTransactionForm(s){
   '<label>Repeat'+frequencyChoices(preset?'monthly':'once',true)+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
   '</div><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
-   'If auto-detection missed a bill or paycheck, select a frequency here. Link its actual bank history below so different amounts or payee names count as one schedule.</p>'+
+   'For alternating biweekly paychecks, make two independent Every 4 weeks deposits, with their start dates 14 days apart. Link each to its own past paychecks below.</p>'+
   '<div class="future-history-container" data-new-history-link hidden>'+historyLinkField()+'</div>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
@@ -1292,9 +1293,12 @@ document.addEventListener('submit',async e=>{
     await commitForecastChange(()=>{
      const existingRows=futureRows(forecastFor(s),s);
      const existingCadence=cadenceOption(row.cadence);
+     // Converting an inferred payroll phase to an explicit recurring rule
+     // must retain its distinct four-week identity.
      const useSeries=Boolean(row.seriesKey&&
       fields.frequency===existingCadence&&row.cadence&&!row.addedId&&
-      !form.dataset.historyLinksChanged);
+      !form.dataset.historyLinksChanged&&
+      row.amountEstimate!=='four-week-paycheck');
      const saveCadence=row.cadence==='twice-monthly'?'twice monthly':row.cadence;
      const result=useSeries?
       planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,saveCadence,row.kind):

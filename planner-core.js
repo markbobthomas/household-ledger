@@ -20,13 +20,24 @@ const twiceDates=(from,slots,end)=>{const dates=[];
   const d=monthDate(from,m,day);if(d>from&&d<=end)dates.push(d);
  }return dates.sort();};
 const next=(s,f,n)=>f==='weekly'?add(s,n*7):f==='biweekly'?add(s,n*14):
+ f==='every-4-weeks'?add(s,n*28):
  monthDate(s,n*({monthly:1,quarterly:3,semiannual:6,annual:12}[f]||1));
+const phaseOf=date=>Math.floor(Date.parse(date+'T12:00:00Z')/86400000)%28;
+const phaseDistance=(a,b)=>{const n=Math.abs(phaseOf(a)-phaseOf(b));return Math.min(n,28-n)};
+const phaseMatch=(a,b)=>valid(a)&&valid(b)&&phaseDistance(a,b)<=3;
 const signature=(accountId,type,merchant)=>[accountId,type,norm(merchant)].map(encodeURIComponent).join('|');
 const isExcludedPattern=(prefs,accountId,type,merchant)=>Boolean(
  prefs?.futureRecurrenceExclusions?.[signature(accountId,type,merchant)]);
-const suppressedRecurrence=(prefs,e)=>isExcludedPattern(prefs,
- e._forecastOriginalAccountId||e.accountId,e._forecastOriginalType||e.type,
- e._forecastOriginalMerchant||e.merchant);
+const suppressedRecurrence=(prefs,e)=>{
+ const account=e._forecastOriginalAccountId||e.accountId,
+  type=e._forecastOriginalType||e.type,
+  merchant=e._forecastOriginalMerchant||e.merchant;
+ if(isExcludedPattern(prefs,account,type,merchant))return true;
+ const prefix=signature(account,type,merchant)+'|phase';
+ return Object.entries(prefs?.futureRecurrenceExclusions||{}).some(([key,item])=>
+  key.startsWith(prefix)&&valid(item.phaseDate)&&valid(e.date)&&
+  phaseDistance(item.phaseDate,e.date)<=3);
+};
 const billName=/\b(?:mortgage|mtg|home loan|rent|lease payment|loan payment|auto loan|car payment|subscription|membership|autopay|recurring|monthly fee|insurance premium|netflix|spotify|hulu|daycare|tuition)\b/i;
 const variableName=/\b(?:safeway|costco|walmart|amazon|grocery|supermarket|target|restaurant|coffee|starbucks|fuel|gas station|shell|chevron|uber|lyft)\b/i;
 const internalName=/\b(?:transfer to|transfer from|savings transfer|account transfer|xfer|credit card payment|payment to visa|payment to mastercard)\b/i;
@@ -91,8 +102,24 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    multiCycle=f&&!['weekly','biweekly','twice-monthly'].includes(f)&&
     g.rows.filter(r=>r.date.slice(0,7)===t.date.slice(0,7)).length>1,
    varying=latest.some(r=>cents(r.amount)!==amount),
-   // Variable bills and paychecks are one series. Predict one amount per
-   // scheduled date using a small rolling average, not one per amount.
+   // Detect an A/B/A/B biweekly payroll pattern only when two full cycles
+   // show the same amount on each phase. Near-equal A and B are distinct
+   // if their phase difference is meaningful compared with pay variability.
+   payroll=/(payroll|paycheck|salary|wage|employer|direct deposit)/i.test(g.merchant)||
+    /INCOME_WAGES/.test(String(metadata(t).detailed||'').toUpperCase()),
+   lastPaychecks=g.rows.slice(-4),
+   payA=lastPaychecks.length===4?money((Number(lastPaychecks[0].amount)+
+    Number(lastPaychecks[2].amount))/2):0,
+   payB=lastPaychecks.length===4?money((Number(lastPaychecks[1].amount)+
+    Number(lastPaychecks[3].amount))/2):0,
+   typicalPay=(payA+payB)/2,
+   pairTolerance=Math.max(3,typicalPay*.003),
+   alternating=Boolean(g.kind==='income'&&payroll&&f==='biweekly'&&
+    lastPaychecks.length===4&&f3&&
+    Math.abs(Number(lastPaychecks[0].amount)-Number(lastPaychecks[2].amount))<=pairTolerance&&
+    Math.abs(Number(lastPaychecks[1].amount)-Number(lastPaychecks[3].amount))<=pairTolerance&&
+    Math.abs(payA-payB)>=Math.max(2,typicalPay*.004)),
+   // Other variable bill amounts use one rolling average.
    estimate=money(latest.reduce((total,r)=>total+Number(r.amount),0)/latest.length),
    // Never infer variable purchases at grocery/retail merchants merely
    // because they occurred near the same day three months in a row.
@@ -116,7 +143,9 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   // A confirmed recurring rule OWNS the entire historical stream. Different
   // amounts are normal for utilities and payroll and must not create another
   // forecast or a false warning for every monthly statement.
-  if(owners.length)continue;
+  // A confirmed four-week paycheck owns only its own payday phase;
+  // the other paycheck may still be inferred as an independent stream.
+  if(owners.some(r=>r.frequency!=='every-4-weeks'))continue;
   // The same merchant/month may contain two genuine bills. Do not pick one
   // automatically or erase a competing charge because its name is similar.
   if(multiCycle){conflicts.push({merchant:g.merchant,reason:'Multiple same-merchant payments this cycle'});}
@@ -124,17 +153,26 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    const auto=Boolean(one||spaced)&&enough&&!multiCycle&&
     !transferRisk&&g.kind!=='refund';
    if(auto){
-    const series='series|'+g.id+'|'+(f||'monthly'),freq=f||'monthly';
+    const rootSeries='series|'+g.id+'|',freq=f||'monthly';
+    // Two alternating biweekly deposits are two independent four-week
+    // schedules, 14 days apart. Each has its own ID, phase and dollar amount.
     const dates=twice?twiceDates(t.date,slots,end):
      Array.from({length:110},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
     for(const when of dates){
      if(when<=asOf)continue;
-     automatic.push({id:'auto|'+series+'|'+when,date:when,amount:estimate,
+     const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0,
+      fourWeekPhase=alternating,
+      series=rootSeries+(fourWeekPhase?'every-4-weeks|phase'+phaseOf(when):freq),
+      forecastAmount=fourWeekPhase?(steps%2===1?payA:payB):estimate;
+     automatic.push({id:'auto|'+series+'|'+when,date:when,amount:forecastAmount,
       merchant:g.merchant,accountId:g.accountId,type:g.kind,category:t.category||'Other',
-      source:'historical',cadence:freq,_seriesKey:series,_seriesDate:when,
+      source:'historical',cadence:fourWeekPhase?'every-4-weeks':freq,
+      _seriesKey:series,_seriesDate:when,
       planConfidence:one?'identified-single-bill':'observed-recurring-pattern',
-      amountEstimate:varying?'recent-history-average':'last-posted-amount',
-      historicalIds:latest.map(x=>String(x.id||''))});
+      amountEstimate:fourWeekPhase?'four-week-paycheck':
+       varying?'recent-history-average':'last-posted-amount',
+      historicalIds:(fourWeekPhase?
+       lastPaychecks.filter(x=>phaseMatch(x.date,when)):latest).map(x=>String(x.id||''))});
     }
     continue;
    }
@@ -175,7 +213,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   String(r.originalAccountId||r.accountId)===String(e.accountId)&&
   (!r.type||r.type===e.type)&&
   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(
-   e._forecastOriginalMerchant||e.merchant)));
+   e._forecastOriginalMerchant||e.merchant))&&
+  (r.frequency!=='every-4-weeks'||!e.date||phaseMatch(r.anchorDate,e.date)));
  // Explicit rules come first, and always own their original bank series.
  const generated=tools.generatedRecurring(rules,add(asOf,-32),add(end,32));
  const ownerEntries=generated.events.map(e=>{
@@ -190,7 +229,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
  for(const event of detected.automatic){
-  if(ownerFor(event))continue;
+  if(ownerFor(event)||suppressedRecurrence(prefs,event))continue;
   const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
   if(adjusted.date<=asOf||adjusted.date>end)continue;
   seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
@@ -320,6 +359,7 @@ function project(snapshot,ledger,days=90){
    sourceType:entry._forecastOriginalType||entry.type||null,
    transferGroupId:group,predictionKey:group?null:'event|'+encodeURIComponent(String(entry.id))+'|'+encodeURIComponent(String(aid)),
    seriesKey:entry._seriesKey||entry.seriesKey||null,baseDate:entry._seriesDate||entry.baseDate||entry.date,
+   amountEstimate:entry.amountEstimate||null,
    cadence:entry.cadence||null,recurringRuleId:entry.ruleId||entry.recurringRuleId||null,
    fromAccountId:entry.fromAccountId||null,toAccountId:entry.toAccountId||null};
   if(!scheduled.has(x.date))scheduled.set(x.date,[]);scheduled.get(x.date).push(x);

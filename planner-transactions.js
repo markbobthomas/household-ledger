@@ -129,6 +129,10 @@ function resetSeries(state,seriesKey){
  * individual bank transactions and their categories are never modified. */
 const frequencies=new Set(['weekly','biweekly','every-4-weeks','twice-monthly','monthly','quarterly','semiannual','annual']);
 const merchantKey=value=>clean(value).replace(/[^a-z0-9]+/g,' ').trim();
+const phaseOf=date=>Math.floor(Date.parse(date+'T12:00:00Z')/86400000)%28;
+const phaseDistance=(a,b)=>{if(!validDate(a)||!validDate(b))return 28;
+ const delta=Math.abs(phaseOf(a)-phaseOf(b));return Math.min(delta,28-delta)};
+const samePhase=(a,b)=>phaseDistance(a,b)<=3;
 const daysBetween=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
 const accountRef=(value,accounts)=>{
  const v=String(value||'');
@@ -202,7 +206,8 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const originalType=reference?.originalType||reference?.sourceType||reference?.type||fields.type;
  const forecastType=transfer?'transfer':fields.type;
  let id=reference?.recurringRuleId||'manual|'+[transfer?'movement':'event',
-  baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),round(originalAmount)]
+  baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),
+  frequency==='every-4-weeks'?'phase'+phaseOf(fields.date):round(originalAmount)]
   .map(encodeURIComponent).join('|');
  // Different historical rows can be labeled expense vs ACH transfer, but
  // refer to the same one mortgage payment. Reuse its existing rule instead
@@ -220,8 +225,13 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   // may change dramatically (seasonal utilities or deductions on a paycheck).
   // Never manufacture a second series just because the amount changed.
   const sameType=sameMerchant.filter(r=>(r.kind==='movement'?'transfer':r.type)===forecastType);
-  if(sameType.length>1)throw Error('Multiple schedules exist for this merchant. Review existing schedules before editing.');
-  if(sameType.length===1)id=sameType[0].id;
+  const matching=sameType.filter(r=>frequency==='every-4-weeks'&&
+   r.frequency==='every-4-weeks'?samePhase(r.anchorDate,fields.date):
+   frequency!=='every-4-weeks');
+  if(matching.length>1)throw Error('More than one matching recurring schedule. Review saved schedules.');
+  if(matching.length===1)id=matching[0].id;
+  else if(frequency!=='every-4-weeks'&&sameType.length)
+   throw Error('This merchant already has separate recurring schedules. Edit the intended schedule instead.');
  }
  let old=p.futureRecurringRules.find(r=>r.id===id);
  const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
@@ -235,9 +245,13 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  // Automatically connect unambiguous same-name posted history, even when
  // transaction amounts vary. Selecting bank examples also connects different
  // Plaid descriptions to the same manually named utility or paycheck.
- const autoLinks=candidates.filter(t=>sameDirection(t,forecastType)&&
-  merchantKey(t.merchant||t.name)===merchantKey(originalMerchant));
- const evidence=[...new Map([...autoLinks,...examples].map(t=>[String(t.id),t])).values()];
+ const phaseRecords=rows=>frequency==='every-4-weeks'?
+  rows.filter(t=>samePhase(t.date,fields.date)):rows;
+ const autoLinks=phaseRecords(candidates.filter(t=>sameDirection(t,forecastType)&&
+  merchantKey(t.merchant||t.name)===merchantKey(originalMerchant)));
+ // Same employer, opposite paycheck phase is deliberately NOT linked as
+ // source evidence for this four-week rule.
+ const evidence=[...new Map([...autoLinks,...phaseRecords(examples)].map(t=>[String(t.id),t])).values()];
  const names=[originalMerchant,...evidence.map(t=>t.merchant||t.name)]
   .map(merchantKey).filter(Boolean);
  // The user may label a bill "Electric" while Plaid calls it "PSE".
@@ -249,7 +263,9 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
    String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
    (r.kind==='movement'?'transfer':r.type)===forecastType&&
    (r.matchNames||[merchantKey(r.originalMerchant||r.merchant)])
-    .some(name=>names.includes(name)));
+    .some(name=>names.includes(name))&&
+   (frequency==='every-4-weeks'&&r.frequency==='every-4-weeks'?
+    samePhase(r.anchorDate,fields.date):frequency!=='every-4-weeks'));
   if(overlapping.length>1||overlapping.length===1&&old&&old.id!==overlapping[0].id)
    throw Error('Multiple recurring rules already share this bank payee. Review the existing schedules before making another.');
   if(overlapping.length===1){id=overlapping[0].id;old=overlapping[0]}
@@ -258,8 +274,12 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
   originalAccountId:old?.originalAccountId||baseAccount,
-  sourceAnchorDate:old?.sourceAnchorDate||reference?.baseDate||reference?.date||fields.date,
-  sourceFrequency:old?.sourceFrequency||({
+  sourceAnchorDate:frequency==='every-4-weeks'?
+   (old?.sourceAnchorDate&&samePhase(old.sourceAnchorDate,fields.date)?
+    old.sourceAnchorDate:fields.date):
+   old?.sourceAnchorDate||reference?.baseDate||reference?.date||fields.date,
+  sourceFrequency:frequency==='every-4-weeks'?'every-4-weeks':
+   old?.sourceFrequency||({
    'every 2 weeks':'biweekly','every 4 weeks':'every-4-weeks','twice monthly':'twice-monthly','3 / month':null,
    '4 / month':null,'5 / month':null
   }[reference?.cadence]||reference?.cadence||frequency),
@@ -275,8 +295,11 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(index<0)p.futureRecurringRules.push(rule);else p.futureRecurringRules[index]=rule;
  // Explicit confirmation reverses any earlier "Not recurring" decision for
  // this precise merchant, account and movement direction.
- delete p.futureRecurrenceExclusions?.[recurrenceKey(
-  rule.originalAccountId,rule.kind==='movement'?'transfer':rule.type,rule.originalMerchant)];
+ const exclusionKey=recurrenceKey(
+  rule.originalAccountId,rule.kind==='movement'?'transfer':rule.type,rule.originalMerchant);
+ delete p.futureRecurrenceExclusions?.[exclusionKey];
+ if(frequency==='every-4-weeks')
+  delete p.futureRecurrenceExclusions?.[exclusionKey+'|phase'+phaseOf(fields.date)];
  return rule;
 }
 /* One authoritative, account-scoped opt-out for bank-derived recurrence.
@@ -325,25 +348,31 @@ function stopRecurrence(state,row){
  const type=rule?(rule.kind==='movement'?'transfer':rule.type):recurringType(row);
  if(!accountId||!sourceMerchant(merchant)||!['expense','income','refund','transfer'].includes(type))
   throw Error('This forecast has no identifiable recurring source');
- const key=recurrenceKey(accountId,type,merchant);
+ const phaseDate=rule?.frequency==='every-4-weeks'?rule.anchorDate:
+  row.cadence==='every-4-weeks'?row.baseDate||row.date:null,
+  key=recurrenceKey(accountId,type,merchant)+(phaseDate?'|phase'+phaseOf(phaseDate):'');
  p.futureRecurrenceExclusions??={};
- p.futureRecurrenceExclusions[key]={accountId,type,merchant};
+ p.futureRecurrenceExclusions[key]={accountId,type,merchant,
+  ...(phaseDate?{phaseDate,frequency:'every-4-weeks'}:{})};
  const remove=(p.futureRecurringRules||[]).filter(r=>
   String(r.originalAccountId||r.accountId||r.fromAccountId)===accountId&&
   (r.kind==='movement'?'transfer':r.type)===type&&
-  sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant));
+  sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant)&&
+  (!phaseDate||r.frequency==='every-4-weeks'&&samePhase(phaseDate,r.anchorDate)));
  const ids=new Set(remove.map(r=>r.id));
  p.futureRecurringRules=p.futureRecurringRules.filter(r=>!ids.has(r.id));
  const keys=new Set([row.seriesKey,...remove.map(r=>manualSeriesKey(r.id))].filter(Boolean));
  const signature=[accountId,type,sourceMerchant(merchant)].map(encodeURIComponent).join('|');
  for(const k of Object.keys(p.futureSeriesEdits||{})){
-  if(keys.has(k)||k.startsWith('series|'+signature+'|'))delete p.futureSeriesEdits[k];
+  if(keys.has(k)||!phaseDate&&k.startsWith('series|'+signature+'|'))delete p.futureSeriesEdits[k];
  }
  for(const k of Object.keys(p.futureTransactionEdits||{})){
   if(!k.startsWith('event|')&&!k.startsWith('movement|'))continue;
   let entry;try{entry=decodeURIComponent(k.split('|')[1]||'')}catch{continue}
   if([...ids].some(id=>entry.startsWith('user|'+id+'|'))||
-   entry.startsWith('auto|series|'+signature+'|'))delete p.futureTransactionEdits[k];
+   !phaseDate&&entry.startsWith('auto|series|'+signature+'|')||
+   phaseDate&&row.seriesKey&&entry.startsWith('auto|'+row.seriesKey+'|'))
+   delete p.futureTransactionEdits[k];
  }
  return {key,accountId,type,merchant,removedRules:ids.size};
 }
@@ -362,12 +391,13 @@ function generatedRecurring(rules,asOf,through){
  const events=[],plans=[];
  for(const r of rules||[]){
   for(const d of recurrenceDates(r,asOf,through)){
+   const amount=r.amount;
    if(r.kind==='movement'){
     plans.push({id:'user|'+r.id+'|'+d,anchorDate:d,frequency:'once',
-     amount:r.amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
+     amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
      merchant:r.merchant,seriesRuleId:r.id,source:'user-recurring'});
    }else{
-    events.push({id:'user|'+r.id+'|'+d,date:d,amount:r.amount,
+    events.push({id:'user|'+r.id+'|'+d,date:d,amount,
      merchant:r.merchant,accountId:r.accountId,type:r.type,category:'Confirmed recurring',
      cashDirection:r.cashDirection,source:'user-recurring',cadence:r.frequency,
      ruleId:r.id,_seriesKey:manualSeriesKey(r.id),_seriesDate:d});
