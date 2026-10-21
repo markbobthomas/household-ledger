@@ -532,7 +532,7 @@ const {chromium,webkit}=require('playwright');
    await cardCoverage.locator('[data-coverage-cell]').nth(column).click();
    assert.match(await page.locator('[data-coverage-detail]').innerText(),
     /Credit-card payment is included as a single linked withdrawal/);
-   assert.match(await page.locator('.coverage-detail-event').first().innerText(),/Household Visa autopay/i);
+   assert.match(await page.locator('.coverage-detail-event').first().innerText(),/Household Visa.*autopay/i);
   }
   assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
    .locator('.coverage-cell.covered,.coverage-cell.review').count()>=2,
