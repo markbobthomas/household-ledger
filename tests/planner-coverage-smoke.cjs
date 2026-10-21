@@ -144,6 +144,69 @@ const classification=C.analyze({...opts,bundle:{...opts.bundle,
  ledger:ledger.map(e=>e.merchant==='Home Mortgage ACH'?{...e,merchant:'Servicer ACH-32'}:e)}});
 assert.notEqual(get(classification,'mortgage','2026-11').status,'missing',
  'Mortgage identification also consults bank transaction descriptions, not merchant name alone');
+// Mortgage checking must use the SAME outgoing cash movements as Predictions.
+// A linked transfer to a connected non-credit account is still a dated cash
+// withdrawal, including when an ACH was labeled transfer instead of expense.
+const mortgageTransfers=[
+ {kind:'movement',id:'loan-nov',date:'2026-11-02',fromAccountId:'checking',toAccountId:'other',
+  amount:2590,merchant:'Home Mortgage ACH'},
+ {kind:'movement',id:'loan-dec',date:'2026-12-02',fromAccountId:'checking',toAccountId:'other',
+  amount:2590,merchant:'Home Mortgage ACH'}
+];
+const projectedTransfers=mortgageTransfers.flatMap(p=>[
+ {...p,kind:'transfer_out',type:'transfer',accountId:'checking',transferGroupId:p.id},
+ {...p,kind:'transfer_in',type:'transfer',accountId:'other',transferGroupId:p.id}
+]);
+const transferMortgage=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:mortgageTransfers,projection:{events:projectedTransfers}}});
+for(const m of ['2026-11','2026-12']){
+ assert.equal(get(transferMortgage,'mortgage',m).status,'covered',
+  'A mortgage outgoing transfer must count as a projected mortgage debit');
+ assert.equal(get(transferMortgage,'mortgage',m).items[0].amount,2590);
+}
+const missingTransfer=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:mortgageTransfers.filter(p=>p.date!=='2026-12-02'),
+ projection:{events:projectedTransfers.filter(e=>e.date!=='2026-12-02')}}});
+assert.equal(get(missingTransfer,'mortgage','2026-11').status,'covered');
+assert.equal(get(missingTransfer,'mortgage','2026-12').status,'missing',
+ 'A truly missing mortgage payment in December must still be flagged');
+const renamedTransfer=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:mortgageTransfers.map(p=>({...p,merchant:'Lender ACH'},)),
+ projection:{events:projectedTransfers.map(p=>({...p,merchant:'Lender ACH',sourceMerchant:'Home Mortgage ACH'}))}}});
+assert.equal(get(renamedTransfer,'mortgage','2026-11').status,'covered',
+ 'An ACH transfer renamed for display must match its actual source merchant');
+const unlinkedTransfer=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:mortgageTransfers.map(p=>({...p,merchant:'Servicer Debit',amount:3000})),
+ projection:{events:projectedTransfers.map(p=>({...p,merchant:'Servicer Debit',sourceMerchant:null,amount:3000}))}}});
+assert.equal(get(unlinkedTransfer,'mortgage','2026-11').status,'review',
+ 'A plausible mortgage-size cash debit is present: classify as review, not missing');
+const ambiguousTransfers=C.analyze({...opts,bundle:{...opts.bundle,projection:{events:[
+ ...projectedTransfers.filter(x=>x.date==='2026-12-02'),
+ {kind:'expense',type:'expense',accountId:'checking',date:'2026-11-03',
+  merchant:'ACH Debit A',amount:2590},
+ {kind:'expense',type:'expense',accountId:'checking',date:'2026-11-04',
+  merchant:'ACH Debit B',amount:2590}
+ ]},ledger:[]}});
+assert.equal(get(ambiguousTransfers,'mortgage','2026-11').status,'review',
+ 'Multiple comparable withdrawals need review rather than a false missing warning');
+const postedLate=[...historic.filter(x=>!x.merchant.includes('Mortgage')),
+ ...historic.filter(x=>x.merchant.includes('Mortgage')&&x.date<'2026-10'),
+ {date:'2026-10-19',type:'expense',amount:2590,merchant:'Home Mortgage ACH',accountId:'checking'}];
+const userScheduled=C.analyze({...opts,bundle:{...opts.bundle,rows:postedLate},
+ prefs:{...opts.prefs,futureRecurringRules:[{
+  id:'explicit-home-loan',originalAccountId:'checking',accountId:'checking',
+  type:'expense',merchant:'Mortgage',anchorDate:'2026-11-02',frequency:'monthly',amount:2590
+ }]}});
+assert.equal(get(userScheduled,'mortgage','2026-11').status,'covered',
+ 'User confirmed next payment date should outrank potentially different historic posting dates');
+assert.equal(get(userScheduled,'mortgage','2026-12').status,'covered');
+const creditOnly=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:[],projection:{events:[{kind:'transfer_out',type:'transfer',
+  date:'2026-11-02',amount:2590,accountId:'checking',toAccountId:'visa',
+  merchant:'Home Mortgage ACH',transferGroupId:'linked-card'}]}}});
+assert.equal(get(creditOnly,'mortgage','2026-11').status,'missing',
+ 'An internal transfer to a credit card must not satisfy a mortgage even if mislabeled');
+
 for(const n of [30,60,90,120,180,360]){
  const m=C.months(date,n);
  assert.ok(m.length>=1&&m.length<=13);
