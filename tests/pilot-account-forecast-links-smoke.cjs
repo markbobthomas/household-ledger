@@ -46,7 +46,7 @@ const state={
    monthlyBudgets:{'account-300':100},
    cashFlowStreams:{'stream-3':{accountId:'account-200',amount:90}}
   }
- };
+ }};
 const copy=JSON.stringify(state),usage=inspect(state),byId=Object.fromEntries(usage.map(x=>[x.id,x]));
 assert.equal(byId['account-300'].forecastLinks,0,
  'Globally named budget category must not be mistaken for an account-specific saved forecast');
