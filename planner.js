@@ -414,6 +414,7 @@ function futureRows(bundle,s){
     e.type==='income'?'income':'expense',
    cashDirection:e.kind==='transfer_in'?'in':'out',
    seriesKey:e.seriesKey||null,baseDate:e.baseDate||e.date,cadence:e.cadence||null,
+   amountEstimate:e.amountEstimate||null,
    recurringRuleId:e.recurringRuleId||null,
    sourceAccountId:String(e.sourceAccountId||e.accountId||''),
    sourceMerchant:e.sourceMerchant||e.merchant,
@@ -538,6 +539,14 @@ function editorFor(row,s,records){
  const currentSeries=row.seriesKey?state().predictions?.futureSeriesEdits?.[row.seriesKey]:null;
  const selectedRule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
  const cadence=selectedRule?.frequency||cadenceOption(row.cadence);
+ const nextPay=(!selectedRule&&row.amountEstimate==='alternating-paychecks')?
+  futureRows(forecastFor(s),s).find(other=>other.seriesKey===row.seriesKey&&
+   other.date===shiftDay(row.date,14)):null;
+ const payPattern=selectedRule?.amountPattern||
+  (row.amountEstimate==='alternating-paychecks'?'alternating':'fixed');
+ const followingAmount=selectedRule?.amountPattern==='alternating'?
+  (Number(row.amount)===Number(selectedRule.amount)?selectedRule.alternateAmount:selectedRule.amount):
+  nextPay?.amount||'';
  const scope='<fieldset class="future-scope"><legend>Apply changes to</legend>'+
   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
   '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
@@ -547,9 +556,7 @@ function editorFor(row,s,records){
    '<div class="future-fields"><label>Repeat frequency'+frequencyChoices(cadence)+'</label>'+
    '<label class="future-second-day"'+(cadence==='twice-monthly'?'':' hidden')+'>Second day of month (1–31)'+
     '<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(selectedRule?.secondDay||15)+'"></label></div>'+
-   paycheckPatternFields(cadence,selectedRule?.amountPattern,
-    selectedRule?.amountPattern==='alternating'?
-     (Number(row.amount)===Number(selectedRule.amount)?selectedRule.alternateAmount:selectedRule.amount):'')+
+   paycheckPatternFields(cadence,payPattern,followingAmount)+
    historyLinkField()+
   '</div>';
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
