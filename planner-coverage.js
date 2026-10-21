@@ -37,7 +37,7 @@ const dayWithin=(m,d)=>date(d)&&d>=m.start&&d<=m.end;
 const initCells=months=>months.map(m=>({month:m.key,status:'na',label:'—',detail:'No known due date in this portion of the forecast',items:[]}));
 const described=items=>items.map(e=>
  ({date:e.date||e.anchorDate,amount:Number(e.amount)||0,merchant:asId(e.merchant||e.name||'Payment')}));
-let details=new Map();
+let details=new Map(),mortgageChoices=new Map();
 function months(asOf,days){
  if(!date(asOf)||![30,60,90,120,180,360].includes(days))return [];
  const first=day(asOf,1),through=day(asOf,days),out=[];
@@ -119,8 +119,43 @@ const futureNameFields=e=>[e.merchant,e._forecastOriginalMerchant,
 const sameStream=(e,key)=>futureNameFields(e).some(x=>norm(x)===key);
 const nearPayment=(e,d,amount)=>Math.abs(daysBetween(e.date,d))<=9&&
  Math.abs(Number(e.amount)-Number(amount))<=Math.max(30,.06*Number(amount));
+// A forecast-only identity: never changes payment dates, amounts, bank facts or recurrence.
+function mortgageIdentity(e){
+ return {accountId:asId(e.accountId),
+  seriesKey:asId(e.seriesKey||''),ruleId:asId(e.recurringRuleId||e.ruleId||''),
+  merchant:norm(e.sourceMerchant||e._forecastOriginalMerchant||e.merchant),
+  display:asId(e.merchant||'Scheduled payment').slice(0,110)};
+}
+function matchesMortgageIdentity(e,identity){
+ if(!identity||asId(e.accountId)!==asId(identity.accountId))return false;
+ if(identity.seriesKey)return asId(e.seriesKey)===asId(identity.seriesKey);
+ if(identity.ruleId)return asId(e.recurringRuleId||e.ruleId)===asId(identity.ruleId);
+ return Boolean(identity.merchant)&&norm(e.sourceMerchant||
+  e._forecastOriginalMerchant||e.merchant)===identity.merchant;
+}
+function mortgageChoicesFor(expenses,accountId){
+ const groups=new Map();
+ for(const e of expenses){
+  if(asId(e.accountId)!==accountId||!(Number(e.amount)>=100))continue;
+  const identity=mortgageIdentity(e),key=identity.seriesKey?
+   'series|'+identity.seriesKey:identity.ruleId?'rule|'+identity.ruleId:
+   'merchant|'+identity.merchant;
+  if(!identity.merchant&&!identity.seriesKey&&!identity.ruleId)continue;
+  if(!groups.has(key))groups.set(key,{identity,merchant:e.merchant||'Payment',
+   amount:Number(e.amount),date:e.date,count:0,months:new Set()});
+  const value=groups.get(key);
+  value.count++;value.months.add(e.date.slice(0,7));
+ }
+ return [...groups.values()].sort((a,b)=>
+  (b.months.size>=2?1:0)-(a.months.size>=2?1:0)||
+  b.amount-a.amount||a.date.localeCompare(b.date)).slice(0,12).map(x=>({
+   identity:x.identity,merchant:x.merchant,date:x.date,amount:x.amount,
+   count:x.count,months:x.months.size
+  }));
+}
 function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,projection}){
  const id=asId(chosen.id),expenses=actualFutureExpenses({projection,ledger,accounts}),
+  saved=prefs?.mortgageCoverageRules?.[id],
   posted=historyFor(rows,accounts,id,r=>realExpense(r)&&mortgageRow(r),asOf),
   confirmed=(prefs?.futureRecurringRules||[]).filter(r=>
    asId(r.originalAccountId||r.accountId||r.fromAccountId)===id&&
@@ -128,16 +163,18 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
   knownNames=new Set([...posted.map(r=>norm(r.merchant||r.name)),...confirmed.flatMap(r=>
    [norm(r.merchant),norm(r.originalMerchant),...(r.matchNames||[]).map(norm)])].filter(Boolean)),
   knownRuleIds=new Set(confirmed.map(r=>asId(r.id)).filter(Boolean)),
-  mortgageLike=e=>futureNameFields(e).some(mortgage)||
+  mortgageLike=e=>saved?matchesMortgageIdentity(e,saved):
+   futureNameFields(e).some(mortgage)||
    futureNameFields(e).some(x=>knownNames.has(norm(x)))||
    knownRuleIds.has(asId(e.ruleId||e.recurringRuleId)),
   own=expenses.filter(e=>asId(e.accountId)===id),
   recognized=own.filter(mortgageLike),
-  lastPosted=posted.at(-1),seed=
+  lastPosted=posted.at(-1),seed=saved&&recognized.length?
+   recognized[0].date:
    confirmed.find(r=>date(r.anchorDate))?.anchorDate||
    lastPosted?.date||recognized[0]?.date,
   expected=expectedMonthly(seed,months);
- const selectedHasEvidence=posted.length>0||confirmed.length>0||recognized.length>0;
+ const selectedHasEvidence=Boolean(saved)||posted.length>0||confirmed.length>0||recognized.length>0;
  // A mortgage on an account other than the selected account is not absent
  // from the *household* forecast. It also must not be marked as affecting the
  // balance curve of the account being inspected.
@@ -185,7 +222,7 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
  // Source-matched events count as known mortgages. Amount/date-only matches
  // need a review indicator, never the same green check as a linked rule.
  const matched=[...recognized,...candidates.keys()];
- const hasHistory=posted.length>0,hasRules=confirmed.length>0;
+ const hasHistory=posted.length>0,hasRules=confirmed.length>0||Boolean(saved);
  // The Predictions tab shows ALL accounts. A mortgage moved to another
  // account must be named, not falsely presented as absent everywhere.
  if(!matched.length){
@@ -517,13 +554,18 @@ function analyze({snapshot,chosen,bundle,prefs,days,accounts,ready}){
   cardCoverage(params):
   [incomeCoverage(params),mortgageCoverage(params),...cardCoverage(params),
    otherMajorCoverage(params)].filter(Boolean);
+ for(const row of lines)if(row.id==='mortgage'){
+  row.choices=mortgageChoicesFor(actualFutureExpenses({
+   projection:bundle?.projection,ledger,accounts}),asId(chosen.id));
+  row.selectedMortgage=prefs?.mortgageCoverageRules?.[asId(chosen.id)]||null;
+ }
  const review=lines.flatMap(row=>row.cells.filter(cell=>
   ['missing','setup','unknown','review'].includes(cell.status)));
  return {months:columns,rows:lines,attention:review.length,
   uncovered:review.filter(c=>c.status==='missing'||c.status==='setup').length};
 }
 function render(result){
- details=new Map();
+ details=new Map();mortgageChoices=new Map();
  const head=result.months.map(m=>
   '<th scope="col" class="coverage-month">'+escape(monthTitle(m.key))+
   (m.full?'':'<span>partial</span>')+'</th>').join('');
@@ -561,11 +603,27 @@ document.addEventListener('click',e=>{
  const items=cell.items.map(p=>
   '<div class="coverage-detail-event"><span>'+escape(titleDate(p.date||window.start))+
   ' · '+escape(p.merchant)+'</span><strong>'+dollars(p.amount)+'</strong></div>').join('');
+ const options=row.id==='mortgage'?(row.choices||[]).map((c,i)=>{
+  const key=asId(button.dataset.coverageCell)+'|'+i;
+  mortgageChoices.set(key,c.identity);
+  return '<button type="button" class="coverage-mortgage-option" data-coverage-mortgage="'+
+   escape(key)+'">'+escape(c.merchant)+' · '+dollars(c.amount)+
+   ' · '+escape(c.months>1?c.months+' forecast months':'Next '+titleDate(c.date))+
+   '</button>';
+ }).join(''):'';
+ const identify=row.id==='mortgage'?
+  '<div class="coverage-identify"><strong>'+(row.selectedMortgage?
+    'Mortgage identified':'Which predicted payment is your mortgage?')+'</strong>'+
+   '<p>Choose once to track the same payment across future months. This only labels existing predictions; it never adds a withdrawal.</p>'+
+   (options||'<small>No eligible checking withdrawals are predicted in this date range. Check the selected account or choose a longer period.</small>')+
+   (row.selectedMortgage?'<button type="button" class="coverage-mortgage-reset"'+
+    ' data-coverage-mortgage-reset="'+escape(row.selectedMortgage.accountId)+'">Clear mortgage identification</button>':'')+
+   '</div>':'';
  el.hidden=false;
  el.innerHTML='<div class="coverage-detail-title"><strong>'+escape(row.title)+' · '+
   escape(monthTitle(window.key))+'</strong><button type="button" class="coverage-close"'+
   ' data-coverage-close aria-label="Close payment details">×</button></div>'+
-  '<p>'+escape(cell.detail)+'</p>'+items+
+  '<p>'+escape(cell.detail)+'</p>'+items+identify+
   '<button class="coverage-open-predictions" data-view="'+(cell.status==='setup'?'settings':'transactions')+
   '" type="button">'+(cell.status==='setup'?'Set up card payments →':'View predictions →')+'</button>';
  document.querySelectorAll('[data-coverage-cell]').forEach(x=>
@@ -577,6 +635,7 @@ document.addEventListener('click',e=>{
  if(el)el.hidden=true;
  document.querySelectorAll('[data-coverage-cell]').forEach(x=>x.removeAttribute('aria-pressed'));
 });
-root.HouseholdPlannerCoverage={analyze,render,months,expectedMonthly};
+root.HouseholdPlannerCoverage={analyze,render,months,expectedMonthly,
+ getMortgageChoice:key=>mortgageChoices.get(asId(key))||null};
 if(typeof module!=='undefined'&&module.exports)module.exports={analyze,render,months,expectedMonthly};
 })(typeof window!=='undefined'?window:globalThis);
