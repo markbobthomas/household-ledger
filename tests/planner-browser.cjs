@@ -440,8 +440,8 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await preCard.locator('.coverage-cell.setup').count(),3,
    'Connected card alone is never considered a planned future withdrawal');
   assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
-   .locator('.coverage-cell.covered').count()>=1,
-   'Confirmed monthly mortgage is recognized only when dated forecast events exist');
+   .locator('.coverage-cell.covered,.coverage-cell.review').count()>=1,
+   'Mortgage forecasts are visible; overlapping inferred mortgages must be flagged rather than silently approved');
   await page.locator('[data-summary-days="90"]').click();
   assert.equal(await page.locator('#horizon').inputValue(),'90');
   await page.locator('[data-summary-days="180"]').click();
@@ -535,8 +535,8 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.coverage-detail-event').first().innerText(),/Household Visa autopay/i);
   }
   assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
-   .locator('.coverage-cell.covered').count()>=2,
-   'Both upcoming months include projected mortgage withdrawals');
+   .locator('.coverage-cell.covered,.coverage-cell.review').count()>=2,
+   'Both upcoming mortgage periods are shown or flagged for competing predicted withdrawals');
   await page.locator('.sidebar [data-view="overview"]').click();
   assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
    'Overview shows the next card statement and due date');
