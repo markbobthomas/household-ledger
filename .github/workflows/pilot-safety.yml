@@ -40,6 +40,7 @@ jobs:
           node tests/planner-recurring-confirmation-smoke.cjs
           node tests/planner-opt-out-smoke.cjs
           node tests/planner-merchant-streams-smoke.cjs
+          node tests/planner-core-smoke.cjs
           node tests/planner-alternating-pay-smoke.cjs
           node tests/planner-payroll-safety-smoke.cjs
           node tests/planner-missing-mortgage-smoke.cjs
