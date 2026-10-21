@@ -353,3 +353,7 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
  .summary-plot{margin:24px -3px 0}
  .summary-account-picker select{max-width:160px}
 }
+
+/* Summary's six day chips are the only horizon selector on that page. */
+body:has(.summary-page) .top-actions label[for="horizon"],
+body:has(.summary-page) .top-actions #horizon{display:none}
