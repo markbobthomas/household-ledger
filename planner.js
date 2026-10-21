@@ -315,7 +315,7 @@ function priorCardCycles(bundle,cardId){
   cycles.map(p=>'<div class="card-preview-line"><span>'+
    escapeHTML(dayLabel(p.periodStart))+' – '+escapeHTML(dayLabel(p.periodEnd))+
    ' · '+p.count+' posted transaction'+(p.count===1?'':'s')+'</span><strong>'+
-   cash(p.netActivity)+(p.issuedBalance!==null?' · Issued '+cash(p.issuedBalance):'')+
+   (p.count?cash(p.netActivity):'No records · coverage unknown')+(p.issuedBalance!==null?' · Issued '+cash(p.issuedBalance):'')+
    '</strong></div>').join('')+'</details>';
 }
 function autopayPanel(s,bundle){
