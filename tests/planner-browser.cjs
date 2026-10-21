@@ -589,6 +589,7 @@ const {chromium,webkit}=require('playwright');
    'Before bank posts withdrawal, its date is explicitly a plan, not actual history');
   await page.locator('.sidebar [data-view="summary"]').click();
   await page.locator('[data-summary-days="60"]').click();
+  await page.locator('.summary-extras > summary').click();
   const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
   assert.equal(await cardCoverage.locator('.coverage-cell.covered').count(),2,
    'November and December both contain actual linked checking withdrawals');
