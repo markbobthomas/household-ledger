@@ -408,3 +408,7 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .coverage-mortgage-option:hover,.coverage-mortgage-option:focus-visible{border-color:#315ebd;background:#eef4fe}
 .coverage-mortgage-option:disabled{opacity:.6;cursor:wait}
 .coverage-mortgage-reset{background:none;border:0;color:#687787;font-size:11px;text-align:left;padding:8px 0;cursor:pointer}
+
+/* Reusable owner-confirmed forecast stream labels in the Summary detail */
+.coverage-mortgage-option.tracked{border-color:#9db9a6;background:#eff6f2;color:#346d4a}
+.coverage-mortgage-option.tracked:hover,.coverage-mortgage-option.tracked:focus-visible{background:#e5f2e9}
