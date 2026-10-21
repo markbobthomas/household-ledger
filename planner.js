@@ -201,7 +201,7 @@ function movementRows(a,derived,s,routine){
  const tags=new Map((routine?.events||[]).map(e=>[String(e.id),e.planConfidence]));
  const records=(derived.events||[]).filter(e=>e.date>s.asOf&&e.date<=cut).sort((x,y)=>x.date.localeCompare(y.date)||x.merchant.localeCompare(y.merchant));
  if(!records.length)return '<div class="forecast-empty"><h3>No dated movements to show yet</h3>'+
-  '<p>No repeating payments currently meet the stable-amount criteria for this account. Confirm a detected repeat below or add a card payment schedule.</p></div>';
+  '<p>No repeating payments currently qualify as confident dated forecasts for this account. Confirm a detected repeat below or add a card payment schedule.</p></div>';
  const first=records.slice(0,12),later=records.slice(12);
  const single=e=>{
   const day=derived.series.find(x=>x.date===e.date),ending=day?.balance;
