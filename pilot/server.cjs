@@ -148,7 +148,12 @@ async function start(port=Number(env.PORT||8788)){
   // Route on the URL pathname; tracking/query parameters are not bank actions.
   const requestPath=new URL(req.url,'http://localhost').pathname;
   const respond=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data))};
-  if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{ok:true,mode:'multi-account-private'});
+  // Render provides the deployed Git SHA at runtime. Health exposes only
+  // this public source identifier, never credentials, banking records or disk paths.
+  if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{
+   ok:true,mode:'multi-account-private',
+   commit:/^[a-f0-9]{40}$/i.test(String(env.RENDER_GIT_COMMIT||''))?env.RENDER_GIT_COMMIT:null
+  });
   const expected=Buffer.from('pilot:'+env.PILOT_PASSWORD).toString('base64');
   const provided=String(req.headers.authorization||'').replace(/^Basic /,'');
   const equal=provided.length===expected.length&&crypto.timingSafeEqual(Buffer.from(provided),Buffer.from(expected));

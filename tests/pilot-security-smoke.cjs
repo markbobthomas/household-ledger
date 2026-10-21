@@ -3,13 +3,17 @@ const assert=require('node:assert/strict'),http=require('node:http'),crypto=requ
 const {spawn}=require('node:child_process');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-pilot-'));
 const port=19845,pass='test-'+crypto.randomBytes(24).toString('hex');
-const env={...process.env,PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test-placeholder',PLAID_SECRET:'test-placeholder',PLAID_ENV:'sandbox',PILOT_STATE_PATH:path.join(dir,'pilot.enc')};
+const env={...process.env,PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test-placeholder',PLAID_SECRET:'test-placeholder',PLAID_ENV:'sandbox',PILOT_STATE_PATH:path.join(dir,'pilot.enc'),RENDER_GIT_COMMIT:'a'.repeat(40)};
 function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostname:'127.0.0.1',port,path:route,headers:auth?{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}:{}},r=>{let body='';r.on('data',c=>body+=c);r.on('end',()=>resolve({status:r.statusCode,body}))}).on('error',reject)})}
 (async()=>{
  const child=spawn(process.execPath,['pilot/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:['ignore','pipe','pipe']});
  try{
   for(let i=0;i<100;i++){try{let h=await get('/healthz',false);if(h.status===200)break}catch{}await new Promise(r=>setTimeout(r,50))}
-  assert.equal((await get('/healthz',false)).status,200);
+  const health=await get('/healthz',false);
+  assert.equal(health.status,200);
+  assert.equal(JSON.parse(health.body).commit,'a'.repeat(40),
+   'Only the public deployed source commit is available without bank authentication');
+  assert.ok(!health.body.includes(pass),'Private password never appears in deployment check');
   assert.equal((await get('/api/status',false)).status,401,'Bank metadata must not be accessible anonymously');
   assert.equal((await get('/',false)).status,401,'Pilot UI requires authentication');
   assert.equal((await get('/api/status',true)).status,200);
