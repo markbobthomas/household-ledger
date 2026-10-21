@@ -193,6 +193,9 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   if(!Number.isInteger(secondDay)||secondDay<1||secondDay>31||
    secondDay===Number(fields.date.slice(-2)))throw Error('Choose a different second payday (1–31)');
  }
+ const alternating=String(data.amountPattern||'fixed')==='alternating';
+ if(alternating&&(frequency!=='biweekly'||!validAmount(data.alternateAmount)))
+  throw Error('Alternating amounts require Every 2 weeks and a valid second paycheck amount');
  const p=ensure(state);
  const baseAccount=reference?.kind==='movement'?String(reference.sourceAccountId||reference.fromAccountId):
   String(reference?.sourceAccountId||reference?.accountId||fields.accountId);
@@ -257,6 +260,8 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(!names.length)throw Error('Enter a merchant name');
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
+  amountPattern:alternating?'alternating':'fixed',
+  ...(alternating?{alternateAmount:round(data.alternateAmount)}:{}),
   originalAccountId:old?.originalAccountId||baseAccount,
   sourceAnchorDate:old?.sourceAnchorDate||reference?.baseDate||reference?.date||fields.date,
   sourceFrequency:old?.sourceFrequency||({
@@ -362,12 +367,19 @@ function generatedRecurring(rules,asOf,through){
  const events=[],plans=[];
  for(const r of rules||[]){
   for(const d of recurrenceDates(r,asOf,through)){
+   // Exactly one payroll stream: A at the next pay date, B fourteen days
+   // later, A after 28 days, etc. The phase is anchored to its saved date
+   // and survives future bank refreshes and planning-window changes.
+   const index=r.frequency==='biweekly'?Math.round(
+    (Date.parse(d+'T12:00:00Z')-Date.parse(r.anchorDate+'T12:00:00Z'))/(14*86400000)):0;
+   const amount=r.amountPattern==='alternating'&&index%2===1?
+    r.alternateAmount:r.amount;
    if(r.kind==='movement'){
     plans.push({id:'user|'+r.id+'|'+d,anchorDate:d,frequency:'once',
-     amount:r.amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
+     amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
      merchant:r.merchant,seriesRuleId:r.id,source:'user-recurring'});
    }else{
-    events.push({id:'user|'+r.id+'|'+d,date:d,amount:r.amount,
+    events.push({id:'user|'+r.id+'|'+d,date:d,amount,
      merchant:r.merchant,accountId:r.accountId,type:r.type,category:'Confirmed recurring',
      cashDirection:r.cashDirection,source:'user-recurring',cadence:r.frequency,
      ruleId:r.id,_seriesKey:manualSeriesKey(r.id),_seriesDate:d});
