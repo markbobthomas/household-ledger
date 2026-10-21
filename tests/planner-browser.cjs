@@ -51,7 +51,9 @@ const {chromium,webkit}=require('playwright');
     assert.match(await page.locator('.summary-end').innerText(),new RegExp('End of '+days+' days'));
     assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),new RegExp(days+'-day forecast'));
    }
-   await page.locator('#horizon').selectOption('90');
+   await page.locator('[data-summary-days="90"]').click();
+   assert.equal(await page.locator('#horizon').isVisible(),false,
+    'Summary shows only its six compact period chips, not a duplicate header selector');
    const beforeDate=await page.locator('[data-summary-peek-date]').innerText();
    await page.locator('[data-summary-plot]').focus();
    await page.keyboard.press('End');
