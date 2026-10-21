@@ -66,6 +66,29 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
     .locator('.coverage-cell.covered').count()>=1,
     'The same mortgage forecast series is marked covered after user confirmation');
+   const incomeCoverageRow=page.locator('.coverage-table tbody tr').filter({hasText:'Income'});
+   await incomeCoverageRow.locator('[data-coverage-cell]').nth(1).click();
+   assert.match(await page.locator('.coverage-identify').innerText(),/Which deposits are recurring income/);
+   const incomeOption=page.locator('[data-coverage-assign]').first();
+   assert.ok(await incomeOption.count()>0,'Income coverage offers current predicted deposit series');
+   await incomeOption.click();
+   const remembered=await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').coverageAssignments||{});
+   assert.ok(Object.keys(remembered).some(k=>k.startsWith('income|')),
+    'Income identity persists as classification only');
+   await incomeCoverageRow.locator('[data-coverage-cell]').nth(1).click();
+   assert.ok(await page.locator('.coverage-identify [data-coverage-assign].tracked').count()>0,
+    'Known income is visibly marked as learned on return');
+   const billCoverageRow=page.locator('.coverage-table tbody tr').filter({hasText:'Other major bills'});
+   await billCoverageRow.locator('[data-coverage-cell]').nth(1).click();
+   assert.match(await page.locator('.coverage-identify').innerText(),/Which large bills should be tracked/);
+   const billOptions=page.locator('.coverage-identify [data-coverage-assign]');
+   assert.ok(await billOptions.count()>0,'Other bills offer existing dated checking withdrawals');
+   await billOptions.first().click();
+   const savedCoverage=await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').coverageAssignments||{});
+   assert.ok(Object.keys(savedCoverage).some(k=>k.startsWith('other-bills|')),
+    'Other bill classifications are remembered across Summary views');
    assert.match(await page.locator('.summary-trust').innerText(),/excludes unplanned everyday spending/i,
     'Summary explains what is excluded instead of claiming unwarranted accuracy');
    for(const days of [30,60,90,120,180,360]){
