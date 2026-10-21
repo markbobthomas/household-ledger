@@ -75,17 +75,24 @@ T.stopRecurrence(state,{kind:'event',type:'income',accountId:'checking',
 assert.deepEqual(incomes(bank,state.predictions).map(e=>e.amount),
  [3075,3075,3075],'Stopping explicit A preserves explicit B');
 
-// True 1st/15th paydays are possible, but four points alone are insufficient
-// to infer the future dates AND amounts without owner confirmation.
+// Genuinely calendar-anchored pay uses BOTH observed amounts, never an
+// impossible 3-paycheck average, and has independent removal identities.
 const semimonth=[
  check('s1','2026-09-01',3020,'Monthly Payroll'),
  check('s2','2026-09-15',3075,'Monthly Payroll'),
  check('s3','2026-10-01',3020,'Monthly Payroll'),
  check('s4','2026-10-15',3075,'Monthly Payroll')
 ];
-assert.equal(C.analyze(semimonth,accounts,asOf).automatic.length,0,
- 'Ambiguous twice-monthly income is review-only, not a fabricated predicted deposit');
-assert.ok(C.analyze(semimonth,accounts,asOf).review.length>0);
+const twice=C.analyze(semimonth,accounts,asOf).automatic;
+assert.deepEqual(twice.slice(0,4).map(e=>e.date),
+ ['2026-11-01','2026-11-15','2026-12-01','2026-12-15']);
+assert.deepEqual(twice.slice(0,4).map(e=>e.amount),[3020,3075,3020,3075]);
+assert.equal(new Set(twice.map(e=>e._seriesKey)).size,2,
+ 'Each calendar payday can be excluded independently');
+const unstableSemimonth=semimonth.map((r,i)=>i===2?{...r,amount:3222}:r);
+assert.equal(C.analyze(unstableSemimonth,accounts,asOf).automatic.length,0,
+ 'An inconsistent calendar payday goes to Reviews, not an invented average');
+assert.ok(C.analyze(unstableSemimonth,accounts,asOf).review.length>0);
 const irregular=[
  check('i1','2026-08-27',3000,'Variable Payroll'),
  check('i2','2026-09-10',2600,'Variable Payroll'),
