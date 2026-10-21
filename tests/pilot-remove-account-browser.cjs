@@ -35,7 +35,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
   assert.equal((await api('/api/exchange',{publicToken:'public-test',
    accountIds:['acct-1','acct-2']})).code,200);
   chrome=await chromium.launch({headless:true});iphone=await webkit.launch({headless:true});
-  for(const [browser,mobile] of [[chrome,false],[iphone,true]]){
+  for(const [browser,mobile] of [[iphone,true],[chrome,false]]){
    const ctx=await browser.newContext({
     viewport:mobile?{width:390,height:844}:{width:1200,height:900},
     httpCredentials:{username:'pilot',password:pass}});
