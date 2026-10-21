@@ -65,6 +65,28 @@ const {spawn}=require('node:child_process');
   assert.equal((await api('/api/accounts/remove',{accountId:'missing'})).code,404);
   assert.equal((await api('/api/accounts/remove',{accountId:'acct-2',other:'acct-1'})).code,400,
    'Cannot submit a bulk or ambiguous removal');
+  let usage=(await api('/api/status')).data.accounts;
+  assert.ok(usage.find(a=>a.id==='acct-1').forecastUsage.protected,
+   'Checking has saved payroll schedule, card funding role and primary account selection');
+  assert.ok(usage.find(a=>a.id==='acct-2').forecastUsage.protected,
+   'Card has saved recurring rule, card payment and category edits');
+  assert.equal((await api('/api/accounts/remove',{accountId:'acct-2'})).code,409,
+   'Never silently remove a card with saved prediction links');
+  assert.equal((await api('/api/accounts/remove',{accountId:'acct-1'})).code,409,
+   'Never silently remove primary checking with saved prediction links');
+  assert.equal((await api('/api/status')).data.accounts.length,2,
+   'Attempts to remove protected accounts do not alter bank connections');
+  const keepAcct1={primaryAccountId:'acct-1',futureRecurringRules:[
+   {id:'income-rule',accountId:'acct-1',originalAccountId:'acct-1',merchant:'Employer',
+    amount:3000,frequency:'monthly'}]};
+  assert.equal((await api('/api/ledger/adjustments',{
+   categoryOverrides:{},customCategories:[],predictions:keepAcct1
+  })).code,200,'Owner can explicitly clear unwanted card settings prior to removal');
+  usage=(await api('/api/status')).data.accounts;
+  assert.equal(usage.find(a=>a.id==='acct-2').forecastUsage.forecastLinks,0);
+  assert.equal(usage.find(a=>a.id==='acct-2').forecastUsage.categoryEdits,0);
+  assert.equal(usage.find(a=>a.id==='acct-2').forecastUsage.protected,false);
+  assert.equal(usage.find(a=>a.id==='acct-1').forecastUsage.protected,true);
   let removed=await api('/api/accounts/remove',{accountId:'acct-2'});
   assert.equal(removed.code,200);
   assert.equal(removed.data.disconnectedInstitution,false,
@@ -74,8 +96,8 @@ const {spawn}=require('node:child_process');
   assert.ok(ledger.transactions.every(t=>t.accountId==='acct-1'),
    'Only the removed account transactions disappear from private Ledger');
   assert.equal(ledger.adjustments.categoryOverrides['card-from-shared-item'],undefined);
-  assert.deepEqual(ledger.adjustments.predictions,savedPrefs,
-   'Removing an account never wipes forecast preferences for other accounts');
+  assert.deepEqual(ledger.adjustments.predictions,keepAcct1,
+   'Removing an unlinked account never wipes saved payroll on the other account');
   assert.equal((await api('/api/sync',{})).code,200);
   ledger=(await api('/api/ledger')).data;
   assert.equal(ledger.accounts.length,1,'Sync does not reintroduce removed shared-Item account');
@@ -87,6 +109,17 @@ const {spawn}=require('node:child_process');
   assert.deepEqual(ledger.accounts.map(a=>a.id),['acct-1','acct-2']);
   assert.equal(ledger.transactions.filter(t=>t.id==='card-from-shared-item').length,0,
    'Old removed-bank transactions do not leak into the newly connected card');
+  assert.equal((await api('/api/accounts/remove',{accountId:'acct-1'})).code,409,
+   'Reconnected card does not make the protected main checking account safe to remove');
+  const keepAcct2={futureRecurringRules:[
+   {id:'card-rule',accountId:'acct-2',originalAccountId:'acct-2',
+    merchant:'Card charge',amount:30,frequency:'monthly'}]};
+  assert.equal((await api('/api/ledger/forecasts',{predictions:keepAcct2})).code,200,
+   'Explicit owner changes can move protection to the remaining account');
+  assert.equal((await api('/api/status')).data.accounts.find(a=>a.id==='acct-1')
+   .forecastUsage.protected,false);
+  assert.equal((await api('/api/status')).data.accounts.find(a=>a.id==='acct-2')
+   .forecastUsage.protected,true);
   // Mock Plaid returns one failure for the first revoke. The source must not
   // mutate locally if the provider could not disconnect the final Item.
   const failed=await api('/api/accounts/remove',{accountId:'acct-1'});
@@ -101,7 +134,7 @@ const {spawn}=require('node:child_process');
   ledger=(await api('/api/ledger')).data;
   assert.deepEqual(ledger.accounts.map(a=>a.id),['acct-2']);
   assert.ok(ledger.transactions.every(t=>t.accountId==='acct-2'));
-  assert.deepEqual(ledger.adjustments.predictions,savedPrefs,
+  assert.deepEqual(ledger.adjustments.predictions,keepAcct2,
    'Existing encrypted forecast preferences remain intact after removing a checking account');
   const encrypted=fs.readFileSync(store,'utf8');
   assert.ok(!encrypted.includes('secret-'),'No Plaid token is written in clear text');
