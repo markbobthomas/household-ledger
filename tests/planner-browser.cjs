@@ -458,7 +458,7 @@ const {chromium,webkit}=require('playwright');
   await cardForm.locator('[name=nextPaymentDate]').fill('2026-11-11');
   await cardForm.locator('[name=nextDueDate]').fill('2026-11-12');
   await cardForm.locator('button[type=submit]').click();
-  await cardForm.locator('.card-statement-preview').first().getByText('$1,200.00').waitFor();
+  await cardForm.locator('.card-statement-preview .card-preview-amount').first().getByText('$1,200.00',{exact:true}).waitFor();
   assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Household Checking/,
    'Private bank card statement previews identify the paying account');
   assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),
