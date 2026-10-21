@@ -2,6 +2,7 @@
 // Isolated one-account pilot. No access to the static Ledger or fictional Sandbox.
 const http=require('node:http'),crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path');
 const env=process.env;
+const {inspect:accountForecastLinks}=require('./account-forecast-links.cjs');
 if(!env.PILOT_PASSWORD||env.PILOT_PASSWORD.length<20||!env.PILOT_ENCRYPTION_KEY||!env.PLAID_CLIENT_ID||!env.PLAID_SECRET)
  throw Error('Missing pilot password (20+ characters), encryption key, or Plaid credentials');
 const key=crypto.createHash('sha256').update(env.PILOT_ENCRYPTION_KEY).digest();
@@ -14,7 +15,7 @@ if(!HOST)throw Error('PLAID_ENV must be production or sandbox');
 const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const stamp=()=>new Date().toISOString();
 const freshState=()=>({items:[],transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}});
-let state=freshState(),forecastWrites=Promise.resolve();
+let state=freshState(),forecastWrites=Promise.resolve(),accountRemovalBusy=false;
 function normalizeState(){
  if(!Array.isArray(state.items))state.items=[];
  if(state.item?.token&&state.accountId&&!state.items.some(i=>i.id===state.item.id))
@@ -184,12 +185,23 @@ async function start(port=Number(env.PORT||8788)){
     transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object').sort((a,b)=>String(b.date).localeCompare(String(a.date))),
     adjustments:state.ledgerAdjustments||{}});
   }
-  if(req.method==='GET'&&requestPath==='/api/status')return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
+  if(req.method==='GET'&&requestPath==='/api/status'){
+   const refs=new Map(accountForecastLinks(state).map(x=>[x.id,x]));
+   return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,
+    accounts:state.accounts.map(a=>({...a,forecastUsage:refs.get(String(a.id))})),
+    lastSync:state.lastSync,
+    transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
+  }
   // Unknown browser navigation should be a 404, not a misleading bank-action error.
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   try{
+   if(accountRemovalBusy&&[
+    '/api/ledger/forecasts','/api/ledger/adjustments','/api/exchange',
+    '/api/sync','/api/disconnect','/api/accounts/remove'
+   ].includes(requestPath))
+    return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
    if(requestPath==='/api/ledger/forecasts'){
     // Forecast rules are not edits to Plaid transactions, balances, or
     // classification overrides. Persist them separately to prevent an
@@ -253,38 +265,41 @@ async function start(port=Number(env.PORT||8788)){
    }
    if(requestPath==='/api/sync'){await sync();return respond(200,{ok:true,accounts:state.accounts.length})}
    if(requestPath==='/api/accounts/remove'){
-    // Removal is by the Plaid account ID, never by ambiguous display name.
-    // It removes only this selected account from the private ledger and keeps
-    // all unrelated item tokens, transactions, and saved forecast preferences.
     if(!body||typeof body.accountId!=='string'||!body.accountId||
        body.accountId.length>256||Object.keys(body).length!==1)
      return respond(400,{error:'Choose exactly one connected account'});
-    const id=body.accountId,account=state.accounts.find(a=>String(a.id)===id),
-     owners=state.items.filter(i=>i.accountIds.includes(id));
-    if(!account||owners.length!==1||String(account.itemId)!==String(owners[0].id))
-     return respond(404,{error:'This account is no longer connected. Refresh the list.'});
-    const item=owners[0],revoke=item.accountIds.length===1;
-    // Plaid permits one token to serve multiple selected accounts. Only
-    // revoke the Item if removing its LAST selected account, otherwise the
-    // remaining accounts from that same bank must keep syncing normally.
-    if(revoke)await plaid('/item/remove',{access_token:item.token});
-    const previous=state,transactions={},removedIds=new Set();
-    for(const [txId,t] of Object.entries(state.transactions)){
-     if(String(t.accountId||'')===id||
-       !t.accountId&&state.accounts.length===1)removedIds.add(txId);
-     else transactions[txId]=t;
-    }
-    const overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
-    for(const txId of removedIds)delete overrides[txId];
-    state={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
-     items:state.items.flatMap(i=>i.id!==item.id?[i]:
-      revoke?[]:[{...i,accountIds:i.accountIds.filter(a=>a!==id)}]),
-     transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides}};
-    // Preserve the encrypted forecast file and other account preferences.
-    // Removing an account must not silently reset paychecks or bills.
-    try{await save()}catch(error){state=previous;throw error}
-    return respond(200,{removed:true,remainingAccounts:state.accounts.length,
-     disconnectedInstitution:revoke});
+    accountRemovalBusy=true;
+    try{
+     // Finish in-flight encrypted preference saves before checking references.
+     await forecastWrites;
+     const id=body.accountId,account=state.accounts.find(a=>String(a.id)===id),
+      owners=state.items.filter(i=>i.accountIds.includes(id));
+     if(!account||owners.length!==1||String(account.itemId)!==String(owners[0].id))
+      return respond(404,{error:'This account is no longer connected. Refresh the list.'});
+     // Refuse the operation even from a stale browser or direct API call.
+     // Removing a card that funds a schedule (or its linked checking account)
+     // would otherwise silently strand the user's previously edited forecasts.
+     const linked=accountForecastLinks(state).find(x=>x.id===id);
+     if(!linked||linked.protected)
+      return respond(409,{error:'This account has saved forecast settings or edited transactions. Reassign those edits before removing it.'});
+     const item=owners[0],revoke=item.accountIds.length===1;
+     if(revoke)await plaid('/item/remove',{access_token:item.token});
+     const previous=state,transactions={},removedIds=new Set();
+     for(const [txId,t] of Object.entries(state.transactions)){
+      if(String(t.accountId||'')===id||
+        !t.accountId&&state.accounts.length===1)removedIds.add(txId);
+      else transactions[txId]=t;
+     }
+     const overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
+     for(const txId of removedIds)delete overrides[txId];
+     state={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
+      items:state.items.flatMap(i=>i.id!==item.id?[i]:
+       revoke?[]:[{...i,accountIds:i.accountIds.filter(a=>a!==id)}]),
+      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides}};
+     try{await save()}catch(error){state=previous;throw error}
+     return respond(200,{removed:true,remainingAccounts:state.accounts.length,
+      disconnectedInstitution:revoke});
+    }finally{accountRemovalBusy=false}
    }
    if(requestPath==='/api/disconnect'){
     for(const item of state.items)await plaid('/item/remove',{access_token:item.token});
