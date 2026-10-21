@@ -69,24 +69,26 @@ function draftFor(row,records,accounts,asOf){
   accountOf(t,accounts)===sourceAccount&&direction(t)===type&&
   norm(t.merchant||t.name)===norm(row.merchant||row.name))
   .sort((a,b)=>a.date.localeCompare(b.date));
- const frequency=guessFrequency(evidence)||'monthly',last=evidence.at(-1)||row;
- const pay=evidence.slice(-4),payA=pay.length===4?(Number(pay[0].amount)+Number(pay[2].amount))/2:0,
+ const cadence=guessFrequency(evidence)||'monthly',last=evidence.at(-1)||row,
+  pay=evidence.slice(-4),payA=pay.length===4?(Number(pay[0].amount)+Number(pay[2].amount))/2:0,
   payB=pay.length===4?(Number(pay[1].amount)+Number(pay[3].amount))/2:0,
   tolerance=Math.max(3,(payA+payB)/2*.003),
-  alternating=frequency==='biweekly'&&type==='income'&&pay.length===4&&
+  alternating=cadence==='biweekly'&&type==='income'&&pay.length===4&&
    Math.abs(Number(pay[0].amount)-Number(pay[2].amount))<=tolerance&&
    Math.abs(Number(pay[1].amount)-Number(pay[3].amount))<=tolerance&&
-   Math.abs(payA-payB)>=Math.max(2,(payA+payB)/2*.004);
+   Math.abs(payA-payB)>=Math.max(2,(payA+payB)/2*.004),
+  frequency=alternating?'every-4-weeks':cadence,
+  // History starts from the SELECTED actual paycheck and only the matching
+  // 28-day series, rather than merging the alternating partner into it.
+  chosen=evidence.filter(t=>frequency!=='every-4-weeks'||
+   Math.min(Math.abs(Math.round((Date.parse(t.date)-Date.parse(row.date))/86400000)%28),
+    28-Math.abs(Math.round((Date.parse(t.date)-Date.parse(row.date))/86400000)%28))<=3);
  return {accountId:sourceAccount,merchant:String(row.merchant||row.name||'Bank transaction'),
-  // When the last posted paycheck was B, the next deposit is A.
-  amount:alternating?Math.round(payA*100)/100:Number(row.amount)||0,
-  amountPattern:alternating?'alternating':'fixed',
-  ...(alternating?{alternateAmount:Math.round(payB*100)/100}:{}),
-  type,originalType:row.type,
+  amount:Number(row.amount)||0,type,originalType:row.type,
   cashDirection:row.cashDirection||null,frequency,
-  nextDate:nextDate(last.date,frequency,asOf),sourceRow:row,
+  nextDate:nextDate(alternating?row.date:last.date,frequency,asOf),sourceRow:row,
   sourcePending:Boolean(row.pending),fromAccountId,toAccountId,
-  linkedTransfer:linked,examples:evidence.filter(t=>Number(t.amount)>0).slice(-8).map(x=>String(x.id))};
+  linkedTransfer:linked,examples:chosen.filter(t=>Number(t.amount)>0).slice(-8).map(x=>String(x.id))};
 }
 function guessFrequency(history){
  const ts=[...(history||[])].sort((a,b)=>a.date.localeCompare(b.date));
@@ -112,6 +114,7 @@ function nextDate(last,frequency,asOf){
  let d=last;
  for(let i=0;i<56&&d<=asOf;i++){
   d=frequency==='weekly'?addDays(d,7):frequency==='biweekly'?addDays(d,14):
+   frequency==='every-4-weeks'?addDays(d,28):
    monthAt(last,(i+1)*({monthly:1,quarterly:3,semiannual:6,annual:12}[frequency]||1));
  }
  return d>asOf?d:null;
