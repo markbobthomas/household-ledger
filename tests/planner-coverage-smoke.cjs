@@ -76,9 +76,17 @@ assert.equal(get(duplicateMortgage,'mortgage','2026-11').status,'review',
 const notConfigured=C.analyze({...opts,prefs:{paymentRules:{}},ready:()=>false});
 assert.equal(get(notConfigured,'card|visa','2026-11').status,'setup');
 const autopayOff=C.analyze({...opts,prefs:{paymentRules:{visa:{...rule,autopayEnabled:false}}},
+ bundle:{...opts.bundle,ledger:ledger.filter(x=>x.toAccountId!=='visa')},
  ready:()=>true});
 assert.equal(get(autopayOff,'card|visa','2026-11').status,'setup',
- 'Manual card payment is not the same as a scheduled checking debit');
+ 'Autopay off with no future manual movement cannot be counted as a checking debit');
+const manualPlan=C.analyze({...opts,prefs:{paymentRules:{visa:{...rule,autopayEnabled:false}}},
+ ready:()=>true});
+assert.equal(get(manualPlan,'card|visa','2026-11').status,'covered',
+ 'A real manually entered linked card withdrawal still counts as a projected payment');
+assert.match(C.render(manualPlan),/Household Visa/);
+assert.equal(get(normal,'card|visa','2026-11').items[0].merchant,'Household Visa autopay',
+ 'Card receipt detail identifies the exact payment source, not a generic Payment label');
 const otherSource=C.analyze({...opts,prefs:{paymentRules:{visa:{...rule,fromAccountId:'other'}}},
  bundle:{...opts.bundle,ledger:ledger.map(x=>x.toAccountId==='visa'?{...x,fromAccountId:'other'}:x)}});
 assert.equal(get(otherSource,'card|visa','2026-11').status,'external',
