@@ -269,6 +269,102 @@ assert.equal(get(linkedSelected,'mortgage','2026-12').status,'covered');
 assert.equal(JSON.stringify(opaque).includes('Mortgage'),false,
  'Identification never depends on a mortgage keyword');
 
+
+// Learning applies to named forecast streams, not to bank history. Individual
+// categories can include several recurring series; a missing phase stays missing.
+const learnedEntries=[
+ {kind:'event',type:'income',date:'2026-11-01',amount:3000,
+  merchant:'Opaque Payroll ACH',sourceMerchant:'Opaque Payroll ACH',
+  cadence:'every-4-weeks',seriesKey:'payroll|phase-A',accountId:'checking'},
+ {kind:'event',type:'income',date:'2026-11-15',amount:3300,
+  merchant:'Opaque Payroll ACH',sourceMerchant:'Opaque Payroll ACH',
+  cadence:'every-4-weeks',seriesKey:'payroll|phase-B',accountId:'checking'},
+ {kind:'event',type:'income',date:'2026-11-29',amount:3000,
+  merchant:'Opaque Payroll ACH',sourceMerchant:'Opaque Payroll ACH',
+  cadence:'every-4-weeks',seriesKey:'payroll|phase-A',accountId:'checking'},
+ {kind:'event',type:'income',date:'2026-12-13',amount:3300,
+  merchant:'Opaque Payroll ACH',sourceMerchant:'Opaque Payroll ACH',
+  cadence:'every-4-weeks',seriesKey:'payroll|phase-B',accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-11-05',amount:950,
+  merchant:'Bank ACH X',sourceMerchant:'Bank ACH X',cadence:'monthly',
+  seriesKey:'card|visa-manual',accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-12-05',amount:950,
+  merchant:'Bank ACH X',sourceMerchant:'Bank ACH X',cadence:'monthly',
+  seriesKey:'card|visa-manual',accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-11-12',amount:240,
+  merchant:'Electricity',cadence:'monthly',seriesKey:'utilities|pse',
+  accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-12-12',amount:280,
+  merchant:'Electricity',cadence:'monthly',seriesKey:'utilities|pse',
+  accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-11-17',amount:320,
+  merchant:'Auto Insurance',cadence:'monthly',seriesKey:'insurance|auto',
+  accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-12-17',amount:320,
+  merchant:'Auto Insurance',cadence:'monthly',seriesKey:'insurance|auto',
+  accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-11-02',amount:2590,
+  merchant:'Mortgage Loan',cadence:'monthly',seriesKey:'mortgage|identity',
+  accountId:'checking'},
+ {kind:'event',type:'expense',date:'2026-12-02',amount:2590,
+  merchant:'Mortgage Loan',cadence:'monthly',seriesKey:'mortgage|identity',
+  accountId:'checking'}
+];
+const emptyEvidence={...opts,bundle:{...opts.bundle,rows:[],
+ ledger:learnedEntries},prefs:{paymentRules:{}}};
+const candidateTest=C.analyze(emptyEvidence);
+const categories=candidateTest.rows;
+assert.ok(categories.find(r=>r.id==='income').choices.some(c=>c.identity.seriesKey==='payroll|phase-A'));
+assert.ok(categories.find(r=>r.id==='income').choices.some(c=>c.identity.seriesKey==='payroll|phase-B'),
+ 'Two income phases must be separately selectable');
+assert.ok(categories.find(r=>r.id==='card|visa').choices.some(c=>c.identity.seriesKey==='card|visa-manual'),
+ 'A recurring card withdrawal mislabeled as an expense can be identified as Visa');
+assert.ok(categories.find(r=>r.id==='other-bills').choices.some(c=>c.identity.seriesKey==='insurance|auto'),
+ 'Bills can be selected even if historical repetition was not identified');
+const assignment=(id)=>categories.find(r=>r.id===id).choices;
+const bySeries=(row,series)=>assignment(row).find(c=>c.identity.seriesKey===series).identity;
+const assignments={
+ 'income|checking':[
+  bySeries('income','payroll|phase-A'),bySeries('income','payroll|phase-B')],
+ 'card|visa|checking':[bySeries('card|visa','card|visa-manual')],
+ 'other-bills|checking':[
+  bySeries('other-bills','utilities|pse'),bySeries('other-bills','insurance|auto')]
+};
+const learnedMortgage={accountId:'checking',seriesKey:'mortgage|identity',ruleId:'',
+ merchant:'mortgage loan',display:'Mortgage Loan'};
+const learnedOpts={...emptyEvidence,prefs:{paymentRules:{},
+ coverageAssignments:assignments,mortgageCoverageRules:{checking:learnedMortgage}}};
+const learned=C.analyze(learnedOpts);
+for(const m of ['2026-11','2026-12']){
+ for(const row of ['income','card|visa','other-bills','mortgage'])
+  assert.equal(get(learned,row,m).status,'covered',row+' learns all matching future streams in '+m);
+}
+assert.equal(get(learned,'income','2026-11').items.length,3,
+ 'Both independent payroll phases are included, not merged by payee');
+assert.equal(get(learned,'other-bills','2026-11').items.length,2);
+assert.ok(!learned.rows.find(r=>r.id==='other-bills').choices
+ .some(c=>c.identity.seriesKey==='mortgage|identity'),
+ 'Already identified mortgage is excluded from other bill choices');
+const phaseMissing=C.analyze({...learnedOpts,bundle:{...learnedOpts.bundle,
+ ledger:learnedEntries.filter(e=>e.seriesKey!=='payroll|phase-A'||e.date!=='2026-11-29')}});
+assert.equal(get(phaseMissing,'income','2026-11').status,'missing',
+ 'Learning retains separately expected A/B paychecks and flags missing second occurrence');
+const billMissing=C.analyze({...learnedOpts,bundle:{...learnedOpts.bundle,
+ ledger:learnedEntries.filter(e=>e.seriesKey!=='insurance|auto'||e.date!=='2026-12-17')}});
+assert.equal(get(billMissing,'other-bills','2026-12').status,'missing',
+ 'After learning a monthly insurance payment, December cannot silently omit it');
+const cardMissing=C.analyze({...learnedOpts,bundle:{...learnedOpts.bundle,
+ ledger:learnedEntries.filter(e=>e.seriesKey!=='card|visa-manual'||e.date!=='2026-12-05')}});
+assert.equal(get(cardMissing,'card|visa','2026-12').status,'missing',
+ 'An unrecognized credit-card withdrawal in the second month must be detected');
+const noCategoryAssumptions=C.analyze(emptyEvidence);
+assert.notEqual(get(noCategoryAssumptions,'card|visa','2026-11').status,'covered',
+ 'Merely seeing an obscure checking debit cannot imply the connected credit card is paid');
+const originalEntries=JSON.stringify(learnedEntries);
+C.analyze(learnedOpts);
+assert.equal(JSON.stringify(learnedEntries),originalEntries,
+ 'Classification learning is entirely read-only and never edits recurring schedules or real transactions');
+
 for(const n of [30,60,90,120,180,360]){
  const m=C.months(date,n);
  assert.ok(m.length>=1&&m.length<=13);
