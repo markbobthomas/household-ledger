@@ -317,6 +317,9 @@ function restoreRecurrence(state,key){
  const p=ensure(state),entry=p.futureRecurrenceExclusions?.[key];
  if(!entry)throw Error('This recurrence is not currently excluded');
  delete p.futureRecurrenceExclusions[key];
+ // An automatic-series exclusion never owns a real confirmed recurring
+ // rule or the employer's general history decision.
+ if(entry.seriesKey)return key;
  // Older app versions tracked rejected suggestions in two independent
  // preference maps. Clear matching legacy rejections too, so Allow predictions
  // always means the recurrence can actually be considered again.
@@ -342,12 +345,32 @@ function restoreRecurrence(state,key){
 function stopRecurrence(state,row){
  if(!row||!['event','movement'].includes(row.kind))throw Error('Choose a recurring forecast');
  const p=ensure(state),rule=(p.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
+ if(row.recurringRuleId&&!rule)throw Error('The original recurring schedule changed. Refresh and select it again.');
  const accountId=String(rule?.originalAccountId||rule?.accountId||rule?.fromAccountId||
   row.sourceAccountId||row.accountId||row.fromAccountId||'');
  const merchant=String(rule?.originalMerchant||row.sourceMerchant||row.merchant||'');
  const type=rule?(rule.kind==='movement'?'transfer':rule.type):recurringType(row);
  if(!accountId||!sourceMerchant(merchant)||!['expense','income','refund','transfer'].includes(type))
   throw Error('This forecast has no identifiable recurring source');
+ // An inferred income series is not permission to delete any independently
+ // confirmed paychecks from the same employer. Exclude its exact engine
+ // series instead, including only its own phase if it is a 28-day stream.
+ const inferredIncome=!rule&&type==='income'&&
+  typeof row.seriesKey==='string'&&row.seriesKey.startsWith('series|');
+ if(inferredIncome){
+  const key='auto-series|'+encodeURIComponent(row.seriesKey);
+  p.futureRecurrenceExclusions??={};
+  p.futureRecurrenceExclusions[key]={accountId,type,merchant,seriesKey:row.seriesKey};
+  delete p.futureSeriesEdits[row.seriesKey];
+  return {key,accountId,type,merchant,removedRules:0,autoSeries:true};
+ }
+ // A history-level merchant-wide rejection must never silently erase
+ // unrelated existing four-week pay phases. Use a specific forecast instead.
+ if(!rule&&type==='income'&&(p.futureRecurringRules||[]).some(r=>
+  String(r.originalAccountId||r.accountId)===accountId&&r.type===type&&
+  (r.matchNames||[sourceMerchant(r.originalMerchant||r.merchant)])
+   .includes(sourceMerchant(merchant))))
+  throw Error('This employer has confirmed schedules. Choose the exact paycheck in Future Transactions.');
  const phaseDate=rule?.frequency==='every-4-weeks'?rule.anchorDate:
   row.cadence==='every-4-weeks'?row.baseDate||row.date:null,
   key=recurrenceKey(accountId,type,merchant)+(phaseDate?'|phase'+phaseOf(phaseDate):'');
@@ -358,7 +381,7 @@ function stopRecurrence(state,row){
   String(r.originalAccountId||r.accountId||r.fromAccountId)===accountId&&
   (r.kind==='movement'?'transfer':r.type)===type&&
   sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant)&&
-  (!phaseDate||r.frequency==='every-4-weeks'&&samePhase(phaseDate,r.anchorDate)));
+  (rule?r.id===rule.id:!phaseDate||r.frequency==='every-4-weeks'&&samePhase(phaseDate,r.anchorDate)));
  const ids=new Set(remove.map(r=>r.id));
  p.futureRecurringRules=p.futureRecurringRules.filter(r=>!ids.has(r.id));
  const keys=new Set([row.seriesKey,...remove.map(r=>manualSeriesKey(r.id))].filter(Boolean));
