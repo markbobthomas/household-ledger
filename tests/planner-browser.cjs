@@ -41,8 +41,35 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.sidebar [data-view="transactions"] span').innerText(),'Predictions');
    assert.equal(await page.locator('.planner-tabs [data-view="transactions"]').innerText(),'Predictions');
    assert.equal(await page.locator('[data-summary-days]').count(),6);
+   assert.equal(await page.locator('[data-calendar-stage]').count(),1,
+    'Summary defaults to a daily balance calendar');
+   assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
+   assert.ok(await page.locator('[data-calendar-day]').count()>=10,
+    'Every in-range date displays its projected account balance');
+   assert.equal(await page.locator('.calendar-day.selected').count(),1);
+   assert.ok(await page.locator('.calendar-day-balance').count()>=10,
+    'Balances appear even on days without transactions');
+   const projectedDay=page.locator('[data-calendar-day]').filter({
+    has:page.locator('.calendar-event')}).first();
+   assert.ok(await projectedDay.count()>0,'Daily dates show predicted transaction labels and amounts');
+   await projectedDay.click();
+   assert.ok(await page.locator('.calendar-detail-item').count()>0,
+    'A date opens individual transaction details');
+   const selectedAria=await page.locator('.calendar-day.selected').getAttribute('aria-label'),
+    balanceText=await page.locator('.calendar-detail-balance strong').innerText();
+   assert.ok(selectedAria.includes(balanceText),
+    'Detailed balance is identical to the calendar projected balance for that date');
+   await page.locator('[data-calendar-nav="1"]').click();
+   assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
+   assert.ok(await page.locator('[data-calendar-day="2026-11-01"]').count()>0,
+    'Next month contains projected balances starting on its first day');
+   await page.locator('[data-calendar-today]').click();
+   assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
+   assert.equal(await page.locator('[data-calendar-day="2026-10-19"].selected').count(),1,
+    'Start returns to the bank as-of date');
    assert.equal(await page.locator('[data-summary-plot]').count(),1,
-    'Summary displays one inspectable curve instead of overlapping metrics');
+    'Previous trend is still available in optional details');
+   await page.locator('.summary-extras > summary').click();
    assert.equal(await page.locator('[aria-label="Major payment coverage"]').count(),1,
     'Summary displays one compact monthly coverage matrix');
    assert.ok(await page.locator('.coverage-table tbody tr').count()>=2);
