@@ -24,6 +24,12 @@ for(const days of [30,60,90,120,180,360]){
  assert.match(html,/data-calendar-day="2026-10-21"/);
  assert.match(html,/Projected account balance|Account balance after daily activity/);
  assert.match(html,/calendar-day-detail/);
+ assert.match(html,/calendar-math/,'Every selected day explains the exact arithmetic');
+ assert.match(html,/Reported starting balance|Yesterday/);
+ assert.match(html,/Deposits/);
+ assert.match(html,/Withdrawals/);
+ assert.match(html,/End of day/);
+ assert.match(html,/data-calendar-add/,'Add an existing-day transaction without a tab change');
  assert.match(html,/Balance trend &amp; coverage checks/);
  assert.match(html,/Forecast coverage/);
  assert.match(html,/excludes unplanned everyday spending/);
