@@ -28,9 +28,16 @@ const phaseMatch=(a,b)=>valid(a)&&valid(b)&&phaseDistance(a,b)<=3;
 const signature=(accountId,type,merchant)=>[accountId,type,norm(merchant)].map(encodeURIComponent).join('|');
 const isExcludedPattern=(prefs,accountId,type,merchant)=>Boolean(
  prefs?.futureRecurrenceExclusions?.[signature(accountId,type,merchant)]);
-const suppressedRecurrence=(prefs,e)=>isExcludedPattern(prefs,
- e._forecastOriginalAccountId||e.accountId,e._forecastOriginalType||e.type,
- e._forecastOriginalMerchant||e.merchant);
+const suppressedRecurrence=(prefs,e)=>{
+ const account=e._forecastOriginalAccountId||e.accountId,
+  type=e._forecastOriginalType||e.type,
+  merchant=e._forecastOriginalMerchant||e.merchant;
+ if(isExcludedPattern(prefs,account,type,merchant))return true;
+ const prefix=signature(account,type,merchant)+'|phase';
+ return Object.entries(prefs?.futureRecurrenceExclusions||{}).some(([key,item])=>
+  key.startsWith(prefix)&&valid(item.phaseDate)&&valid(e.date)&&
+  phaseDistance(item.phaseDate,e.date)<=3);
+};
 const billName=/\b(?:mortgage|mtg|home loan|rent|lease payment|loan payment|auto loan|car payment|subscription|membership|autopay|recurring|monthly fee|insurance premium|netflix|spotify|hulu|daycare|tuition)\b/i;
 const variableName=/\b(?:safeway|costco|walmart|amazon|grocery|supermarket|target|restaurant|coffee|starbucks|fuel|gas station|shell|chevron|uber|lyft)\b/i;
 const internalName=/\b(?:transfer to|transfer from|savings transfer|account transfer|xfer|credit card payment|payment to visa|payment to mastercard)\b/i;
@@ -136,7 +143,9 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   // A confirmed recurring rule OWNS the entire historical stream. Different
   // amounts are normal for utilities and payroll and must not create another
   // forecast or a false warning for every monthly statement.
-  if(owners.length)continue;
+  // A confirmed four-week paycheck owns only its own payday phase;
+  // the other paycheck may still be inferred as an independent stream.
+  if(owners.some(r=>r.frequency!=='every-4-weeks'))continue;
   // The same merchant/month may contain two genuine bills. Do not pick one
   // automatically or erase a competing charge because its name is similar.
   if(multiCycle){conflicts.push({merchant:g.merchant,reason:'Multiple same-merchant payments this cycle'});}
@@ -220,7 +229,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
  for(const event of detected.automatic){
-  if(ownerFor(event))continue;
+  if(ownerFor(event)||suppressedRecurrence(prefs,event))continue;
   const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
   if(adjusted.date<=asOf||adjusted.date>end)continue;
   seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
