@@ -57,7 +57,10 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  selected=lowIndex;
  const pin=locate(lowIndex),warnings=issues(bundle,accounts,chosen,prefs,ready),
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
-  quality=warnings?
+  emptySchedule=moves===0,
+  quality=emptySchedule?
+   '<strong class="summary-risk">No dated predictions yet</strong> · The balance may be incomplete.':
+   warnings?
    '<strong class="summary-risk">Needs review</strong> · Some payments may be missing or uncertain.':
    '<strong class="summary-ok">No flagged issues</strong> · Not a guarantee that every expense is captured.';
  const zero=!credit&&floor<0&&ceil>0?
@@ -98,7 +101,8 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   '<span>Tap or move along the curve to explore a day</span></div></section>'+
   '<section class="summary-trust" aria-label="Forecast coverage"><div class="summary-trust-line">'+
   '<strong>Forecast coverage</strong><span>'+quality+'</span>'+
-  (warnings?'<button type="button" data-view="reviews" class="summary-review-link">Review →</button>':'')+
+  (emptySchedule?'<button type="button" data-view="transactions" class="summary-review-link">Add predictions →</button>':
+   warnings?'<button type="button" data-view="reviews" class="summary-review-link">Review →</button>':'')+
   '</div><p>Includes scheduled and detected recurring payments; excludes unplanned everyday spending.'+
   (days>=120?' Longer-range forecasts are less certain.':'')+
   '</p></section></div>';
