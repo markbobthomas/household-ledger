@@ -802,7 +802,7 @@ document.addEventListener('click',e=>{
     '<p>Tap each relevant prediction once. Identified series are remembered for future months, and gaps are flagged without creating extra transactions.</p>'+
     (buttons||'<small>No eligible future items in this account and time range.</small>')+
     '</div>';
-  })());
+  })();
  el.hidden=false;
  el.innerHTML='<div class="coverage-detail-title"><strong>'+escape(row.title)+' · '+
   escape(monthTitle(window.key))+'</strong><button type="button" class="coverage-close"'+
