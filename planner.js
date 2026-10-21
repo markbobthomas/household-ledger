@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -40,7 +40,8 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions}));
+   futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
+    mortgageCoverageRules:p.mortgageCoverageRules}));
   return true;
  }
 }
@@ -1026,6 +1027,35 @@ function render(){
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
 }
 document.addEventListener('click',async e=>{
+ const pickedMortgage=e.target.closest('[data-coverage-mortgage]');
+ if(pickedMortgage){
+  const identity=window.HouseholdPlannerCoverage?.getMortgageChoice(
+   pickedMortgage.dataset.coverageMortgage);
+  const exists=identity&&activeAccounts(snapshot()).some(a=>
+   String(a.id)===identity.accountId&&accountType(a)!=='credit');
+  if(!exists){setNotice('Select a predicted mortgage payment again.');return}
+  pickedMortgage.disabled=true;
+  try{
+   await commitForecastChange(()=>{
+    state().predictions.mortgageCoverageRules??={};
+    state().predictions.mortgageCoverageRules[identity.accountId]=identity;
+   });
+   latestError='';render();
+  }catch(error){setNotice('Mortgage identification could not be saved: '+
+   String(error.message||error))}
+  return;
+ }
+ const resetMortgage=e.target.closest('[data-coverage-mortgage-reset]');
+ if(resetMortgage){
+  try{
+   await commitForecastChange(()=>{
+    delete state().predictions.mortgageCoverageRules?.[resetMortgage.dataset.coverageMortgageReset];
+   });
+   latestError='';render();
+  }catch(error){setNotice('Mortgage identification could not be cleared: '+
+   String(error.message||error))}
+  return;
+ }
  const period=e.target.closest('[data-summary-days]');
  if(period){
   const days=Number(period.dataset.summaryDays);
