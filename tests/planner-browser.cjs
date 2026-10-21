@@ -406,7 +406,8 @@ const {chromium,webkit}=require('playwright');
    // The calendar is the everyday planning editor, without navigating
    // to Predictions or inventing any separate account-balance calculation.
    await go('summary');
-   await page.locator('#summary-account').selectOption('checking');
+   const checkingOption=page.locator('#summary-account option').filter({hasText:'Checking'}).first();
+   await page.locator('#summary-account').selectOption(await checkingOption.getAttribute('value'));
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-09"]').click();
    assert.match(await page.locator('.calendar-math').innerText(),/Yesterday/);
