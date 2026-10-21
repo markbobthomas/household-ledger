@@ -171,7 +171,7 @@ assert.equal(get(missingTransfer,'mortgage','2026-11').status,'covered');
 assert.equal(get(missingTransfer,'mortgage','2026-12').status,'missing',
  'A truly missing mortgage payment in December must still be flagged');
 const renamedTransfer=C.analyze({...opts,bundle:{...opts.bundle,
- ledger:mortgageTransfers.map(p=>({...p,merchant:'Lender ACH'},)),
+ ledger:mortgageTransfers.map(p=>({...p,merchant:'Lender ACH'})),
  projection:{events:projectedTransfers.map(p=>({...p,merchant:'Lender ACH',sourceMerchant:'Home Mortgage ACH'}))}}});
 assert.equal(get(renamedTransfer,'mortgage','2026-11').status,'covered',
  'An ACH transfer renamed for display must match its actual source merchant');
