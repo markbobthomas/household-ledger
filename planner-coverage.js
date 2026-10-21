@@ -37,7 +37,7 @@ const dayWithin=(m,d)=>date(d)&&d>=m.start&&d<=m.end;
 const initCells=months=>months.map(m=>({month:m.key,status:'na',label:'—',detail:'No known due date in this portion of the forecast',items:[]}));
 const described=items=>items.map(e=>
  ({date:e.date||e.anchorDate,amount:Number(e.amount)||0,merchant:asId(e.merchant||e.name||'Payment')}));
-let details=new Map(),mortgageChoices=new Map();
+let details=new Map(),mortgageChoices=new Map(),categoryChoices=new Map();
 function months(asOf,days){
  if(!date(asOf)||![30,60,90,120,180,360].includes(days))return [];
  const first=day(asOf,1),through=day(asOf,days),out=[];
@@ -612,7 +612,9 @@ function otherMajorCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
   const anchor=verified?g.find(x=>x.confirmed).date:last;
   for(const d of expectedMonthly(anchor,months))due.push({date:d,source});
  }
- if(!due.length)return null;
+ if(!due.length)return {id:'other-bills',title:'Other major bills',hint:'Identify recurring payments',
+  cells:months.map(m=>({month:m.key,status:'unknown',label:'?',
+   detail:'No repeated major bill schedule has been identified. Select an existing prediction below to teach this category.',items:[]}))};
  const planned=(ledger||[]).filter(e=>futureExpense(e)&&asId(e.accountId)===id&&!mortgage(e.merchant));
  return {id:'other-bills',title:'Other major bills',hint:'Repeating $150+ bills',cells:months.map(m=>{
   const expected=due.filter(x=>dayWithin(m,x.date)),mine=planned.filter(e=>
@@ -694,10 +696,25 @@ function analyze({snapshot,chosen,bundle,prefs,days,accounts,ready}){
   cardCoverage(params):
   [incomeCoverage(params),mortgageCoverage(params),...cardCoverage(params),
    otherMajorCoverage(params)].filter(Boolean);
- for(const row of lines)if(row.id==='mortgage'){
-  row.choices=mortgageChoicesFor(actualFutureExpenses({
-   projection:bundle?.projection,ledger,accounts}),asId(chosen.id));
-  row.selectedMortgage=prefs?.mortgageCoverageRules?.[asId(chosen.id)]||null;
+ const movements=datedCashMovements({projection:bundle?.projection,ledger,accounts}),
+  mortgageIdentitySaved=prefs?.mortgageCoverageRules?.[asId(chosen.id)];
+ for(let i=0;i<lines.length;i++){
+  const row=lines[i];
+  if(row.id==='mortgage'){
+   row.choices=mortgageChoicesFor(actualFutureExpenses({
+    projection:bundle?.projection,ledger,accounts}),asId(chosen.id));
+   row.selectedMortgage=mortgageIdentitySaved||null;
+  }else{
+   const learned=learnedCoverage({...params,row});
+   const learnedKey=assignmentKey(row.id,chosen.id);
+   learned.savedAssignments=Array.isArray(prefs?.coverageAssignments?.[learnedKey])?
+    prefs.coverageAssignments[learnedKey].slice(0,15):[];
+   learned.choices=categoryCandidates(row,movements,accounts,chosen,
+    [mortgageIdentitySaved,
+     ...Object.entries(prefs?.coverageAssignments||{}).filter(([k])=>
+      k!==learnedKey).flatMap(([,v])=>Array.isArray(v)?v:[])]);
+   lines[i]=learned;
+  }
  }
  const review=lines.flatMap(row=>row.cells.filter(cell=>
   ['missing','setup','unknown','review'].includes(cell.status)));
@@ -705,7 +722,7 @@ function analyze({snapshot,chosen,bundle,prefs,days,accounts,ready}){
   uncovered:review.filter(c=>c.status==='missing'||c.status==='setup').length};
 }
 function render(result){
- details=new Map();mortgageChoices=new Map();
+ details=new Map();mortgageChoices=new Map();categoryChoices=new Map();
  const head=result.months.map(m=>
   '<th scope="col" class="coverage-month">'+escape(monthTitle(m.key))+
   (m.full?'':'<span>partial</span>')+'</th>').join('');
@@ -758,7 +775,29 @@ document.addEventListener('click',e=>{
    (options||'<small>No eligible checking withdrawals are predicted in this date range. Check the selected account or choose a longer period.</small>')+
    (row.selectedMortgage?'<button type="button" class="coverage-mortgage-reset"'+
     ' data-coverage-mortgage-reset="'+escape(row.selectedMortgage.accountId)+'">Clear mortgage identification</button>':'')+
-   '</div>':'';
+   '</div>':
+  (()=>{const tracked=row.savedAssignments||[];
+   const buttons=(row.choices||[]).map((c,i)=>{
+    const selected=tracked.some(x=>matchesMortgageIdentity({
+     ...c.identity,sourceMerchant:c.identity.merchant,accountId:c.identity.accountId,
+     recurringRuleId:c.identity.ruleId},x));
+    const key=asId(button.dataset.coverageCell)+'|'+i;
+    categoryChoices.set(key,{category:row.id,accountId:c.identity.accountId,
+     identity:c.identity,remove:selected});
+    return '<button type="button" class="coverage-mortgage-option'+
+     (selected?' tracked':'')+'" data-coverage-assign="'+escape(key)+'">'+
+     (selected?'✓ ':'+ ')+escape(c.merchant)+' · '+dollars(c.amount)+
+     ' · '+escape(c.months>1?c.months+' forecast months':'Next '+titleDate(c.date))+
+     (selected?' · Stop tracking':'')+'</button>';
+   }).join('');
+   const title=row.id==='income'?'Which deposits are recurring income?':
+    row.id==='other-bills'?'Which large bills should be tracked?':
+    'Which withdrawal pays this credit card?';
+   return '<div class="coverage-identify"><strong>'+title+'</strong>'+
+    '<p>Tap each relevant prediction once. Identified series are remembered for future months, and gaps are flagged without creating extra transactions.</p>'+
+    (buttons||'<small>No eligible future items in this account and time range.</small>')+
+    '</div>';
+  })());
  el.hidden=false;
  el.innerHTML='<div class="coverage-detail-title"><strong>'+escape(row.title)+' · '+
   escape(monthTitle(window.key))+'</strong><button type="button" class="coverage-close"'+
@@ -776,6 +815,7 @@ document.addEventListener('click',e=>{
  document.querySelectorAll('[data-coverage-cell]').forEach(x=>x.removeAttribute('aria-pressed'));
 });
 root.HouseholdPlannerCoverage={analyze,render,months,expectedMonthly,
- getMortgageChoice:key=>mortgageChoices.get(asId(key))||null};
+ getMortgageChoice:key=>mortgageChoices.get(asId(key))||null,
+ getCategoryChoice:key=>categoryChoices.get(asId(key))||null};
 if(typeof module!=='undefined'&&module.exports)module.exports={analyze,render,months,expectedMonthly};
 })(typeof window!=='undefined'?window:globalThis);
