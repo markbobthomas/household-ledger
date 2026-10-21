@@ -140,14 +140,15 @@ function projectedIncomeSlots(records,months){
   groups.get(key).push(r);
  }
  const slots=[];
- for(const group of groups.values()){
-  const monthCount=new Set(group.map(r=>r.date.slice(0,7)));
-  if(group.length<2||monthCount.size<2)continue;
+ for(const [source,group] of groups){
+  const distinct=new Set(group.map(r=>r.date.slice(0,7)));
+  if(group.length<2||distinct.size<2)continue;
   const rhythm=cadenceFor(group),seed=group.at(-1).date;
-  if(rhythm==='monthly')slots.push(...expectedMonthly(seed,months));
+  if(rhythm==='monthly')
+   slots.push(...expectedMonthly(seed,months).map(date=>({date,source})));
   if(rhythm==='biweekly'){
    for(let d=day(seed,14),n=0;n<36&&d<=months.at(-1).end;d=day(d,14),n++)
-    if(d>=months[0].start)slots.push(d);
+    if(d>=months[0].start)slots.push({date:d,source});
   }
   if(rhythm==='twice-monthly'){
    const days=[...new Set(group.slice(-6).map(r=>Number(r.date.slice(-2))))]
@@ -156,57 +157,150 @@ function projectedIncomeSlots(records,months){
     for(const m of months)for(const dom of days){
      const end=Number(day(monthEnd(m.key),-1).slice(-2));
      const when=m.key+'-'+String(Math.min(dom,end)).padStart(2,'0');
-     if(dayWithin(m,when))slots.push(when);
+     if(dayWithin(m,when))slots.push({date:when,source});
     }
    }
   }
  }
- return [...new Set(slots)].sort();
+ return slots.sort((a,b)=>a.date.localeCompare(b.date)||a.source.localeCompare(b.source));
 }
-function incomeCoverage({months,ledger,rows,chosen,accounts,asOf}){
+function incomeCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
  const id=asId(chosen.id),
   posted=historyFor(rows,accounts,id,realIncome,asOf),
   planned=(ledger||[]).filter(e=>e.kind==='event'&&e.type==='income'&&
    asId(e.accountId)===id);
- const slots=projectedIncomeSlots(posted,months);
- const fullCounts=new Map();
- // Only use completed history months, and only a repeated incoming payee.
+ let slots=projectedIncomeSlots(posted,months);
+ // Saved recurring payroll is authoritative when history is sparse. Generate
+ // slots from each separate confirmed rule (including alternating 4-week
+ // income streams), never lump those two rules together by merchant alone.
+ const confirmed=(prefs?.futureRecurringRules||[]).filter(r=>r.type==='income'&&
+  asId(r.originalAccountId||r.accountId)===id&&date(r.anchorDate));
+ const confirmedSources=new Set(confirmed.map(r=>norm(r.originalMerchant||r.merchant)));
+ slots=slots.filter(x=>!confirmedSources.has(x.source));
+ for(const rule of confirmed){
+  const source=norm(rule.originalMerchant||rule.merchant),freq=rule.frequency;
+  if(['monthly','quarterly','semiannual','annual'].includes(freq)){
+   const step={monthly:1,quarterly:3,semiannual:6,annual:12}[freq];
+   for(let n=0;n<24;n++){
+    const d=monthPlus(rule.anchorDate,n*step);
+    if(d>months.at(-1).end)break;
+    if(d>=months[0].start)slots.push({date:d,source,ruleId:rule.id});
+   }
+  }else if(['biweekly','every-4-weeks','weekly'].includes(freq)){
+   const step={biweekly:14,'every-4-weeks':28,weekly:7}[freq];
+   for(let d=rule.anchorDate,n=0;n<65&&d<=months.at(-1).end;d=day(d,step),n++)
+    if(d>=months[0].start)slots.push({date:d,source,ruleId:rule.id});
+  }else if(freq==='twice-monthly'){
+   for(const m of months)for(const dom of [Number(rule.anchorDate.slice(-2)),Number(rule.secondDay||0)]){
+    if(!(dom>=1&&dom<=31))continue;
+    const actual=Math.min(dom,Number(day(monthEnd(m.key),-1).slice(-2)));
+    const d=m.key+'-'+String(actual).padStart(2,'0');
+    if(d>=rule.anchorDate&&dayWithin(m,d))slots.push({date:d,source,ruleId:rule.id});
+   }
+  }
+ }
+ slots.sort((a,b)=>a.date.localeCompare(b.date));
  const groups=new Map();
  for(const r of posted){
   const key=norm(r.merchant||r.name);
   if(!groups.has(key))groups.set(key,new Set());
   groups.get(key).add(r.date.slice(0,7));
  }
- const recurringPayees=new Set([...groups].filter(([,set])=>set.size>=2).map(([key])=>key));
+ const payees=new Set([...groups].filter(([,set])=>set.size>=2).map(([key])=>key));
+ const fullCounts=new Map();
  for(const r of posted){
-  if(!recurringPayees.has(norm(r.merchant||r.name)))continue;
+  if(!payees.has(norm(r.merchant||r.name)))continue;
   const month=r.date.slice(0,7);
   if(month>=asOf.slice(0,7))continue;
   fullCounts.set(month,(fullCounts.get(month)||0)+1);
  }
  const counts=[...fullCounts.entries()].sort(([a],[b])=>b.localeCompare(a)).slice(0,3).map(([,n])=>n);
- const typical=counts.length>=2?Math.min(...counts):null;
+ const typical=slots.length?null:counts.length>=2?Math.min(...counts):null;
  return {id:'income',title:'Income',hint:'Selected account',cells:months.map(m=>{
-  const items=planned.filter(e=>dayWithin(m,e.date)),needed=slots.filter(d=>dayWithin(m,d)).length;
-  // When posting cadence cannot be safely inferred, compare only complete
-  // calendar months against recurring payroll observed in several months.
-  const expected=needed||(m.full?typical:null);
-  if(expected===null){
+  const items=planned.filter(e=>dayWithin(m,e.date)),
+   expectedSlots=slots.filter(x=>dayWithin(m,x.date));
+  const bySource=new Map();
+  for(const slot of expectedSlots){
+   const key=asId(slot.ruleId||slot.source);
+   if(!bySource.has(key))bySource.set(key,{source:slot.source,ruleId:slot.ruleId,count:0});
+   bySource.get(key).count++;
+  }
+  let matched=0;
+  for(const group of bySource.values()){
+   const candidates=items.filter(e=>group.ruleId?
+    asId(e.ruleId||e.recurringRuleId)===asId(group.ruleId):
+    norm(e._forecastOriginalMerchant||e.originalMerchant||e.merchant)===group.source);
+   matched+=Math.min(group.count,candidates.length);
+  }
+  const count=expectedSlots.length||(m.full?typical:null);
+  if(count===null){
    return {month:m.key,status:items.length?'review':'unknown',label:items.length?'? '+items.length:'?',
-    detail:items.length?'Deposits are forecast but the historical pay cadence is not yet verified':
-     'No reliable recurring income schedule has been established for this partial month',
+    detail:items.length?'Deposits are forecast but their repeating pay schedule is not verified':
+     'No reliable recurring pay schedule has been established for this partial month',
     items:described(items)};
   }
-  if(!expected)return {month:m.key,status:items.length?'review':'na',
+  if(!count)return {month:m.key,status:items.length?'review':'na',
    label:items.length?'? '+items.length:'—',
-   detail:'No expected payroll date falls in this portion of the month',items:described(items)};
-  if(items.length<expected)return {month:m.key,status:'missing',
-   label:items.length?items.length+' / '+expected:'!',
-   detail:'Historical pay cadence suggests '+expected+' deposit'+(expected===1?'':'s')+
-    ' but only '+items.length+' appears in the future ledger',items:described(items)};
+   detail:'No predicted pay date is established for this portion of the month',
+   items:described(items)};
+  const satisfied=expectedSlots.length?matched:Math.min(count,items.length);
+  if(satisfied<count)return {month:m.key,status:'missing',
+   label:satisfied?satisfied+' / '+count:'!',
+   detail:'Expected '+count+' recurring deposit'+(count===1?'':'s')+' but only '+satisfied+
+    ' matching prediction'+(satisfied===1?'':'s')+' appear in this selected period',
+   items:described(items)};
   return {month:m.key,status:'covered',label:'✓ '+items.length,
-   detail:items.length+' predicted deposit'+(items.length===1?'':'s')+
-    ' included; amounts are estimates until the bank posts them',items:described(items)};
+   detail:items.length+' dated deposit'+(items.length===1?'':'s')+
+    ' included in the forecast; bank receipt and amount are not guaranteed',items:described(items)};
+ })};
+}
+function otherMajorCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
+ const id=asId(chosen.id),history=historyFor(rows,accounts,id,r=>
+  realExpense(r)&&!mortgageRow(r)&&Number(r.amount)>=150,asOf),groups=new Map();
+ for(const r of history){
+  const key=norm(r.merchant||r.name);
+  if(!key)continue;
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(r);
+ }
+ const explicit=(prefs?.futureRecurringRules||[]).filter(r=>
+  asId(r.originalAccountId||r.accountId||r.fromAccountId)===id&&r.type==='expense'&&
+  r.frequency==='monthly'&&Number(r.amount)>=150&&
+  !mortgage(r.originalMerchant)&&!mortgage(r.merchant));
+ for(const r of explicit){
+  const key=norm(r.originalMerchant||r.merchant);
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push({date:r.anchorDate,merchant:r.originalMerchant||r.merchant,
+   amount:Number(r.amount),confirmed:true});
+ }
+ const due=[];
+ for(const [source,g] of groups){
+  const dates=[...new Set(g.filter(x=>!x.confirmed).map(x=>x.date))].sort(),
+   last=dates.at(-1),gaps=dates.slice(1).map((d,i)=>daysBetween(d,dates[i]));
+  const stable=dates.length>=3&&
+   new Set(dates.map(d=>d.slice(0,7))).size>=3&&gaps.slice(-2).every(n=>n>=25&&n<=36),
+   verified=g.some(x=>x.confirmed);
+  if(!stable&&!verified)continue;
+  const anchor=verified?g.find(x=>x.confirmed).date:last;
+  for(const d of expectedMonthly(anchor,months))due.push({date:d,source});
+ }
+ if(!due.length)return null;
+ const planned=(ledger||[]).filter(e=>futureExpense(e)&&asId(e.accountId)===id&&!mortgage(e.merchant));
+ return {id:'other-bills',title:'Other major bills',hint:'Repeating $150+ bills',cells:months.map(m=>{
+  const expected=due.filter(x=>dayWithin(m,x.date)),mine=planned.filter(e=>
+   dayWithin(m,e.date)&&due.some(d=>d.source===norm(e._forecastOriginalMerchant||e.merchant)));
+  if(!expected.length)return {month:m.key,status:'na',label:'—',
+   detail:'No identified large repeating bill is due in these selected days',items:[]};
+  const matched=expected.filter(x=>mine.some(e=>
+   norm(e._forecastOriginalMerchant||e.merchant)===x.source&&
+   Math.abs(daysBetween(e.date,x.date))<=7));
+  if(matched.length<expected.length)return {month:m.key,status:'missing',
+   label:matched.length?matched.length+' / '+expected.length:'!',
+   detail:'At least one historically recurring major bill is absent from the future ledger',
+   items:described(mine)};
+  return {month:m.key,status:'covered',label:'✓ '+mine.length,
+   detail:'Identified repeating large bills are represented by actual dated predictions',
+   items:described(mine)};
  })};
 }
 function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
@@ -258,11 +352,12 @@ function analyze({snapshot,chosen,bundle,prefs,days,accounts,ready}){
  const columns=months(snapshot.asOf,days),ledger=bundle?.ledger||[],rows=bundle?.rows||[],
   params={months:columns,ledger,rows,chosen,accounts,prefs,asOf:snapshot.asOf,
    payments:bundle?.payments,ready};
- const lines=[
-  incomeCoverage(params),mortgageCoverage(params),
-  ...cardCoverage(params)];
+ const lines=credit(chosen)?
+  cardCoverage(params):
+  [incomeCoverage(params),mortgageCoverage(params),...cardCoverage(params),
+   otherMajorCoverage(params)].filter(Boolean);
  const review=lines.flatMap(row=>row.cells.filter(cell=>
-  ['missing','setup','unknown','review','external'].includes(cell.status)));
+  ['missing','setup','unknown','review'].includes(cell.status)));
  return {months:columns,rows:lines,attention:review.length,
   uncovered:review.filter(c=>c.status==='missing'||c.status==='setup').length};
 }
