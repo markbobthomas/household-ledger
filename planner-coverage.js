@@ -319,11 +319,21 @@ function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
     items:[]};
    const targets=due.filter(d=>dayWithin(m,d));
    const relevant=plans.filter(p=>dayWithin(m,p.date));
+   const details=described(relevant.map(p=>({...p,
+    merchant:p.merchant||(p.origin==='card-autopay'?card.name+' autopay':card.name+' payment')})));
    const paid=statements.filter(s=>asId(s.cardId)===cardId&&
     dayWithin(m,s.withdrawalDate)&&s.alreadyPaid);
-   if(rule.autopayEnabled===false)return {month:m.key,status:'setup',label:'Manual',
-    detail:'Autopay is off. A statement estimate is not a scheduled checking withdrawal.',
-    items:[]};
+   if(rule.autopayEnabled===false){
+    if(relevant.length)return {month:m.key,
+     status:relevant.every(p=>asId(p.fromAccountId)===asId(chosen.id))?'covered':'external',
+     label:'✓ '+relevant.length,detail:'A manually entered card payment is included'+
+      (relevant.every(p=>asId(p.fromAccountId)===asId(chosen.id))?
+       ' in this account balance.':' in another paying account, not this balance.'),
+     items:details};
+    return {month:m.key,status:'setup',label:'Manual',
+     detail:'Autopay is off. A statement estimate is not a scheduled checking withdrawal.',
+     items:[]};
+   }
    if(!targets.length&&!relevant.length)return {month:m.key,status:'na',label:'—',
     detail:'No configured withdrawal date falls inside this portion of the month',items:[]};
    if(paid.length&&!relevant.length)return {month:m.key,status:'posted',label:'Paid',
@@ -336,13 +346,13 @@ function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
       ' (estimated statement amount is zero; review the card)' : ''),items:[]};
    if(!inChosen)return {month:m.key,status:'external',label:'Other',
     detail:'Payment is included in '+(funding?.name||'another account')+
-     ', not in the balance curve for '+chosen.name,items:described(relevant)};
+     ', not in the balance curve for '+chosen.name,items:details};
    if(relevant.length!==targets.length)return {month:m.key,status:'review',label:relevant.length+'?',
     detail:'More than one withdrawal or an unmatched payment date needs review',
-    items:described(relevant)};
+    items:details};
    return {month:m.key,status:'covered',label:'✓ '+relevant.length,
     detail:'Credit-card payment is included as a single linked withdrawal from '+
-     (funding?.name||'checking')+'. The amount may be estimated.',items:described(relevant)};
+     (funding?.name||'checking')+'. The amount may be estimated.',items:details};
   });
   return {id:'card|'+cardId,title:asId(card.name||'Credit card')+
    (card.mask?' ••'+card.mask:''),hint:funding?'Paid from '+funding.name:'Payment setup needed',cells};
