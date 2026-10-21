@@ -75,6 +75,29 @@ T.stopRecurrence(state,{kind:'event',type:'income',accountId:'checking',
 assert.deepEqual(incomes(bank,state.predictions).map(e=>e.amount),
  [3075,3075,3075],'Stopping explicit A preserves explicit B');
 
+// Older preference states can contain an incorrectly confirmed 1st/15th
+// payroll rule alongside the two real four-week schedules. Removing this
+// single obsolete rule must never install a merchant-wide income exclusion.
+const mixed={predictions:{}};
+const oldSemi=T.defineRecurring(mixed,{...base,date:'2026-11-01',
+ amount:3047,frequency:'twice-monthly',secondDay:15},accounts,asOf);
+T.defineRecurring(mixed,{...base,date:'2026-10-29',amount:3020},
+ accounts,asOf,bank[2],bank);
+T.defineRecurring(mixed,{...base,date:'2026-11-12',amount:3075},
+ accounts,asOf,bank[3],bank);
+assert.equal(mixed.predictions.futureRecurringRules.length,3);
+const obsolete=T.stopRecurrence(mixed,{kind:'event',type:'income',accountId:'checking',
+ merchant:'North Coast Payroll',recurringRuleId:oldSemi.id});
+assert.ok(obsolete.key.startsWith('manual-rule|'),
+ 'Old combined-pay artifact gets only a rule-specific removal marker');
+assert.equal(mixed.predictions.futureRecurringRules.length,2);
+assert.deepEqual(incomes(bank,mixed.predictions).slice(0,4).map(e=>e.amount),
+ [3020,3075,3020,3075],
+ 'Deleting a saved 15th-day artifact preserves BOTH real four-week paychecks');
+T.restoreRecurrence(mixed,obsolete.key);
+assert.equal(mixed.predictions.futureRecurringRules.length,2,
+ 'Allow predictions does not reconstruct the already deleted artifact');
+
 // Genuinely calendar-anchored pay uses BOTH observed amounts, never an
 // impossible 3-paycheck average, and has independent removal identities.
 const semimonth=[
