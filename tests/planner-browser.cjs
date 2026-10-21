@@ -32,11 +32,34 @@ const {chromium,webkit}=require('playwright');
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
-   assert.equal(await page.locator('.side-link').count(),5,'Five pages separate predicted bills, actual History and Reviews');
+   assert.equal(await page.locator('.side-link').count(),6,'Summary and Predictions keep History, Reviews and Settings separate');
    const go=tab=>page.locator(mobile?'.planner-tabs [data-view="'+tab+'"]':'.sidebar [data-view="'+tab+'"]').click();
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
+   assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+   assert.equal(await page.locator('.sidebar [data-view="transactions"] span').innerText(),'Predictions');
+   assert.equal(await page.locator('.planner-tabs [data-view="transactions"]').innerText(),'Predictions');
+   assert.equal(await page.locator('[data-summary-days]').count(),6);
+   assert.equal(await page.locator('[data-summary-plot]').count(),1,
+    'Summary displays one inspectable curve instead of overlapping metrics');
+   assert.match(await page.locator('.summary-trust').innerText(),/excludes unplanned everyday spending/i,
+    'Summary explains what is excluded instead of claiming unwarranted accuracy');
+   for(const days of [30,60,90,120,180,360]){
+    await page.locator('[data-summary-days="'+days+'"]').click();
+    assert.equal(await page.locator('#horizon').inputValue(),String(days));
+    assert.match(await page.locator('.summary-end').innerText(),new RegExp('End of '+days+' days'));
+    assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),new RegExp(days+'-day forecast'));
+   }
+   await page.locator('#horizon').selectOption('90');
+   const beforeDate=await page.locator('[data-summary-peek-date]').innerText();
+   await page.locator('[data-summary-plot]').focus();
+   await page.keyboard.press('End');
+   assert.notEqual(await page.locator('[data-summary-peek-date]').innerText(),beforeDate,
+    'Keyboard navigation inspects future days without editing the forecast');
+   await page.keyboard.press('Home');
+   assert.equal(await page.locator('[data-summary-peek-date]').innerText(),'Oct 19, 2026');
+   await go('overview');
    assert.ok((await page.locator('.account-tile').count())>=2,'Sample account selection works');
    const checking=page.locator('.account-tile').filter({hasText:'Everyday Checking'});
    await checking.click();
@@ -398,9 +421,17 @@ const {chromium,webkit}=require('playwright');
   await page.route('**/api/sync',r=>{refreshed++;return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'})});
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
+  assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+  assert.equal(await page.locator('#horizon').inputValue(),'90');
+  await page.locator('[data-summary-days="180"]').click();
+  assert.equal(await page.locator('#horizon').inputValue(),'180',
+   'Real private forecast recalculates longer ranges from the bank ledger');
+  assert.match(await page.locator('.summary-end').innerText(),/End of 180 days/);
+  await page.locator('.sidebar [data-view="overview"]').click();
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
    'Real checking starts at bank-reported available cash, not credit card debt');
+  await page.locator('#horizon').selectOption('90');
   assert.match(await page.locator('.income-status').innerText(),/PREDICTED/i,
    'Recurring payroll categorized by Plaid as TRANSFER_IN now reaches projected income');
   assert.match(await page.locator('.income-status').innerText(),/3 dated deposits · \$9,300/,
