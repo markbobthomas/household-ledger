@@ -55,7 +55,11 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   cushion=Number(prefs?.cashCushion??500),below=!credit&&low<cushion,
   negative=!credit&&low<0;
  selected=lowIndex;
- const pin=locate(lowIndex),warnings=issues(bundle,accounts,chosen,prefs,ready),
+ const coverageTool=root.HouseholdPlannerCoverage;
+ const coverage=coverageTool?.analyze?.({snapshot,chosen,bundle,prefs,days,accounts,ready});
+ const coverageHtml=coverage?coverageTool.render(coverage):'';
+ const pin=locate(lowIndex),
+  warnings=issues(bundle,accounts,chosen,prefs,ready)+(coverage?.attention||0),
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
   emptySchedule=moves===0,
   quality=emptySchedule?
@@ -99,6 +103,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   'Spendable cash · From scheduled deposits and withdrawals')+' · '+
   moves+' dated movement'+(moves===1?'':'s')+
   '<span>Tap or move along the curve to explore a day</span></div></section>'+
+  coverageHtml+
   '<section class="summary-trust" aria-label="Forecast coverage"><div class="summary-trust-line">'+
   '<strong>Forecast coverage</strong><span>'+quality+'</span>'+
   (emptySchedule?'<button type="button" data-view="transactions" class="summary-review-link">Add predictions →</button>':
