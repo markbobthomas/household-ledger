@@ -295,8 +295,11 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(index<0)p.futureRecurringRules.push(rule);else p.futureRecurringRules[index]=rule;
  // Explicit confirmation reverses any earlier "Not recurring" decision for
  // this precise merchant, account and movement direction.
- delete p.futureRecurrenceExclusions?.[recurrenceKey(
-  rule.originalAccountId,rule.kind==='movement'?'transfer':rule.type,rule.originalMerchant)];
+ const exclusionKey=recurrenceKey(
+  rule.originalAccountId,rule.kind==='movement'?'transfer':rule.type,rule.originalMerchant);
+ delete p.futureRecurrenceExclusions?.[exclusionKey];
+ if(frequency==='every-4-weeks')
+  delete p.futureRecurrenceExclusions?.[exclusionKey+'|phase'+phaseOf(fields.date)];
  return rule;
 }
 /* One authoritative, account-scoped opt-out for bank-derived recurrence.
