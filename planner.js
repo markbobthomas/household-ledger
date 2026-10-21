@@ -533,7 +533,8 @@ function editorFor(row,s,records){
    '<button class="btn" type="button" data-restore-future="'+escapeHTML(row.key)+'">Reset this occurrence</button>'+
    (currentSeries?'<button class="btn" type="button" data-reset-series="'+escapeHTML(row.seriesKey)+'">Reset all future changes</button>':'')+
    ((row.seriesKey||selectedRule)&&!(row.seriesKey||'').startsWith('autopay|')?
-    '<button class="btn" type="button" data-remove-recurring="'+escapeHTML(row.key)+'">Not recurring</button>':'')+
+    '<button class="btn" type="button" data-remove-recurring="'+escapeHTML(row.key)+'">'+
+     (row.type==='income'&&!row.recurringRuleId?'Remove inferred series':'Not recurring')+'</button>':'')+
    '</div></form>';
 }
 function missingMortgagePanel(bundle){
@@ -881,7 +882,7 @@ function settingsPage(bundle,s,chosen){
    Object.entries(state().predictions?.futureRecurrenceExclusions||{}).map(([key,item])=>
     '<div class="future-skip-line"><strong>'+escapeHTML(item.merchant)+'</strong> · '+
      escapeHTML(activeAccounts(s).find(a=>String(a.id)===String(item.accountId))?.name||item.accountId)+
-     ' · '+escapeHTML(item.type)+
+     ' · '+escapeHTML(item.type)+(item.seriesKey?' · inferred series only':item.phaseDate?' · one payday phase':'')+
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Allow predictions</button></div>').join('')+
    (!Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
@@ -1022,18 +1023,26 @@ document.addEventListener('click',async e=>{
   if(!row){setNotice('That bank transaction is no longer available.');return}
   const kind=row.type==='transfer'?
    (row.cashDirection==='out'?'expense':row.cashDirection==='in'?'income':'transfer'):row.type;
-  const saved=(state().predictions?.futureRecurringRules||[]).find(r=>
+  const rules=(state().predictions?.futureRecurringRules||[]).filter(r=>
    String(r.originalAccountId||r.accountId||r.fromAccountId)===aid&&
-   String(r.originalMerchant||r.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()===
-    String(row.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()&&
+   (r.matchNames||[String(r.originalMerchant||r.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()])
+    .includes(String(row.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim())&&
    (r.kind==='movement'?'transfer':r.type)===kind);
+  const phaseRules=rules.filter(r=>r.frequency==='every-4-weeks'&&
+   Math.min(Math.abs(Math.round((Date.parse(r.anchorDate)-Date.parse(row.date))/86400000)%28),
+    28-Math.abs(Math.round((Date.parse(r.anchorDate)-Date.parse(row.date))/86400000)%28))<=3);
+  const saved=phaseRules.length===1?phaseRules[0]:rules.length===1?rules[0]:null;
+  if(rules.length>1&&!saved){
+   setNotice('This employer has several pay schedules. Choose the matching paycheck in Future Transactions.');return;
+  }
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),{
     kind:saved?.kind==='movement'?'movement':'event',accountId:aid,type:kind,
     merchant:row.merchant,recurringRuleId:saved?.id||null
    }));
    recurringDraft=null;reviewNotice='Marked '+row.merchant+
-    ' as not recurring. All future predictions were removed.';
+    ' as not recurring.'+(saved?.frequency==='every-4-weeks'?
+     ' Only this four-week payday was removed.':' Matching future predictions were removed.');
    render();
   }catch(err){setNotice(String(err.message||err))}
   return;
@@ -1142,9 +1151,11 @@ document.addEventListener('click',async e=>{
    .find(r=>r.key===removeRecurring.dataset.removeRecurring);
   if(!row){setNotice('The recurring schedule changed. Open Transactions and try again.');return}
   try{
-   await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),row));
-   editingKey='';transactionNotice='Marked '+row.merchant+
-    ' as not recurring. All predicted occurrences were removed. Restore it in Settings or History.';render();
+   const result=await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),row));
+   editingKey='';transactionNotice=result.autoSeries?
+    'Removed only the inferred '+row.merchant+' series. Confirmed income schedules were preserved. Restore in Settings.':
+    'Marked '+row.merchant+' as not recurring. Only its matching schedule was removed. Restore in Settings or History.';
+   render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
