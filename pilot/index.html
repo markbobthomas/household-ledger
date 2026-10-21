@@ -1,10 +1,11 @@
 <!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Household Ledger · Bank connections</title><script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-<style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:0 18px;color:#1e293b}button{padding:12px 18px;border:1px solid #64748b;border-radius:8px;background:white;margin:3px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button.remove-account{border-color:#bc6e68;color:#9f281e;background:#fff9f8}.panel{border:1px solid #cbd5e1;border-radius:12px;padding:18px;margin:14px 0}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0}strong{font-size:1.1em}.danger{color:#9f281e}label{display:block;margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:7px}input[type=checkbox]{transform:scale(1.2);margin-right:10px}#account-choices[hidden]{display:none}#status{white-space:pre-wrap}</style></head><body>
+<style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:0 18px;color:#1e293b}button{padding:12px 18px;border:1px solid #64748b;border-radius:8px;background:white;margin:3px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button.remove-account{border-color:#bc6e68;color:#9f281e;background:#fff9f8}.usage{padding:10px 12px;border-radius:8px;background:#f1f5f9;font-size:14px;line-height:1.5}.usage.protected{background:#fff5f0;color:#862a1c}.usage.clear{background:#edf6f2;color:#164b32}.usage strong{font-size:14px}.account-note{font-size:13px}.removal-help{background:#f6f9fc}.remove-account:disabled{background:#f3f4f6;color:#64748b;border-color:#cbd5e1}.panel{border:1px solid #cbd5e1;border-radius:12px;padding:18px;margin:14px 0}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0}strong{font-size:1.1em}.danger{color:#9f281e}label{display:block;margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:7px}input[type=checkbox]{transform:scale(1.2);margin-right:10px}#account-choices[hidden]{display:none}#status{white-space:pre-wrap}</style></head><body>
 <h1>Bank connections</h1><p class="muted">Add checking, savings and credit cards to your existing Ledger. Adding another account never clears one already connected. Bank balances and transactions remain read-only. <a href="/">Return to Ledger</a>.</p>
 <div class="panel" id="status" role="status">Loading…</div>
 <button id="connect">+ Connect accounts</button><button id="sync">Refresh all banks</button>
 <div id="account-choices" class="panel" hidden><h2>Select accounts to add</h2><p>Choose every eligible account you want included from this institution.</p><form id="choices-form"><div id="choices-list"></div><button type="submit">Add selected accounts</button><button type="button" id="choices-cancel">Cancel</button></form></div>
+<div class="panel removal-help"><h2>Which duplicate should I remove?</h2><p>Household Ledger checks your saved forecast changes against each account’s unique Plaid ID—not its name. <strong>Keep the copy marked “Has saved links.”</strong> An account with saved predictions or category edits is protected from removal until those changes are reassigned. If neither copy has links, review its actual transactions before deciding. Automatic predictions from bank history are not saved edits.</p><p class="muted">Do not use “Disconnect everything” to remove a duplicate.</p></div>
 <div id="report"></div>
 <div class="panel"><h2>Disconnect everything</h2><p class="muted">This erases all connected bank tokens and imported bank transactions from this private Ledger. It is not required when adding an account.</p><button id="disconnect" class="danger">Disconnect and erase all banks</button></div>
 <script>
@@ -12,6 +13,25 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const money=n=>n==null?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
 const status=document.getElementById('status'),choices=document.getElementById('account-choices');
 let pendingToken=null,pendingAccounts=[],lastAccounts=[],removalBusy=false;
+const usageLabels={
+ primaryAccount:'Selected main account',futureRecurringRules:'Recurring schedules',
+ futureTransactionEdits:'Individual prediction changes',futureSeriesEdits:'Changes to repeating predictions',
+ futureTransactionAdds:'Manually added predictions',paymentRules:'Credit-card payment settings',
+ paymentBills:'Scheduled payments',futureRecurrenceExclusions:'Not-recurring decisions',
+ historyPatternDecisions:'History decisions',plannerRoutineDecisions:'Recurring review decisions',
+ mortgageReviewDismissals:'Mortgage review decisions'};
+function usageText(a){
+ const u=a.forecastUsage;
+ if(!u)return '<p class="usage protected">Cannot verify saved forecast references. Removal is disabled.</p>';
+ if(!u.protected)
+  return '<p class="usage clear"><strong>No saved prediction links found.</strong> This copy has no identifiable account-specific saved edits. Confirm its actual bank history before removing it.</p>';
+ const list=Object.entries(u.counts||{}).filter(([,count])=>count>0)
+  .map(([name,count])=>esc(usageLabels[name]||name.replace(/([A-Z])/g,' $1'))+': '+count);
+ if(u.categoryEdits)list.push('Manual category edits: '+u.categoryEdits);
+ return '<p class="usage protected"><strong>Has saved links · protected from removal.</strong> '+
+  'These saved settings refer to this exact account: '+list.join(' · ')+
+  '. Reassign or review them in the Ledger before removing this account.</p>';
+}
 async function api(path,data){const r=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',
  headers:data===undefined?{}:{'Content-Type':'application/json','X-Pilot-Action':'1'},
  body:data===undefined?undefined:JSON.stringify(data),cache:'no-store'});
@@ -29,8 +49,10 @@ async function refresh(){
    ' · '+money(a.available)+' available</p>'+
    '<p class="muted">Last observed '+esc(a.balanceObservedAt||'unknown')+' · '+esc(a.type)+
    ' · Bank connection '+(connections.indexOf(String(a.itemId||a.id))+1)+'</p>'+
+   usageText(a)+
    '<button type="button" class="remove-account" data-remove-account="'+esc(a.id)+
-   '" aria-label="Remove '+esc(a.name)+' ending '+esc(a.mask||'unknown')+'">Remove account</button>'+
+   '" '+(!a.forecastUsage||a.forecastUsage.protected?'disabled title="This account has saved changes or its forecast links have not been verified"':'')+
+   ' aria-label="Remove '+esc(a.name)+' ending '+esc(a.mask||'unknown')+'">Remove account</button>'+
    '</div>').join('')+
    (accounts.length?'<div class="panel"><h3>Recent imported transactions ('+transactions.length+' shown)</h3><table><thead><tr><th>Date</th><th>Account</th><th>Merchant</th><th>Bank amount</th></tr></thead><tbody>'+
    transactions.slice(0,50).map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(accounts.find(a=>a.id===t.accountId)?.name||'')+'</td><td>'+esc(t.merchant)+'</td><td>'+money(t.amount)+'</td></tr>').join('')+'</tbody></table></div>':'');
@@ -64,9 +86,12 @@ document.getElementById('report').addEventListener('click',async e=>{
  if(!button||removalBusy)return;
  const account=lastAccounts.find(a=>String(a.id)===button.dataset.removeAccount);
  if(!account){status.textContent='That account is no longer listed. Refresh and try again.';return}
+ if(!account.forecastUsage||account.forecastUsage.protected){
+  status.textContent='This account has saved forecast or category changes. Removal is blocked until they are reassigned.';return;
+ }
  const last=lastAccounts.filter(a=>String(a.itemId)===String(account.itemId)).length===1;
  const label=account.name+(account.mask?' ending '+account.mask:'');
- if(!confirm('Remove '+label+' from Household Ledger?\\n\\nThis removes only its imported transactions and balance. Other accounts and saved forecast settings are preserved. '+
+ if(!confirm('Remove '+label+' from Household Ledger?\\n\\nNo linked saved prediction edits were found for this account. This removes its imported transactions and bank balance; any automatic forecasts based on its historical transactions will stop. Other accounts and their saved settings remain. '+
   (last?'Its Plaid bank connection will also be disconnected.':'Other accounts using this Plaid bank connection will remain linked.')+
   '\\n\\nYour actual bank account will NOT be closed.'))return;
  removalBusy=true;button.disabled=true;
