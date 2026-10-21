@@ -15,12 +15,24 @@ const closeFor=(month,day)=>{const max=new Date(Date.UTC(Number(month.slice(0,4)
 const cash=a=>['checking','savings','depository'].includes(String(a.accountType||a.type||'').toLowerCase());
 const credit=a=>String(a.accountType||a.type||'').toLowerCase()==='credit';
 const validAmount=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0;
+// A connected card's historical purchases are always read-only. Its future
+// purchases/payment obligations cannot enter the forecast until configured.
+const ready=(rule,card,accounts=[])=>Boolean(rule&&card&&credit(card)&&
+ date(rule.billingEndDate||rule.lastStatementClose)&&
+ date(rule.billingStartDate||rule.lastStatementClose)&&
+ date(rule.nextPaymentDate)&&date(rule.nextDueDate||rule.nextPaymentDate)&&
+ ['statement','full','minimum','fixed'].includes(rule.method||'statement')&&
+ (rule.autopayEnabled===false||
+  accounts.some(a=>String(a.id)===String(rule.fromAccountId)&&cash(a))));
 function build(snapshot,records=[],expected=[],predictions={},options={}){
  const asOf=String(snapshot.asOf||''),days=options.days||90,through=shift(asOf,days);
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
- const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],suppressedExpectedIds=[];
+ const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],historyStatements=[],suppressedExpectedIds=[];
+ for(const card of accounts.filter(credit))
+  if(!ready(cards[card.id],card,accounts))
+   warnings.push(card.name+': credit-card setup required in Settings before forecasting purchases or payments');
  const settled=new Map(records.filter(t=>t&&t.id).map(t=>[String(t.id),t]));
  const matchesAccount=(row,account)=>{
   const key=String(row.accountId||row.account||''),id=String(account.id);
@@ -47,6 +59,9 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  for(const [id,rule] of Object.entries(cards)){
   const card=byId.get(id),from=byId.get(String(rule.fromAccountId||''));
   const autopay=rule.autopayEnabled!==false;
+  if(!ready(rule,card,accounts)){
+   warnings.push((card?.name||'Credit card')+': complete statement dates, payment date and payment method in Settings');continue;
+  }
   const postedPayments=actualSettlements(from,card);
   if(!card||!credit(card)){warnings.push('A configured credit card is not connected');continue}
   if(autopay&&(!from||!cash(from))){
@@ -64,7 +79,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   }
   if(!autopay)warnings.push(card.name+': statement is estimated, but no automatic withdrawal is scheduled. Choose a payment account if this card is paid from checking.');
   const method=rule.method||'statement',hasIssued=validAmount(rule.lastStatementBalance);
-  if(!['statement','minimum','fixed'].includes(method)||
+  if(!['statement','full','minimum','fixed'].includes(method)||
     method==='minimum'&&!validAmount(rule.minimumAmount)||
     method==='fixed'&&!validAmount(rule.fixedAmount)){
    warnings.push(card.name+': invalid card payment method');continue;
@@ -72,6 +87,29 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   if(rule.nextPaymentDate<=lastClose){
    warnings.push(card.name+': next autopay must follow the billing-period end');continue;
   }
+  // Prior periods are reconstructed from settled card activity, not called
+  // verified bank-issued statements. Retrieved history may be incomplete and
+  // does not reveal carried balances, interest or adjustments reliably.
+  for(let n=-6;n<=0;n++){
+   const close=n===0?lastClose:closeFor(plus(lastClose,n).slice(0,7),rule.closingDay);
+   if(close>asOf)continue;
+   const start=n===0?anchorStart:
+    shift(closeFor(plus(lastClose,n-1).slice(0,7),rule.closingDay),1);
+   const entries=records.filter(t=>matchesAccount(t,card)&&!t.pending&&
+    t.date>=start&&t.date<=close&&['expense','refund'].includes(t.type));
+   const purchases=round(entries.filter(t=>t.type==='expense').reduce((sum,t)=>sum+Number(t.amount),0));
+   const refunds=round(entries.filter(t=>t.type==='refund').reduce((sum,t)=>sum+Number(t.amount),0));
+   historyStatements.push({cardId:id,cardName:card.name,periodStart:start,periodEnd:close,
+    purchases,refunds,netActivity:round(purchases-refunds),count:entries.length,
+    issuedBalance:n===0&&validAmount(rule.lastStatementBalance)?round(rule.lastStatementBalance):null,
+    source:'Reconstructed from available posted card transactions'});
+  }
+  // A rolling historic cycle is a fallback estimate when future card activity
+  // is not predictable. It never adds on top of known future charges.
+  const priorCycles=historyStatements.filter(x=>x.cardId===id&&x.count>0).slice(-3);
+  const historicalAverage=priorCycles.length>=2?
+   round(priorCycles.reduce((total,x)=>total+x.netActivity,0)/priorCycles.length):null;
+  let plannedCardPayments=0;
   // The statement is calculated from the *card's own* settled purchases and
   // refunds during each billing cycle, plus future explicitly predicted charges.
   // An account balance is not itself a statement balance (it may carry debt).
@@ -98,6 +136,10 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const futureCharges=round(predictedRows.reduce((sum,t)=>
     sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
    const calculated=round(Math.max(0,bankPurchases+futureCharges));
+   // When two or more historical cycles exist, fill gaps in incomplete
+   // future purchase predictions conservatively with observed net spending.
+   const estimatedCycle=round(Math.max(calculated,
+    historicalAverage===null?0:historicalAverage));
    // Posted activity is an exact bank-ledger sum, distinct from both the
    // projection for a not-yet-closed period and the issued card statement.
    const actualPeriodNet=round(bankPurchases);
@@ -111,9 +153,23 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // Legacy setups retain their old planning floor for subsequent cycles.
    const confirmedFirst=n===0&&hasIssued&&cycleClose<=asOf;
    const statementAmount=round(confirmedFirst?Number(rule.lastStatementBalance):
-    legacy&&hasIssued?Math.max(calculated,Number(rule.lastStatementBalance)):calculated);
+    legacy&&hasIssued?Math.max(calculated,Number(rule.lastStatementBalance)):
+    periodComplete?calculated:estimatedCycle);
+   // Full current balance means the modeled card debt that would exist at
+   // withdrawal, including forecast charges up to that date, minus any earlier
+   // planned card payments. It is not a bank-issued payoff quotation.
+   const futureToDue=round(expected.filter(t=>matchesCard(t)&&t.date>asOf&&
+    t.date<=due&&['expense','refund'].includes(t.type)).reduce((sum,t)=>
+    sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
+   const currentDebt=Number(card.current);
+   const fullAmount=Number.isFinite(currentDebt)&&card.current!==null&&card.current!==undefined?
+    round(Math.max(0,currentDebt+futureToDue-plannedCardPayments)):null;
    const amount=round(method==='statement'?statementAmount:
+    method==='full'?(fullAmount??0):
     method==='minimum'?Number(rule.minimumAmount):Number(rule.fixedAmount));
+   if(method==='full'&&fullAmount===null){
+    warnings.push(card.name+': full balance needs a current bank-reported card balance');continue;
+   }
    const confidence=confirmedFirst?'User-entered issued statement':
     'Estimated from available card purchases, refunds and scheduled charges';
    if(due>actualDue&&autopay)warnings.push(card.name+': planned checking withdrawal '+due+
@@ -141,6 +197,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     actualPeriodNet,periodComplete,postedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
+    historicalAverage,fullBalanceEstimate:fullAmount,
     autopayEnabled:autopay,alreadyPaid:paid,actualPayments:postedForCycle,
     actualPaymentAmount:postedPaymentTotal,actualPaymentDate:postedForCycle[0]?.date||null,
     lastPostedPayment:recentPostedPayment,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
@@ -152,6 +209,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
      anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay'};
     plans.push(plan);
+    plannedCardPayments=round(plannedCardPayments+amount);
     obligations.push({id:plan.id,date:due,amount,fromAccountId:from.id,
      merchant:card.name+' autopay',kind:'card_payment',confidence,cardId:id});
    }
@@ -193,9 +251,10 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     kind:'automatic_bill',confidence:'entered schedule / amount estimate'});
   }
  }
- return {plans,billEvents,suppressedExpectedIds,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements};
+ return {plans,billEvents,suppressedExpectedIds,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
+  historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
-const api={build,plus,closeFor};
+const api={build,plus,closeFor,ready};
 root.HouseholdPaymentObligations=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

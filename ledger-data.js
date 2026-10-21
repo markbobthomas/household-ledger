@@ -448,7 +448,7 @@ function setCardPaymentRule(state,accountId,rule){
  if(!dateOK(due)||!dateOK(paymentDue)||!dateOK(closed)||
   due<=closed||paymentDue<=closed||due>paymentDue||
   !Number.isInteger(closingDay)||closingDay<1||closingDay>31||
-  !['statement','minimum','fixed'].includes(method)||
+  !['statement','full','minimum','fixed'].includes(method)||
   (hasIssued&&(!Number.isFinite(last)||last<0||last>999999999))||
   (!isCycle&&!hasIssued)||
   (isCycle&&(!dateOK(beginning)||beginning>end||

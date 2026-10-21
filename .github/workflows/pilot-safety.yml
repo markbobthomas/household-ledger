@@ -32,6 +32,7 @@ jobs:
           node tests/recurrence-reconcile-smoke.cjs
           node tests/payment-obligations-smoke.cjs
           node tests/card-statement-cycles-smoke.cjs
+          node tests/card-setup-gate-smoke.cjs
           node tests/planner-routine-smoke.cjs
           node tests/planner-backtest-smoke.cjs
           node tests/planner-transactions-smoke.cjs

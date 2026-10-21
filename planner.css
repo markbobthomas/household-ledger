@@ -102,6 +102,10 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .card-rule-form .lead{max-width:750px;margin:0 0 14px}
 .card-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:13px}
 .card-fields label{display:flex;flex-direction:column;font-size:11px;font-weight:650;gap:5px;color:#506070}
+.card-fields [hidden]{display:none!important}
+.card-history{margin:16px 0;padding:13px;border:1px solid var(--line);border-radius:5px}
+.card-history summary{cursor:pointer;font-weight:650;font-size:12px;margin-bottom:8px}
+.card-history .card-preview-line{gap:14px}
 .card-fields input,.card-fields select{height:40px;min-width:0;width:100%;border:1px solid #cbd3dd;border-radius:4px;padding:6px 10px;color:var(--ink);background:#fff;font:13px var(--mono)}
 .card-fields input:focus,.card-fields select:focus{outline:2px solid #a2b9e5;outline-offset:1px}
 .card-form-actions{margin:16px 0 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}

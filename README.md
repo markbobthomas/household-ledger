@@ -58,6 +58,41 @@ Legacy forecasting files remain in Git for historical test compatibility but are
 
 Open **Future Transactions** to edit one future payment, change a recurring schedule, skip/restore an occurrence, or add a new dated transaction. To link an estimated utility bill or recurring paycheck to its real Plaid history, choose a recurring frequency and expand **Link related actual transactions**. Search the actual bank payee, select the relevant historical payments (different amounts are fine), and save. This creates **one** manually controlled schedule instead of a competing auto-prediction. When an earlier payment posts in its billing cycle, that cycle is not forecast again. Open **History** to turn *any actual transaction* into a confirmed recurring forecast without changing its bank classification. **Reviews** holds unconfirmed possible repeats. **Settings** holds card payment assumptions, warnings, and an optional historical prediction accuracy audit that now tests the *same new engine*.
 
+## Connecting a credit card
+
+A newly linked card remains **unconfigured** until you open **Settings →
+Credit-card statements & payments** and save its payment information. The
+card's actual transactions and bank-reported balance remain visible, but its
+future purchases and payments do **not** enter the forecast until setup is
+complete. No payment is initiated from Household Ledger.
+
+Enter the **start and closing date** of one billing period, the **statement
+due date**, the **expected payment date**, **whether autopay is on**, and the
+**payment amount method**. If autopay is enabled, choose the connected
+checking/savings account that funds it.
+
+- **Full statement:** a user-entered issued statement amount takes precedence
+  after the closing date. Otherwise calculate estimated net cycle spending
+  from posted purchases/refunds and known future charges. When enough history
+  exists, a conservative historical cycle average fills unknown future spend.
+- **Full outstanding balance:** estimate the bank-reported card debt plus
+  expected future card charges through the payment date, less previously
+  scheduled card payments. This is an estimate, **not** a bank payoff quote.
+- **Minimum payment:** enter the dollar amount from the card issuer; it may
+  change each month and must be reviewed.
+- **Fixed payment:** enter the intended dollar amount.
+- **No autopay:** keep statement previews but do not add a fictional checking
+  withdrawal. A user-confirmed separate payment can be planned manually.
+
+Previous billing periods are reconstructed from available posted card
+transactions and refunds. **Those are estimates of net activity, not
+recovered official statements**: incomplete Plaid history, opening debt,
+interest, fees, and adjustments can cause differences. A prior issued
+statement amount can be entered manually. Credit purchases affect only the
+card balance; a planned payment is one linked checking-to-card movement, not
+a second expense. For reliable checking forecasts, verify the next issued
+statement and payment amount.
+
 ## Security and deployment
 
 The source of truth for opening balances is the latest Plaid-reported bank snapshot, with freshness shown to the user. Plaid credentials are not exposed to the public Demo, and only the password-protected Real service accesses encrypted connected-bank state. Planned transactions and owner overrides are stored separately from immutable bank history. Production deployment configuration is retained.
