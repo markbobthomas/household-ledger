@@ -229,6 +229,13 @@ const eventKey=(tools,e)=>tools.keyEvent(e.id,e.accountId);
 function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const asOf=snapshot.asOf,end=horizon(asOf,days),accounts=snapshot.accounts||[];
  if(!valid(asOf)||!tools||!Array.isArray(accounts))throw Error('Valid snapshot and forecast tools required');
+ const configuredCard=id=>{
+  const account=accounts.find(a=>String(a.id)===String(id));
+  if(!account||String(account.accountType||account.type||'').toLowerCase()!=='credit')
+   return true;
+  return Boolean(paymentEngine?.ready?.(
+   (prefs.paymentRules||{})[String(id)],account,accounts));
+ };
  const detected=analyze(rows,accounts,asOf,prefs,days),
   rules=(prefs.futureRecurringRules||[]).filter(r=>!isExcludedPattern(prefs,
    r.originalAccountId||r.accountId||r.fromAccountId,
@@ -245,7 +252,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   (r.frequency!=='every-4-weeks'||!e.date||phaseMatch(r.anchorDate,e.date)));
  // Explicit rules come first, and always own their original bank series.
  const generated=tools.generatedRecurring(rules,add(asOf,-32),add(end,32));
- const ownerEntries=generated.events.map(e=>{
+ const ownerEntries=generated.events.filter(e=>configuredCard(e.accountId)).map(e=>{
   const base=e._seriesDate||e.date,changed=tools.applySeries(e,base,e._seriesKey,series),
    rule=rules.find(r=>r.id===e.ruleId);
   return {...changed,_seriesDate:base,
@@ -257,7 +264,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
  for(const event of detected.automatic){
-  if(ownerFor(event)||suppressedRecurrence(prefs,event))continue;
+  if(!configuredCard(event.accountId)||
+   ownerFor(event)||suppressedRecurrence(prefs,event))continue;
   const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
   if(adjusted.date<=asOf||adjusted.date>end)continue;
   seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
@@ -266,7 +274,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  }
  // One-off forecast additions are independent of Plaid facts.
  for(const e of extras){
-  if(e.type==='transfer'||rules.some(r=>r.sourceAddedId===e.id))continue;
+  if(!configuredCard(e.accountId)||e.type==='transfer'||
+   rules.some(r=>r.sourceAddedId===e.id))continue;
   if(!valid(e.date)||e.date<=asOf||e.date>end)continue;
   if(ownerFor(e))continue;
   const clash=entries.find(a=>a.accountId===e.accountId&&
