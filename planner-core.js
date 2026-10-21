@@ -91,8 +91,24 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    multiCycle=f&&!['weekly','biweekly','twice-monthly'].includes(f)&&
     g.rows.filter(r=>r.date.slice(0,7)===t.date.slice(0,7)).length>1,
    varying=latest.some(r=>cents(r.amount)!==amount),
-   // Variable bills and paychecks are one series. Predict one amount per
-   // scheduled date using a small rolling average, not one per amount.
+   // Detect an A/B/A/B biweekly payroll pattern only when two full cycles
+   // show the same amount on each phase. Near-equal A and B are distinct
+   // if their phase difference is meaningful compared with pay variability.
+   payroll=/(payroll|paycheck|salary|wage|employer|direct deposit)/i.test(g.merchant)||
+    /INCOME_WAGES/.test(String(metadata(t).detailed||'').toUpperCase()),
+   lastPaychecks=g.rows.slice(-4),
+   payA=lastPaychecks.length===4?money((Number(lastPaychecks[0].amount)+
+    Number(lastPaychecks[2].amount))/2):0,
+   payB=lastPaychecks.length===4?money((Number(lastPaychecks[1].amount)+
+    Number(lastPaychecks[3].amount))/2):0,
+   typicalPay=(payA+payB)/2,
+   pairTolerance=Math.max(3,typicalPay*.003),
+   alternating=Boolean(g.kind==='income'&&payroll&&f==='biweekly'&&
+    lastPaychecks.length===4&&f3&&
+    Math.abs(Number(lastPaychecks[0].amount)-Number(lastPaychecks[2].amount))<=pairTolerance&&
+    Math.abs(Number(lastPaychecks[1].amount)-Number(lastPaychecks[3].amount))<=pairTolerance&&
+    Math.abs(payA-payB)>=Math.max(2,typicalPay*.004)),
+   // Other variable bill amounts use one rolling average.
    estimate=money(latest.reduce((total,r)=>total+Number(r.amount),0)/latest.length),
    // Never infer variable purchases at grocery/retail merchants merely
    // because they occurred near the same day three months in a row.
@@ -129,12 +145,17 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
      Array.from({length:110},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
     for(const when of dates){
      if(when<=asOf)continue;
-     automatic.push({id:'auto|'+series+'|'+when,date:when,amount:estimate,
+     const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0;
+     // Following the last posted B paycheck, the NEXT deposit is A.
+     const forecastAmount=alternating?
+      (steps%2===1?payA:payB):estimate;
+     automatic.push({id:'auto|'+series+'|'+when,date:when,amount:forecastAmount,
       merchant:g.merchant,accountId:g.accountId,type:g.kind,category:t.category||'Other',
       source:'historical',cadence:freq,_seriesKey:series,_seriesDate:when,
       planConfidence:one?'identified-single-bill':'observed-recurring-pattern',
-      amountEstimate:varying?'recent-history-average':'last-posted-amount',
-      historicalIds:latest.map(x=>String(x.id||''))});
+      amountEstimate:alternating?'alternating-paychecks':
+       varying?'recent-history-average':'last-posted-amount',
+      historicalIds:(alternating?lastPaychecks:latest).map(x=>String(x.id||''))});
     }
     continue;
    }
