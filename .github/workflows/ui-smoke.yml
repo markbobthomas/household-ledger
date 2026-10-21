@@ -31,6 +31,7 @@ jobs:
           node --check planner-backtest.js
           node --check planner-transactions.js
           node --check planner-summary.js
+          node --check planner-coverage.js
           node --check account-forecast.js
           node --check planner-intelligence.js
           node tests/planner-browser.cjs
@@ -56,4 +57,5 @@ jobs:
           node tests/card-statement-cycles-smoke.cjs
           node tests/card-setup-gate-smoke.cjs
           node tests/planner-summary-smoke.cjs
+          node tests/planner-coverage-smoke.cjs
           node tests/mortgage-prediction-smoke.cjs
