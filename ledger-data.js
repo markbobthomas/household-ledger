@@ -445,10 +445,12 @@ function setCardPaymentRule(state,accountId,rule){
  const last=hasIssued?Number(rule.lastStatementBalance):null;
  const autopayEnabled=rule.autopayEnabled===undefined?true:
   rule.autopayEnabled===true||rule.autopayEnabled==='yes';
+ if(isCycle&&(rule.autopayEnabled===undefined||!rule.method))
+  throw Error('Choose whether autopay is enabled and how the card will be paid');
  if(!dateOK(due)||!dateOK(paymentDue)||!dateOK(closed)||
   due<=closed||paymentDue<=closed||due>paymentDue||
   !Number.isInteger(closingDay)||closingDay<1||closingDay>31||
-  !['statement','minimum','fixed'].includes(method)||
+  !['statement','full','minimum','fixed'].includes(method)||
   (hasIssued&&(!Number.isFinite(last)||last<0||last>999999999))||
   (!isCycle&&!hasIssued)||
   (isCycle&&(!dateOK(beginning)||beginning>end||
