@@ -109,24 +109,42 @@ function quickEditor(){
 }
 
 function dayDetail(point,card){
- const events=point.events||[],first=calendarContext?.points[0],
+ const events=point.events||[],first=calendarContext.points[0],
+  previousIndex=calendarContext.points.indexOf(point)-1,
+  previous=previousIndex>=0?calendarContext.points[previousIndex].balance:point.balance,
+  plus=events.reduce((n,e)=>n+Math.max(0,moneyDelta(e,card)),0),
+  minus=events.reduce((n,e)=>n+Math.max(0,-moneyDelta(e,card)),0),
+  gaps=calendarContext.gaps.get(point.date)||[],
   label=card?'Projected card debt':'Projected account balance';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
   '<div class="calendar-detail-heading"><div><span>SELECTED DAY</span><strong>'+
    esc(dateLabel(point.date))+'</strong></div><div class="calendar-detail-balance"><small>'+
    label+' · end of day</small><strong>'+money(point.balance)+'</strong></div></div>'+
-  (events.length?'<div class="calendar-detail-items">'+events.map(e=>{
+  '<div class="calendar-math">'+
+   '<div><span>'+(previousIndex<0?'Reported starting balance':'Yesterday')+'</span><strong>'+money(previous)+'</strong></div>'+
+   '<div><span>'+(card?'Debt increases':'Deposits')+'</span><strong class="in">+'+money(plus)+'</strong></div>'+
+   '<div><span>'+(card?'Debt payments':'Withdrawals')+'</span><strong class="out">−'+money(minus)+'</strong></div>'+
+   '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
+  (events.length?'<div class="calendar-detail-items">'+events.map((e,i)=>{
    const dir=signed(e,card)>0?'in':'out';
    return '<div class="calendar-detail-item"><span class="calendar-transaction-name">'+
     esc(e.merchant||'Predicted transaction')+
-    (e.kind==='transfer_in'||e.kind==='transfer_out'?
-     '<small>Linked account transfer</small>':'')+
-    '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong></div>';
+    (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':'')+
+    '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong>'+
+    '<button type="button" class="calendar-item-edit" data-calendar-edit="'+i+'">Edit</button></div>';
   }).join('')+'</div>':
-   '<p class="calendar-empty">'+(point.date===first?.date?
-    'Starting balance. No future transactions have occurred yet.':
-    'No predicted transactions on this day. The projected balance carries forward.')+'</p>')+
-  '<button type="button" class="calendar-edit" data-view="transactions">See all predictions →</button>'+
+   '<p class="calendar-empty">'+(point.date===first.date?
+    'Starting balance. No future transactions yet.':
+    'No predicted transactions on this day. Balance carries forward.')+'</p>')+
+  (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
+   gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
+    '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
+   '<small>Only confirmed schedules. These items do not change your balance.</small></div>':'')+
+  (calendarNotice?'<p class="calendar-notice" role="status">'+esc(calendarNotice)+'</p>':'')+
+  quickEditor()+
+  '<div class="calendar-day-actions"><button type="button" class="calendar-add" data-calendar-add'+
+   (point.date===first.date?' disabled':'')+'>+ Add transaction</button>'+
+   '<button type="button" class="calendar-edit" data-view="transactions">All predictions →</button></div>'+
  '</section>';
 }
 function calendarGrid(){
