@@ -24,6 +24,7 @@ jobs:
           node --check planner-intelligence.js
           node --check planner-backtest.js
           node --check planner-transactions.js
+          node --check planner-summary.js
           node --check account-forecast.js
           node --check sandbox/server.cjs
       - name: Smoke test authentication, health and no-credentials startup
@@ -36,6 +37,7 @@ jobs:
           node tests/payment-obligations-smoke.cjs
           node tests/card-statement-cycles-smoke.cjs
           node tests/card-setup-gate-smoke.cjs
+          node tests/planner-summary-smoke.cjs
           node tests/planner-routine-smoke.cjs
           node tests/planner-backtest-smoke.cjs
           node tests/planner-transactions-smoke.cjs
