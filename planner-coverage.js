@@ -126,16 +126,16 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
    asId(r.originalAccountId||r.accountId||r.fromAccountId)===id&&
    r.type==='expense'&&(mortgage(r.merchant)||mortgage(r.originalMerchant))),
   knownNames=new Set([...posted.map(r=>norm(r.merchant||r.name)),...confirmed.flatMap(r=>
-   [norm(r.merchant),norm(r.originalMerchant)])].filter(Boolean)),
+   [norm(r.merchant),norm(r.originalMerchant),...(r.matchNames||[]).map(norm)])].filter(Boolean)),
   knownRuleIds=new Set(confirmed.map(r=>asId(r.id)).filter(Boolean)),
   mortgageLike=e=>futureNameFields(e).some(mortgage)||
    futureNameFields(e).some(x=>knownNames.has(norm(x)))||
    knownRuleIds.has(asId(e.ruleId||e.recurringRuleId)),
   own=expenses.filter(e=>asId(e.accountId)===id),
   recognized=own.filter(mortgageLike),
-  lastPosted=posted.at(-1),seed=lastPosted?.date||
+  lastPosted=posted.at(-1),seed=
    confirmed.find(r=>date(r.anchorDate))?.anchorDate||
-   recognized[0]?.date,
+   lastPosted?.date||recognized[0]?.date,
   expected=expectedMonthly(seed,months);
  const selectedHasEvidence=posted.length>0||confirmed.length>0||recognized.length>0;
  // A mortgage on an account other than the selected account is not absent
@@ -237,10 +237,32 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
   if(entries.length>due.length)return {month:m.key,status:'review',
    label:entries.length+'?',detail:'More than one possible mortgage withdrawal is predicted for this month. Check for duplicates.',
    items:described(entries)};
-  if(entries.length<due.length)return {month:m.key,status:'missing',
-   label:entries.length?entries.length+' / '+due.length:'!',
-   detail:'An expected mortgage withdrawal does not appear among the dated predictions for this account',
-   items:described(entries)};
+  if(entries.length<due.length){
+   const elsewhere=expenses.filter(e=>asId(e.accountId)!==id&&
+    due.some(d=>dayWithin(m,e.date)||Math.abs(daysBetween(e.date,d))<=9)&&
+    (mortgageLike(e)||referenceAmount>0&&
+     Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25)));
+   const adjacent=own.filter(e=>!entries.includes(e)&&!candidates.has(e)&&
+    due.some(d=>Math.abs(daysBetween(e.date,d))<=9)&&
+    (mortgageLike(e)||referenceAmount>0&&
+     Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25)));
+   const ambiguous=own.filter(e=>!entries.includes(e)&&dayWithin(m,e.date)&&
+    referenceAmount>0&&Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25));
+   const plausible=[...new Set([...elsewhere,...adjacent,...ambiguous])];
+   if(plausible.length){
+    const names=[...new Set(plausible.map(e=>accounts.find(a=>
+     asId(a.id)===asId(e.accountId))?.name||'Another account'))];
+    return {month:m.key,status:'review',label:plausible.length+'?',
+     detail:'The expected mortgage may be among these projected withdrawals'+
+      (elsewhere.length?' on '+names.join(', '):'')+
+      '. It is present in Predictions, but its identity, paying account, amount or posting date needs confirmation.',
+     items:described([...entries,...plausible])};
+   }
+   return {month:m.key,status:'missing',
+    label:entries.length?entries.length+' / '+due.length:'!',
+    detail:'An expected mortgage withdrawal is absent from the projected withdrawals for this month',
+    items:described(entries)};
+  }
   return {month:m.key,status:guessed?'review':'covered',
    label:(guessed?'? ':'✓ ')+entries.length,
    detail:guessed?
