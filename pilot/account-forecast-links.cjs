@@ -9,6 +9,8 @@ const namedFields=new Set([
 ]);
 const encodedFields=new Set(['id','sourceKey','seriesKey','key','ruleId','sourceRuleId','recurringRuleId']);
 const maxDepth=12;
+// These settings are global categories/thresholds, never account identities.
+const globalSettings=new Set(['monthlyBudgets','categoryForecasts','cashCushion','dailyVariable']);
 function keyContains(key,id){
  const seen=new Set(),pending=[String(key??'')];
  while(pending.length&&seen.size<180){
@@ -47,7 +49,7 @@ function inspect(state){
   const id=String(a.id),byType={};
   if(String(p.primaryAccountId||'')===id)byType.primaryAccount=1;
   for(const [type,collection] of Object.entries(p)){
-   if(type==='primaryAccountId'||collection==null)continue;
+   if(type==='primaryAccountId'||globalSettings.has(type)||collection==null)continue;
    if(Array.isArray(collection)){
     const count=collection.filter(entry=>itemContains(entry,id)).length;
     if(count)byType[type]=count;
