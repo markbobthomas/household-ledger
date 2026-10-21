@@ -972,7 +972,7 @@ function render(){
  const derived=projection?.accounts.find(x=>x.id===String(selectedAccount));
  const statuses=projection?.diagnostics||{};
  const missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
-  !state().predictions?.paymentRules?.[a.id]);
+  !window.HouseholdPaymentObligations.ready(state().predictions?.paymentRules?.[a.id],a,activeAccounts(s)));
  const caution=[
   ...(missingCards.length?['Credit-card payment schedule not set for '+missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.']:[]),
   ...((bundle?.payments?.warnings||[]).slice(0,3)),
@@ -1010,6 +1010,7 @@ function render(){
   }
   updateHistoryLinks(form);
  }
+ for(const form of root.querySelectorAll('[data-card-rule]'))configureCardFields(form);
 }
 document.addEventListener('click',async e=>{
  const view=e.target.closest('[data-view]');
@@ -1401,8 +1402,14 @@ document.addEventListener('submit',async e=>{
   if(fields.nextPaymentDate<=dateToday())throw Error('Enter the next future withdrawal date');
   if(fields.nextPaymentDate>fields.nextDueDate)
    throw Error('The payment should not be after the card due date');
+  if(!fields.autopayEnabled||!fields.method)
+   throw Error('Choose autopay yes/no and a payment amount method');
+  if(fields.method==='minimum'&&!(Number(fields.minimumAmount)>0))
+   throw Error('Enter the minimum payment amount');
+  if(fields.method==='fixed'&&!(Number(fields.fixedAmount)>0))
+   throw Error('Enter the fixed payment amount');
   const rule={...fields,closingDay:Number(fields.billingEndDate.slice(-2)),
-   lastStatementClose:fields.billingEndDate,method:'statement'};
+   lastStatementClose:fields.billingEndDate};
   await commitForecastChange(()=>window.HouseholdLedgerData.setCardPaymentRule(state(),cardId,rule));
   latestError='';render();document.getElementById('card-autopay')?.setAttribute('open','');
  }catch(err){
@@ -1419,6 +1426,9 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',e=>{
+ if(e.target.matches?.('[data-card-rule] [name=method],[data-card-rule] [name=autopayEnabled]')){
+  configureCardFields(e.target.closest('[data-card-rule]'));return;
+ }
  if(e.target.matches?.('[data-history-example]')){
   const form=e.target.closest('form'),chosen=checkedHistoryIds(form),
    id=e.target.value;
