@@ -31,6 +31,7 @@ jobs:
         run: |
           node tests/pilot-security-smoke.cjs
           node tests/pilot-plaid-flow.cjs
+          node tests/planner-parity.cjs
           node tests/pilot-account-forecast-links-smoke.cjs
           node tests/pilot-remove-account-smoke.cjs
           node tests/recurrence-reconcile-smoke.cjs
