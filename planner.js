@@ -462,9 +462,11 @@ function updatePayPattern(form){
   input=other?.querySelector('input');
  wrapper.hidden=freq!=='biweekly';
  if(freq!=='biweekly'&&mode)mode.value='fixed';
- const show=freq==='biweekly'&&mode?.value==='alternating';
+ const isEdit=form.hasAttribute('data-future-edit-form'),
+  repeatAllowed=!isEdit||form.querySelector('[name=scope]:checked')?.value==='all',
+  show=freq==='biweekly'&&mode?.value==='alternating';
  if(other)other.hidden=!show;
- if(input)input.required=show;
+ if(input)input.required=Boolean(show&&repeatAllowed);
 }
 // Select posted bank examples to teach one forecast which Plaid payee names
 // belong to it. Amounts may vary. All selection stays in forecast settings.
@@ -1438,6 +1440,7 @@ document.addEventListener('change',e=>{
   const form=e.target.closest('[data-future-edit-form]');
   const section=form?.querySelector('.future-repeat-fields');
   if(section)section.hidden=e.target.value!=='all';
+  updatePayPattern(form);
   if(e.target.value==='all')updateHistoryLinks(form);
   return;
  }
