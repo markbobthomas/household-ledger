@@ -345,25 +345,31 @@ function stopRecurrence(state,row){
  const type=rule?(rule.kind==='movement'?'transfer':rule.type):recurringType(row);
  if(!accountId||!sourceMerchant(merchant)||!['expense','income','refund','transfer'].includes(type))
   throw Error('This forecast has no identifiable recurring source');
- const key=recurrenceKey(accountId,type,merchant);
+ const phaseDate=rule?.frequency==='every-4-weeks'?rule.anchorDate:
+  row.cadence==='every-4-weeks'?row.baseDate||row.date:null,
+  key=recurrenceKey(accountId,type,merchant)+(phaseDate?'|phase'+phaseOf(phaseDate):'');
  p.futureRecurrenceExclusions??={};
- p.futureRecurrenceExclusions[key]={accountId,type,merchant};
+ p.futureRecurrenceExclusions[key]={accountId,type,merchant,
+  ...(phaseDate?{phaseDate,frequency:'every-4-weeks'}:{})};
  const remove=(p.futureRecurringRules||[]).filter(r=>
   String(r.originalAccountId||r.accountId||r.fromAccountId)===accountId&&
   (r.kind==='movement'?'transfer':r.type)===type&&
-  sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant));
+  sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant)&&
+  (!phaseDate||r.frequency==='every-4-weeks'&&samePhase(phaseDate,r.anchorDate)));
  const ids=new Set(remove.map(r=>r.id));
  p.futureRecurringRules=p.futureRecurringRules.filter(r=>!ids.has(r.id));
  const keys=new Set([row.seriesKey,...remove.map(r=>manualSeriesKey(r.id))].filter(Boolean));
  const signature=[accountId,type,sourceMerchant(merchant)].map(encodeURIComponent).join('|');
  for(const k of Object.keys(p.futureSeriesEdits||{})){
-  if(keys.has(k)||k.startsWith('series|'+signature+'|'))delete p.futureSeriesEdits[k];
+  if(keys.has(k)||!phaseDate&&k.startsWith('series|'+signature+'|'))delete p.futureSeriesEdits[k];
  }
  for(const k of Object.keys(p.futureTransactionEdits||{})){
   if(!k.startsWith('event|')&&!k.startsWith('movement|'))continue;
   let entry;try{entry=decodeURIComponent(k.split('|')[1]||'')}catch{continue}
   if([...ids].some(id=>entry.startsWith('user|'+id+'|'))||
-   entry.startsWith('auto|series|'+signature+'|'))delete p.futureTransactionEdits[k];
+   !phaseDate&&entry.startsWith('auto|series|'+signature+'|')||
+   phaseDate&&row.seriesKey&&entry.startsWith('auto|'+row.seriesKey+'|'))
+   delete p.futureTransactionEdits[k];
  }
  return {key,accountId,type,merchant,removedRules:ids.size};
 }
