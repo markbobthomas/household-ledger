@@ -640,7 +640,7 @@ function otherMajorCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
 }
 function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
  return accounts.filter(credit).map(card=>{
-  const rule=prefs?.paymentRules?.[card.id],configured=ready(rule,card,accounts),
+  const rule=prefs?.paymentRules?.[card.id],configured=Boolean(rule)&&ready(rule,card,accounts),
    due=configured?expectedMonthly(rule.nextPaymentDate,months):[],
    cardId=asId(card.id),payer=asId(rule?.fromAccountId),
    funding=accounts.find(a=>asId(a.id)===payer),
