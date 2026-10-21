@@ -412,3 +412,88 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 /* Reusable owner-confirmed forecast stream labels in the Summary detail */
 .coverage-mortgage-option.tracked{border-color:#9db9a6;background:#eff6f2;color:#346d4a}
 .coverage-mortgage-option.tracked:hover,.coverage-mortgage-option.tracked:focus-visible{background:#e5f2e9}
+
+/* Summary calendar: balances are end-of-day canonical projections, not separate estimates. */
+.calendar-wrapper{margin-top:27px;min-width:0}
+.calendar-navigation{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}
+.calendar-navigation h2{margin:0;font-weight:760;font-size:19px;letter-spacing:-.4px;color:var(--ink)}
+.calendar-navigation small{display:block;margin-top:4px;font-size:11px;color:#87929e}
+.calendar-nav-actions{display:flex;gap:5px;align-items:center}
+.calendar-nav-actions button{width:35px;height:35px;border:1px solid #e0e7ee;border-radius:8px;color:#29496e;background:#fff;cursor:pointer;font-size:21px;line-height:1}
+.calendar-nav-actions button:disabled{color:#bac3cb;opacity:.65;cursor:default;background:#f8fafc}
+.calendar-nav-actions .calendar-today{font:700 11px var(--mono);width:auto;padding:0 10px}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;min-width:0}
+.calendar-weekday{text-align:center;color:#8895a4;font:700 10px var(--mono);padding:3px 0 9px}
+.calendar-day,.calendar-blank,.calendar-outside{min-width:0;min-height:122px;border:1px solid #e9edf2;border-radius:8px}
+.calendar-day{appearance:none;text-align:left;background:#fff;padding:9px 8px;display:flex;flex-direction:column;gap:4px;cursor:pointer;color:var(--ink);transition:border-color .12s ease,background .12s ease}
+.calendar-day:hover{border-color:#86a9d4;background:#f9fbff}
+.calendar-day:focus-visible{outline:2px solid #315ebd;outline-offset:0}
+.calendar-day.selected{border-color:#315ebd;background:#f2f6fc;box-shadow:inset 0 0 0 1px #315ebd}
+.calendar-day.negative{background:#fdf4f4}
+.calendar-day.low:not(.negative){background:#fffaf1}
+.calendar-day-number{font:750 11px var(--mono);color:#718093;display:flex;align-items:center;gap:5px}
+.calendar-day.today .calendar-day-number:after{content:"Today";font:600 9px var(--mono);color:#315ebd}
+.calendar-day-balance{display:block;font:750 clamp(12px,1.35vw,16px) var(--mono);color:#1c344e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.45px}
+.calendar-day.negative .calendar-day-balance{color:#aa3d47}
+.calendar-day.low:not(.negative) .calendar-day-balance{color:#9c6d2f}
+.calendar-money-narrow{display:none}
+.calendar-day-events{display:flex;flex-direction:column;gap:4px;min-width:0}
+.calendar-event{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:10px;line-height:1.22;color:#687887}
+.calendar-event-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.calendar-event-amount{font:700 10px var(--mono);color:#b04f52}
+.calendar-event.in .calendar-event-amount{color:#2e805f}
+.calendar-more{font:650 9px var(--mono);color:#85919c}
+.calendar-blank{background:transparent;border-color:transparent}
+.calendar-outside{background:#fbfcfe;color:#bdc6cf;padding:9px 8px;font:700 11px var(--mono);border-style:dashed}
+.calendar-day-detail{margin-top:20px;padding:19px 21px;border:1px solid #e6ecf3;border-radius:11px;background:#f9fbfe}
+.calendar-detail-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.calendar-detail-heading>div:first-child{display:flex;flex-direction:column;gap:5px}
+.calendar-detail-heading>div:first-child>span{font:700 10px var(--mono);letter-spacing:.7px;color:#8a99a6}
+.calendar-detail-heading>div:first-child>strong{font-size:15px}
+.calendar-detail-balance{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+.calendar-detail-balance small{font-size:10px;color:#748494}
+.calendar-detail-balance strong{font:760 21px var(--mono);color:#1d3449;letter-spacing:-.7px}
+.calendar-detail-items{margin-top:15px;border-top:1px solid #e8edf3}
+.calendar-detail-item{display:flex;align-items:center;justify-content:space-between;gap:15px;border-bottom:1px solid #e9edf3;padding:10px 0;font-size:12px}
+.calendar-transaction-name{min-width:0;font-weight:650;overflow-wrap:anywhere}
+.calendar-transaction-name small{display:block;font-size:10px;color:#8795a2;margin-top:3px;font-weight:400}
+.calendar-detail-item>strong{white-space:nowrap;font:730 13px var(--mono);color:#b14f55}
+.calendar-detail-item>strong.in{color:#2f835f}
+.calendar-empty{font-size:12px;color:#84929f;margin:16px 0 4px}
+.calendar-edit{background:none;border:0;font-size:11px;font-weight:700;color:#315ebd;margin-top:12px;padding:8px 0;cursor:pointer}
+.summary-extras{margin-top:22px;border:1px solid #e5ebf0;background:#fff;border-radius:12px;overflow:hidden}
+.summary-extras>summary{cursor:pointer;font-size:12px;color:#5e7285;font-weight:690;padding:16px 21px;user-select:none}
+.summary-extras[open]>summary{border-bottom:1px solid #edf1f5}
+.summary-extras>.summary-stage{border:0;border-radius:0;padding:4px 24px 25px}
+.summary-extras .coverage-section{margin:0 20px 18px}
+@media(max-width:780px){
+ .calendar-wrapper{margin-top:25px}
+ .calendar-navigation h2{font-size:17px}
+ .calendar-navigation small{font-size:10px}
+ .calendar-grid{gap:2px}
+ .calendar-weekday{font-size:9px;padding-bottom:7px}
+ .calendar-day,.calendar-blank,.calendar-outside{min-height:101px;border-radius:6px}
+ .calendar-day{padding:6px 3px;gap:5px}
+ .calendar-day-number{font-size:10px;justify-content:center}
+ .calendar-day.today .calendar-day-number:after{content:"•";font-size:12px}
+ .calendar-day-balance{text-align:center;font-size:11px;letter-spacing:-.6px}
+ .calendar-money-wide{display:none}
+ .calendar-money-narrow{display:inline}
+ .calendar-day-events{gap:3px}
+ .calendar-event{font-size:8px;gap:1px;text-align:center}
+ .calendar-event-name{font-size:8px}
+ .calendar-event-amount{font-size:8px}
+ .calendar-more{font-size:8px;text-align:center}
+ .calendar-outside{padding:6px 4px;font-size:10px;text-align:center}
+ .calendar-day-detail{padding:15px 12px;margin-top:15px}
+ .calendar-detail-heading{align-items:flex-start}
+ .calendar-detail-heading>div:first-child>strong{font-size:12px}
+ .calendar-detail-balance strong{font-size:16px}
+ .summary-extras>.summary-stage{padding:0 12px 12px}
+ .summary-extras .coverage-section{margin:0 9px 14px}
+}
+@media(max-width:370px){
+ .calendar-event-name{display:none}
+ .calendar-day,.calendar-blank,.calendar-outside{min-height:78px}
+ .calendar-navigation small{max-width:150px}
+}
