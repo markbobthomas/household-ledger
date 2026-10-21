@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -41,7 +41,7 @@ function savePlanning(){
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
-    mortgageCoverageRules:p.mortgageCoverageRules}));
+    mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments}));
   return true;
  }
 }
@@ -1042,6 +1042,41 @@ document.addEventListener('click',async e=>{
    });
    latestError='';render();
   }catch(error){setNotice('Mortgage identification could not be saved: '+
+   String(error.message||error))}
+  return;
+ }
+ const assignment=e.target.closest('[data-coverage-assign]');
+ if(assignment){
+  const choice=window.HouseholdPlannerCoverage?.getCategoryChoice(
+   assignment.dataset.coverageAssign);
+  const acc=activeAccounts(snapshot());
+  const account=choice&&acc.find(a=>String(a.id)===String(choice.accountId));
+  const category=String(choice?.category||'');
+  const categoryValid=category==='income'||category==='other-bills'||
+   category.startsWith('card|')&&acc.some(a=>String(a.id)===category.slice(5)&&
+    accountType(a)==='credit');
+  if(!account||accountType(account)==='credit'||!categoryValid){
+   setNotice('Choose a predicted item again.');return;
+  }
+  assignment.disabled=true;
+  try{
+   await commitForecastChange(()=>{
+    const p=state().predictions;
+    p.coverageAssignments??={};
+    const key=category+'|'+choice.accountId,
+     arr=Array.isArray(p.coverageAssignments[key])?p.coverageAssignments[key]:[],
+     identity=choice.identity,signature=JSON.stringify(identity),
+     remaining=arr.filter(v=>JSON.stringify(v)!==signature);
+    if(choice.remove||remaining.length<arr.length){
+     if(remaining.length)p.coverageAssignments[key]=remaining;
+     else delete p.coverageAssignments[key];
+    }else{
+     if(arr.length>=15)throw Error('This category already tracks 15 recurring streams.');
+     p.coverageAssignments[key]=[...arr,identity];
+    }
+   });
+   latestError='';render();
+  }catch(error){setNotice('Coverage identification could not be saved: '+
    String(error.message||error))}
   return;
  }

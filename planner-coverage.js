@@ -37,7 +37,7 @@ const dayWithin=(m,d)=>date(d)&&d>=m.start&&d<=m.end;
 const initCells=months=>months.map(m=>({month:m.key,status:'na',label:'—',detail:'No known due date in this portion of the forecast',items:[]}));
 const described=items=>items.map(e=>
  ({date:e.date||e.anchorDate,amount:Number(e.amount)||0,merchant:asId(e.merchant||e.name||'Payment')}));
-let details=new Map(),mortgageChoices=new Map();
+let details=new Map(),mortgageChoices=new Map(),categoryChoices=new Map();
 function months(asOf,days){
  if(!date(asOf)||![30,60,90,120,180,360].includes(days))return [];
  const first=day(asOf,1),through=day(asOf,days),out=[];
@@ -153,6 +153,151 @@ function mortgageChoicesFor(expenses,accountId){
    count:x.count,months:x.months.size
   }));
 }
+
+/* Learned labels only classify existing forecasted cash movements. They do not
+ * generate income/bills, edit Plaid history, or change any projected balances. */
+const assignmentKey=(category,accountId)=>category+'|'+asId(accountId);
+const matchingRows=(items,id)=>items.filter(e=>matchesMortgageIdentity(e,id));
+const nonCardDebit=(e,accounts)=>e.kind==='expense'&&e.type==='expense'||
+ e.kind==='transfer_out'&&!credit(accounts.find(a=>asId(a.id)===asId(e.toAccountId)));
+function datedCashMovements({projection,ledger,accounts}){
+ const byId=new Map(accounts.map(a=>[asId(a.id),a]));
+ if(projection&&Array.isArray(projection.events))
+  return projection.events.filter(e=>e&&!credit(byId.get(asId(e.accountId)))&&
+   (e.kind==='income'||nonCardDebit(e,accounts))&&Number(e.amount)>0);
+ return (ledger||[]).flatMap(e=>{
+  if(e.kind==='event'&&['income','expense'].includes(e.type))
+   return [{...e,kind:e.type}];
+  if(e.kind==='movement')return [{...e,accountId:e.fromAccountId,
+   type:'transfer',kind:'transfer_out'}];
+  return [];
+ }).filter(e=>!credit(byId.get(asId(e.accountId)))&&
+  (e.kind==='income'||nonCardDebit(e,accounts))&&Number(e.amount)>0);
+}
+function categoryCandidates(row,items,accounts,chosen,excluded=[]){
+ const saved=excluded.filter(Boolean),id=asId(chosen.id),out=[];
+ for(const e of items){
+  if(asId(e.accountId)!==id||!(Number(e.amount)>0))continue;
+  if(row.id==='income'&&e.kind!=='income')continue;
+  if(row.id==='other-bills'&&e.kind==='income')continue;
+  if(row.id.startsWith('card|')){
+   const cardId=row.id.slice(5);
+   if(e.kind==='income'||e.kind==='transfer_out'&&asId(e.toAccountId)!==cardId)continue;
+  }
+  if(row.id==='other-bills'&&e.kind==='transfer_out'&&
+   credit(accounts.find(a=>asId(a.id)===asId(e.toAccountId))))continue;
+  if(row.id!=='income'&&saved.some(x=>matchesMortgageIdentity(e,x)))continue;
+  out.push(e);
+ }
+ const grouped=new Map();
+ for(const e of out){
+  const identity=mortgageIdentity(e);
+  const key=identity.seriesKey?'s|'+identity.seriesKey:
+   identity.ruleId?'r|'+identity.ruleId:'m|'+identity.merchant;
+  if(!identity.merchant&&!identity.seriesKey&&!identity.ruleId)continue;
+  if(!grouped.has(key))grouped.set(key,{identity,merchant:e.merchant||'Scheduled item',
+   date:e.date,amount:Number(e.amount),months:new Set(),count:0});
+  const g=grouped.get(key);g.months.add(e.date.slice(0,7));g.count++;
+ }
+ return [...grouped.values()].sort((a,b)=>
+  b.months.size-a.months.size||b.count-a.count||
+  b.amount-a.amount||a.date.localeCompare(b.date)).slice(0,25)
+  .map(x=>({identity:x.identity,merchant:x.merchant,date:x.date,
+   amount:x.amount,months:x.months.size,count:x.count}));
+}
+function recurrenceForLearned(events,prefs,months,identity,category){
+ const first=events[0];
+ if(!first)return {dates:[],confidence:false};
+ const rule=(prefs?.futureRecurringRules||[]).find(r=>
+  asId(r.id)===asId(identity.ruleId)||
+  asId(identity.seriesKey)==='user-series|'+encodeURIComponent(asId(r.id)));
+ const cardId=category?.startsWith('card|')?category.slice(5):null,
+  cardRule=cardId&&prefs?.paymentRules?.[cardId];
+ let frequency=rule?.frequency||first.cadence||
+  (cardRule?.nextPaymentDate?'monthly':'');
+ if(!frequency&&events.length>=2){
+  const dates=[...new Set(events.map(e=>e.date))].sort();
+  const gaps=dates.slice(1).map((d,i)=>daysBetween(d,dates[i]));
+  if(gaps.length>=2&&gaps.every(n=>n>=27&&n<=29))frequency='every-4-weeks';
+  else if(gaps.length&&gaps.every(n=>n>=26&&n<=36))frequency='monthly';
+  else if(gaps.length&&gaps.every(n=>n>=12&&n<=16))frequency='biweekly';
+ }
+ // Every recurring deposit phase stays separate (two alternating paychecks).
+ const seed=rule?.anchorDate&&date(rule.anchorDate)?rule.anchorDate:
+  cardRule?.nextPaymentDate&&date(cardRule.nextPaymentDate)?
+   cardRule.nextPaymentDate:
+   [...events].sort((a,b)=>a.date.localeCompare(b.date))[0].date;
+ const result=[],last=months.at(-1)?.end;
+ const period={weekly:7,biweekly:14,'every-4-weeks':28};
+ if(period[frequency]){
+  let d=seed;
+  // Anchor may predate selected window. Advance without dropping its phase.
+  for(let n=0;n<730&&d<=last;d=day(d,period[frequency]),n++)
+   if(d>=months[0].start)result.push(d);
+ }else if(['monthly','quarterly','semiannual','annual'].includes(frequency)){
+  const step={monthly:1,quarterly:3,semiannual:6,annual:12}[frequency];
+  for(let n=0;n<100;n++){
+   const d=monthPlus(seed,n*step);if(d>last)break;
+   if(d>=months[0].start)result.push(d);
+  }
+ }
+ return {dates:result,confidence:result.length>0};
+}
+function learnedCoverage({row,chosen,months,accounts,prefs,projection,ledger}){
+ const key=assignmentKey(row.id,chosen.id),
+  saved=Array.isArray(prefs?.coverageAssignments?.[key])?
+   prefs.coverageAssignments[key].slice(0,15):[];
+ if(!saved.length)return row;
+ const actual=datedCashMovements({projection,ledger,accounts}),
+  tracked=saved.map(identity=>{
+   const entries=matchingRows(actual,identity).filter(e=>
+    row.id==='income'?e.kind==='income':
+     row.id.startsWith('card|')?nonCardDebit(e,accounts)&&
+      (e.kind!=='transfer_out'||asId(e.toAccountId)===row.id.slice(5)):
+      nonCardDebit(e,accounts)&&
+      (e.kind!=='transfer_out'||!credit(accounts.find(a=>
+       asId(a.id)===asId(e.toAccountId)))));
+   return {identity,entries,expected:recurrenceForLearned(entries,prefs,months,identity,row.id)};
+  });
+ const cells=months.map(m=>{
+  const entries=tracked.flatMap(t=>t.entries.filter(e=>dayWithin(m,e.date)));
+  const expectations=tracked.reduce((acc,t)=>
+   acc+t.expected.dates.filter(d=>dayWithin(m,d)).length,0);
+  const matched=tracked.reduce((acc,t)=>{
+   const present=t.entries.filter(e=>dayWithin(m,e.date)).length,
+    due=t.expected.dates.filter(d=>dayWithin(m,d)).length;
+   return acc+Math.min(present,due);
+  },0);
+  const lacksSchedule=tracked.some(t=>!t.expected.confidence);
+  const absent=tracked.some(t=>!t.entries.length);
+  const allExpected=tracked.every(t=>t.expected.confidence);
+  if(entries.length&&entries.length>expectations&&allExpected)
+   return {month:m.key,status:'review',label:entries.length+'?',
+    detail:'More tracked transactions are projected than this known recurrence expects. Review possible duplicates.',
+    items:described(entries)};
+  if(expectations>matched)
+   return {month:m.key,status:'missing',label:matched?matched+' / '+expectations:'!',
+    detail:expectations+' recurring payments are expected from identified schedules, but only '+
+     matched+' matching forecast transactions are included this month.',items:described(entries)};
+  if(entries.length&&expectations===matched&&(!lacksSchedule||expectations===0))
+   return {month:m.key,status:'covered',label:'✓ '+entries.length,
+    detail:'These '+entries.length+' owner-identified transaction'+
+     (entries.length===1?' is':'s are')+' included in the actual balance forecast.'+
+     (lacksSchedule?' Another identified series has no verified cadence.':''),
+    items:described(entries)};
+  if(entries.length)return {month:m.key,status:'review',label:'? '+entries.length,
+   detail:'Identified transactions are included, but one or more schedules need more dated examples.',
+   items:described(entries)};
+  if(absent)return {month:m.key,status:'unknown',label:'?',
+   detail:'An identified transaction is not forecast in this period. The app cannot yet verify its recurrence; check Predictions.',
+   items:[]};
+  return {month:m.key,status:'na',label:'—',
+   detail:'No identified recurring payment is due in this portion of the selected period.',items:[]};
+ });
+ return {...row,cells,hint:saved.length+' identified '+(row.id==='income'?'income':'payment')+
+  ' stream'+(saved.length===1?'':'s'),savedAssignments:saved};
+}
+
 function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,projection}){
  const id=asId(chosen.id),expenses=actualFutureExpenses({projection,ledger,accounts}),
   saved=prefs?.mortgageCoverageRules?.[id],
@@ -472,7 +617,9 @@ function otherMajorCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
   const anchor=verified?g.find(x=>x.confirmed).date:last;
   for(const d of expectedMonthly(anchor,months))due.push({date:d,source});
  }
- if(!due.length)return null;
+ if(!due.length)return {id:'other-bills',title:'Other major bills',hint:'Identify recurring payments',
+  cells:months.map(m=>({month:m.key,status:'unknown',label:'?',
+   detail:'No repeated major bill schedule has been identified. Select an existing prediction below to teach this category.',items:[]}))};
  const planned=(ledger||[]).filter(e=>futureExpense(e)&&asId(e.accountId)===id&&!mortgage(e.merchant));
  return {id:'other-bills',title:'Other major bills',hint:'Repeating $150+ bills',cells:months.map(m=>{
   const expected=due.filter(x=>dayWithin(m,x.date)),mine=planned.filter(e=>
@@ -493,7 +640,7 @@ function otherMajorCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
 }
 function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
  return accounts.filter(credit).map(card=>{
-  const rule=prefs?.paymentRules?.[card.id],configured=ready(rule,card,accounts),
+  const rule=prefs?.paymentRules?.[card.id],configured=Boolean(rule)&&ready(rule,card,accounts),
    due=configured?expectedMonthly(rule.nextPaymentDate,months):[],
    cardId=asId(card.id),payer=asId(rule?.fromAccountId),
    funding=accounts.find(a=>asId(a.id)===payer),
@@ -554,10 +701,25 @@ function analyze({snapshot,chosen,bundle,prefs,days,accounts,ready}){
   cardCoverage(params):
   [incomeCoverage(params),mortgageCoverage(params),...cardCoverage(params),
    otherMajorCoverage(params)].filter(Boolean);
- for(const row of lines)if(row.id==='mortgage'){
-  row.choices=mortgageChoicesFor(actualFutureExpenses({
-   projection:bundle?.projection,ledger,accounts}),asId(chosen.id));
-  row.selectedMortgage=prefs?.mortgageCoverageRules?.[asId(chosen.id)]||null;
+ const movements=datedCashMovements({projection:bundle?.projection,ledger,accounts}),
+  mortgageIdentitySaved=prefs?.mortgageCoverageRules?.[asId(chosen.id)];
+ for(let i=0;i<lines.length;i++){
+  const row=lines[i];
+  if(row.id==='mortgage'){
+   row.choices=mortgageChoicesFor(actualFutureExpenses({
+    projection:bundle?.projection,ledger,accounts}),asId(chosen.id));
+   row.selectedMortgage=mortgageIdentitySaved||null;
+  }else{
+   const learned=learnedCoverage({...params,row});
+   const learnedKey=assignmentKey(row.id,chosen.id);
+   learned.savedAssignments=Array.isArray(prefs?.coverageAssignments?.[learnedKey])?
+    prefs.coverageAssignments[learnedKey].slice(0,15):[];
+   learned.choices=categoryCandidates(row,movements,accounts,chosen,
+    [mortgageIdentitySaved,
+     ...Object.entries(prefs?.coverageAssignments||{}).filter(([k])=>
+      k!==learnedKey).flatMap(([,v])=>Array.isArray(v)?v:[])]);
+   lines[i]=learned;
+  }
  }
  const review=lines.flatMap(row=>row.cells.filter(cell=>
   ['missing','setup','unknown','review'].includes(cell.status)));
@@ -565,7 +727,7 @@ function analyze({snapshot,chosen,bundle,prefs,days,accounts,ready}){
   uncovered:review.filter(c=>c.status==='missing'||c.status==='setup').length};
 }
 function render(result){
- details=new Map();mortgageChoices=new Map();
+ details=new Map();mortgageChoices=new Map();categoryChoices=new Map();
  const head=result.months.map(m=>
   '<th scope="col" class="coverage-month">'+escape(monthTitle(m.key))+
   (m.full?'':'<span>partial</span>')+'</th>').join('');
@@ -618,7 +780,29 @@ document.addEventListener('click',e=>{
    (options||'<small>No eligible checking withdrawals are predicted in this date range. Check the selected account or choose a longer period.</small>')+
    (row.selectedMortgage?'<button type="button" class="coverage-mortgage-reset"'+
     ' data-coverage-mortgage-reset="'+escape(row.selectedMortgage.accountId)+'">Clear mortgage identification</button>':'')+
-   '</div>':'';
+   '</div>':
+  (()=>{const tracked=row.savedAssignments||[];
+   const buttons=(row.choices||[]).map((c,i)=>{
+    const selected=tracked.some(x=>matchesMortgageIdentity({
+     ...c.identity,sourceMerchant:c.identity.merchant,accountId:c.identity.accountId,
+     recurringRuleId:c.identity.ruleId},x));
+    const key=asId(button.dataset.coverageCell)+'|'+i;
+    categoryChoices.set(key,{category:row.id,accountId:c.identity.accountId,
+     identity:c.identity,remove:selected});
+    return '<button type="button" class="coverage-mortgage-option'+
+     (selected?' tracked':'')+'" data-coverage-assign="'+escape(key)+'">'+
+     (selected?'✓ ':'+ ')+escape(c.merchant)+' · '+dollars(c.amount)+
+     ' · '+escape(c.months>1?c.months+' forecast months':'Next '+titleDate(c.date))+
+     (selected?' · Stop tracking':'')+'</button>';
+   }).join('');
+   const title=row.id==='income'?'Which deposits are recurring income?':
+    row.id==='other-bills'?'Which large bills should be tracked?':
+    'Which withdrawal pays this credit card?';
+   return '<div class="coverage-identify"><strong>'+title+'</strong>'+
+    '<p>Tap each relevant prediction once. Identified series are remembered for future months, and gaps are flagged without creating extra transactions.</p>'+
+    (buttons||'<small>No eligible future items in this account and time range.</small>')+
+    '</div>';
+  })();
  el.hidden=false;
  el.innerHTML='<div class="coverage-detail-title"><strong>'+escape(row.title)+' · '+
   escape(monthTitle(window.key))+'</strong><button type="button" class="coverage-close"'+
@@ -636,6 +820,7 @@ document.addEventListener('click',e=>{
  document.querySelectorAll('[data-coverage-cell]').forEach(x=>x.removeAttribute('aria-pressed'));
 });
 root.HouseholdPlannerCoverage={analyze,render,months,expectedMonthly,
- getMortgageChoice:key=>mortgageChoices.get(asId(key))||null};
+ getMortgageChoice:key=>mortgageChoices.get(asId(key))||null,
+ getCategoryChoice:key=>categoryChoices.get(asId(key))||null};
 if(typeof module!=='undefined'&&module.exports)module.exports={analyze,render,months,expectedMonthly};
 })(typeof window!=='undefined'?window:globalThis);
