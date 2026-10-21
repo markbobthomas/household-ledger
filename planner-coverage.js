@@ -167,14 +167,33 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
  // need a review indicator, never the same green check as a linked rule.
  const matched=[...recognized,...candidates.keys()];
  const hasHistory=posted.length>0,hasRules=confirmed.length>0;
+ // The Predictions tab shows ALL accounts. A mortgage moved to another
+ // account must be named, not falsely presented as absent everywhere.
+ if(!matched.length){
+  const elsewhere=expenses.filter(e=>asId(e.accountId)!==id&&mortgageLike(e));
+  if(elsewhere.length)return {id:'mortgage',title:'Mortgage',
+   hint:'Check paying account',cells:months.map(m=>{
+    const entries=elsewhere.filter(e=>dayWithin(m,e.date));
+    const names=[...new Set(entries.map(e=>accounts.find(a=>
+     asId(a.id)===asId(e.accountId))?.name||'another account'))];
+    return {month:m.key,status:entries.length?'review':'missing',
+     label:entries.length?'Other?':'!',
+     detail:entries.length?
+      'The mortgage is in Predictions for '+names.join(', ')+
+      ', but bank history or a saved schedule points to '+chosen.name+
+      '. Check which account is actually paying it; this selected balance does not include the debit.':
+      'The expected mortgage is not predicted in any identified paying account during these dates',
+     items:described(entries.map(e=>({...e,merchant:
+      (e.merchant||'Mortgage')+' · '+(accounts.find(a=>
+       asId(a.id)===asId(e.accountId))?.name||'Other account')})))};
+   })};
+ }
  if(!hasHistory&&!hasRules){
   // Repeating explicitly named predictions show as forecasted, not missing.
   // A single one-off cannot prove future monthly coverage.
-  const seriesIds=new Set(recognized.map(e=>asId(e.seriesKey||e.recurringRuleId||e.ruleId))
-   .filter(Boolean));
   const monthlyRecognized=recognized.length>=2&&
    new Set(recognized.map(e=>e.date.slice(0,7))).size>=2;
-  const evidence=seriesIds.size>0&&monthlyRecognized;
+  const evidence=monthlyRecognized;
   return {id:'mortgage',title:'Mortgage',hint:'Selected account',
    cells:months.map(m=>{
     const entries=matched.filter(e=>dayWithin(m,e.date));
