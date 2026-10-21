@@ -19,9 +19,9 @@ assert.ok(script.includes('HouseholdFutureLedger.materialize')&&
  'All balances must derive from one canonical future ledger');
 assert.ok(script.includes('HouseholdLiveSource.bind')&&script.includes('getSnapshot'),
  'Demo and real read separate bank sources but share one planner');
-assert.ok(privateServer.includes('planner-core|planner-summary|bank-feed')&&
- sandbox.includes('planner-core|planner-summary|bank-feed')&&
- html.includes('planner-summary.js'),
+assert.ok(privateServer.includes('planner-core|planner-summary|planner-coverage|bank-feed')&&
+ sandbox.includes('planner-core|planner-summary|planner-coverage|bank-feed')&&
+ html.includes('planner-summary.js')&&html.includes('planner-coverage.js'),
  'Private and Sandbox hosts must serve the unified planning module');
 assert.ok(script.includes('enterUnavailable()'),
  'A failed private bank connection must not silently show fictional accounts');
