@@ -101,6 +101,49 @@ const unknownMortgage=C.analyze({...opts,bundle:{...opts.bundle,rows:historic.fi
  ledger:ledger.filter(r=>!r.merchant.includes('Mortgage'))}});
 assert.equal(get(unknownMortgage,'mortgage','2026-11').status,'unknown',
  'No evidence must not turn an unknown mortgage into a confident check mark');
+// Real source often has a different future merchant label than the historical
+// ACH. If that dated withdrawal is in Predictions, never say it is absent.
+const renamed=ledger.map(e=>e.merchant==='Home Mortgage ACH'?
+ {...e,merchant:'Lender Autodraft',_forecastOriginalMerchant:'Home Mortgage ACH'}:e);
+const renamedForecast=C.analyze({...opts,bundle:{...opts.bundle,ledger:renamed}});
+for(const month of ['2026-11','2026-12']){
+ assert.equal(get(renamedForecast,'mortgage',month).status,'covered',
+  'Edited mortgage payee labels must still link through the originating mortgage stream');
+}
+const unlinked=ledger.map(e=>e.merchant==='Home Mortgage ACH'?
+ {...e,merchant:'Autodraft Servicing Co'}:e);
+const amountMatched=C.analyze({...opts,bundle:{...opts.bundle,ledger:unlinked}});
+for(const month of ['2026-11','2026-12']){
+ const cell=get(amountMatched,'mortgage',month);
+ assert.equal(cell.status,'review',
+  'A unique amount/date-matched mortgage-looking debit is present: review identity, not missing');
+ assert.match(cell.detail,/not missing from the balance/i);
+ assert.equal(cell.items[0].merchant,'Autodraft Servicing Co');
+}
+const projectionEvents=ledger.filter(e=>e.kind==='event').map(e=>({...e,kind:
+ e.type==='expense'?'expense':'income'}));
+const authoritative=C.analyze({...opts,bundle:{...opts.bundle,ledger:ledger.filter(e=>
+ e.merchant!=='Home Mortgage ACH'),projection:{events:projectionEvents}}});
+assert.equal(get(authoritative,'mortgage','2026-11').status,'covered',
+ 'Coverage must use the same projected account events displayed in Predictions');
+const moved=ledger.map(e=>e.merchant==='Home Mortgage ACH'?
+ {...e,accountId:'other'}:e);
+const anotherBank=C.analyze({...opts,bundle:{...opts.bundle,ledger:moved},
+ chosen:accounts[0],prefs:{paymentRules:{visa:rule}}});
+assert.equal(get(anotherBank,'mortgage','2026-11').status,'review',
+ 'An account mismatch requires review rather than claiming the mortgage is entirely missing');
+assert.match(get(anotherBank,'mortgage','2026-11').detail,/Savings/);
+const onFunding=C.analyze({...opts,bundle:{...opts.bundle,ledger:moved},
+ chosen:accounts[1],prefs:{paymentRules:{visa:rule}}});
+assert.equal(get(onFunding,'mortgage','2026-11').status,'covered',
+ 'Switching to the actual mortgage funding account shows the planned payment');
+const classifiedActual={...historic[0],merchant:'Servicer ACH-32',
+ description:'Monthly mortgage principal & interest'};
+const classification=C.analyze({...opts,bundle:{...opts.bundle,
+ rows:[...historic.filter(r=>r.merchant!=='Home Mortgage ACH'),classifiedActual],
+ ledger:ledger.map(e=>e.merchant==='Home Mortgage ACH'?{...e,merchant:'Servicer ACH-32'}:e)}});
+assert.notEqual(get(classification,'mortgage','2026-11').status,'missing',
+ 'Mortgage identification also consults bank transaction descriptions, not merchant name alone');
 for(const n of [30,60,90,120,180,360]){
  const m=C.months(date,n);
  assert.ok(m.length>=1&&m.length<=13);
