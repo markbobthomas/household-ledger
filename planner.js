@@ -438,6 +438,34 @@ function frequencyChoices(value,includeOnce=false){
   .map(([key,label])=>'<option value="'+key+'"'+(key===value?' selected':'')+'>'+
     escapeHTML(label)+'</option>').join('')+'</select>';
 }
+// A biweekly paycheck can have two distinct amounts without becoming two
+// recurring streams. The first amount is for the date shown in the form.
+function paycheckPatternFields(frequency='monthly',pattern='fixed',alternate=''){
+ const biweekly=frequency==='biweekly',alternating=biweekly&&pattern==='alternating';
+ return '<div class="future-pay-pattern" data-pay-pattern'+(biweekly?'':' hidden')+'>'+
+  '<label>Amount pattern<select name="amountPattern" data-amount-pattern>'+
+   '<option value="fixed"'+(!alternating?' selected':'')+'>Same amount every paycheck</option>'+
+   '<option value="alternating"'+(alternating?' selected':'')+'>Alternate between two amounts</option>'+
+  '</select></label>'+
+  '<label data-alternate-amount'+(alternating?'':' hidden')+
+   '>Following paycheck amount ($)<input name="alternateAmount" type="number" min="0.01" max="999999999" step="0.01"'+
+   (alternating?' required':'')+' value="'+escapeHTML(alternate)+'" placeholder="Second paycheck amount"></label>'+
+  '<p class="audit-footnote">Amount above applies to the next pay date. The following paycheck uses the second amount, then repeats every 28 days.</p>'+
+ '</div>';
+}
+function updatePayPattern(form){
+ const wrapper=form?.querySelector('[data-pay-pattern]');
+ if(!wrapper)return;
+ const freq=form.querySelector('[name=frequency]')?.value,
+  mode=wrapper.querySelector('[data-amount-pattern]'),
+  other=wrapper.querySelector('[data-alternate-amount]'),
+  input=other?.querySelector('input');
+ wrapper.hidden=freq!=='biweekly';
+ if(freq!=='biweekly'&&mode)mode.value='fixed';
+ const show=freq==='biweekly'&&mode?.value==='alternating';
+ if(other)other.hidden=!show;
+ if(input)input.required=show;
+}
 // Select posted bank examples to teach one forecast which Plaid payee names
 // belong to it. Amounts may vary. All selection stays in forecast settings.
 function historyLinkField(selected=[]){
@@ -517,6 +545,9 @@ function editorFor(row,s,records){
    '<div class="future-fields"><label>Repeat frequency'+frequencyChoices(cadence)+'</label>'+
    '<label class="future-second-day"'+(cadence==='twice-monthly'?'':' hidden')+'>Second day of month (1–31)'+
     '<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(selectedRule?.secondDay||15)+'"></label></div>'+
+   paycheckPatternFields(cadence,selectedRule?.amountPattern,
+    selectedRule?.amountPattern==='alternating'?
+     (Number(row.amount)===Number(selectedRule.amount)?selectedRule.alternateAmount:selectedRule.amount):'')+
    historyLinkField()+
   '</div>';
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
@@ -577,7 +608,7 @@ function newTransactionForm(s){
   '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00" value="'+escapeHTML(preset?.amount??'')+'"></label>'+
   '<label>Repeat'+frequencyChoices(preset?'monthly':'once',true)+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
-  '</div><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
+  '</div>'+paycheckPatternFields()+'<p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
    'If auto-detection missed a bill or paycheck, select a frequency here. Link its actual bank history below so different amounts or payee names count as one schedule.</p>'+
   '<div class="future-history-container" data-new-history-link hidden>'+historyLinkField()+'</div>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
@@ -662,6 +693,7 @@ function repeatingReviewForm(s){
   '<label>Repeat'+frequencyChoices(d.frequency||'monthly')+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input name="secondDay" type="number" min="1" max="31" value="15"></label>'+
   '</div>'+
+  paycheckPatternFields(d.frequency,d.amountPattern,d.alternateAmount||'')+
   historyLinkField(d.examples||[])+
   '<p class="audit-footnote">For actual account-to-account transfers, select Transfer and two connected accounts. Otherwise use Expense or Deposit. Only the future forecast changes; the original bank record is never edited or duplicated.</p>'+
   '<div class="future-form-actions"><button type="submit" class="btn primary">Save recurring forecast</button>'+
@@ -973,6 +1005,7 @@ function render(){
    form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
   }
   updateHistoryLinks(form);
+  updatePayPattern(form);
  }
 }
 document.addEventListener('click',async e=>{
@@ -1292,9 +1325,15 @@ document.addEventListener('submit',async e=>{
     await commitForecastChange(()=>{
      const existingRows=futureRows(forecastFor(s),s);
      const existingCadence=cadenceOption(row.cadence);
+     // Changing to/from two alternating paycheck amounts must save a full
+     // owner rule; a flat series edit would erase the A/B pattern.
+     const originalRule=(state().predictions.futureRecurringRules||[])
+      .find(r=>r.id===row.recurringRuleId);
+     const requestedPattern=fields.amountPattern||'fixed';
      const useSeries=Boolean(row.seriesKey&&
       fields.frequency===existingCadence&&row.cadence&&!row.addedId&&
-      !form.dataset.historyLinksChanged);
+      !form.dataset.historyLinksChanged&&requestedPattern==='fixed'&&
+      originalRule?.amountPattern!=='alternating');
      const saveCadence=row.cadence==='twice-monthly'?'twice monthly':row.cadence;
      const result=useSeries?
       planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,saveCadence,row.kind):
@@ -1402,8 +1441,12 @@ document.addEventListener('change',e=>{
   if(e.target.value==='all')updateHistoryLinks(form);
   return;
  }
+ if(e.target.matches?.('[data-amount-pattern]')){
+  updatePayPattern(e.target.closest('form'));return;
+ }
  if(e.target.matches?.('[data-frequency]')){
   const form=e.target.closest('form');
+  updatePayPattern(form);
   const second=form?.querySelector('.future-second-day');
   if(second)second.hidden=e.target.value!=='twice-monthly';
   const holder=form?.querySelector('[data-new-history-link]');
