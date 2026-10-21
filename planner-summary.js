@@ -170,7 +170,7 @@ function calendarGrid(){
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
   if(!p)return '<div class="calendar-outside" aria-hidden="true"><span>'+
    dom+'</span></div>';
-  const events=p.events||[],low=!state.card&&p.balance<state.cushion,
+  const events=p.events||[],gaps=state.gaps.get(iso)||[],low=!state.card&&p.balance<state.cushion,
    negative=!state.card&&p.balance<0,
    delta=events.slice(0,2).map(e=>{
     const amount=(signed(e,state.card)>0?'+':'−')+shortMoney(Number(e.amount));
@@ -194,6 +194,7 @@ function calendarGrid(){
     shortMoney(p.balance)+'</span></span>'+
    '<span class="calendar-day-events">'+delta+
     (events.length>2?'<span class="calendar-more">+'+(events.length-2)+' more</span>':'')+
+    (gaps.length?'<span class="calendar-unplanned">? '+esc(gaps[0].merchant)+'</span>':'')+
    '</span></button>';
  }).join('');
  const index=keys.indexOf(calendarMonth);
@@ -214,7 +215,7 @@ function calendarGrid(){
 }
 function showCalendar(date){
  if(!calendarContext||!calendarContext.points.some(p=>p.date===date))return;
- calendarDate=date;calendarMonth=date.slice(0,7);
+ calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
 }
@@ -250,9 +251,13 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
   calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
   calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;
+   calendarEditor=null;calendarNotice='';
  }
  calendarContext={points:series,asOf:snapshot.asOf,card:credit,
-  cushion:Number(prefs?.cashCushion??500)};
+  cushion:Number(prefs?.cashCushion??500),accounts,
+  chosen:String(chosen.id),through:series.at(-1)?.date,
+  gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
+   series.at(-1).date,chosen.id,series):new Map()};
  if(series.length<2)return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
   '<div class="summary-empty">A current, verifiable account balance is required before this forecast can be shown. Refresh your bank data and check its balance date.</div>'+
   '</section></div>';
@@ -391,5 +396,31 @@ document.addEventListener('keydown',e=>{
  document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
 });
 
-root.HouseholdPlannerSummary={render,getPoints};
+root.HouseholdPlannerSummary={render,getPoints,
+ currentDay:()=>calendarDate,
+ currentEvent:index=>{
+  const point=calendarContext?.points.find(p=>p.date===calendarDate);
+  return point?.events?.[Number(index)]||null;
+ },
+ currentGap:index=>calendarContext?.gaps.get(calendarDate)?.[Number(index)]||null,
+ openEditor:draft=>{
+  if(!calendarContext?.points.some(p=>p.date===calendarDate))return;
+  calendarEditor={...draft,accountId:calendarContext.chosen,
+   accounts:calendarContext.accounts,asOf:calendarContext.asOf,
+   through:calendarContext.through};
+  calendarNotice='';
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+ },
+ closeEditor:()=>{
+  calendarEditor=null;
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+ },
+ refreshNotice:message=>{
+  calendarEditor=null;calendarNotice=message||'';
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+ }
+};
 })(typeof window!=='undefined'?window:globalThis);
