@@ -145,7 +145,7 @@ const {spawn}=require('node:child_process');
   ledger=(await api('/api/ledger')).data;
   assert.deepEqual(ledger.accounts.map(a=>a.id),['acct-2'],
    'Removed accounts stay removed after server restart');
-  assert.deepEqual(ledger.adjustments.predictions,savedPrefs,
+  assert.deepEqual(ledger.adjustments.predictions,keepAcct2,
    'Encrypted forecasts survive restart and account removal');
   assert.equal((await api('/api/sync',{})).code,200,'Remaining credit connection still syncs after restart');
   ledger=(await api('/api/ledger')).data;
