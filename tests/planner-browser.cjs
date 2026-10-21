@@ -439,8 +439,18 @@ const {chromium,webkit}=require('playwright');
   await homeForm.locator('button[type=submit]').click();
   await page.locator('.history-page .future-notice').getByText(/Saved recurring forecast/).waitFor();
   await page.locator('.sidebar [data-view="settings"]').click();
-  await page.locator('#card-autopay > summary').click();
+  const cardSettings=page.locator('#card-autopay');
+  if(await cardSettings.getAttribute('open')===null)
+   await cardSettings.locator('summary').click();
   const cardForm=page.locator('[data-card-rule="credit-real"]');
+  assert.match(await cardForm.innerText(),/SETUP REQUIRED/,
+   'Connected credit card cannot contribute forecasts until billing setup is saved');
+  await cardForm.locator('[name=autopayEnabled]').selectOption('yes');
+  await cardForm.locator('[name=method]').selectOption('statement');
+  assert.equal(await cardForm.locator('[name=fromAccountId]').isVisible(),true,
+   'Funding account becomes required for autopay');
+  assert.equal(await cardForm.locator('[name=minimumAmount]').isVisible(),false,
+   'Minimum payment amount stays hidden for full statement autopay');
   await cardForm.locator('[name=fromAccountId]').selectOption('checking-real');
   await cardForm.locator('[name=billingStartDate]').fill('2026-09-19');
   await cardForm.locator('[name=billingEndDate]').fill('2026-10-18');
