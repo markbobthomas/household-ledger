@@ -18,6 +18,7 @@ function getPoints(derived,asOf,days){
 /* Daily calendar uses ONLY the same per-account daily projection and its
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
+let extrasOpen=false;
 const monthName=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',
  {month:'long',year:'numeric',timeZone:'UTC'});
 const signed=(e,card)=>card?
@@ -194,7 +195,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   '<div class="summary-end"><span>End of '+days+' days</span><strong>'+money(last.balance)+'</strong>'+
   '<small>'+esc(shortDate(last.date))+'</small></div></div>'+
   calendarGrid()+'</section>'+
-  '<details class="summary-extras"><summary>Balance trend &amp; coverage checks</summary>'+
+  '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend &amp; coverage checks</summary>'+
   '<section class="summary-stage summary-legacy">'+
   '<div class="summary-plot"><svg data-summary-plot role="img" tabindex="0" viewBox="0 0 '+plotWidth+
   ' 294" aria-label="Interactive '+days+'-day forecast. Use arrow keys or tap the curve to inspect a day.">'+
@@ -265,6 +266,8 @@ document.addEventListener('keydown',e=>{
   selected+(e.key==='ArrowRight'?1:-1));
 });
 document.addEventListener('click',e=>{
+ const legacy=e.target.closest?.('.summary-extras > summary');
+ if(legacy){extrasOpen=!legacy.parentElement.open;return;}
  const day=e.target.closest?.('[data-calendar-day]');
  if(day){showCalendar(day.dataset.calendarDay);return;}
  const nav=e.target.closest?.('[data-calendar-nav]');
