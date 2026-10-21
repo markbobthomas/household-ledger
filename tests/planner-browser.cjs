@@ -537,6 +537,7 @@ const {chromium,webkit}=require('playwright');
   assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
    .locator('.coverage-cell.covered,.coverage-cell.review').count()>=2,
    'Both upcoming mortgage periods are shown or flagged for competing predicted withdrawals');
+  await page.locator('[data-summary-days="90"]').click();
   await page.locator('.sidebar [data-view="overview"]').click();
   assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
    'Overview shows the next card statement and due date');
