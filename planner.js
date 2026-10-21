@@ -882,7 +882,8 @@ function settingsPage(bundle,s,chosen){
    Object.entries(state().predictions?.futureRecurrenceExclusions||{}).map(([key,item])=>
     '<div class="future-skip-line"><strong>'+escapeHTML(item.merchant)+'</strong> · '+
      escapeHTML(activeAccounts(s).find(a=>String(a.id)===String(item.accountId))?.name||item.accountId)+
-     ' · '+escapeHTML(item.type)+(item.seriesKey?' · inferred series only':item.phaseDate?' · one payday phase':'')+
+     ' · '+escapeHTML(item.type)+(item.seriesKey?' · inferred series only':
+      item.manualRuleId?' · one saved schedule':item.phaseDate?' · one payday phase':'')+
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Allow predictions</button></div>').join('')+
    (!Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
