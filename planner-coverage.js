@@ -97,12 +97,22 @@ function billCells({months,found,expected,reason,tooMany=false}){
  * in the balance, whereas ledger drafts may include entries that could not
  * be applied to an account. The ledger fallback serves isolated test fixtures. */
 function actualFutureExpenses({projection,ledger,accounts}){
+ const byId=new Map(accounts.map(a=>[asId(a.id),a]));
+ // Match the exact projected cash withdrawals shown under Predictions.
+ // Both expenses and linked outgoing transfers lower checking balance.
+ // A transfer to a connected credit card is not a mortgage.
+ const cashOut=e=>e&&byId.has(asId(e.accountId))&&
+  !credit(byId.get(asId(e.accountId)))&&Number(e.amount)>0&&
+  (e.kind==='expense'&&e.type==='expense'||
+   e.kind==='transfer_out'&&!credit(byId.get(asId(e.toAccountId))));
  if(projection&&Array.isArray(projection.events))
-  return projection.events.filter(e=>e&&!e.transferGroupId&&
-   e.kind==='expense'&&e.type==='expense'&&
-   !accounts.some(a=>asId(a.id)===asId(e.accountId)&&credit(a)));
- return (ledger||[]).filter(e=>futureExpense(e)&&
-  !accounts.some(a=>asId(a.id)===asId(e.accountId)&&credit(a)));
+  return projection.events.filter(cashOut);
+ const fallback=(ledger||[]).flatMap(e=>{
+  if(e.kind==='movement'&&!credit(byId.get(asId(e.toAccountId))))
+   return [{...e,accountId:e.fromAccountId,kind:'transfer_out',type:'transfer'}];
+  return futureExpense(e)?[{...e,kind:'expense'}]:[];
+ });
+ return fallback.filter(cashOut);
 }
 const futureNameFields=e=>[e.merchant,e._forecastOriginalMerchant,
  e.sourceMerchant,e.originalMerchant,e.description,e.source?.merchant];
@@ -155,12 +165,21 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
  // account, only when posted history proves the original mortgage amount.
  // This never fabricates a payment, and the UI discloses the weaker match.
  const candidates=new Map();
- if(lastPosted&&expected.length){
+ // A renamed ACH mortgage may have different labels, dates and amounts.
+ // A unique plausible same-month debit is a REVIEW, not a missing payment
+ // or a fabricated green check.
+ const referenceAmount=Number(lastPosted?.amount||
+  confirmed.find(r=>Number(r.matchAmount)>0)?.matchAmount||
+  confirmed.find(r=>Number(r.amount)>0)?.amount);
+ if(Number.isFinite(referenceAmount)&&referenceAmount>0&&expected.length){
   for(const due of expected){
    if(recognized.some(e=>e.date.slice(0,7)===due.slice(0,7)))continue;
-   const potentials=own.filter(e=>!recognized.includes(e)&&
-    nearPayment(e,due,lastPosted.amount));
-   if(potentials.length===1)candidates.set(potentials[0],true);
+   const comparable=own.filter(e=>!recognized.includes(e)&&
+    e.date.slice(0,7)===due.slice(0,7)&&
+    Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25));
+   const precise=comparable.filter(e=>nearPayment(e,due,referenceAmount));
+   const match=precise.length===1?precise[0]:comparable.length===1?comparable[0]:null;
+   if(match)candidates.set(match,true);
   }
  }
  // Source-matched events count as known mortgages. Amount/date-only matches
