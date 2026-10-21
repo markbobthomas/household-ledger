@@ -1010,7 +1010,8 @@ function render(){
   }
   updateHistoryLinks(form);
  }
- for(const form of root.querySelectorAll('[data-card-rule]'))configureCardFields(form);
+ for(const form of (typeof root.querySelectorAll==='function'?
+  root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
 }
 document.addEventListener('click',async e=>{
  const view=e.target.closest('[data-view]');
