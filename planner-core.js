@@ -341,6 +341,7 @@ function project(snapshot,ledger,days=90){
    sourceType:entry._forecastOriginalType||entry.type||null,
    transferGroupId:group,predictionKey:group?null:'event|'+encodeURIComponent(String(entry.id))+'|'+encodeURIComponent(String(aid)),
    seriesKey:entry._seriesKey||entry.seriesKey||null,baseDate:entry._seriesDate||entry.baseDate||entry.date,
+   amountEstimate:entry.amountEstimate||null,
    cadence:entry.cadence||null,recurringRuleId:entry.ruleId||entry.recurringRuleId||null,
    fromAccountId:entry.fromAccountId||null,toAccountId:entry.toAccountId||null};
   if(!scheduled.has(x.date))scheduled.set(x.date,[]);scheduled.get(x.date).push(x);
