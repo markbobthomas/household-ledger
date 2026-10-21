@@ -402,6 +402,60 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=2,
     'User can undo the false rejection from Settings');
 
+
+   // The calendar is the everyday planning editor, without navigating
+   // to Predictions or inventing any separate account-balance calculation.
+   await go('summary');
+   const checkingOption=page.locator('#summary-account option').filter({hasText:'Checking'}).first();
+   await page.locator('#summary-account').selectOption(await checkingOption.getAttribute('value'));
+   await page.locator('[data-calendar-nav="1"]').click();
+   await page.locator('[data-calendar-day="2026-11-09"]').click();
+   assert.match(await page.locator('.calendar-math').innerText(),/Yesterday/);
+   assert.match(await page.locator('.calendar-math').innerText(),/Deposits/);
+   assert.match(await page.locator('.calendar-math').innerText(),/Withdrawals/);
+   assert.match(await page.locator('.calendar-math').innerText(),/End of day/);
+   await page.locator('[data-calendar-add]').click();
+   const quick=page.locator('[data-calendar-quick-form]');
+   assert.equal(await quick.locator('[name=date]').inputValue(),'2026-11-09');
+   await quick.locator('[name=merchant]').fill('Playground one-time expense');
+   await quick.locator('[name=amount]').fill('25');
+   await quick.locator('button[type=submit]').click();
+   await page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'}).waitFor();
+   assert.ok(await page.locator('.calendar-notice').innerText().then(x=>x.includes('recalculated')));
+   const playground=page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'});
+   await playground.locator('[data-calendar-edit]').click();
+   assert.equal(await quick.locator('[name=amount]').inputValue(),'25',
+    'Existing predicted transaction opens in the calendar editor');
+   await quick.locator('[name=amount]').fill('40');
+   await quick.locator('button[type=submit]').click();
+   assert.match(await page.locator('.calendar-detail-item')
+    .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/);
+   await page.reload({waitUntil:'load'});
+   await page.locator('[data-calendar-nav="1"]').click();
+   await page.locator('[data-calendar-day="2026-11-09"]').click();
+   assert.match(await page.locator('.calendar-detail-item')
+    .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/,
+    'Calendar-only edits persist across reload');
+   await page.locator('.calendar-detail-item')
+    .filter({hasText:'Playground one-time expense'}).locator('[data-calendar-edit]').click();
+   await quick.locator('[data-calendar-skip]').click();
+   assert.equal(await page.locator('.calendar-detail-item')
+    .filter({hasText:'Playground one-time expense'}).count(),0,
+    'Skipping a selected occurrence removes it from the same balance forecast');
+   await page.locator('[data-calendar-day="2026-11-11"]').click();
+   await page.locator('[data-calendar-add]').click();
+   await quick.locator('[name=merchant]').fill('Playground recurring payment');
+   await quick.locator('[name=amount]').fill('90');
+   await quick.locator('[name=frequency]').selectOption('monthly');
+   await quick.locator('button[type=submit]').click();
+   await page.locator('.calendar-detail-item')
+    .filter({hasText:'Playground recurring payment'}).waitFor();
+   await page.locator('[data-calendar-nav="1"]').click();
+   await page.locator('[data-calendar-day="2026-12-11"]').click();
+   assert.ok(await page.locator('.calendar-detail-item')
+    .filter({hasText:'Playground recurring payment'}).count()>0,
+    'Creating a recurring expense from one calendar date creates its next month too');
+
    assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');

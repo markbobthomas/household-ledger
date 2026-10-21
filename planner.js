@@ -1027,6 +1027,51 @@ function render(){
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
 }
 document.addEventListener('click',async e=>{
+ const calendar=window.HouseholdPlannerSummary;
+ const addCalendar=e.target.closest('[data-calendar-add]');
+ const gap=e.target.closest('[data-calendar-fill-gap]');
+ if(addCalendar||gap){
+  const date=calendar.currentDay(),chosen=selected(snapshot()),suggestion=gap?
+   calendar.currentGap(gap.dataset.calendarFillGap):null;
+  if(!chosen||date<=snapshot().asOf)return;
+  calendar.openEditor({mode:'add',preset:{date,accountId:chosen.id,
+   ...(suggestion?{merchant:suggestion.merchant,amount:suggestion.amount,
+     type:suggestion.type}: {})}});
+  document.querySelector('[data-calendar-quick-form] [name=merchant]')?.focus();
+  return;
+ }
+ const editCalendar=e.target.closest('[data-calendar-edit]');
+ if(editCalendar){
+  const item=calendar.currentEvent(editCalendar.dataset.calendarEdit);
+  if(!item)return;
+  const s=snapshot(),all=futureRows(forecastFor(s),s);
+  const row=item.transferGroupId?
+   all.find(r=>r.kind==='movement'&&r.id===String(item.transferGroupId)):
+   all.find(r=>r.kind==='event'&&r.id===String(item.id)&&
+    r.accountId===String(item.accountId));
+  if(!row){setNotice('This prediction changed. Open Predictions to inspect it.');return}
+  calendar.openEditor({mode:'edit',row});
+  document.querySelector('[data-calendar-quick-form] [name=amount]')?.focus();
+  return;
+ }
+ if(e.target.closest('[data-calendar-cancel]')){calendar.closeEditor();return;}
+ const skipCalendar=e.target.closest('[data-calendar-skip]');
+ if(skipCalendar){
+  const form=skipCalendar.closest('[data-calendar-quick-form]'),
+   key=form?.dataset.calendarQuickKey,s=snapshot(),
+   row=futureRows(forecastFor(s),s).find(r=>r.key===key);
+  if(!row){setNotice('This prediction has changed. Try again.');return}
+  skipCalendar.disabled=true;
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.skip(state(),row.key,{
+    label:row.merchant,date:row.date,accountId:row.accountId||row.fromAccountId,
+    toAccountId:row.toAccountId}));
+   latestError='';render();calendar.refreshNotice('Skipped this predicted occurrence. Other payments are unchanged.');
+  }catch(err){skipCalendar.disabled=false;
+   const target=form?.querySelector('[data-calendar-error]');
+   if(target)target.textContent=String(err.message||err)}
+  return;
+ }
  const pickedMortgage=e.target.closest('[data-coverage-mortgage]');
  if(pickedMortgage){
   const identity=window.HouseholdPlannerCoverage?.getMortgageChoice(
@@ -1402,6 +1447,48 @@ document.addEventListener('submit',async e=>{
   message.textContent=String(err.message||err);
  }
 });
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest('[data-calendar-quick-form]');
+ if(!form)return;
+ e.preventDefault();
+ const button=form.querySelector('[type=submit]');if(button)button.disabled=true;
+ try{
+  const s=snapshot(),accounts=activeAccounts(s),asOf=s.asOf,
+   fields=Object.fromEntries(new FormData(form)),planner=window.HouseholdPlannerTransactions,
+   mode=form.dataset.calendarQuickForm;
+  if(fields.date>shiftDay(asOf,horizon))
+   throw Error('Choose a date inside your forecast window.');
+  if(mode==='edit'){
+   const key=form.dataset.calendarQuickKey,
+    row=futureRows(forecastFor(s),s).find(r=>r.key===key);
+   if(!row)throw Error('This prediction changed. Reopen it and try again.');
+   if(fields.scope==='all'){
+    if(!row.seriesKey||!row.cadence)throw Error('This series cannot be edited here. Open Predictions.');
+    const cadence=row.cadence==='twice-monthly'?'twice monthly':row.cadence;
+    await commitForecastChange(()=>planner.saveSeriesEdit(
+     state(),row.seriesKey,row.baseDate,fields,accounts,asOf,cadence,row.kind));
+   }else await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
+  }else if(mode==='add'){
+   if(fields.frequency&&fields.frequency!=='once')
+    await commitForecastChange(()=>planner.defineRecurring(
+     state(),fields,accounts,asOf,null,model.records(state()),[]));
+   else await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
+  }else throw Error('Unknown calendar action.');
+  latestError='';render();
+  window.HouseholdPlannerSummary.refreshNotice(mode==='edit'?'Prediction updated. All daily balances recalculated.':
+   'Prediction added. All daily balances recalculated.');
+ }catch(err){
+  if(button)button.disabled=false;
+  const target=form.querySelector('[data-calendar-error]');
+  if(target)target.textContent=String(err.message||err);
+ }
+});
+document.addEventListener('change',e=>{
+ if(!e.target.matches?.('[data-calendar-type]'))return;
+ const form=e.target.closest('[data-calendar-quick-form]');
+ if(form)form.dataset.quickKind=e.target.value;
+});
+
 document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-cushion-form]');
  if(!form)return;

@@ -18,7 +18,7 @@ function getPoints(derived,asOf,days){
 /* Daily calendar uses ONLY the same per-account daily projection and its
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
-let extrasOpen=false;
+let extrasOpen=false,calendarEditor=null,calendarNotice='';
 const monthName=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',
  {month:'long',year:'numeric',timeZone:'UTC'});
 const signed=(e,card)=>card?
@@ -28,25 +28,123 @@ const fullSigned=(e,card)=>(signed(e,card)>0?'+':'−')+money(Number(e.amount));
 const shortMoney=n=>new Intl.NumberFormat('en-US',{
  style:'currency',currency:'USD',notation:'compact',maximumFractionDigits:1}).format(n);
 const dayShort=d=>String(Number(d.slice(-2)));
+
+const norm=s=>String(s??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const calendarTypes={expense:'Withdrawal',income:'Deposit',refund:'Refund',transfer:'Account transfer'};
+const dateDelta=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
+const moneyDelta=(e,card)=>signed(e,card)*Number(e.amount);
+function knownGaps(prefs,asOf,through,accountId,points){
+ const dates=new Map(),tools=root.HouseholdPlannerTransactions;
+ if(!tools?.recurrenceDates)return dates;
+ for(const r of prefs?.futureRecurringRules||[]){
+  if(r.kind==='movement'||!['income','expense'].includes(r.type)||
+   String(r.accountId)!==String(accountId)||!r.id)continue;
+  for(const due of tools.recurrenceDates(r,asOf,through)){
+   if(dateDelta(due,asOf)<=7)continue;
+   const exists=points.some(p=>Math.abs(dateDelta(p.date,due))<=6&&
+    (p.events||[]).some(e=>e.kind===r.type&&
+     (String(e.recurringRuleId||'')===String(r.id)||
+      norm(e.sourceMerchant||e.merchant)===norm(r.originalMerchant||r.merchant))));
+   const skipped=Boolean(prefs?.futureTransactionEdits?.[
+    tools.keyEvent('user|'+r.id+'|'+due,accountId)]?.skipped);
+   if(exists||skipped)continue;
+   const matches=dates.get(due)||[];
+   matches.push({date:due,merchant:r.merchant||'Recurring payment',
+    amount:Number(r.amount),type:r.type,accountId:String(accountId)});
+   dates.set(due,matches);
+  }
+ }
+ return dates;
+}
+const accountOptions=(accounts,chosen)=>accounts.map(a=>
+ '<option value="'+esc(a.id)+'"'+(String(a.id)===String(chosen)?' selected':'')+
+ '>'+esc(a.name||a.id)+'</option>').join('');
+function quickEditor(){
+ if(!calendarEditor)return '';
+ const {mode,row,accountId,accounts,asOf,through}=calendarEditor;
+ const entry=mode==='edit'?row:calendarEditor.preset||{},
+  transfer=mode==='edit'?row.kind==='movement':entry.type==='transfer',
+  kind=transfer?'transfer':entry.type||'expense',
+  first=accountId||accounts[0]?.id,other=accounts.find(a=>String(a.id)!==String(first))?.id||first;
+ const choices=mode==='add'?'<label>Type<select name="type" data-calendar-type>'+
+  Object.entries(calendarTypes).filter(([k])=>k!=='transfer'||accounts.length>1)
+   .map(([k,name])=>'<option value="'+k+'"'+(kind===k?' selected':'')+'>'+
+    name+'</option>').join('')+'</select></label>':
+   '<label>Type<strong>'+esc(transfer?'Account transfer':calendarTypes[kind]||'Payment')+
+    '</strong><input type="hidden" name="type" value="'+esc(kind)+'"></label>';
+ const repeatable=mode==='edit'&&row.seriesKey&&
+  ['weekly','biweekly','every-4-weeks','monthly','quarterly','semiannual','annual','twice-monthly','twice monthly','every 2 weeks'].includes(row.cadence);
+ return '<form data-calendar-quick-form="'+mode+'" class="calendar-quick-form"'+
+  ' data-calendar-quick-key="'+esc(row?.key||'')+'" data-quick-kind="'+kind+'">'+
+  '<div class="calendar-quick-head"><strong>'+(mode==='edit'?'Edit prediction':'Add prediction')+
+   '</strong><button type="button" data-calendar-cancel aria-label="Close transaction editor">×</button></div>'+
+  '<p>Forecast only · No changes to bank records</p>'+
+  '<div class="calendar-quick-fields">'+choices+
+   '<label>Description<input name="merchant" maxlength="160" placeholder="e.g. Insurance" value="'+
+    esc(entry.merchant||'')+'" required></label>'+
+   '<label>Amount ($)<input type="number" inputmode="decimal" name="amount" min=".01" max="999999999" step=".01" value="'+
+    esc(entry.amount??'')+'" placeholder="0.00" required></label>'+
+   '<label>Date<input type="date" name="date" min="'+esc(asOf)+'" max="'+esc(through)+
+    '" value="'+esc(entry.date||calendarDate)+'" required></label>'+
+   '<label class="calendar-single-account">Account<select name="accountId">'+
+    accountOptions(accounts,entry.accountId||first)+'</select></label>'+
+   '<label class="calendar-transfer-field">From<select name="fromAccountId">'+
+    accountOptions(accounts,entry.fromAccountId||first)+'</select></label>'+
+   '<label class="calendar-transfer-field">To<select name="toAccountId">'+
+    accountOptions(accounts,entry.toAccountId||other)+'</select></label>'+
+   (mode==='add'?'<label>Repeat<select name="frequency">'+
+    [['once','One time'],['weekly','Weekly'],['biweekly','Every 2 weeks'],
+    ['every-4-weeks','Every 4 weeks'],['monthly','Monthly'],
+    ['quarterly','Every 3 months'],['annual','Every year']]
+     .map(([v,name])=>'<option value="'+v+'">'+name+'</option>').join('')+
+    '</select></label>':'')+'</div>'+
+  (repeatable?'<fieldset class="calendar-quick-scope"><legend>Apply to</legend>'+
+   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
+   '<label><input type="radio" name="scope" value="all"> This and all future payments</label></fieldset>':'')+
+  '<div class="calendar-quick-actions"><button class="btn primary" type="submit">'+
+   (mode==='edit'?'Save changes':'Add to forecast')+'</button>'+
+  '<button class="btn" type="button" data-calendar-cancel>Cancel</button>'+
+  (mode==='edit'?'<button class="btn" type="button" data-calendar-skip>Skip payment</button>':'')+
+  '</div><p class="calendar-quick-error" role="alert" data-calendar-error></p></form>';
+}
+
 function dayDetail(point,card){
- const events=point.events||[],first=calendarContext?.points[0],
+ const events=point.events||[],first=calendarContext.points[0],
+  previousIndex=calendarContext.points.indexOf(point)-1,
+  previous=previousIndex>=0?calendarContext.points[previousIndex].balance:point.balance,
+  plus=events.reduce((n,e)=>n+Math.max(0,moneyDelta(e,card)),0),
+  minus=events.reduce((n,e)=>n+Math.max(0,-moneyDelta(e,card)),0),
+  gaps=calendarContext.gaps.get(point.date)||[],
   label=card?'Projected card debt':'Projected account balance';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
   '<div class="calendar-detail-heading"><div><span>SELECTED DAY</span><strong>'+
    esc(dateLabel(point.date))+'</strong></div><div class="calendar-detail-balance"><small>'+
    label+' · end of day</small><strong>'+money(point.balance)+'</strong></div></div>'+
-  (events.length?'<div class="calendar-detail-items">'+events.map(e=>{
+  '<div class="calendar-math">'+
+   '<div><span>'+(previousIndex<0?'Reported starting balance':'Yesterday')+'</span><strong>'+money(previous)+'</strong></div>'+
+   '<div><span>'+(card?'Debt increases':'Deposits')+'</span><strong class="in">+'+money(plus)+'</strong></div>'+
+   '<div><span>'+(card?'Debt payments':'Withdrawals')+'</span><strong class="out">−'+money(minus)+'</strong></div>'+
+   '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
+  (events.length?'<div class="calendar-detail-items">'+events.map((e,i)=>{
    const dir=signed(e,card)>0?'in':'out';
    return '<div class="calendar-detail-item"><span class="calendar-transaction-name">'+
     esc(e.merchant||'Predicted transaction')+
-    (e.kind==='transfer_in'||e.kind==='transfer_out'?
-     '<small>Linked account transfer</small>':'')+
-    '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong></div>';
+    (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':'')+
+    '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong>'+
+    '<button type="button" class="calendar-item-edit" data-calendar-edit="'+i+'">Edit</button></div>';
   }).join('')+'</div>':
-   '<p class="calendar-empty">'+(point.date===first?.date?
-    'Starting balance. No future transactions have occurred yet.':
-    'No predicted transactions on this day. The projected balance carries forward.')+'</p>')+
-  '<button type="button" class="calendar-edit" data-view="transactions">See all predictions →</button>'+
+   '<p class="calendar-empty">'+(point.date===first.date?
+    'Starting balance. No future transactions yet.':
+    'No predicted transactions on this day. Balance carries forward.')+'</p>')+
+  (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
+   gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
+    '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
+   '<small>Only confirmed schedules. These items do not change your balance.</small></div>':'')+
+  (calendarNotice?'<p class="calendar-notice" role="status">'+esc(calendarNotice)+'</p>':'')+
+  quickEditor()+
+  '<div class="calendar-day-actions"><button type="button" class="calendar-add" data-calendar-add'+
+   (point.date===first.date?' disabled':'')+'>+ Add transaction</button>'+
+   '<button type="button" class="calendar-edit" data-view="transactions">All predictions →</button></div>'+
  '</section>';
 }
 function calendarGrid(){
@@ -72,7 +170,7 @@ function calendarGrid(){
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
   if(!p)return '<div class="calendar-outside" aria-hidden="true"><span>'+
    dom+'</span></div>';
-  const events=p.events||[],low=!state.card&&p.balance<state.cushion,
+  const events=p.events||[],gaps=state.gaps.get(iso)||[],low=!state.card&&p.balance<state.cushion,
    negative=!state.card&&p.balance<0,
    delta=events.slice(0,2).map(e=>{
     const amount=(signed(e,state.card)>0?'+':'−')+shortMoney(Number(e.amount));
@@ -96,6 +194,7 @@ function calendarGrid(){
     shortMoney(p.balance)+'</span></span>'+
    '<span class="calendar-day-events">'+delta+
     (events.length>2?'<span class="calendar-more">+'+(events.length-2)+' more</span>':'')+
+    (gaps.length?'<span class="calendar-unplanned">? '+esc(gaps[0].merchant)+'</span>':'')+
    '</span></button>';
  }).join('');
  const index=keys.indexOf(calendarMonth);
@@ -116,7 +215,7 @@ function calendarGrid(){
 }
 function showCalendar(date){
  if(!calendarContext||!calendarContext.points.some(p=>p.date===date))return;
- calendarDate=date;calendarMonth=date.slice(0,7);
+ calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
 }
@@ -152,9 +251,13 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
   calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
   calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;
+   calendarEditor=null;calendarNotice='';
  }
  calendarContext={points:series,asOf:snapshot.asOf,card:credit,
-  cushion:Number(prefs?.cashCushion??500)};
+  cushion:Number(prefs?.cashCushion??500),accounts,
+  chosen:String(chosen.id),through:series.at(-1)?.date,
+  gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
+   series.at(-1).date,chosen.id,series):new Map()};
  if(series.length<2)return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
   '<div class="summary-empty">A current, verifiable account balance is required before this forecast can be shown. Refresh your bank data and check its balance date.</div>'+
   '</section></div>';
@@ -293,5 +396,31 @@ document.addEventListener('keydown',e=>{
  document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
 });
 
-root.HouseholdPlannerSummary={render,getPoints};
+root.HouseholdPlannerSummary={render,getPoints,
+ currentDay:()=>calendarDate,
+ currentEvent:index=>{
+  const point=calendarContext?.points.find(p=>p.date===calendarDate);
+  return point?.events?.[Number(index)]||null;
+ },
+ currentGap:index=>calendarContext?.gaps.get(calendarDate)?.[Number(index)]||null,
+ openEditor:draft=>{
+  if(!calendarContext?.points.some(p=>p.date===calendarDate))return;
+  calendarEditor={...draft,accountId:calendarContext.chosen,
+   accounts:calendarContext.accounts,asOf:calendarContext.asOf,
+   through:calendarContext.through};
+  calendarNotice='';
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+ },
+ closeEditor:()=>{
+  calendarEditor=null;
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+ },
+ refreshNotice:message=>{
+  calendarEditor=null;calendarNotice=message||'';
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+ }
+};
 })(typeof window!=='undefined'?window:globalThis);

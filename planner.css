@@ -497,3 +497,58 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .calendar-day,.calendar-blank,.calendar-outside{min-height:78px}
  .calendar-navigation small{max-width:150px}
 }
+
+
+/* Calendar-first planning: one balance explanation, one compact transaction editor. */
+.calendar-day-detail{background:#fff;border-color:#e5ecf4}
+.calendar-math{margin-top:16px;display:grid;gap:8px;border:1px solid #e9eff5;border-radius:9px;padding:13px 15px;background:#fafcfe}
+.calendar-math>div{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
+.calendar-math>div span{color:#6e7e8e}
+.calendar-math>div strong{font:700 13px var(--mono);color:#304153;white-space:nowrap}
+.calendar-math>div strong.in{color:#31815b}
+.calendar-math>div strong.out{color:#ad5157}
+.calendar-math .calendar-math-total{margin-top:4px;padding-top:10px;border-top:1px solid #dce6ef;font-weight:750}
+.calendar-math .calendar-math-total span{color:#1b3349}
+.calendar-math .calendar-math-total strong{font-size:17px;color:#172c42}
+.calendar-detail-item .calendar-item-edit{border:0;border-radius:6px;background:#eff3f9;color:#345e90;min-height:31px;padding:5px 9px;cursor:pointer;font-size:11px;font-weight:700}
+.calendar-detail-item .calendar-item-edit:hover{background:#e0eafa}
+.calendar-day-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px}
+.calendar-add{border:1px solid #315ebd;border-radius:8px;background:#315ebd;color:#fff;min-height:37px;padding:8px 13px;cursor:pointer;font-weight:750;font-size:12px}
+.calendar-add:hover{background:#244c98}
+.calendar-add:disabled{opacity:.45;cursor:default}
+.calendar-unplanned{display:block;margin-top:3px;font-size:9px;color:#ad7040;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calendar-gaps{margin-top:16px;border:1px solid #f0dbbc;background:#fffbf4;border-radius:9px;padding:13px}
+.calendar-gaps>strong{color:#906027;font-size:12px;display:block;margin-bottom:7px}
+.calendar-gaps>div{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:6px 0;font-size:12px}
+.calendar-gaps button{border:1px solid #cfa46d;border-radius:6px;background:#fff;color:#916123;font-size:11px;min-height:31px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.calendar-gaps small{display:block;margin-top:6px;color:#a18259;font-size:10px;line-height:1.5}
+.calendar-notice{margin:12px 0 0;padding:9px 12px;border-radius:7px;background:#eef6f1;color:#316a4d;font-size:12px}
+.calendar-quick-form{margin-top:17px;padding:17px;border:1px solid #cfdbeb;background:#f6f9fd;border-radius:11px}
+.calendar-quick-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.calendar-quick-head strong{font-size:14px}
+.calendar-quick-head button{border:0;background:transparent;color:#7b8da0;font-size:23px;min-width:32px;min-height:32px;cursor:pointer}
+.calendar-quick-form>p:first-of-type{font-size:11px;color:#798b9b;margin:3px 0 15px}
+.calendar-quick-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.calendar-quick-fields label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:650;color:#587087;min-width:0}
+.calendar-quick-fields input,.calendar-quick-fields select{width:100%;height:39px;padding:7px 10px;border:1px solid #d7e1eb;border-radius:7px;background:#fff;color:#1d3146;font-size:13px;min-width:0}
+.calendar-quick-fields label>strong{padding:12px 8px;font-weight:700;color:#233c53}
+.calendar-quick-form:not([data-quick-kind="transfer"]) .calendar-transfer-field{display:none}
+.calendar-quick-form[data-quick-kind="transfer"] .calendar-single-account{display:none}
+.calendar-quick-scope{border:0;padding:13px 0 0;margin:13px 0 0;display:flex;gap:15px;flex-wrap:wrap;align-items:center}
+.calendar-quick-scope legend{font-size:11px;font-weight:730;color:#53708b}
+.calendar-quick-scope label{font-size:11px;color:#42586e;display:flex;align-items:center;gap:5px;min-height:30px}
+.calendar-quick-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:17px}
+.calendar-quick-actions .btn{min-height:36px}
+.calendar-quick-error{color:#a83d46;font-size:11px;margin:8px 0 0}
+.calendar-quick-error:empty{display:none}
+@media(max-width:780px){
+ .calendar-math{padding:11px 10px}
+ .calendar-math>div{font-size:11px}
+ .calendar-math>div strong{font-size:12px}
+ .calendar-quick-form{padding:13px 10px}
+ .calendar-quick-fields{grid-template-columns:1fr 1fr;gap:9px}
+ .calendar-quick-fields input,.calendar-quick-fields select{font-size:12px}
+ .calendar-quick-actions .btn{flex:1 1 auto}
+ .calendar-day-actions{justify-content:space-between;gap:6px}
+}
+@media(max-width:360px){.calendar-quick-fields{grid-template-columns:1fr}}
