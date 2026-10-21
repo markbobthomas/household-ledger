@@ -260,6 +260,10 @@ function cardStatementPreview(s,bundle,cardId){
     '</span><span class="status-tag '+(p.confirmed?'good':'warn')+'">'+
     (p.confirmed?'ISSUED AMOUNT ENTERED':'PAYMENT ESTIMATE')+'</span></div>'+
    '<strong class="card-preview-amount">'+cash(p.statementBalance)+'</strong>'+
+   '<div class="card-preview-line"><span>Estimated checking withdrawal</span><strong>'+
+    (p.autopayEnabled?cash(p.amount):'None · autopay off')+'</strong></div>'+
+   '<div class="card-preview-line"><span>Payment method</span><strong>'+
+    escapeHTML(({statement:'Full statement',full:'Full outstanding',minimum:'Minimum',fixed:'Fixed amount'})[p.method]||p.method)+'</strong></div>'+
    '<div class="card-preview-line"><span>Billing period</span><strong>'+
     escapeHTML(dayLabel(p.periodStart))+' – '+escapeHTML(dayLabel(p.periodEnd))+'</strong></div>'+
    '<div class="card-preview-line"><span>Period status</span><strong>'+
@@ -874,9 +878,9 @@ function upcomingCardBills(bundle,s){
      p.autopayEnabled?' · Planned '+escapeHTML(dayLabel(p.withdrawalDate))+
       ' from '+escapeHTML(p.fromName):' · No autopay')+
     (p.estimated?' · Estimated':' · Entered statement')+'</small></div>'+
-    '<strong>'+cash(p.statementBalance)+'</strong></div>').join('')||
+    '<strong>'+(p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>').join('')||
     '<p class="lead">No card statement forecasts are configured yet. Set up each card in Settings.</p>')+
-  '<p class="audit-footnote">Based on posted and known future charges only. Unplanned card spending, interest, fees and carried balances may change the actual bill.</p></section>';
+  '<p class="audit-footnote">The figure shown is the predicted withdrawal from checking, not a new purchase. Statement reconstruction may differ from issuer totals due to carried balances, fees, interest or missing activity.</p></section>';
 }
 function overviewPage(bundle,s,chosen,derived,fresh){
  const series=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
