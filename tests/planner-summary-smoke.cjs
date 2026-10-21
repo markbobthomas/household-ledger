@@ -30,7 +30,10 @@ assert.match(long,/Property tax|Insurance|No dated transactions that day/);
 assert.match(long,/longer-range forecasts are less certain/i);
 const short=tool.render({...opts,days:30});
 assert.doesNotMatch(short,/longer-range forecasts are less certain/i);
-const caution=tool.render({...opts,days:90,bundle:{
+assert.match(short,/No dated predictions yet/);
+assert.match(short,/data-view="transactions"/,
+ 'An empty forecast should invite prediction setup instead of claiming accuracy');
+const caution=tool.render({...opts,days:180,bundle:{
  historyCandidates:[{accountId:'checking'}],missingMortgages:[],duplicateConflicts:[],
  payments:{warnings:[]},routines:{warnings:[]},
  projection:{diagnostics:{unassigned:[],unmatchedTransfers:[]}}
