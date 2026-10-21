@@ -125,6 +125,10 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
     Number(lastPaychecks[3].amount))/2):0,
    typicalPay=(payA+payB)/2,
    pairTolerance=Math.max(3,typicalPay*.003),
+   semiMonthlyExact=Boolean(g.kind==='income'&&f==='twice-monthly'&&
+    lastFour.length===4&&
+    Math.abs(Number(lastFour[0].amount)-Number(lastFour[2].amount))<=pairTolerance&&
+    Math.abs(Number(lastFour[1].amount)-Number(lastFour[3].amount))<=pairTolerance),
    alternating=Boolean(g.kind==='income'&&payroll&&f==='biweekly'&&
     lastPaychecks.length===4&&f3&&
     Math.abs(Number(lastPaychecks[0].amount)-Number(lastPaychecks[2].amount))<=pairTolerance&&
@@ -134,11 +138,12 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    estimate=money(latest.reduce((total,r)=>total+Number(r.amount),0)/latest.length),
    // Never infer variable purchases at grocery/retail merchants merely
    // because they occurred near the same day three months in a row.
-   // Inferred income must use an amount that actually appeared in bank
-   // history. Averaging mixed paychecks fabricates a deposit amount.
-   // Semi-monthly income needs confirmation before we choose calendar slots.
+   // Inferred income must use a bank-posted paycheck amount. A real 1st/15th
+   // salary is allowed only when BOTH calendar slots repeat their own amount;
+   // all other unstable payroll is reviewed rather than averaged.
    enough=one||spaced&&!transferRisk&&
-    (g.kind==='income'?(f!=='twice-monthly'&&(!varying||alternating)):
+    (g.kind==='income'?(f==='twice-monthly'?semiMonthlyExact:
+      f==='biweekly'?(!varying||alternating):f3||!varying):
      variableName.test(g.merchant)?!varying&&f3:
      (twice||f3||!varying)),
    planDate=next(t.date,f||'monthly',1);
@@ -177,8 +182,11 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
      if(when<=asOf)continue;
      const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0,
       fourWeekPhase=alternating,
-      series=rootSeries+(fourWeekPhase?'every-4-weeks|phase'+phaseOf(when):freq),
+      semiSlot=semiMonthlyExact?slots.indexOf(Number(when.slice(-2))):-1,
+      series=rootSeries+(fourWeekPhase?'every-4-weeks|phase'+phaseOf(when):
+       semiSlot>=0?'twice-monthly|slot'+slots[semiSlot]:freq),
       forecastAmount=fourWeekPhase?(steps%2===1?payA:payB):
+       semiSlot>=0?money(lastFour[semiSlot+2].amount):
        g.kind==='income'?money(t.amount):estimate;
      automatic.push({id:'auto|'+series+'|'+when,date:when,amount:forecastAmount,
       merchant:g.merchant,accountId:g.accountId,type:g.kind,category:t.category||'Other',
@@ -186,9 +194,13 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
       _seriesKey:series,_seriesDate:when,
       planConfidence:one?'identified-single-bill':'observed-recurring-pattern',
       amountEstimate:fourWeekPhase?'four-week-paycheck':
+       semiSlot>=0?'bank-posted-calendar-paycheck':
+       g.kind==='income'?'bank-posted-income':
        varying?'recent-history-average':'last-posted-amount',
       historicalIds:(fourWeekPhase?
-       lastPaychecks.filter(x=>phaseMatch(x.date,when)):latest).map(x=>String(x.id||''))});
+       lastPaychecks.filter(x=>phaseMatch(x.date,when)):
+       semiSlot>=0?[lastFour[semiSlot],lastFour[semiSlot+2]]:latest)
+       .map(x=>String(x.id||''))});
     }
     continue;
    }
