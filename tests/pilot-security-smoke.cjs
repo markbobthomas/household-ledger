@@ -43,6 +43,8 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   const partial=path.join(dir,'partial-deploy');
   fs.mkdirSync(path.join(partial,'pilot'),{recursive:true});
   fs.copyFileSync(path.join(__dirname,'../pilot/server.cjs'),path.join(partial,'pilot/server.cjs'));
+  fs.copyFileSync(path.join(__dirname,'../pilot/account-forecast-links.cjs'),
+   path.join(partial,'pilot/account-forecast-links.cjs'));
   fs.writeFileSync(path.join(partial,'index.html'),'<html><head></head><body>partial deployment</body></html>');
   const altPort=port+1;
   const partialChild=spawn(process.execPath,['pilot/server.cjs'],{

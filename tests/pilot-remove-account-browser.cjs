@@ -34,6 +34,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
   await ready();
   assert.equal((await api('/api/exchange',{publicToken:'public-test',
    accountIds:['acct-1','acct-2']})).code,200);
+  assert.equal((await api('/api/ledger/forecasts',{predictions:{
+   primaryAccountId:'acct-1',
+   futureTransactionEdits:{'event|planned-event|acct-1':{accountId:'acct-1',amount:123}}
+  }})).code,200);
   chrome=await chromium.launch({headless:true});iphone=await webkit.launch({headless:true});
   for(const [browser,mobile] of [[iphone,true],[chrome,false]]){
    const ctx=await browser.newContext({
@@ -47,6 +51,12 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('[data-remove-account="acct-2"]').waitFor();
    assert.equal(await page.locator('[data-remove-account]').count(),2,
     'Each connected card/checking account shows its own Remove account action');
+   assert.equal(await page.locator('[data-remove-account="acct-1"]').isDisabled(),true,
+    'Main account with saved future edits cannot be removed even when names match');
+   assert.equal(await page.locator('[data-remove-account="acct-2"]').isEnabled(),true,
+    'New duplicate without forecast references can be removed');
+   assert.match(await page.locator('#report').innerText(),/Has saved links/);
+   assert.match(await page.locator('#report').innerText(),/No saved prediction links found/);
    assert.ok(await page.locator('[data-remove-account="acct-2"]').isVisible(),
     'Removal control accessible on desktop and mobile');
    if(!mobile){
