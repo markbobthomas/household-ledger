@@ -97,12 +97,22 @@ function billCells({months,found,expected,reason,tooMany=false}){
  * in the balance, whereas ledger drafts may include entries that could not
  * be applied to an account. The ledger fallback serves isolated test fixtures. */
 function actualFutureExpenses({projection,ledger,accounts}){
+ const byId=new Map(accounts.map(a=>[asId(a.id),a]));
+ // Match the exact projected cash withdrawals shown under Predictions.
+ // Both expenses and linked outgoing transfers lower checking balance.
+ // A transfer to a connected credit card is not a mortgage.
+ const cashOut=e=>e&&byId.has(asId(e.accountId))&&
+  !credit(byId.get(asId(e.accountId)))&&Number(e.amount)>0&&
+  (e.kind==='expense'&&e.type==='expense'||
+   e.kind==='transfer_out'&&!credit(byId.get(asId(e.toAccountId))));
  if(projection&&Array.isArray(projection.events))
-  return projection.events.filter(e=>e&&!e.transferGroupId&&
-   e.kind==='expense'&&e.type==='expense'&&
-   !accounts.some(a=>asId(a.id)===asId(e.accountId)&&credit(a)));
- return (ledger||[]).filter(e=>futureExpense(e)&&
-  !accounts.some(a=>asId(a.id)===asId(e.accountId)&&credit(a)));
+  return projection.events.filter(cashOut);
+ const fallback=(ledger||[]).flatMap(e=>{
+  if(e.kind==='movement'&&!credit(byId.get(asId(e.toAccountId))))
+   return [{...e,accountId:e.fromAccountId,kind:'transfer_out',type:'transfer'}];
+  return futureExpense(e)?[{...e,kind:'expense'}]:[];
+ });
+ return fallback.filter(cashOut);
 }
 const futureNameFields=e=>[e.merchant,e._forecastOriginalMerchant,
  e.sourceMerchant,e.originalMerchant,e.description,e.source?.merchant];
@@ -116,16 +126,16 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
    asId(r.originalAccountId||r.accountId||r.fromAccountId)===id&&
    r.type==='expense'&&(mortgage(r.merchant)||mortgage(r.originalMerchant))),
   knownNames=new Set([...posted.map(r=>norm(r.merchant||r.name)),...confirmed.flatMap(r=>
-   [norm(r.merchant),norm(r.originalMerchant)])].filter(Boolean)),
+   [norm(r.merchant),norm(r.originalMerchant),...(r.matchNames||[]).map(norm)])].filter(Boolean)),
   knownRuleIds=new Set(confirmed.map(r=>asId(r.id)).filter(Boolean)),
   mortgageLike=e=>futureNameFields(e).some(mortgage)||
    futureNameFields(e).some(x=>knownNames.has(norm(x)))||
    knownRuleIds.has(asId(e.ruleId||e.recurringRuleId)),
   own=expenses.filter(e=>asId(e.accountId)===id),
   recognized=own.filter(mortgageLike),
-  lastPosted=posted.at(-1),seed=lastPosted?.date||
+  lastPosted=posted.at(-1),seed=
    confirmed.find(r=>date(r.anchorDate))?.anchorDate||
-   recognized[0]?.date,
+   lastPosted?.date||recognized[0]?.date,
   expected=expectedMonthly(seed,months);
  const selectedHasEvidence=posted.length>0||confirmed.length>0||recognized.length>0;
  // A mortgage on an account other than the selected account is not absent
@@ -155,12 +165,21 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
  // account, only when posted history proves the original mortgage amount.
  // This never fabricates a payment, and the UI discloses the weaker match.
  const candidates=new Map();
- if(lastPosted&&expected.length){
+ // A renamed ACH mortgage may have different labels, dates and amounts.
+ // A unique plausible same-month debit is a REVIEW, not a missing payment
+ // or a fabricated green check.
+ const referenceAmount=Number(lastPosted?.amount||
+  confirmed.find(r=>Number(r.matchAmount)>0)?.matchAmount||
+  confirmed.find(r=>Number(r.amount)>0)?.amount);
+ if(Number.isFinite(referenceAmount)&&referenceAmount>0&&expected.length){
   for(const due of expected){
    if(recognized.some(e=>e.date.slice(0,7)===due.slice(0,7)))continue;
-   const potentials=own.filter(e=>!recognized.includes(e)&&
-    nearPayment(e,due,lastPosted.amount));
-   if(potentials.length===1)candidates.set(potentials[0],true);
+   const comparable=own.filter(e=>!recognized.includes(e)&&
+    e.date.slice(0,7)===due.slice(0,7)&&
+    Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25));
+   const precise=comparable.filter(e=>nearPayment(e,due,referenceAmount));
+   const match=precise.length===1?precise[0]:comparable.length===1?comparable[0]:null;
+   if(match)candidates.set(match,true);
   }
  }
  // Source-matched events count as known mortgages. Amount/date-only matches
@@ -218,10 +237,32 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
   if(entries.length>due.length)return {month:m.key,status:'review',
    label:entries.length+'?',detail:'More than one possible mortgage withdrawal is predicted for this month. Check for duplicates.',
    items:described(entries)};
-  if(entries.length<due.length)return {month:m.key,status:'missing',
-   label:entries.length?entries.length+' / '+due.length:'!',
-   detail:'An expected mortgage withdrawal does not appear among the dated predictions for this account',
-   items:described(entries)};
+  if(entries.length<due.length){
+   const elsewhere=expenses.filter(e=>asId(e.accountId)!==id&&
+    due.some(d=>dayWithin(m,e.date)||Math.abs(daysBetween(e.date,d))<=9)&&
+    (mortgageLike(e)||referenceAmount>0&&
+     Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25)));
+   const adjacent=own.filter(e=>!entries.includes(e)&&!candidates.has(e)&&
+    due.some(d=>Math.abs(daysBetween(e.date,d))<=9)&&
+    (mortgageLike(e)||referenceAmount>0&&
+     Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25)));
+   const ambiguous=own.filter(e=>!entries.includes(e)&&dayWithin(m,e.date)&&
+    referenceAmount>0&&Math.abs(Number(e.amount)-referenceAmount)<=Math.max(60,referenceAmount*.25));
+   const plausible=[...new Set([...elsewhere,...adjacent,...ambiguous])];
+   if(plausible.length){
+    const names=[...new Set(plausible.map(e=>accounts.find(a=>
+     asId(a.id)===asId(e.accountId))?.name||'Another account'))];
+    return {month:m.key,status:'review',label:plausible.length+'?',
+     detail:'The expected mortgage may be among these projected withdrawals'+
+      (elsewhere.length?' on '+names.join(', '):'')+
+      '. It is present in Predictions, but its identity, paying account, amount or posting date needs confirmation.',
+     items:described([...entries,...plausible])};
+   }
+   return {month:m.key,status:'missing',
+    label:entries.length?entries.length+' / '+due.length:'!',
+    detail:'An expected mortgage withdrawal is absent from the projected withdrawals for this month',
+    items:described(entries)};
+  }
   return {month:m.key,status:guessed?'review':'covered',
    label:(guessed?'? ':'✓ ')+entries.length,
    detail:guessed?
