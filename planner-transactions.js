@@ -319,7 +319,7 @@ function restoreRecurrence(state,key){
  delete p.futureRecurrenceExclusions[key];
  // An automatic-series exclusion never owns a real confirmed recurring
  // rule or the employer's general history decision.
- if(entry.seriesKey)return key;
+ if(entry.seriesKey||entry.manualRuleId)return key;
  // Older app versions tracked rejected suggestions in two independent
  // preference maps. Clear matching legacy rejections too, so Allow predictions
  // always means the recurrence can actually be considered again.
@@ -373,9 +373,17 @@ function stopRecurrence(state,row){
   throw Error('This employer has confirmed schedules. Choose the exact paycheck in Future Transactions.');
  const phaseDate=rule?.frequency==='every-4-weeks'?rule.anchorDate:
   row.cadence==='every-4-weeks'?row.baseDate||row.date:null,
-  key=recurrenceKey(accountId,type,merchant)+(phaseDate?'|phase'+phaseOf(phaseDate):'');
+  // Deleting one old semi-monthly/monthly pay rule must not install an
+  // employer-wide opt-out when another confirmed paycheck rule exists.
+  siblings=rule&&type==='income'&&(p.futureRecurringRules||[]).some(r=>
+   r.id!==rule.id&&String(r.originalAccountId||r.accountId)===accountId&&
+   r.type===type&&sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant)),
+  ruleOnly=Boolean(siblings&&!phaseDate),
+  key=ruleOnly?'manual-rule|'+encodeURIComponent(rule.id):
+   recurrenceKey(accountId,type,merchant)+(phaseDate?'|phase'+phaseOf(phaseDate):'');
  p.futureRecurrenceExclusions??={};
  p.futureRecurrenceExclusions[key]={accountId,type,merchant,
+  ...(ruleOnly?{manualRuleId:rule.id}:{}),
   ...(phaseDate?{phaseDate,frequency:'every-4-weeks'}:{})};
  const remove=(p.futureRecurringRules||[]).filter(r=>
   String(r.originalAccountId||r.accountId||r.fromAccountId)===accountId&&
