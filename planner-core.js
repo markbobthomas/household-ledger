@@ -182,7 +182,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
      if(when<=asOf)continue;
      const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0,
       fourWeekPhase=alternating,
-      semiSlot=semiMonthlyExact?slots.indexOf(Number(when.slice(-2))):-1,
+      semiSlot=semiMonthlyExact?slots.findIndex(day=>monthDate(when,0,day)===when):-1,
       series=rootSeries+(fourWeekPhase?'every-4-weeks|phase'+phaseOf(when):
        semiSlot>=0?'twice-monthly|slot'+slots[semiSlot]:freq),
       forecastAmount=fourWeekPhase?(steps%2===1?payA:payB):
