@@ -52,6 +52,20 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.coverage-detail').innerText(),/View predictions|Set up card payments/);
    await page.locator('[data-coverage-close]').click();
    assert.equal(await page.locator('[data-coverage-detail]').isVisible(),false);
+   const mortgageCoverageRow=page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'});
+   await mortgageCoverageRow.locator('[data-coverage-cell]').nth(1).click();
+   assert.match(await page.locator('.coverage-identify').innerText(),/Which predicted payment is your mortgage/);
+   const identifiedMortgage=page.locator('.coverage-mortgage-option').filter({hasText:/Mortgage/}).first();
+   assert.ok(await identifiedMortgage.count()>0,
+    'The owner can identify a future mortgage straight from the current predictions');
+   await identifiedMortgage.click();
+   const savedMortgage=await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').mortgageCoverageRules);
+   assert.ok(savedMortgage?.checking||Object.values(savedMortgage||{}).some(r=>r?.merchant?.includes('mortgage')),
+    'Mortgage identity persists only as a forecast preference, not a new transaction');
+   assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
+    .locator('.coverage-cell.covered').count()>=1,
+    'The same mortgage forecast series is marked covered after user confirmation');
    assert.match(await page.locator('.summary-trust').innerText(),/excludes unplanned everyday spending/i,
     'Summary explains what is excluded instead of claiming unwarranted accuracy');
    for(const days of [30,60,90,120,180,360]){

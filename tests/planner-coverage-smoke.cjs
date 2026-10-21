@@ -207,6 +207,68 @@ const creditOnly=C.analyze({...opts,bundle:{...opts.bundle,
 assert.equal(get(creditOnly,'mortgage','2026-11').status,'missing',
  'An internal transfer to a credit card must not satisfy a mortgage even if mislabeled');
 
+// A real lender can have an opaque Plaid descriptor with no 'mortgage'
+// keyword or recognized category. Never keep reporting unverified after the
+// owner identifies the existing recurring series in Summary.
+const opaque=[
+ {kind:'event',type:'expense',date:'2026-11-03',amount:2570,
+  merchant:'ACH AUTO DEBIT 00421',sourceMerchant:'ACH AUTO DEBIT 00421',
+  accountId:'checking',seriesKey:'series|loan|monthly'},
+ {kind:'event',type:'expense',date:'2026-12-03',amount:2570,
+  merchant:'ACH AUTO DEBIT 00421',sourceMerchant:'ACH AUTO DEBIT 00421',
+  accountId:'checking',seriesKey:'series|loan|monthly'},
+ {kind:'event',type:'expense',date:'2026-11-07',amount:1700,
+  merchant:'Rent second property',accountId:'checking',seriesKey:'series|rent'},
+ {kind:'event',type:'expense',date:'2026-12-07',amount:1700,
+  merchant:'Rent second property',accountId:'checking',seriesKey:'series|rent'}
+];
+const noMortgageEvidence=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:opaque,rows:historic.filter(r=>r.merchant!=='Home Mortgage ACH')}});
+assert.equal(get(noMortgageEvidence,'mortgage','2026-11').status,'unknown',
+ 'Unknown lender label must remain unverified until user identifies the mortgage');
+const option=noMortgageEvidence.rows.find(r=>r.id==='mortgage')
+ .choices.find(c=>c.identity.seriesKey==='series|loan|monthly');
+assert.ok(option,'Summary provides the exact future recurring series for one-click identification');
+const savedSource={checking:option.identity};
+const identified=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:opaque,rows:historic.filter(r=>r.merchant!=='Home Mortgage ACH')},
+ prefs:{...opts.prefs,mortgageCoverageRules:savedSource}});
+assert.equal(get(identified,'mortgage','2026-11').status,'covered',
+ 'Identified mortgage recurring stream must show as included in November');
+assert.equal(get(identified,'mortgage','2026-12').status,'covered',
+ 'The same forecast series in December is also covered without a second confirmation');
+const changedLabel=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:opaque.map(e=>e.seriesKey==='series|loan|monthly'?
+  {...e,merchant:'BANK PMT RENAMED',sourceMerchant:'NEW SOURCE'}:e),
+ rows:historic.filter(r=>r.merchant!=='Home Mortgage ACH')},
+ prefs:{...opts.prefs,mortgageCoverageRules:savedSource}});
+assert.equal(get(changedLabel,'mortgage','2026-12').status,'covered',
+ 'Stable recurring ID survives renamed loan servicers');
+const justOne=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:opaque.filter(e=>e.date!=='2026-12-03'),
+ rows:historic.filter(r=>r.merchant!=='Home Mortgage ACH')},
+ prefs:{...opts.prefs,mortgageCoverageRules:savedSource}});
+assert.equal(get(justOne,'mortgage','2026-12').status,'missing',
+ 'Once identified, a truly missing mortgage month still produces a warning');
+assert.equal(get(justOne,'mortgage','2026-11').status,'covered');
+assert.equal(get(identified,'other-bills','2026-11').status,
+ get(noMortgageEvidence,'other-bills','2026-11').status,
+ 'Mortgage identification never mutates other bill predictions or actual bank facts');
+const linkedTransfer=projectedTransfers.map(e=>({...e,merchant:'LOAN AUTOPAY REF#091',
+ sourceMerchant:'LOAN AUTOPAY REF#091',seriesKey:'recurring|loan-transfer'}));
+const transferOwner=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:[],projection:{events:linkedTransfer},rows:historic.filter(r=>r.merchant!=='Home Mortgage ACH')}});
+const transferOption=transferOwner.rows.find(r=>r.id==='mortgage').choices
+ .find(c=>c.identity.seriesKey==='recurring|loan-transfer');
+assert.ok(transferOption,'An outgoing linked mortgage cash transfer may be identified too');
+const linkedSelected=C.analyze({...opts,bundle:{...opts.bundle,
+ ledger:[],projection:{events:linkedTransfer},rows:historic.filter(r=>r.merchant!=='Home Mortgage ACH')},
+ prefs:{...opts.prefs,mortgageCoverageRules:{checking:transferOption.identity}}});
+assert.equal(get(linkedSelected,'mortgage','2026-11').status,'covered');
+assert.equal(get(linkedSelected,'mortgage','2026-12').status,'covered');
+assert.equal(JSON.stringify(opaque).includes('Mortgage'),false,
+ 'Identification never depends on a mortgage keyword');
+
 for(const n of [30,60,90,120,180,360]){
  const m=C.months(date,n);
  assert.ok(m.length>=1&&m.length<=13);

@@ -400,3 +400,11 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .coverage-heading>span{max-width:145px}
  .coverage-legend{gap:9px 15px}
 }
+
+.coverage-identify{margin-top:14px;padding-top:12px;border-top:1px solid #e7ebf0;display:flex;flex-direction:column;gap:6px}
+.coverage-identify>strong{font-size:12px}
+.coverage-identify>p{margin:0 0 7px;font-size:11px;color:#6b7b89}
+.coverage-mortgage-option{width:100%;border:1px solid #e5ebf1;background:#f8fafc;color:#29405b;min-height:37px;text-align:left;padding:8px 10px;border-radius:6px;font-size:11px;cursor:pointer;overflow-wrap:anywhere}
+.coverage-mortgage-option:hover,.coverage-mortgage-option:focus-visible{border-color:#315ebd;background:#eef4fe}
+.coverage-mortgage-option:disabled{opacity:.6;cursor:wait}
+.coverage-mortgage-reset{background:none;border:0;color:#687787;font-size:11px;text-align:left;padding:8px 0;cursor:pointer}
