@@ -23,8 +23,11 @@ const accountFor=(row,accounts)=>{
  const aliases=(accounts||[]).filter(a=>[a.id,a.name,a.transactionAccount].some(v=>asId(v)===raw));
  return aliases.length===1?asId(aliases[0].id):raw;
 };
-const mortgageRow=r=>mortgage(r.merchant||r.description||r.name)||
- /MORTGAGE/.test(asId(r.personal_finance_category?.detailed||r.source?.personalFinanceCategory?.detailed||r.category).toUpperCase());
+const mortgageRow=r=>[r.merchant,r.description,r.name,r.source?.name,
+ r.source?.merchantName,r.personal_finance_category?.detailed,
+ r.personal_finance_category?.primary,r.source?.personalFinanceCategory?.detailed,
+ r.source?.personalFinanceCategory?.primary,r.category].some(x=>
+  mortgage(x)||/MORTGAGE|HOME_LOAN/.test(asId(x).toUpperCase()));
 const realExpense=r=>r&&!r.pending&&Number(r.amount)>0&&
  (r.type==='expense'||r.type==='transfer'&&r.cashDirection==='out'&&!r.pairedTransactionId);
 const realIncome=r=>r&&!r.pending&&Number(r.amount)>0&&
@@ -89,36 +92,124 @@ function billCells({months,found,expected,reason,tooMany=false}){
    detail:'Predicted withdrawal included in the account balance',items:described(items)};
  });
 }
-function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
- const id=asId(chosen.id),
+/* Match the items users see under Predictions, not a second independently
+ * named stream. Projection.events are the account movements actually included
+ * in the balance, whereas ledger drafts may include entries that could not
+ * be applied to an account. The ledger fallback serves isolated test fixtures. */
+function actualFutureExpenses({projection,ledger,accounts}){
+ if(projection&&Array.isArray(projection.events))
+  return projection.events.filter(e=>e&&!e.transferGroupId&&
+   e.kind==='expense'&&e.type==='expense'&&
+   !accounts.some(a=>asId(a.id)===asId(e.accountId)&&credit(a)));
+ return (ledger||[]).filter(e=>futureExpense(e)&&
+  !accounts.some(a=>asId(a.id)===asId(e.accountId)&&credit(a)));
+}
+const futureNameFields=e=>[e.merchant,e._forecastOriginalMerchant,
+ e.sourceMerchant,e.originalMerchant,e.description,e.source?.merchant];
+const sameStream=(e,key)=>futureNameFields(e).some(x=>norm(x)===key);
+const nearPayment=(e,d,amount)=>Math.abs(daysBetween(e.date,d))<=9&&
+ Math.abs(Number(e.amount)-Number(amount))<=Math.max(30,.06*Number(amount));
+function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,projection}){
+ const id=asId(chosen.id),expenses=actualFutureExpenses({projection,ledger,accounts}),
   posted=historyFor(rows,accounts,id,r=>realExpense(r)&&mortgageRow(r),asOf),
-  knownNames=new Set(posted.map(r=>norm(r.merchant))),
   confirmed=(prefs?.futureRecurringRules||[]).filter(r=>
    asId(r.originalAccountId||r.accountId||r.fromAccountId)===id&&
    r.type==='expense'&&(mortgage(r.merchant)||mortgage(r.originalMerchant))),
-  planned=(ledger||[]).filter(e=>
-   futureExpense(e)&&asId(e.accountId)===id&&
-   (mortgage(e.merchant)||mortgage(e._forecastOriginalMerchant)||
-    knownNames.has(norm(e.merchant))||knownNames.has(norm(e._forecastOriginalMerchant)))),
-  hasHistory=posted.length>0,
-  seed=posted.at(-1)?.date||confirmed.at(0)?.anchorDate||planned.at(0)?.date;
- // Without an observed/confirmed mortgage schedule, seeing a single future
- // expense is not enough evidence to assert that every month is covered.
- if(!hasHistory&&!confirmed.length){
+  knownNames=new Set([...posted.map(r=>norm(r.merchant||r.name)),...confirmed.flatMap(r=>
+   [norm(r.merchant),norm(r.originalMerchant)])].filter(Boolean)),
+  knownRuleIds=new Set(confirmed.map(r=>asId(r.id)).filter(Boolean)),
+  mortgageLike=e=>futureNameFields(e).some(mortgage)||
+   futureNameFields(e).some(x=>knownNames.has(norm(x)))||
+   knownRuleIds.has(asId(e.ruleId||e.recurringRuleId)),
+  own=expenses.filter(e=>asId(e.accountId)===id),
+  recognized=own.filter(mortgageLike),
+  lastPosted=posted.at(-1),seed=lastPosted?.date||
+   confirmed.find(r=>date(r.anchorDate))?.anchorDate||
+   recognized[0]?.date,
+  expected=expectedMonthly(seed,months);
+ const selectedHasEvidence=posted.length>0||confirmed.length>0||recognized.length>0;
+ // A mortgage on an account other than the selected account is not absent
+ // from the *household* forecast. It also must not be marked as affecting the
+ // balance curve of the account being inspected.
+ if(!selectedHasEvidence){
+  const elsewhere=expenses.filter(e=>asId(e.accountId)!==id&&mortgageLike(e));
+  if(elsewhere.length)return {id:'mortgage',title:'Mortgage',
+   hint:'Paid from another account',cells:months.map(m=>{
+    const entries=elsewhere.filter(e=>dayWithin(m,e.date)),
+     names=[...new Set(entries.map(e=>accounts.find(a=>asId(a.id)===asId(e.accountId))?.name||'another account'))];
+    return {month:m.key,status:entries.length?'external':'unknown',
+     label:entries.length?'Other':'?',detail:entries.length?
+      'Predicted mortgage exists in '+names.join(', ')+
+      ', not in the selected '+chosen.name+' balance. Switch to that account to see its effect.':
+      'No identifiable mortgage is scheduled within this part of the forecast',
+     items:described(entries.map(e=>({...e,
+      merchant:(e.merchant||'Mortgage')+' · '+(accounts.find(a=>asId(a.id)===asId(e.accountId))?.name||'Other account')})))};
+   })};
+  return {id:'mortgage',title:'Mortgage',hint:'Selected account',
+   cells:months.map(m=>({month:m.key,status:'unknown',label:'?',
+    detail:'The app cannot identify a recurring mortgage schedule for this account',
+    items:[]}))};
+ }
+ // An edited mortgage can have a new merchant label. Reconcile missing names
+ // to one unique, dated, amount-matched projected debit from the SAME
+ // account, only when posted history proves the original mortgage amount.
+ // This never fabricates a payment, and the UI discloses the weaker match.
+ const candidates=new Map();
+ if(lastPosted&&expected.length){
+  for(const due of expected){
+   if(recognized.some(e=>e.date.slice(0,7)===due.slice(0,7)))continue;
+   const potentials=own.filter(e=>!recognized.includes(e)&&
+    nearPayment(e,due,lastPosted.amount));
+   if(potentials.length===1)candidates.set(potentials[0],true);
+  }
+ }
+ // Source-matched events count as known mortgages. Amount/date-only matches
+ // need a review indicator, never the same green check as a linked rule.
+ const matched=[...recognized,...candidates.keys()];
+ const hasHistory=posted.length>0,hasRules=confirmed.length>0;
+ if(!hasHistory&&!hasRules){
+  // Repeating explicitly named predictions show as forecasted, not missing.
+  // A single one-off cannot prove future monthly coverage.
+  const seriesIds=new Set(recognized.map(e=>asId(e.seriesKey||e.recurringRuleId||e.ruleId))
+   .filter(Boolean));
+  const monthlyRecognized=recognized.length>=2&&
+   new Set(recognized.map(e=>e.date.slice(0,7))).size>=2;
+  const evidence=seriesIds.size>0&&monthlyRecognized;
   return {id:'mortgage',title:'Mortgage',hint:'Selected account',
    cells:months.map(m=>{
-    const items=planned.filter(e=>dayWithin(m,e.date));
-    return {month:m.key,status:'unknown',label:items.length?'? '+items.length:'?',
-     detail:items.length?'Mortgage-looking payment is present, but its monthly schedule is not verified':
-      'No reliable recurring mortgage schedule has been identified for this account',
-     items:described(items)};
+    const entries=matched.filter(e=>dayWithin(m,e.date));
+    return {month:m.key,status:entries.length&&evidence?'covered':'unknown',
+     label:entries.length?(evidence?'✓ ':'? ')+entries.length:'?',
+     detail:entries.length?(evidence?
+      'Recurring mortgage predictions are included in this account balance; confirm the schedule against your lender.':
+      'Mortgage-like predictions are included, but a monthly due schedule has not been verified.'):
+      'No confirmed mortgage schedule is available to check this month',
+     items:described(entries)};
    })};
  }
- const due=expectedMonthly(seed,months);
- return {id:'mortgage',title:'Mortgage',hint:'Selected account',
-  cells:billCells({months,found:planned,expected:due,
-   reason:'Mortgage is expected from bank history or your saved schedule but is absent from the future ledger',
-   tooMany:true})};
+ return {id:'mortgage',title:'Mortgage',hint:'Selected account',cells:months.map(m=>{
+  const due=expected.filter(d=>dayWithin(m,d));
+  const entries=matched.filter(e=>dayWithin(m,e.date)),
+   guessed=entries.some(e=>candidates.has(e));
+  if(!due.length&&!entries.length)return {month:m.key,status:'na',label:'—',
+   detail:'No expected mortgage date falls inside this part of the month',items:[]};
+  if(!due.length&&entries.length)return {month:m.key,status:'review',
+   label:entries.length+'?',detail:'Mortgage prediction is present but does not match the expected monthly schedule',
+   items:described(entries)};
+  if(entries.length>due.length)return {month:m.key,status:'review',
+   label:entries.length+'?',detail:'More than one possible mortgage withdrawal is predicted for this month. Check for duplicates.',
+   items:described(entries)};
+  if(entries.length<due.length)return {month:m.key,status:'missing',
+   label:entries.length?entries.length+' / '+due.length:'!',
+   detail:'An expected mortgage withdrawal does not appear among the dated predictions for this account',
+   items:described(entries)};
+  return {month:m.key,status:guessed?'review':'covered',
+   label:(guessed?'? ':'✓ ')+entries.length,
+   detail:guessed?
+    'A withdrawal matching the expected mortgage amount and date is in Predictions, but its merchant identity needs confirmation. It is not missing from the balance.':
+    'Mortgage withdrawal is included in the selected account balance and the expected monthly schedule.',
+   items:described(entries)};
+ })};
 }
 function cadenceFor(history){
  const list=[...new Set(history.map(r=>r.date))].sort();
@@ -361,7 +452,7 @@ function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
 function analyze({snapshot,chosen,bundle,prefs,days,accounts,ready}){
  const columns=months(snapshot.asOf,days),ledger=bundle?.ledger||[],rows=bundle?.rows||[],
   params={months:columns,ledger,rows,chosen,accounts,prefs,asOf:snapshot.asOf,
-   payments:bundle?.payments,ready};
+   projection:bundle?.projection,payments:bundle?.payments,ready};
  const lines=credit(chosen)?
   cardCoverage(params):
   [incomeCoverage(params),mortgageCoverage(params),...cardCoverage(params),
