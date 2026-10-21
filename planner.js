@@ -1293,8 +1293,8 @@ document.addEventListener('submit',async e=>{
     await commitForecastChange(()=>{
      const existingRows=futureRows(forecastFor(s),s);
      const existingCadence=cadenceOption(row.cadence);
-     // Changing to/from two alternating paycheck amounts must save a full
-     // owner rule; a flat series edit would erase the A/B pattern.
+     // Converting an inferred payroll phase to an explicit recurring rule
+     // must retain its distinct four-week identity.
      const useSeries=Boolean(row.seriesKey&&
       fields.frequency===existingCadence&&row.cadence&&!row.addedId&&
       !form.dataset.historyLinksChanged&&
