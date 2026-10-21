@@ -252,6 +252,40 @@ async function start(port=Number(env.PORT||8788)){
     finally{if(!retained)try{await plaid('/item/remove',{access_token:x.access_token})}catch{}}
    }
    if(requestPath==='/api/sync'){await sync();return respond(200,{ok:true,accounts:state.accounts.length})}
+   if(requestPath==='/api/accounts/remove'){
+    // Removal is by the Plaid account ID, never by ambiguous display name.
+    // It removes only this selected account from the private ledger and keeps
+    // all unrelated item tokens, transactions, and saved forecast preferences.
+    if(!body||typeof body.accountId!=='string'||!body.accountId||
+       body.accountId.length>256||Object.keys(body).length!==1)
+     return respond(400,{error:'Choose exactly one connected account'});
+    const id=body.accountId,account=state.accounts.find(a=>String(a.id)===id),
+     owners=state.items.filter(i=>i.accountIds.includes(id));
+    if(!account||owners.length!==1||String(account.itemId)!==String(owners[0].id))
+     return respond(404,{error:'This account is no longer connected. Refresh the list.'});
+    const item=owners[0],revoke=item.accountIds.length===1;
+    // Plaid permits one token to serve multiple selected accounts. Only
+    // revoke the Item if removing its LAST selected account, otherwise the
+    // remaining accounts from that same bank must keep syncing normally.
+    if(revoke)await plaid('/item/remove',{access_token:item.token});
+    const previous=state,transactions={},removedIds=new Set();
+    for(const [txId,t] of Object.entries(state.transactions)){
+     if(String(t.accountId||'')===id||
+       !t.accountId&&state.accounts.length===1)removedIds.add(txId);
+     else transactions[txId]=t;
+    }
+    const overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
+    for(const txId of removedIds)delete overrides[txId];
+    state={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
+     items:state.items.flatMap(i=>i.id!==item.id?[i]:
+      revoke?[]:[{...i,accountIds:i.accountIds.filter(a=>a!==id)}]),
+     transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides}};
+    // Preserve the encrypted forecast file and other account preferences.
+    // Removing an account must not silently reset paychecks or bills.
+    try{await save()}catch(error){state=previous;throw error}
+    return respond(200,{removed:true,remainingAccounts:state.accounts.length,
+     disconnectedInstitution:revoke});
+   }
    if(requestPath==='/api/disconnect'){
     for(const item of state.items)await plaid('/item/remove',{access_token:item.token});
     await forecastWrites;
