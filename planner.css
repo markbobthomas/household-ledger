@@ -357,3 +357,46 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 /* Summary's six day chips are the only horizon selector on that page. */
 body:has(.summary-page) .top-actions label[for="horizon"],
 body:has(.summary-page) .top-actions #horizon{display:none}
+
+
+/* Proof of coverage: one restrained month-by-month matrix, not another dashboard */
+.coverage-section{margin:26px 0 0;border:1px solid var(--line);border-radius:12px;background:#fff;padding:21px 23px 17px}
+.coverage-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+.coverage-heading h2{font-size:13px;font-weight:760;margin:0;letter-spacing:-.15px}
+.coverage-heading>span{font-size:11px;color:var(--muted);text-align:right}
+.coverage-scroller{overflow-x:auto;max-width:100%;overscroll-behavior-x:contain}
+.coverage-table{border-spacing:0;width:100%;min-width:max-content;border-collapse:separate}
+.coverage-table th,.coverage-table td{border-bottom:1px solid #eef1f5;text-align:center;padding:8px 7px;min-width:75px}
+.coverage-table thead th{font:700 10px var(--mono);color:#7a8794;background:#fff;vertical-align:bottom;padding:8px 7px}
+.coverage-table thead th:first-child{position:sticky;left:0;z-index:3;text-align:left;min-width:146px;background:white}
+.coverage-month>span{display:block;font:500 9px var(--mono);color:#9ba6b1;margin-top:3px}
+.coverage-table tbody th{position:sticky;left:0;z-index:2;min-width:146px;text-align:left;background:#fff;max-width:200px}
+.coverage-table tbody th strong{display:block;font-size:12px;overflow-wrap:anywhere}
+.coverage-table tbody th small{display:block;font-size:10px;color:var(--muted);font-weight:500;margin-top:3px}
+.coverage-cell{border:1px solid transparent;background:transparent;border-radius:7px;padding:6px 7px;min-width:49px;min-height:34px;color:#687787;font:700 11px var(--mono);cursor:pointer;white-space:nowrap}
+.coverage-cell.covered,.coverage-cell.posted{background:#eff6f2;color:#346d4a}
+.coverage-cell.missing,.coverage-cell.setup{background:#fceeed;color:#a43838}
+.coverage-cell.unknown,.coverage-cell.review,.coverage-cell.external{background:#faf2e6;color:#99743c}
+.coverage-cell.na{color:#9ba6b1;cursor:pointer}
+.coverage-cell:hover,.coverage-cell[aria-pressed="true"]{border-color:currentColor}
+.coverage-cell:focus-visible{outline:2px solid #315ebd;outline-offset:1px}
+.coverage-legend{display:flex;flex-wrap:wrap;align-items:center;gap:12px 19px;color:#91a0ac;margin-top:13px;font-size:10px}
+.coverage-legend b{font:750 11px var(--mono);color:#586e80}
+.coverage-detail{margin-top:15px;border-top:1px solid #e7ebf0;padding:14px 0 3px;font-size:12px}
+.coverage-detail-title{display:flex;align-items:center;justify-content:space-between;gap:15px}
+.coverage-detail-title strong{font-size:12px}
+.coverage-close{border:0;background:none;font-size:20px;color:#6b7c8a;min-width:28px;min-height:28px}
+.coverage-detail p{color:#6b7b89;margin:8px 0 10px;line-height:1.5}
+.coverage-detail-event{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #f0f2f5;font-size:11px}
+.coverage-detail-event strong{font:700 12px var(--mono);white-space:nowrap}
+.coverage-open-predictions{border:0;background:transparent;color:#315ebd;font-weight:720;font-size:12px;padding:10px 0 4px}
+@media(max-width:780px){
+ .coverage-section{padding:16px 12px;border-radius:11px;margin-top:18px}
+ .coverage-table thead th:first-child,.coverage-table tbody th{min-width:124px;max-width:144px}
+ .coverage-table th,.coverage-table td{min-width:66px;padding:7px 4px}
+ .coverage-table tbody th strong{font-size:11px}
+ .coverage-table tbody th small{font-size:9px}
+ .coverage-heading{align-items:start}
+ .coverage-heading>span{max-width:145px}
+ .coverage-legend{gap:9px 15px}
+}

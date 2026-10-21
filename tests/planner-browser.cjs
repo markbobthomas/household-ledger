@@ -43,6 +43,15 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-summary-days]').count(),6);
    assert.equal(await page.locator('[data-summary-plot]').count(),1,
     'Summary displays one inspectable curve instead of overlapping metrics');
+   assert.equal(await page.locator('[aria-label="Major payment coverage"]').count(),1,
+    'Summary displays one compact monthly coverage matrix');
+   assert.ok(await page.locator('.coverage-table tbody tr').count()>=2);
+   await page.locator('.coverage-table [data-coverage-cell]').first().click();
+   assert.equal(await page.locator('[data-coverage-detail]').isVisible(),true,
+    'Tap a month to reveal a projected payment or why it needs review');
+   assert.match(await page.locator('.coverage-detail').innerText(),/View predictions|Set up card payments/);
+   await page.locator('[data-coverage-close]').click();
+   assert.equal(await page.locator('[data-coverage-detail]').isVisible(),false);
    assert.match(await page.locator('.summary-trust').innerText(),/excludes unplanned everyday spending/i,
     'Summary explains what is excluded instead of claiming unwarranted accuracy');
    for(const days of [30,60,90,120,180,360]){
@@ -424,6 +433,16 @@ const {chromium,webkit}=require('playwright');
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
   assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+  await page.locator('[data-summary-days="60"]').click();
+  assert.equal(await page.locator('.coverage-month').count(),3,
+   '60 days from mid-October includes three calendar-month segments');
+  const preCard=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
+  assert.equal(await preCard.locator('.coverage-cell.setup').count(),3,
+   'Connected card alone is never considered a planned future withdrawal');
+  assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
+   .locator('.coverage-cell.covered,.coverage-cell.review').count()>=1,
+   'Mortgage forecasts are visible; overlapping inferred mortgages must be flagged rather than silently approved');
+  await page.locator('[data-summary-days="90"]').click();
   assert.equal(await page.locator('#horizon').inputValue(),'90');
   await page.locator('[data-summary-days="180"]').click();
   assert.equal(await page.locator('#horizon').inputValue(),'180',
@@ -504,6 +523,21 @@ const {chromium,webkit}=require('playwright');
    'Posted card charges are individually auditable for their billing period');
   assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Planned/,
    'Before bank posts withdrawal, its date is explicitly a plan, not actual history');
+  await page.locator('.sidebar [data-view="summary"]').click();
+  await page.locator('[data-summary-days="60"]').click();
+  const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
+  assert.equal(await cardCoverage.locator('.coverage-cell.covered').count(),2,
+   'November and December both contain actual linked checking withdrawals');
+  for(const column of [1,2]){
+   await cardCoverage.locator('[data-coverage-cell]').nth(column).click();
+   assert.match(await page.locator('[data-coverage-detail]').innerText(),
+    /Credit-card payment is included as a single linked withdrawal/);
+   assert.match(await page.locator('.coverage-detail-event').first().innerText(),/Household Visa.*autopay/i);
+  }
+  assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
+   .locator('.coverage-cell.covered,.coverage-cell.review').count()>=2,
+   'Both upcoming mortgage periods are shown or flagged for competing predicted withdrawals');
+  await page.locator('[data-summary-days="90"]').click();
   await page.locator('.sidebar [data-view="overview"]').click();
   assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
    'Overview shows the next card statement and due date');
