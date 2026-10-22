@@ -543,22 +543,22 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '<defs><linearGradient id="summary-blue-fill" x1="0" y1="0" x2="0" y2="1">'+
   '<stop offset="0" stop-color="#315ebd" stop-opacity=".14"/><stop offset="1" stop-color="#315ebd" stop-opacity="0"/></linearGradient></defs>'+
   '<line x1="'+plotLeft+'" x2="'+plotRight+'" y1="'+bottom+'" y2="'+bottom+'" stroke="#e8edf2"/>'+
-  zero+'<path d="'+path+' L '+plotRight+' '+bottom+' L '+plotLeft+' '+bottom+
+  zero+'<path data-trend-area d="'+path+' L '+plotRight+' '+bottom+' L '+plotLeft+' '+bottom+
   ' Z" fill="url(#summary-blue-fill)"/>'+
-  '<path d="'+path+'" stroke="#315ebd" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>'+
-  '<circle cx="'+pin[0]+'" cy="'+pin[1]+'" r="6" fill="'+(below?'#b9444b':'#315ebd')+
+  '<path data-trend-line d="'+path+'" stroke="#315ebd" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>'+
+  '<circle data-trend-pin cx="'+pin[0]+'" cy="'+pin[1]+'" r="6" fill="'+(below?'#b9444b':'#315ebd')+
   '" stroke="#fff" stroke-width="3"/>'+
   '<line data-summary-cursor x1="'+pin[0]+'" x2="'+pin[0]+'" y1="'+top+'" y2="'+bottom+
   '" stroke="#8395ae" stroke-width="1" stroke-dasharray="3 7"/>'+
   '<circle data-summary-dot cx="'+pin[0]+'" cy="'+pin[1]+'" r="7" stroke="#315ebd" stroke-width="2.5" fill="#fff"/>'+
-  '</svg><div class="summary-axis"><span>'+esc(shortDate(first.date))+'</span><span>'+
+  '</svg><div class="summary-axis"><span data-trend-first>'+esc(shortDate(first.date))+'</span><span data-trend-last>'+
   esc(shortDate(last.date))+'</span></div></div>'+
   '<div class="summary-peek" aria-live="off"><div><span data-summary-peek-date>'+esc(dateLabel(lowDay.date))+
   '</span><strong data-summary-peek-amount>'+money(low)+'</strong></div>'+
   '<small data-summary-peek-events>'+causes+'</small></div>'+
   '<div class="summary-caption">'+(credit?'Credit card debt · Higher means more owed':
   'Spendable cash · From scheduled deposits and withdrawals')+' · '+
-  moves+' dated movement'+(moves===1?'':'s')+
+  '<span data-trend-count>'+moves+' dated movement'+(moves===1?'':'s')+'</span>'+
   '<span>Tap or move along the curve to explore a day</span></div></section>'+
   '</details>'+
   '<section class="summary-trust" aria-label="Forecast assumptions">'+
