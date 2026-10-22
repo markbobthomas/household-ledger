@@ -893,3 +893,10 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .schedule-occurrence-section{padding:11px;margin:12px 0}
  .plan-occurrence-editor{padding:11px}
 }
+
+.plan-save-confirmation{padding:11px 13px;border:1px solid #cfe1ee;background:#f3f9fe;border-radius:8px;color:#315b7b;font-size:12px;font-weight:690;line-height:1.5}
+.plan-stop{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 3px 5px;margin-top:20px;border-top:1px solid #e6eef4}
+.plan-stop span{font-size:11px;color:#718397;line-height:1.5}
+.plan-stop .btn{font-size:11px;white-space:nowrap}
+.plan-stop .btn[data-stop-plan]:hover{background:#fff2ee}
+@media(max-width:520px){.plan-stop{flex-direction:column;align-items:flex-start}.plan-stop .btn{align-self:flex-start}}
