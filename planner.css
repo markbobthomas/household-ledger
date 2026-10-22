@@ -729,3 +729,29 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .calendar-monthly-unplanned .btn{white-space:nowrap}
 .summary-review-trigger{font-weight:750;font-size:14px;font-family:inherit}
 @media(max-width:520px){.calendar-monthly-unplanned>div{align-items:flex-start;flex-direction:column}}
+
+/* The calculation opens directly from the actual card-payment row or the month list. */
+.calendar-breakdown-row,.calendar-monthly-entry{display:flex;align-items:stretch;min-width:0;border-top:1px solid #e9eef4}
+.calendar-breakdown-row>.calendar-detail-item,.calendar-monthly-entry>.calendar-monthly-row{flex:1;min-width:0;border-top:0;border-bottom:0}
+.card-breakdown-action{flex:none;align-self:stretch;border:0;border-left:1px solid #e8eef4;background:#f6f9fd;color:#2b608c;cursor:pointer;font-size:11px;font-weight:720;padding:10px 12px;white-space:nowrap}
+.card-breakdown-action:hover,.card-breakdown-action:focus-visible{background:#eaf3fc}
+.card-breakdown-panel{margin:16px 0 0;padding:19px 20px;border:1px solid #ccdfef;border-radius:10px;background:#fcfdff}
+.card-breakdown-heading{display:flex;justify-content:space-between;gap:15px;align-items:start}
+.card-breakdown-heading>div{display:flex;flex-direction:column;gap:4px}
+.card-breakdown-heading small{font-size:10px;letter-spacing:.05em;color:#6c8094;font-weight:760}
+.card-breakdown-heading strong{font-size:18px;color:#2d435a;font-variant-numeric:tabular-nums}
+.card-breakdown-window,.card-breakdown-note,.card-breakdown-adjustment{font-size:11px;line-height:1.55;color:#60768a}
+.card-breakdown-section{margin:14px 0;padding:10px 0;border-top:1px solid #e8eef4}
+.card-breakdown-subhead,.card-breakdown-total{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#344e64}
+.card-breakdown-line{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:11px;border-top:1px solid #edf1f6;color:#657c8d}
+.card-breakdown-line strong{white-space:nowrap;color:#2c435a;font-variant-numeric:tabular-nums}
+.card-breakdown-section p{font-size:11px;color:#8995a0}
+.card-breakdown-total{font-size:13px;font-weight:730;padding:12px 0;border-top:1px solid #cfdee9}
+.card-breakdown-adjustment{padding:10px;border-radius:7px;background:#fff8ed}
+@media(max-width:600px){
+ .calendar-breakdown-row,.calendar-monthly-entry{flex-wrap:wrap}
+ .calendar-breakdown-row>.calendar-detail-item,.calendar-monthly-entry>.calendar-monthly-row{flex-basis:100%}
+ .card-breakdown-action{border-left:0;border-top:1px solid #eef2f7;width:100%;text-align:left;padding:8px 11px}
+ .card-breakdown-panel{padding:15px 12px}
+ .card-breakdown-heading strong{font-size:16px}
+}
