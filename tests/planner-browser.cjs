@@ -165,7 +165,7 @@ const {chromium,webkit}=require('playwright');
    }
    assert.equal(await page.locator('.coverage-table,.calendar-checklist').count(),0);
    assert.match(await page.locator('.summary-trust').innerText(),/not a guaranteed minimum/i);
-   assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),/1095-day forecast/);
+   assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),/3-year balance trend/);
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
    const beforeDate=await page.locator('[data-summary-peek-date]').innerText();
    await page.locator('[data-summary-plot]').focus();
