@@ -2204,7 +2204,12 @@ document.addEventListener('submit',async e=>{
       planner.defineRecurring(state(),fields,accounts,asOf,row,model.records(state()),examples);
      const edits=state().predictions.futureTransactionEdits||{};
      for(const other of existingRows){
-      if(other.key===row.key||row.seriesKey&&other.seriesKey===row.seriesKey&&other.baseDate>=row.baseDate)
+      // A confirmed plan's individually edited dates are independent.
+      // Updating repeating defaults may replace the selected date's override,
+      // but must never silently erase a different dated exception.
+      if(other.key===row.key||
+       !row.recurringRuleId&&row.seriesKey&&other.seriesKey===row.seriesKey&&
+        other.baseDate>=row.baseDate)
        delete edits[other.key];
      }
      // Replacing inferred recurrence with an explicit schedule makes the old
