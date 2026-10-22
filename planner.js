@@ -1461,9 +1461,9 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  }).join('');
  return '<div class="planner-page overview-page">'+
   accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
-  ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length||bundle?.automaticRecurrence?.review?.length||bundle?.duplicateConflicts?.length)?
+  ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length||bundle?.automaticRecurrence?.review?.length||bundle?.duplicateConflicts?.length||bundle?.postedMatchReview?.length)?
     '<section class="panel review-spotlight"><div><strong>Recurring payments may need review</strong>'+
-    '<p>Recent bank transactions may repeat. Confirm uncertain patterns before they affect your balance.</p></div>'+
+    '<p>Bank transactions or repeating payments need a decision before your forecast can be trusted.</p></div>'+
     '<button type="button" class="btn" data-view="reviews">Review suggestions</button></section>':'')+
   incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
