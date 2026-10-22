@@ -545,6 +545,16 @@ const {chromium,webkit}=require('playwright');
     .filter({hasText:'Water - House'}).innerText(),/175/);
    assert.match(await page.locator('.calendar-detail-item')
     .filter({hasText:'Water - Garden'}).innerText(),/220/);
+   await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).click();
+   assert.ok(await page.locator('.transaction-detail .future-edit-form').count()>0,
+    'A recurring utility bill uses the same full transaction editor from the calendar');
+   await page.locator('.transaction-detail [data-open-linked-schedule]').first().click();
+   assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
+    'The connected recurring schedule opens in the SAME details panel');
+   await page.locator('.transaction-detail-close').click();
+   assert.equal(await page.locator('.summary-page').count(),1,
+    'Closing a linked schedule returns to the calendar instead of stranding users on Schedules');
+   assert.equal(await page.locator('.transaction-detail').count(),0);
       assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');
