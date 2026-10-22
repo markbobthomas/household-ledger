@@ -18,7 +18,7 @@ function getPoints(derived,asOf,days){
 /* Daily calendar uses ONLY the same per-account daily projection and its
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
-let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null;
+let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false;
 const monthName=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',
  {month:'long',year:'numeric',timeZone:'UTC'});
 const signed=(e,card)=>card?
@@ -191,6 +191,36 @@ function dayDetail(point,card){
    '<button type="button" class="calendar-edit" data-view="transactions">All predictions →</button></div>'+
  '</section>';
 }
+
+function monthlyPredictions(state){
+ const rows=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
+  (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i})));
+ const credit=state.card;
+ const deposits=rows.filter(r=>signed(r.event,credit)>0)
+  .reduce((sum,r)=>sum+Number(r.event.amount||0),0),
+  withdrawals=rows.filter(r=>signed(r.event,credit)<=0)
+  .reduce((sum,r)=>sum+Number(r.event.amount||0),0);
+ const uncertain=!credit?(state.cardEstimates||[]).filter(c=>!c.eligible):[];
+ const unplanned=uncertain.length?'<div class="calendar-monthly-unplanned"><strong>Card payments not yet included</strong>'+
+  uncertain.map(c=>'<div><span>'+esc(c.cardName)+' · '+money(Number(c.observedCharges||0))+
+   ' in recent posted purchases (not an issued statement)</span>'+
+   '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
+ return '<details class="calendar-monthly-list" open>'+
+  '<summary>All '+rows.length+' predicted transactions in '+esc(monthName(calendarMonth))+
+   '<span>View every dated prediction</span></summary>'+
+  '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
+   ': <strong>'+money(deposits)+'</strong></span><span>'+
+   esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
+  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>
+   '<button type="button" class="calendar-monthly-row" data-calendar-list-date="'+date+
+   '" data-calendar-list-index="'+index+'"><span class="calendar-monthly-date">'+esc(shortDate(date))+
+   '</span><span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
+   (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
+   '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
+   '</strong><span class="calendar-monthly-view">View</span></button>').join('')+
+   '</div>':'<p class="calendar-empty">No predicted deposits or withdrawals for the selected account this month.</p>')+
+   unplanned+'</details>';
+}
 function calendarGrid(){
  const state=calendarContext;
  if(!state||!state.points.length)return '';
@@ -270,7 +300,8 @@ function calendarGrid(){
     (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
   '</div>'+coverageChecklist()+'<div class="calendar-grid" role="group" aria-label="'+
    esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
-   (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+'</div>';
+   (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
+   monthlyPredictions(state)+'</div>';
 }
 function showCalendar(date){
  if(!calendarContext||!calendarContext.points.some(p=>p.date===date)&&
@@ -280,6 +311,60 @@ function showCalendar(date){
  if(stage)stage.outerHTML=calendarGrid();
 }
 
+function reviewDetails(bundle,accounts,chosen,prefs,ready,coverage){
+ const rows=[],seen=new Set();
+ const add=(label,detail,action='reviews',month=null,index=null)=>{
+  const key=[label,detail,month,index].join('|');
+  if(seen.has(key))return;seen.add(key);
+  rows.push({label:String(label),detail:String(detail),action,month,index});
+ };
+ for(const card of accounts.filter(a=>String(a.accountType||a.type)==='credit'&&
+  !ready(prefs?.paymentRules?.[a.id],a,accounts))){
+  const candidate=(bundle?.payments?.cardEstimates||[]).find(c=>String(c.cardId)===String(card.id));
+  add(card.name+' · card payment',candidate?.eligible?
+   'A provisional monthly checking withdrawal is included using paired Plaid transfers. The amount is an estimate, not an issued statement. Confirm its cycle and withdrawal date in Settings.':
+   'No checking withdrawal has been forecast. Settled Plaid card spending over the last 30 days: '+
+    money(Number(candidate?.observedCharges||0))+
+    '. This is not necessarily the issued statement balance. The paying account and payment date cannot be established from purchases alone. '+
+    (candidate?.reason||'Confirm card billing and payment details.'),'settings');
+ }
+ for(const item of (bundle?.historyCandidates||[]).filter(t=>String(t.accountId)===String(chosen.id)))
+  add(item.merchant||'Recurring suggestion','Potential repeating payment; '+(item.reason||'Review its bank history.'),'reviews');
+ for(const item of (bundle?.missingMortgages||[]).filter(t=>String(t.accountId)===String(chosen.id)))
+  add(item.merchant||'Mortgage','Potential missing mortgage prediction: '+(item.reason||'Review the bank transaction.'),'reviews');
+ for(const item of bundle?.duplicateConflicts||[]){
+  if(item.accountId&&String(item.accountId)!==String(chosen.id))continue;
+  add(item.merchant||'Duplicate prediction',item.reason||'This prediction needs review.','reviews');
+ }
+ for(const message of [...(bundle?.payments?.warnings||[]),...(bundle?.routines?.warnings||[])])
+  if(!accounts.some(c=>String(c.accountType||c.type)==='credit'&&
+   !ready(prefs?.paymentRules?.[c.id],c,accounts)&&String(message).startsWith(c.name+':')))
+   add('Forecast warning',message,'reviews');
+ for(const issue of bundle?.projection?.diagnostics?.unassigned||[])
+  add('Unassigned payment',issue.merchant||issue.reason||'A payment is missing its account.','reviews');
+ for(const issue of bundle?.projection?.diagnostics?.unmatchedTransfers||[])
+  add('Unmatched transfer',issue.merchant||issue.reason||'A transfer is missing its counterpart.','reviews');
+ // Coverage rows describe specific future months, not generic review counts.
+ (coverage?.rows||[]).forEach((row,i)=>(row.cells||[]).forEach((cell,j)=>{
+  if(!['missing','setup','review','unknown'].includes(cell.status))return;
+  add(row.title+' · '+coverage.months[j].key,cell.detail,'coverage',j,i);
+ }));
+ return rows;
+}
+function reviewPanel(items){
+ if(!items.length)return '';
+ return '<section class="summary-review-details"'+(reviewOpen?'':' hidden')+
+  ' aria-label="Payments and predictions needing review">'+
+  '<strong>What needs attention?</strong>'+
+  '<p>These are specific forecast uncertainties, not additional withdrawals. Select an item to inspect it.</p>'+
+  items.map((x,i)=>'<div class="summary-review-row"><div><strong>'+esc(x.label)+
+   '</strong><small>'+esc(x.detail)+'</small></div>'+
+   '<button class="btn" type="button" '+(x.action==='coverage'?
+    'data-coverage-focus="'+x.index+'|'+x.month+'"':
+    'data-view="'+x.action+'"')+'>'+
+    (x.action==='coverage'?'Inspect':x.action==='settings'?'Set up card':'Review')+
+   '</button></div>').join('')+'</section>';
+}
 function issues(bundle,accounts,chosen,prefs,ready){
  const match=x=>String(x.accountId||'')===String(chosen.id);
  const pending=[...(bundle?.historyCandidates||[]).filter(match),
@@ -323,6 +408,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   actual.get(r.date).push(r);
  }
  calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,
+  cardEstimates:bundle?.payments?.cardEstimates||[],
   cushion:Number(prefs?.cashCushion??500),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
@@ -345,7 +431,8 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  calendarContext.coverage=coverage;
  const coverageHtml=coverage?coverageTool.render(coverage):'';
  const pin=locate(lowIndex),
-  warnings=issues(bundle,accounts,chosen,prefs,ready)+(coverage?.attention||0),
+  reviews=reviewDetails(bundle,accounts,chosen,prefs,ready,coverage),
+  warnings=reviews.length,
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
   emptySchedule=moves===0,
   quality=emptySchedule?
@@ -366,8 +453,11 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   '<div class="summary-date">'+esc(dateLabel(lowDay.date))+
   (negative?' · below $0':below?' · below your cash cushion':'')+'</div></div>'+
   '<div class="summary-end"><span>End of '+days+' days</span><strong>'+money(last.balance)+'</strong>'+
-  '<small>'+esc(shortDate(last.date))+'</small></div><div class="summary-coverage-metric"><span>Payment checklist</span><strong>'+(warnings?warnings+' to review':'No flagged gaps')+'</strong></div></div>'+
-  calendarGrid()+'</section>'+
+  '<small>'+esc(shortDate(last.date))+'</small></div><div class="summary-coverage-metric"><span>Payment checklist</span>'+
+  (warnings?'<button type="button" data-summary-review-toggle aria-expanded="'+reviewOpen+
+   '" class="summary-review-trigger">'+warnings+' to review <span>⌄</span></button>':
+   '<strong>No flagged gaps</strong>')+'</div></div>'+
+  reviewPanel(reviews)+calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend &amp; coverage checks</summary>'+
   '<section class="summary-stage summary-legacy">'+
   '<div class="summary-plot"><svg data-summary-plot role="img" tabindex="0" viewBox="0 0 '+plotWidth+
@@ -396,7 +486,8 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   '<section class="summary-trust" aria-label="Forecast coverage"><div class="summary-trust-line">'+
   '<strong>Forecast coverage</strong><span>'+quality+'</span>'+
   (emptySchedule?'<button type="button" data-view="transactions" class="summary-review-link">Add predictions →</button>':
-   warnings?'<button type="button" data-view="reviews" class="summary-review-link">Review →</button>':'')+
+   warnings?'<button type="button" data-summary-review-toggle aria-expanded="'+reviewOpen+
+    '" class="summary-review-link">Show '+warnings+' issues →</button>':'')+
   '</div><p>Includes scheduled and detected recurring payments; excludes unplanned everyday spending.'+
   (days>=120?' Longer-range forecasts are less certain.':'')+
   '</p></section></div>';
@@ -439,6 +530,22 @@ document.addEventListener('keydown',e=>{
   selected+(e.key==='ArrowRight'?1:-1));
 });
 document.addEventListener('click',e=>{
+ const review=e.target.closest?.('[data-summary-review-toggle]');
+ if(review){
+  reviewOpen=!reviewOpen;
+  const panel=document.querySelector('.summary-review-details');
+  if(panel)panel.hidden=!reviewOpen;
+  document.querySelectorAll('[data-summary-review-toggle]').forEach(b=>
+   b.setAttribute('aria-expanded',String(reviewOpen)));
+  if(reviewOpen)panel?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  return;
+ }
+ const monthly=e.target.closest?.('[data-calendar-list-date]');
+ if(monthly){
+  showCalendar(monthly.dataset.calendarListDate);
+  document.querySelector('[data-calendar-detail]')?.scrollIntoView({block:'nearest',behavior:'smooth'});
+  return;
+ }
  const legacy=e.target.closest?.('.summary-extras > summary');
  if(legacy){extrasOpen=!legacy.parentElement.open;return;}
  const coverageButton=e.target.closest?.('[data-coverage-focus]');

@@ -641,17 +641,31 @@ function otherMajorCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
 function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
  return accounts.filter(credit).map(card=>{
   const rule=prefs?.paymentRules?.[card.id],configured=Boolean(rule)&&ready(rule,card,accounts),
-   due=configured?expectedMonthly(rule.nextPaymentDate,months):[],
-   cardId=asId(card.id),payer=asId(rule?.fromAccountId),
+   inferred=(payments?.cardEstimates||[]).find(x=>asId(x.cardId)===asId(card.id)&&x.eligible),
+   due=configured?expectedMonthly(rule.nextPaymentDate,months):
+    inferred?expectedMonthly(inferred.nextPaymentDate,months):[],
+   cardId=asId(card.id),payer=asId(rule?.fromAccountId||inferred?.fromAccountId),
    funding=accounts.find(a=>asId(a.id)===payer),
    plans=(ledger||[]).filter(e=>e.kind==='movement'&&
     asId(e.toAccountId)===cardId&&asId(e.fromAccountId)===payer),
    statements=payments?.statements||[],
    inChosen=payer===asId(chosen.id);
   const cells=months.map(m=>{
-   if(!configured)return {month:m.key,status:'setup',label:'!',
-    detail:'Card payment setup is incomplete. No future checking withdrawal is assured.',
-    items:[]};
+   if(!configured){
+    const relevant=plans.filter(p=>dayWithin(m,p.date)),expected=due.filter(d=>dayWithin(m,d)),
+     entries=described(relevant.map(p=>({...p,merchant:p.merchant||card.name+' estimated card payment'})));
+    if(inferred&&relevant.length)return {month:m.key,
+     status:inChosen?'review':'external',label:'~ '+relevant.length,
+     detail:'Estimated checking-to-card payment inferred from multiple matched Plaid payment transfers and posted card spending. '+
+      'The issuer statement date and amount are not confirmed. Review them in Settings.'+
+      (inChosen?'':' This affects another paying account, not the selected balance.'),
+     items:entries};
+    if(inferred&&!expected.length)return {month:m.key,status:'na',label:'—',
+     detail:'No inferred card payment is due in this portion of the forecast.',items:[]};
+    return {month:m.key,status:'setup',label:'!',
+     detail:'Card payment details are incomplete. Plaid purchases alone cannot establish the actual statement closing date, withdrawal date or paying account. Confirm them in Settings.',
+     items:[]};
+   }
    const targets=due.filter(d=>dayWithin(m,d));
    const relevant=plans.filter(p=>dayWithin(m,p.date));
    const details=described(relevant.map(p=>({...p,

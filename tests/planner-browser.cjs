@@ -68,6 +68,14 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.summary-current').count(),1);
    assert.equal(await page.locator('.summary-coverage-metric').count(),1);
    assert.ok(await page.locator('.calendar-checklist').count()>0);
+   assert.equal(await page.locator('.calendar-monthly-list[open]').count(),1,
+    'Every monthly prediction is listed by default beneath the calendar');
+   const monthlyEntries=page.locator('.calendar-monthly-row');
+   assert.ok(await monthlyEntries.count()>0,'Monthly list contains actual forecast events');
+   const pickedMonth=await monthlyEntries.first().getAttribute('data-calendar-list-date');
+   await monthlyEntries.first().click();
+   assert.equal(await page.locator('.calendar-day.selected').getAttribute('data-calendar-day'),pickedMonth,
+    'Selecting a prediction from the monthly list focuses the matching date');
    assert.equal(await page.locator('[data-calendar-stage]').count(),1,
     'Summary defaults to a daily balance calendar');
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
@@ -630,6 +638,18 @@ const {chromium,webkit}=require('playwright');
   await page.locator('[data-summary-days="60"]').click();
   assert.equal(await page.locator('.coverage-month').count(),3,
    '60 days from mid-October includes three calendar-month segments');
+  assert.match(await page.locator('.calendar-monthly-unplanned').innerText(),/Household Visa/,
+   'Absent payment remains explicitly visible under monthly predictions with card-spending evidence');
+  const review=page.locator('.summary-review-trigger');
+  assert.equal(await review.count(),1,'Review count is an actionable button');
+  await review.click();
+  const details=page.locator('.summary-review-details');
+  assert.equal(await details.isVisible(),true);
+  assert.match(await details.innerText(),/Household Visa/,'Review explains the missing card payment');
+  assert.ok(await details.locator('[data-view="settings"]').count()>0,
+   'Missing card estimate links to payment configuration');
+  await review.click();
+  assert.equal(await details.isVisible(),false);
   const preCard=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
   assert.equal(await preCard.locator('.coverage-cell.setup').count(),3,
    'Connected card alone is never considered a planned future withdrawal');

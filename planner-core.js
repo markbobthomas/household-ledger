@@ -319,9 +319,19 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
    cadence:p.cadence||(p.origin==='card-autopay'?'monthly':
     p.frequency==='once'?null:p.frequency||null),
    baseDate:p.anchorDate,recurringRuleId:p.seriesRuleId||null}))];
- for(const e of extras.filter(x=>x.type==='transfer'&&x.date>asOf&&x.date<=end))
+ for(const e of extras.filter(x=>x.type==='transfer'&&x.date>asOf&&x.date<=end)){
+  // An explicit one-off transfer to a credit card supersedes a provisional
+  // same-cycle history estimate. It must not create two checking withdrawals.
+  const provisional=plans.findIndex(p=>p.origin==='card-history-estimate'&&
+   String(p.fromAccountId)===String(e.fromAccountId)&&
+   String(p.toAccountId)===String(e.toAccountId)&&
+   p.date.slice(0,7)===e.date.slice(0,7));
+  if(provisional>=0){checks.push({id:plans[provisional].id,keptId:e.id,
+   reason:'Explicit card payment replaces provisional payment estimate'});
+   plans.splice(provisional,1);}
   plans.push({...e,id:'future|'+e.id,fromAccountId:e.fromAccountId,toAccountId:e.toAccountId,
    source:'manual'});
+ }
  const finalPlans=[];
  for(const p of plans){
   const moved=tools.applySeries(p,p.baseDate||p.date,p.seriesKey,series);
