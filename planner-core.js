@@ -252,7 +252,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   (r.frequency!=='every-4-weeks'||!e.date||phaseMatch(r.anchorDate,e.date)));
  // Explicit rules come first, and always own their original bank series.
  const generated=tools.generatedRecurring(rules,add(asOf,-32),add(end,32));
- const ownerEntries=generated.events.filter(e=>configuredCard(e.accountId)).map(e=>{
+ // Explicitly confirmed card schedules can be included without card autopay
+ // setup. Unconfirmed automatic card-spend inference remains gated below.
+ const ownerEntries=generated.events.map(e=>{
   const base=e._seriesDate||e.date,changed=tools.applySeries(e,base,e._seriesKey,series),
    rule=rules.find(r=>r.id===e.ruleId);
   return {...changed,_seriesDate:base,
@@ -274,7 +276,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  }
  // One-off forecast additions are independent of Plaid facts.
  for(const e of extras){
-  if(!configuredCard(e.accountId)||e.type==='transfer'||
+  if(e.type==='transfer'||
    rules.some(r=>r.sourceAddedId===e.id))continue;
   if(!valid(e.date)||e.date<=asOf||e.date>end)continue;
   // A one-time explicit payment from the same payee is NOT the recurring
