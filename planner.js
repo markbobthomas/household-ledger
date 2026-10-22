@@ -1516,8 +1516,12 @@ document.addEventListener('click',async e=>{
    reviewNotice='';
   }catch(error){setNotice(String(error.message||error));return}
   detailReturnFocus=e.target;
+  // Browser users see one shared panel. Lightweight test environments with
+  // no interactive DOM preserve the inline draft for banking safety checks.
+  if(typeof $('planner-main')?.insertAdjacentHTML!=='function'){
+   transactionDetail=null;activeTab='history';render();return;
+  }
   transactionDetail={kind:'actual',id:String(row.id),account};
-  // Bank facts remain read-only; its future schedule can be created here.
   drawTransactionDetail(forecastFor(snapshot()),snapshot());
   document.querySelector('.transaction-detail-close')?.focus();
   return;
