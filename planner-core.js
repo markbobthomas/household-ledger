@@ -380,7 +380,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
    counts:{confirmed:ownerEntries.length,suggested:detected.automatic.length,excluded:0}},
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
-  duplicateChecks:checks,duplicateConflicts:detected.conflicts};
+  duplicateChecks:checks,duplicateConflicts:detected.conflicts,
+  postedMatchReview:covered.review||[]};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){
