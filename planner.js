@@ -759,18 +759,40 @@ function drawTransactionDetail(bundle,s){
   updateHistoryLinks(form);
  }
 }
+function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
+ const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===id);
+ if(!rule)return false;
+ detailReturnFocus=origin||null;
+ if(activeTab!=='schedules'){
+  if(!detailOriginTab)detailOriginTab=activeTab;
+  activeTab='schedules';
+ }
+ scheduleMode=mode;scheduleTarget=id;detailParentSchedule=null;
+ transactionDetail={kind:'schedule',id,mode,selectedKey:String(selectedKey||'')};
+ render();
+ document.querySelector('.transaction-detail-close')?.focus();
+ return true;
+}
 function openPrediction(key,origin){
- // A schedule is the parent of its dated occurrences. Opening a single
- // occurrence keeps the parent ready to return to after closing or saving.
- if(transactionDetail?.kind==='schedule')detailParentSchedule={...transactionDetail};
+ const current=transactionDetail?.kind==='schedule'?transactionDetail:null;
+ const s=snapshot(),bundle=forecastFor(s),
+  row=futureRows(bundle,s).find(r=>r.key===String(key));
+ if(row?.recurringRuleId&&openSchedulePlan(row.recurringRuleId,row.key,origin))return;
+ // Unconfirmed or one-time forecasts use this same plan shell, but do not
+ // claim to have a saved repeating rule.
+ if(current)detailParentSchedule={...current};
  else detailParentSchedule=null;
  detailReturnFocus=origin||null;
  transactionDetail={kind:'prediction',key:String(key)};
- try{drawTransactionDetail(forecastFor(snapshot()),snapshot())}
+ try{drawTransactionDetail(bundle,s)}
  catch(err){transactionDetail=null;setNotice(String(err.message||err));return}
  document.querySelector('.transaction-detail-close')?.focus();
 }
 function restoreScheduleAfterOccurrence(){
+ if(transactionDetail?.kind==='schedule'&&transactionDetail.selectedKey){
+  transactionDetail.selectedKey='';
+  return;
+ }
  if(detailParentSchedule){
   const parent=detailParentSchedule;detailParentSchedule=null;
   if((state().predictions?.futureRecurringRules||[]).some(r=>r.id===parent.id)){
@@ -781,6 +803,10 @@ function restoreScheduleAfterOccurrence(){
 }
 function dismissTransaction(){
  const mode=transactionDetail?.kind;
+ if(mode==='schedule'&&transactionDetail.selectedKey){
+  transactionDetail.selectedKey='';render();
+  return;
+ }
  if(mode==='prediction'&&detailParentSchedule){
   restoreScheduleAfterOccurrence();
   detailReturnFocus=null;render();return;
@@ -906,8 +932,10 @@ function schedulesPage(bundle,s){
   '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
   '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
  const cards=rules.map(r=>{
-  const id=escapeHTML(r.id),isEditing=scheduleMode==='edit'&&scheduleTarget===r.id,
-   isEstimating=scheduleMode==='estimate'&&scheduleTarget===r.id,
+  const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
+   transactionDetail.id===r.id,
+   isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
+   isEstimating=(scheduleMode==='estimate'||planOpen)&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
@@ -940,8 +968,7 @@ function schedulesPage(bundle,s){
    '<div class="schedule-metrics"><span>Next: '+(next?escapeHTML(dayLabel(next)):'Outside forecast')+'</span>'+
     '<strong>'+cash(estimate.amount)+'</strong><span>'+dates.length+' upcoming</span></div>'+
    '<div class="schedule-actions">'+
-    '<button class="btn" type="button" data-schedule-edit="'+id+'">Edit schedule</button>'+
-    '<button class="btn" type="button" data-schedule-estimate="'+id+'">Set estimate</button>'+
+    '<button class="btn primary" type="button" data-schedule-edit="'+id+'">Open plan →</button>'+
     '<button class="btn" type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
     '<button class="btn" type="button" data-schedule-remove="'+id+'">'+
      (scheduleRemoveTarget===r.id?'Confirm remove':'Remove')+'</button></div>'+
@@ -1367,6 +1394,12 @@ function render(){
 }
 document.addEventListener('click',async e=>{
  if(e.target.closest?.('[data-close-transaction-detail]')){dismissTransaction();return}
+ const selectedPlanPayment=e.target.closest?.('[data-select-plan-payment]');
+ if(selectedPlanPayment&&transactionDetail?.kind==='schedule'){
+  transactionDetail.selectedKey=selectedPlanPayment.dataset.selectPlanPayment;
+  transactionDetail.mode='edit';
+  render();return;
+ }
  const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
  if(opening){
   if(opening.hasAttribute('data-open-transaction'))
@@ -1390,7 +1423,11 @@ document.addEventListener('click',async e=>{
   render();return;
  }
  const closeSchedule=e.target.closest?.('[data-schedule-close]');
- if(closeSchedule){transactionDetail=null;scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render();return}
+ if(closeSchedule){
+  if(transactionDetail)dismissTransaction();
+  else{scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render()}
+  return;
+ }
  const fromActual=e.target.closest?.('[data-schedule-from-actual]');
  if(fromActual){
   const t=lastHistoryRows.find(r=>String(r.id)===fromActual.dataset.scheduleFromActual);
@@ -1427,10 +1464,9 @@ document.addEventListener('click',async e=>{
  if(scheduleEdit||scheduleEstimate){
   const mode=scheduleEdit?'edit':'estimate',id=(scheduleEdit||scheduleEstimate).dataset[
    scheduleEdit?'scheduleEdit':'scheduleEstimate'];
-  scheduleMode=scheduleMode===mode&&scheduleTarget===id?'':mode;
-  scheduleTarget=id;scheduleRemoveTarget='';scheduleNotice='';
-  transactionDetail=scheduleMode?{kind:'schedule',id,mode:scheduleMode}:null;
-  render();return;
+  scheduleRemoveTarget='';scheduleNotice='';
+  openSchedulePlan(id,'',scheduleEdit||scheduleEstimate,mode);
+  return;
  }
  const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
  if(removeWindow){
