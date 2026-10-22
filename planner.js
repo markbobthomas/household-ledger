@@ -40,6 +40,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
+let scheduleSort='order',scheduleCategoryFilter='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -51,6 +52,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
+   scheduleCategories:p.scheduleCategories,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments}));
   return true;
@@ -973,6 +975,10 @@ function scheduleFields(r,isNew,s){
   return '<div class="future-fields">'+
    '<label>Bill label (distinguishes same-payee bills)<input name="scheduleLabel" maxlength="110" placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||'')+'"></label>'+
    '<label>Bank merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(r.merchant||'')+'"></label>'+
+   '<label>Category<select name="category">'+
+    window.HouseholdPlannerTransactions.scheduleCategories(state()).map(c=>
+     '<option value="'+escapeHTML(c)+'"'+(c===(r.category||'Uncategorized')?' selected':'')+'>'+
+      escapeHTML(c)+'</option>').join('')+'</select></label>'+
    '<label>Expected amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
    '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
    '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
@@ -992,9 +998,39 @@ function scheduleFields(r,isNew,s){
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
  }
+function scheduleAvgMonth(rule,T,asOf,through){
+ const dates=T.recurrenceDates(rule,asOf,through);
+ return dates.reduce((sum,date)=>sum+T.scheduleAmount(rule,date).amount,0)/12;
+}
+function scheduleCategorySummary(items,T,asOf,through){
+ let withdrawals=0,deposits=0,transfers=0;
+ for(const {rule} of items){
+  const average=scheduleAvgMonth(rule,T,asOf,through);
+  if(rule.kind==='movement')transfers+=average;
+  else if(['income','refund'].includes(rule.type))deposits+=average;
+  else withdrawals+=average;
+ }
+ const parts=[];
+ if(withdrawals)parts.push('Out '+cash(withdrawals)+'/mo');
+ if(deposits)parts.push('In '+cash(deposits)+'/mo');
+ if(transfers)parts.push('Transfers '+cash(transfers)+'/mo');
+ return parts.join(' · ')||cash(0)+'/mo';
+}
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
-  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
+  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
+  nextYear=shiftDay(s.asOf,365),tomorrow=shiftDay(s.asOf,1),
+  categories=T.scheduleCategories(state()),
+  categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
+ const indexed=rules.map((rule,index)=>({rule,index}));
+ const visible=indexed.filter(({rule})=>!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter);
+ visible.sort((a,b)=>scheduleSort==='value-desc'?
+  Number(b.rule.amount)-Number(a.rule.amount)||a.index-b.index:
+  scheduleSort==='value-asc'?
+   Number(a.rule.amount)-Number(b.rule.amount)||a.index-b.index:
+  scheduleSort==='category'?
+   categoryOf(a.rule).localeCompare(categoryOf(b.rule))||a.index-b.index:
+  a.index-b.index);
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
  const create=scheduleMode==='new'?'<form class="panel schedule-form" data-schedule-new-form>'+
   '<h3>New schedule</h3>'+
@@ -1003,7 +1039,7 @@ function schedulesPage(bundle,s){
   fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
   '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
- const cards=rules.map((r,index)=>{
+ const cardHtml=({rule:r,index})=>{
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
@@ -1031,7 +1067,7 @@ function schedulesPage(bundle,s){
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-      ' · '+escapeHTML(r.frequency)+'</small></span></span>'+
+      ' · '+escapeHTML(r.frequency)+' · '+escapeHTML(categoryOf(r))+'</small></span></span>'+
     '<span class="schedule-row-next"><small>Next</small><span>'+
      (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
     '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
@@ -1061,12 +1097,40 @@ function schedulesPage(bundle,s){
       '<small>Amount, date, frequency, payee and accounts</small></summary>'+
       '<div class="plan-settings-body">'+edit+'</div></details>'+
      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</div></article>';
- }).join('');
+ };
+ const cards=scheduleSort==='category'?
+  [...new Set(visible.map(({rule})=>categoryOf(rule)))].map(category=>{
+   const items=visible.filter(({rule})=>categoryOf(rule)===category);
+   return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
+    '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
+    ' <small>('+items.length+')</small></strong><span>'+
+    scheduleCategorySummary(items,T,s.asOf,nextYear)+'</span></div>'+
+    items.map(cardHtml).join('')+'</section>';
+  }).join(''):
+  visible.map(cardHtml).join(''); 
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
   '<h2>Payment schedules</h2><p>Edit any schedule or an individual upcoming payment.</p></div>'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  create+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
+  '<div class="schedule-toolbar" aria-label="Schedule organization">'+
+   '<label>Sort <select data-schedule-sort>'+
+    [['order','Original order'],['value-desc','Amount: high to low'],
+     ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
+     '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
+   '</select></label>'+
+   '<label>Show <select data-schedule-category-filter><option value="">All categories</option>'+
+    categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
+     (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+   '</select></label>'+
+   '<details class="schedule-category-manager" data-schedule-category-manager>'+
+    '<summary>+ Category</summary>'+
+    '<form data-schedule-category-add><label>New category<input name="categoryName" maxlength="40" '+
+    'placeholder="e.g. Pet care" required></label>'+
+    '<button type="submit" class="btn">Add</button></form>'+
+    '<p data-schedule-category-notice role="status"></p></details></div>'+ 
+  create+'<div class="schedule-grid">'+
+   (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
+   '</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
