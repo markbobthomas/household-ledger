@@ -40,7 +40,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='order',scheduleCategoryFilter='';
+let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1024,7 +1024,11 @@ function schedulesPage(bundle,s){
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
  const indexed=rules.map((rule,index)=>({rule,index}));
- const visible=indexed.filter(({rule})=>!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter);
+ const query=scheduleSearch.toLowerCase().trim();
+ const visible=indexed.filter(({rule})=>
+  (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter)&&
+  (!query||[rule.scheduleLabel,rule.merchant,categoryOf(rule)].some(value=>
+   String(value||'').toLowerCase().includes(query))));
  const nextAmount=rule=>{
   const first=T.recurrenceDates(rule,s.asOf,end)[0];
   return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
@@ -1072,7 +1076,7 @@ function schedulesPage(bundle,s){
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-      ' · '+escapeHTML(r.frequency)+' · '+escapeHTML(categoryOf(r))+'</small></span></span>'+
+      ' · '+escapeHTML(r.frequency)+'</small></span></span>'+
     '<span class="schedule-row-next"><small>Next</small><span>'+
      (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
     '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
@@ -1080,6 +1084,11 @@ function schedulesPage(bundle,s){
     '<span class="schedule-row-chevron" aria-hidden="true"><span class="schedule-edit-label">'+
      (isEditing?'Close':'Edit')+' </span>'+(isEditing?'⌃':'⌄')+'</span>'+
    '</button>'+
+   '<select class="schedule-row-category" data-schedule-quick-category="'+id+'" '+
+    'aria-label="Category for schedule '+number+': '+title+'">'+
+    categories.map(category=>'<option value="'+escapeHTML(category)+'"'+
+     (category===categoryOf(r)?' selected':'')+'>'+escapeHTML(category)+'</option>').join('')+
+   '</select>'+
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for schedule '+number+'" title="More actions">⋯</summary>'+
     '<div class="schedule-more-menu">'+
@@ -1118,6 +1127,8 @@ function schedulesPage(bundle,s){
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" aria-label="Schedule organization">'+
+   '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
+    'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Sort <select data-schedule-sort>'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
@@ -1135,7 +1146,8 @@ function schedulesPage(bundle,s){
     '<p data-schedule-category-notice role="status"></p></details></div>'+ 
   create+'<div class="schedule-grid">'+
    (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
-   '</div></div>';
+   '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
+   'No matching schedules. Try a different search.</p></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
