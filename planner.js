@@ -2413,12 +2413,49 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('input',e=>{
+ if(e.target.matches?.('[data-schedule-search]')){
+  scheduleSearch=e.target.value;
+  applyScheduleSearch(document.querySelector('#planner-main'));return;
+ }
  if(e.target.matches?.('[data-history-link-search],[data-future-new-form] [name=merchant],'+
   '[data-future-edit-form] [name=merchant],[data-history-recurring-form] [name=merchant]')){
   const form=e.target.closest('form');updateHistoryLinks(form);
  }
 });
-document.addEventListener('change',e=>{
+document.addEventListener('change',async e=>{
+ const quick=e.target.closest?.('[data-schedule-quick-category]');
+ if(quick){
+  const id=quick.dataset.scheduleQuickCategory,
+   saved=(state().predictions?.futureRecurringRules||[]).find(rule=>String(rule.id)===String(id)),
+   original=saved?.category||'Uncategorized',
+   form=document.querySelector('[data-schedule-edit-form],[data-schedule-new-form]');
+  if(!saved){quick.value=original;setNotice('Schedule changed. Refresh and try again.');return}
+  if(quick.value===original)return;
+  const dirty=form&&[...form.querySelectorAll('input,select,textarea')].some(field=>{
+   if(field.type==='hidden')return false;
+   if(field.type==='checkbox'||field.type==='radio')return field.checked!==field.defaultChecked;
+   if(field.tagName==='SELECT')return [...field.options].some(o=>o.selected!==o.defaultSelected);
+   return field.value!==field.defaultValue;
+  });
+  if(dirty&&!window.confirm('Discard unsaved schedule edits to change this category?')){
+   quick.value=original;return;
+  }
+  quick.disabled=true;
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,quick.value));
+   scheduleNotice='';
+   render();
+   [...document.querySelectorAll('[data-schedule-quick-category]')].find(el=>
+    el.dataset.scheduleQuickCategory===id)?.focus({preventScroll:true});
+  }catch(err){quick.disabled=false;quick.value=original;
+   scheduleNotice='Could not save category: '+String(err.message||err);
+   const note=document.querySelector('.future-notice');
+   if(note)note.textContent=scheduleNotice;
+   else{quick.insertAdjacentHTML('afterend','<span class="schedule-quick-error" role="alert">'+
+    escapeHTML(scheduleNotice)+'</span>');}
+  }
+  return;
+ }
  const sorter=e.target.closest?.('[data-schedule-sort]'),
   filter=e.target.closest?.('[data-schedule-category-filter]');
  if(sorter||filter){
