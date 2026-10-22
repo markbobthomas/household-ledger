@@ -1680,7 +1680,7 @@ if(available()){
 render();
 // /healthz reveals only the currently running server revision; a GitHub merge
 // is never treated as proof that the private Render service deployed it.
-fetch('/healthz',{cache:'no-store'}).then(async response=>{
+if(typeof fetch==='function')fetch('/healthz',{cache:'no-store'}).then(async response=>{
  if(!response.ok)return null;
  const data=await response.json();
  return data?.commit&&/^[a-f0-9]{40}$/i.test(data.commit)?data.commit:null;
