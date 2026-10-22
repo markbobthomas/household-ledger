@@ -599,6 +599,7 @@ document.addEventListener('click',e=>{
  }
  const monthly=e.target.closest?.('[data-calendar-list-date]');
  if(monthly){
+  if(monthly.hasAttribute('data-open-transaction'))return; // Open the SAME transaction panel everywhere.
   showCalendar(monthly.dataset.calendarListDate);
   document.querySelector('[data-calendar-detail]')?.scrollIntoView({block:'nearest',behavior:'smooth'});
   return;
