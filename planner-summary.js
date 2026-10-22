@@ -518,7 +518,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
   emptySchedule=moves===0;
  const zero=!credit&&floor<0&&ceil>0?
-  '<line x1="'+plotLeft+'" x2="'+plotRight+'" y1="'+y(0).toFixed(2)+'" y2="'+y(0).toFixed(2)+
+  '<line data-trend-zero x1="'+plotLeft+'" x2="'+plotRight+'" y1="'+y(0).toFixed(2)+'" y2="'+y(0).toFixed(2)+
   '" stroke="#c68687" stroke-width="1" stroke-dasharray="4 7"/>':'';
  const listed=lowDay.events||[];
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
