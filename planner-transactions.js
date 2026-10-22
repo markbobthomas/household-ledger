@@ -186,6 +186,21 @@ function recurrenceDates(rule,asOf,through){
  return [...new Set(dates)].sort();
 }
 function manualSeriesKey(ruleId){return 'user-series|'+encodeURIComponent(String(ruleId))}
+
+// Ambiguity is a choice of existing forecast schedules, never permission to
+// create another debit or combine independent paycheck phases.
+function scheduleChoice(candidates){
+ const e=Error('Several saved schedules match this payment. Choose the one to update.');
+ e.code='RECURRING_SCHEDULE_CHOICE';
+ e.options=candidates.map(r=>({id:r.id,merchant:r.merchant,frequency:r.frequency,
+  anchorDate:r.anchorDate,amount:Number(r.amount),accountId:r.accountId||r.fromAccountId}));
+ return e;
+}
+function linkedSchedule(candidates,selectedExampleIds){
+ const ids=new Set((selectedExampleIds||[]).map(String));
+ const linked=candidates.filter(r=>(r.exampleIds||[]).some(id=>ids.has(String(id))));
+ return linked.length===1?linked[0]:null;
+}
 function defineRecurring(state,data,accounts,asOf,reference=null,records=[],selectedExampleIds=[]){
  const transfer=reference?reference.kind==='movement':data.type==='transfer';
  const fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
@@ -197,7 +212,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   if(!Number.isInteger(secondDay)||secondDay<1||secondDay>31||
    secondDay===Number(fields.date.slice(-2)))throw Error('Choose a different second payday (1–31)');
  }
- const p=ensure(state);
+ const p=ensure(state),requestedId=String(data.existingRuleId||'');
  const baseAccount=reference?.kind==='movement'?String(reference.sourceAccountId||reference.fromAccountId):
   String(reference?.sourceAccountId||reference?.accountId||fields.accountId);
  const originalMerchant=reference?.originalMerchant||reference?.sourceMerchant||reference?.merchant||fields.merchant;
@@ -228,12 +243,23 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   const matching=sameType.filter(r=>frequency==='every-4-weeks'&&
    r.frequency==='every-4-weeks'?samePhase(r.anchorDate,fields.date):
    frequency!=='every-4-weeks');
-  if(matching.length>1)throw Error('More than one matching recurring schedule. Review saved schedules.');
-  if(matching.length===1)id=matching[0].id;
+  // Bank transaction IDs are stronger evidence than the common payee name.
+  // An exact cadence can disambiguate a pair of different saved schedules.
+  const linked=linkedSchedule(matching,selectedExampleIds);
+  const cadenceMatches=matching.filter(r=>r.frequency===frequency);
+  const candidates=linked?[linked]:(cadenceMatches.length===1?cadenceMatches:matching);
+  if(requestedId){
+   const chosen=candidates.find(r=>r.id===requestedId);
+   if(!chosen)throw Error('Selected recurring schedule is no longer a match. Reopen this payment.');
+   id=chosen.id;
+  }else if(candidates.length===1)id=candidates[0].id;
+  else if(candidates.length>1)throw scheduleChoice(candidates);
   else if(frequency!=='every-4-weeks'&&sameType.length)
-   throw Error('This merchant already has separate recurring schedules. Edit the intended schedule instead.');
+   throw scheduleChoice(sameType);
  }
  let old=p.futureRecurringRules.find(r=>r.id===id);
+ if(reference?.recurringRuleId&&!old)
+  throw Error('The saved recurring schedule changed. Reopen it before editing.');
  const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
   accountRef(t.accountId||t.account,accounts)===baseAccount&&
   merchantKey(t.merchant)&&Number(t.amount)>0);
@@ -266,10 +292,23 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
     .some(name=>names.includes(name))&&
    (frequency==='every-4-weeks'&&r.frequency==='every-4-weeks'?
     samePhase(r.anchorDate,fields.date):frequency!=='every-4-weeks'));
-  if(overlapping.length>1||overlapping.length===1&&old&&old.id!==overlapping[0].id)
-   throw Error('Multiple recurring rules already share this bank payee. Review the existing schedules before making another.');
-  if(overlapping.length===1){id=overlapping[0].id;old=overlapping[0]}
+  if(requestedId){
+   const picked=overlapping.find(r=>r.id===requestedId);
+   if(overlapping.length&&!picked)
+    throw Error('This bank payment is also connected to another schedule. Review its links.');
+   if(picked){id=picked.id;old=picked}
+  }else if(overlapping.length>1){
+   const linked=linkedSchedule(overlapping,selectedExampleIds);
+   if(linked){id=linked.id;old=linked}
+   else if(!old||!overlapping.some(r=>r.id===old.id))
+    throw scheduleChoice(overlapping);
+  }else if(overlapping.length===1){
+   if(old&&old.id!==overlapping[0].id)throw scheduleChoice([old,overlapping[0]]);
+   id=overlapping[0].id;old=overlapping[0];
+  }
  }
+ if(requestedId&&id!==requestedId)
+  throw Error('Choose the matching saved recurring schedule before saving.');
  if(!names.length)throw Error('Enter a merchant name');
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,

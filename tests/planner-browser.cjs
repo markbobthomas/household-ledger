@@ -37,6 +37,27 @@ const {chromium,webkit}=require('playwright');
     await page.locator('#planner-menu > summary').click();
     await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
    };
+   // The menu must stay usable on desktop and the narrowest supported iPhones.
+   const visibleMenu=async()=>{
+    await page.locator('#planner-menu > summary').click();
+    const r=await page.locator('.planner-menu-content').evaluate(el=>{
+     const b=el.getBoundingClientRect();
+     return {left:b.left,right:b.right,top:b.top,bottom:b.bottom,
+      screenW:window.innerWidth,screenH:window.innerHeight};
+    });
+    assert.ok(r.left>=-1&&r.right<=r.screenW+1&&r.top>=0&&r.bottom<=r.screenH+1,
+     'Menu remains entirely onscreen: '+JSON.stringify(r));
+    await page.keyboard.press('Escape');
+   };
+   await visibleMenu();
+   if(mobile){
+    await page.setViewportSize({width:320,height:640});
+    await visibleMenu();
+    const menu=await page.locator('#planner-menu > summary').boundingBox();
+    assert.ok(menu&&menu.x>=0&&menu.x+menu.width<=321,'Menu trigger itself stays onscreen at 320px');
+    await page.setViewportSize({width:390,height:844});
+   }
+
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
