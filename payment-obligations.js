@@ -98,7 +98,10 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   cardEstimates=[];
  for(const card of accounts.filter(credit))
   if(!ready(cards[card.id],card,accounts)){
-   const candidate=inferPayment(card,accounts,records,asOf);
+   const candidate=cards[card.id]?{
+    cardId:String(card.id),cardName:card.name,eligible:false,
+    reason:'Saved card payment settings are incomplete; finish or remove them in Settings'
+   }:inferPayment(card,accounts,records,asOf);
    cardEstimates.push(candidate);
    if(candidate.eligible){
     // Estimated monthly autopay is provisionally forecast when the bank
