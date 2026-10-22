@@ -113,13 +113,16 @@ function quickEditor(){
 function postedDay(date){
  const rows=calendarContext.actual.get(date)||[];
  const body=rows.map(t=>{
-  const incoming=['income','refund'].includes(t.type)||t.type==='transfer'&&t.cashDirection==='in';
+  const incoming=['income','refund'].includes(t.type)||t.type==='transfer'&&t.cashDirection==='in',
+   matches=root.HouseholdPlannerTransactions.historicalScheduleMatches(
+    t,calendarContext.accounts,calendarContext.prefs?.futureRecurringRules||[]),
+   action=matches.length===1?'View schedule':matches.length>1?'Choose schedule':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row"><span class="calendar-transaction-name">'+
    esc(t.merchant||'Bank transaction')+
    '<small>'+(t.pending?'Pending bank transaction':'Posted bank transaction')+'</small></span>'+
    '<strong class="'+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
    '</strong><button type="button" class="calendar-item-edit" data-calendar-history-plan="'+
-   esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">Make recurring</button></div>';
+   esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">'+action+'</button></div>';
  }).join('');
  return '<section class="calendar-day-detail calendar-actual-detail" data-calendar-detail>'+
   '<div class="calendar-detail-heading"><div><span>BANK HISTORY · NOT A PREDICTION</span><strong>'+
@@ -236,6 +239,12 @@ function dayDetail(point,card){
 function monthlyPredictions(state){
  const rows=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
   (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i})));
+ const futureDays=state.points.filter(p=>p.date>state.asOf&&p.date.startsWith(calendarMonth)),
+  from=futureDays[0]?.date,to=futureDays.at(-1)?.date,
+  account=state.accounts.find(a=>String(a.id)===String(state.chosen)),
+  period=from?(shortDate(from)+(from===to?'':' – '+shortDate(to))):
+   'No remaining forecast days',
+  contextLabel=period+' · '+esc(account?.name||'Selected account')+' · posted bank history excluded';
  const credit=state.card;
  const deposits=rows.filter(r=>signed(r.event,credit)>0)
   .reduce((sum,r)=>sum+Number(r.event.amount||0),0),
@@ -247,8 +256,8 @@ function monthlyPredictions(state){
    ' in recent posted purchases (not an issued statement)</span>'+
    '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
  return '<details class="calendar-monthly-list" open>'+
-  '<summary>Transactions · '+esc(monthName(calendarMonth))+' ('+rows.length+')'+
-   '<span>One editable list · selected day is highlighted</span></summary>'+
+  '<summary>Upcoming predictions · '+esc(monthName(calendarMonth))+' ('+rows.length+')'+
+   '<span>'+contextLabel+'</span></summary>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
@@ -265,7 +274,7 @@ function monthlyPredictions(state){
     (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+
      '">Payment calculation →</button>':'')+'</div>';
   }).join('')+
-   '</div>':'<p class="calendar-empty">No predicted deposits or withdrawals for the selected account this month.</p>')+
+   '</div>':'<p class="calendar-empty">No upcoming predicted deposits or withdrawals for this account during the remaining forecast days this month.</p>')+
    unplanned+'</details>';
 }
 function calendarGrid(){
@@ -456,7 +465,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   if(!actual.has(r.date)||String(accountOf?.(r,accounts)||r.accountId)!==String(chosen.id))continue;
   actual.get(r.date).push(r);
  }
- calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,
+ calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],
   paymentDetails:bundle?.payments?.paymentDetails||[],
   cushion:Number(prefs?.cashCushion??500),accounts,
