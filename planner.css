@@ -552,3 +552,34 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .calendar-day-actions{justify-content:space-between;gap:6px}
 }
 @media(max-width:360px){.calendar-quick-fields{grid-template-columns:1fr}}
+
+/* Calendar-first navigation: all advanced views remain accessible from one quiet menu. */
+.sidebar,.planner-tabs,.mobile-titlebar{display:none!important}
+.shell{margin-left:0!important}
+.content{max-width:1170px;padding:25px 30px 55px}
+.topbar{align-items:center;gap:15px;margin-bottom:8px}
+.topbar h1{font-size:21px;letter-spacing:-.4px}
+.topbar .eyebrow,.topbar .lead{display:none}
+.planner-menu{position:relative;order:10;z-index:12}
+.planner-menu>summary{list-style:none;display:flex;gap:7px;align-items:center;justify-content:center;min-height:36px;padding:7px 12px;border:1px solid #d8e1eb;border-radius:8px;color:#284057;background:#fff;font-weight:680;cursor:pointer;white-space:nowrap}
+.planner-menu>summary::-webkit-details-marker{display:none}
+.planner-menu[open]>summary{background:#f3f6f9}
+.planner-menu-content{position:absolute;right:0;top:calc(100% + 7px);width:218px;background:#fff;border:1px solid #dce5ed;border-radius:11px;box-shadow:0 14px 40px #1c32462a;padding:8px;display:flex;flex-direction:column;gap:2px;z-index:20}
+.planner-menu-content button,.planner-menu-content a{width:100%;border:0;background:transparent;text-align:left;padding:10px 12px;color:#253b50;border-radius:7px;cursor:pointer;font-size:12px;text-decoration:none;font-weight:640}
+.planner-menu-content button:hover,.planner-menu-content a:hover,.planner-menu-content button.active{background:#f2f6fb;color:#284e83}
+.planner-menu-content small{padding:8px 10px;color:#8392a0;font-size:10px;border-top:1px solid #ecf1f5;margin-top:5px}
+.calendar-editor-backdrop{display:none}
+@media(max-width:780px){
+ .content{padding:15px 12px 60px}
+ .topbar{align-items:center;gap:8px}
+ .topbar h1{font-size:17px}
+ .top-actions{margin-left:auto;align-items:center;gap:5px}
+ .top-actions>label,.top-actions>.mode-box{display:none}
+ .planner-menu{order:0}
+ .planner-menu>summary{min-height:36px}
+ .planner-menu-content{width:min(250px,85vw)}
+ .calendar-editor-backdrop{display:block;position:fixed;inset:0;background:#12223678;border:0;z-index:79;cursor:pointer}
+ .calendar-quick-form{position:fixed;bottom:0;left:0;right:0;z-index:80;background:#fff;box-shadow:0 -18px 60px #122a4640;max-height:min(88dvh,760px);overflow-y:auto;margin:0;padding:19px 17px max(19px,env(safe-area-inset-bottom));border-radius:18px 18px 0 0;border-color:#dce5ed}
+ .calendar-quick-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .calendar-quick-fields label:nth-child(2){grid-column:1 / -1}
+}
