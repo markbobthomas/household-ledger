@@ -77,6 +77,16 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),
     /All predictions/,'Advanced bulk prediction view remains available without a fourth tab');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
+   assert.equal(await page.locator('.topbar .lead').count(),0,
+    'Global header does not repeat the planner introduction');
+   assert.equal(await page.locator('.top-actions label[for="ledger-mode-switch"]').count(),0,
+    'The source selector has its own accessible name without an extra label');
+   await go('settings');
+   assert.equal(await page.locator('[aria-label="Not recurring decisions"]').count(),0,
+    'An empty recurrence-exclusion manager does not occupy space in Settings');
+   assert.equal(await page.locator('[aria-label="Recurring forecast changes"]').count(),0,
+    'Schedules, not a second Settings shortcut, own recurrence editing');
+   await go('summary');
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0,
     'No 30/60/90 period selectors in the simplified planner');
    assert.equal(await page.locator('.summary-low').count(),1,
