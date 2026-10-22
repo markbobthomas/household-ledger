@@ -635,37 +635,35 @@ function relatedCardCalculation(bundle,row){
 }
 // The live forecast, not unedited schedule defaults, owns each occurrence:
  // edited dates/amounts and skipped payments are reflected here exactly.
-function scheduleOccurrencesHtml(bundle,s,rule,selectedKey=''){
+// The same forecast row component is rendered in Calendar, Schedules, Reviews
+// and advanced Predictions. All buttons resolve the same canonical ledger key.
+function editableForecastRow(row,opts={}){
+ const isTransfer=row.kind==='movement',inbound=row.type==='income'||row.type==='refund';
+ const subtitle=(isTransfer?row.from+' → '+row.to:row.account||'Account')+
+  (row.recurringRuleId?' · Repeats':row.seriesKey?' · Auto-detected':' · One time');
+ return '<div class="unified-payment-row'+(opts.kind==='schedule'?' schedule-occurrence-entry':'')+
+  '" data-inline-row-wrapper data-payment-key="'+escapeHTML(row.key)+'">'+
+  '<button type="button" class="unified-payment-trigger" data-open-transaction="'+escapeHTML(row.key)+
+  '" aria-expanded="false">'+
+  '<span class="unified-payment-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+  '<span class="unified-payment-name"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+   '<small>'+escapeHTML(subtitle)+'</small></span>'+
+  '<span class="unified-payment-value'+(inbound?' incoming':'')+'">'+
+   (inbound?'+':'−')+cash(row.amount)+'</span>'+
+  '<span class="unified-payment-chevron" aria-hidden="true">⌄</span></button></div>';
+}
+function scheduleOccurrencesHtml(bundle,s,rule){
  if(!rule)return '';
- const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id)),
-  selected=occurrences.find(r=>r.key===selectedKey);
- const rows=occurrences.map(row=>{
-  const picked=row.key===selectedKey;
-  const inline=picked?'<div class="plan-occurrence-editor" data-plan-occurrence-editor>'+
-   '<div class="plan-section-label"><strong>Edit this payment here</strong>'+
-    '<span>'+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+'</span></div>'+
-   '<p>Changes here apply to this date only; the other payments remain as scheduled.</p>'+
-   editorFor(row,s,bundle?.rows||[],{oneOnly:true})+'</div>':'';
-  return '<div class="schedule-occurrence-entry">'+
-   '<button type="button" class="schedule-occurrence'+(picked?' selected':'')+
-   '" data-select-plan-payment="'+escapeHTML(row.key)+
-   '" data-schedule-occurrence-key="'+escapeHTML(row.key)+'" aria-expanded="'+picked+'">'+
-   '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
-   '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
-    '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
-     row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
-   '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">'+
-   (picked?'Close −':'Edit ↓')+'</span></button>'+inline+'</div>';
- }).join('');
- return '<section class="schedule-occurrence-section" aria-label="Upcoming individual payments">'+
-  '<div class="schedule-occurrence-heading"><h3>Individual upcoming payments</h3>'+
-   '<span>'+occurrences.length+' in next '+horizon+' days</span></div>'+
-  '<p>Select a date to adjust just that payment. Schedule settings and all other dates stay unchanged.</p>'+
-  (rows?'<div class="schedule-occurrence-list">'+rows+'</div>':
-   '<p class="schedule-occurrence-empty">No remaining payments for this schedule within the selected forecast. '+
-    'A payment may have already posted, been skipped, or be outside the forecast window.</p>')+
+ const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id));
+ return '<section class="schedule-occurrence-section" aria-label="Upcoming payments">'+
+  '<div class="schedule-occurrence-heading"><h3>Upcoming payments</h3><span>'+
+   occurrences.length+' in next '+horizon+' days</span></div>'+
+  '<p>Click a payment to edit its actual date, amount or account. Save applies only to that occurrence; other dates stay unchanged.</p>'+
+  (occurrences.length?'<div class="unified-payment-list">'+occurrences.map(r=>editableForecastRow(r,{kind:'schedule'})).join('')+'</div>':
+   '<p class="schedule-occurrence-empty">No future payments in this forecast window. Payments may have posted, been skipped, or be beyond the selected period.</p>')+
   '</section>';
 }
+
 function detailHtml(bundle,s){
  if(!transactionDetail)return '';
  if(transactionDetail.kind==='prediction'){
@@ -1020,7 +1018,16 @@ function schedulesPage(bundle,s){
     '<button class="btn" type="button" data-schedule-remove="'+id+'">'+
      (scheduleRemoveTarget===r.id?'Confirm remove':'Remove')+'</button></div>'+
    (windows?'<div class="schedule-windows"><small>Estimated ranges</small>'+windows+'</div>':'')+
-   edit+estimateForm+'</article>';
+   (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
+     '<p class="plan-edit-guide">Repeating defaults apply across future payments. '+
+      'Each dated payment below can be changed separately.</p>'+
+     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span>'+
+      '<small>Amount, date, frequency, payee and accounts</small></summary>'+
+      '<div class="plan-settings-body">'+edit+'</div></details>'+
+     '<details class="plan-settings" data-plan-estimates><summary><span>Variable amount ranges</span>'+
+      '<small>Specific months or all future payments</small></summary>'+
+      '<div class="plan-settings-body">'+estimateForm+'</div></details>'+
+      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</article>';
  }).join('');
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
   '<h2>Payment schedules</h2><p>Manage repeating bills and paychecks here. Open any schedule to edit one upcoming payment without changing the others.</p></div>'+
@@ -1515,7 +1522,9 @@ document.addEventListener('click',async e=>{
  }
  const newSchedule=e.target.closest?.('[data-schedule-new]');
  if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
-  transactionDetail={kind:'schedule',id:'new',mode:'new'};render();return}
+  transactionDetail=null;render();
+  document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
+  return}
  const duplicate=e.target.closest?.('[data-schedule-duplicate]');
  if(duplicate){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===duplicate.dataset.scheduleDuplicate);
@@ -1535,8 +1544,12 @@ document.addEventListener('click',async e=>{
  if(scheduleEdit||scheduleEstimate){
   const mode=scheduleEdit?'edit':'estimate',id=(scheduleEdit||scheduleEstimate).dataset[
    scheduleEdit?'scheduleEdit':'scheduleEstimate'];
+  const same=scheduleMode==='edit'&&scheduleTarget===id;
   scheduleRemoveTarget='';scheduleNotice='';
-  openSchedulePlan(id,'',scheduleEdit||scheduleEstimate,mode);
+  scheduleMode=same?'':'edit';scheduleTarget=same?'':id;
+  transactionDetail=null;render();
+  if(!same&&mode==='estimate')
+   document.querySelector('[data-schedule-inline-plan="'+id.replace(/[\\"']/g,'')+'"] [data-plan-estimates]')?.setAttribute('open','');
   return;
  }
  const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
@@ -2000,14 +2013,16 @@ document.addEventListener('submit',async e=>{
    scheduleNotice='Estimate saved for this plan and date range only.';
   }
   schedulePreset=null;scheduleRemoveTarget='';
-  if(transactionDetail?.kind==='schedule'&&savedPlanId){
+  if(activeTab==='schedules'&&savedPlanId&&!transactionDetail){
+   scheduleMode='edit';scheduleTarget=savedPlanId;render();
+  }else if(transactionDetail?.kind==='schedule'&&savedPlanId){
    scheduleMode='edit';scheduleTarget=savedPlanId;
    transactionDetail={kind:'schedule',id:savedPlanId,mode:'edit',selectedKey:''};
   }else{
    scheduleMode='';scheduleTarget='';transactionDetail=null;
    if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
+   render();
   }
-  render();
  }catch(error){if(submit)submit.disabled=false;
   scheduleNotice=String(error.message||error);
   // Preserve entered dates/amounts on error; don't reset the form.
