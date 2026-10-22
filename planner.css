@@ -1034,3 +1034,17 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .summary-minimum .summary-low{font-size:clamp(24px,6vw,36px)}
  .summary-trend-range{flex:1 1 27%;text-align:center;padding:9px 5px}
 }
+
+/* Keep each selected day's ending balance in exactly one place: the last
+   element of the detail panel, after payment rows and add/edit actions. */
+.calendar-day-detail .calendar-day-ending{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ margin-top:16px;padding:15px 2px 1px;border-top:1px solid #dce6ef;
+ color:#1b3349;font-size:12px;font-weight:750
+}
+.calendar-day-detail .calendar-day-ending strong{
+ font:760 clamp(18px,2.3vw,23px)/1.2 var(--mono);color:#172c42;
+ white-space:nowrap
+}
+.calendar-day-detail>.calendar-empty{margin:14px 0;color:#738799}
+.calendar-day-detail .calendar-math{margin-top:13px}

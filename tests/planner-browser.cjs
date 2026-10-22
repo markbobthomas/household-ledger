@@ -82,6 +82,10 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.top-actions label[for="ledger-mode-switch"]').count(),0,
     'The source selector has its own accessible name without an extra label');
    await go('settings');
+   assert.equal(await page.locator('[aria-label="Bank connection status"]').count(),1,
+    'Connection information appears in one compact, actionable Settings section');
+   assert.equal(await page.locator('h3').filter({hasText:'Planning assumptions'}).count(),0,
+    'Settings does not repeat forecasting disclaimers already present in Calendar');
    assert.equal(await page.locator('[aria-label="Not recurring decisions"]').count(),0,
     'An empty recurrence-exclusion manager does not occupy space in Settings');
    assert.equal(await page.locator('[aria-label="Recurring forecast changes"]').count(),0,
@@ -98,8 +102,12 @@ const {chromium,webkit}=require('playwright');
     'Full-month prediction list is collapsed by default');
    assert.equal(await page.locator('.calendar-day-transactions .calendar-monthly-row').count(),0,
     'No selected-day payments are invented on an empty starting day');
-   assert.equal((await page.locator('.calendar-day-detail').innerText()).match(/No payments predicted/g)?.length,1,
-    'Empty days state the absence of transactions once');
+   assert.equal((await page.locator('.calendar-day-detail').innerText()).match(/No transactions predicted for this day/g)?.length,1,
+    'Empty days show one plain-language status');
+   assert.equal(await page.locator('.calendar-day-detail .calendar-math').count(),0,
+    'No zero-only deposits and withdrawals on an empty day');
+   assert.equal(await page.locator('.calendar-day-detail .calendar-day-ending').count(),1,
+    'Empty day still shows one closing balance at its bottom');
    assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
     'The native monthly disclosure does not repeat Expand');
    await page.locator('.calendar-monthly-list > summary').click();
@@ -155,7 +163,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.calendar-day-detail .calendar-detail-balance').count(),0,
     'End-of-day balance does not repeat in the selected-day heading');
    assert.equal(await page.locator('.calendar-math-total').count(),1,
-    'Only one end-of-day total remains at the bottom of the calculation');
+    'Only one end-of-day total remains for the date');
+   assert.equal(await page.locator('.calendar-day-detail > :last-child').getAttribute('class'),
+    'calendar-math-total calendar-day-ending',
+    'Ending balance is the LAST part of the day panel, after edit and add controls');
+   assert.equal(await page.locator('.calendar-day-detail .calendar-math').count(),1,
+    'Only days with transactions show a deposit and withdrawal reconciliation');
    await page.locator('[data-calendar-actual-day]').last().click();
    assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
@@ -475,10 +488,9 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#summary-account').selectOption(await checkingOption.getAttribute('value'));
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-09"]').click();
-   assert.match(await page.locator('.calendar-math').innerText(),/Yesterday/);
-   assert.match(await page.locator('.calendar-math').innerText(),/Deposits/);
-   assert.match(await page.locator('.calendar-math').innerText(),/Withdrawals/);
-   assert.match(await page.locator('.calendar-math').innerText(),/End of day/);
+   assert.equal(await page.locator('.calendar-math').count(),0,
+    'No zero-only arithmetic before a forecast payment is added');
+   assert.equal(await page.locator('.calendar-day-ending').count(),1);
    await page.locator('[data-calendar-add]').click();
    const quick=page.locator('[data-calendar-quick-form]');
    assert.equal(await quick.locator('[name=date]').inputValue(),'2026-11-09');
@@ -486,6 +498,13 @@ const {chromium,webkit}=require('playwright');
    await quick.locator('[name=amount]').fill('25');
    await quick.locator('button[type=submit]').click();
    await page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Playground one-time expense'}).waitFor();
+   assert.match(await page.locator('.calendar-math').innerText(),/Yesterday/);
+   assert.match(await page.locator('.calendar-math').innerText(),/Withdrawals/);
+   assert.equal(await page.locator('.calendar-math').getByText('Deposits').count(),0,
+    'There is no empty deposit row for an expense-only day');
+   assert.equal(await page.locator('.calendar-day-detail > :last-child').getAttribute('class'),
+    'calendar-math-total calendar-day-ending',
+    'Single ending balance remains at bottom after adding a transaction');
    assert.ok(await page.locator('.calendar-notice').innerText().then(x=>x.includes('recalculated')));
    const playground=page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Playground one-time expense'});
    await playground.click();

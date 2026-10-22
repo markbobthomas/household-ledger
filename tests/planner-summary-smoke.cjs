@@ -27,16 +27,16 @@ for(const days of [1095]){
  assert.match(html,/data-calendar-day="2026-10-21"/);
  assert.match(html,/Projected account balance|Account balance after daily activity/);
  assert.match(html,/calendar-day-detail/);
- assert.match(html,/calendar-math/,'Every selected day explains the exact arithmetic');
- assert.match(html,/Reported starting balance|Yesterday/);
- assert.match(html,/Deposits/);
- assert.match(html,/Withdrawals/);
- assert.match(html,/End of day/);
+ assert.doesNotMatch(html,/class="calendar-math"/,
+  'An empty day must not repeat the unchanged balance via a zero-only breakdown');
+ assert.match(html,/End-of-day balance/);
+ assert.match(html,/calendar-day-ending/,
+  'Single balance footer comes after daily transactions and actions');
  assert.equal((html.match(/calendar-math-total/g)||[]).length,1,
-  'A selected date has one end-of-day total in its calculation footer');
+  'A selected date has one end-of-day total in its panel footer');
  assert.doesNotMatch(html,/calendar-detail-balance/,
   'Do not repeat end-of-day balance in the selected date header');
- assert.equal((html.match(/No payments predicted/g)||[]).length,1,
+ assert.equal((html.match(/No transactions predicted for this day/g)||[]).length,1,
   'An empty selected day explains its absence of payments once');
  assert.doesNotMatch(html,/Expand ↓/,
   'Native monthly disclosure should not also print a redundant expand prompt');
@@ -47,7 +47,7 @@ for(const days of [1095]){
  assert.equal(tool.getPoints(derived,iso(0),days).length,days+1);
  assert.match(html,/calendar-day-balance/);
  assert.match(html,/data-calendar-nav="1"/);
- assert.match(html,/End of /);
+ assert.match(html,/End-of-day balance/);
 }
 const long=tool.render({...opts,days:1095});
 assert.match(long,/Property tax|Insurance|No dated transactions that day/);
