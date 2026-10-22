@@ -571,11 +571,11 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
 }
 function setDay(index){
  const svg=document.querySelector('[data-summary-plot]');
- if(!svg||!series.length)return;
- selected=range(index,0,series.length-1);
- const point=series[selected],vals=series.map(p=>p.balance),
+ if(!svg||!trendSeries.length)return;
+ selected=range(index,0,trendSeries.length-1);
+ const point=trendSeries[selected],vals=trendSeries.map(p=>p.balance),
   lo=Math.min(...vals),hi=Math.max(...vals),pad=Math.max(50,(hi-lo)*.14),
-  x=plotLeft+selected*(plotRight-plotLeft)/(series.length-1),
+  x=plotLeft+selected*(plotRight-plotLeft)/(trendSeries.length-1),
   y=bottom-(point.balance-(lo-pad))/(hi+pad-(lo-pad))*(bottom-top);
  const guide=svg.querySelector('[data-summary-cursor]'),dot=svg.querySelector('[data-summary-dot]');
  guide.setAttribute('x1',x);guide.setAttribute('x2',x);
@@ -590,10 +590,10 @@ function setDay(index){
 }
 function byPointer(e){
  const svg=e.target.closest?.('[data-summary-plot]');
- if(!svg||series.length<2)return;
+ if(!svg||trendSeries.length<2)return;
  const rect=svg.getBoundingClientRect();
  const position=(e.clientX-rect.left)/rect.width;
- setDay(Math.round((position*plotWidth-plotLeft)/(plotRight-plotLeft)*(series.length-1)));
+ setDay(Math.round((position*plotWidth-plotLeft)/(plotRight-plotLeft)*(trendSeries.length-1)));
 }
 document.addEventListener('pointermove',e=>{
  if(e.pointerType!=='touch')byPointer(e);
@@ -615,7 +615,7 @@ document.addEventListener('keydown',e=>{
  if(!e.target.matches?.('[data-summary-plot]')||
   !['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
  e.preventDefault();
- setDay(e.key==='Home'?0:e.key==='End'?series.length-1:
+ setDay(e.key==='Home'?0:e.key==='End'?trendSeries.length-1:
   selected+(e.key==='ArrowRight'?1:-1));
 });
 document.addEventListener('click',e=>{
