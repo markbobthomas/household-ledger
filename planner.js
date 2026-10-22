@@ -1327,8 +1327,10 @@ function reviewsPage(bundle,s){
  const autoLow=(bundle?.automaticRecurrence?.review||[]).filter(a=>
   !weak.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant))&&
   !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
- const duplicates=bundle?.duplicateConflicts||[];
- const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length;
+ const duplicates=bundle?.duplicateConflicts||[],
+  postedAmbiguities=bundle?.postedMatchReview||[];
+ const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length+
+  postedAmbiguities.length;
  const cards=weak.map(p=>
   '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
    '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
@@ -1363,6 +1365,21 @@ function reviewsPage(bundle,s){
     escapeHTML(p.merchant)+'</strong><small>'+cash(p.amount)+' · '+escapeHTML(p.reason)+
     '</small></div><button type="button" class="btn" data-view="history">Review in History</button></div>').join('')+
    '</section>':'')+
+  (postedAmbiguities.length?'<section class="panel" data-posted-match-review>'+
+    '<div class="section-title"><h2>Which schedule was paid?</h2>'+
+    '<span class="status-tag warn">'+postedAmbiguities.length+' NEEDS REVIEW</span></div>'+
+    '<p class="lead">A posted bank payment may cover one of several separate schedules. '+
+    'Choose the correct schedule so only that future payment is removed from the balance forecast.</p>'+
+    postedAmbiguities.map(row=>'<article class="review-candidate">'+
+     '<div class="review-candidate-main"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+     '<small>Posted '+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+
+     ' · Bank record remains unchanged</small></div>'+
+     '<div class="review-candidate-actions">'+row.candidates.map(c=>
+      '<button class="btn" type="button" data-posted-match-bank="'+escapeHTML(row.bankId)+
+       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
+       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+
+       ' · '+escapeHTML(dayLabel(c.date))+'</button>').join('')+'</div></article>').join('')+
+    '</section>':'')+
   (duplicates.length?'<section class="panel"><div class="section-title"><h2>Ambiguous predicted payments</h2>'+
    '<span class="status-tag warn">'+duplicates.length+' NEEDS REVIEW</span></div>'+
    '<p class="lead">Possible duplicate predictions cannot be matched confidently. Review them before relying on the projected balance.</p>'+
@@ -1537,6 +1554,7 @@ function render(){
    'An actual '+cash(m.amount)+' mortgage payment from '+m.account+' is not in the forecast. Review its proposed recurring schedule below.')),
   ...((bundle?.routines?.warnings||[]).slice(0,2).map(w=>
    'Possible mortgage withdrawal not included: '+w.merchant+' ('+w.reason+'). Confirm its recurrence before relying on the projected balance.')),
+  ...((bundle?.postedMatchReview||[]).length?['Some posted payments may cover one of several confirmed schedules. Choose the matching schedule under Needs review before relying on the projected balance.']:[]),
   ...((bundle?.forecast?.suppressedDuplicates||[]).length?['Older overlapping one-time forecasts were excluded to avoid duplicate payments.']:[]),
   ...((statuses.unassigned||[]).length?['Some expected payments lack a confirmed account, so those are not included in the balance.']:[]),
   ...((statuses.unmatchedTransfers||[]).length?['Some scheduled transfers do not have a verified counterpart; review before relying on cash coverage.']:[])
@@ -1545,7 +1563,11 @@ function render(){
  if(error)note='<div class="notice danger"><strong>Forecast calculation unavailable.</strong> '+escapeHTML(error)+
   '. Your bank balances have not been changed.</div>';
  else if(latestError)note='<div class="notice danger">'+escapeHTML(latestError)+'</div>';
- else if(caution.length)note='<div class="notice danger"><div><strong>Forecast needs review.</strong> '+escapeHTML(caution.join(' '))+'</div></div>';
+ else if(caution.length)note='<div class="notice danger"><div><strong>Forecast needs review.</strong> '+
+  escapeHTML(caution.join(' '))+'</div>'+
+  ((bundle?.postedMatchReview||[]).length?
+   '<button type="button" class="btn" data-view="reviews">Choose matching schedule</button>':'')+
+  '</div>';
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
@@ -1616,6 +1638,23 @@ document.addEventListener('click',async e=>{
    if(row)openPrediction(row.key,opening);
    else setNotice('This card payment has changed. Reopen its dated prediction.');
   }
+  return;
+ }
+ const postedChoice=e.target.closest?.('[data-posted-match-bank][data-posted-match-rule]');
+ if(postedChoice){
+  const bankId=postedChoice.dataset.postedMatchBank,
+   ruleId=postedChoice.dataset.postedMatchRule;
+  try{
+   const current=forecastFor(snapshot()),
+    candidate=(current?.postedMatchReview||[]).find(item=>item.bankId===bankId&&
+     item.candidates.some(c=>c.ruleId===ruleId));
+   if(!candidate)throw Error('This bank payment has changed. Refresh Needs review.');
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.linkPostedToSchedule(
+    state(),bankId,ruleId,model.records(state()),activeAccounts(snapshot())));
+   reviewNotice='Linked the posted payment to schedule #'+
+    (scheduleListNumber(ruleId)||'?')+'. The forecast has been recalculated.';
+   render();
+  }catch(err){reviewNotice=String(err.message||err);render()}
   return;
  }
  const linkedSchedule=e.target.closest?.('[data-open-linked-schedule]');
