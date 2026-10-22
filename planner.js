@@ -1151,7 +1151,7 @@ document.addEventListener('click',async e=>{
   window.scrollTo({top:0,behavior:'auto'});
   return;
  }
- const fromHistory=e.target.closest('[data-history-plan],[data-calendar-history-plan]');
+ const fromHistory=e.target.closest('[data-history-plan]')||e.target.closest('[data-calendar-history-plan]');
  if(fromHistory){
   const account=fromHistory.dataset.historyAccount;
   const historyId=fromHistory.dataset.historyPlan||fromHistory.dataset.calendarHistoryPlan;
