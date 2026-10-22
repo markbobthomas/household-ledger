@@ -629,7 +629,7 @@ function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
  const fields=(r,isNew)=>{
-  const type=r.type||'expense',transfer=isNew&&type==='transfer'||r.kind==='movement',
+  const type=r.kind==='movement'?'transfer':r.type||'expense',transfer=isNew&&type==='transfer'||r.kind==='movement',
    accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id;
   return '<div class="future-fields">'+
    '<label>Bill label (distinguishes same-payee bills)<input name="scheduleLabel" maxlength="110" placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||'')+'"></label>'+
@@ -1114,6 +1114,49 @@ function render(){
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
 }
 document.addEventListener('click',async e=>{
+ const closeSchedule=e.target.closest?.('[data-schedule-close]');
+ if(closeSchedule){scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render();return}
+ const newSchedule=e.target.closest?.('[data-schedule-new]');
+ if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';render();return}
+ const duplicate=e.target.closest?.('[data-schedule-duplicate]');
+ if(duplicate){
+  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===duplicate.dataset.scheduleDuplicate);
+  if(!rule)return;
+  const next=window.HouseholdPlannerTransactions.recurrenceDates(rule,snapshot().asOf,
+   shiftDay(snapshot().asOf,360))[0];
+  schedulePreset={merchant:rule.merchant,scheduleLabel:(rule.scheduleLabel||rule.merchant)+' — second bill',
+   amount:rule.amount,accountId:rule.accountId||rule.fromAccountId,
+   toAccountId:rule.toAccountId,type:rule.kind==='movement'?'transfer':rule.type,
+   frequency:rule.frequency,date:next||shiftDay(snapshot().asOf,1),
+   amountBasis:'estimate'};
+  scheduleMode='new';scheduleTarget='';scheduleNotice='';render();return;
+ }
+ const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
+ const scheduleEstimate=e.target.closest?.('[data-schedule-estimate]');
+ if(scheduleEdit||scheduleEstimate){
+  const mode=scheduleEdit?'edit':'estimate',id=(scheduleEdit||scheduleEstimate).dataset[
+   scheduleEdit?'scheduleEdit':'scheduleEstimate'];
+  scheduleMode=scheduleMode===mode&&scheduleTarget===id?'':mode;
+  scheduleTarget=id;scheduleRemoveTarget='';scheduleNotice='';render();return;
+ }
+ const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
+ if(removeWindow){
+  const id=removeWindow.dataset.scheduleRemoveEstimate,index=Number(removeWindow.dataset.estimateIndex);
+  try{await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeScheduleEstimate(state(),id,index));
+   scheduleNotice='Estimated range cleared. All projected balances recalculated.';render()}
+  catch(e){scheduleNotice=String(e.message||e);render()}
+  return;
+ }
+ const removeSchedule=e.target.closest?.('[data-schedule-remove]');
+ if(removeSchedule){
+  const id=removeSchedule.dataset.scheduleRemove;
+  if(scheduleRemoveTarget!==id){scheduleRemoveTarget=id;render();return}
+  try{await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeRecurring(state(),id));
+   scheduleMode='';scheduleTarget='';scheduleRemoveTarget='';
+   scheduleNotice='Removed this schedule only. Bank transactions and other schedules were not changed.';render()}
+  catch(e){scheduleNotice=String(e.message||e);render()}
+  return;
+ }
  const calendar=window.HouseholdPlannerSummary;
  const addCalendar=e.target.closest('[data-calendar-add]');
  const gap=e.target.closest('[data-calendar-fill-gap]');
@@ -1508,6 +1551,41 @@ async function commitForecastChange(action){
  }catch(err){current.predictions=JSON.parse(before);throw err}
 }
 document.addEventListener('submit',async e=>{
+ const form=e.target.closest?.('[data-schedule-new-form],[data-schedule-edit-form],[data-schedule-estimate-form]');
+ if(!form)return;
+ e.preventDefault();
+ const submit=form.querySelector('[type=submit]');if(submit)submit.disabled=true;
+ try{
+  const fields=Object.fromEntries(new FormData(form)),
+   T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s);
+  if(form.hasAttribute('data-schedule-new-form')){
+   await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,model.records(state()),[]));
+   scheduleNotice='Independent payment schedule created. Other schedules are unchanged.';
+  }else if(form.hasAttribute('data-schedule-edit-form')){
+   const id=form.dataset.scheduleEditForm,r=(state().predictions?.futureRecurringRules||[]).find(x=>x.id===id);
+   if(!r)throw Error('This schedule changed. Open it again.');
+   const reference={kind:r.kind,recurringRuleId:id,
+    sourceAccountId:r.originalAccountId||r.accountId||r.fromAccountId,
+    fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
+    accountId:r.accountId,originalMerchant:r.originalMerchant||r.merchant,
+    originalType:r.originalType||r.type,sourceAmount:r.matchAmount||r.amount,date:r.sourceAnchorDate||r.anchorDate};
+   await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,reference,model.records(state()),[]));
+   scheduleNotice='Schedule updated. All matching projected dates recalculated.';
+  }else{
+   await commitForecastChange(()=>T.setScheduleEstimate(state(),form.dataset.scheduleEstimateForm,fields,s.asOf));
+   scheduleNotice='Amount estimate applied only to the selected schedule and range.';
+  }
+  scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render();
+ }catch(error){if(submit)submit.disabled=false;
+  scheduleNotice=String(error.message||error);
+  // Preserve entered dates/amounts on error; don't reset the form.
+  let message=form.querySelector('[data-schedule-error]');
+  if(!message){message=document.createElement('p');message.dataset.scheduleError='true';
+   message.setAttribute('role','alert');form.appendChild(message)}
+  message.textContent=scheduleNotice;
+ }
+});
+document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-history-filter]');
  if(!form)return;
  e.preventDefault();
@@ -1720,6 +1798,17 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',e=>{
+ if(e.target.matches?.('[data-schedule-amount-scope]')){
+  const dates=e.target.closest('form')?.querySelector('[data-schedule-estimate-dates]');
+  if(dates)dates.hidden=e.target.value==='all';
+  return;
+ }
+ if(e.target.matches?.('[data-schedule-type]')){
+  const form=e.target.closest('form'),transfer=e.target.value==='transfer';
+  form?.querySelectorAll('.schedule-transfer-account').forEach(el=>el.hidden=!transfer);
+  const single=form?.querySelector('.schedule-single-account');if(single)single.hidden=transfer;
+  return;
+ }
  if(e.target.matches?.('[data-card-rule] [name=method],[data-card-rule] [name=autopayEnabled]')){
   configureCardFields(e.target.closest('[data-card-rule]'));return;
  }
