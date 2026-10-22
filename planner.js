@@ -2067,6 +2067,27 @@ async function commitForecastChange(action){
   return result;
  }catch(err){current.predictions=JSON.parse(before);throw err}
 }
+// Add a category without rebuilding an unsaved editor or modifying bank data.
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest?.('[data-schedule-category-add]');
+ if(!form)return;
+ e.preventDefault();
+ const field=form.querySelector('[name=categoryName]'),
+  submit=form.querySelector('[type=submit]'),
+  notice=form.parentElement.querySelector('[data-schedule-category-notice]');
+ if(submit)submit.disabled=true;
+ try{
+  const label=await commitForecastChange(()=>window.HouseholdPlannerTransactions.addScheduleCategory(state(),field.value));
+  document.querySelectorAll('select[name=category],[data-schedule-category-filter]').forEach(select=>{
+   const option=document.createElement('option');option.value=label;option.textContent=label;
+   select.appendChild(option);
+   if(select.name==='category')select.value=label;
+  });
+  field.value='';
+  if(notice)notice.textContent='Added '+label+'. Choose it for any schedule.';
+ }catch(error){if(notice)notice.textContent=String(error.message||error)}
+ finally{if(submit)submit.disabled=false}
+});
 document.addEventListener('submit',async e=>{
  const form=e.target.closest?.('[data-schedule-new-form],[data-schedule-edit-form]');
  if(!form)return;
@@ -2351,6 +2372,24 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',e=>{
+ const sorter=e.target.closest?.('[data-schedule-sort]'),
+  filter=e.target.closest?.('[data-schedule-category-filter]');
+ if(sorter||filter){
+  const nextSort=sorter?sorter.value:scheduleSort,
+   nextFilter=filter?filter.value:scheduleCategoryFilter,
+   edit=document.querySelector('[data-schedule-edit-form],[data-schedule-new-form]');
+  const dirty=edit&&[...edit.querySelectorAll('input,select,textarea')].some(field=>{
+   if(field.type==='hidden')return false;
+   if(field.type==='checkbox'||field.type==='radio')return field.checked!==field.defaultChecked;
+   if(field.tagName==='SELECT')return [...field.options].some(o=>o.selected!==o.defaultSelected);
+   return field.value!==field.defaultValue;
+  });
+  if(dirty&&!window.confirm('Discard unsaved schedule edits to reorganize the list?')){
+   e.target.value=sorter?scheduleSort:scheduleCategoryFilter;return;
+  }
+  scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;
+  scheduleMode='';scheduleTarget='';transactionDetail=null;render();return;
+ }
  if(e.target.name==='separateSchedule'&&e.target.checked){
   const form=e.target.closest?.('[data-history-recurring-form]');
   // A second bill cannot claim the historical examples already associated
