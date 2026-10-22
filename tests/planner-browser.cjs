@@ -503,9 +503,9 @@ const {chromium,webkit}=require('playwright');
    await quick.locator('[name=merchant]').fill('Playground one-time expense');
    await quick.locator('[name=amount]').fill('25');
    await quick.locator('button[type=submit]').click();
-   await page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'}).waitFor();
+   await page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Playground one-time expense'}).waitFor();
    assert.ok(await page.locator('.calendar-notice').innerText().then(x=>x.includes('recalculated')));
-   const playground=page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'});
+   const playground=page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Playground one-time expense'});
    await playground.click();
    const universal=page.locator('.calendar-detail-entry [data-inline-transaction-editor] .future-edit-form');
    assert.equal(await page.locator('.transaction-detail').count(),0,
@@ -514,20 +514,20 @@ const {chromium,webkit}=require('playwright');
     'Editable amount is directly beneath the clicked calendar date row');
    await universal.locator('[name=amount]').fill('40');
    await universal.locator('button[type=submit]').click();
-   assert.match(await page.locator('.calendar-detail-item')
+   assert.match(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/);
    await page.reload({waitUntil:'load'});
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-09"]').click();
-   assert.match(await page.locator('.calendar-detail-item')
+   assert.match(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/,
     'Calendar-only edits persist across reload');
-   await page.locator('.calendar-detail-item')
+   await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).click();
    assert.ok(await page.locator('.calendar-detail-entry [data-remove-added]').count()>0,
     'An individually added payment can be removed from the expanded row');
    await page.locator('.calendar-detail-entry [data-remove-added]').click();
-   assert.equal(await page.locator('.calendar-detail-item')
+   assert.equal(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).count(),0,
     'Skipping a selected occurrence removes it from the same balance forecast');
    await page.locator('[data-calendar-day="2026-11-11"]').click();
@@ -536,11 +536,11 @@ const {chromium,webkit}=require('playwright');
    await quick.locator('[name=amount]').fill('90');
    await quick.locator('[name=frequency]').selectOption('monthly');
    await quick.locator('button[type=submit]').click();
-   await page.locator('.calendar-detail-item')
+   await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground recurring payment'}).waitFor();
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-12-11"]').click();
-   assert.ok(await page.locator('.calendar-detail-item')
+   assert.ok(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground recurring payment'}).count()>0,
     'Creating a recurring expense from one calendar date creates its next month too');
 
@@ -616,17 +616,17 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-10"]').click();
-   assert.ok(await page.locator('.calendar-monthly-rows .selected-date').count()>0,
-    'Selecting the day highlights its transactions in the one monthly list');
-   assert.ok(await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).count()>0);
-   assert.ok(await page.locator('.calendar-detail-item').filter({hasText:'Water - Garden'}).count()>0);
+   assert.ok(await page.locator('.calendar-day-transactions .selected-date').count()>0,
+    'Selecting the day shows only its scheduled payments directly below the balance');
+   assert.ok(await page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Water - House'}).count()>0);
+   assert.ok(await page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Water - Garden'}).count()>0);
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-12-10"]').click();
-   assert.match(await page.locator('.calendar-detail-item')
+   assert.match(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Water - House'}).innerText(),/175/);
-   assert.match(await page.locator('.calendar-detail-item')
+   assert.match(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Water - Garden'}).innerText(),/220/);
-   await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).click();
+   await page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Water - House'}).click();
    const inlineWater=page.locator('.calendar-monthly-entry').filter({hasText:'Water - House'}).first();
    assert.equal(await page.locator('.transaction-detail').count(),0,
     'Calendar and Schedules use inline fields without another modal');
