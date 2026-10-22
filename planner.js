@@ -1678,7 +1678,7 @@ document.addEventListener('click',async e=>{
   if(!row){setNotice('The recurring schedule changed. Open Predictions and try again.');return}
   try{
    const result=await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),row));
-   editingKey='';transactionNotice=result.autoSeries?
+   editingKey='';transactionDetail=null;transactionNotice=result.autoSeries?
     'Removed only the inferred '+row.merchant+' series. Confirmed income schedules were preserved. Restore in Settings.':
     'Marked '+row.merchant+' as not recurring. Only its matching schedule was removed. Restore in Settings or History.';
    render();
@@ -1689,7 +1689,7 @@ document.addEventListener('click',async e=>{
  if(resetRecurring){
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.resetSeries(state(),resetRecurring.dataset.resetSeries));
-   editingKey='';transactionNotice='Recurring schedule restored to its original forecast.';render();
+   editingKey='';transactionDetail=null;transactionNotice='Recurring schedule restored to its original forecast.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
