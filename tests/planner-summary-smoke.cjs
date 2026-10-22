@@ -47,7 +47,7 @@ for(const days of [1095]){
  assert.equal(tool.getPoints(derived,iso(0),days).length,days+1);
  assert.match(html,/calendar-day-balance/);
  assert.match(html,/data-calendar-nav="1"/);
- assert.match(html,/End of /);
+ assert.match(html,/End-of-day balance/);
 }
 const long=tool.render({...opts,days:1095});
 assert.match(long,/Property tax|Insurance|No dated transactions that day/);
