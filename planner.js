@@ -31,7 +31,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
- let transactionDetail=null,detailReturnFocus=null;
+ let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null;
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -710,7 +710,9 @@ function dismissTransaction(){
  const mode=transactionDetail?.kind;
  transactionDetail=null;
  if(mode==='schedule'){
-  scheduleMode='';scheduleTarget='';schedulePreset=null;render();
+  scheduleMode='';scheduleTarget='';schedulePreset=null;
+  if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null;}
+  render();
  }else document.querySelector('[data-transaction-overlay]')?.remove();
  if(detailReturnFocus?.isConnected)detailReturnFocus.focus();
  detailReturnFocus=null;
@@ -1304,6 +1306,7 @@ document.addEventListener('click',async e=>{
  if(linkedSchedule){
   const id=linkedSchedule.dataset.openLinkedSchedule;
   if(!(state().predictions?.futureRecurringRules||[]).some(r=>r.id===id))return;
+  detailOriginTab=activeTab;
   activeTab='schedules';scheduleTarget=id;
   scheduleMode=linkedSchedule.dataset.schedulePanel==='estimate'?'estimate':'edit';
   transactionDetail={kind:'schedule',id,mode:scheduleMode};
@@ -1486,7 +1489,7 @@ document.addEventListener('click',async e=>{
  }
  const view=e.target.closest('[data-view]');
  if(view){
-  activeTab=view.dataset.view;transactionDetail=null;
+  activeTab=view.dataset.view;transactionDetail=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   render();
@@ -1795,7 +1798,9 @@ document.addEventListener('submit',async e=>{
    await commitForecastChange(()=>T.setScheduleEstimate(state(),form.dataset.scheduleEstimateForm,fields,s.asOf));
    scheduleNotice='Amount estimate applied only to the selected schedule and range.';
   }
-  scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';transactionDetail=null;render();
+  scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';transactionDetail=null;
+  if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
+  render();
  }catch(error){if(submit)submit.disabled=false;
   scheduleNotice=String(error.message||error);
   // Preserve entered dates/amounts on error; don't reset the form.
