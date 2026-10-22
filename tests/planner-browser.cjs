@@ -531,6 +531,10 @@ const {chromium,webkit}=require('playwright');
   await real.addInitScript(fixedDate);
   await real.addInitScript(()=>localStorage.setItem('household-ledger-view-mode','real'));
   const page=await real.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const go=async tab=>{
+   await page.locator('#planner-menu > summary').click();
+   await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
+  };
   await page.route('**/api/ledger',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(realPayload)}));
   const writes=[];
   let failNextForecast=false,legacyAdjustmentCalls=0;
