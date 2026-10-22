@@ -686,3 +686,39 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .schedule-form .future-fields{grid-template-columns:1fr 1fr;gap:8px}
 }
 @media(max-width:380px){.schedule-form .future-fields{grid-template-columns:1fr}}
+
+/* Calendar-first actionable forecast assurance and complete monthly ledger. */
+.summary-review-trigger{border:0;background:transparent;padding:0;text-align:left;color:#245f94;font:700 14px inherit;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.summary-review-trigger:hover,.summary-review-trigger:focus-visible{color:#123e68}
+.summary-review-trigger span{margin-left:4px}
+.summary-review-details{margin:13px 0 16px;padding:16px 18px;background:#fafbfd;border:1px solid #dde8f1;border-radius:11px}
+.summary-review-details[hidden]{display:none}
+.summary-review-details>strong{font-size:13px;color:#27415b}
+.summary-review-details>p{font-size:11px;color:#6e8090;margin:5px 0 12px}
+.summary-review-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 1px;border-top:1px solid #e7eef4}
+.summary-review-row>div{min-width:0;display:flex;flex-direction:column;gap:4px}
+.summary-review-row strong{font-size:12px;color:#32485c}
+.summary-review-row small{font-size:11px;color:#6b7c8b;line-height:1.45}
+.summary-review-row button{white-space:nowrap;flex:none}
+.calendar-monthly-list{border:1px solid #dfe7ef;border-radius:11px;margin:17px 0 0;background:#fff;overflow:hidden}
+.calendar-monthly-list>summary{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:15px 17px;cursor:pointer;font-weight:750;font-size:13px;color:#2b435c;list-style:revert}
+.calendar-monthly-list>summary span{color:#80909d;font-size:10px;font-weight:550}
+.calendar-monthly-totals{display:flex;gap:18px;flex-wrap:wrap;padding:11px 16px;border-top:1px solid #eef2f6;background:#fafbfd;font-size:11px;color:#63778b}
+.calendar-monthly-totals strong{color:#31475b}
+.calendar-monthly-rows{display:flex;flex-direction:column;max-height:560px;overflow:auto}
+.calendar-monthly-row{display:grid;grid-template-columns:70px minmax(0,1fr)minmax(80px,auto) 34px;gap:10px;align-items:center;text-align:left;padding:11px 15px;border:0;border-top:1px solid #edf1f5;background:#fff;cursor:pointer;color:#34485f}
+.calendar-monthly-row:hover,.calendar-monthly-row:focus-visible{background:#f3f7fc}
+.calendar-monthly-date{font-size:11px;color:#7a8b9b;font-variant-numeric:tabular-nums}
+.calendar-monthly-name{font-size:12px;font-weight:680;min-width:0;overflow-wrap:anywhere}
+.calendar-monthly-name small{display:block;font-size:10px;font-weight:500;color:#8594a1;margin-top:3px}
+.calendar-monthly-row strong{font-variant-numeric:tabular-nums;font-size:12px;text-align:right;white-space:nowrap}
+.calendar-monthly-view{font-size:10px;color:#6186a5;text-align:right}
+@media(max-width:520px){
+ .summary-review-row{align-items:flex-start}
+ .summary-review-row .btn{padding:7px 8px;font-size:10px}
+ .calendar-monthly-list>summary{align-items:flex-start;flex-direction:column;gap:3px}
+ .calendar-monthly-row{grid-template-columns:54px minmax(0,1fr)auto;gap:7px;padding:12px 9px}
+ .calendar-monthly-view{display:none}
+ .calendar-monthly-date{font-size:10px}
+ .calendar-monthly-row strong{font-size:11px}
+}
