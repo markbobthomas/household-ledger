@@ -33,14 +33,20 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
    assert.equal(await page.locator('.side-link').count(),6,'Summary and Predictions keep History, Reviews and Settings separate');
-   const go=tab=>page.locator(mobile?'.planner-tabs [data-view="'+tab+'"]':'.sidebar [data-view="'+tab+'"]').click();
+   const go=async tab=>{
+    await page.locator('#planner-menu > summary').click();
+    await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
+   };
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
    assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
-   assert.equal(await page.locator('.sidebar [data-view="transactions"] span').innerText(),'Predictions');
-   assert.equal(await page.locator('.planner-tabs [data-view="transactions"]').innerText(),'Predictions');
+   assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),'All predictions');
+   assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
    assert.equal(await page.locator('[data-summary-days]').count(),6);
+   assert.equal(await page.locator('.summary-current').count(),1);
+   assert.equal(await page.locator('.summary-coverage-metric').count(),1);
+   assert.ok(await page.locator('.calendar-checklist').count()>0);
    assert.equal(await page.locator('[data-calendar-stage]').count(),1,
     'Summary defaults to a daily balance calendar');
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
@@ -63,6 +69,8 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
    assert.ok(await page.locator('[data-calendar-day="2026-11-01"]').count()>0,
     'Next month contains projected balances starting on its first day');
+   await page.locator('[data-calendar-actual-day]').last().click();
+   assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
    await page.locator('[data-calendar-today]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
    assert.equal(await page.locator('[data-calendar-day="2026-10-19"].selected').count(),1,
@@ -566,7 +574,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('#horizon').inputValue(),'180',
    'Real private forecast recalculates longer ranges from the bank ledger');
   assert.match(await page.locator('.summary-end').innerText(),/End of 180 days/);
-  await page.locator('.sidebar [data-view="overview"]').click();
+  await go('overview');
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
    'Real checking starts at bank-reported available cash, not credit card debt');
@@ -585,7 +593,7 @@ const {chromium,webkit}=require('playwright');
    .filter({hasText:/^MAIN ACCOUNT$/}).waitFor();
   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/MAIN ACCOUNT/,
    'The chosen checking account becomes the persistent primary focus');
-  await page.locator('.sidebar [data-view="history"]').click();
+  await go('history');
   assert.match(await page.locator('.history-page').innerText(),/Home Mortgage ACH/,
    'Plaid posted mortgage visible separately from future predictions');
   const ambiguousMortgage=page.locator('.history-actual-row').filter({hasText:'House Loan ACH Unrecognized'}).first();
@@ -597,18 +605,18 @@ const {chromium,webkit}=require('playwright');
    'An actual misclassified ACH mortgage can be scheduled as a checking withdrawal');
   assert.equal(await uncertainForm.locator('[name=amount]').inputValue(),'2000');
   await uncertainForm.locator('[data-cancel-review-form]').click();
-  await page.locator('.sidebar [data-view="transactions"]').click();
+  await go('transactions');
   assert.ok(await page.locator('.future-item').filter({hasText:'Storage Unit Monthly'}).count()>0,
    'Two precisely repeating storage payments are in the future ledger');
   assert.ok(await page.locator('.future-item').filter({hasText:'Home Mortgage ACH'}).count()>0,
    'The recurring mortgage is also in that same future ledger');
-  await page.locator('.sidebar [data-view="history"]').click();
+  await go('history');
   await page.locator('.history-actual-row').filter({hasText:'Home Mortgage ACH'})
    .first().locator('[data-history-plan]').click();
   const homeForm=page.locator('.history-schedule-form');
   await homeForm.locator('button[type=submit]').click();
   await page.locator('.history-page .future-notice').getByText(/Saved recurring forecast/).waitFor();
-  await page.locator('.sidebar [data-view="settings"]').click();
+  await go('settings');
   const cardSettings=page.locator('#card-autopay');
   if(await cardSettings.getAttribute('open')===null)
    await cardSettings.locator('summary').click();
@@ -641,7 +649,7 @@ const {chromium,webkit}=require('playwright');
    'Posted card charges are individually auditable for their billing period');
   assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Planned/,
    'Before bank posts withdrawal, its date is explicitly a plan, not actual history');
-  await page.locator('.sidebar [data-view="summary"]').click();
+  await go('summary');
   await page.locator('[data-summary-days="60"]').click();
   await page.locator('.summary-extras > summary').click();
   const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
@@ -657,10 +665,10 @@ const {chromium,webkit}=require('playwright');
    .locator('.coverage-cell.covered,.coverage-cell.review').count()>=2,
    'Both upcoming mortgage periods are shown or flagged for competing predicted withdrawals');
   await page.locator('[data-summary-days="90"]').click();
-  await page.locator('.sidebar [data-view="overview"]').click();
+  await go('overview');
   assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
    'Overview shows the next card statement and due date');
-  await page.locator('.sidebar [data-view="transactions"]').click();
+  await go('transactions');
   assert.match(await page.locator('.transactions-page').innerText(),/ACME Employer Payroll/,
    'Predicted payroll is listed as an editable future deposit for checking');
   assert.match(await page.locator('.transactions-page').innerText(),/Deposit/,
@@ -692,7 +700,7 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#future-new-form [name=date]').fill('2026-11-23');
   await page.locator('#future-new-form button[type=submit]').click();
   await page.getByText('One-time plumbing').first().waitFor();
-  await page.locator('.sidebar [data-view="settings"]').click();
+  await go('settings');
   for(let i=0;i<45&&!writes.some(x=>x.predictions?.paymentRules?.['credit-real']);i++)
    await new Promise(r=>setTimeout(r,80));
   assert.ok(writes.some(x=>x.predictions?.paymentRules?.['credit-real']?.fromAccountId==='checking-real'),
@@ -718,7 +726,7 @@ const {chromium,webkit}=require('playwright');
    'Real-mode rerun retains the expanded audit section');
   assert.match(await auditReal.innerText(),/Refresh bank first/,
    'An audit recheck clearly distinguishes recalculation from fetching new Plaid data');
-  await page.locator('.sidebar [data-view="overview"]').click();
+  await go('overview');
   await page.locator('.account-tile').filter({hasText:'Household Visa'}).click();
   assert.equal(await page.locator('.balance-main').innerText(),'$1,200.00',
    'Selecting a card switches to debt without reducing checking');
@@ -728,13 +736,13 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#refresh-bank').click();
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
-  await page.locator('.sidebar [data-view="transactions"]').click();
+  await go('transactions');
   const predictedMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
   assert.ok(await predictedMortgage.count()>=1,
    'One strongly identified actual $2,000 mortgage is forecast automatically without three months');
   const predictedDatesBefore=await predictedMortgage.count();
   assert.equal(predictedDatesBefore,3,'Automatic mortgage estimate appears once per upcoming month');
-  await page.locator('.sidebar [data-view="history"]').click();
+  await go('history');
   const actualMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage Servicer X'}).first();
   await actualMortgage.locator('[data-history-plan]').click();
   const mortgageForm=page.locator('.history-schedule-form');
@@ -756,13 +764,13 @@ const {chromium,webkit}=require('playwright');
   assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
    r.merchant==='Mortgage Servicer X'&&r.amount===2000&&r.accountId==='checking-real')),
    'Mortgage rule saved as private prediction, not bank-transaction change');
-  await page.locator('.sidebar [data-view="transactions"]').click();
+  await go('transactions');
   const singleMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
   assert.equal(await singleMortgage.count(),2,
    'November and December have one user-confirmed mortgage each, without the inferred duplicate');
   assert.match(await singleMortgage.first().innerText(),/Nov 25/,
    'Owner-selected mortgage date takes priority over the historical posting day');
-  await page.locator('.sidebar [data-view="history"]').click();
+  await go('history');
   await page.locator('.history-actual-row').filter({hasText:'Storage Unit Monthly'})
    .first().locator('[data-history-plan]').click();
   const storageForm=page.locator('.history-schedule-form');
