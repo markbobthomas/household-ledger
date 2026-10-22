@@ -31,7 +31,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
- let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null;
+ let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -728,6 +728,11 @@ function detailHtml(bundle,s){
    '<summary><span>Schedule settings</span><small>Default dates, amount, account and repeat frequency</small></summary>'+
    '<div class="plan-settings-body"><p>Saving these settings updates the repeating plan. '+
     'Changes to one dated payment belong in the payment list below.</p>'+editHtml+'</div></details>';
+  const stopable=!isNew&&rule?futureRows(bundle,s).find(r=>r.recurringRuleId===rule.id):null;
+  const stopPlan=stopable?'<div class="plan-stop"><span>Need this payment to stop repeating? '+
+   'Bank history and other unrelated plans remain unchanged.</span>'+
+   '<button type="button" class="btn" data-stop-plan="'+escapeHTML(rule.id)+'">'+
+   (planStopPending===rule.id?'Confirm stop repeating':'Stop repeating')+'</button></div>':'';
   const estimates=!isNew&&estimateHtml?'<details class="plan-settings plan-estimates" data-plan-estimates'+
    (transactionDetail.mode==='estimate'?' open':'')+'><summary><span>Estimate amounts over a date range</span>'+
    '<small>Override part of the forecast, without changing another bill</small></summary>'+
@@ -744,7 +749,7 @@ function detailHtml(bundle,s){
      ' This change will not update the other occurrences.</div>':'')+
     // Keep selected payment visible near the top, not in a second modal.
     (isNew?'':scheduleOccurrencesHtml(bundle,s,rule,picked))+
-    settings+estimates,
+    settings+estimates+stopPlan,
    isNew?'NEW PLAN · FORECAST ONLY':'PAYMENT PLAN · EDITABLE');
  }
  return '';
@@ -804,6 +809,7 @@ function restoreScheduleAfterOccurrence(){
  transactionDetail=null;
 }
 function dismissTransaction(){
+ planStopPending='';
  const mode=transactionDetail?.kind;
  if(mode==='schedule'&&transactionDetail.selectedKey){
   transactionDetail.selectedKey='';render();
@@ -1396,6 +1402,21 @@ function render(){
 }
 document.addEventListener('click',async e=>{
  if(e.target.closest?.('[data-close-transaction-detail]')){dismissTransaction();return}
+ const stopPlan=e.target.closest?.('[data-stop-plan]');
+ if(stopPlan){
+  const id=stopPlan.dataset.stopPlan,
+   row=futureRows(forecastFor(snapshot()),snapshot()).find(r=>r.recurringRuleId===id);
+  if(!row)return;
+  if(planStopPending!==id){planStopPending=id;render();return}
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),row));
+   planStopPending='';transactionDetail=null;scheduleMode='';scheduleTarget='';
+   scheduleNotice='Stopped this repeating plan; actual bank history is unchanged.';
+   if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
+   render();
+  }catch(err){planStopPending='';scheduleNotice=String(err.message||err);render()}
+  return;
+ }
  const selectedPlanPayment=e.target.closest?.('[data-select-plan-payment]');
  if(selectedPlanPayment&&transactionDetail?.kind==='schedule'){
   transactionDetail.selectedKey=selectedPlanPayment.dataset.selectPlanPayment;
