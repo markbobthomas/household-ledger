@@ -766,6 +766,11 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
    other.exampleIds=other.exampleIds.filter(id=>String(id)!==String(bankId));
  }
  r.exampleIds=[...new Set([...(r.exampleIds||[]).map(String),String(bankId)])];
+ // User-confirmed aliases help recognize future bank postings even if
+ // Plaid's displayed payee differs from the schedule name. Shared aliases
+ // across two obligations remain ambiguous and require another decision.
+ const alias=merchantKey(bank.merchant||bank.name);
+ if(alias)r.matchNames=[...new Set([...(r.matchNames||[]),alias])];
  return r.id;
 }
 
