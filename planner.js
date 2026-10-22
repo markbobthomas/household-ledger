@@ -1356,7 +1356,7 @@ function settingsPage(bundle,s,chosen){
   '<section class="panel mini-panel" aria-label="Recurring forecast changes">'+
    '<div class="section-title"><h2>Recurring payment changes</h2>'+
     '<span class="status-tag">'+Object.keys(state().predictions?.futureSeriesEdits||{}).length+' CUSTOMIZED</span></div>'+
-   '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Predictions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
+   '<p>To change all future payments, edit the repeating defaults in Schedules. To change one date, click that payment in Calendar or Schedules.</p>'+
    '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
    '</section>'+
   auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
@@ -2177,7 +2177,8 @@ document.addEventListener('submit',async e=>{
      const saveCadence=row.cadence==='twice-monthly'?'twice monthly':row.cadence;
      const result=useSeries?
       planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,saveCadence,row.kind):
-      planner.defineRecurring(state(),fields,accounts,asOf,row,model.records(state()),examples);
+      planner.defineRecurring(state(),{...fields,resetAmountWindows:'on'},
+       accounts,asOf,row,model.records(state()),examples);
      const edits=state().predictions.futureTransactionEdits||{};
      for(const other of existingRows){
       // A confirmed plan's individually edited dates are independent.
@@ -2272,12 +2273,7 @@ document.addEventListener('change',e=>{
   }
   return;
  }
- if(e.target.matches?.('[data-schedule-amount-scope]')){
-  const dates=e.target.closest('form')?.querySelector('[data-schedule-estimate-dates]');
-  if(dates)dates.hidden=e.target.value==='all';
-  return;
- }
- if(e.target.matches?.('[data-schedule-type]')){
+  if(e.target.matches?.('[data-schedule-type]')){
   const form=e.target.closest('form'),transfer=e.target.value==='transfer';
   form?.querySelectorAll('.schedule-transfer-account').forEach(el=>el.hidden=!transfer);
   const single=form?.querySelector('.schedule-single-account');if(single)single.hidden=transfer;
