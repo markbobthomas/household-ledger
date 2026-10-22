@@ -998,16 +998,17 @@ function scheduleFields(r,isNew,s){
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
  }
-function scheduleAvgMonth(rule,T,asOf,through){
- const dates=T.recurrenceDates(rule,asOf,through);
- return dates.reduce((sum,date)=>sum+T.scheduleAmount(rule,date).amount,0)/12;
-}
-function scheduleCategorySummary(items,T,asOf,through){
+function scheduleCategorySummary(items,bundle,asOf,through){
+ // Use the canonical forecast ledger, so posted-coverage suppression and
+ // individual predicted payment edits affect totals exactly once.
+ const ids=new Set(items.map(({rule})=>String(rule.id)));
  let withdrawals=0,deposits=0,transfers=0;
- for(const {rule} of items){
-  const average=scheduleAvgMonth(rule,T,asOf,through);
-  if(rule.kind==='movement')transfers+=average;
-  else if(['income','refund'].includes(rule.type))deposits+=average;
+ for(const row of bundle?.ledger||[]){
+  if(!(row.date>asOf&&row.date<=through)||
+   !ids.has(String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')))continue;
+  const average=Number(row.amount)/12;
+  if(row.kind==='movement')transfers+=average;
+  else if(['income','refund'].includes(row.type))deposits+=average;
   else withdrawals+=average;
  }
  const parts=[];
@@ -1024,10 +1025,14 @@ function schedulesPage(bundle,s){
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter);
+ const nextAmount=rule=>{
+  const first=T.recurrenceDates(rule,s.asOf,end)[0];
+  return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
+ };
  visible.sort((a,b)=>scheduleSort==='value-desc'?
-  Number(b.rule.amount)-Number(a.rule.amount)||a.index-b.index:
+  nextAmount(b.rule)-nextAmount(a.rule)||a.index-b.index:
   scheduleSort==='value-asc'?
-   Number(a.rule.amount)-Number(b.rule.amount)||a.index-b.index:
+   nextAmount(a.rule)-nextAmount(b.rule)||a.index-b.index:
   scheduleSort==='category'?
    categoryOf(a.rule).localeCompare(categoryOf(b.rule))||a.index-b.index:
   a.index-b.index);
@@ -1104,7 +1109,7 @@ function schedulesPage(bundle,s){
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
     '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
     ' <small>('+items.length+')</small></strong><span>'+
-    scheduleCategorySummary(items,T,s.asOf,nextYear)+'</span></div>'+
+    scheduleCategorySummary(items,bundle,s.asOf,nextYear)+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
