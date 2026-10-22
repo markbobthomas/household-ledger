@@ -41,7 +41,7 @@ assert.equal(T.scheduleAmount(house,'2026-11-10').amount,160);
 assert.equal(T.scheduleAmount(house,'2026-12-10').amount,175,'Specific range overrides all-future estimate');
 assert.throws(()=>T.setScheduleEstimate(state,house.id,
  {scope:'range',amount:50,from:'2026-10-01',through:'2026-12-31'},asOf),/future date range/);
-const next=T.defineRecurring(state,{...base,merchant:'River Water Utility',scheduleLabel:'Water — House',
+const next=T.defineRecurring(state,{...base,separateSchedule:false,merchant:'River Water Utility',scheduleLabel:'Water — House',
  amount:160,amountBasis:'estimate',date:'2026-11-10'},accounts,asOf,
  {kind:'event',accountId:'checking',sourceAccountId:'checking',recurringRuleId:house.id,
   originalMerchant:'River Water Utility',type:'expense',date:'2026-11-10'},history,[]);
@@ -68,7 +68,7 @@ assert.equal(b.ledger.filter(e=>e.date==='2026-11-10').length,0,
 assert.equal(b.ledger.filter(e=>e.date==='2026-12-10').length,2,
  'December bills remain predicted after both November payments post');
 T.removeScheduleEstimate(state,house.id,0);
-assert.equal(T.scheduleAmount(house,'2026-12-10').amount,160);
+assert.equal(T.scheduleAmount(state.predictions.futureRecurringRules.find(r=>r.id===house.id),'2026-12-10').amount,160);
 T.removeRecurring(state,house.id);
 assert.equal(state.predictions.futureRecurringRules.length,1);
 assert.equal(state.predictions.futureRecurringRules[0].id,garden.id,
