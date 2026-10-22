@@ -638,6 +638,8 @@ const {chromium,webkit}=require('playwright');
   await page.locator('[data-summary-days="60"]').click();
   assert.equal(await page.locator('.coverage-month').count(),3,
    '60 days from mid-October includes three calendar-month segments');
+  assert.match(await page.locator('.calendar-monthly-unplanned').innerText(),/Household Visa/,
+   'Absent payment remains explicitly visible under monthly predictions with card-spending evidence');
   const review=page.locator('.summary-review-trigger');
   assert.equal(await review.count(),1,'Review count is an actionable button');
   await review.click();
