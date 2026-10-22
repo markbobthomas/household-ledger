@@ -84,14 +84,16 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await monthlyEntries.count()>0,'Monthly list contains actual forecast events');
    const pickedMonth=await monthlyEntries.first().getAttribute('data-calendar-list-date');
    await monthlyEntries.first().click();
-   assert.equal(await page.locator('.transaction-detail[role="dialog"]').count(),1,
-    'The month list opens the single transaction detail panel');
-   assert.equal(await page.locator('.transaction-detail .future-edit-form').count(),1,
-    'Calendar list reuses the same full editor as Predictions');
-   assert.match(await page.locator('.transaction-detail').innerText(),/Forecast source|Expected amount/);
-   await page.locator('.transaction-detail-close').click();
-   assert.equal(await page.locator('.transaction-detail').count(),0,
-    'Closing returns to the month list, not another page');
+   assert.equal(await page.locator('.transaction-detail[role="dialog"]').count(),0,
+    'Monthly rows edit without opening a popup or navigating away');
+   const expandedMonth=page.locator('[data-inline-row-wrapper]').filter({
+    has:page.locator('.calendar-monthly-row[aria-expanded="true"]')});
+   assert.equal(await expandedMonth.locator('[data-inline-transaction-editor] .future-edit-form').count(),1,
+    'Complete editing fields appear directly under the clicked monthly transaction');
+   assert.ok(await expandedMonth.locator('[name=date],[name=merchant],[name=amount]').count()>=3);
+   await expandedMonth.locator('[data-cancel-future]').click();
+   assert.equal(await page.locator('[data-inline-transaction-editor]').count(),0,
+    'Cancel collapses the row without changing the forecast');
    assert.equal(await page.locator('[data-calendar-stage]').count(),1,
     'Summary defaults to a daily balance calendar');
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
@@ -486,9 +488,11 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.calendar-notice').innerText().then(x=>x.includes('recalculated')));
    const playground=page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'});
    await playground.click();
-   const universal=page.locator('.transaction-detail .future-edit-form');
+   const universal=page.locator('.calendar-detail-entry [data-inline-transaction-editor] .future-edit-form');
+   assert.equal(await page.locator('.transaction-detail').count(),0,
+    'Calendar day edits are inline and do not open a modal');
    assert.equal(await universal.locator('[name=amount]').inputValue(),'25',
-    'Calendar and Predictions use the identical form');
+    'Editable amount is directly beneath the clicked calendar date row');
    await universal.locator('[name=amount]').fill('40');
    await universal.locator('button[type=submit]').click();
    assert.match(await page.locator('.calendar-detail-item')
@@ -501,9 +505,9 @@ const {chromium,webkit}=require('playwright');
     'Calendar-only edits persist across reload');
    await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).click();
-   assert.ok(await page.locator('.transaction-detail [data-remove-added]').count()>0,
-    'An individually added payment offers removal rather than a misleading skip');
-   await page.locator('.transaction-detail [data-remove-added]').click();
+   assert.ok(await page.locator('.calendar-detail-entry [data-remove-added]').count()>0,
+    'An individually added payment can be removed from the expanded row');
+   await page.locator('.calendar-detail-entry [data-remove-added]').click();
    assert.equal(await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).count(),0,
     'Skipping a selected occurrence removes it from the same balance forecast');
@@ -573,6 +577,11 @@ const {chromium,webkit}=require('playwright');
    const onePayment=page.locator('.transaction-detail .future-edit-form');
    assert.equal(await onePayment.locator('[name=scope][value=one]').isChecked(),true,
     'One date editing is the default within the unified plan');
+   assert.equal(await page.locator('.plan-occurrence-editor').count(),1,
+    'The date editor expands inside its own list row, not in a second location');
+   assert.equal(await page.locator('.schedule-occurrence-entry')
+    .filter({hasText:'Nov 10'}).locator('.future-edit-form').count(),1,
+    'All editable fields are directly underneath the November line');
    assert.equal(await onePayment.locator('[name=scope][value=all]').count(),0,
     'No second competing schedule editor is embedded in an individual payment');
    await onePayment.locator('[name=amount]').fill('147');
@@ -606,22 +615,21 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.calendar-detail-item')
     .filter({hasText:'Water - Garden'}).innerText(),/220/);
    await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).click();
-   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
-    'Clicking a monthly prediction opens its complete payment plan directly');
-   assert.equal(await page.locator('.transaction-detail .future-edit-form').count(),1,
-    'The specific occurrence is editable inline in the SAME plan');
-   assert.equal(await page.locator('.transaction-detail [data-open-linked-schedule]').count(),0,
-    'No redundant Edit Schedule button creates a second navigation step');
-   await page.locator('.transaction-detail [data-plan-settings] > summary').click();
-   assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').isVisible(),true,
-    'Schedule-wide settings are one disclosure in the current panel');
-   await page.locator('.transaction-detail-close').click();
-   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
-    'Closing the selected occurrence stays inside the same payment plan');
-   await page.locator('.transaction-detail-close').click();
+   const inlineWater=page.locator('.calendar-detail-entry').filter({
+    hasText:'Water - House'}).first();
+   assert.equal(await page.locator('.transaction-detail').count(),0,
+    'Selecting a confirmed payment edits the visible calendar row, never opens a second editor');
+   assert.equal(await inlineWater.locator('.future-edit-form').count(),1,
+    'One-payment editing appears underneath its original line');
+   assert.equal(await inlineWater.locator('.future-edit-form [name=scope][value=all]').count(),0,
+    'The individual row cannot silently change every future schedule');
+   await inlineWater.locator('.inline-plan-settings > summary').click();
+   assert.equal(await inlineWater.locator('[data-schedule-edit-form]').isVisible(),true,
+    'The same expanded line exposes repeating-plan settings for editing');
+   await inlineWater.locator('[data-cancel-future]').click();
+   assert.equal(await inlineWater.locator('[data-inline-transaction-editor]').count(),0);
    assert.equal(await page.locator('.summary-page').count(),1,
-    'Closing a linked schedule returns to the calendar instead of stranding users on Schedules');
-   assert.equal(await page.locator('.transaction-detail').count(),0);
+    'Collapsing transaction edit keeps the calendar and selected date in place');
       assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');
@@ -832,14 +840,15 @@ const {chromium,webkit}=require('playwright');
   const cardNov=page.locator('.calendar-monthly-entry').filter({hasText:'Credit-card payment'}).first();
   assert.ok(await cardNov.count()>0,'The projected checking card payment has an itemized breakdown');
   await cardNov.locator('[data-open-card-payment]').click();
-  const itemized=page.locator('.transaction-detail');
+  const itemized=cardNov.locator('[data-inline-transaction-editor]');
+  assert.equal(await page.locator('.transaction-detail').count(),0);
   assert.equal(await itemized.isVisible(),true);
   assert.match(await itemized.innerText(),/Actual posted card transactions/);
   assert.match(await itemized.innerText(),/Scheduled\/recurring card transactions/);
   assert.match(await itemized.innerText(),/Identifiable activity/);
   assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
   assert.equal(await itemized.locator('.future-edit-form').count(),1);
-  await page.locator('.transaction-detail-close').click();
+  await itemized.locator('[data-cancel-future]').click();
   await page.locator('.summary-extras > summary').click();
   const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
   assert.equal(await cardCoverage.locator('.coverage-cell.covered').count(),2,

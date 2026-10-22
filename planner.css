@@ -900,3 +900,35 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .plan-stop .btn{font-size:11px;white-space:nowrap}
 .plan-stop .btn[data-stop-plan]:hover{background:#fff2ee}
 @media(max-width:520px){.plan-stop{flex-direction:column;align-items:flex-start}.plan-stop .btn{align-self:flex-start}}
+
+/* The transaction row is its own editor, not a link to a separate surface. */
+.calendar-monthly-entry,.calendar-detail-entry{position:relative;display:flex;flex-wrap:wrap;align-items:stretch;width:100%;min-width:0;border-bottom:1px solid #e7eef5}
+.calendar-monthly-entry>.calendar-monthly-row,.calendar-detail-entry>.calendar-detail-item{flex:1 1 0;min-width:0;border:0}
+.calendar-monthly-entry>.calendar-monthly-row[aria-expanded="true"],.calendar-detail-entry>.calendar-detail-item[aria-expanded="true"]{background:#eff6fc;color:#244d6e;font-weight:700}
+.calendar-detail-entry>.calendar-detail-item{width:100%;text-align:left;background:transparent;cursor:pointer}
+.calendar-detail-entry>.calendar-detail-item:hover,.calendar-detail-entry>.calendar-detail-item:focus-visible{background:#f3f8fc}
+.calendar-detail-entry>.card-breakdown-action{align-self:stretch}
+.inline-transaction-editor{display:block;flex:1 0 100%;width:100%;min-width:0;padding:15px;background:#f9fbfe;border-top:1px solid #d9e6f2;box-shadow:inset 3px 0 #6794bc}
+.inline-transaction-editor .future-edit-form{margin:0;padding:0;background:transparent;border:0;border-radius:0}
+.inline-transaction-editor .future-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.inline-transaction-editor .future-fields label{min-width:0}
+.inline-transaction-editor .future-fields input,.inline-transaction-editor .future-fields select{width:100%;max-width:100%}
+.inline-transaction-editor .future-scope{background:#fff;border:1px solid #dfebf4;border-radius:8px;margin-bottom:12px}
+.inline-transaction-editor .future-form-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:12px}
+.inline-transaction-editor .future-form-actions .btn{min-height:36px}
+.inline-editor-explanation{font-size:11px;line-height:1.5;color:#5a7388;margin:0 0 13px}
+.inline-plan-settings{margin-top:14px;border-top:1px solid #e0eaf2;padding-top:14px}
+.inline-plan-settings>summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font-size:12px;font-weight:750;color:#2f6084}
+.inline-plan-settings>summary small{font-size:10px;font-weight:500;color:#8495a2}
+.inline-plan-settings>.schedule-form{padding:13px 0 0;margin:0;border:0;background:transparent}
+.schedule-occurrence-entry{border-bottom:1px solid #edf1f5}
+.schedule-occurrence-entry:last-child{border-bottom:0}
+.schedule-occurrence-entry>.schedule-occurrence{border:0}
+.schedule-occurrence-entry>.plan-occurrence-editor{margin:0 9px 12px}
+@media(max-width:600px){
+ .inline-transaction-editor{padding:11px}
+ .inline-transaction-editor .future-fields{grid-template-columns:1fr}
+ .inline-transaction-editor .future-form-actions .btn{min-height:42px;flex:1 1 42%}
+ .calendar-monthly-entry>.calendar-monthly-row,.calendar-detail-entry>.calendar-detail-item{flex-basis:100%}
+ .inline-plan-settings>summary{flex-direction:column;gap:4px}
+}

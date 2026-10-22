@@ -223,9 +223,10 @@ function dayDetail(point,card){
     esc(e.merchant||'Predicted transaction')+
     (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':e.amountEstimate?'<small>Estimated prediction</small>':'<small>Predicted · not posted</small>')+
     '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong>'+
-    '<span class="calendar-item-edit">Details →</span></button>';
-   return d?'<div class="calendar-breakdown-row">'+editor+
-    '<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+'">Payment calculation →</button></div>':editor;
+    '<span class="calendar-item-edit">Edit ↓</span></button>';
+   return '<div class="calendar-detail-entry" data-inline-row-wrapper>'+editor+
+    (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+'">Payment calculation →</button>':'')+
+    '</div>';
   }).join('')+'</div>':
    '<p class="calendar-empty">'+(point.date===first.date?
     'Starting balance. No future transactions yet.':
@@ -269,10 +270,10 @@ function monthlyPredictions(state){
     '</span><span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
     (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
     '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
-    '</strong><span class="calendar-monthly-view">Details →</span></button>';
-   return d?'<div class="calendar-monthly-entry">'+entry+
-    '<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+
-    '">Payment calculation →</button></div>':entry;
+    '</strong><span class="calendar-monthly-view">Edit ↓</span></button>';
+   return '<div class="calendar-monthly-entry" data-inline-row-wrapper>'+entry+
+    (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+
+     '">Payment calculation →</button>':'')+'</div>';
   }).join('')+
    '</div>':'<p class="calendar-empty">No predicted deposits or withdrawals for the selected account this month.</p>')+
    unplanned+'</details>';

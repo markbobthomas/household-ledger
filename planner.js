@@ -639,26 +639,28 @@ function scheduleOccurrencesHtml(bundle,s,rule,selectedKey=''){
  if(!rule)return '';
  const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id)),
   selected=occurrences.find(r=>r.key===selectedKey);
- const rows=occurrences.map(row=>'<button type="button" class="schedule-occurrence'+
-  (row.key===selectedKey?' selected':'')+'" data-select-plan-payment="'+
-  escapeHTML(row.key)+'" data-schedule-occurrence-key="'+escapeHTML(row.key)+'" aria-pressed="'+
-  (row.key===selectedKey?'true':'false')+'">'+
-  '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
-  '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
-   '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
-    row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
-  '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">Edit →</span></button>').join('');
- const selectedForm=selected?'<div class="plan-occurrence-editor" data-plan-occurrence-editor>'+
-  '<div class="plan-section-label"><strong>Editing just this payment</strong>'+
-   '<span>'+escapeHTML(dayLabel(selected.date))+' · '+cash(selected.amount)+'</span></div>'+
-  '<p>You can change the date, amount or account for this occurrence. The other '+
-   'payments in this plan stay exactly as they are.</p>'+
-  editorFor(selected,s,bundle?.rows||[],{oneOnly:true})+'</div>':'';
+ const rows=occurrences.map(row=>{
+  const picked=row.key===selectedKey;
+  const inline=picked?'<div class="plan-occurrence-editor" data-plan-occurrence-editor>'+
+   '<div class="plan-section-label"><strong>Edit this payment here</strong>'+
+    '<span>'+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+'</span></div>'+
+   '<p>Changes here apply to this date only; the other payments remain as scheduled.</p>'+
+   editorFor(row,s,bundle?.rows||[],{oneOnly:true})+'</div>':'';
+  return '<div class="schedule-occurrence-entry">'+
+   '<button type="button" class="schedule-occurrence'+(picked?' selected':'')+
+   '" data-select-plan-payment="'+escapeHTML(row.key)+
+   '" data-schedule-occurrence-key="'+escapeHTML(row.key)+'" aria-expanded="'+picked+'">'+
+   '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+   '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
+    '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
+     row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
+   '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">'+
+   (picked?'Close −':'Edit ↓')+'</span></button>'+inline+'</div>';
+ }).join('');
  return '<section class="schedule-occurrence-section" aria-label="Upcoming individual payments">'+
   '<div class="schedule-occurrence-heading"><h3>Individual upcoming payments</h3>'+
    '<span>'+occurrences.length+' in next '+horizon+' days</span></div>'+
   '<p>Select a date to adjust just that payment. Schedule settings and all other dates stay unchanged.</p>'+
-  selectedForm+
   (rows?'<div class="schedule-occurrence-list">'+rows+'</div>':
    '<p class="schedule-occurrence-empty">No remaining payments for this schedule within the selected forecast. '+
     'A payment may have already posted, been skipped, or be outside the forecast window.</p>')+
@@ -765,6 +767,41 @@ function drawTransactionDetail(bundle,s){
   form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
   updateHistoryLinks(form);
  }
+}
+function closeInlineTransaction(){
+ document.querySelectorAll('[data-inline-transaction-editor]').forEach(el=>el.remove());
+ document.querySelectorAll('[data-inline-row-wrapper] [data-open-transaction]').forEach(el=>{
+  el.setAttribute('aria-expanded','false');
+ });
+}
+function openInlineTransaction(button){
+ const wrapper=button?.closest?.('[data-inline-row-wrapper]');
+ if(!wrapper)return false;
+ const existing=wrapper.querySelector('[data-inline-transaction-editor]');
+ if(existing){closeInlineTransaction();return true}
+ const focused=button.dataset.openTransaction;
+ const s=snapshot(),bundle=forecastFor(s),
+  row=futureRows(bundle,s).find(r=>r.key===focused);
+ if(!row){setNotice('That forecast has changed. Refresh the calendar and select the updated payment.');return true}
+ closeInlineTransaction();
+ const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
+ const helper=rule?'<p class="inline-editor-explanation"><strong>Only this date:</strong> '+
+  'The repeating payment plan is unchanged. Other dates keep their amounts and accounts.</p>':
+  '<p class="inline-editor-explanation">Edit the values directly below. Actual posted bank records stay untouched.</p>';
+ const settings=rule?'<details class="inline-plan-settings">'+
+  '<summary>Edit repeating plan defaults <small>affects other scheduled dates</small></summary>'+
+  '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
+   scheduleFields({...rule,date:window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,
+    shiftDay(s.asOf,360))[0]||shiftDay(s.asOf,1)},false,s)+
+   '<div class="future-form-actions"><button class="btn primary" type="submit">Save repeating plan</button>'+
+   '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
+ const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
+  helper+relatedCardCalculation(bundle,row)+
+  editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+settings+'</div>';
+ wrapper.insertAdjacentHTML('beforeend',html);
+ button.setAttribute('aria-expanded','true');
+ wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
+ return true;
 }
 function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===id);
@@ -878,10 +915,8 @@ function newTransactionForm(s){
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
 
-function schedulesPage(bundle,s){
- const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
-  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
- const fields=(r,isNew)=>{
+function scheduleFields(r,isNew,s){
+  const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1);
   const type=r.kind==='movement'?'transfer':r.type||'expense',transfer=isNew&&type==='transfer'||r.kind==='movement',
    accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id;
   return '<div class="future-fields">'+
@@ -905,7 +940,11 @@ function schedulesPage(bundle,s){
    '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
- };
+ }
+function schedulesPage(bundle,s){
+ const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
+  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
+ const fields=(r,isNew)=>scheduleFields(r,isNew,s);
  // Count separate posted charges on the same day. A shared merchant identity
  // cannot explain two obligations unless there are two saved schedules.
  const groups=new Map(),norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1419,11 +1458,20 @@ document.addEventListener('click',async e=>{
  }
  const selectedPlanPayment=e.target.closest?.('[data-select-plan-payment]');
  if(selectedPlanPayment&&transactionDetail?.kind==='schedule'){
-  transactionDetail.selectedKey=selectedPlanPayment.dataset.selectPlanPayment;
+  const chosen=selectedPlanPayment.dataset.selectPlanPayment;
+  transactionDetail.selectedKey=transactionDetail.selectedKey===chosen?'':chosen;
   transactionDetail.mode='edit';
   render();return;
  }
- const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
+ if(e.target.closest?.('[data-cancel-inline-schedule]')){
+  closeInlineTransaction();return;
+ }
+  const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
+ if(opening?.hasAttribute('data-open-card-payment')){
+  const adjacent=opening.closest('[data-inline-row-wrapper]')?.querySelector('[data-open-transaction]');
+  if(adjacent&&openInlineTransaction(adjacent))return;
+ }
+ if(opening?.hasAttribute('data-open-transaction')&&openInlineTransaction(opening))return;
  if(opening){
   if(opening.hasAttribute('data-open-transaction'))
    openPrediction(opening.dataset.openTransaction,opening);
@@ -1774,7 +1822,13 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('[data-cancel-new]')){
   showNewTransaction=false;mortgageDraft=null;transactionNotice='';render();return;
  }
- if(e.target.closest('[data-cancel-future]')){dismissTransaction();return}
+ if(e.target.closest('[data-cancel-future]')){
+  if(e.target.closest('[data-inline-transaction-editor]')){closeInlineTransaction();return}
+  if(transactionDetail?.kind==='schedule'&&transactionDetail.selectedKey){
+   transactionDetail.selectedKey='';render();return;
+  }
+  dismissTransaction();return;
+ }
  const edit=e.target.closest('[data-edit-future]');
  if(edit){showNewTransaction=false;transactionNotice='';
   openPrediction(edit.dataset.editFuture,edit);return}
@@ -2055,6 +2109,9 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&document.querySelector('[data-inline-transaction-editor]')){
+  closeInlineTransaction();return;
+ }
  if(e.key==='Escape'&&transactionDetail){dismissTransaction();return}
  if((e.key==='Enter'||e.key===' ')&&e.target.matches?.('[data-historical-transaction]')){
   e.preventDefault();e.target.click();return;
