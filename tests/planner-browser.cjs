@@ -549,6 +549,15 @@ const {chromium,webkit}=require('playwright');
    // Same merchant/date: separately saved streams and editable inline rows.
    await go('schedules');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
+   assert.equal(await page.locator('.schedule-discovery,[data-schedule-from-actual]').count(),0,
+    'Same-merchant charges no longer create an independent heuristic panel or extra-schedule prompts');
+   const beforeNumbers=await page.locator('[data-schedule-card]').evaluateAll(cards=>
+    cards.map(card=>({
+      number:Number(card.dataset.scheduleNumber),
+      label:card.querySelector('.schedule-number')?.textContent?.trim()
+    })));
+   assert.deepEqual(beforeNumbers,beforeNumbers.map((_,i)=>({number:i+1,label:String(i+1)})),
+    'Every existing schedule is labeled 1 through N in saved list order');
    await page.locator('[data-schedule-new]').click();
    let schedule=page.locator('[data-schedule-new-form]');
    assert.equal(await page.locator('.transaction-detail').count(),0,
@@ -559,6 +568,10 @@ const {chromium,webkit}=require('playwright');
    await schedule.locator('[name=date]').fill('2026-11-10');
    await schedule.locator('button[type=submit]').click();
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+1);
+   assert.equal(await page.locator('[data-schedule-card]').last().getAttribute('data-schedule-number'),
+    String(previousSchedules+1),'A new independent schedule receives the next number');
+   assert.equal(await page.locator('[data-schedule-card]').last().locator('.schedule-number').innerText(),
+    String(previousSchedules+1));
    let water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
     'Schedule settings and upcoming payments expand inside their own schedule');
@@ -570,6 +583,12 @@ const {chromium,webkit}=require('playwright');
    await schedule.locator('button[type=submit]').click();
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
     'Separate same-merchant bills never merge');
+   assert.deepEqual(await page.locator('[data-schedule-card]').evaluateAll(cards=>
+    cards.map(card=>Number(card.dataset.scheduleNumber))),
+    Array.from({length:previousSchedules+2},(_,i)=>i+1),
+    'Distinct same-merchant schedules keep separate consecutive numbers');
+   assert.equal(await page.locator('.schedule-discovery').count(),0,
+    'Removing merchant discovery does not remove or merge separately saved bills');
 
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    if(!await water.locator('[data-schedule-inline-plan]').count())

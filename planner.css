@@ -1048,3 +1048,13 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 }
 .calendar-day-detail>.calendar-empty{margin:14px 0;color:#738799}
 .calendar-day-detail .calendar-math{margin-top:13px}
+
+/* Compact schedule identifiers are list numbers, not bank or recurrence IDs. */
+.schedule-heading>.schedule-heading-ident{display:flex;flex-direction:row;align-items:flex-start;gap:10px;
+ flex:1 1 auto;min-width:0}
+.schedule-heading-text{min-width:0;display:flex;flex-direction:column;gap:3px;flex:1}
+.schedule-number{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+ min-width:27px;height:27px;padding:0 5px;border:1px solid #d9e3ed;border-radius:8px;
+ background:#f3f6f9;color:#314a61;font:750 12px/1 var(--mono)}
+@media(max-width:600px){.schedule-heading>.schedule-heading-ident{gap:8px}
+ .schedule-number{min-width:25px;height:25px}}
