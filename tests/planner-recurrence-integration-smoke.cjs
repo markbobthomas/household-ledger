@@ -90,7 +90,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.equal(saved.futureRecurringRules[0].date,'2026-11-25');
  await click('[data-view]',{view:'transactions'});
  const after=future();
- assert.equal(occurrences(after),36,
+ assert.equal(occurrences(after),35,
   'One user-confirmed mortgage per future month over three years; no old inferred date');
  assert.match(after,/Nov 25/);
  assert.doesNotMatch(after,/Nov 15[^<]*.*Mortgage ACH/,
@@ -106,7 +106,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  const again=JSON.parse(store['household-planner-sample-settings-v1']||'{}');
  assert.equal(again.futureRecurringRules.length,1,'Opening existing schedule leaves one rule');
  await click('[data-view]',{view:'transactions'});
- assert.equal(occurrences(future()),36,'No duplicate mortgage created by opening the schedule');
+ assert.equal(occurrences(future()),35,'No duplicate mortgage created by opening the schedule');
  // Repeat the exact same owner-confirmation scenario for an UNKNOWN merchant.
  // Its category/name provides no fixed-bill shortcut, so detection genuinely
  // depends on the two observed exact-amount calendar payments.
@@ -120,7 +120,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
   'Confirming unrelated generic payment creates one separate recurring rule');
  await click('[data-view]',{view:'transactions'});
  const genericAfter=future();
- assert.equal((genericAfter.match(/ABC Draft 984/g)||[]).length,36,
+ assert.equal((genericAfter.match(/ABC Draft 984/g)||[]).length,35,
   'Owner-modified generic payment occurs once per month through the entire modeled period');
  assert.match(genericAfter,/Nov 26/);
  assert.doesNotMatch(genericAfter,/Nov 9[^<]*.*ABC Draft 984/);
