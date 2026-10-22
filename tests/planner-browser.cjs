@@ -65,12 +65,12 @@ const {chromium,webkit}=require('playwright');
     balanceText=await page.locator('.calendar-detail-balance strong').innerText();
    assert.ok(selectedAria.includes(balanceText),
     'Detailed balance is identical to the calendar projected balance for that date');
-   await page.locator('[data-calendar-nav="1"]').click();
+   await page.locator('[data-calendar-actual-day]').last().click();
+   assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
+      await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
    assert.ok(await page.locator('[data-calendar-day="2026-11-01"]').count()>0,
     'Next month contains projected balances starting on its first day');
-   await page.locator('[data-calendar-actual-day]').last().click();
-   assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
    await page.locator('[data-calendar-today]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
    assert.equal(await page.locator('[data-calendar-day="2026-10-19"].selected').count(),1,
