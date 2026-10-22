@@ -65,7 +65,11 @@ assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(1095),
  'The full three-year forecast is modeled rather than truncated to one year');
 const liveView=tool.render({...opts,chosen:{...opts.chosen,current:5650.25,available:5400.25},
  snapshot:{...opts.snapshot,connected:true},isReal:true});
-assert.match(liveView,/data-bank-current-value>\\$5,650\\.25</);
+assert.ok(liveView.includes('data-bank-current-value>$5,650.25<'));
 assert.match(liveView,/Plaid current balance/);
-assert.doesNotMatch(liveView,/data-bank-current-value>\\$5,400\\.25</);
+assert.ok(!liveView.includes('data-bank-current-value>$5,400.25<'));
+for(const n of [10,30,90,180,360,1095])
+ assert.ok(liveView.includes('data-trend-days="'+n+'"'));
+const noCurrent=tool.render({...opts,chosen:{...opts.chosen,current:null,available:5000}});
+assert.ok(noCurrent.includes('data-bank-current-value>Not reported<'));
 console.log('PASS three-year lowest-balance Summary: single minimum, no major-payments checklist, warnings and unverified suppression');
