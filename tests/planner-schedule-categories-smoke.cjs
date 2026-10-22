@@ -68,4 +68,17 @@ assert.throws(()=>Transactions.defineRecurring(state,{
 }),/Choose an existing schedule category/);
 assert.equal(state.predictions.futureRecurringRules.find(r=>r.id===rule.id).category,'Pet Care',
  'Unknown category cannot corrupt the saved schedule');
+assert.deepEqual(Transactions.setScheduleCategory(state,rule.id,'Insurance'),
+ {id:rule.id,category:'Insurance'},
+ 'Quick schedule category update returns the existing ID and new category');
+const recategorized=Core.materialize(snapshot,[],state.predictions,Transactions,null,days);
+assert.ok(recategorized.ledger.filter(e=>e.ruleId===rule.id)
+ .every(e=>e.category==='Insurance'),
+ 'One-tap category changes propagate to every future forecast occurrence, including saved one-date edits');
+assert.ok(recategorized.projection.accounts.flatMap(a=>a.events)
+ .filter(e=>e.recurringRuleId===rule.id).every(e=>e.category==='Insurance'),
+ 'Balance-projection event data retains the quick category change');
+assert.throws(()=>Transactions.setScheduleCategory(state,rule.id,'Unknown category'),/Choose an existing/);
+assert.equal(state.predictions.futureRecurringRules.find(r=>r.id===rule.id).category,'Insurance');
+assert.throws(()=>Transactions.setScheduleCategory(state,'unknown rule','Insurance'),/schedule changed/);
 console.log('PASS schedule category preservation: encrypted-forecast preference shape, custom categories, individual edits and linked-transfer legs');
