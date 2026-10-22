@@ -574,7 +574,7 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .topbar{align-items:center;gap:8px}
  .topbar h1{font-size:17px}
  .top-actions{margin-left:auto;align-items:center;gap:5px}
- .top-actions>label,.top-actions>.mode-box{display:none}
+ .top-actions>label{display:none}.top-actions>.mode-box{display:block;max-width:122px;padding:6px 7px}
  .planner-menu{order:0}
  .planner-menu>summary{min-height:36px}
  .planner-menu-content{width:min(250px,85vw)}
