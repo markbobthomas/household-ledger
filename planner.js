@@ -1602,7 +1602,7 @@ document.addEventListener('click',async e=>{
    amount:rule.amount,accountId:rule.accountId||rule.fromAccountId,
    toAccountId:rule.toAccountId,type:rule.kind==='movement'?'transfer':rule.type,
    frequency:rule.frequency,date:next||shiftDay(snapshot().asOf,1),
-   amountBasis:'estimate'};
+   amountBasis:'estimate',category:rule.category||'Uncategorized'};
   scheduleMode='new';scheduleTarget='';scheduleNotice='';
   transactionDetail=null;activeTab='schedules';render();return;
  }
