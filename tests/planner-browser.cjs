@@ -868,7 +868,7 @@ const {chromium,webkit}=require('playwright');
   assert.ok(await predictedMortgage.count()>=1,
    'One strongly identified actual $2,000 mortgage is forecast automatically without three months');
   const predictedDatesBefore=await predictedMortgage.count();
-  assert.equal(predictedDatesBefore,3,'Automatic mortgage estimate appears once per upcoming month');
+  assert.equal(predictedDatesBefore,36,'Automatic mortgage estimate repeats throughout the three-year modeled period');
   await go('history');
   const actualMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage Servicer X'}).first();
   await actualMortgage.locator('[data-history-plan]').click();
@@ -893,8 +893,8 @@ const {chromium,webkit}=require('playwright');
    'Mortgage rule saved as private prediction, not bank-transaction change');
   await go('transactions');
   const singleMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
-  assert.equal(await singleMortgage.count(),2,
-   'November and December have one user-confirmed mortgage each, without the inferred duplicate');
+  assert.equal(await singleMortgage.count(),35,
+   'One owner-confirmed mortgage per remaining billing month, without the inferred duplicate');
   assert.match(await singleMortgage.first().innerText(),/Nov 25/,
    'Owner-selected mortgage date takes priority over the historical posting day');
   await go('history');
