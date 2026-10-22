@@ -712,6 +712,18 @@ function detailHtml(bundle,s){
    summary+(recurringDraft?repeatingReviewForm(s):'<p>Unable to create a schedule from this transaction.</p>'),
    'ACTUAL · BANK-RECORDED');
  }
+ if(transactionDetail.kind==='history-choice'){
+  const ids=transactionDetail.ids||[],
+   rules=(state().predictions?.futureRecurringRules||[]).filter(r=>ids.includes(r.id)),
+   options=rules.map(r=>'<button type="button" class="btn" data-choose-history-schedule="'+
+    escapeHTML(r.id)+'">'+escapeHTML(r.scheduleLabel||r.merchant||'Scheduled payment')+
+    ' · '+escapeHTML(r.frequency||'Recurring')+' · '+cash(r.amount)+'</button>').join(' ');
+  return detailShell('Choose the existing schedule',
+   'This posted payment may belong to more than one confirmed schedule.',
+   '<p class="transaction-detail-help">No new schedule will be created. Choose which existing plan to inspect; similar payees and alternating income are kept separate.</p>'+
+   (options||'<p>Those schedules changed. Refresh the bank history.</p>'),
+   'BANK HISTORY · SCHEDULE MATCH');
+ }
  if(transactionDetail.kind==='schedule'){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===transactionDetail.id);
   const isNew=transactionDetail.mode==='new',picked=transactionDetail.selectedKey||'';
@@ -1136,21 +1148,20 @@ function historyPage(bundle,s){
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
    t.type==='transfer'&&t.cashDirection==='in';
-  const linked=savedRules.some(r=>String(r.originalAccountId)===aid&&
-   r.originalType===t.type&&Math.abs(Number(r.matchAmount)-Number(t.amount))<.011&&
-   (r.matchNames||[]).includes(String(t.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()));
+  const tools=window.HouseholdPlannerTransactions,
+   matches=tools.historicalScheduleMatches(t,accounts,savedRules),
+   linked=matches.length===1,ambiguous=matches.length>1;
   const kind=t.type==='transfer'&&!t.pairedTransactionId?
    (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':'transfer'):t.type;
-  const tools=window.HouseholdPlannerTransactions;
   const rejectedKey=tools.recurrenceKey(aid,kind,t.merchant);
   const rejected=Boolean(state().predictions?.futureRecurrenceExclusions?.[rejectedKey]);
   const predicted=futureRows(bundle,s).some(r=>r.kind==='event'&&
    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey);
   const action='<button class="btn" type="button" data-history-plan="'+escapeHTML(String(t.id))+
-   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit forecast':'Make recurring')+'</button>'+
+   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'View schedule':ambiguous?'Choose schedule':'Make recurring')+'</button>'+
    (rejected?'<button class="btn" type="button" data-restore-recurrence="'+escapeHTML(rejectedKey)+
-    '">Allow predictions</button>':linked||predicted?
+    '">Allow predictions</button>':!matches.length&&predicted?
     '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
     '" data-history-account="'+escapeHTML(aid)+'">Not recurring</button>':'');
   return '<div class="history-actual-row" role="button" tabindex="0" aria-label="View bank transaction: '+
@@ -1159,7 +1170,7 @@ function historyPage(bundle,s){
    '<span class="history-actual-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
    '<div class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
-    (t.pending?' · Pending':' · Posted')+(linked?' · Recurring confirmed':'')+
+    (t.pending?' · Pending':' · Posted')+(matches.length?' · '+(ambiguous?'Several matching schedules':'Recurring confirmed'):'')+
     (rejected?' · NOT RECURRING':'')+'</small></div>'+
    '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':'−')+cash(t.amount)+'</strong>'+
    action+'</div>';
@@ -1691,6 +1702,12 @@ document.addEventListener('click',async e=>{
   window.scrollTo({top:0,behavior:'auto'});
   return;
  }
+ const scheduleChoice=e.target.closest?.('[data-choose-history-schedule]');
+ if(scheduleChoice){
+  if(!openSchedulePlan(scheduleChoice.dataset.chooseHistorySchedule,'',scheduleChoice))
+   setNotice('That schedule changed. Refresh bank history.');
+  return;
+ }
  const actualRow=e.target.closest?.('[data-historical-transaction]');
  const fromHistory=e.target.closest('[data-history-plan]')||
   e.target.closest('[data-calendar-history-plan]')||
@@ -1703,6 +1720,24 @@ document.addEventListener('click',async e=>{
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
   if(!row||!window.HouseholdPlannerHistory.canPlan(row)){
    setNotice('That bank transaction is no longer available for review.');return;
+  }
+  // Calendar and History consult the SAME account/direction/history-ID matcher.
+  // Never open a fresh recurring form for a payment already represented by a
+  // saved schedule, even if its bank amount is different.
+  const matching=window.HouseholdPlannerTransactions.historicalScheduleMatches(
+   row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
+  if(matching.length===1){
+   recurringDraft=null;
+   if(!openSchedulePlan(matching[0].id,'',e.target))
+    setNotice('That schedule changed. Refresh bank history.');
+   return;
+  }
+  if(matching.length>1){
+   recurringDraft=null;transactionDetail={kind:'history-choice',ids:matching.map(r=>r.id)};
+   detailReturnFocus=e.target;
+   drawTransactionDetail(forecastFor(snapshot()),snapshot());
+   document.querySelector('.transaction-detail-close')?.focus();
+   return;
   }
   try{
    recurringDraft=window.HouseholdPlannerHistory.draftFor(
@@ -2063,11 +2098,12 @@ document.addEventListener('submit',async e=>{
    kind:'movement',fromAccountId:fields.fromAccountId,toAccountId:fields.toAccountId,
    type:'transfer',amount:draft.amount,merchant:draft.merchant,
    date:draft.sourceRow?.date||draft.nextDate,sourceAmount:draft.amount,
-   originalMerchant:draft.merchant
+   originalMerchant:draft.merchant,bankTransactionId:draft.sourceRow?.id
   }:{
    kind:'event',accountId:draft.accountId,type:bankType,amount:draft.amount,
    merchant:draft.merchant,date:draft.sourceRow?.date||draft.nextDate,
-   sourceAmount:draft.amount,originalMerchant:draft.merchant
+   sourceAmount:draft.amount,originalMerchant:draft.merchant,
+   bankTransactionId:draft.sourceRow?.id
   };
   await commitForecastChange(()=>window.HouseholdPlannerTransactions.defineRecurring(
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,

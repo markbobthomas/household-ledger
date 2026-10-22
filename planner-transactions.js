@@ -207,6 +207,45 @@ function linkedSchedule(candidates,selectedExampleIds){
  const linked=candidates.filter(r=>(r.exampleIds||[]).some(id=>ids.has(String(id))));
  return linked.length===1?linked[0]:null;
 }
+/* A historical bank payment may already belong to an owner-confirmed rule.
+ * Resolve by account, cash direction, and explicit bank IDs/merchant aliases;
+ * NEVER by the transaction amount, which changes for utilities and payroll.
+ * A genuine pair of same-payee rules remains ambiguous unless an explicitly
+ * linked bank ID or unambiguous four-week paycheck phase identifies one. */
+function historicalScheduleMatches(row,accounts,rules=[]){
+ if(!row)return [];
+ const account=accountRef(row.accountId||row.account,accounts);
+ if(!account)return [];
+ // Bank identifiers outrank provider category and renamed merchant metadata.
+ // Plaid may reclassify an ACH payment after its schedule was confirmed.
+ const explicit=(rules||[]).filter(r=>{
+  const source=String(r.originalAccountId||r.accountId||r.fromAccountId),
+   ids=(r.exampleIds||[]).map(String);
+  return source===account&&ids.includes(String(row.id))||
+   r.kind==='movement'&&Boolean(row.pairedTransactionId)&&
+   String(r.toAccountId)===account&&ids.includes(String(row.pairedTransactionId));
+ });
+ if(explicit.length)return explicit;
+ const type=bankDirection(row),name=merchantKey(row.merchant||row.name);
+ if(!type)return [];
+ const kind=type==='transfer'?'movement':'event',
+  eligible=(rules||[]).filter(r=>
+   r.kind===kind&&
+   String(r.originalAccountId||r.accountId||r.fromAccountId)===account&&
+   (kind==='movement'?Boolean(row.pairedTransactionId)&&
+    (!row.toAccountId||String(r.toAccountId)===String(row.toAccountId)):
+    r.type===type));
+ if(!name)return [];
+ const named=eligible.filter(r=>
+  [r.originalMerchant,r.merchant,...(r.matchNames||[])]
+   .some(alias=>merchantKey(alias)===name));
+ if(named.length>1&&validDate(row.date)&&
+  named.every(r=>r.frequency==='every-4-weeks')){
+  const phased=named.filter(r=>validDate(r.anchorDate)&&samePhase(row.date,r.anchorDate));
+  if(phased.length===1)return phased;
+ }
+ return named;
+}
 function defineRecurring(state,data,accounts,asOf,reference=null,records=[],selectedExampleIds=[]){
  const transfer=reference?reference.kind==='movement':data.type==='transfer';
  const fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
@@ -220,6 +259,20 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  }
  const p=ensure(state),requestedId=String(data.existingRuleId||''),
   separate=data.separateSchedule===true||data.separateSchedule==='yes'||data.separateSchedule==='on';
+ // A historical payment already associated with an existing schedule can
+ // only update THAT schedule. A stale form or separate-bill checkbox must
+ // never silently create a competing recurring obligation.
+ if(reference?.bankTransactionId){
+  const actual=(records||[]).find(t=>String(t.id)===String(reference.bankTransactionId));
+  if(!actual)throw Error('This bank transaction changed. Refresh bank history before saving.');
+  const attached=historicalScheduleMatches(actual,accounts,p.futureRecurringRules);
+  if(attached.length){
+   if(separate)throw Error('This bank transaction already belongs to a schedule. Open its existing plan; do not create a duplicate.');
+   if(!requestedId)throw scheduleChoice(attached);
+   if(!attached.some(r=>r.id===requestedId))
+    throw Error('This bank transaction belongs to another schedule. Reopen it from History.');
+  }
+ }
  const baseAccount=reference?.kind==='movement'?String(reference.sourceAccountId||reference.fromAccountId):
   String(reference?.sourceAccountId||reference?.accountId||fields.accountId);
  const originalMerchant=reference?.originalMerchant||reference?.sourceMerchant||reference?.merchant||fields.merchant;
@@ -625,7 +678,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,findExamples,bankDirection,sameDirection,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
+ frequencies,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
  recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;

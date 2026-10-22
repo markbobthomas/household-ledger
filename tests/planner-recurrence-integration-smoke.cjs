@@ -95,17 +95,18 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.match(after,/Nov 25/);
  assert.doesNotMatch(after,/Nov 15[^<]*.*Mortgage ACH/,
   'Old posting date must not produce a duplicate debit');
- // A different real-bank historical entry can be re-confirmed without
- // creating a second rule for the same merchant/account/amount.
+ // A bank transaction already attached to the recurring plan offers ONLY
+ // View schedule, even when the bank categorized it as a transfer.
  await click('[data-view]',{view:'history'});
+ assert.match(future(),/View schedule/, 'Known bank payment must not suggest creating recurrence');
  await click('[data-history-plan]',{
   historyPlan:'solo-bank-mortgage',historyAccount:'demo-checking'});
- await submit({merchant:'Home Mortgage ACH',accountId:'demo-checking',
-  date:'2026-11-27',amount:'2000',type:'expense',frequency:'monthly'});
+ assert.doesNotMatch(future(),/Confirm recurring transaction/,
+  'Clicking linked history must not open another creation form');
  const again=JSON.parse(store['household-planner-sample-settings-v1']||'{}');
- assert.equal(again.futureRecurringRules.length,1,'Second confirmation updates existing rule');
+ assert.equal(again.futureRecurringRules.length,1,'Opening existing schedule leaves one rule');
  await click('[data-view]',{view:'transactions'});
- assert.equal(occurrences(future()),2,'Repeated save still only debits checking once per month');
+ assert.equal(occurrences(future()),2,'No duplicate mortgage created by opening the schedule');
  // Repeat the exact same owner-confirmation scenario for an UNKNOWN merchant.
  // Its category/name provides no fixed-bill shortcut, so detection genuinely
  // depends on the two observed exact-amount calendar payments.
