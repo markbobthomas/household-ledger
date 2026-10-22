@@ -295,7 +295,7 @@ function cardStatementPreview(s,bundle,cardId){
       (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
      '<p>No settled card purchases or refunds found for this cycle.</p>')+
     '</details>'+
-   '<details class="card-actual-transactions"><summary>Review '+(p.predictedTransactions||[]).length+
+   '<details class="card-scheduled-transactions"><summary>Review '+(p.predictedTransactions||[]).length+
     ' specifically scheduled card transactions in this period</summary>'+
     ((p.predictedTransactions||[]).length?p.predictedTransactions.map(t=>
      '<div class="card-actual-line"><span>'+escapeHTML(dayLabel(t.date))+
