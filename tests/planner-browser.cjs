@@ -74,10 +74,13 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),
     /All predictions/,'Advanced bulk prediction view remains available without a fourth tab');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
-   assert.equal(await page.locator('[data-summary-days]').count(),6);
-   assert.equal(await page.locator('.summary-current').count(),1);
-   assert.equal(await page.locator('.summary-coverage-metric').count(),1);
-   assert.ok(await page.locator('.calendar-checklist').count()>0);
+   assert.equal(await page.locator('[data-summary-days],#horizon').count(),0,
+    'No 30/60/90 period selectors in the simplified planner');
+   assert.equal(await page.locator('.summary-low').count(),1,
+    'Only the lowest modeled balance is emphasized');
+   assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
+   assert.equal(await page.locator('.calendar-checklist,.coverage-table,.summary-coverage-metric').count(),0,
+    'Ambiguous major-payment assurance panels have been removed');
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
     'Full-month prediction list is collapsed by default');
    assert.equal(await page.locator('.calendar-day-transactions .calendar-monthly-row').count(),0,
@@ -147,63 +150,10 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-summary-plot]').count(),1,
     'Previous trend is still available in optional details');
    await page.locator('.summary-extras > summary').click();
-   assert.equal(await page.locator('[aria-label="Major payment coverage"]').count(),1,
-    'Summary displays one compact monthly coverage matrix');
-   assert.ok(await page.locator('.coverage-table tbody tr').count()>=2);
-   await page.locator('.coverage-table [data-coverage-cell]').first().click();
-   assert.equal(await page.locator('[data-coverage-detail]').isVisible(),true,
-    'Tap a month to reveal a projected payment or why it needs review');
-   assert.match(await page.locator('.coverage-detail').innerText(),/View predictions|Set up card payments/);
-   await page.locator('[data-coverage-close]').click();
-   assert.equal(await page.locator('[data-coverage-detail]').isVisible(),false);
-   const mortgageCoverageRow=page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'});
-   await mortgageCoverageRow.locator('[data-coverage-cell]').nth(1).click();
-   assert.match(await page.locator('.coverage-identify').innerText(),/Which predicted payment is your mortgage/);
-   const identifiedMortgage=page.locator('.coverage-mortgage-option').filter({hasText:/Mortgage/}).first();
-   assert.ok(await identifiedMortgage.count()>0,
-    'The owner can identify a future mortgage straight from the current predictions');
-   await identifiedMortgage.click();
-   const savedMortgage=await page.evaluate(()=>JSON.parse(
-    localStorage.getItem('household-planner-sample-settings-v1')||'{}').mortgageCoverageRules);
-   assert.ok(savedMortgage?.checking||Object.values(savedMortgage||{}).some(r=>r?.merchant?.includes('mortgage')),
-    'Mortgage identity persists only as a forecast preference, not a new transaction');
-   assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
-    .locator('.coverage-cell.covered').count()>=1,
-    'The same mortgage forecast series is marked covered after user confirmation');
-   const incomeCoverageRow=page.locator('.coverage-table tbody tr').filter({hasText:'Income'});
-   await incomeCoverageRow.locator('[data-coverage-cell]').nth(1).click();
-   assert.match(await page.locator('.coverage-identify').innerText(),/Which deposits are recurring income/);
-   const incomeOption=page.locator('[data-coverage-assign]').first();
-   assert.ok(await incomeOption.count()>0,'Income coverage offers current predicted deposit series');
-   await incomeOption.click();
-   const remembered=await page.evaluate(()=>JSON.parse(
-    localStorage.getItem('household-planner-sample-settings-v1')||'{}').coverageAssignments||{});
-   assert.ok(Object.keys(remembered).some(k=>k.startsWith('income|')),
-    'Income identity persists as classification only');
-   await incomeCoverageRow.locator('[data-coverage-cell]').nth(1).click();
-   assert.ok(await page.locator('.coverage-identify [data-coverage-assign].tracked').count()>0,
-    'Known income is visibly marked as learned on return');
-   const billCoverageRow=page.locator('.coverage-table tbody tr').filter({hasText:'Other major bills'});
-   await billCoverageRow.locator('[data-coverage-cell]').nth(1).click();
-   assert.match(await page.locator('.coverage-identify').innerText(),/Which large bills should be tracked/);
-   const billOptions=page.locator('.coverage-identify [data-coverage-assign]');
-   assert.ok(await billOptions.count()>0,'Other bills offer existing dated checking withdrawals');
-   await billOptions.first().click();
-   const savedCoverage=await page.evaluate(()=>JSON.parse(
-    localStorage.getItem('household-planner-sample-settings-v1')||'{}').coverageAssignments||{});
-   assert.ok(Object.keys(savedCoverage).some(k=>k.startsWith('other-bills|')),
-    'Other bill classifications are remembered across Summary views');
-   assert.match(await page.locator('.summary-trust').innerText(),/excludes unplanned everyday spending/i,
-    'Summary explains what is excluded instead of claiming unwarranted accuracy');
-   for(const days of [30,60,90,120,180,360]){
-    await page.locator('[data-summary-days="'+days+'"]').click();
-    assert.equal(await page.locator('#horizon').inputValue(),String(days));
-    assert.match(await page.locator('.summary-end').innerText(),new RegExp('End of '+days+' days'));
-    assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),new RegExp(days+'-day forecast'));
-   }
-   await page.locator('[data-summary-days="90"]').click();
-   assert.equal(await page.locator('#horizon').isVisible(),false,
-    'Summary shows only its six compact period chips, not a duplicate header selector');
+   assert.equal(await page.locator('.coverage-table,.calendar-checklist').count(),0);
+   assert.match(await page.locator('.summary-trust').innerText(),/not a guaranteed minimum/i);
+   assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),/1095-day forecast/);
+   assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
    const beforeDate=await page.locator('[data-summary-peek-date]').innerText();
    await page.locator('[data-summary-plot]').focus();
    await page.keyboard.press('End');
@@ -217,8 +167,8 @@ const {chromium,webkit}=require('playwright');
    await checking.click();
    assert.match(await page.locator('.balance-main').innerText(),/\$5,400\.25/,
     'Demo checking displays an illustrative bank-feed available balance');
-   assert.ok((await page.locator('.chart-wrap svg').count())>0,'90-day chart is rendered from forecasting engine');
-   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 90 days/);
+   assert.ok((await page.locator('.chart-wrap svg').count())>0,'Forecast chart is rendered from the same engine');
+   assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 3 years/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
    await go('history');
@@ -272,13 +222,12 @@ const {chromium,webkit}=require('playwright');
     'Rerunning the audit does not redraw the surrounding settings page');
    assert.equal(await auditDetails.locator('[data-run-backtest]').innerText(),'Run check again');
    await go('overview');
-   await page.locator('#horizon').selectOption('30');
    assert.match(await page.locator('.chart-caption').innerText(),/projection/i);
-   assert.match(await page.locator('[aria-label="Projected balance curve"] .section-title').innerText(),/30 days/);
+   assert.equal(await page.locator('#horizon').count(),0);
+   assert.match(await page.locator('[aria-label="Projected balance curve"] .section-title').innerText(),/3 years|1095 days/);
    await page.locator('.account-tile').filter({hasText:'Rewards Visa'}).click();
    assert.match(await page.locator('.balance-main').innerText(),/\$810\.00/,'Credit card balance is shown as debt, not checking cash');
    assert.match(await page.locator('.hero-footnote').first().innerText(),/debt/);
-   await page.locator('#horizon').selectOption('90');
    await go('transactions');
    await page.locator('#transaction-filter').selectOption('demo-checking');
    assert.ok(await page.locator('.future-item').count()>0,'All scheduled transactions are editable on separate page');
@@ -740,42 +689,21 @@ const {chromium,webkit}=require('playwright');
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
   assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
-  await page.locator('[data-summary-days="60"]').click();
-  assert.equal(await page.locator('.coverage-month').count(),3,
-   '60 days from mid-October includes three calendar-month segments');
+  assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
+  assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
+   'Long-range calculation does not resurrect old major-payment coverage checks');
   assert.match(await page.locator('.calendar-monthly-unplanned').innerText(),/Household Visa/,
-   'Absent payment remains visible even when monthly predictions are collapsed');
-  const review=page.locator('.summary-review-trigger');
-  assert.equal(await review.count(),1,'Review count is an actionable button');
-  await review.click();
-  const details=page.locator('.summary-review-details');
-  assert.equal(await details.isVisible(),true);
-  assert.match(await details.innerText(),/Household Visa/,'Review explains the missing card payment');
-  assert.ok(await details.locator('[data-view="settings"]').count()>0,
-   'Missing card estimate links to payment configuration');
-  await review.click();
-  assert.equal(await details.isVisible(),false);
-  const preCard=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
-  assert.equal(await preCard.locator('.coverage-cell.setup').count(),3,
-   'Connected card alone is never considered a planned future withdrawal');
-  assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
-   .locator('.coverage-cell.covered,.coverage-cell.review').count()>=1,
-   'Mortgage forecasts are visible; overlapping inferred mortgages must be flagged rather than silently approved');
-  await page.locator('[data-summary-days="90"]').click();
-  assert.equal(await page.locator('#horizon').inputValue(),'90');
-  await page.locator('[data-summary-days="180"]').click();
-  assert.equal(await page.locator('#horizon').inputValue(),'180',
-   'Real private forecast recalculates longer ranges from the bank ledger');
-  assert.match(await page.locator('.summary-end').innerText(),/End of 180 days/);
+   'Missing card setup remains clearly visible without the removed checklist');
+  assert.match(await page.locator('.summary-trust').innerText(),/everyday unplanned spending is excluded/);
+  assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
   await go('overview');
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
    'Real checking starts at bank-reported available cash, not credit card debt');
-  await page.locator('#horizon').selectOption('90');
   assert.match(await page.locator('.income-status').innerText(),/PREDICTED/i,
    'Recurring payroll categorized by Plaid as TRANSFER_IN now reaches projected income');
-  assert.match(await page.locator('.income-status').innerText(),/3 dated deposits · \$9,300/,
-   'Income summary accurately totals three inferred $3,100 future paychecks');
+  assert.match(await page.locator('.income-status').innerText(),/dated deposits/,
+   'Income summary includes recurring payroll over the fixed forecast period');
   assert.match(await page.locator('.overview-upcoming-item').first().innerText(),/Home Mortgage ACH/,
    'Real mortgage history produces expected future cash withdrawals');
   assert.ok(await page.locator('.overview-upcoming-item').count()>=1);
@@ -843,7 +771,6 @@ const {chromium,webkit}=require('playwright');
   assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Planned/,
    'Before bank posts withdrawal, its date is explicitly a plan, not actual history');
   await go('summary');
-  await page.locator('[data-summary-days="60"]').click();
   await page.locator('[data-calendar-today]').click();
   await page.locator('[data-calendar-nav="1"]').click();
   await page.locator('[data-calendar-day="2026-11-11"]').click();
@@ -860,20 +787,9 @@ const {chromium,webkit}=require('playwright');
   assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
   assert.equal(await itemized.locator('.future-edit-form').count(),1);
   await itemized.locator('[data-cancel-future]').click();
-  await page.locator('.summary-extras > summary').click();
-  const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
-  assert.equal(await cardCoverage.locator('.coverage-cell.covered').count(),2,
-   'November and December both contain actual linked checking withdrawals');
-  for(const column of [1,2]){
-   await cardCoverage.locator('[data-coverage-cell]').nth(column).click();
-   assert.match(await page.locator('[data-coverage-detail]').innerText(),
-    /Credit-card payment is included as a single linked withdrawal/);
-   assert.match(await page.locator('.coverage-detail-event').first().innerText(),/Household Visa.*autopay/i);
-  }
-  assert.ok(await page.locator('.coverage-table tbody tr').filter({hasText:'Mortgage'})
-   .locator('.coverage-cell.covered,.coverage-cell.review').count()>=2,
-   'Both upcoming mortgage periods are shown or flagged for competing predicted withdrawals');
-  await page.locator('[data-summary-days="90"]').click();
+  assert.equal(await page.locator('.calendar-checklist,.coverage-table').count(),0,
+   'Card setup is inspectable directly from payments without a separate assurance matrix');
+  assert.match(await page.locator('.summary-trust').innerText(),/not a guaranteed minimum/i);
   await go('overview');
   assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
    'Overview shows the next card statement and due date');
@@ -997,7 +913,7 @@ const {chromium,webkit}=require('playwright');
    'Raw Real bank transactions are not written to localStorage');
   assert.deepEqual(errors,[]);
   await real.close();
-  console.log('PASS compact planner in desktop Chromium and iPhone WebKit: Demo, Real no-fallback, Real Plaid-shaped balances, mortgage future cash, card debt, 30/90 horizon, refresh, privacy, mobile layout');
+  console.log('PASS compact planner in desktop Chromium and iPhone WebKit: fixed three-year minimum, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
  }finally{
   if(chrome)await chrome.close();if(iphone)await iphone.close();
   for(const child of children)child.kill('SIGTERM');
