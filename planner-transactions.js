@@ -175,7 +175,12 @@ function recurrenceDates(rule,asOf,through){
   for(let i=n;i<n+60;i++){const d=shift(start,i*step);if(d>through)break;if(d>asOf&&d>=start)dates.push(d)}
  }else{
   const spacing={monthly:1,'twice-monthly':1,quarterly:3,semiannual:6,annual:12}[rule.frequency];
-  for(let i=0;i<=16;i+=spacing){
+  // A saved monthly bill should not expire just because its anchor is old.
+  // Preserve its original month phase while skipping elapsed months.
+  const index=iso=>Number(iso.slice(0,4))*12+Number(iso.slice(5,7)),
+   elapsed=index(asOf)-index(start),last=index(through)-index(start),
+   begin=Math.max(0,Math.floor(elapsed/spacing)*spacing-spacing);
+  for(let i=begin;i<=last+spacing;i+=spacing){
    for(const day of rule.frequency==='twice-monthly'?[Number(start.slice(-2)),Number(rule.secondDay)]:[Number(start.slice(-2))]){
     const d=monthAt(start,i,day);
     if(d>=start&&d>asOf&&d<=through)dates.push(d);
