@@ -177,7 +177,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
     // Two alternating biweekly deposits are two independent four-week
     // schedules, 14 days apart. Each has its own ID, phase and dollar amount.
     const dates=freq==='twice-monthly'?twiceDates(t.date,slots,end):
-     Array.from({length:110},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
+     Array.from({length:Math.ceil(days/7)+12},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
     for(const when of dates){
      if(when<=asOf)continue;
      const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0,

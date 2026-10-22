@@ -1008,3 +1008,14 @@ body:has(.summary-page) .top-actions #horizon{display:none}
   grid-template-columns:minmax(0,1fr) auto;padding:12px 9px}
  .calendar-day-transactions-head{align-items:flex-start}
 }
+
+/* One lowest-modelled-balance answer; the calendar remains the navigation. */
+.summary-minimum{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.summary-numbers{justify-content:flex-start;align-items:flex-start;margin-bottom:15px}
+.summary-minimum .summary-low{display:block;font-size:clamp(34px,5vw,62px);line-height:1.13}
+.summary-low-date{appearance:none;border:0;background:transparent;padding:6px 0;
+ color:#315ebd;text-align:left;font-weight:700;font-size:12px;cursor:pointer}
+.summary-low-date:hover,.summary-low-date:focus-visible{text-decoration:underline}
+.summary-low-warning{display:block;color:#aa3d47;font-size:11px;font-weight:700}
+.summary-trust>strong{font-size:12px;color:#40566c}
+.summary-trust{padding:15px 6px 0}

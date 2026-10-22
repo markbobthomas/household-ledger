@@ -26,7 +26,8 @@ try{
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
-let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError='',lastSuggestions=[];
+const horizon=1095; // Three-year modeled floor. No user-selectable time windows.
+let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSuggestions=[];
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
@@ -184,10 +185,10 @@ function hero(a,derived,asOf){
    '<strong class="'+(fresh&&isCash&&monthBalance<0?'low':'')+'">'+
     (fresh?cash(monthBalance):'Unverified')+'</strong>'+
    '<small>'+escapeHTML(dayLabel(endOfMonth))+' · includes expected deposits</small></div>'+
-  '<div class="metric"><span>'+(credit?'Lowest debt · next '+horizon+' days':'Lowest balance · next '+horizon+' days')+'</span>'+
+  '<div class="metric"><span>'+(credit?'Lowest debt · next 3 years':'Lowest balance · next 3 years')+'</span>'+
    '<strong class="'+(below?'low':'')+'">'+(fresh?cash(lowest):'Unverified')+'</strong>'+
    '<small>'+(fresh&&lowDate?escapeHTML(dayLabel(lowDate)):'Confirm bank balance first')+'</small></div>'+
-  '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · day '+horizon)+'</span>'+
+  '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · 3-year horizon')+'</span>'+
    '<strong class="'+(fresh&&firstNegative?'low':'')+'">'+
     (fresh?(isCash?(firstNegative?escapeHTML(dateLong(firstNegative.date)):'None from dated payments'):cash(horizonSeries.at(-1)?.balance)):'Unverified')+'</strong>'+
    '<small>'+(isCash&&firstNegative?'Projected cash below $0 · not a guaranteed outcome':
@@ -825,7 +826,7 @@ function openInlineTransaction(button){
   '<summary>Edit repeating plan defaults <small>affects other scheduled dates</small></summary>'+
   '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
    scheduleFields({...rule,date:window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,
-    shiftDay(s.asOf,360))[0]||shiftDay(s.asOf,1)},false,s)+
+    shiftDay(s.asOf,horizon))[0]||shiftDay(s.asOf,1)},false,s)+
    '<div class="future-form-actions"><button class="btn primary" type="submit">Save repeating plan</button>'+
    '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
  const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
@@ -959,7 +960,7 @@ function scheduleFields(r,isNew,s){
    '<label>Bill label (distinguishes same-payee bills)<input name="scheduleLabel" maxlength="110" placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||'')+'"></label>'+
    '<label>Bank merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(r.merchant||'')+'"></label>'+
    '<label>Expected amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
-   '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,360))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
+   '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
    '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
    '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
    '<option value="fixed"'+(r.amountBasis!=='estimate'?' selected':'')+'>Fixed</option></select></label>'+
@@ -1120,7 +1121,7 @@ function repeatingReviewForm(s){
   '<label class="history-transfer-only"'+(!transfer?' hidden':'')+'>To account'+
    accountSelect(accounts,to,'toAccountId')+'</label>'+
   '<label>Next expected date<input name="date" type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+
-   '" max="'+escapeHTML(shiftDay(s.asOf,90))+'" required value="'+escapeHTML(date)+'"></label>'+
+   '" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(date)+'"></label>'+
   '<label>Amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+
    escapeHTML(d.amount||'')+'"></label>'+
   '<label>Repeat'+frequencyChoices(d.frequency||'monthly')+'</label>'+
@@ -1388,7 +1389,6 @@ function render(){
   if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
  });
  $('bank-connect').hidden=!available();
- $('horizon').value=String(horizon);
  if(busy){$('planner-notice').innerHTML='<div class="notice'+(window.HouseholdLiveSource?.error?' danger':'')+'"><div><strong>Real bank information is not available yet.</strong> '+
   escapeHTML(window.HouseholdLiveSource?.error||'Loading your private bank connection…')+
   ' You can manage connections without switching to fictional balances.</div><a class="btn" href="/bank-connect">Bank connections</a></div>';
@@ -1544,7 +1544,7 @@ document.addEventListener('click',async e=>{
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===duplicate.dataset.scheduleDuplicate);
   if(!rule)return;
   const next=window.HouseholdPlannerTransactions.recurrenceDates(rule,snapshot().asOf,
-   shiftDay(snapshot().asOf,360))[0];
+   shiftDay(snapshot().asOf,horizon))[0];
   schedulePreset={merchant:rule.merchant,scheduleLabel:(rule.scheduleLabel||rule.merchant)+' — second bill',
    amount:rule.amount,accountId:rule.accountId||rule.fromAccountId,
    toAccountId:rule.toAccountId,type:rule.kind==='movement'?'transfer':rule.type,
@@ -1685,12 +1685,6 @@ document.addEventListener('click',async e=>{
    latestError='';render();
   }catch(error){setNotice('Mortgage identification could not be cleared: '+
    String(error.message||error))}
-  return;
- }
- const period=e.target.closest('[data-summary-days]');
- if(period){
-  const days=Number(period.dataset.summaryDays);
-  if([30,60,90,120,180,360].includes(days)){horizon=days;render()}
   return;
  }
  const view=e.target.closest('[data-view]');
@@ -2088,8 +2082,8 @@ document.addEventListener('submit',async e=>{
   const draft=recurringDraft;
   if(!draft)throw Error('Select a posted bank payment again');
   const fields=Object.fromEntries(new FormData(form));
-  if(fields.date>shiftDay(snapshot().asOf,90))
-   throw Error('Next payment must fall within the 90-day planning window');
+  if(fields.date>shiftDay(snapshot().asOf,horizon))
+   throw Error('Next payment must fall within the three-year forecast window');
   const linked=fields.type==='transfer',bankType=draft.originalType||draft.sourceRow?.type||draft.type;
   // Future classification is chosen by the owner, not dictated by Plaid.
   // For an actual household transfer, store both account legs as ONE plan,
@@ -2377,10 +2371,6 @@ document.addEventListener('change',e=>{
  }
  if(e.target.id==='summary-account'){
   selectedAccount=e.target.value;render();return;
- }
- if(e.target.id==='horizon'){
-  const x=Number(e.target.value);
-  if([30,60,90,120,180,360].includes(x)){horizon=x;render()}
  }
 });
 if(available()){

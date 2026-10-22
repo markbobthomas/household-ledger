@@ -61,5 +61,6 @@ jobs:
           node tests/card-statement-cycles-smoke.cjs
           node tests/card-setup-gate-smoke.cjs
           node tests/planner-summary-smoke.cjs
+          node tests/planner-three-year-smoke.cjs
           node tests/planner-coverage-smoke.cjs
           node tests/mortgage-prediction-smoke.cjs
