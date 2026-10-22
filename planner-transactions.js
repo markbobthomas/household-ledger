@@ -143,8 +143,9 @@ function scheduleCategory(name,state){
  return match;
 }
 function addScheduleCategory(state,name){
- const value=String(name||'').trim().replace(/\\s+/g,' ');
- if(value.length<2||value.length>40||!(/^[\\p{L}\\p{N}][\\p{L}\\p{N} &/().,+'-]*$/u.test(value)))
+ const value=String(name||'').trim().replace(/\s+/g,' ');
+ if(value.length<2||value.length>40||
+  !/^[\p{L}\p{N}][\p{L}\p{N} &\/().,+'-]*$/u.test(value))
   throw Error('Category must be 2–40 letters/numbers with ordinary punctuation');
  const existing=scheduleCategories(state);
  if(existing.some(n=>n.toLowerCase()===value.toLowerCase()))throw Error('Category already exists');
