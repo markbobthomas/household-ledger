@@ -475,6 +475,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const points=getPoints(derived,snapshot.asOf,days);
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
  trendContext=series.length?{points:series,credit,prefs,derived}:null;
+ trendSeries=series;
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
   calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
   calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;calendarFocus=null;
@@ -587,6 +588,40 @@ function setDay(index){
   events.slice(0,2).map(e=>e.merchant||'Expected payment').join(' · ')+
   (events.length>2?' · +'+(events.length-2)+' more':''):'No dated transactions that day';
  svg.setAttribute('aria-valuetext',dateLabel(point.date)+': '+money(point.balance));
+}
+function paintTrend(days){
+ const svg=document.querySelector('[data-summary-plot]');
+ if(!svg||!series.length)return;
+ trendDays=days;
+ trendSeries=series.slice(0,Math.min(days,series.length-1)+1);
+ const vals=trendSeries.map(p=>p.balance),lo=Math.min(...vals),hi=Math.max(...vals),
+  pad=Math.max(50,(hi-lo)*.14),floor=lo-pad,ceil=hi+pad,
+  x=i=>plotLeft+i*(plotRight-plotLeft)/(trendSeries.length-1),
+  y=v=>bottom-(v-floor)/(ceil-floor)*(bottom-top),
+  path=vals.map((v,i)=>(i?'L':'M')+x(i).toFixed(2)+' '+y(v).toFixed(2)).join(' ');
+ const line=svg.querySelector('[data-trend-line]'),area=svg.querySelector('[data-trend-area]'),
+  pin=svg.querySelector('[data-trend-pin]');
+ line?.setAttribute('d',path);
+ area?.setAttribute('d',path+' L '+plotRight+' '+bottom+' L '+plotLeft+' '+bottom+' Z');
+ const index=vals.indexOf(lo);
+ pin?.setAttribute('cx',x(index).toFixed(2));pin?.setAttribute('cy',y(lo).toFixed(2));
+ const zero=svg.querySelector('[data-trend-zero]');
+ if(zero){zero.style.display=floor<0&&ceil>0?'':'none';
+  zero.setAttribute('y1',y(0).toFixed(2));zero.setAttribute('y2',y(0).toFixed(2));}
+ const label=days===1095?'3-year':days+'-day';
+ svg.setAttribute('aria-label','Interactive '+label+
+  ' balance trend. Use arrow keys or tap the curve to inspect a day.');
+ const first=document.querySelector('[data-trend-first]'),last=document.querySelector('[data-trend-last]'),
+  count=document.querySelector('[data-trend-count]');
+ if(first)first.textContent=shortDate(trendSeries[0].date);
+ if(last)last.textContent=shortDate(trendSeries.at(-1).date);
+ const movements=trendSeries.reduce((sum,p)=>sum+(p.events||[]).length,0);
+ if(count)count.textContent=movements+' dated movement'+(movements===1?'':'s');
+ document.querySelectorAll('[data-trend-days]').forEach(btn=>{
+  const active=Number(btn.dataset.trendDays)===days;
+  btn.setAttribute('aria-pressed',String(active));btn.classList.toggle('active',active);
+ });
+ setDay(index);
 }
 function byPointer(e){
  const svg=e.target.closest?.('[data-summary-plot]');
