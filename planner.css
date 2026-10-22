@@ -976,3 +976,10 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .schedule-grid{display:block}
  .schedule-card{margin-bottom:12px}
 }
+
+.inline-save-result{margin:8px 11px 11px;padding:10px 12px;background:#eff7f3;color:#2b654c;border:1px solid #d0e5d8;border-radius:7px;font-size:12px;font-weight:700;line-height:1.45}
+.inline-transaction-editor [data-edit-impact]{font-size:12px;color:#3e6685}
+.calendar-monthly-row.calendar-detail-item{display:grid;grid-template-columns:70px minmax(0,1fr) minmax(80px,auto) 45px;gap:10px}
+.calendar-monthly-entry.calendar-detail-entry{display:flex;flex-wrap:wrap}
+.calendar-monthly-entry.calendar-detail-entry>.calendar-monthly-row{flex:1 1 0;min-width:0}
+@media(max-width:600px){.calendar-monthly-row.calendar-detail-item{grid-template-columns:54px minmax(0,1fr) auto;gap:7px}.calendar-monthly-row .calendar-monthly-view{display:none}}
