@@ -4,7 +4,7 @@ global.document={addEventListener(){}};
 require('../planner-summary.js');
 const tool=global.HouseholdPlannerSummary;
 const iso=(offset)=>{const d=new Date('2026-10-21T12:00:00Z');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10)};
-const series=Array.from({length:361},(_,i)=>({
+const series=Array.from({length:1096},(_,i)=>({
  date:iso(i),balance:5000+(i*20)-(i>=120?2000:0)-(i>=300?1500:0),
  events:i===120?[{merchant:'Property tax',amount:2000}]:[]
 }));
@@ -55,12 +55,12 @@ const caution=tool.render({...opts,days:180,bundle:{
  payments:{warnings:[]},routines:{warnings:[]},
  projection:{diagnostics:{unassigned:[],unmatchedTransfers:[]}}
 }});
-assert.match(caution,/Needs review/);
-assert.match(caution,/data-view="reviews"/);
+assert.doesNotMatch(caution,/Major payments|Payment checklist/,
+ 'Forecast uncertainty must not reintroduce ambiguous automatic coverage UI');
 const bad=tool.render({...opts,days:90,fresh:false});
 assert.match(bad,/verifiable account balance/);
 assert.doesNotMatch(bad,/data-summary-plot/);
 assert.doesNotMatch(bad,/data-calendar-stage/);
-assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(360),
- 'Direct summary unit fixture only supplies 360 points; display must not invent new balances');
+assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(1095),
+ 'The full three-year forecast is modeled rather than truncated to one year');
 console.log('PASS three-year lowest-balance Summary: single minimum, no major-payments checklist, warnings and unverified suppression');
