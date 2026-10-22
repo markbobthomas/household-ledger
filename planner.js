@@ -646,11 +646,11 @@ function editableForecastRow(row,opts={}){
   '<button type="button" class="unified-payment-trigger" '+
    (opts.advanced?'data-edit-future="'+escapeHTML(row.key)+'" ':'')+
    'data-open-transaction="'+escapeHTML(row.key)+
-  '" aria-expanded="false">'+
-  '<span class="unified-payment-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+  '" aria-expanded="false"'+(opts.kind==='schedule'?' data-schedule-occurrence-key="'+escapeHTML(row.key)+'"':'')+'>'+
+  '<span class="unified-payment-date future-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
   '<span class="unified-payment-name"><strong>'+escapeHTML(row.merchant)+'</strong>'+
    '<small>'+escapeHTML(subtitle)+'</small></span>'+
-  '<span class="unified-payment-value'+(inbound?' incoming':'')+'">'+
+  '<span class="unified-payment-value future-amount'+(inbound?' incoming':'')+'">'+
    (inbound?'+':'−')+cash(row.amount)+'</span>'+
   '<span class="unified-payment-chevron" aria-hidden="true">⌄</span></button></div>';
 }
