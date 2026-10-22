@@ -16,9 +16,12 @@ const opts={snapshot,chosen:snapshot.accounts[0],derived,bundle:{historyCandidat
  missingMortgages:[],duplicateConflicts:[],payments:{warnings:[]},
  routines:{warnings:[]},projection:{diagnostics:{unassigned:[],unmatchedTransfers:[]}}},
  prefs:{cashCushion:500},accounts:snapshot.accounts,fresh:true,ready:()=>true};
-for(const days of [30,60,90,120,180,360]){
+for(const days of [1095]){
  const html=tool.render({...opts,days});
- assert.match(html,new RegExp('End of '+days+' days'));
+ assert.match(html,/Lowest projected balance/);
+ assert.match(html,/next 3 years/);
+ assert.doesNotMatch(html,/data-summary-days|Major payments|Payment checklist/);
+ assert.match(html,/data-summary-low-date/);
  assert.match(html,new RegExp(days+'-day forecast'));
  assert.match(html,/data-calendar-stage/);
  assert.match(html,/data-calendar-day="2026-10-21"/);
@@ -30,24 +33,23 @@ for(const days of [30,60,90,120,180,360]){
  assert.match(html,/Withdrawals/);
  assert.match(html,/End of day/);
  assert.match(html,/data-calendar-add/,'Add an existing-day transaction without a tab change');
- assert.match(html,/Balance trend &amp; coverage checks/);
- assert.match(html,/Forecast coverage/);
- assert.match(html,/excludes unplanned everyday spending/);
+ assert.match(html,/Balance trend \(3-year illustration\)/);
+ assert.match(html,/Illustration, not a guaranteed minimum/);
+ assert.match(html,/everyday unplanned spending is excluded/);
  assert.equal(tool.getPoints(derived,iso(0),days).length,days+1);
  assert.match(html,/calendar-day-balance/);
  assert.match(html,/data-calendar-nav="1"/);
  assert.match(html,/End of /);
 }
-const long=tool.render({...opts,days:360});
+const long=tool.render({...opts,days:1095});
 assert.match(long,/Property tax|Insurance|No dated transactions that day/);
 assert.match(long,/calendar-grid/);
 assert.match(long,/aria-label="Next forecast month"/);
-assert.match(long,/longer-range forecasts are less certain/i);
+assert.match(long,/low estimate far in the future is especially uncertain/i);
 const short=tool.render({...opts,days:30});
-assert.doesNotMatch(short,/longer-range forecasts are less certain/i);
-assert.match(short,/No dated predictions yet/);
-assert.match(short,/data-view="transactions"/,
- 'An empty forecast should invite prediction setup instead of claiming accuracy');
+assert.match(short,/Add a schedule →/);
+assert.match(short,/data-view="schedules"/,
+ 'An empty forecast should invite schedule setup instead of claiming accuracy');
 const caution=tool.render({...opts,days:180,bundle:{
  historyCandidates:[{accountId:'checking'}],missingMortgages:[],duplicateConflicts:[],
  payments:{warnings:[]},routines:{warnings:[]},
@@ -59,5 +61,6 @@ const bad=tool.render({...opts,days:90,fresh:false});
 assert.match(bad,/verifiable account balance/);
 assert.doesNotMatch(bad,/data-summary-plot/);
 assert.doesNotMatch(bad,/data-calendar-stage/);
-assert.equal(tool.getPoints(derived,iso(0),360).at(-1).date,iso(360));
-console.log('PASS concise forecast Summary: all six real date windows, non-overstated coverage, warnings, and unverified suppression');
+assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(360),
+ 'Direct summary unit fixture only supplies 360 points; display must not invent new balances');
+console.log('PASS three-year lowest-balance Summary: single minimum, no major-payments checklist, warnings and unverified suppression');
