@@ -106,8 +106,10 @@ const {chromium,webkit}=require('playwright');
     has:page.locator('.calendar-event')}).first();
    assert.ok(await projectedDay.count()>0,'Daily dates show predicted transaction labels and amounts');
    await projectedDay.click();
-   assert.ok(await page.locator('.calendar-detail-item').count()>0,
-    'A date opens individual transaction details');
+   assert.equal(await page.locator('.calendar-detail-items').count(),0,
+    'Selected day no longer duplicates the monthly transaction list');
+   assert.ok(await page.locator('.calendar-monthly-rows .selected-date').count()>0,
+    'Selecting a date highlights its payments in the single monthly list');
    const selectedAria=await page.locator('.calendar-day.selected').getAttribute('aria-label'),
     balanceText=await page.locator('.calendar-detail-balance strong').innerText();
    assert.ok(selectedAria.includes(balanceText),
@@ -333,11 +335,9 @@ const {chromium,webkit}=require('playwright');
     'Explicitly confirmed recurrence is saved, independent of detection');
    const recurringRepair=page.locator('.future-item').filter({hasText:'One-time home repair'}).first();
    await recurringRepair.locator('[data-edit-future]').click();
-   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
-    'Confirmed recurring transactions open their complete payment plan');
-   await page.locator('.transaction-detail [data-stop-plan]').click();
-   assert.match(await page.locator('.transaction-detail [data-stop-plan]').innerText(),/Confirm stop/);
-   await page.locator('.transaction-detail [data-stop-plan]').click();
+   assert.equal(await recurringRepair.locator('[data-inline-transaction-editor]').count(),1,
+    'Confirmed recurring transactions use the same expandable payment row');
+   await recurringRepair.locator('[data-remove-recurring]').click();
    assert.equal(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count(),1,
     'Stopping recurrence returns to the original single user-added payment');
    await page.locator('[data-show-new]').click();
@@ -388,15 +388,14 @@ const {chromium,webkit}=require('playwright');
      .futureRecurringRules?.filter(x=>x.merchant==='Alternating Employer Paycheck').length),2,
     'Same employer creates exactly two independent saved rules');
    await payRows.first().locator('[data-edit-future]').click();
-   const editPay=page.locator('.transaction-detail');
-   assert.equal(await editPay.locator('[data-plan-settings]').count(),1,
-    'A confirmed payroll stream is managed as one payment plan');
-   await editPay.locator('[data-plan-settings] > summary').click();
+   const editPay=page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'}).first();
+   assert.equal(await editPay.locator('.inline-plan-settings').count(),1,
+    'Payroll plan settings are embedded in the expanded payment row');
+   await editPay.locator('.inline-plan-settings > summary').click();
    await editPay.locator('[data-schedule-edit-form] [name=amount]').fill('3040');
    await editPay.locator('[data-schedule-edit-form] button[type=submit]').click();
-   assert.match(await page.locator('.transaction-detail [role=status]').innerText(),
-    /Schedule saved/);
-   await page.locator('.transaction-detail-close').click();
+   assert.match(await page.locator('.inline-save-result').first().innerText(),
+    /Saved.*repeating plan/i);
    assert.deepEqual((await page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'})
      .locator('.future-amount').allInnerTexts()).map(x=>x.replace(/[^0-9.]/g,'')),
     ['3040.00','3075.00','3040.00','3075.00','3040.00','3075.00'],
@@ -526,86 +525,74 @@ const {chromium,webkit}=require('playwright');
     'Creating a recurring expense from one calendar date creates its next month too');
 
 
-   // Same payee, same date: two completely separate obligations and estimates.
+   // Same merchant/date: separately saved streams and editable inline rows.
    await go('schedules');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
    await page.locator('[data-schedule-new]').click();
    let schedule=page.locator('[data-schedule-new-form]');
+   assert.equal(await page.locator('.transaction-detail').count(),0,
+    'Schedule creation does not open a separate popup editor');
    await schedule.locator('[name=scheduleLabel]').fill('Water - House');
    await schedule.locator('[name=merchant]').fill('Same Merchant Water');
    await schedule.locator('[name=amount]').fill('135');
    await schedule.locator('[name=date]').fill('2026-11-10');
    await schedule.locator('button[type=submit]').click();
-   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
-    'After creating a plan, the unified plan editor remains available');
-   await page.locator('.transaction-detail-close').click();
-   assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+1,
-    'An independent water obligation is stored');
+   assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+1);
    let water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
+    'Schedule settings and upcoming payments expand inside their own schedule');
    await water.locator('[data-schedule-duplicate]').click();
    schedule=page.locator('[data-schedule-new-form]');
    await schedule.locator('[name=scheduleLabel]').fill('Water - Garden');
    await schedule.locator('[name=amount]').fill('220');
    await schedule.locator('[name=date]').fill('2026-11-10');
    await schedule.locator('button[type=submit]').click();
-   await page.locator('.transaction-detail-close').click();
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
-    'Adding a second same-merchant/same-day bill never updates the first');
+    'Separate same-merchant bills never merge');
+
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
-   await water.locator('[data-schedule-edit]').click();
-   await page.locator('.transaction-detail [data-plan-estimates] > summary').click();
-   const amountForm=page.locator('.transaction-detail [data-schedule-estimate-form]');
+   if(!await water.locator('[data-schedule-inline-plan]').count())
+    await water.locator('[data-schedule-edit]').click();
+   await water.locator('[data-plan-estimates] > summary').click();
+   const amountForm=water.locator('[data-schedule-estimate-form]');
    await amountForm.locator('[name=amount]').fill('175');
    await amountForm.locator('[name=from]').fill('2026-12-01');
    await amountForm.locator('[name=through]').fill('2026-12-31');
    await amountForm.locator('button[type=submit]').click();
-   assert.match(await page.locator('.transaction-detail').innerText(),/Estimate saved for this plan/);
-   await page.locator('.transaction-detail-close').click();
-   assert.match(await page.locator('[data-schedule-card]').filter({hasText:'Water - House'})
-    .first().innerText(),/175/,'A dated forecast estimate is saved only to that schedule');
-   // Editing one payment from inside its saved schedule must not edit the
-   // rest of its recurring series, or another bill from the same merchant.
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
-   await water.locator('[data-schedule-edit]').click();
-   const scheduleDialog=page.locator('.transaction-detail');
-   assert.equal(await scheduleDialog.count(),1,'Schedules use the shared detail panel');
-   const upcoming=scheduleDialog.locator('[data-schedule-occurrence-key]');
-   assert.ok(await upcoming.count()>=2,'A schedule exposes its individual dated future predictions');
-   const november=upcoming.filter({hasText:'Nov 10'}).first();
-   assert.equal(await november.count(),1,'November is independently editable in its schedule');
+   assert.match(await water.locator('.inline-save-result').innerText(),/Estimate saved/);
+   assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
+    'Schedule remains expanded after saving its dated estimate');
+   const november=water.locator('[data-schedule-occurrence-key]').filter({hasText:'Nov 10'}).first();
+   assert.equal(await november.count(),1,'November payment is visible directly in its plan');
    await november.click();
-   const onePayment=page.locator('.transaction-detail .future-edit-form');
+   const onePayment=water.locator('[data-inline-transaction-editor] .future-edit-form');
    assert.equal(await onePayment.locator('[name=scope][value=one]').isChecked(),true,
-    'One date editing is the default within the unified plan');
-   assert.equal(await page.locator('.plan-occurrence-editor').count(),1,
-    'The date editor expands inside its own list row, not in a second location');
-   assert.equal(await page.locator('.schedule-occurrence-entry')
-    .filter({hasText:'Nov 10'}).locator('.future-edit-form').count(),1,
-    'All editable fields are directly underneath the November line');
-   assert.equal(await onePayment.locator('[name=scope][value=all]').count(),0,
-    'No second competing schedule editor is embedded in an individual payment');
+    'One-date edit is the default');
+   assert.equal(await onePayment.locator('[name=scope][value=all]').count(),1,
+    'All future payments can also be edited using the same fields');
    await onePayment.locator('[name=amount]').fill('147');
    await onePayment.locator('button[type=submit]').click();
-   await page.locator('.transaction-detail [data-schedule-occurrence-key]').first().waitFor();
-   assert.equal(await page.locator('.transaction-detail [data-schedule-occurrence-key]')
-    .filter({hasText:'Nov 10'}).count(),1,'Saving returns to the parent schedule');
-   assert.match(await page.locator('.transaction-detail [data-schedule-occurrence-key]')
-    .filter({hasText:'Nov 10'}).innerText(),/147/,'November override is reflected in the schedule');
-   assert.match(await page.locator('.transaction-detail [data-schedule-occurrence-key]')
-    .filter({hasText:'Dec 10'}).innerText(),/175/,'December retains its separate estimate');
-   await page.locator('.transaction-detail [data-schedule-occurrence-key]')
-    .filter({hasText:'Dec 10'}).click();
-   await page.locator('.transaction-detail-close').click();
-   assert.equal(await page.locator('.transaction-detail [data-schedule-occurrence-key]').count()>0,true,
-    'Closing one occurrence returns to the parent schedule editor');
-   await page.locator('.transaction-detail-close').click();
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   assert.match(await water.locator('[data-schedule-occurrence-key]')
+    .filter({hasText:'Nov 10'}).innerText(),/147/);
+   assert.match(await water.locator('[data-schedule-occurrence-key]')
+    .filter({hasText:'Dec 10'}).innerText(),/175/,
+    'December keeps its independently estimated amount');
+   await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).click();
+   assert.equal(await water.locator('[data-inline-transaction-editor]').count(),1,
+    'Clicking December expands editing immediately underneath its own row');
+   await water.locator('[data-cancel-future]').click();
+   assert.equal(await water.locator('[data-inline-transaction-editor]').count(),0);
    assert.equal(await page.locator('.transaction-detail').count(),0);
-   assert.ok(await water.locator('[data-schedule-edit]').count(),
-    'Parent schedule stays on the same page after detail navigation');
+   await water.locator('[data-schedule-edit]').click();
+
    await go('summary');
    await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-10"]').click();
+   assert.ok(await page.locator('.calendar-monthly-rows .selected-date').count()>0,
+    'Selecting the day highlights its transactions in the one monthly list');
    assert.ok(await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).count()>0);
    assert.ok(await page.locator('.calendar-detail-item').filter({hasText:'Water - Garden'}).count()>0);
    await page.locator('[data-calendar-nav="1"]').click();
@@ -615,21 +602,18 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.calendar-detail-item')
     .filter({hasText:'Water - Garden'}).innerText(),/220/);
    await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).click();
-   const inlineWater=page.locator('.calendar-detail-entry').filter({
-    hasText:'Water - House'}).first();
+   const inlineWater=page.locator('.calendar-monthly-entry').filter({hasText:'Water - House'}).first();
    assert.equal(await page.locator('.transaction-detail').count(),0,
-    'Selecting a confirmed payment edits the visible calendar row, never opens a second editor');
-   assert.equal(await inlineWater.locator('.future-edit-form').count(),1,
-    'One-payment editing appears underneath its original line');
-   assert.equal(await inlineWater.locator('.future-edit-form [name=scope][value=all]').count(),0,
-    'The individual row cannot silently change every future schedule');
-   await inlineWater.locator('.inline-plan-settings > summary').click();
-   assert.equal(await inlineWater.locator('[data-schedule-edit-form]').isVisible(),true,
-    'The same expanded line exposes repeating-plan settings for editing');
+    'Calendar and Schedules use inline fields without another modal');
+   assert.equal(await inlineWater.locator('.future-edit-form').count(),1);
+   assert.equal(await inlineWater.locator('.future-edit-form [name=scope][value=all]').count(),1,
+    'The same payment fields may apply to later recurring payments');
    await inlineWater.locator('[data-cancel-future]').click();
    assert.equal(await inlineWater.locator('[data-inline-transaction-editor]').count(),0);
-   assert.equal(await page.locator('.summary-page').count(),1,
-    'Collapsing transaction edit keeps the calendar and selected date in place');
+   assert.equal(await page.locator('.summary-page').count(),1);
+   assert.equal(await page.locator('.calendar-detail-items').count(),0,
+    'Only one calendar transaction list is displayed');
+
       assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');

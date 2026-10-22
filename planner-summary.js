@@ -216,21 +216,10 @@ function dayDetail(point,card){
    '<div><span>'+(card?'Debt increases':'Deposits')+'</span><strong class="in">+'+money(plus)+'</strong></div>'+
    '<div><span>'+(card?'Debt payments':'Withdrawals')+'</span><strong class="out">−'+money(minus)+'</strong></div>'+
    '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
-  (events.length?'<div class="calendar-detail-items">'+events.map((e,i)=>{
-   const dir=signed(e,card)>0?'in':'out';
-   const d=paymentDetail(e);
-   const editor='<button type="button" class="calendar-detail-item calendar-tap-edit" data-open-transaction="'+esc(predictionIdentity(e))+'"><span class="calendar-transaction-name">'+
-    esc(e.merchant||'Predicted transaction')+
-    (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':e.amountEstimate?'<small>Estimated prediction</small>':'<small>Predicted · not posted</small>')+
-    '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong>'+
-    '<span class="calendar-item-edit">Edit ↓</span></button>';
-   return '<div class="calendar-detail-entry" data-inline-row-wrapper>'+editor+
-    (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+'">Payment calculation →</button>':'')+
-    '</div>';
-  }).join('')+'</div>':
-   '<p class="calendar-empty">'+(point.date===first.date?
-    'Starting balance. No future transactions yet.':
-    'No predicted transactions on this day. Balance carries forward.')+'</p>')+
+  '<p class="calendar-single-list-hint">'+
+   (events.length?events.length+' predicted payment'+(events.length===1?'':'s')+
+    ' today. Select a transaction from the single monthly list below to edit it.':
+    'No predicted transactions this day; the balance carries forward.')+'</p>'+
   (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
    gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
     '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
@@ -240,7 +229,7 @@ function dayDetail(point,card){
   quickEditor()+
   '<div class="calendar-day-actions"><button type="button" class="calendar-add" data-calendar-add'+
    (point.date===first.date?' disabled':'')+'>+ Add transaction</button>'+
-   '<button type="button" class="calendar-edit" data-view="transactions">All predictions →</button></div>'+
+   '</div>'+
  '</section>';
 }
 
@@ -258,20 +247,21 @@ function monthlyPredictions(state){
    ' in recent posted purchases (not an issued statement)</span>'+
    '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
  return '<details class="calendar-monthly-list" open>'+
-  '<summary>All '+rows.length+' predicted transactions in '+esc(monthName(calendarMonth))+
-   '<span>View every dated prediction</span></summary>'+
+  '<summary>Transactions · '+esc(monthName(calendarMonth))+' ('+rows.length+')'+
+   '<span>One editable list · selected day is highlighted</span></summary>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
   (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>{
    const d=paymentDetail(e);
-   const entry='<button type="button" class="calendar-monthly-row" data-calendar-list-date="'+date+
+   const entry='<button type="button" class="calendar-monthly-row calendar-detail-item" data-calendar-list-date="'+date+
     '" data-calendar-list-index="'+index+'" data-open-transaction="'+esc(predictionIdentity(e))+'"><span class="calendar-monthly-date">'+esc(shortDate(date))+
     '</span><span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
     (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
     '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
     '</strong><span class="calendar-monthly-view">Edit ↓</span></button>';
-   return '<div class="calendar-monthly-entry" data-inline-row-wrapper>'+entry+
+   return '<div class="calendar-monthly-entry calendar-detail-entry'+(date===calendarDate?' selected-date':'')+
+    '" data-calendar-entry-date="'+date+'" data-inline-row-wrapper>'+entry+
     (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+
      '">Payment calculation →</button>':'')+'</div>';
   }).join('')+
@@ -366,6 +356,8 @@ function showCalendar(date){
  calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
+ const row=document.querySelector('[data-calendar-entry-date="'+date+'"]');
+ if(row&&row.closest('.calendar-monthly-rows'))row.scrollIntoView({block:'nearest',behavior:'instant'});
 }
 
 function reviewDetails(bundle,accounts,chosen,prefs,ready,coverage){

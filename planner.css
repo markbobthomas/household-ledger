@@ -932,3 +932,54 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .calendar-monthly-entry>.calendar-monthly-row,.calendar-detail-entry>.calendar-detail-item{flex-basis:100%}
  .inline-plan-settings>summary{flex-direction:column;gap:4px}
 }
+
+/* Unified row: one view and one expandable editor on Calendar, Schedules,
+   and advanced Predictions. Bank-recorded History remains read-only. */
+.unified-payment-list{border:1px solid #e0e9f1;border-radius:10px;overflow:visible;background:#fff}
+.unified-payment-row{min-width:0;border-bottom:1px solid #e7edf3}
+.unified-payment-row:last-child{border-bottom:0}
+.unified-payment-trigger{display:grid;grid-template-columns:66px minmax(0,1fr) minmax(80px,auto) 18px;gap:12px;align-items:center;padding:13px 14px;width:100%;background:#fff;color:#2e455d;text-align:left;border:0;cursor:pointer;font:inherit}
+.unified-payment-trigger:hover,.unified-payment-trigger:focus-visible{background:#f1f7fd}
+.unified-payment-trigger[aria-expanded="true"]{background:#eaf3fc;box-shadow:inset 3px 0 #4b80b1}
+.unified-payment-date{font-size:11px;font-weight:760;color:#6b7e8e}
+.unified-payment-name{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:12px}
+.unified-payment-name strong{overflow-wrap:anywhere}
+.unified-payment-name small{font-size:10px;color:#7a8a98;font-weight:500;overflow-wrap:anywhere}
+.unified-payment-value{font:760 12px var(--mono);white-space:nowrap;text-align:right}
+.unified-payment-value.incoming{color:#39765c}
+.unified-payment-chevron{font-size:17px;line-height:1;text-align:center;color:#7e95aa}
+.unified-payment-trigger[aria-expanded="true"] .unified-payment-chevron{transform:rotate(180deg)}
+.unified-payment-row>.inline-transaction-editor{margin:0;border-top:1px solid #dce8f2;box-shadow:inset 3px 0 #4b80b1}
+.schedule-inline-plan{padding:0 4px 4px}
+.schedule-inline-plan>.plan-settings{margin:12px 0}
+.schedule-inline-plan .schedule-occurrence-section{margin:16px 0 6px}
+.schedule-inline-plan .schedule-occurrence-section>.unified-payment-list{margin-top:10px}
+.schedule-inline-plan .schedule-occurrence-section .unified-payment-list{max-height:none;overflow:visible}
+.schedule-grid{align-items:start}
+.plan-edit-guide{font-size:11px;line-height:1.6;color:#657d91;padding:8px 8px 1px}
+.schedule-card .schedule-actions{flex-wrap:wrap}
+.schedule-card:has(.schedule-inline-plan){border-color:#b5cce0}
+.calendar-single-list-hint{margin:11px 0;font-size:11px;line-height:1.55;color:#688096}
+.calendar-monthly-entry.selected-date{background:#f3f8fd;box-shadow:inset 3px 0 #6b9dc9}
+.calendar-monthly-entry.selected-date>.calendar-monthly-row{background:#f3f8fd}
+.calendar-monthly-entry>.calendar-monthly-row[aria-expanded="true"]{background:#e8f3fc}
+.calendar-monthly-rows{scrollbar-gutter:stable}
+.future-item>.unified-payment-row{border-bottom:1px solid #e7edf3}
+.future-item>.unified-payment-row .inline-transaction-editor{margin:0}
+.schedule-form .future-fields{margin-top:13px}
+@media(max-width:620px){
+ .unified-payment-trigger{grid-template-columns:49px minmax(0,1fr) auto 14px;gap:7px;padding:12px 8px}
+ .unified-payment-date,.unified-payment-value{font-size:11px}
+ .unified-payment-name{font-size:11px}
+ .unified-payment-name small{font-size:10px}
+ .schedule-inline-plan{padding:0}
+ .schedule-grid{display:block}
+ .schedule-card{margin-bottom:12px}
+}
+
+.inline-save-result{margin:8px 11px 11px;padding:10px 12px;background:#eff7f3;color:#2b654c;border:1px solid #d0e5d8;border-radius:7px;font-size:12px;font-weight:700;line-height:1.45}
+.inline-transaction-editor [data-edit-impact]{font-size:12px;color:#3e6685}
+.calendar-monthly-row.calendar-detail-item{display:grid;grid-template-columns:70px minmax(0,1fr) minmax(80px,auto) 45px;gap:10px}
+.calendar-monthly-entry.calendar-detail-entry{display:flex;flex-wrap:wrap}
+.calendar-monthly-entry.calendar-detail-entry>.calendar-monthly-row{flex:1 1 0;min-width:0}
+@media(max-width:600px){.calendar-monthly-row.calendar-detail-item{grid-template-columns:54px minmax(0,1fr) auto;gap:7px}.calendar-monthly-row .calendar-monthly-view{display:none}}

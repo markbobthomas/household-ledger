@@ -566,7 +566,7 @@ function editorFor(row,s,records,opts={}){
    'To change every future payment, edit Schedule settings above.</p></fieldset>':
   '<fieldset class="future-scope"><legend>Apply changes to</legend>'+
   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
-  '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
+  '<label><input type="radio" name="scope" value="all"> This and future payments</label>'+
   '<p>For a repeating payment, choose all future to create or change its schedule. '+
    'Only this payment keeps all other dates unchanged.</p></fieldset>'+
   '<div class="future-repeat-fields" hidden>'+
@@ -635,37 +635,39 @@ function relatedCardCalculation(bundle,row){
 }
 // The live forecast, not unedited schedule defaults, owns each occurrence:
  // edited dates/amounts and skipped payments are reflected here exactly.
-function scheduleOccurrencesHtml(bundle,s,rule,selectedKey=''){
+// The same forecast row component is rendered in Calendar, Schedules, Reviews
+// and advanced Predictions. All buttons resolve the same canonical ledger key.
+function editableForecastRow(row,opts={}){
+ const isTransfer=row.kind==='movement',inbound=row.type==='income'||row.type==='refund';
+ const kindLabel=isTransfer?'Linked transfer':row.type==='income'?'Deposit':
+  row.type==='refund'?'Refund':'Withdrawal / purchase';
+ const subtitle=kindLabel+' · '+(isTransfer?row.from+' → '+row.to:row.account||'Account')+
+  (row.recurringRuleId?' · Repeats':row.seriesKey?' · Auto-detected':' · One time');
+ return '<div class="unified-payment-row'+(opts.kind==='schedule'?' schedule-occurrence-entry':'')+
+  '" data-inline-row-wrapper data-payment-key="'+escapeHTML(row.key)+'">'+
+  '<button type="button" class="unified-payment-trigger" '+
+   (opts.advanced?'data-edit-future="'+escapeHTML(row.key)+'" ':'')+
+   'data-open-transaction="'+escapeHTML(row.key)+
+  '" aria-expanded="false"'+(opts.kind==='schedule'?' data-schedule-occurrence-key="'+escapeHTML(row.key)+'"':'')+'>'+
+  '<span class="unified-payment-date future-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+  '<span class="unified-payment-name"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+   '<small>'+escapeHTML(subtitle)+'</small></span>'+
+  '<span class="unified-payment-value future-amount'+(inbound?' incoming':'')+'">'+
+   (inbound?'+':'−')+cash(row.amount)+'</span>'+
+  '<span class="unified-payment-chevron" aria-hidden="true">⌄</span></button></div>';
+}
+function scheduleOccurrencesHtml(bundle,s,rule){
  if(!rule)return '';
- const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id)),
-  selected=occurrences.find(r=>r.key===selectedKey);
- const rows=occurrences.map(row=>{
-  const picked=row.key===selectedKey;
-  const inline=picked?'<div class="plan-occurrence-editor" data-plan-occurrence-editor>'+
-   '<div class="plan-section-label"><strong>Edit this payment here</strong>'+
-    '<span>'+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+'</span></div>'+
-   '<p>Changes here apply to this date only; the other payments remain as scheduled.</p>'+
-   editorFor(row,s,bundle?.rows||[],{oneOnly:true})+'</div>':'';
-  return '<div class="schedule-occurrence-entry">'+
-   '<button type="button" class="schedule-occurrence'+(picked?' selected':'')+
-   '" data-select-plan-payment="'+escapeHTML(row.key)+
-   '" data-schedule-occurrence-key="'+escapeHTML(row.key)+'" aria-expanded="'+picked+'">'+
-   '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
-   '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
-    '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
-     row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
-   '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">'+
-   (picked?'Close −':'Edit ↓')+'</span></button>'+inline+'</div>';
- }).join('');
- return '<section class="schedule-occurrence-section" aria-label="Upcoming individual payments">'+
-  '<div class="schedule-occurrence-heading"><h3>Individual upcoming payments</h3>'+
-   '<span>'+occurrences.length+' in next '+horizon+' days</span></div>'+
-  '<p>Select a date to adjust just that payment. Schedule settings and all other dates stay unchanged.</p>'+
-  (rows?'<div class="schedule-occurrence-list">'+rows+'</div>':
-   '<p class="schedule-occurrence-empty">No remaining payments for this schedule within the selected forecast. '+
-    'A payment may have already posted, been skipped, or be outside the forecast window.</p>')+
+ const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id));
+ return '<section class="schedule-occurrence-section" aria-label="Upcoming payments">'+
+  '<div class="schedule-occurrence-heading"><h3>Upcoming payments</h3><span>'+
+   occurrences.length+' in next '+horizon+' days</span></div>'+
+  '<p>Click a payment to edit its actual date, amount or account. Save applies only to that occurrence; other dates stay unchanged.</p>'+
+  (occurrences.length?'<div class="unified-payment-list">'+occurrences.map(r=>editableForecastRow(r,{kind:'schedule'})).join('')+'</div>':
+   '<p class="schedule-occurrence-empty">No future payments in this forecast window. Payments may have posted, been skipped, or be beyond the selected period.</p>')+
   '</section>';
 }
+
 function detailHtml(bundle,s){
  if(!transactionDetail)return '';
  if(transactionDetail.kind==='prediction'){
@@ -768,11 +770,31 @@ function drawTransactionDetail(bundle,s){
   updateHistoryLinks(form);
  }
 }
-function closeInlineTransaction(){
+function inlineDraftChanged(){
+ const editor=document.querySelector('[data-inline-transaction-editor]');
+ if(!editor)return false;
+ return [...editor.querySelectorAll('form')].some(form=>{
+  const initial=form.dataset.initialValues;
+  return initial!==undefined&&initial!==JSON.stringify([...new FormData(form)]);
+ });
+}
+function closeInlineTransaction(force=false){
+ if(!force&&inlineDraftChanged()&&typeof window.confirm==='function'&&
+   !window.confirm('Discard unsaved changes to this payment?'))return false;
  document.querySelectorAll('[data-inline-transaction-editor]').forEach(el=>el.remove());
  document.querySelectorAll('[data-inline-row-wrapper] [data-open-transaction]').forEach(el=>{
   el.setAttribute('aria-expanded','false');
  });
+ return true;
+}
+function confirmInlineSave(key,message){
+ const rows=[...document.querySelectorAll('[data-inline-row-wrapper]')];
+ const row=rows.find(el=>el.dataset.paymentKey===key||
+  el.querySelector('[data-open-transaction]')?.dataset.openTransaction===key);
+ const target=row||document.querySelector('#planner-main .planner-page');
+ if(!target)return;
+ target.insertAdjacentHTML(row?'beforeend':'afterbegin',
+  '<p class="inline-save-result" role="status">'+escapeHTML(message)+'</p>');
 }
 function openInlineTransaction(button){
  const wrapper=button?.closest?.('[data-inline-row-wrapper]');
@@ -783,11 +805,14 @@ function openInlineTransaction(button){
  const s=snapshot(),bundle=forecastFor(s),
   row=futureRows(bundle,s).find(r=>r.key===focused);
  if(!row){setNotice('That forecast has changed. Refresh the calendar and select the updated payment.');return true}
- closeInlineTransaction();
+ if(!closeInlineTransaction())return true;
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
- const helper=rule?'<p class="inline-editor-explanation"><strong>Only this date:</strong> '+
-  'The repeating payment plan is unchanged. Other dates keep their amounts and accounts.</p>':
-  '<p class="inline-editor-explanation">Edit the values directly below. Actual posted bank records stay untouched.</p>';
+ const nearby=rule?futureRows(bundle,s).filter(r=>r.recurringRuleId===rule.id&&r.date>=row.date).length:0;
+ const helper='<p class="inline-editor-explanation" data-edit-impact>'+
+  (rule?'Change this date only, or choose all future to update the repeating plan ('+nearby+
+   ' upcoming payments in your forecast).':
+   row.seriesKey?'Update one payment, or confirm changes for later recurring payments.':
+   'Edit these values here. Actual posted bank records remain read-only.')+'</p>';
  const settings=rule?'<details class="inline-plan-settings">'+
   '<summary>Edit repeating plan defaults <small>affects other scheduled dates</small></summary>'+
   '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
@@ -797,9 +822,12 @@ function openInlineTransaction(button){
    '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
  const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
   helper+relatedCardCalculation(bundle,row)+
-  editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+settings+'</div>';
+  editorFor(row,s,bundle?.rows||[])+settings+'</div>';
  wrapper.insertAdjacentHTML('beforeend',html);
  button.setAttribute('aria-expanded','true');
+ wrapper.querySelectorAll('[data-inline-transaction-editor] form').forEach(form=>{
+  form.dataset.initialValues=JSON.stringify([...new FormData(form)]);
+ });
  wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
  return true;
 }
@@ -982,7 +1010,7 @@ function schedulesPage(bundle,s){
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
-   isEstimating=(scheduleMode==='estimate'||planOpen)&&scheduleTarget===r.id,
+   isEstimating=(isEditing||scheduleMode==='estimate'||planOpen)&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
@@ -1015,12 +1043,21 @@ function schedulesPage(bundle,s){
    '<div class="schedule-metrics"><span>Next: '+(next?escapeHTML(dayLabel(next)):'Outside forecast')+'</span>'+
     '<strong>'+cash(estimate.amount)+'</strong><span>'+dates.length+' upcoming</span></div>'+
    '<div class="schedule-actions">'+
-    '<button class="btn primary" type="button" data-schedule-edit="'+id+'">Open plan →</button>'+
+    '<button class="btn primary" type="button" data-schedule-edit="'+id+'">'+(isEditing?'Close plan −':'Edit plan ↓')+'</button>'+
     '<button class="btn" type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
     '<button class="btn" type="button" data-schedule-remove="'+id+'">'+
      (scheduleRemoveTarget===r.id?'Confirm remove':'Remove')+'</button></div>'+
-   (windows?'<div class="schedule-windows"><small>Estimated ranges</small>'+windows+'</div>':'')+
-   edit+estimateForm+'</article>';
+   (windows&&wins.length?'<div class="schedule-windows"><small>Estimated ranges</small>'+windows+'</div>':'')+
+   (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
+     '<p class="plan-edit-guide">Repeating defaults apply across future payments. '+
+      'Each dated payment below can be changed separately.</p>'+
+     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span>'+
+      '<small>Amount, date, frequency, payee and accounts</small></summary>'+
+      '<div class="plan-settings-body">'+edit+'</div></details>'+
+     '<details class="plan-settings" data-plan-estimates><summary><span>Variable amount ranges</span>'+
+      '<small>Specific months or all future payments</small></summary>'+
+      '<div class="plan-settings-body">'+estimateForm+'</div></details>'+
+      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</article>';
  }).join('');
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
   '<h2>Payment schedules</h2><p>Manage repeating bills and paychecks here. Open any schedule to edit one upcoming payment without changing the others.</p></div>'+
@@ -1034,20 +1071,8 @@ function transactionsPage(bundle,s){
    r.fromAccountId===transactionFilter||r.toAccountId===transactionFilter:
    r.accountId===transactionFilter));
  const opts=accountSelect(accounts,transactionFilter,'transactionFilter',true);
- const lines=visible.map(row=>{
-  const paired=row.kind==='movement',incoming=row.type==='income'||row.type==='refund',
-   desc=paired?row.from+' → '+row.to:row.account+' · '+
-    (row.type==='income'?'Deposit':row.type==='refund'?'Refund':
-     row.type==='transfer'?(row.cashDirection==='in'?'Transfer in':'Transfer out'):'Withdrawal / card purchase');
-  return '<article class="future-item" data-future-item="'+escapeHTML(row.key)+'">'+
-   '<div class="future-row"><div class="future-date">'+escapeHTML(dayLabel(row.date))+'</div>'+
-   '<div class="future-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-   '<small>'+escapeHTML(desc)+(row.seriesKey?' · Recurring':'')+
-    (row.seriesKey&&state().predictions?.futureSeriesEdits?.[row.seriesKey]?' · SERIES EDITED':'')+'</small>'+
-   '</div>'+
-   '<div class="future-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':paired?'↔ ':'−')+cash(row.amount)+'</div>'+
-   '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">Details →</button></div></article>';
- }).join('');
+ const lines=visible.map(row=>'<article class="future-item" data-future-item="'+
+  escapeHTML(row.key)+'">'+editableForecastRow(row,{advanced:true})+'</article>').join('');
  const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([k,v])=>
   v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter||
    String(v.toAccountId)===transactionFilter));
@@ -1058,7 +1083,7 @@ function transactionsPage(bundle,s){
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
   '<div class="page-heading"><div><h2>Predictions</h2>'+
-   '<p>All forecast transactions for the next '+horizon+' days. Select any payment to see its source, linked schedule and full editing options. All pages use the same details panel.</p></div>'+
+   '<p>All dated forecasts for the next '+horizon+' days. Select a payment to expand the same inline editor used in Calendar and Schedules.</p></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -1509,13 +1534,15 @@ document.addEventListener('click',async e=>{
     date:d.nextDate,type:d.type,frequency:d.frequency||'monthly',
     amountBasis:'estimate',historyExampleId:String(t.id)};
    scheduleMode='new';scheduleTarget='';scheduleNotice='';
-   transactionDetail={kind:'schedule',id:'new',mode:'new'};render();
+   transactionDetail=null;activeTab='schedules';render();
   }catch(err){scheduleNotice=String(err.message||err);render()}
   return;
  }
  const newSchedule=e.target.closest?.('[data-schedule-new]');
  if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
-  transactionDetail={kind:'schedule',id:'new',mode:'new'};render();return}
+  transactionDetail=null;render();
+  document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
+  return}
  const duplicate=e.target.closest?.('[data-schedule-duplicate]');
  if(duplicate){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===duplicate.dataset.scheduleDuplicate);
@@ -1528,15 +1555,19 @@ document.addEventListener('click',async e=>{
    frequency:rule.frequency,date:next||shiftDay(snapshot().asOf,1),
    amountBasis:'estimate'};
   scheduleMode='new';scheduleTarget='';scheduleNotice='';
-  transactionDetail={kind:'schedule',id:'new',mode:'new'};render();return;
+  transactionDetail=null;activeTab='schedules';render();return;
  }
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
  const scheduleEstimate=e.target.closest?.('[data-schedule-estimate]');
  if(scheduleEdit||scheduleEstimate){
   const mode=scheduleEdit?'edit':'estimate',id=(scheduleEdit||scheduleEstimate).dataset[
    scheduleEdit?'scheduleEdit':'scheduleEstimate'];
+  const same=scheduleMode==='edit'&&scheduleTarget===id;
   scheduleRemoveTarget='';scheduleNotice='';
-  openSchedulePlan(id,'',scheduleEdit||scheduleEstimate,mode);
+  scheduleMode=same?'':'edit';scheduleTarget=same?'':id;
+  transactionDetail=null;render();
+  if(!same&&mode==='estimate')
+   document.querySelector('[data-schedule-inline-plan="'+id.replace(/[\\"']/g,'')+'"] [data-plan-estimates]')?.setAttribute('open','');
   return;
  }
  const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
@@ -1831,7 +1862,8 @@ document.addEventListener('click',async e=>{
  }
  const edit=e.target.closest('[data-edit-future]');
  if(edit){showNewTransaction=false;transactionNotice='';
-  openPrediction(edit.dataset.editFuture,edit);return}
+  if(!openInlineTransaction(edit))openPrediction(edit.dataset.editFuture,edit);
+  return}
  const skip=e.target.closest('[data-skip-future]');
  if(skip){
   const row=futureRows(forecastFor(snapshot()),snapshot()).find(r=>r.key===skip.dataset.skipFuture);
@@ -1976,7 +2008,8 @@ document.addEventListener('submit',async e=>{
  const submit=form.querySelector('[type=submit]');if(submit)submit.disabled=true;
  try{
   const fields=Object.fromEntries(new FormData(form)),
-   T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s);
+   T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s),
+   originatingKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||'';
   let savedPlanId='';
   if(form.hasAttribute('data-schedule-new-form')){
    const saved=await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
@@ -2000,14 +2033,21 @@ document.addEventListener('submit',async e=>{
    scheduleNotice='Estimate saved for this plan and date range only.';
   }
   schedulePreset=null;scheduleRemoveTarget='';
-  if(transactionDetail?.kind==='schedule'&&savedPlanId){
+  if(activeTab==='schedules'&&savedPlanId&&!transactionDetail){
+   scheduleMode='edit';scheduleTarget=savedPlanId;render();
+   const card=[...document.querySelectorAll('[data-schedule-card]')].find(x=>x.dataset.scheduleCard===savedPlanId);
+   card?.insertAdjacentHTML('afterbegin','<p class="inline-save-result" role="status">'+escapeHTML(scheduleNotice)+'</p>');
+  }else if(originatingKey&&savedPlanId){
+   render();
+   confirmInlineSave(originatingKey,'Saved — repeating plan defaults updated.');
+  }else if(transactionDetail?.kind==='schedule'&&savedPlanId){
    scheduleMode='edit';scheduleTarget=savedPlanId;
    transactionDetail={kind:'schedule',id:savedPlanId,mode:'edit',selectedKey:''};
   }else{
    scheduleMode='';scheduleTarget='';transactionDetail=null;
    if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
+   render();
   }
-  render();
  }catch(error){if(submit)submit.disabled=false;
   scheduleNotice=String(error.message||error);
   // Preserve entered dates/amounts on error; don't reset the form.
@@ -2059,7 +2099,12 @@ document.addEventListener('submit',async e=>{
   const origin=draft.merchant;
   recurringDraft=null;transactionDetail=null;reviewNotice='Saved recurring forecast for '+origin+'.';
   transactionNotice=reviewNotice;
+  const inlineKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||
+   (form.hasAttribute('data-future-edit-form')?form.dataset.futureEditForm:'');
+  const savedMessage=form.hasAttribute('data-future-edit-form')?
+   (fields.scope==='all'?'Saved — this and future payments updated.':'Saved — only this payment changed.'):null;
   render();
+  if(savedMessage)confirmInlineSave(inlineKey,savedMessage);
  }catch(err){
   if(button)button.disabled=false;
   if(showRecurringScheduleChoice(form,err))return;
@@ -2151,7 +2196,7 @@ document.addEventListener('submit',async e=>{
      const existingCadence=cadenceOption(row.cadence);
      // Converting an inferred payroll phase to an explicit recurring rule
      // must retain its distinct four-week identity.
-     const useSeries=Boolean(row.seriesKey&&
+     const useSeries=Boolean(!row.recurringRuleId&&row.seriesKey&&
       fields.frequency===existingCadence&&row.cadence&&!row.addedId&&
       !form.dataset.historyLinksChanged&&
       row.amountEstimate!=='four-week-paycheck');
@@ -2161,7 +2206,12 @@ document.addEventListener('submit',async e=>{
       planner.defineRecurring(state(),fields,accounts,asOf,row,model.records(state()),examples);
      const edits=state().predictions.futureTransactionEdits||{};
      for(const other of existingRows){
-      if(other.key===row.key||row.seriesKey&&other.seriesKey===row.seriesKey&&other.baseDate>=row.baseDate)
+      // A confirmed plan's individually edited dates are independent.
+      // Updating repeating defaults may replace the selected date's override,
+      // but must never silently erase a different dated exception.
+      if(other.key===row.key||
+       !row.recurringRuleId&&row.seriesKey&&other.seriesKey===row.seriesKey&&
+        other.baseDate>=row.baseDate)
        delete edits[other.key];
      }
      // Replacing inferred recurrence with an explicit schedule makes the old
@@ -2289,10 +2339,11 @@ document.addEventListener('change',e=>{
  }
  if(e.target.name==='scope'){
   const form=e.target.closest('[data-future-edit-form]');
-  const impact=document.querySelector('[data-edit-impact]');
+  const impact=form?.closest('[data-inline-transaction-editor]')?.querySelector('[data-edit-impact]')||
+   document.querySelector('[data-edit-impact]');
   if(impact)impact.textContent=e.target.value==='all'?
-   'This and all future: the repeating forecast from this date forward will change. Past bank transactions never change.':
-   'This payment only: just this date and amount will change. Other recurring payments stay as they are.';
+   'All future payments beginning with this date will change. Posted bank transactions are never changed.':
+   'Only this dated payment will change. Other scheduled payments stay as they are.';
   const section=form?.querySelector('.future-repeat-fields');
   if(section)section.hidden=e.target.value!=='all';
   if(e.target.value==='all')updateHistoryLinks(form);
