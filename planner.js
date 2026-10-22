@@ -1387,6 +1387,30 @@ document.addEventListener('click',async e=>{
  if(account){selectedAccount=account.dataset.accountId;render();return}
  if(e.target.closest('#refresh-bank')){window.HouseholdLiveSource?.refresh();return}
 });
+
+// A payee may legitimately have multiple independently confirmed schedules.
+// Ask which EXISTING schedule to update; never create a second payment as a
+// workaround for ambiguous identities. This dropdown remains in the form.
+function showRecurringScheduleChoice(form,error){
+ if(error?.code!=='RECURRING_SCHEDULE_CHOICE'||!Array.isArray(error.options)||
+  !error.options.length)return false;
+ let holder=form.querySelector('[data-recurring-schedule-choice]');
+ if(!holder){
+  holder=document.createElement('div');
+  holder.className='recurring-schedule-choice';
+  holder.dataset.recurringScheduleChoice='true';
+  form.appendChild(holder);
+ }
+ const choices=error.options.map(r=>'<option value="'+escapeHTML(r.id)+'">'+
+  escapeHTML(r.merchant||'Recurring payment')+' · '+escapeHTML(r.frequency||'Repeats')+
+  ' · '+escapeHTML(dayLabel(r.anchorDate))+' · '+cash(r.amount)+'</option>').join('');
+ holder.innerHTML='<label>Which existing payment schedule?'+
+  '<select name="existingRuleId" required><option value="" selected disabled>Select a schedule</option>'+
+  choices+'</select></label>'+
+  '<p>Only the chosen recurring schedule will be updated. This does not add a second payment or change your bank history.</p>';
+ holder.querySelector('select')?.focus();
+ return true;
+}
 async function commitForecastChange(action){
  const current=state(),before=JSON.stringify(current.predictions||{});
  try{
@@ -1441,6 +1465,7 @@ document.addEventListener('submit',async e=>{
   render();
  }catch(err){
   if(button)button.disabled=false;
+  if(showRecurringScheduleChoice(form,err))return;
   let message=form.querySelector('.future-form-error');
   if(!message){
    message=document.createElement('p');message.className='future-form-error';
@@ -1481,6 +1506,7 @@ document.addEventListener('submit',async e=>{
    'Prediction added. All daily balances recalculated.');
  }catch(err){
   if(button)button.disabled=false;
+  if(showRecurringScheduleChoice(form,err))return;
   const target=form.querySelector('[data-calendar-error]');
   if(target)target.textContent=String(err.message||err);
  }
@@ -1562,6 +1588,7 @@ document.addEventListener('submit',async e=>{
   render();
  }catch(err){
   if(button)button.disabled=false;
+  if(showRecurringScheduleChoice(form,err))return;
   let error=form.querySelector('.future-form-error');
   if(!error){error=document.createElement('p');error.className='future-form-error';error.setAttribute('role','alert');form.appendChild(error)}
   error.textContent=String(err.message||err);
