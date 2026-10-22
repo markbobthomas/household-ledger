@@ -143,6 +143,16 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Verification:** PR #38 passed both required GitHub CI jobs on head `9f4b5311ce8f10e9098031a00e16e5c1ef309e08`: real-account pilot/banking-safety checks and desktop Chromium/iPhone WebKit browser regression tests (single closing balance, concise empty-day/disclosure UI, preserved inline editors, Settings navigation). Merged to `main` as `a2879dfdd9dd3e333b437e848d349611421fbb7f` on 2026-10-22. GitHub merge does not verify live Render or GitHub Pages publication.
 - **Next:** Test with fictional data and merge on green CI; check private Render deployment independently. Future structural simplification of Overview and advanced tools should be evaluated with usage evidence rather than silently removing unique capabilities.
 
+
+### 2026-10-22 — follow-up: closing balance as the last row of each day
+
+- **Request:** Re-audit site-wide navigation and UI redundancies; user's specific requirement is one end-of-day balance at the **bottom of the entire daily transaction panel**, not a repeated number at the top and bottom.
+- **Investigation:** PR #38 already removed the duplicated balance *heading*, but the day arithmetic panel still came before the transactions, and empty selected days repeated the same unchanged balance as both the starting and ending balance while showing zero deposit and withdrawal rows. Settings also duplicated forecast assumptions already explained on Calendar and used two panels for banking status.
+- **UI changes:** `planner-summary.js` now renders the selected day's date, only meaningful arithmetic rows **if transactions exist**, editable payment list, add/edit actions, and exactly **one closing-balance footer as the final element**. Zero-transaction dates show one concise empty-day message and the closing balance, without an unnecessary identical opening number or zero sums. `planner.js` condenses Settings' bank connection status/actions into one section and omits the redundant planning-assumptions panel. `planner.css` defines the closing footer style and `index.html` refreshes asset cache keys.
+- **Safety:** No changes to the forecast engine, bank current/available distinctions, stored recurrence or edit data, linked transfers or immutable source records. The bottom footer continues to use the identical canonical `point.balance` already shown in Calendar.
+- **Verification:** Dedicated smoke and desktop Chromium/iPhone WebKit assertions check the empty day, nonempty day, unique footer as the panel's **last child**, direct editing controls, and Settings panel. Record actual CI results before merging.
+- **Deployment:** GitHub branch/PR validation is independent of the private Render deployment; do not claim live until commit is checked.
+
 ## Reusable new-chat prompt
 
 > Continue Household Ledger. Read https://github.com/markbobthomas/household-ledger/blob/main/PROJECT_LEDGER.md and AGENTS.md first, inspect current GitHub main, then handle my request. Update the ledger in GitHub after **every prompt**, including discussions. Preserve the existing Plaid/Render setup and verify deployment before claiming it is live.
