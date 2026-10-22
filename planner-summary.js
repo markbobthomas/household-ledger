@@ -639,6 +639,12 @@ document.addEventListener('click',e=>{
   document.querySelector('[data-calendar-stage]')?.scrollIntoView?.({block:'start',behavior:'auto'});
  }
 });
+document.addEventListener('click',e=>{
+ const btn=e.target.closest?.('[data-trend-days]');
+ if(!btn)return;
+ const days=Number(btn.dataset.trendDays);
+ if([10,30,90,180,360,1095].includes(days))paintTrend(days);
+});
 document.addEventListener('click',byPointer);
 // Keep the optional month drawer open across ordinary forecast re-renders,
 // but return to date-only focus when a different calendar day is selected.
