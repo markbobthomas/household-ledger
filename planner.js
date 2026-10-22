@@ -998,24 +998,58 @@ function scheduleFields(r,isNew,s){
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
  }
-function scheduleCategorySummary(items,bundle,asOf,through){
- // Use the canonical forecast ledger, so posted-coverage suppression and
- // individual predicted payment edits affect totals exactly once.
- const ids=new Set(items.map(({rule})=>String(rule.id)));
- let withdrawals=0,deposits=0,transfers=0;
+function applyScheduleSearch(root=document){
+ const input=root.querySelector('[data-schedule-search]');
+ if(!input)return;
+ const q=String(scheduleSearch||'').trim().toLowerCase();
+ let shown=0;
+ for(const row of root.querySelectorAll('[data-schedule-card]')){
+  const matches=!q||String(row.dataset.scheduleSearchText||'').includes(q);
+  row.hidden=!matches;
+  if(matches)shown++;
+ }
+ for(const group of root.querySelectorAll('[data-schedule-category-group]')){
+  const rows=[...group.querySelectorAll('[data-schedule-card]')].filter(row=>!row.hidden);
+  group.hidden=rows.length===0;
+  const count=group.querySelector('[data-schedule-group-count]'),
+   total=group.querySelector('[data-schedule-group-total]'),
+   sum={out:0,in:0,transfers:0};
+  if(count)count.textContent='('+rows.length+')';
+  for(const row of rows)
+   for(const key of ['out','in','transfers'])
+    sum[key]+=Number(row.dataset['scheduleMonthly'+key[0].toUpperCase()+key.slice(1)]||0);
+  if(total)total.textContent=formatScheduleTotals(sum);
+ }
+ const empty=root.querySelector('[data-schedule-search-empty]');
+ if(empty)empty.hidden=shown!==0||!q;
+}
+function scheduleMonthAmounts(rule,bundle,asOf,through){
+ const result={out:0,in:0,transfers:0};
  for(const row of bundle?.ledger||[]){
   if(!(row.date>asOf&&row.date<=through)||
-   !ids.has(String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')))continue;
+   String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')!==String(rule.id))continue;
   const average=Number(row.amount)/12;
-  if(row.kind==='movement')transfers+=average;
-  else if(['income','refund'].includes(row.type))deposits+=average;
-  else withdrawals+=average;
+  if(row.kind==='movement')result.transfers+=average;
+  else if(['income','refund'].includes(row.type))result.in+=average;
+  else result.out+=average;
  }
+ return result;
+}
+function formatScheduleTotals({out=0,in:income=0,transfers=0}){
  const parts=[];
- if(withdrawals)parts.push('Out '+cash(withdrawals)+'/mo');
- if(deposits)parts.push('In '+cash(deposits)+'/mo');
+ if(out)parts.push('Out '+cash(out)+'/mo');
+ if(income)parts.push('In '+cash(income)+'/mo');
  if(transfers)parts.push('Transfers '+cash(transfers)+'/mo');
  return parts.join(' · ')||cash(0)+'/mo';
+}
+function scheduleCategorySummary(items,bundle,asOf,through){
+ // Use canonical dated predictions after individual edits and posted-coverage matching.
+ const total={out:0,in:0,transfers:0};
+ for(const {rule} of items){
+  const a=scheduleMonthAmounts(rule,bundle,asOf,through);
+  for(const key of ['out','in','transfers'])total[key]+=a[key];
+ }
+ return formatScheduleTotals(total);
 }
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
@@ -1024,11 +1058,7 @@ function schedulesPage(bundle,s){
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
  const indexed=rules.map((rule,index)=>({rule,index}));
- const query=scheduleSearch.toLowerCase().trim();
- const visible=indexed.filter(({rule})=>
-  (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter)&&
-  (!query||[rule.scheduleLabel,rule.merchant,categoryOf(rule)].some(value=>
-   String(value||'').toLowerCase().includes(query))));
+ const visible=indexed.filter(({rule})=>!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter);
  const nextAmount=rule=>{
   const first=T.recurrenceDates(rule,s.asOf,end)[0];
   return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
@@ -1064,10 +1094,14 @@ function schedulesPage(bundle,s){
    escapeHTML(w.from)+' to '+escapeHTML(w.through)+' · '+cash(w.amount)+'</span>'+
    '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
-  const number=index+1, title=escapeHTML(r.scheduleLabel||r.merchant),
-   pendingRemove=scheduleRemoveTarget===r.id;
+  const number=index+1,title=escapeHTML(r.scheduleLabel||r.merchant),
+   pendingRemove=scheduleRemoveTarget===r.id,
+   monthly=scheduleMonthAmounts(r,bundle,s.asOf,nextYear),
+   searchText=[r.scheduleLabel,r.merchant,categoryOf(r)].filter(Boolean).join(' ').toLowerCase();
   return '<article class="panel schedule-card" data-schedule-card="'+id+
-   '" data-schedule-number="'+number+'">'+
+   '" data-schedule-number="'+number+'" data-schedule-search-text="'+escapeHTML(searchText)+
+   '" data-schedule-monthly-out="'+monthly.out+'" data-schedule-monthly-in="'+monthly.in+
+   '" data-schedule-monthly-transfers="'+monthly.transfers+'">'+
    '<div class="schedule-compact-row">'+
    '<button class="schedule-row-main" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
@@ -1117,7 +1151,7 @@ function schedulesPage(bundle,s){
    const items=visible.filter(({rule})=>categoryOf(rule)===category);
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
     '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
-    ' <small>('+items.length+')</small></strong><span>'+
+    ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
     scheduleCategorySummary(items,bundle,s.asOf,nextYear)+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
@@ -1538,6 +1572,7 @@ function render(){
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
  drawTransactionDetail(bundle,s);
+ if(activeTab==='schedules')applyScheduleSearch(root);
 }
 document.addEventListener('click',async e=>{
  if(e.target.closest?.('[data-close-transaction-detail]')){dismissTransaction();return}
