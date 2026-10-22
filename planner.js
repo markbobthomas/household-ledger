@@ -1502,20 +1502,6 @@ document.addEventListener('click',async e=>{
   else{scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render()}
   return;
  }
- const fromActual=e.target.closest?.('[data-schedule-from-actual]');
- if(fromActual){
-  const t=lastHistoryRows.find(r=>String(r.id)===fromActual.dataset.scheduleFromActual);
-  if(!t)return;
-  try{
-   const d=window.HouseholdPlannerHistory.draftFor(t,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
-   schedulePreset={merchant:d.merchant,amount:d.amount,accountId:d.accountId,
-    date:d.nextDate,type:d.type,frequency:d.frequency||'monthly',
-    amountBasis:'estimate',historyExampleId:String(t.id)};
-   scheduleMode='new';scheduleTarget='';scheduleNotice='';
-   transactionDetail=null;activeTab='schedules';render();
-  }catch(err){scheduleNotice=String(err.message||err);render()}
-  return;
- }
  const newSchedule=e.target.closest?.('[data-schedule-new]');
  if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
   transactionDetail=null;render();
