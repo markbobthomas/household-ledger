@@ -1573,7 +1573,8 @@ function render(){
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
- $('planner-notice').innerHTML=activeTab==='summary'&&!error&&!latestError?'':note;
+ $('planner-notice').innerHTML=activeTab==='summary'&&!error&&!latestError&&
+  !(bundle?.postedMatchReview||[]).length?'':note;
  if(!selectedSource){root.innerHTML='<section class="panel"><h2>No connected accounts</h2><p>Add a bank account to start planning.</p>'+
   (available()?'<a class="btn primary" href="/bank-connect">Connect a bank</a>':'')+'</section>';return}
  const fresh=derived&&freshness(derived);
