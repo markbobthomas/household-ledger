@@ -34,6 +34,20 @@ assert.equal(ranges.amount,150,'Dated estimates do not rewrite the usual amount'
 assert.equal(T.scheduleAmount(ranges,'2026-11-10').amount,150);
 assert.equal(T.scheduleAmount(ranges,'2026-12-10').amount,175);
 assert.equal(T.scheduleAmount(garden,'2026-12-10').amount,220,'Other bills are unchanged');
+const edited={predictions:structuredClone(state.predictions)};
+edited.predictions.futureSeriesEdits={
+ [T.manualSeriesKey(house.id)]:{startsOn:'2026-11-10',amount:999,dayOffset:0}
+};
+let adjusted=C.materialize(snapshot,history,edited.predictions,T,P,90);
+assert.ok(adjusted.ledger.some(e=>e.date==='2026-11-10'&&e.amount===999));
+assert.ok(adjusted.ledger.some(e=>e.date==='2026-12-10'&&e.amount===175),
+ 'Specific estimate must win over an older recurring series amount edit');
+T.setScheduleEstimate(edited,house.id,{scope:'all',amount:160},asOf);
+adjusted=C.materialize(snapshot,history,edited.predictions,T,P,90);
+assert.ok(adjusted.ledger.some(e=>e.date==='2026-11-10'&&e.amount===160),
+ 'An all-future schedule estimate replaces a stale global amount edit');
+assert.ok(adjusted.ledger.some(e=>e.date==='2026-12-10'&&e.amount===175));
+
 b=C.materialize(snapshot,history,state.predictions,T,P,90);
 assert.deepEqual(b.ledger.filter(e=>e.date==='2026-12-10').map(e=>e.amount).sort((a,b)=>a-b),[175,220]);
 T.setScheduleEstimate(state,house.id,{scope:'all',amount:160},asOf);
