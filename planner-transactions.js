@@ -142,6 +142,17 @@ function scheduleCategory(name,state){
  if(!match)throw Error('Choose an existing schedule category or add it first');
  return match;
 }
+function setScheduleCategory(state,id,category){
+ const list=state?.predictions?.futureRecurringRules||[];
+ const rule=list.find(r=>String(r.id)===String(id));
+ if(!rule)throw Error('This schedule changed. Open the list again.');
+ const value=scheduleCategory(category,state);
+ const p=ensure(state);
+ const current=p.futureRecurringRules.find(r=>String(r.id)===String(id));
+ if(!current)throw Error('This schedule changed. Open the list again.');
+ current.category=value;
+ return {id:current.id,category:value};
+}
 function addScheduleCategory(state,name){
  const value=String(name||'').trim().replace(/\s+/g,' ');
  if(value.length<2||value.length>40||
@@ -707,7 +718,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
+ frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
  recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
