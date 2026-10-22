@@ -482,7 +482,9 @@ const {chromium,webkit}=require('playwright');
     'Calendar-only edits persist across reload');
    await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).click();
-   await page.locator('.transaction-detail [data-skip-future]').click();
+   assert.ok(await page.locator('.transaction-detail [data-remove-added]').count()>0,
+    'An individually added payment offers removal rather than a misleading skip');
+   await page.locator('.transaction-detail [data-remove-added]').click();
    assert.equal(await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).count(),0,
     'Skipping a selected occurrence removes it from the same balance forecast');
