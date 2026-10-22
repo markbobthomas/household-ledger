@@ -683,16 +683,13 @@ function detailHtml(bundle,s){
    '<div><span>Expected amount</span><strong>'+cash(row.amount)+'</strong></div></div>'+
    '<p class="transaction-edit-impact" data-edit-impact>'+
    'This payment only: only this occurrence will change. Future scheduled payments stay as they are.</p>';
-  const schedule=rule?'<div class="transaction-related"><strong>Connected schedule: '+
-   escapeHTML(rule.scheduleLabel||rule.merchant||row.merchant)+'</strong>'+
-   '<span>'+escapeHTML(rule.frequency||'Repeating')+' · Change future dates, estimates and historical links in its schedule.</span>'+
-   '<div><button type="button" class="btn" data-open-linked-schedule="'+escapeHTML(rule.id)+'">Edit schedule →</button>'+
-   '<button type="button" class="btn" data-open-linked-schedule="'+escapeHTML(rule.id)+'" data-schedule-panel="estimate">Set amount estimate →</button></div></div>':'';
+  // Standalone or automatically inferred predictions have no confirmed rule
+  // yet; the SAME plan panel permits a one-time edit or creation of a rule.
   return detailShell(row.merchant,
-   'Predicted '+(linked?'linked transfer':row.type==='income'?'deposit':'transaction')+
+   (row.seriesKey?'Detected repeating plan':'One-time payment plan')+
    ' · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
-   impact+relatedCardCalculation(bundle,row)+editorFor(row,s,bundle?.rows||[])+schedule,
-   'PREDICTION · EDITABLE');
+   impact+relatedCardCalculation(bundle,row)+editorFor(row,s,bundle?.rows||[]),
+   row.seriesKey?'REPEATING · NOT YET CONFIRMED':'ONE-TIME PLAN · FORECAST');
  }
  if(transactionDetail.kind==='actual'){
   const row=(bundle?.rows||lastHistoryRows).find(t=>String(t.id)===String(transactionDetail.id)&&
@@ -713,16 +710,40 @@ function detailHtml(bundle,s){
  }
  if(transactionDetail.kind==='schedule'){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===transactionDetail.id);
-  const form=document.querySelector(transactionDetail.mode==='new'?'[data-schedule-new-form]':
-   transactionDetail.mode==='estimate'?'[data-schedule-estimate-form]':'[data-schedule-edit-form]');
-  const formHtml=form?.outerHTML||'<p>Schedule editor not available. Close and reopen it.</p>';
-  form?.remove();
-  return detailShell(transactionDetail.mode==='new'?'New payment schedule':rule?.scheduleLabel||rule?.merchant||'Payment schedule',
-   transactionDetail.mode==='new'?'Create an independent recurring payment':
-    'Edit only this saved schedule; its bank history remains untouched.',
-   '<p class="transaction-detail-help">Schedule edits change future forecast occurrences. Actual bank transactions are never changed.</p>'+
-    formHtml+scheduleOccurrencesHtml(bundle,s,rule),
-   'CONFIRMED SCHEDULE · FORECAST ONLY');
+  const isNew=transactionDetail.mode==='new',picked=transactionDetail.selectedKey||'';
+  const edit=document.querySelector(isNew?'[data-schedule-new-form]':'[data-schedule-edit-form]'),
+   estimate=document.querySelector('[data-schedule-estimate-form]');
+  const editHtml=edit?.outerHTML||'<p>Schedule details are temporarily unavailable. Close and reopen the plan.</p>',
+   estimateHtml=estimate?.outerHTML||'';
+  edit?.remove();estimate?.remove();
+  const account=rule?activeAccounts(s).find(a=>String(a.id)===String(rule.accountId||rule.fromAccountId)):null;
+  const info=!isNew&&rule?'<div class="plan-summary">'+
+   '<div><small>Repeats</small><strong>'+escapeHTML(rule.frequency||'Recurring')+'</strong></div>'+
+   '<div><small>Default amount</small><strong>'+cash(rule.amount)+'</strong></div>'+
+   '<div><small>Account</small><strong>'+escapeHTML(account?.name||rule.accountId||rule.fromAccountId||'Account')+'</strong></div>'+
+   '<div><small>Payee</small><strong>'+escapeHTML(rule.merchant||'')+'</strong></div></div>':'';
+  const settings='<details class="plan-settings" data-plan-settings'+(isNew||!picked&&transactionDetail.mode!=='estimate'?' open':'')+'>'+
+   '<summary><span>Schedule settings</span><small>Default dates, amount, account and repeat frequency</small></summary>'+
+   '<div class="plan-settings-body"><p>Saving these settings updates the repeating plan. '+
+    'Changes to one dated payment belong in the payment list below.</p>'+editHtml+'</div></details>';
+  const estimates=!isNew&&estimateHtml?'<details class="plan-settings plan-estimates" data-plan-estimates'+
+   (transactionDetail.mode==='estimate'?' open':'')+'><summary><span>Estimate amounts over a date range</span>'+
+   '<small>Override part of the forecast, without changing another bill</small></summary>'+
+   '<div class="plan-settings-body">'+estimateHtml+'</div></details>':'';
+  return detailShell(isNew?'New payment plan':rule?.scheduleLabel||rule?.merchant||'Payment plan',
+   isNew?'Create a separate, repeating payment plan':
+    picked?'One plan · editing a single scheduled payment':
+    'One plan · edit the repeating rule or a specific payment below',
+   '<p class="transaction-detail-help">'+(isNew?
+    'Creating a plan generates future payments. You can modify each payment afterward.':
+    'The schedule is the starting point. Specific payments can have their own exceptions. '+
+    'All changes affect forecasts only; actual bank transactions remain read-only.')+'</p>'+
+    info+(picked?'<div class="plan-selected-guide"><strong>One payment selected.</strong>'+
+     ' This change will not update the other occurrences.</div>':'')+
+    // Keep selected payment visible near the top, not in a second modal.
+    (isNew?'':scheduleOccurrencesHtml(bundle,s,rule,picked))+
+    settings+estimates,
+   isNew?'NEW PLAN · FORECAST ONLY':'PAYMENT PLAN · EDITABLE');
  }
  return '';
 }
