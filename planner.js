@@ -722,6 +722,8 @@ function detailHtml(bundle,s){
    '<div><small>Default amount</small><strong>'+cash(rule.amount)+'</strong></div>'+
    '<div><small>Account</small><strong>'+escapeHTML(account?.name||rule.accountId||rule.fromAccountId||'Account')+'</strong></div>'+
    '<div><small>Payee</small><strong>'+escapeHTML(rule.merchant||'')+'</strong></div></div>':'';
+  const notice=scheduleNotice?'<p class="plan-save-confirmation" role="status">'+
+   escapeHTML(scheduleNotice)+'</p>':'';
   const settings='<details class="plan-settings" data-plan-settings'+(isNew||!picked&&transactionDetail.mode!=='estimate'?' open':'')+'>'+
    '<summary><span>Schedule settings</span><small>Default dates, amount, account and repeat frequency</small></summary>'+
    '<div class="plan-settings-body"><p>Saving these settings updates the repeating plan. '+
@@ -734,7 +736,7 @@ function detailHtml(bundle,s){
    isNew?'Create a separate, repeating payment plan':
     picked?'One plan · editing a single scheduled payment':
     'One plan · edit the repeating rule or a specific payment below',
-   '<p class="transaction-detail-help">'+(isNew?
+   notice+'<p class="transaction-detail-help">'+(isNew?
     'Creating a plan generates future payments. You can modify each payment afterward.':
     'The schedule is the starting point. Specific payments can have their own exceptions. '+
     'All changes affect forecasts only; actual bank transactions remain read-only.')+'</p>'+
@@ -1900,10 +1902,12 @@ document.addEventListener('submit',async e=>{
  try{
   const fields=Object.fromEntries(new FormData(form)),
    T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s);
+  let savedPlanId='';
   if(form.hasAttribute('data-schedule-new-form')){
-   await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
+   const saved=await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
     model.records(state()),fields.historyExampleId?[fields.historyExampleId]:[]));
-   scheduleNotice='Independent payment schedule created. Other schedules are unchanged.';
+   savedPlanId=saved.id;
+   scheduleNotice='Plan created. All its upcoming payments are shown below.';
   }else if(form.hasAttribute('data-schedule-edit-form')){
    const id=form.dataset.scheduleEditForm,r=(state().predictions?.futureRecurringRules||[]).find(x=>x.id===id);
    if(!r)throw Error('This schedule changed. Open it again.');
@@ -1913,13 +1917,21 @@ document.addEventListener('submit',async e=>{
     accountId:r.accountId,originalMerchant:r.originalMerchant||r.merchant,
     originalType:r.originalType||r.type,sourceAmount:r.matchAmount||r.amount,date:r.sourceAnchorDate||r.anchorDate};
    await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,reference,model.records(state()),[]));
-   scheduleNotice='Schedule updated. All matching projected dates recalculated.';
+   savedPlanId=id;
+   scheduleNotice='Schedule saved. Individual exceptions remain separate.';
   }else{
    await commitForecastChange(()=>T.setScheduleEstimate(state(),form.dataset.scheduleEstimateForm,fields,s.asOf));
-   scheduleNotice='Amount estimate applied only to the selected schedule and range.';
+   savedPlanId=form.dataset.scheduleEstimateForm;
+   scheduleNotice='Estimate saved for this plan and date range only.';
   }
-  scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';transactionDetail=null;
-  if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
+  schedulePreset=null;scheduleRemoveTarget='';
+  if(transactionDetail?.kind==='schedule'&&savedPlanId){
+   scheduleMode='edit';scheduleTarget=savedPlanId;
+   transactionDetail={kind:'schedule',id:savedPlanId,mode:'edit',selectedKey:''};
+  }else{
+   scheduleMode='';scheduleTarget='';transactionDetail=null;
+   if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
+  }
   render();
  }catch(error){if(submit)submit.disabled=false;
   scheduleNotice=String(error.message||error);
