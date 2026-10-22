@@ -85,6 +85,10 @@ const linkedUtility=T.historicalScheduleMatches(utilityHistory[1],accounts,
 assert.equal(linkedUtility.length,1);
 assert.equal(linkedUtility[0].id,utility.id,
  'Variable bill with different amount resolves to the confirmed schedule');
+assert.equal(T.historicalScheduleMatches({
+ ...utilityHistory[0],type:'transfer',cashDirection:null,merchant:'Provider renamed ACH'
+},accounts,utilityState.predictions.futureRecurringRules)[0].id,utility.id,
+ 'Explicitly linked bank ID remains authoritative if Plaid renames or reclassifies it');
 const beforeGuard=JSON.stringify(utilityState.predictions);
 assert.throws(()=>T.defineRecurring(utilityState,{
  date:'2026-11-20',merchant:'Valley Electric',amount:168,
