@@ -92,6 +92,19 @@ const equalRows=C.materialize(snapshot,history,equalValue,T,P,90).ledger
  .filter(e=>e.date==='2026-11-10');
 assert.deepEqual(equalRows.map(e=>e.amount),[160,160],
  'Two independent schedules still count twice even with identical amounts and dates');
+const stopped={predictions:structuredClone(state.predictions)};
+T.stopRecurrence(stopped,{kind:'event',recurringRuleId:house.id,accountId:'checking',
+ type:'expense',merchant:'Water — House',date:'2026-11-10'});
+assert.equal(stopped.predictions.futureRecurringRules.length,1,
+ 'Stop repeating affects exactly one confirmed same-payee bill');
+assert.equal(stopped.predictions.futureRecurringRules[0].id,garden.id,
+ 'Stopping house water does not delete or exclude its separate garden payment');
+assert.ok(Object.keys(stopped.predictions.futureRecurrenceExclusions||{}).some(key=>
+ key.startsWith('manual-rule|')),
+ 'An independent same-payee bill gets a rule-specific exclusion, not a merchant-wide blacklist');
+const siblingForecast=C.materialize(snapshot,history,stopped.predictions,T,P,90);
+assert.ok(siblingForecast.ledger.some(e=>e.date==='2026-11-10'&&e.amount===220),
+ 'The second same-merchant bill still reduces the cash forecast');
 T.removeScheduleEstimate(state,house.id,0);
 assert.equal(T.scheduleAmount(state.predictions.futureRecurringRules.find(r=>r.id===house.id),'2026-12-10').amount,160);
 T.removeRecurring(state,house.id);
