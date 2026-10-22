@@ -630,3 +630,7 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 @media(max-width:380px){
  .calendar-check-rows{grid-template-columns:1fr}
 }
+
+.calendar-tap-edit{width:100%;border:0;border-bottom:1px solid #e9edf3;background:transparent;text-align:left;cursor:pointer;color:inherit}
+.calendar-tap-edit:hover,.calendar-tap-edit:focus-visible{background:#f1f6fb;outline-offset:-2px}
+.calendar-tap-edit>.calendar-item-edit{display:inline-flex;align-items:center}
