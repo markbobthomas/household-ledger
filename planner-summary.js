@@ -285,7 +285,7 @@ function monthlyPredictions(state){
   (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>
     predictionEntry(date,e,index,credit,date===calendarDate)).join('')+
    '</div>':'<p class="calendar-empty">No upcoming predicted deposits or withdrawals for this account during the remaining forecast days this month.</p>')+
-   unplanned+'</details>';
+   '</details>'+unplanned;
 }
 function calendarGrid(){
  const state=calendarContext;
