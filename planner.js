@@ -796,7 +796,8 @@ function openInlineTransaction(button){
    '<div class="future-form-actions"><button class="btn primary" type="submit">Save repeating plan</button>'+
    '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
  const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
-  helper+editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+settings+'</div>';
+  helper+relatedCardCalculation(bundle,row)+
+  editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+settings+'</div>';
  wrapper.insertAdjacentHTML('beforeend',html);
  button.setAttribute('aria-expanded','true');
  wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
@@ -1466,6 +1467,10 @@ document.addEventListener('click',async e=>{
   closeInlineTransaction();return;
  }
   const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
+ if(opening?.hasAttribute('data-open-card-payment')){
+  const adjacent=opening.closest('[data-inline-row-wrapper]')?.querySelector('[data-open-transaction]');
+  if(adjacent&&openInlineTransaction(adjacent))return;
+ }
  if(opening?.hasAttribute('data-open-transaction')&&openInlineTransaction(opening))return;
  if(opening){
   if(opening.hasAttribute('data-open-transaction'))
