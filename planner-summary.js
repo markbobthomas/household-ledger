@@ -364,7 +364,7 @@ function calendarGrid(){
     '>Start</button>'+
    '<button type="button" data-calendar-nav="1"'+
     (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
-  '</div>'+coverageChecklist()+'<div class="calendar-grid" role="group" aria-label="'+
+  '</div>'+'<div class="calendar-grid" role="group" aria-label="'+
    esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
@@ -457,17 +457,13 @@ function issues(bundle,accounts,chosen,prefs,ready){
 }
 function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
- const choices=[30,60,90,120,180,360].map(n=>
-  '<button type="button" data-summary-days="'+n+'" aria-pressed="'+(days===n)+
-  '" class="summary-range'+(days===n?' active':'')+'">'+n+'d</button>').join('');
  const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
   (String(a.id)===String(chosen.id)?' selected':'')+'>'+
   esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
   '</option>').join('');
  const lead='<div class="summary-heading"><span class="summary-eyebrow">YOUR FORECAST</span>'+
   '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Summary account">'+
-  options+'</select></label></div>'+
-  '<div class="summary-ranges" role="group" aria-label="Forecast period">'+choices+'</div>';
+  options+'</select></label></div>';
  const points=getPoints(derived,snapshot.asOf,days);
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
@@ -504,20 +500,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   cushion=Number(prefs?.cashCushion??500),below=!credit&&low<cushion,
   negative=!credit&&low<0;
  selected=lowIndex;
- const coverageTool=root.HouseholdPlannerCoverage;
- const coverage=coverageTool?.analyze?.({snapshot,chosen,bundle,prefs,days,accounts,ready});
- calendarContext.coverage=coverage;
- const coverageHtml=coverage?coverageTool.render(coverage):'';
  const pin=locate(lowIndex),
-  reviews=reviewDetails(bundle,accounts,chosen,prefs,ready,coverage),
-  warnings=reviews.length,
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
-  emptySchedule=moves===0,
-  quality=emptySchedule?
-   '<strong class="summary-risk">No dated predictions yet</strong> · The balance may be incomplete.':
-   warnings?
-   '<strong class="summary-risk">Needs review</strong> · Some payments may be missing or uncertain.':
-   '<strong class="summary-ok">No flagged issues</strong> · Not a guarantee that every expense is captured.';
+  emptySchedule=moves===0;
  const zero=!credit&&floor<0&&ceil>0?
   '<line x1="'+plotLeft+'" x2="'+plotRight+'" y1="'+y(0).toFixed(2)+'" y2="'+y(0).toFixed(2)+
   '" stroke="#c68687" stroke-width="1" stroke-dasharray="4 7"/>':'';
@@ -525,18 +510,17 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers"><div class="summary-current"><div class="summary-overline">'+(credit?'Reported card debt':'Available now')+' · '+esc(shortDate(snapshot.asOf))+'</div><strong>'+money(first.balance)+'</strong></div><div><div class="summary-overline">'+
-  (credit?'Lowest estimated card debt':'Lowest projected balance')+'</div>'+
-  '<div class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</div>'+
-  '<div class="summary-date">'+esc(dateLabel(lowDay.date))+
-  (negative?' · below $0':below?' · below your cash cushion':'')+'</div></div>'+
-  '<div class="summary-end"><span>End of '+days+' days</span><strong>'+money(last.balance)+'</strong>'+
-  '<small>'+esc(shortDate(last.date))+'</small></div><div class="summary-coverage-metric"><span>Payment checklist</span>'+
-  (warnings?'<button type="button" data-summary-review-toggle aria-expanded="'+reviewOpen+
-   '" class="summary-review-trigger">'+warnings+' to review <span>⌄</span></button>':
-   '<strong>No flagged gaps</strong>')+'</div></div>'+
-  reviewPanel(reviews)+calendarGrid()+'</section>'+
-  '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend &amp; coverage checks</summary>'+
+  '<div class="summary-numbers"><div class="summary-minimum">'+
+  '<div class="summary-overline">'+(credit?'Lowest modeled card debt':'Lowest projected balance')+
+  ' · next 3 years</div>'+
+  '<strong class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
+  '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
+  '">On '+esc(dateLabel(lowDay.date))+' · View day →</button>'+
+  (negative?'<small class="summary-low-warning">Below $0</small>':
+   below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
+  '</div></div>'+
+  calendarGrid()+'</section>'+
+  '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend (3-year illustration)</summary>'+
   '<section class="summary-stage summary-legacy">'+
   '<div class="summary-plot"><svg data-summary-plot role="img" tabindex="0" viewBox="0 0 '+plotWidth+
   ' 294" aria-label="Interactive '+days+'-day forecast. Use arrow keys or tap the curve to inspect a day.">'+
@@ -560,15 +544,14 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   'Spendable cash · From scheduled deposits and withdrawals')+' · '+
   moves+' dated movement'+(moves===1?'':'s')+
   '<span>Tap or move along the curve to explore a day</span></div></section>'+
-  coverageHtml+'</details>'+
-  '<section class="summary-trust" aria-label="Forecast coverage"><div class="summary-trust-line">'+
-  '<strong>Forecast coverage</strong><span>'+quality+'</span>'+
-  (emptySchedule?'<button type="button" data-view="transactions" class="summary-review-link">Add predictions →</button>':
-   warnings?'<button type="button" data-summary-review-toggle aria-expanded="'+reviewOpen+
-    '" class="summary-review-link">Show '+warnings+' issues →</button>':'')+
-  '</div><p>Includes scheduled and detected recurring payments; excludes unplanned everyday spending.'+
-  (days>=120?' Longer-range forecasts are less certain.':'')+
-  '</p></section></div>';
+  '</details>'+
+  '<section class="summary-trust" aria-label="Forecast assumptions">'+
+  '<strong>Illustration, not a guaranteed minimum.</strong>'+
+  '<p>Based on current balances and dated predicted payments repeated for up to 3 years. '+
+  'Future pay, bills and card payments may change; everyday unplanned spending is excluded. '+
+  'A low estimate far in the future is especially uncertain.</p>'+
+  (emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a schedule →</button>':'')+
+  '</section></div>';
 }
 function setDay(index){
  const svg=document.querySelector('[data-summary-plot]');
@@ -598,6 +581,12 @@ function byPointer(e){
 }
 document.addEventListener('pointermove',e=>{
  if(e.pointerType!=='touch')byPointer(e);
+});
+document.addEventListener('click',e=>{
+ const low=e.target.closest?.('[data-summary-low-date]');
+ if(low){showCalendar(low.dataset.summaryLowDate);
+  document.querySelector('[data-calendar-stage]')?.scrollIntoView?.({block:'start',behavior:'auto'});
+ }
 });
 document.addEventListener('click',byPointer);
 // Keep the optional month drawer open across ordinary forecast re-renders,
