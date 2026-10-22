@@ -120,7 +120,7 @@ function postedDay(date){
    action=matches.length===1?'View schedule':matches.length>1?'Choose schedule':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row"><span class="calendar-transaction-name">'+
    esc(t.merchant||'Bank transaction')+
-   '<small>'+(t.pending?'Pending bank transaction':'Posted bank transaction')+'</small></span>'+
+   '<small>'+(t.pending?'Pending':'Posted')+'</small></span>'+
    '<strong class="'+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
    '</strong><button type="button" class="calendar-item-edit" data-calendar-history-plan="'+
    esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">'+action+'</button></div>';
