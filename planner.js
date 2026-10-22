@@ -1690,7 +1690,7 @@ document.addEventListener('click',async e=>{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.skip(state(),row.key,
     {label:row.merchant,date:row.date,accountId:row.accountId||row.fromAccountId,
      toAccountId:row.toAccountId}));
-   editingKey='';transactionDetail=null;transactionNotice='Skipped '+row.merchant+' on '+dateLong(row.date)+'.';render();
+   editingKey='';restoreScheduleAfterOccurrence();transactionNotice='Skipped '+row.merchant+' on '+dateLong(row.date)+'.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
@@ -1698,7 +1698,7 @@ document.addEventListener('click',async e=>{
  if(restore){
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.restore(state(),restore.dataset.restoreFuture));
-   editingKey='';transactionDetail=null;transactionNotice='Forecast occurrence restored.';render();
+   editingKey='';restoreScheduleAfterOccurrence();transactionNotice='Forecast occurrence restored.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
@@ -1706,7 +1706,7 @@ document.addEventListener('click',async e=>{
  if(removeAdded){
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeAdded(state(),removeAdded.dataset.removeAdded));
-   editingKey='';transactionDetail=null;transactionNotice='Added transaction removed.';render();
+   editingKey='';restoreScheduleAfterOccurrence();transactionNotice='Added transaction removed.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
@@ -1717,7 +1717,7 @@ document.addEventListener('click',async e=>{
   if(!row){setNotice('The recurring schedule changed. Open Predictions and try again.');return}
   try{
    const result=await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),row));
-   editingKey='';transactionDetail=null;transactionNotice=result.autoSeries?
+   editingKey='';restoreScheduleAfterOccurrence();transactionNotice=result.autoSeries?
     'Removed only the inferred '+row.merchant+' series. Confirmed income schedules were preserved. Restore in Settings.':
     'Marked '+row.merchant+' as not recurring. Only its matching schedule was removed. Restore in Settings or History.';
    render();
@@ -1728,7 +1728,7 @@ document.addEventListener('click',async e=>{
  if(resetRecurring){
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.resetSeries(state(),resetRecurring.dataset.resetSeries));
-   editingKey='';transactionDetail=null;transactionNotice='Recurring schedule restored to its original forecast.';render();
+   editingKey='';restoreScheduleAfterOccurrence();transactionNotice='Recurring schedule restored to its original forecast.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
@@ -2011,7 +2011,7 @@ document.addEventListener('submit',async e=>{
     await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
     transactionNotice='Updated only this predicted payment.';
    }
-   editingKey='';transactionDetail=null;
+   editingKey='';restoreScheduleAfterOccurrence();
   }else if(form.hasAttribute('data-future-new-form')){
    if(fields.frequency&&fields.frequency!=='once'){
     await commitForecastChange(()=>planner.defineRecurring(state(),fields,accounts,asOf,
