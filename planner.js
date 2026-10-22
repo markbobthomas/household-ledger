@@ -639,26 +639,28 @@ function scheduleOccurrencesHtml(bundle,s,rule,selectedKey=''){
  if(!rule)return '';
  const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id)),
   selected=occurrences.find(r=>r.key===selectedKey);
- const rows=occurrences.map(row=>'<button type="button" class="schedule-occurrence'+
-  (row.key===selectedKey?' selected':'')+'" data-select-plan-payment="'+
-  escapeHTML(row.key)+'" data-schedule-occurrence-key="'+escapeHTML(row.key)+'" aria-pressed="'+
-  (row.key===selectedKey?'true':'false')+'">'+
-  '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
-  '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
-   '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
-    row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
-  '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">Edit →</span></button>').join('');
- const selectedForm=selected?'<div class="plan-occurrence-editor" data-plan-occurrence-editor>'+
-  '<div class="plan-section-label"><strong>Editing just this payment</strong>'+
-   '<span>'+escapeHTML(dayLabel(selected.date))+' · '+cash(selected.amount)+'</span></div>'+
-  '<p>You can change the date, amount or account for this occurrence. The other '+
-   'payments in this plan stay exactly as they are.</p>'+
-  editorFor(selected,s,bundle?.rows||[],{oneOnly:true})+'</div>':'';
+ const rows=occurrences.map(row=>{
+  const picked=row.key===selectedKey;
+  const inline=picked?'<div class="plan-occurrence-editor" data-plan-occurrence-editor>'+
+   '<div class="plan-section-label"><strong>Edit this payment here</strong>'+
+    '<span>'+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+'</span></div>'+
+   '<p>Changes here apply to this date only; the other payments remain as scheduled.</p>'+
+   editorFor(row,s,bundle?.rows||[],{oneOnly:true})+'</div>':'';
+  return '<div class="schedule-occurrence-entry">'+
+   '<button type="button" class="schedule-occurrence'+(picked?' selected':'')+
+   '" data-select-plan-payment="'+escapeHTML(row.key)+
+   '" data-schedule-occurrence-key="'+escapeHTML(row.key)+'" aria-expanded="'+picked+'">'+
+   '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+   '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
+    '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
+     row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
+   '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">'+
+   (picked?'Close −':'Edit ↓')+'</span></button>'+inline+'</div>';
+ }).join('');
  return '<section class="schedule-occurrence-section" aria-label="Upcoming individual payments">'+
   '<div class="schedule-occurrence-heading"><h3>Individual upcoming payments</h3>'+
    '<span>'+occurrences.length+' in next '+horizon+' days</span></div>'+
   '<p>Select a date to adjust just that payment. Schedule settings and all other dates stay unchanged.</p>'+
-  selectedForm+
   (rows?'<div class="schedule-occurrence-list">'+rows+'</div>':
    '<p class="schedule-occurrence-empty">No remaining payments for this schedule within the selected forecast. '+
     'A payment may have already posted, been skipped, or be outside the forecast window.</p>')+
@@ -1419,7 +1421,8 @@ document.addEventListener('click',async e=>{
  }
  const selectedPlanPayment=e.target.closest?.('[data-select-plan-payment]');
  if(selectedPlanPayment&&transactionDetail?.kind==='schedule'){
-  transactionDetail.selectedKey=selectedPlanPayment.dataset.selectPlanPayment;
+  const chosen=selectedPlanPayment.dataset.selectPlanPayment;
+  transactionDetail.selectedKey=transactionDetail.selectedKey===chosen?'':chosen;
   transactionDetail.mode='edit';
   render();return;
  }
