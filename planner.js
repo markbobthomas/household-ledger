@@ -762,7 +762,9 @@ function detailHtml(bundle,s){
    (planStopPending===rule.id?'Confirm stop repeating':'Stop repeating')+'</button></div>':'';
   // Legacy date-range estimates remain honored by the forecast engine, but
   // the editor only offers one payment or the entire repeating schedule.
-  return detailShell(isNew?'New payment plan':rule?.scheduleLabel||rule?.merchant||'Payment plan',
+  return detailShell(isNew?'New payment plan':(scheduleListNumber(rule?.id)?
+   'Schedule '+scheduleListNumber(rule.id)+' · ':'')+
+   (rule?.scheduleLabel||rule?.merchant||'Payment plan'),
    isNew?'Create a separate, repeating payment plan':
     picked?'One plan · editing a single scheduled payment':
     'One plan · edit the repeating rule or a specific payment below',
