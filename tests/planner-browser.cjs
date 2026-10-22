@@ -517,6 +517,7 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[data-schedule-card]').filter({hasText:'Water - House'})
     .first().innerText(),/175/,'A dated forecast estimate is saved only to that schedule');
    await go('summary');
+   await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-10"]').click();
    assert.ok(await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).count()>0);
