@@ -173,7 +173,9 @@ function recurrenceDates(rule,asOf,through){
  if(!validDate(start)||!frequencies.has(rule.frequency))return dates;
  if(['weekly','biweekly','every-4-weeks'].includes(rule.frequency)){
   const step=rule.frequency==='weekly'?7:rule.frequency==='biweekly'?14:28,n=Math.max(0,Math.ceil(daysBetween(asOf,start)/step));
-  for(let i=n;i<n+60;i++){const d=shift(start,i*step);if(d>through)break;if(d>asOf&&d>=start)dates.push(d)}
+  for(let i=n;i<n+Math.ceil(Math.max(0,daysBetween(through,asOf))/step)+2;i++){
+   const d=shift(start,i*step);if(d>through)break;if(d>asOf&&d>=start)dates.push(d)
+  }
  }else{
   const spacing={monthly:1,'twice-monthly':1,quarterly:3,semiannual:6,annual:12}[rule.frequency];
   // A saved monthly bill should not expire just because its anchor is old.
