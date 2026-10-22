@@ -2,7 +2,7 @@
    No new financial data source, confidence score, or automatic prediction is invented. */
 (function(root){
 'use strict';
-let series=[],trendSeries=[],selected=0,trendDays=90,trendContext=null;
+let series=[],trendSeries=[],selected=0,trendDays=1095,trendContext=null;
 const range=(n,a,b)=>Math.max(a,Math.min(b,n));
 const plotWidth=920,plotLeft=20,plotRight=900,top=18,bottom=274;
 const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unverified';
@@ -534,6 +534,10 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend (3-year illustration)</summary>'+
   '<section class="summary-stage summary-legacy">'+
+  '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+
+  [10,30,90,180,360,1095].map(n=>'<button type="button" data-trend-days="'+n+
+   '" aria-pressed="'+(n===trendDays)+'" class="summary-trend-range'+(n===trendDays?' active':'')+
+   '">'+(n===1095?'3 years':n+'d')+'</button>').join('')+'</div>'+
   '<div class="summary-plot"><svg data-summary-plot role="img" tabindex="0" viewBox="0 0 '+plotWidth+
   ' 294" aria-label="Interactive '+days+'-day forecast. Use arrow keys or tap the curve to inspect a day.">'+
   '<defs><linearGradient id="summary-blue-fill" x1="0" y1="0" x2="0" y2="1">'+
