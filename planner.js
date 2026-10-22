@@ -295,9 +295,18 @@ function cardStatementPreview(s,bundle,cardId){
       (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
      '<p>No settled card purchases or refunds found for this cycle.</p>')+
     '</details>'+
-   (p.pendingExcluded?'<p class="card-preview-caveat">'+p.pendingExcluded+
+   '<details class="card-scheduled-transactions"><summary>Review '+(p.predictedTransactions||[]).length+
+    ' specifically scheduled card transactions in this period</summary>'+
+    ((p.predictedTransactions||[]).length?p.predictedTransactions.map(t=>
+     '<div class="card-actual-line"><span>'+escapeHTML(dayLabel(t.date))+
+      ' · '+escapeHTML(t.merchant)+'</span><strong>'+
+      (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
+     '<p>No future dated card transactions are scheduled for this statement.</p>')+
+    '</details>'+
+      (p.pendingExcluded?'<p class="card-preview-caveat">'+p.pendingExcluded+
     ' pending card transaction(s) excluded until posted.</p>':'')+
-   '<p class="card-preview-caveat">'+(p.confirmed?
+   '<p class="card-preview-caveat">No average historic spending allowance or generic card-spending guess is added to this calculation.</p>'+
+      '<p class="card-preview-caveat">'+(p.confirmed?
     'Issued statement amount supplied by you. Actual card purchases are listed separately.':
     'The actual net charges are based on retrieved posted bank transactions. The payment estimate can differ due to prior balances, fees, interest or unplanned future card purchases.')+
    ' Future autopay dates are user-entered plans; actual dates become known when the bank posts the payment.</p>'+

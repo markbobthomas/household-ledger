@@ -36,7 +36,11 @@ const forecast=[
  {id:'bank-charge',date:'2026-10-23',accountId:'checking',type:'expense',amount:700,merchant:'Not card'}
 ];
 const before=JSON.stringify(posted),beforeState=JSON.stringify(state.transactions);
-const plan=Payments.build(snapshot,posted,forecast,state.predictions,{days:90});
+const previousBigBills=[
+ {id:'prior-aug',date:'2026-08-22',accountId:'visa',type:'expense',amount:1400,merchant:'Prior spending'},
+ {id:'prior-sep',date:'2026-09-22',accountId:'visa',type:'expense',amount:1200,merchant:'Prior spending'}
+];
+const plan=Payments.build(snapshot,[...posted,...previousBigBills],forecast,state.predictions,{days:90});
 const visa=plan.statements.filter(x=>x.cardId==='visa'),amex=plan.statements.filter(x=>x.cardId==='amex');
 assert.equal(visa.length,2,'Each configured card has future statement cycles within 90 days');
 assert.equal(visa[0].periodStart,'2026-10-19');
@@ -50,6 +54,16 @@ assert.equal(visa[0].actualPeriodNet,150,'Actual spending excludes future estima
 assert.equal(visa[0].postedTransactions.length,3,'Every settled charge and refund is auditable');
 assert.equal(visa[0].postedTransactions.reduce((sum,x)=>sum+(x.type==='refund'?-x.amount:x.amount),0),150);
 assert.equal(visa[0].periodComplete,false,'Open statement cycle has not finished');
+assert.equal(visa[0].historicalAverage,null,
+ 'No average monthly spending is added to a statement estimate');
+assert.deepEqual(visa[0].predictedTransactions.map(x=>x.merchant),['Subscription','Service']);
+const detail=plan.paymentDetails.find(x=>x.cardId==='visa'&&x.withdrawalDate==='2026-12-12');
+assert.equal(detail.calculated,200);
+assert.deepEqual(detail.postedTransactions.map(x=>x.id),['visa-grocery','visa-gas','visa-refund']);
+assert.deepEqual(detail.predictedTransactions.map(x=>x.amount),[20,30]);
+assert.equal(detail.calculated,detail.postedTransactions.reduce((v,t)=>v+(t.type==='refund'?-t.amount:t.amount),0)+
+ detail.predictedTransactions.reduce((v,t)=>v+(t.type==='refund'?-t.amount:t.amount),0));
+
 assert.equal(amex[0].postedTransactions.length,1,'Expenses are isolated to each card');
 assert.equal(visa[0].estimatedCharges,50);
 assert.equal(visa[0].pendingExcluded,1,'Pending charges are not silently presented as posted');

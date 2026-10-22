@@ -74,19 +74,14 @@ function inferPayment(card,accounts,records,asOf){
  if(recent.length!==1)return {...result,eligible:false,
   reason:recent.length>1?'Payments appear to use multiple funding accounts':
    'No reliable pair of monthly checking-to-card payments was found'};
- const match=recent[0],previous=net(shift(asOf,-59),shift(asOf,-30));
- const estimate=round(Math.max(lastThirty.amount,previous.count?previous.amount:0)),
-  debt=Number(card.current);
- if(!(estimate>0))return {...result,eligible:false,
-  reason:'No settled card purchases were found to support a positive payment estimate'};
+ const match=recent[0],debt=Number(card.current);
  if(card.current==null||!Number.isFinite(debt)||debt<=0)
-  return {...result,eligible:false,reason:'Current card debt is not positive and requires confirmation'};
+  return {...result,eligible:false,reason:'Current bank card balance is unavailable; confirm the account before forecasting a payment'};
  let next=plus(match.last.date,1);
  for(let i=0;i<18&&next<=asOf;i++)next=plus(next,1);
  return {...result,eligible:true,fromAccountId:match.id,
   fromName:accounts.find(a=>String(a.id)===match.id)?.name||match.id,
-  nextPaymentDate:next,estimatedAmount:estimate,firstAmount:round(Math.min(estimate,debt)),
-  lastPaymentDate:match.last.date,
+  nextPaymentDate:next,lastPaymentDate:match.last.date,
   reason:'Estimated from posted card charges and recurring matched bank transfers'};
 }
 function build(snapshot,records=[],expected=[],predictions={},options={}){
@@ -95,7 +90,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
  const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],historyStatements=[],suppressedExpectedIds=[],
-  cardEstimates=[];
+  cardEstimates=[],paymentDetails=[];
  for(const card of accounts.filter(credit))
   if(!ready(cards[card.id],card,accounts)){
    const candidate=cards[card.id]?{
@@ -104,31 +99,50 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    }:inferPayment(card,accounts,records,asOf);
    cardEstimates.push(candidate);
    if(candidate.eligible){
-    // Estimated monthly autopay is provisionally forecast when the bank
-    // demonstrates a unique, repeated linked card-payment history. Nothing
-    // is saved or claimed as the issuer's actual statement amount.
+    // An observed payment rhythm suggests a tentative date, NOT an amount.
+    // Include only individual posted charges, refunds and dated forecasts.
+    const own=t=>String(t.accountId||t.account||'')===String(card.id)||
+     String(t.accountId||t.account||'')===String(card.name);
+    const entries=(rows,start,end,postedOnly)=>rows.filter(t=>own(t)&&
+     t.date>=start&&t.date<=end&&['expense','refund'].includes(t.type)&&
+     (!postedOnly||!t.pending&&t.date<=asOf)).map(t=>({
+      id:String(t.id||''),date:t.date,merchant:String(t.merchant||t.description||'Card transaction'),
+      type:t.type,amount:round(Number(t.amount)),source:postedOnly?'posted':'scheduled'
+     })).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
     for(let when=candidate.nextPaymentDate,n=0;when<=through;when=plus(when,1),n++){
-     const amount=n===0?candidate.firstAmount:candidate.estimatedAmount;
+     const from=shift(plus(candidate.lastPaymentDate,n),1),
+      actual=entries(records,from,when,true),
+      scheduled=entries(expected,from,when,false).filter(t=>t.date>asOf),
+      raw=round([...actual,...scheduled].reduce((v,t)=>v+
+       (t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
+     const debt=Number(card.current),
+      chargeDelta=scheduled.reduce((v,t)=>v+(t.type==='refund'?-t.amount:t.amount),0),
+      maxAvailable=round(Math.max(0,debt+chargeDelta));
+     // The current card balance already includes posted activity.
+     // Avoid scheduling a transfer larger than observed debt plus dated charges.
+     const amount=round(Math.max(0,n===0?Math.min(raw,maxAvailable):raw));
      if(!(amount>0))continue;
-     // First card payment draws from existing card debt; later monthly
-     // payments require corresponding estimated future card charges.
-     if(n>0){
-      const chargeDay=shift(when,-15);
-      if(chargeDay>asOf)billEvents.push({
-       id:'card-spend-estimate|'+card.id+'|'+when,
-       accountId:String(card.id),date:chargeDay,amount,
-       type:'expense',merchant:card.name+' estimated monthly card spending',
-       source:'card-history-estimate',amountEstimate:'bank-activity-estimate'
-      });
-     }
-     plans.push({id:'card-history-estimate|'+card.id+'|'+when,
-      fromAccountId:candidate.fromAccountId,toAccountId:String(card.id),
+     const id='card-history-estimate|'+card.id+'|'+when;
+     plans.push({id,fromAccountId:candidate.fromAccountId,toAccountId:String(card.id),
       anchorDate:when,amount,frequency:'once',
-      merchant:card.name+' Credit-card payment (estimated)',
+      merchant:card.name+' Credit-card payment (transaction-based)',
       origin:'card-history-estimate',status:'estimated',
-      amountEstimate:'bank-activity-estimate'});
+      amountEstimate:'transaction-based'});
+     paymentDetails.push({id,cardId:String(card.id),cardName:card.name,
+      fromAccountId:candidate.fromAccountId,withdrawalDate:when,
+      periodStart:from,periodEnd:when,periodSource:'inferred-payment-window',
+      method:'statement',amount,calculated:round(Math.max(0,raw)),
+      postedTransactions:actual,predictedTransactions:scheduled,
+      confirmed:false,periodComplete:false,pendingExcluded:records.filter(t=>
+       own(t)&&t.pending&&t.date>=from&&t.date<=when).length,
+      caveat:'Payment dates are inferred from linked bank transfers; the issuer statement closing date is not known. '+
+       'Only posted charges and specifically dated predictions are counted.'});
     }
-    warnings.push(card.name+': provisional card withdrawals estimated from Plaid payment history. Confirm billing dates and statement amounts in Settings.');
+    if(!paymentDetails.some(p=>p.cardId===String(card.id))){
+     candidate.eligible=false;
+     candidate.reason='A recurring payment date was found, but no identifiable posted or scheduled card transactions support an amount';
+     warnings.push(card.name+': payment timing is inferred, but no posted or specifically scheduled charges justify a checking withdrawal. Review card billing dates.');
+    }else warnings.push(card.name+': transaction-based card payment uses only posted purchases and dated forecasts. Confirm payment and statement dates in Settings.');
    }else warnings.push(card.name+': credit-card setup required; no checking withdrawal can be predicted yet. '+
     candidate.reason+'. Set payment dates and funding account in Settings.');
   }
@@ -203,11 +217,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     issuedBalance:n===0&&validAmount(rule.lastStatementBalance)?round(rule.lastStatementBalance):null,
     source:'Reconstructed from available posted card transactions'});
   }
-  // A rolling historic cycle is a fallback estimate when future card activity
-  // is not predictable. It never adds on top of known future charges.
-  const priorCycles=historyStatements.filter(x=>x.cardId===id&&x.count>0).slice(-3);
-  const historicalAverage=priorCycles.length>=2?
-   round(priorCycles.reduce((total,x)=>total+x.netActivity,0)/priorCycles.length):null;
+  // Past cycles can inform review, but never inflate a payment with averages.
   let plannedCardPayments=0;
   // The statement is calculated from the *card's own* settled purchases and
   // refunds during each billing cycle, plus future explicitly predicted charges.
@@ -235,11 +245,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const futureCharges=round(predictedRows.reduce((sum,t)=>
     sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
    const calculated=round(Math.max(0,bankPurchases+futureCharges));
-   // When two or more historical cycles exist, fill gaps in incomplete
-   // future purchase predictions conservatively with observed net spending.
-   const estimatedCycle=round(Math.max(calculated,
-    historicalAverage===null?0:historicalAverage));
-   // Posted activity is an exact bank-ledger sum, distinct from both the
+    // Posted activity is an exact bank-ledger sum, distinct from both the
    // projection for a not-yet-closed period and the issued card statement.
    const actualPeriodNet=round(bankPurchases);
    const periodComplete=cycleClose<=asOf;
@@ -247,13 +253,15 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     id:String(t.id||''),date:t.date,merchant:String(t.merchant||t.description||'Card transaction'),
     type:t.type,amount:round(Number(t.amount))
    })).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
-   const legacy=!explicit;
-   // A known issued statement (optional) supersedes our calculation once.
-   // Legacy setups retain their old planning floor for subsequent cycles.
+   const predictedTransactions=predictedRows.map(t=>({
+    id:String(t.id||''),date:t.date,merchant:String(t.merchant||'Scheduled card transaction'),
+    type:t.type,amount:round(Number(t.amount)),source:t.source||'scheduled',
+    recurringRuleId:t.ruleId||t.recurringRuleId||null
+   })).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+   // Only a user-confirmed ISSUED amount after closing supersedes the
+   // posted-and-scheduled transaction sum.
    const confirmedFirst=n===0&&hasIssued&&cycleClose<=asOf;
-   const statementAmount=round(confirmedFirst?Number(rule.lastStatementBalance):
-    legacy&&hasIssued?Math.max(calculated,Number(rule.lastStatementBalance)):
-    periodComplete?calculated:estimatedCycle);
+   const statementAmount=round(confirmedFirst?Number(rule.lastStatementBalance):calculated);
    // Full current balance means the modeled card debt that would exist at
    // withdrawal, including forecast charges up to that date, minus any earlier
    // planned card payments. It is not a bank-issued payoff quotation.
@@ -293,10 +301,10 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
     dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
-    actualPeriodNet,periodComplete,postedTransactions,
+    actualPeriodNet,periodComplete,postedTransactions,predictedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
-    historicalAverage,fullBalanceEstimate:fullAmount,
+    historicalAverage:null,fullBalanceEstimate:fullAmount,
     autopayEnabled:autopay,alreadyPaid:paid,actualPayments:postedForCycle,
     actualPaymentAmount:postedPaymentTotal,actualPaymentDate:postedForCycle[0]?.date||null,
     lastPostedPayment:recentPostedPayment,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
@@ -309,6 +317,14 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay',
      merchant:card.name+' Credit-card payment (autopay)',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
+    paymentDetails.push({id:plan.id,cardId:id,cardName:card.name,
+     fromAccountId:from.id,withdrawalDate:due,
+     periodStart:cycleStart,periodEnd:cycleClose,periodSource:'configured-statement',
+     method,amount,calculated,postedTransactions,predictedTransactions,
+     confirmed:confirmedFirst,issuedAmount:confirmedFirst?Number(rule.lastStatementBalance):null,
+     periodComplete,pendingExcluded:pendingRows.length,
+     caveat:method==='statement'?'This statement estimate uses identified posted and scheduled card activity only.':
+      'The selected payment method changes the transfer amount; identified card activity remains separately visible.'});
     plannedCardPayments=round(plannedCardPayments+amount);
     obligations.push({id:plan.id,date:due,amount,fromAccountId:from.id,
      merchant:card.name+' autopay',kind:'card_payment',confidence,cardId:id});
@@ -352,7 +368,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   }
  }
  return {plans,billEvents,suppressedExpectedIds,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
-  cardEstimates,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
+  cardEstimates,paymentDetails,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
 const api={build,plus,closeFor,ready,inferPayment};
 root.HouseholdPaymentObligations=api;

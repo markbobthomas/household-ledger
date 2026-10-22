@@ -18,7 +18,7 @@ function getPoints(derived,asOf,days){
 /* Daily calendar uses ONLY the same per-account daily projection and its
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
-let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false;
+let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false,cardBreakdownId='';
 const monthName=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',
  {month:'long',year:'numeric',timeZone:'UTC'});
 const signed=(e,card)=>card?
@@ -151,6 +151,49 @@ function coverageChecklist(){
   '</strong><small>Tap a payment to inspect</small></div>'+
   '<div class="calendar-check-rows">'+rows+'</div></div>';
 }
+function paymentDetail(event){
+ const id=String(event?.transferGroupId||'');
+ return calendarContext?.paymentDetails?.find(x=>String(x.id)===id)||null;
+}
+function paymentBreakdown(){
+ if(!cardBreakdownId)return '';
+ const d=calendarContext?.paymentDetails?.find(x=>String(x.id)===cardBreakdownId);
+ if(!d)return '';
+ const line=(t)=>'<div class="card-breakdown-line"><span>'+esc(shortDate(t.date))+
+  ' · '+esc(t.merchant)+(t.type==='refund'?' (refund)':'')+'</span><strong>'+
+  (t.type==='refund'?'−':'')+money(t.amount)+'</strong></div>';
+ const posted=d.postedTransactions||[],scheduled=d.predictedTransactions||[],
+  net=list=>Math.round(list.reduce((n,t)=>n+(t.type==='refund'?-1:1)*Number(t.amount),0)*100)/100,
+  calculated=net(posted)+net(scheduled),
+  displayed=calendarContext.points.flatMap(x=>x.events||[]).find(x=>
+   x.kind==='transfer_out'&&String(x.transferGroupId)===String(d.id))?.amount??d.amount;
+ return '<section class="card-breakdown-panel" data-card-breakdown-panel aria-label="Credit card payment calculation">'+
+  '<div class="card-breakdown-heading"><div><small>TRANSACTION-BASED CARD PAYMENT</small><strong>'+
+   esc(d.cardName)+' · '+money(displayed)+'</strong></div>'+
+  '<button type="button" class="btn" data-card-breakdown-close>Close</button></div>'+
+  '<p class="card-breakdown-window">'+
+   (d.periodSource==='configured-statement'?'Billing statement period: ':'Activity window since last matched payment: ')+
+   esc(dateLabel(d.periodStart))+' – '+esc(dateLabel(d.periodEnd))+'</p>'+
+  '<div class="card-breakdown-section"><div class="card-breakdown-subhead"><strong>Posted card purchases and refunds</strong>'+
+   '<strong>'+money(net(posted))+'</strong></div>'+
+   (posted.length?posted.map(line).join(''):'<p>No posted card charges in this period.</p>')+'</div>'+
+  '<div class="card-breakdown-section"><div class="card-breakdown-subhead"><strong>Scheduled and recurring card transactions</strong>'+
+   '<strong>'+money(net(scheduled))+'</strong></div>'+
+   (scheduled.length?scheduled.map(line).join(''):
+    '<p>No additional scheduled card charges before this period closes.</p>')+'</div>'+
+  '<div class="card-breakdown-total"><span>Identified net card activity</span><strong>'+money(calculated)+'</strong></div>'+
+  (Math.abs(displayed-calculated)>.011?'<p class="card-breakdown-adjustment">'+
+   (d.confirmed?'An issued statement amount was entered and takes precedence over transaction totals. ':
+    d.method!=='statement'?'The chosen card payment method determines a different withdrawal amount. ':
+     'The predicted withdrawal differs from the identified activity due to a bank-balance limit or manual adjustment. ')+
+   'Projected transfer: <strong>'+money(displayed)+'</strong>.</p>':'')+
+  (d.pendingExcluded?'<p class="card-breakdown-note">'+d.pendingExcluded+
+   ' pending card transaction(s) are not yet counted as posted purchases.</p>':'')+
+  '<p class="card-breakdown-note">'+esc(d.caveat||'No historical spending averages or generic future charges are added.')+
+   ' History helps identify recurring transactions, but no historical-average spending allowance is added.</p>'+
+  '<button type="button" class="btn" data-view="settings">Review statement/payment dates →</button>'+
+  '</section>';
+}
 function dayDetail(point,card){
  const events=point.events||[],first=calendarContext.points[0],
   previousIndex=calendarContext.points.indexOf(point)-1,
@@ -170,11 +213,14 @@ function dayDetail(point,card){
    '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
   (events.length?'<div class="calendar-detail-items">'+events.map((e,i)=>{
    const dir=signed(e,card)>0?'in':'out';
-   return '<button type="button" class="calendar-detail-item calendar-tap-edit" data-calendar-edit="'+i+'"><span class="calendar-transaction-name">'+
+   const d=paymentDetail(e);
+   const editor='<button type="button" class="calendar-detail-item calendar-tap-edit" data-calendar-edit="'+i+'"><span class="calendar-transaction-name">'+
     esc(e.merchant||'Predicted transaction')+
     (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':e.amountEstimate?'<small>Estimated prediction</small>':'<small>Predicted · not posted</small>')+
     '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong>'+
     '<span class="calendar-item-edit">Edit</span></button>';
+   return d?'<div class="calendar-breakdown-row">'+editor+
+    '<button type="button" class="card-breakdown-action" data-card-breakdown="'+esc(d.id)+'">What is included? ↗</button></div>':editor;
   }).join('')+'</div>':
    '<p class="calendar-empty">'+(point.date===first.date?
     'Starting balance. No future transactions yet.':
@@ -211,13 +257,18 @@ function monthlyPredictions(state){
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
-  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>
-   '<button type="button" class="calendar-monthly-row" data-calendar-list-date="'+date+
-   '" data-calendar-list-index="'+index+'"><span class="calendar-monthly-date">'+esc(shortDate(date))+
-   '</span><span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
-   (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
-   '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
-   '</strong><span class="calendar-monthly-view">View</span></button>').join('')+
+  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>{
+   const d=paymentDetail(e);
+   const entry='<button type="button" class="calendar-monthly-row" data-calendar-list-date="'+date+
+    '" data-calendar-list-index="'+index+'"><span class="calendar-monthly-date">'+esc(shortDate(date))+
+    '</span><span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
+    (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
+    '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
+    '</strong><span class="calendar-monthly-view">View</span></button>';
+   return d?'<div class="calendar-monthly-entry">'+entry+
+    '<button type="button" class="card-breakdown-action" data-card-breakdown="'+esc(d.id)+
+    '">What is included? ↗</button></div>':entry;
+  }).join('')+
    '</div>':'<p class="calendar-empty">No predicted deposits or withdrawals for the selected account this month.</p>')+
    unplanned+'</details>';
 }
@@ -301,7 +352,7 @@ function calendarGrid(){
   '</div>'+coverageChecklist()+'<div class="calendar-grid" role="group" aria-label="'+
    esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
-   monthlyPredictions(state)+'</div>';
+   monthlyPredictions(state)+paymentBreakdown()+'</div>';
 }
 function showCalendar(date){
  if(!calendarContext||!calendarContext.points.some(p=>p.date===date)&&
@@ -409,6 +460,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  }
  calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,
   cardEstimates:bundle?.payments?.cardEstimates||[],
+  paymentDetails:bundle?.payments?.paymentDetails||[],
   cushion:Number(prefs?.cashCushion??500),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
@@ -530,6 +582,20 @@ document.addEventListener('keydown',e=>{
   selected+(e.key==='ArrowRight'?1:-1));
 });
 document.addEventListener('click',e=>{
+ const breakdown=e.target.closest?.('[data-card-breakdown]');
+ if(breakdown){
+  cardBreakdownId=breakdown.dataset.cardBreakdown;
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+  document.querySelector('[data-card-breakdown-panel]')?.scrollIntoView({block:'nearest',behavior:'smooth'});
+  return;
+ }
+ if(e.target.closest?.('[data-card-breakdown-close]')){
+  cardBreakdownId='';
+  const stage=document.querySelector('[data-calendar-stage]');
+  if(stage)stage.outerHTML=calendarGrid();
+  return;
+ }
  const review=e.target.closest?.('[data-summary-review-toggle]');
  if(review){
   reviewOpen=!reviewOpen;
