@@ -40,6 +40,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
+let scheduleSort='order',scheduleCategoryFilter='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -51,6 +52,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
+   scheduleCategories:p.scheduleCategories,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments}));
   return true;
@@ -973,6 +975,10 @@ function scheduleFields(r,isNew,s){
   return '<div class="future-fields">'+
    '<label>Bill label (distinguishes same-payee bills)<input name="scheduleLabel" maxlength="110" placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||'')+'"></label>'+
    '<label>Bank merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(r.merchant||'')+'"></label>'+
+   '<label>Category<select name="category">'+
+    window.HouseholdPlannerTransactions.scheduleCategories(state()).map(c=>
+     '<option value="'+escapeHTML(c)+'"'+(c===(r.category||'Uncategorized')?' selected':'')+'>'+
+      escapeHTML(c)+'</option>').join('')+'</select></label>'+
    '<label>Expected amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
    '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
    '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
@@ -992,9 +998,44 @@ function scheduleFields(r,isNew,s){
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
  }
+function scheduleCategorySummary(items,bundle,asOf,through){
+ // Use the canonical forecast ledger, so posted-coverage suppression and
+ // individual predicted payment edits affect totals exactly once.
+ const ids=new Set(items.map(({rule})=>String(rule.id)));
+ let withdrawals=0,deposits=0,transfers=0;
+ for(const row of bundle?.ledger||[]){
+  if(!(row.date>asOf&&row.date<=through)||
+   !ids.has(String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')))continue;
+  const average=Number(row.amount)/12;
+  if(row.kind==='movement')transfers+=average;
+  else if(['income','refund'].includes(row.type))deposits+=average;
+  else withdrawals+=average;
+ }
+ const parts=[];
+ if(withdrawals)parts.push('Out '+cash(withdrawals)+'/mo');
+ if(deposits)parts.push('In '+cash(deposits)+'/mo');
+ if(transfers)parts.push('Transfers '+cash(transfers)+'/mo');
+ return parts.join(' · ')||cash(0)+'/mo';
+}
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
-  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
+  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
+  nextYear=shiftDay(s.asOf,365),tomorrow=shiftDay(s.asOf,1),
+  categories=T.scheduleCategories(state()),
+  categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
+ const indexed=rules.map((rule,index)=>({rule,index}));
+ const visible=indexed.filter(({rule})=>!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter);
+ const nextAmount=rule=>{
+  const first=T.recurrenceDates(rule,s.asOf,end)[0];
+  return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
+ };
+ visible.sort((a,b)=>scheduleSort==='value-desc'?
+  nextAmount(b.rule)-nextAmount(a.rule)||a.index-b.index:
+  scheduleSort==='value-asc'?
+   nextAmount(a.rule)-nextAmount(b.rule)||a.index-b.index:
+  scheduleSort==='category'?
+   categoryOf(a.rule).localeCompare(categoryOf(b.rule))||a.index-b.index:
+  a.index-b.index);
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
  const create=scheduleMode==='new'?'<form class="panel schedule-form" data-schedule-new-form>'+
   '<h3>New schedule</h3>'+
@@ -1003,7 +1044,7 @@ function schedulesPage(bundle,s){
   fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
   '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
- const cards=rules.map((r,index)=>{
+ const cardHtml=({rule:r,index})=>{
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
@@ -1031,7 +1072,7 @@ function schedulesPage(bundle,s){
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-      ' · '+escapeHTML(r.frequency)+'</small></span></span>'+
+      ' · '+escapeHTML(r.frequency)+' · '+escapeHTML(categoryOf(r))+'</small></span></span>'+
     '<span class="schedule-row-next"><small>Next</small><span>'+
      (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
     '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
@@ -1061,12 +1102,40 @@ function schedulesPage(bundle,s){
       '<small>Amount, date, frequency, payee and accounts</small></summary>'+
       '<div class="plan-settings-body">'+edit+'</div></details>'+
      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</div></article>';
- }).join('');
+ };
+ const cards=scheduleSort==='category'?
+  [...new Set(visible.map(({rule})=>categoryOf(rule)))].map(category=>{
+   const items=visible.filter(({rule})=>categoryOf(rule)===category);
+   return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
+    '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
+    ' <small>('+items.length+')</small></strong><span>'+
+    scheduleCategorySummary(items,bundle,s.asOf,nextYear)+'</span></div>'+
+    items.map(cardHtml).join('')+'</section>';
+  }).join(''):
+  visible.map(cardHtml).join(''); 
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
   '<h2>Payment schedules</h2><p>Edit any schedule or an individual upcoming payment.</p></div>'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  create+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
+  '<div class="schedule-toolbar" aria-label="Schedule organization">'+
+   '<label>Sort <select data-schedule-sort>'+
+    [['order','Original order'],['value-desc','Amount: high to low'],
+     ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
+     '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
+   '</select></label>'+
+   '<label>Show <select data-schedule-category-filter><option value="">All categories</option>'+
+    categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
+     (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+   '</select></label>'+
+   '<details class="schedule-category-manager" data-schedule-category-manager>'+
+    '<summary>+ Category</summary>'+
+    '<form data-schedule-category-add><label>New category<input name="categoryName" maxlength="40" '+
+    'placeholder="e.g. Pet care" required></label>'+
+    '<button type="submit" class="btn">Add</button></form>'+
+    '<p data-schedule-category-notice role="status"></p></details></div>'+ 
+  create+'<div class="schedule-grid">'+
+   (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
+   '</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -1533,7 +1602,7 @@ document.addEventListener('click',async e=>{
    amount:rule.amount,accountId:rule.accountId||rule.fromAccountId,
    toAccountId:rule.toAccountId,type:rule.kind==='movement'?'transfer':rule.type,
    frequency:rule.frequency,date:next||shiftDay(snapshot().asOf,1),
-   amountBasis:'estimate'};
+   amountBasis:'estimate',category:rule.category||'Uncategorized'};
   scheduleMode='new';scheduleTarget='';scheduleNotice='';
   transactionDetail=null;activeTab='schedules';render();return;
  }
@@ -1998,6 +2067,27 @@ async function commitForecastChange(action){
   return result;
  }catch(err){current.predictions=JSON.parse(before);throw err}
 }
+// Add a category without rebuilding an unsaved editor or modifying bank data.
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest?.('[data-schedule-category-add]');
+ if(!form)return;
+ e.preventDefault();
+ const field=form.querySelector('[name=categoryName]'),
+  submit=form.querySelector('[type=submit]'),
+  notice=form.parentElement.querySelector('[data-schedule-category-notice]');
+ if(submit)submit.disabled=true;
+ try{
+  const label=await commitForecastChange(()=>window.HouseholdPlannerTransactions.addScheduleCategory(state(),field.value));
+  document.querySelectorAll('select[name=category],[data-schedule-category-filter]').forEach(select=>{
+   const option=document.createElement('option');option.value=label;option.textContent=label;
+   select.appendChild(option);
+   if(select.name==='category')select.value=label;
+  });
+  field.value='';
+  if(notice)notice.textContent='Added '+label+'. Choose it for any schedule.';
+ }catch(error){if(notice)notice.textContent=String(error.message||error)}
+ finally{if(submit)submit.disabled=false}
+});
 document.addEventListener('submit',async e=>{
  const form=e.target.closest?.('[data-schedule-new-form],[data-schedule-edit-form]');
  if(!form)return;
@@ -2282,6 +2372,24 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',e=>{
+ const sorter=e.target.closest?.('[data-schedule-sort]'),
+  filter=e.target.closest?.('[data-schedule-category-filter]');
+ if(sorter||filter){
+  const nextSort=sorter?sorter.value:scheduleSort,
+   nextFilter=filter?filter.value:scheduleCategoryFilter,
+   edit=document.querySelector('[data-schedule-edit-form],[data-schedule-new-form]');
+  const dirty=edit&&[...edit.querySelectorAll('input,select,textarea')].some(field=>{
+   if(field.type==='hidden')return false;
+   if(field.type==='checkbox'||field.type==='radio')return field.checked!==field.defaultChecked;
+   if(field.tagName==='SELECT')return [...field.options].some(o=>o.selected!==o.defaultSelected);
+   return field.value!==field.defaultValue;
+  });
+  if(dirty&&!window.confirm('Discard unsaved schedule edits to reorganize the list?')){
+   e.target.value=sorter?scheduleSort:scheduleCategoryFilter;return;
+  }
+  scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;
+  scheduleMode='';scheduleTarget='';transactionDetail=null;render();return;
+ }
  if(e.target.name==='separateSchedule'&&e.target.checked){
   const form=e.target.closest?.('[data-history-recurring-form]');
   // A second bill cannot claim the historical examples already associated

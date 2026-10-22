@@ -549,6 +549,25 @@ const {chromium,webkit}=require('playwright');
    // Same merchant/date: separately saved streams and editable inline rows.
    await go('schedules');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
+   assert.equal(await page.locator('[data-schedule-sort]').count(),1);
+   assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
+   const values=async()=>page.locator('.schedule-row-amount strong').evaluateAll(nodes=>
+    nodes.map(node=>Number((node.textContent||'').replace(/[^0-9.]/g,''))));
+   await page.locator('[data-schedule-sort]').selectOption('value-desc');
+   let amounts=await values();
+   assert.deepEqual(amounts,[...amounts].sort((a,b)=>b-a),
+    'Amount sorting follows the value displayed on the schedule row');
+   await page.locator('[data-schedule-sort]').selectOption('value-asc');
+   amounts=await values();
+   assert.deepEqual(amounts,[...amounts].sort((a,b)=>a-b));
+   await page.locator('[data-schedule-sort]').selectOption('order');
+   await page.locator('[data-schedule-category-manager] > summary').click();
+   const categories=page.locator('[data-schedule-category-add]');
+   await categories.locator('[name=categoryName]').fill('Water bills');
+   await categories.locator('button[type=submit]').click();
+   assert.match(await page.locator('[data-schedule-category-notice]').innerText(),/Added Water bills/);
+   assert.equal(await page.locator('[data-schedule-category-filter] option[value="Water bills"]').count(),1,
+    'Custom categories appear immediately without reload');
    assert.equal(await page.locator('.schedule-heading,.schedule-metrics,.schedule-actions').count(),0,
     'Collapsed schedules do not use three stacked rows of repeated details and buttons');
    if(previousSchedules>0){
@@ -578,6 +597,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.transaction-detail').count(),0,
     'Schedule creation does not open a separate popup editor');
    await schedule.locator('[name=scheduleLabel]').fill('Water - House');
+   await schedule.locator('[name=category]').selectOption('Water bills');
    await schedule.locator('[name=merchant]').fill('Same Merchant Water');
    await schedule.locator('[name=amount]').fill('135');
    await schedule.locator('[name=date]').fill('2026-11-10');
@@ -595,6 +615,8 @@ const {chromium,webkit}=require('playwright');
    await water.locator('[data-schedule-duplicate]').click();
    schedule=page.locator('[data-schedule-new-form]');
    await schedule.locator('[name=scheduleLabel]').fill('Water - Garden');
+   assert.equal(await schedule.locator('[name=category]').inputValue(),'Water bills',
+    'Separate same-merchant schedule copies category for the new independent stream');
    await schedule.locator('[name=amount]').fill('220');
    await schedule.locator('[name=date]').fill('2026-11-10');
    await schedule.locator('button[type=submit]').click();
@@ -616,6 +638,23 @@ const {chromium,webkit}=require('playwright');
    await water.locator('[data-schedule-cancel-remove]').click();
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
     'Canceling removal leaves both independent schedules intact');
+   await page.locator('[data-schedule-sort]').selectOption('category');
+   await page.locator('[data-schedule-category-filter]').selectOption('Water bills');
+   assert.equal(await page.locator('[data-schedule-card]').count(),2,
+    'Category filter shows only the two assigned schedules');
+   const group=page.locator('[data-schedule-category-group="Water bills"]');
+   assert.equal(await group.count(),1);
+   assert.match(await group.locator('.schedule-category-heading').innerText(),/Out .*\/mo/,
+    'Category grouping shows a normalized monthly withdrawal total');
+   assert.match(await group.locator('.schedule-category-heading').innerText(),/355/,
+    'Category total includes both independently forecast monthly bills');
+   assert.ok((await group.locator('.schedule-row-title').allInnerTexts()).every(v=>v.includes('Water bills')),
+    'Each row displays its assigned schedule category');
+   await page.locator('[data-schedule-category-filter]').selectOption('');
+   await page.locator('[data-schedule-sort]').selectOption('order');
+   assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
+    'Clearing the filter restores all schedule actions');
+
 
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    if(!await water.locator('[data-schedule-inline-plan]').count())

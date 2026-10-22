@@ -129,6 +129,32 @@ function resetSeries(state,seriesKey){
  * find a reliable series. Rule identity includes account/type/source merchant;
  * individual bank transactions and their categories are never modified. */
 const frequencies=new Set(['weekly','biweekly','every-4-weeks','twice-monthly','monthly','quarterly','semiannual','annual']);
+const defaultScheduleCategories=Object.freeze(['Uncategorized','Mortgage','Rent','Utility','Insurance',
+ 'Subscription','Loan','Transportation','Healthcare','Childcare','Groceries','Tax','Income',
+ 'Savings','Transfer','Other']);
+function scheduleCategories(state){
+ const custom=state?.predictions?.scheduleCategories;
+ return [...defaultScheduleCategories,...(Array.isArray(custom)?custom:[]).filter(n=>
+  typeof n==='string'&&n.trim()&&!defaultScheduleCategories.some(d=>d.toLowerCase()===n.toLowerCase()))];
+}
+function scheduleCategory(name,state){
+ const match=scheduleCategories(state).find(c=>c.toLowerCase()===String(name||'Uncategorized').trim().toLowerCase());
+ if(!match)throw Error('Choose an existing schedule category or add it first');
+ return match;
+}
+function addScheduleCategory(state,name){
+ const value=String(name||'').trim().replace(/\s+/g,' ');
+ if(value.length<2||value.length>40||
+  !/^[\p{L}\p{N}][\p{L}\p{N} &\/().,+'-]*$/u.test(value))
+  throw Error('Category must be 2–40 letters/numbers with ordinary punctuation');
+ const existing=scheduleCategories(state);
+ if(existing.some(n=>n.toLowerCase()===value.toLowerCase()))throw Error('Category already exists');
+ const p=ensure(state);p.scheduleCategories??=[];
+ if(!Array.isArray(p.scheduleCategories)||p.scheduleCategories.length>=40)throw Error('Category limit reached');
+ p.scheduleCategories.push(value);
+ return value;
+}
+
 const merchantKey=value=>clean(value).replace(/[^a-z0-9]+/g,' ').trim();
 const phaseOf=date=>Math.floor(Date.parse(date+'T12:00:00Z')/86400000)%28;
 const phaseDistance=(a,b)=>{if(!validDate(a)||!validDate(b))return 28;
@@ -388,6 +414,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
+  category:scheduleCategory(data.category===undefined?old?.category:data.category,state),
   amountBasis:data.amountBasis==='estimate'||data.amountBasis==='fixed'?data.amountBasis:
    old?.amountBasis||'fixed',
   // Honor previously saved date-range amounts until the owner explicitly
@@ -595,12 +622,12 @@ function generatedRecurring(rules,asOf,through){
    if(r.kind==='movement'){
     plans.push({id:'user|'+r.id+'|'+d,anchorDate:d,frequency:'once',
      amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
-     merchant,scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     merchant,category:r.category||'Uncategorized',scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
      seriesRuleId:r.id,source:'user-recurring'});
    }else{
     events.push({id:'user|'+r.id+'|'+d,date:d,amount,
-     merchant,scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
-     accountId:r.accountId,type:r.type,category:'Confirmed recurring',
+     merchant,category:r.category||'Uncategorized',scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     accountId:r.accountId,type:r.type,category:r.category||'Uncategorized',
      cashDirection:r.cashDirection,source:'user-recurring',cadence:r.frequency,
      ruleId:r.id,_seriesKey:manualSeriesKey(r.id),_seriesDate:d});
    }
@@ -680,7 +707,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
+ frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
  recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
