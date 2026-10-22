@@ -1033,11 +1033,12 @@ function schedulesPage(bundle,s){
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
   return '<article class="panel schedule-card" data-schedule-card="'+id+'">'+
    '<div class="schedule-heading"><div><strong>'+escapeHTML(r.scheduleLabel||r.merchant)+'</strong>'+
-   '<small>'+escapeHTML(r.merchant)+' · '+escapeHTML(account?.name||'Account')+
+   '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
+    escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
    ' · '+escapeHTML(r.frequency)+'</small></div><span class="status-tag">'+
    (estimate.estimated?'ESTIMATE':'FIXED')+'</span></div>'+
    '<div class="schedule-metrics"><span>Next: '+(next?escapeHTML(dayLabel(next)):'Outside forecast')+'</span>'+
-    '<strong>'+cash(estimate.amount)+'</strong><span>'+dates.length+' upcoming</span></div>'+
+    '<strong>'+cash(estimate.amount)+'</strong></div>'+
    '<div class="schedule-actions">'+
     '<button class="btn primary" type="button" data-schedule-edit="'+id+'">'+(isEditing?'Close plan −':'Edit plan ↓')+'</button>'+
     '<button class="btn" type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
@@ -1050,8 +1051,7 @@ function schedulesPage(bundle,s){
     'Changing the repeating amount for all future payments will replace these older rules.</p>'+
     windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
-     '<p class="plan-edit-guide">Two choices: change the repeating schedule for all future payments, '+
-      'or open a dated payment below to change only that one.</p>'+
+     '<p class="plan-edit-guide">Edit defaults for all future payments, or select one dated payment below.</p>'+
      '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span>'+
       '<small>Amount, date, frequency, payee and accounts</small></summary>'+
       '<div class="plan-settings-body">'+edit+'</div></details>'+
@@ -1177,8 +1177,7 @@ function historyPage(bundle,s){
    action+'</div>';
  }).join('');
  return '<div class="planner-page history-page"><div class="page-heading"><div><h2>Actual transaction history</h2>'+
-  '<p>Bank records, not forecasts. Select a transaction to see its details and optionally create a future schedule. Original bank records never change.</p></div>'+
-  '<span class="status-tag">'+records.length+' TRANSACTIONS</span></div>'+
+  '<p>Bank records, not forecasts. Select a transaction to see details or create a future schedule.</p></div></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   '<section class="panel"><form class="history-filters" data-history-filter>'+
@@ -1187,8 +1186,9 @@ function historyPage(bundle,s){
     '" placeholder="Merchant, date, amount"></label>'+
    '<button class="btn" type="submit">Search</button>'+
    (historySearch?'<button type="button" class="btn" data-clear-history-search>Clear</button>':'')+
-   '</form><p class="history-count">'+filtered.length+' actual records match. Showing '+visible.length+
-    ' newest '+(filtered.length>historyLimit?'— load older records below.':'records.')+'</p>'+
+   '</form><p class="history-count">Showing '+visible.length+' of '+filtered.length+
+    ' matching transaction'+(filtered.length===1?'':'s')+
+    (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '<p class="audit-footnote">Every historical transaction, including transfers, refunds and pending bank entries, can be turned into a proposed future schedule. Review its type, amount, and date. No bank transaction is changed and no payment is initiated.</p></section></div>';
@@ -1366,12 +1366,6 @@ function settingsPage(bundle,s,chosen){
      '">Allow predictions</button></div>').join('')+
    (!Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
      '<p class="audit-footnote">No recurring patterns have been excluded.</p>':'')+
-   '</section>'+
-  '<section class="panel mini-panel" aria-label="Recurring forecast changes">'+
-   '<div class="section-title"><h2>Recurring payment changes</h2>'+
-    '<span class="status-tag">'+Object.keys(state().predictions?.futureSeriesEdits||{}).length+' CUSTOMIZED</span></div>'+
-   '<p>To change all future payments, edit the repeating defaults in Schedules. To change one date, click that payment in Calendar or Schedules.</p>'+
-   '<button type="button" class="btn" data-view="schedules">Manage schedules</button>'+
    '</section>'+
   auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
