@@ -739,6 +739,18 @@ const {chromium,webkit}=require('playwright');
    'Before bank posts withdrawal, its date is explicitly a plan, not actual history');
   await go('summary');
   await page.locator('[data-summary-days="60"]').click();
+  await page.locator('[data-calendar-today]').click();
+  await page.locator('[data-calendar-nav="1"]').click();
+  const cardNov=page.locator('.calendar-monthly-entry').filter({hasText:'Credit-card payment'}).first();
+  assert.ok(await cardNov.count()>0,'The projected checking card payment has an itemized breakdown');
+  await cardNov.locator('[data-card-breakdown]').click();
+  const itemized=page.locator('[data-card-breakdown-panel]');
+  assert.equal(await itemized.isVisible(),true);
+  assert.match(await itemized.innerText(),/Posted card purchases and refunds/);
+  assert.match(await itemized.innerText(),/Scheduled and recurring card transactions/);
+  assert.match(await itemized.innerText(),/Identified net card activity/);
+  assert.match(await itemized.innerText(),/No average historic spending allowance|No historical spending averages/i);
+  await itemized.locator('[data-card-breakdown-close]').click();
   await page.locator('.summary-extras > summary').click();
   const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
   assert.equal(await cardCoverage.locator('.coverage-cell.covered').count(),2,
