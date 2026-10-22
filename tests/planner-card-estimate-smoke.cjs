@@ -21,15 +21,40 @@ const inferred=P.inferPayment(accounts[1],accounts,history,asOf);
 assert.equal(inferred.eligible,true);
 assert.equal(inferred.fromAccountId,'checking');
 assert.equal(inferred.nextPaymentDate,'2026-11-11');
-assert.equal(inferred.estimatedAmount,360);
+assert.equal(inferred.estimatedAmount,undefined,'Historical payment amounts are not used to estimate future withdrawals');
 const result=C.materialize(snapshot,history,{},T,P,90);
 const first=result.ledger.filter(e=>e.kind==='movement'&&e.date==='2026-11-11');
 assert.equal(first.length,1,'One November checking debit to the linked card');
 assert.equal(first[0].amount,360);
 assert.equal(first[0].origin,'card-history-estimate');
-assert.equal(result.ledger.filter(e=>e.kind==='movement'&&e.date==='2026-12-11').length,1);
-assert.equal(result.ledger.filter(e=>e.kind==='event'&&e.source==='card-history-estimate').length>=1,true,
- 'Later monthly card cash payments are supported by aggregate future card purchase estimates');
+assert.equal(result.ledger.filter(e=>e.kind==='movement'&&e.date==='2026-12-11').length,0,
+ 'No December debit without actual or confirmed dated card purchases');
+assert.equal(result.ledger.filter(e=>e.kind==='event'&&e.source==='card-history-estimate').length,0,
+ 'No synthetic future card purchases ever appear');
+const detail=result.payments.paymentDetails.find(d=>d.id===first[0].id);
+assert.equal(detail.postedTransactions.length,3);
+assert.equal(detail.predictedTransactions.length,0);
+assert.equal(detail.calculated,360);
+assert.equal(detail.periodSource,'inferred-payment-window');
+const scheduled={futureTransactionAdds:[{
+ id:'future-expense-card',date:'2026-11-04',type:'expense',accountId:'card',amount:29,
+ merchant:'Known subscription'
+}]};
+const withSubscription=C.materialize(snapshot,history,scheduled,T,P,90);
+const included=withSubscription.payments.paymentDetails.find(d=>d.withdrawalDate==='2026-11-11');
+assert.equal(included.calculated,389,'Posted 360 plus known subscription 29, never a spend average');
+assert.deepEqual(included.predictedTransactions.map(x=>x.merchant),['Known subscription']);
+assert.equal(withSubscription.ledger.filter(e=>e.date==='2026-11-11'&&e.kind==='movement')[0].amount,389);
+const nextKnown={futureRecurringRules:[{id:'monthly-card-sub',kind:'event',frequency:'monthly',
+ anchorDate:'2026-11-05',date:'2026-11-05',amount:25,type:'expense',accountId:'card',
+ merchant:'Streaming',originalMerchant:'Streaming',originalAccountId:'card',
+ matchNames:['streaming'],exampleIds:[]}]};
+const withRecurring=C.materialize(snapshot,history,nextKnown,T,P,90);
+assert.ok(withRecurring.payments.paymentDetails.some(x=>x.withdrawalDate==='2026-12-11'&&
+ x.predictedTransactions.some(t=>t.merchant==='Streaming')),
+ 'Confirmed recurring card expense contributes to next month rather than an invented generic charge');
+assert.ok(withRecurring.ledger.some(e=>e.date==='2026-12-11'&&e.kind==='movement'),
+ 'A future card payment is created only from an actual scheduled card transaction');
 assert.equal(result.projection.household.conservationDifference,0);
 assert.equal(JSON.stringify(history),original,'Plaid records remain immutable');
 const noPairs=history.filter(t=>!t.pairedTransactionId);
