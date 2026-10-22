@@ -749,7 +749,7 @@ const {chromium,webkit}=require('playwright');
   assert.match(await itemized.innerText(),/Posted card purchases and refunds/);
   assert.match(await itemized.innerText(),/Scheduled and recurring card transactions/);
   assert.match(await itemized.innerText(),/Identified net card activity/);
-  assert.match(await itemized.innerText(),/No average historic spending allowance|No historical spending averages/i);
+  assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
   await itemized.locator('[data-card-breakdown-close]').click();
   await page.locator('.summary-extras > summary').click();
   const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
