@@ -19,6 +19,7 @@ function getPoints(derived,asOf,days){
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
 let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false,cardBreakdownId='';
+let calendarMonthExpanded=false;
 const monthName=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',
  {month:'long',year:'numeric',timeZone:'UTC'});
 const signed=(e,card)=>card?
@@ -202,6 +203,23 @@ function predictionIdentity(e){
  return e.transferGroupId?tools.keyMovement(e.transferGroupId):
   e.predictionKey||tools.keyEvent(e.id,e.accountId);
 }
+function predictionEntry(date,e,index,card,selected=false){
+ const d=paymentDetail(e),key=esc(predictionIdentity(e));
+ const entry='<button type="button" class="calendar-monthly-row calendar-detail-item" '+
+  'data-calendar-list-date="'+date+'" data-calendar-list-index="'+index+
+  '" data-open-transaction="'+key+'" aria-expanded="false" aria-label="'+
+  esc('Edit '+(e.merchant||'predicted payment')+' on '+shortDate(date))+'">'+
+  '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
+  '<span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
+  (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
+  '<strong class="'+(signed(e,card)>0?'in':'out')+'">'+fullSigned(e,card)+'</strong>'+
+  '<span class="calendar-monthly-view">Edit ↓</span></button>';
+ return '<div class="calendar-monthly-entry calendar-detail-entry'+
+  (selected?' selected-date':'')+'" data-calendar-entry-date="'+date+
+  '" data-inline-row-wrapper>'+entry+
+  (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+
+   '">Payment calculation →</button>':'')+'</div>';
+}
 function dayDetail(point,card){
  const events=point.events||[],first=calendarContext.points[0],
   previousIndex=calendarContext.points.indexOf(point)-1,
@@ -219,10 +237,12 @@ function dayDetail(point,card){
    '<div><span>'+(card?'Debt increases':'Deposits')+'</span><strong class="in">+'+money(plus)+'</strong></div>'+
    '<div><span>'+(card?'Debt payments':'Withdrawals')+'</span><strong class="out">−'+money(minus)+'</strong></div>'+
    '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
-  '<p class="calendar-single-list-hint">'+
-   (events.length?events.length+' predicted payment'+(events.length===1?'':'s')+
-    ' today. Select a transaction from the single monthly list below to edit it.':
-    'No predicted transactions this day; the balance carries forward.')+'</p>'+
+  '<div class="calendar-day-transactions" aria-label="Predictions for selected date">'+
+   '<div class="calendar-day-transactions-head"><strong>Predicted transactions ('+events.length+
+   ')</strong><span>'+(events.length?'Tap a payment to edit':'No payments predicted')+'</span></div>'+
+   (events.length?events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join(''):
+    '<p class="calendar-empty">No predicted payments on this date. The balance carries forward.</p>')+
+   '</div>'+
   (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
    gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
     '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
@@ -255,25 +275,14 @@ function monthlyPredictions(state){
   uncertain.map(c=>'<div><span>'+esc(c.cardName)+' · '+money(Number(c.observedCharges||0))+
    ' in recent posted purchases (not an issued statement)</span>'+
    '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
- return '<details class="calendar-monthly-list" open>'+
-  '<summary>Upcoming predictions · '+esc(monthName(calendarMonth))+' ('+rows.length+')'+
+ return '<details class="calendar-monthly-list" data-calendar-monthly'+(calendarMonthExpanded?' open':'')+'>'+
+  '<summary>All upcoming predictions · '+esc(monthName(calendarMonth))+' ('+rows.length+')'+
    '<span>'+contextLabel+'</span></summary>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
-  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>{
-   const d=paymentDetail(e);
-   const entry='<button type="button" class="calendar-monthly-row calendar-detail-item" data-calendar-list-date="'+date+
-    '" data-calendar-list-index="'+index+'" data-open-transaction="'+esc(predictionIdentity(e))+'"><span class="calendar-monthly-date">'+esc(shortDate(date))+
-    '</span><span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
-    (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
-    '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
-    '</strong><span class="calendar-monthly-view">Edit ↓</span></button>';
-   return '<div class="calendar-monthly-entry calendar-detail-entry'+(date===calendarDate?' selected-date':'')+
-    '" data-calendar-entry-date="'+date+'" data-inline-row-wrapper>'+entry+
-    (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+
-     '">Payment calculation →</button>':'')+'</div>';
-  }).join('')+
+  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>
+    predictionEntry(date,e,index,credit,date===calendarDate)).join('')+
    '</div>':'<p class="calendar-empty">No upcoming predicted deposits or withdrawals for this account during the remaining forecast days this month.</p>')+
    unplanned+'</details>';
 }
@@ -362,11 +371,20 @@ function calendarGrid(){
 function showCalendar(date){
  if(!calendarContext||!calendarContext.points.some(p=>p.date===date)&&
   !calendarContext.actual.has(date))return;
+ // Switching the day should refocus the compact day view, not jump to or
+ // silently discard an unfinished editor inside the optional month list.
+ if(date!==calendarDate){
+  const forms=document.querySelectorAll('[data-calendar-stage] [data-inline-transaction-editor] form');
+  const dirty=[...forms].some(form=>form.dataset.initialValues!==undefined&&
+   form.dataset.initialValues!==JSON.stringify([...new FormData(form)]));
+  if(dirty&&typeof root.confirm==='function'&&
+   !root.confirm('Discard unsaved changes to this payment?'))return false;
+  calendarMonthExpanded=false;
+ }
  calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
- const row=document.querySelector('[data-calendar-entry-date="'+date+'"]');
- if(row&&row.closest('.calendar-monthly-rows'))row.scrollIntoView({block:'nearest',behavior:'instant'});
+ return true;
 }
 
 function reviewDetails(bundle,accounts,chosen,prefs,ready,coverage){
@@ -454,7 +472,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
   calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
   calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;calendarFocus=null;
-   calendarEditor=null;calendarNotice='';
+   calendarEditor=null;calendarNotice='';calendarMonthExpanded=false;
  }
  const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf;
  for(let n=45;n>=1;n--){
@@ -581,6 +599,12 @@ document.addEventListener('pointermove',e=>{
  if(e.pointerType!=='touch')byPointer(e);
 });
 document.addEventListener('click',byPointer);
+// Keep the optional month drawer open across ordinary forecast re-renders,
+// but return to date-only focus when a different calendar day is selected.
+document.addEventListener('toggle',e=>{
+ if(e.target?.matches?.('[data-calendar-monthly]'))
+  calendarMonthExpanded=e.target.open;
+},true);
 document.addEventListener('keydown',e=>{
  if(!e.target.matches?.('[data-summary-plot]')||
   !['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
@@ -650,8 +674,8 @@ document.addEventListener('keydown',e=>{
  if(idx<0)return;
  e.preventDefault();
  const next=days[range(idx+delta,0,days.length-1)];
- showCalendar(next.date);
- document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
+ if(showCalendar(next.date)!==false)
+  document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
 });
 
 root.HouseholdPlannerSummary={render,getPoints,
