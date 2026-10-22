@@ -653,9 +653,36 @@ function schedulesPage(bundle,s){
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
  };
+ // Count separate posted charges on the same day. A shared merchant identity
+ // cannot explain two obligations unless there are two saved schedules.
+ const groups=new Map(),norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ for(const t of bundle?.rows||[]){
+  if(t.pending||t.pairedTransactionId||t.date>s.asOf||!t.date||!(Number(t.amount)>0))continue;
+  const account=window.HouseholdPlannerHistory.accountOf(t,accounts),
+   dir=t.type==='transfer'?t.cashDirection==='in'?'income':'expense':t.type,
+   name=norm(t.merchant||t.name);
+  if(!name||!account)continue;
+  const key=[account,dir,name,t.date].join('|'),g=groups.get(key)||{account,dir,name,date:t.date,rows:[]};
+  g.rows.push(t);groups.set(key,g);
+ }
+ const warnings=[...groups.values()].filter(g=>g.rows.length>1).filter(g=>{
+  const found=rules.filter(r=>String(r.originalAccountId||r.accountId||r.fromAccountId)===g.account&&
+   (r.kind==='movement'?'transfer':r.type)===g.dir&&
+   (r.matchNames||[r.originalMerchant||r.merchant]).some(n=>norm(n)===g.name));
+  return found.length<g.rows.length;
+ }).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4);
+ const unexplained=warnings.length?'<section class="panel schedule-discovery">'+
+  '<h3>Multiple payments to the same merchant</h3>'+
+  '<p>Bank history contains separate charges from one payee on the same day. Confirm an independent schedule for each recurring bill if appropriate.</p>'+
+  warnings.map(g=>'<div class="schedule-discovery-group"><strong>'+escapeHTML(g.name)+
+   ' · '+escapeHTML(dayLabel(g.date))+' · '+g.rows.length+' posted charges</strong>'+
+   g.rows.map(t=>'<div class="schedule-discovery-row"><span>'+cash(t.amount)+'</span>'+
+    '<button class="btn" type="button" data-schedule-from-actual="'+escapeHTML(t.id)+'">'+
+    'Create separate schedule</button></div>').join('')+'</div>').join('')+'</section>':'';
  const create=scheduleMode==='new'?'<form class="panel schedule-form" data-schedule-new-form>'+
   '<h3>Create a separate payment schedule</h3><p>This will not merge with another bill, even from the same merchant on the same day.</p>'+
   '<input name="separateSchedule" type="hidden" value="on">'+
+  (schedulePreset?.historyExampleId?'<input type="hidden" name="historyExampleId" value="'+escapeHTML(schedulePreset.historyExampleId)+'">':'')+
   fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
   '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
@@ -706,7 +733,7 @@ function schedulesPage(bundle,s){
   '<h2>Payment schedules</h2><p>Each bill or paycheck has its own schedule. History supplies evidence; Predictions are the dated occurrences.</p></div>'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  create+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
+  create+unexplained+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -1116,6 +1143,19 @@ function render(){
 document.addEventListener('click',async e=>{
  const closeSchedule=e.target.closest?.('[data-schedule-close]');
  if(closeSchedule){scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render();return}
+ const fromActual=e.target.closest?.('[data-schedule-from-actual]');
+ if(fromActual){
+  const t=lastHistoryRows.find(r=>String(r.id)===fromActual.dataset.scheduleFromActual);
+  if(!t)return;
+  try{
+   const d=window.HouseholdPlannerHistory.draftFor(t,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+   schedulePreset={merchant:d.merchant,amount:d.amount,accountId:d.accountId,
+    date:d.nextDate,type:d.type,frequency:d.frequency||'monthly',
+    amountBasis:'estimate',historyExampleId:String(t.id)};
+   scheduleMode='new';scheduleTarget='';scheduleNotice='';render();
+  }catch(err){scheduleNotice=String(err.message||err);render()}
+  return;
+ }
  const newSchedule=e.target.closest?.('[data-schedule-new]');
  if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';render();return}
  const duplicate=e.target.closest?.('[data-schedule-duplicate]');
@@ -1559,7 +1599,8 @@ document.addEventListener('submit',async e=>{
   const fields=Object.fromEntries(new FormData(form)),
    T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s);
   if(form.hasAttribute('data-schedule-new-form')){
-   await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,model.records(state()),[]));
+   await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
+    model.records(state()),fields.historyExampleId?[fields.historyExampleId]:[]));
    scheduleNotice='Independent payment schedule created. Other schedules are unchanged.';
   }else if(form.hasAttribute('data-schedule-edit-form')){
    const id=form.dataset.scheduleEditForm,r=(state().predictions?.futureRecurringRules||[]).find(x=>x.id===id);
