@@ -449,11 +449,12 @@ function stopRecurrence(state,row){
   throw Error('This employer has confirmed schedules. Choose the exact paycheck in Future Transactions.');
  const phaseDate=rule?.frequency==='every-4-weeks'?rule.anchorDate:
   row.cadence==='every-4-weeks'?row.baseDate||row.date:null,
-  // Deleting one old semi-monthly/monthly pay rule must not install an
-  // employer-wide opt-out when another confirmed paycheck rule exists.
-  siblings=rule&&type==='income'&&(p.futureRecurringRules||[]).some(r=>
-   r.id!==rule.id&&String(r.originalAccountId||r.accountId)===accountId&&
-   r.type===type&&sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant)),
+  // Separate obligations can have the identical merchant, account, due
+  // date, direction and amount. Stopping ONE may never blacklist its sibling.
+  siblings=rule&&(p.futureRecurringRules||[]).some(r=>
+   r.id!==rule.id&&String(r.originalAccountId||r.accountId||r.fromAccountId)===accountId&&
+   (r.kind==='movement'?'transfer':r.type)===type&&
+   sourceMerchant(r.originalMerchant||r.merchant)===sourceMerchant(merchant)),
   ruleOnly=Boolean(siblings&&!phaseDate),
   key=ruleOnly?'manual-rule|'+encodeURIComponent(rule.id):
    recurrenceKey(accountId,type,merchant)+(phaseDate?'|phase'+phaseOf(phaseDate):'');

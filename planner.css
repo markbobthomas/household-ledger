@@ -856,3 +856,47 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .schedule-occurrence>strong{font-size:11px}
  .schedule-occurrence-arrow{display:none}
 }
+
+/* Payment plan: schedule-wide settings and per-date edits on ONE surface. */
+.plan-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;padding:13px 15px;margin:0 0 12px;background:#f6f9fc;border:1px solid #e5edf4;border-radius:10px}
+.plan-summary>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.plan-summary small{font-size:10px;font-weight:650;color:#788a9c}
+.plan-summary strong{font-size:12px;font-weight:740;color:#27415a;overflow-wrap:anywhere}
+.plan-selected-guide{margin:11px 0;padding:9px 12px;background:#f1f7fd;border:1px solid #d5e5f2;border-radius:7px;color:#496e8c;font-size:11px;line-height:1.5}
+.plan-selected-guide strong{color:#294b68}
+.plan-settings{border:1px solid #dce7f0;border-radius:10px;margin:13px 0;background:#fff;overflow:hidden}
+.plan-settings>summary{display:flex;flex-direction:column;gap:4px;cursor:pointer;padding:14px 17px;background:#f9fbfd;list-style:none}
+.plan-settings>summary::-webkit-details-marker{display:none}
+.plan-settings>summary span{font-size:13px;font-weight:770;color:#29465f}
+.plan-settings>summary small{font-size:11px;color:#73889a}
+.plan-settings[open]>summary{border-bottom:1px solid #e7edf3;background:#f2f7fb}
+.plan-settings-body{padding:15px}
+.plan-settings-body>p{font-size:11px;color:#6d8295;line-height:1.55;margin:0 0 10px}
+.plan-settings-body .schedule-form{border:0;padding:0;margin:0;background:transparent}
+.plan-settings-body .future-form-actions{padding-top:12px}
+.schedule-occurrence-section{border:1px solid #e1eaf2;border-radius:10px;padding:14px;margin:14px 0;background:#fbfcfe}
+.schedule-occurrence-section>.schedule-occurrence-heading{padding:2px 0 0}
+.schedule-occurrence-section>.schedule-occurrence-list{margin-top:11px}
+.schedule-occurrence.selected{background:#e9f3fd;box-shadow:inset 3px 0 #5386b5}
+.plan-occurrence-editor{border:1px solid #cbdde9;border-radius:9px;background:#fff;padding:15px;margin:13px 0}
+.plan-occurrence-editor>.plan-section-label{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.plan-section-label strong{font-size:13px;color:#305777}
+.plan-section-label span{font-size:11px;color:#5e7890}
+.plan-occurrence-editor>p{font-size:11px;color:#6b8091;line-height:1.5}
+.plan-occurrence-editor .future-edit-form{margin:10px 0 0}
+.plan-occurrence-editor .future-scope{margin:8px 0 13px}
+.plan-occurrence-editor .future-form-actions{display:flex;flex-wrap:wrap;gap:6px}
+@media(max-width:520px){
+ .plan-summary{gap:10px;padding:12px}
+ .plan-settings>summary{padding:13px 12px}
+ .plan-settings-body{padding:12px}
+ .schedule-occurrence-section{padding:11px;margin:12px 0}
+ .plan-occurrence-editor{padding:11px}
+}
+
+.plan-save-confirmation{padding:11px 13px;border:1px solid #cfe1ee;background:#f3f9fe;border-radius:8px;color:#315b7b;font-size:12px;font-weight:690;line-height:1.5}
+.plan-stop{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 3px 5px;margin-top:20px;border-top:1px solid #e6eef4}
+.plan-stop span{font-size:11px;color:#718397;line-height:1.5}
+.plan-stop .btn{font-size:11px;white-space:nowrap}
+.plan-stop .btn[data-stop-plan]:hover{background:#fff2ee}
+@media(max-width:520px){.plan-stop{flex-direction:column;align-items:flex-start}.plan-stop .btn{align-self:flex-start}}

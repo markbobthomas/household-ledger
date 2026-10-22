@@ -331,7 +331,11 @@ const {chromium,webkit}=require('playwright');
     'Explicitly confirmed recurrence is saved, independent of detection');
    const recurringRepair=page.locator('.future-item').filter({hasText:'One-time home repair'}).first();
    await recurringRepair.locator('[data-edit-future]').click();
-   await page.locator('.future-edit-form [data-remove-recurring]').click();
+   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
+    'Confirmed recurring transactions open their complete payment plan');
+   await page.locator('.transaction-detail [data-stop-plan]').click();
+   assert.match(await page.locator('.transaction-detail [data-stop-plan]').innerText(),/Confirm stop/);
+   await page.locator('.transaction-detail [data-stop-plan]').click();
    assert.equal(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count(),1,
     'Stopping recurrence returns to the original single user-added payment');
    await page.locator('[data-show-new]').click();
@@ -382,10 +386,15 @@ const {chromium,webkit}=require('playwright');
      .futureRecurringRules?.filter(x=>x.merchant==='Alternating Employer Paycheck').length),2,
     'Same employer creates exactly two independent saved rules');
    await payRows.first().locator('[data-edit-future]').click();
-   const editPay=page.locator('.future-edit-form');
-   await editPay.locator('[name=scope][value=all]').check();
-   await editPay.locator('[name=amount]').fill('3040');
-   await editPay.locator('button[type=submit]').click();
+   const editPay=page.locator('.transaction-detail');
+   assert.equal(await editPay.locator('[data-plan-settings]').count(),1,
+    'A confirmed payroll stream is managed as one payment plan');
+   await editPay.locator('[data-plan-settings] > summary').click();
+   await editPay.locator('[data-schedule-edit-form] [name=amount]').fill('3040');
+   await editPay.locator('[data-schedule-edit-form] button[type=submit]').click();
+   assert.match(await page.locator('.transaction-detail [role=status]').innerText(),
+    /Schedule saved/);
+   await page.locator('.transaction-detail-close').click();
    assert.deepEqual((await page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'})
      .locator('.future-amount').allInnerTexts()).map(x=>x.replace(/[^0-9.]/g,'')),
     ['3040.00','3075.00','3040.00','3075.00','3040.00','3075.00'],
@@ -523,6 +532,9 @@ const {chromium,webkit}=require('playwright');
    await schedule.locator('[name=amount]').fill('135');
    await schedule.locator('[name=date]').fill('2026-11-10');
    await schedule.locator('button[type=submit]').click();
+   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
+    'After creating a plan, the unified plan editor remains available');
+   await page.locator('.transaction-detail-close').click();
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+1,
     'An independent water obligation is stored');
    let water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
@@ -532,15 +544,19 @@ const {chromium,webkit}=require('playwright');
    await schedule.locator('[name=amount]').fill('220');
    await schedule.locator('[name=date]').fill('2026-11-10');
    await schedule.locator('button[type=submit]').click();
+   await page.locator('.transaction-detail-close').click();
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
     'Adding a second same-merchant/same-day bill never updates the first');
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
-   await water.locator('[data-schedule-estimate]').click();
-   const amountForm=page.locator('[data-schedule-estimate-form]');
+   await water.locator('[data-schedule-edit]').click();
+   await page.locator('.transaction-detail [data-plan-estimates] > summary').click();
+   const amountForm=page.locator('.transaction-detail [data-schedule-estimate-form]');
    await amountForm.locator('[name=amount]').fill('175');
    await amountForm.locator('[name=from]').fill('2026-12-01');
    await amountForm.locator('[name=through]').fill('2026-12-31');
    await amountForm.locator('button[type=submit]').click();
+   assert.match(await page.locator('.transaction-detail').innerText(),/Estimate saved for this plan/);
+   await page.locator('.transaction-detail-close').click();
    assert.match(await page.locator('[data-schedule-card]').filter({hasText:'Water - House'})
     .first().innerText(),/175/,'A dated forecast estimate is saved only to that schedule');
    // Editing one payment from inside its saved schedule must not edit the
@@ -556,7 +572,9 @@ const {chromium,webkit}=require('playwright');
    await november.click();
    const onePayment=page.locator('.transaction-detail .future-edit-form');
    assert.equal(await onePayment.locator('[name=scope][value=one]').isChecked(),true,
-    'Single occurrence editing is the safe default inside schedules');
+    'One date editing is the default within the unified plan');
+   assert.equal(await onePayment.locator('[name=scope][value=all]').count(),0,
+    'No second competing schedule editor is embedded in an individual payment');
    await onePayment.locator('[name=amount]').fill('147');
    await onePayment.locator('button[type=submit]').click();
    await page.locator('.transaction-detail [data-schedule-occurrence-key]').first().waitFor();
@@ -588,11 +606,18 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.calendar-detail-item')
     .filter({hasText:'Water - Garden'}).innerText(),/220/);
    await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).click();
-   assert.ok(await page.locator('.transaction-detail .future-edit-form').count()>0,
-    'A recurring utility bill uses the same full transaction editor from the calendar');
-   await page.locator('.transaction-detail [data-open-linked-schedule]').first().click();
-   assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
-    'The connected recurring schedule opens in the SAME details panel');
+   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
+    'Clicking a monthly prediction opens its complete payment plan directly');
+   assert.equal(await page.locator('.transaction-detail .future-edit-form').count(),1,
+    'The specific occurrence is editable inline in the SAME plan');
+   assert.equal(await page.locator('.transaction-detail [data-open-linked-schedule]').count(),0,
+    'No redundant Edit Schedule button creates a second navigation step');
+   await page.locator('.transaction-detail [data-plan-settings] > summary').click();
+   assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').isVisible(),true,
+    'Schedule-wide settings are one disclosure in the current panel');
+   await page.locator('.transaction-detail-close').click();
+   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
+    'Closing the selected occurrence stays inside the same payment plan');
    await page.locator('.transaction-detail-close').click();
    assert.equal(await page.locator('.summary-page').count(),1,
     'Closing a linked schedule returns to the calendar instead of stranding users on Schedules');
