@@ -639,7 +639,9 @@ function relatedCardCalculation(bundle,row){
 // and advanced Predictions. All buttons resolve the same canonical ledger key.
 function editableForecastRow(row,opts={}){
  const isTransfer=row.kind==='movement',inbound=row.type==='income'||row.type==='refund';
- const subtitle=(isTransfer?row.from+' → '+row.to:row.account||'Account')+
+ const kindLabel=isTransfer?'Linked transfer':row.type==='income'?'Deposit':
+  row.type==='refund'?'Refund':'Withdrawal / purchase';
+ const subtitle=kindLabel+' · '+(isTransfer?row.from+' → '+row.to:row.account||'Account')+
   (row.recurringRuleId?' · Repeats':row.seriesKey?' · Auto-detected':' · One time');
  return '<div class="unified-payment-row'+(opts.kind==='schedule'?' schedule-occurrence-entry':'')+
   '" data-inline-row-wrapper data-payment-key="'+escapeHTML(row.key)+'">'+
@@ -1081,7 +1083,7 @@ function transactionsPage(bundle,s){
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
   '<div class="page-heading"><div><h2>Predictions</h2>'+
-   '<p>All forecast transactions for the next '+horizon+' days. Select any payment to see its source, linked schedule and full editing options. All pages use the same details panel.</p></div>'+
+   '<p>All dated forecasts for the next '+horizon+' days. Select a payment to expand the same inline editor used in Calendar and Schedules.</p></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
