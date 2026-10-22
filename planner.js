@@ -905,7 +905,7 @@ function transactionsPage(bundle,s){
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
   '<div class="page-heading"><div><h2>Predictions</h2>'+
-   '<p>All dated predictions for the next '+horizon+' days. Select Edit to change a payment or choose Not recurring to remove an incorrectly detected repeating payment.</p></div>'+
+   '<p>All forecast transactions for the next '+horizon+' days. Select any payment to see its source, linked schedule and full editing options. All pages use the same details panel.</p></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -1002,7 +1002,7 @@ function historyPage(bundle,s){
    action+'</div>';
  }).join('');
  return '<div class="planner-page history-page"><div class="page-heading"><div><h2>Actual transaction history</h2>'+
-  '<p>Every transaction retrieved from your connected accounts. These are bank records—not predictions.</p></div>'+
+  '<p>Bank records, not forecasts. Select a transaction to see its details and optionally create a future schedule. Original bank records never change.</p></div>'+
   '<span class="status-tag">'+records.length+' TRANSACTIONS</span></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
@@ -1139,8 +1139,14 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  const series=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
  const events=(derived?.events||[]).filter(x=>x.date>s.asOf&&x.date<=shiftDay(s.asOf,horizon))
   .sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
- const notes=events.map(e=>'<div class="overview-upcoming-item"><span>'+escapeHTML(dayLabel(e.date))+
-  '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span></div>').join('');
+ const notes=events.map(e=>{
+  const key=e.transferGroupId?window.HouseholdPlannerTransactions.keyMovement(e.transferGroupId):
+   e.predictionKey||window.HouseholdPlannerTransactions.keyEvent(e.id,e.accountId);
+  return '<button type="button" class="overview-upcoming-item overview-upcoming-open" data-open-transaction="'+
+   escapeHTML(key)+'"><span>'+escapeHTML(dayLabel(e.date))+
+   '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span>'+
+   '<span class="overview-details-indicator">Details →</span></button>';
+ }).join('');
  return '<div class="planner-page overview-page">'+
   accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
   ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length||bundle?.automaticRecurrence?.review?.length||bundle?.duplicateConflicts?.length)?
