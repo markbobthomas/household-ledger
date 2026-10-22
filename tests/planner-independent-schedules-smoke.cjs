@@ -28,9 +28,14 @@ assert.deepEqual(nov.map(e=>e.amount).sort((a,b)=>a-b),[150,220]);
 assert.ok(nov.every(e=>e.amountEstimate),'Variable bills should identify amounts as estimates');
 assert.ok(b.ledger.filter(e=>e.date==='2026-12-10'&&e.accountId==='checking').length===2);
 assert.equal(b.projection.household.conservationDifference,0);
-const ranges=T.setScheduleEstimate(state,house.id,
- {scope:'range',amount:175,from:'2026-12-01',through:'2026-12-31'},asOf);
-assert.equal(ranges.amount,150,'Dated estimates do not rewrite the usual amount');
+// Previously saved date-range estimates are honored for compatibility,
+ // but new grouped date-range changes are no longer allowed.
+assert.throws(()=>T.setScheduleEstimate(state,house.id,
+ {scope:'range',amount:175,from:'2026-12-01',through:'2026-12-31'},asOf),
+ /Edit one dated payment/);
+house.amountWindows=[{from:'2026-12-01',through:'2026-12-31',amount:175}];
+const ranges=house;
+assert.equal(ranges.amount,150,'Legacy estimates preserve the original schedule');
 assert.equal(T.scheduleAmount(ranges,'2026-11-10').amount,150);
 assert.equal(T.scheduleAmount(ranges,'2026-12-10').amount,175);
 assert.equal(T.scheduleAmount(garden,'2026-12-10').amount,220,'Other bills are unchanged');
@@ -46,21 +51,25 @@ T.setScheduleEstimate(edited,house.id,{scope:'all',amount:160},asOf);
 adjusted=C.materialize(snapshot,history,edited.predictions,T,P,90);
 assert.ok(adjusted.ledger.some(e=>e.date==='2026-11-10'&&e.amount===160),
  'An all-future schedule estimate replaces a stale global amount edit');
-assert.ok(adjusted.ledger.some(e=>e.date==='2026-12-10'&&e.amount===175));
+assert.ok(adjusted.ledger.some(e=>e.date==='2026-12-10'&&e.amount===160),
+ 'All future amount updates supersede legacy partial range amounts');
 
 b=C.materialize(snapshot,history,state.predictions,T,P,90);
 assert.deepEqual(b.ledger.filter(e=>e.date==='2026-12-10').map(e=>e.amount).sort((a,b)=>a-b),[175,220]);
-T.setScheduleEstimate(state,house.id,{scope:'all',amount:160},asOf);
+// Existing stored legacy ranges stay intact until the owner explicitly
+ // updates the repeating schedule amount (or clears an old rule).
+house.amount=160;
 assert.equal(T.scheduleAmount(house,'2026-11-10').amount,160);
-assert.equal(T.scheduleAmount(house,'2026-12-10').amount,175,'Specific range overrides all-future estimate');
+assert.equal(T.scheduleAmount(house,'2026-12-10').amount,175);
 assert.throws(()=>T.setScheduleEstimate(state,house.id,
- {scope:'range',amount:50,from:'2026-10-01',through:'2026-12-31'},asOf),/future date range/);
+ {scope:'range',amount:50,from:'2026-10-01',through:'2026-12-31'},asOf),
+ /Edit one dated payment/);
 const next=T.defineRecurring(state,{...base,separateSchedule:false,merchant:'River Water Utility',scheduleLabel:'Water — House',
  amount:160,amountBasis:'estimate',date:'2026-11-10'},accounts,asOf,
  {kind:'event',accountId:'checking',sourceAccountId:'checking',recurringRuleId:house.id,
   originalMerchant:'River Water Utility',type:'expense',date:'2026-11-10'},history,[]);
 assert.equal(next.id,house.id);
-assert.equal(next.amountWindows.length,1,'Editing a schedule retains its dated estimates');
+assert.equal(next.amountWindows.length,1,'Unmodified legacy amounts are retained without silently changing the forecast');
 assert.equal(state.predictions.futureRecurringRules.length,2);
 const added=T.add(state,{date:'2026-11-10',merchant:'Water — House',type:'expense',
  amount:10,accountId:'checking'},accounts,asOf);
@@ -107,6 +116,14 @@ assert.ok(siblingForecast.ledger.some(e=>e.date==='2026-11-10'&&e.amount===220),
  'The second same-merchant bill still reduces the cash forecast');
 T.removeScheduleEstimate(state,house.id,0);
 assert.equal(T.scheduleAmount(state.predictions.futureRecurringRules.find(r=>r.id===house.id),'2026-12-10').amount,160);
+assert.equal(next.amountWindows.length,0,'An old range can be explicitly cleared');
+const allState={predictions:structuredClone(state.predictions)};
+const allHouse=allState.predictions.futureRecurringRules.find(r=>r.id===house.id);
+allHouse.amountWindows=[{from:'2026-12-01',through:'2026-12-31',amount:175}];
+T.setScheduleEstimate(allState,house.id,{scope:'all',amount:180},asOf);
+assert.equal(allHouse.amountWindows.length,0);
+assert.equal(T.scheduleAmount(allHouse,'2026-12-10').amount,180,
+ 'All future amount updates really apply to every future date');
 T.removeRecurring(state,house.id);
 assert.equal(state.predictions.futureRecurringRules.length,1);
 assert.equal(state.predictions.futureRecurringRules[0].id,garden.id,
@@ -116,4 +133,4 @@ assert.deepEqual(T.recurrenceDates(historic,'2026-10-21','2027-01-15'),
  ['2026-11-10','2026-12-10','2027-01-10'],
  'A schedule saved years ago must continue generating future monthly bills');
 assert.equal(JSON.stringify(history),immutable,'All posted bank records stay untouched');
-console.log('PASS independent same-payee/same-day variable bills, calendar amounts, scoped estimates, real posting, immutable bank history');
+console.log('PASS independent same-payee/same-day bills, legacy compatibility, individual-or-all only, real posting, immutable bank history');

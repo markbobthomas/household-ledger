@@ -715,11 +715,9 @@ function detailHtml(bundle,s){
  if(transactionDetail.kind==='schedule'){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===transactionDetail.id);
   const isNew=transactionDetail.mode==='new',picked=transactionDetail.selectedKey||'';
-  const edit=document.querySelector(isNew?'[data-schedule-new-form]':'[data-schedule-edit-form]'),
-   estimate=document.querySelector('[data-schedule-estimate-form]');
-  const editHtml=edit?.outerHTML||'<p>Schedule details are temporarily unavailable. Close and reopen the plan.</p>',
-   estimateHtml=estimate?.outerHTML||'';
-  edit?.remove();estimate?.remove();
+  const edit=document.querySelector(isNew?'[data-schedule-new-form]':'[data-schedule-edit-form]');
+  const editHtml=edit?.outerHTML||'<p>Schedule details are temporarily unavailable. Close and reopen the plan.</p>';
+  edit?.remove();
   const account=rule?activeAccounts(s).find(a=>String(a.id)===String(rule.accountId||rule.fromAccountId)):null;
   const info=!isNew&&rule?'<div class="plan-summary">'+
    '<div><small>Repeats</small><strong>'+escapeHTML(rule.frequency||'Recurring')+'</strong></div>'+
@@ -737,10 +735,8 @@ function detailHtml(bundle,s){
    'Bank history and other unrelated plans remain unchanged.</span>'+
    '<button type="button" class="btn" data-stop-plan="'+escapeHTML(rule.id)+'">'+
    (planStopPending===rule.id?'Confirm stop repeating':'Stop repeating')+'</button></div>':'';
-  const estimates=!isNew&&estimateHtml?'<details class="plan-settings plan-estimates" data-plan-estimates'+
-   (transactionDetail.mode==='estimate'?' open':'')+'><summary><span>Estimate amounts over a date range</span>'+
-   '<small>Override part of the forecast, without changing another bill</small></summary>'+
-   '<div class="plan-settings-body">'+estimateHtml+'</div></details>':'';
+  // Legacy date-range estimates remain honored by the forecast engine, but
+  // the editor only offers one payment or the entire repeating schedule.
   return detailShell(isNew?'New payment plan':rule?.scheduleLabel||rule?.merchant||'Payment plan',
    isNew?'Create a separate, repeating payment plan':
     picked?'One plan · editing a single scheduled payment':
@@ -753,7 +749,7 @@ function detailHtml(bundle,s){
      ' This change will not update the other occurrences.</div>':'')+
     // Keep selected payment visible near the top, not in a second modal.
     (isNew?'':scheduleOccurrencesHtml(bundle,s,rule,picked))+
-    settings+estimates+stopPlan,
+    settings+stopPlan,
    isNew?'NEW PLAN · FORECAST ONLY':'PAYMENT PLAN · EDITABLE');
  }
  return '';
@@ -1010,7 +1006,6 @@ function schedulesPage(bundle,s){
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
-   isEstimating=(isEditing||scheduleMode==='estimate'||planOpen)&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
@@ -1019,22 +1014,10 @@ function schedulesPage(bundle,s){
    fields({...r,date:next||tomorrow},false)+
    '<div class="future-form-actions"><button class="btn primary" type="submit">Save schedule</button>'+
     '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
-  const estimateForm=isEstimating?'<form class="schedule-form" data-schedule-estimate-form="'+id+'">'+
-   '<p>Change an estimate without moving its due date or changing another bill.</p><div class="future-fields">'+
-   '<label>Estimated amount ($)<input name="amount" min=".01" max="999999999" type="number" step=".01" required value="'+
-   escapeHTML(estimate.amount)+'"></label>'+
-   '<label>Applies to<select name="scope" data-schedule-amount-scope><option value="range">Part of forecast</option>'+
-    '<option value="all">All future payments</option></select></label></div>'+
-   '<div class="future-fields" data-schedule-estimate-dates>'+
-   '<label>From<input name="from" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,360))+
-   '" value="'+tomorrow+'"></label>'+
-   '<label>Through<input name="through" type="date" min="'+tomorrow+'" max="'+
-   escapeHTML(shiftDay(s.asOf,360))+'" value="'+escapeHTML(end)+'"></label></div>'+
-   '<div class="future-form-actions"><button class="btn primary" type="submit">Apply estimate</button>'+
-    '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
   const windows=wins.map((w,i)=>'<div class="schedule-window"><span>'+
    escapeHTML(w.from)+' to '+escapeHTML(w.through)+' · '+cash(w.amount)+'</span>'+
-   '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+'">Clear</button></div>').join('');
+   '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+
+   '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
   return '<article class="panel schedule-card" data-schedule-card="'+id+'">'+
    '<div class="schedule-heading"><div><strong>'+escapeHTML(r.scheduleLabel||r.merchant)+'</strong>'+
    '<small>'+escapeHTML(r.merchant)+' · '+escapeHTML(account?.name||'Account')+
@@ -1047,17 +1030,19 @@ function schedulesPage(bundle,s){
     '<button class="btn" type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
     '<button class="btn" type="button" data-schedule-remove="'+id+'">'+
      (scheduleRemoveTarget===r.id?'Confirm remove':'Remove')+'</button></div>'+
-   (windows&&wins.length?'<div class="schedule-windows"><small>Estimated ranges</small>'+windows+'</div>':'')+
+   (wins.length?'<details class="schedule-legacy-windows"><summary>'+wins.length+
+    ' previously saved amount exception'+(wins.length===1?'':'s')+'</summary>'+
+    '<p>Older date-range estimates are still included so your balances do not change unexpectedly. '+
+    'You can clear an old rule or change a specific payment below. '+
+    'Changing the repeating amount for all future payments will replace these older rules.</p>'+
+    windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
-     '<p class="plan-edit-guide">Repeating defaults apply across future payments. '+
-      'Each dated payment below can be changed separately.</p>'+
+     '<p class="plan-edit-guide">Two choices: change the repeating schedule for all future payments, '+
+      'or open a dated payment below to change only that one.</p>'+
      '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span>'+
       '<small>Amount, date, frequency, payee and accounts</small></summary>'+
       '<div class="plan-settings-body">'+edit+'</div></details>'+
-     '<details class="plan-settings" data-plan-estimates><summary><span>Variable amount ranges</span>'+
-      '<small>Specific months or all future payments</small></summary>'+
-      '<div class="plan-settings-body">'+estimateForm+'</div></details>'+
-      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</article>';
+     scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</article>';
  }).join('');
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
   '<h2>Payment schedules</h2><p>Manage repeating bills and paychecks here. Open any schedule to edit one upcoming payment without changing the others.</p></div>'+
@@ -1373,8 +1358,8 @@ function settingsPage(bundle,s,chosen){
   '<section class="panel mini-panel" aria-label="Recurring forecast changes">'+
    '<div class="section-title"><h2>Recurring payment changes</h2>'+
     '<span class="status-tag">'+Object.keys(state().predictions?.futureSeriesEdits||{}).length+' CUSTOMIZED</span></div>'+
-   '<p>To change a mortgage, bill, paycheck, or card payment across future months, open Predictions, click <strong>Edit</strong>, and select <strong>This and all future payments</strong>.</p>'+
-   '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
+   '<p>To change all future payments, edit the repeating defaults in Schedules. To change one date, click that payment in Calendar or Schedules.</p>'+
+   '<button type="button" class="btn" data-view="schedules">Manage schedules</button>'+
    '</section>'+
   auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
@@ -1558,17 +1543,12 @@ document.addEventListener('click',async e=>{
   transactionDetail=null;activeTab='schedules';render();return;
  }
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
- const scheduleEstimate=e.target.closest?.('[data-schedule-estimate]');
- if(scheduleEdit||scheduleEstimate){
-  const mode=scheduleEdit?'edit':'estimate',id=(scheduleEdit||scheduleEstimate).dataset[
-   scheduleEdit?'scheduleEdit':'scheduleEstimate'];
+ if(scheduleEdit){
+  const id=scheduleEdit.dataset.scheduleEdit;
   const same=scheduleMode==='edit'&&scheduleTarget===id;
   scheduleRemoveTarget='';scheduleNotice='';
   scheduleMode=same?'':'edit';scheduleTarget=same?'':id;
-  transactionDetail=null;render();
-  if(!same&&mode==='estimate')
-   document.querySelector('[data-schedule-inline-plan="'+id.replace(/[\\"']/g,'')+'"] [data-plan-estimates]')?.setAttribute('open','');
-  return;
+  transactionDetail=null;render();return;
  }
  const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
  if(removeWindow){
@@ -2002,7 +1982,7 @@ async function commitForecastChange(action){
  }catch(err){current.predictions=JSON.parse(before);throw err}
 }
 document.addEventListener('submit',async e=>{
- const form=e.target.closest?.('[data-schedule-new-form],[data-schedule-edit-form],[data-schedule-estimate-form]');
+ const form=e.target.closest?.('[data-schedule-new-form],[data-schedule-edit-form]');
  if(!form)return;
  e.preventDefault();
  const submit=form.querySelector('[type=submit]');if(submit)submit.disabled=true;
@@ -2026,11 +2006,7 @@ document.addEventListener('submit',async e=>{
     originalType:r.originalType||r.type,sourceAmount:r.matchAmount||r.amount,date:r.sourceAnchorDate||r.anchorDate};
    await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,reference,model.records(state()),[]));
    savedPlanId=id;
-   scheduleNotice='Schedule saved. Individual exceptions remain separate.';
-  }else{
-   await commitForecastChange(()=>T.setScheduleEstimate(state(),form.dataset.scheduleEstimateForm,fields,s.asOf));
-   savedPlanId=form.dataset.scheduleEstimateForm;
-   scheduleNotice='Estimate saved for this plan and date range only.';
+   scheduleNotice='Saved — repeating schedule updated. Individual payment edits remain separate.';
   }
   schedulePreset=null;scheduleRemoveTarget='';
   if(activeTab==='schedules'&&savedPlanId&&!transactionDetail){
@@ -2203,7 +2179,8 @@ document.addEventListener('submit',async e=>{
      const saveCadence=row.cadence==='twice-monthly'?'twice monthly':row.cadence;
      const result=useSeries?
       planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,saveCadence,row.kind):
-      planner.defineRecurring(state(),fields,accounts,asOf,row,model.records(state()),examples);
+      planner.defineRecurring(state(),{...fields,resetAmountWindows:'on'},
+       accounts,asOf,row,model.records(state()),examples);
      const edits=state().predictions.futureTransactionEdits||{};
      for(const other of existingRows){
       // A confirmed plan's individually edited dates are independent.
@@ -2298,12 +2275,7 @@ document.addEventListener('change',e=>{
   }
   return;
  }
- if(e.target.matches?.('[data-schedule-amount-scope]')){
-  const dates=e.target.closest('form')?.querySelector('[data-schedule-estimate-dates]');
-  if(dates)dates.hidden=e.target.value==='all';
-  return;
- }
- if(e.target.matches?.('[data-schedule-type]')){
+  if(e.target.matches?.('[data-schedule-type]')){
   const form=e.target.closest('form'),transfer=e.target.value==='transfer';
   form?.querySelectorAll('.schedule-transfer-account').forEach(el=>el.hidden=!transfer);
   const single=form?.querySelector('.schedule-single-account');if(single)single.hidden=transfer;
