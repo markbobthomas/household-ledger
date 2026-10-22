@@ -15,11 +15,11 @@ const immutable=JSON.stringify(history),state={predictions:{}};
 const base={date:'2026-11-10',type:'expense',accountId:'checking',frequency:'monthly',
  merchant:'River Water Utility',amountBasis:'estimate',separateSchedule:'on'};
 const house=T.defineRecurring(state,{...base,scheduleLabel:'Water — House',amount:150},accounts,asOf,
- null,history,['2026-10a']);
+ null,history,['2026-10a','2026-10b']);
 const garden=T.defineRecurring(state,{...base,scheduleLabel:'Water — Garden',amount:220},accounts,asOf,
  null,history,['2026-10b']);
 assert.notEqual(house.id,garden.id,'Two bills of same merchant and date have different stable IDs');
-assert.deepEqual(house.exampleIds,['2026-10a'],'Bank examples are linked to one selected stream');
+assert.deepEqual(house.exampleIds,['2026-10a'],'New schedule takes ownership of its chosen posted transaction, without changing bank facts');
 assert.deepEqual(garden.exampleIds,['2026-10b'],'Second bill has its own bank evidence');
 let b=C.materialize(snapshot,history,state.predictions,T,P,90);
 let nov=b.ledger.filter(e=>e.date==='2026-11-10'&&e.accountId==='checking');
@@ -58,8 +58,8 @@ const postedOne=[...history,{id:'nov-only',date:'2026-11-08',merchant:'River Wat
  amount:161,type:'expense',accountId:'checking',pending:false}];
 const later={...snapshot,asOf:'2026-11-09'};
 b=C.materialize(later,postedOne,state.predictions,T,P,90);
-assert.equal(b.ledger.filter(e=>e.date==='2026-11-10').length,1,
- 'One real payment may reconcile one schedule; the other obligation stays forecast');
+assert.deepEqual(b.ledger.filter(e=>e.date==='2026-11-10').map(e=>e.amount),[220],
+ 'The matching paid bill disappears; the other same-payee bill remains forecast');
 const postedBoth=[...postedOne,{id:'nov-second',date:'2026-11-09',merchant:'River Water Utility',
  amount:218,type:'expense',accountId:'checking',pending:false}];
 b=C.materialize(later,postedBoth,state.predictions,T,P,90);
@@ -67,6 +67,17 @@ assert.equal(b.ledger.filter(e=>e.date==='2026-11-10').length,0,
  'Two actual bank payments reconcile two separate occurrences exactly once');
 assert.equal(b.ledger.filter(e=>e.date==='2026-12-10').length,2,
  'December bills remain predicted after both November payments post');
+const oneDifferent=[...history,{id:'nov-garden',date:'2026-11-09',
+ merchant:'River Water Utility',amount:219,type:'expense',accountId:'checking',pending:false}];
+const gardenPaid=C.materialize(later,oneDifferent,state.predictions,T,P,90);
+assert.deepEqual(gardenPaid.ledger.filter(e=>e.date==='2026-11-10').map(e=>e.amount),[160],
+ 'The closest matching estimated bill is reconciled, not the first saved rule');
+const equalValue=JSON.parse(JSON.stringify(state.predictions));
+T.setScheduleEstimate({predictions:equalValue},garden.id,{scope:'all',amount:160},asOf);
+const equalRows=C.materialize(snapshot,history,equalValue,T,P,90).ledger
+ .filter(e=>e.date==='2026-11-10');
+assert.deepEqual(equalRows.map(e=>e.amount),[160,160],
+ 'Two independent schedules still count twice even with identical amounts and dates');
 T.removeScheduleEstimate(state,house.id,0);
 assert.equal(T.scheduleAmount(state.predictions.futureRecurringRules.find(r=>r.id===house.id),'2026-12-10').amount,160);
 T.removeRecurring(state,house.id);
