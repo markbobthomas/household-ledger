@@ -1597,7 +1597,10 @@ document.addEventListener('click',async e=>{
   return;
  }
  if(e.target.closest('[data-cancel-review-form]')){
-  recurringDraft=null;render();return;
+  recurringDraft=null;
+  if(transactionDetail) dismissTransaction();
+  else render();
+  return;
  }
  if(e.target.closest('[data-history-more]')){
   historyLimit+=90;render();return;
