@@ -200,6 +200,11 @@ function monthlyPredictions(state){
   .reduce((sum,r)=>sum+Number(r.event.amount||0),0),
   withdrawals=rows.filter(r=>signed(r.event,credit)<=0)
   .reduce((sum,r)=>sum+Number(r.event.amount||0),0);
+ const uncertain=!credit?(state.cardEstimates||[]).filter(c=>!c.eligible):[];
+ const unplanned=uncertain.length?'<div class="calendar-monthly-unplanned"><strong>Card payments not yet included</strong>'+
+  uncertain.map(c=>'<div><span>'+esc(c.cardName)+' · '+money(Number(c.observedCharges||0))+
+   ' in recent posted purchases (not an issued statement)</span>'+
+   '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
  return '<details class="calendar-monthly-list" open>'+
   '<summary>All '+rows.length+' predicted transactions in '+esc(monthName(calendarMonth))+
    '<span>View every dated prediction</span></summary>'+
@@ -214,7 +219,7 @@ function monthlyPredictions(state){
    '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
    '</strong><span class="calendar-monthly-view">View</span></button>').join('')+
    '</div>':'<p class="calendar-empty">No predicted deposits or withdrawals for the selected account this month.</p>')+
-  '</details>';
+   unplanned+'</details>';
 }
 function calendarGrid(){
  const state=calendarContext;
@@ -317,9 +322,11 @@ function reviewDetails(bundle,accounts,chosen,prefs,ready,coverage){
   !ready(prefs?.paymentRules?.[a.id],a,accounts))){
   const candidate=(bundle?.payments?.cardEstimates||[]).find(c=>String(c.cardId)===String(card.id));
   add(card.name+' · card payment',candidate?.eligible?
-   'A provisional monthly checking withdrawal is included, based on past paired Plaid payments. Confirm the actual statement cycle and expected withdrawal in Settings.':
-   'No checking withdrawal is predicted for this card. Plaid purchases do not reveal the payment date or paying account. '+(candidate?.reason||'Confirm card billing and payment details.'),
-   'settings');
+   'A provisional monthly checking withdrawal is included using paired Plaid transfers. The amount is an estimate, not an issued statement. Confirm its cycle and withdrawal date in Settings.':
+   'No checking withdrawal has been forecast. Settled Plaid card spending over the last 30 days: '+
+    money(Number(candidate?.observedCharges||0))+
+    '. This is not necessarily the issued statement balance. The paying account and payment date cannot be established from purchases alone. '+
+    (candidate?.reason||'Confirm card billing and payment details.'),'settings');
  }
  for(const item of (bundle?.historyCandidates||[]).filter(t=>String(t.accountId)===String(chosen.id)))
   add(item.merchant||'Recurring suggestion','Potential repeating payment; '+(item.reason||'Review its bank history.'),'reviews');
@@ -401,6 +408,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   actual.get(r.date).push(r);
  }
  calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,
+  cardEstimates:bundle?.payments?.cardEstimates||[],
   cushion:Number(prefs?.cashCushion??500),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
