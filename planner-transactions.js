@@ -214,18 +214,27 @@ function linkedSchedule(candidates,selectedExampleIds){
  * linked bank ID or unambiguous four-week paycheck phase identifies one. */
 function historicalScheduleMatches(row,accounts,rules=[]){
  if(!row)return [];
- const account=accountRef(row.accountId||row.account,accounts),
-  type=bankDirection(row),name=merchantKey(row.merchant||row.name);
- if(!account||!type)return [];
+ const account=accountRef(row.accountId||row.account,accounts);
+ if(!account)return [];
+ // Bank identifiers outrank provider category and renamed merchant metadata.
+ // Plaid may reclassify an ACH payment after its schedule was confirmed.
+ const explicit=(rules||[]).filter(r=>{
+  const source=String(r.originalAccountId||r.accountId||r.fromAccountId),
+   ids=(r.exampleIds||[]).map(String);
+  return source===account&&ids.includes(String(row.id))||
+   r.kind==='movement'&&Boolean(row.pairedTransactionId)&&
+   String(r.toAccountId)===account&&ids.includes(String(row.pairedTransactionId));
+ });
+ if(explicit.length)return explicit;
+ const type=bankDirection(row),name=merchantKey(row.merchant||row.name);
+ if(!type)return [];
  const kind=type==='transfer'?'movement':'event',
   eligible=(rules||[]).filter(r=>
    r.kind===kind&&
    String(r.originalAccountId||r.accountId||r.fromAccountId)===account&&
    (kind==='movement'?Boolean(row.pairedTransactionId)&&
     (!row.toAccountId||String(r.toAccountId)===String(row.toAccountId)):
-    r.type===type)),
-  explicit=eligible.filter(r=>(r.exampleIds||[]).some(id=>String(id)===String(row.id)));
- if(explicit.length)return explicit;
+    r.type===type));
  if(!name)return [];
  const named=eligible.filter(r=>
   [r.originalMerchant,r.merchant,...(r.matchNames||[])]
