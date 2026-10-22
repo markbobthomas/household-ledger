@@ -446,6 +446,7 @@ function futureRows(bundle,s){
    from:labels.get(String(p.fromAccountId))||p.fromAccountId,
    to:labels.get(String(p.toAccountId))||p.toAccountId,
    seriesKey:p.seriesKey||null,baseDate:p.baseDate||p.date,cadence:p.cadence||null,
+   source:p.origin||p.source||null,amountEstimate:p.amountEstimate||null,
    recurringRuleId:p.recurringRuleId||null,
    sourceAccountId:String(p.sourceAccountId||p.fromAccountId||''),
    sourceMerchant:p.sourceMerchant||p.merchant,
@@ -467,7 +468,7 @@ function futureRows(bundle,s){
    recurringRuleId:e.recurringRuleId||null,
    sourceAccountId:String(e.sourceAccountId||e.accountId||''),
    sourceMerchant:e.sourceMerchant||e.merchant,
-   sourceType:e.sourceType||e.type,
+   sourceType:e.sourceType||e.type,source:e.source||null,
    addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
  }
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
@@ -989,7 +990,9 @@ function historyPage(bundle,s){
     '">Allow predictions</button>':linked||predicted?
     '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
     '" data-history-account="'+escapeHTML(aid)+'">Not recurring</button>':'');
-  return '<div class="history-actual-row" data-historical-transaction="'+escapeHTML(String(t.id))+'">'+
+  return '<div class="history-actual-row" role="button" tabindex="0" aria-label="View bank transaction: '+
+   escapeHTML(t.merchant||'Bank transaction')+'" data-historical-transaction="'+escapeHTML(String(t.id))+
+   '" data-historical-account="'+escapeHTML(aid)+'">'+
    '<span class="history-actual-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
    '<div class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
@@ -1484,10 +1487,14 @@ document.addEventListener('click',async e=>{
   window.scrollTo({top:0,behavior:'auto'});
   return;
  }
- const fromHistory=e.target.closest('[data-history-plan]')||e.target.closest('[data-calendar-history-plan]');
+ const actualRow=e.target.closest?.('[data-historical-transaction]');
+ const fromHistory=e.target.closest('[data-history-plan]')||
+  e.target.closest('[data-calendar-history-plan]')||
+  (actualRow&&!e.target.closest('button,input,a,select')?actualRow:null);
  if(fromHistory){
-  const account=fromHistory.dataset.historyAccount;
-  const historyId=fromHistory.dataset.historyPlan||fromHistory.dataset.calendarHistoryPlan;
+  const account=fromHistory.dataset.historyAccount||fromHistory.dataset.historicalAccount;
+  const historyId=fromHistory.dataset.historyPlan||fromHistory.dataset.calendarHistoryPlan||
+   fromHistory.dataset.historicalTransaction;
   const row=lastHistoryRows.find(t=>String(t.id)===historyId&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
   if(!row||!window.HouseholdPlannerHistory.canPlan(row)){
@@ -1498,6 +1505,7 @@ document.addEventListener('click',async e=>{
     row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
    reviewNotice='';
   }catch(error){setNotice(String(error.message||error));return}
+  detailReturnFocus=e.target;
   transactionDetail={kind:'actual',id:String(row.id),account};
   // Bank facts remain read-only; its future schedule can be created here.
   drawTransactionDetail(forecastFor(snapshot()),snapshot());
@@ -1884,6 +1892,9 @@ document.addEventListener('submit',async e=>{
 });
 document.addEventListener('keydown',e=>{
  if(e.key==='Escape'&&transactionDetail){dismissTransaction();return}
+ if((e.key==='Enter'||e.key===' ')&&e.target.matches?.('[data-historical-transaction]')){
+  e.preventDefault();e.target.click();return;
+ }
  if(e.key==='Escape'&&document.querySelector('[data-calendar-quick-form]')){
   window.HouseholdPlannerSummary.closeEditor();
   return;
@@ -2057,6 +2068,10 @@ document.addEventListener('change',e=>{
  }
  if(e.target.name==='scope'){
   const form=e.target.closest('[data-future-edit-form]');
+  const impact=document.querySelector('[data-edit-impact]');
+  if(impact)impact.textContent=e.target.value==='all'?
+   'This and all future: the repeating forecast from this date forward will change. Past bank transactions never change.':
+   'This payment only: just this date and amount will change. Other recurring payments stay as they are.';
   const section=form?.querySelector('.future-repeat-fields');
   if(section)section.hidden=e.target.value!=='all';
   if(e.target.value==='all')updateHistoryLinks(form);
