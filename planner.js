@@ -30,6 +30,7 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,horizon=90,latestError
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
+let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -617,11 +618,95 @@ function newTransactionForm(s){
   '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00" value="'+escapeHTML(preset?.amount??'')+'"></label>'+
   '<label>Repeat'+frequencyChoices(preset?'monthly':'once',true)+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
-  '</div><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
+  '</div><label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> This is an additional independent bill or paycheck, even from the same merchant</label><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
    'For alternating biweekly paychecks, make two independent Every 4 weeks deposits, with their start dates 14 days apart. Link each to its own past paychecks below.</p>'+
   '<div class="future-history-container" data-new-history-link hidden>'+historyLinkField()+'</div>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
+}
+
+function schedulesPage(bundle,s){
+ const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
+  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
+ const fields=(r,isNew)=>{
+  const type=r.type||'expense',transfer=isNew&&type==='transfer'||r.kind==='movement',
+   accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id;
+  return '<div class="future-fields">'+
+   '<label>Bill label (distinguishes same-payee bills)<input name="scheduleLabel" maxlength="110" placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||'')+'"></label>'+
+   '<label>Bank merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(r.merchant||'')+'"></label>'+
+   '<label>Expected amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
+   '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,360))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
+   '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
+   '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
+   '<option value="fixed"'+(r.amountBasis!=='estimate'?' selected':'')+'>Fixed</option></select></label>'+
+   (isNew?'<label>Type<select name="type" data-schedule-type>'+
+    [['expense','Withdrawal'],['income','Deposit'],['refund','Refund'],['transfer','Linked transfer']].map(([v,name])=>
+     '<option value="'+v+'"'+(type===v?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':
+    '<input type="hidden" name="type" value="'+escapeHTML(type)+'">')+
+   '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+
+    accountSelect(accounts,accountId,'accountId')+'</label>'+
+   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From'+
+    accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
+   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>To'+
+    accountSelect(accounts,r.toAccountId||accounts.find(a=>String(a.id)!==accountId)?.id||accountId,'toAccountId')+'</label>'+
+   '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
+    '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
+   '</div>';
+ };
+ const create=scheduleMode==='new'?'<form class="panel schedule-form" data-schedule-new-form>'+
+  '<h3>Create a separate payment schedule</h3><p>This will not merge with another bill, even from the same merchant on the same day.</p>'+
+  '<input name="separateSchedule" type="hidden" value="on">'+
+  fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
+  '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
+  '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
+ const cards=rules.map(r=>{
+  const id=escapeHTML(r.id),isEditing=scheduleMode==='edit'&&scheduleTarget===r.id,
+   isEstimating=scheduleMode==='estimate'&&scheduleTarget===r.id,
+   dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
+   estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
+   account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
+   wins=Array.isArray(r.amountWindows)?r.amountWindows:[];
+  const edit=isEditing?'<form class="schedule-form" data-schedule-edit-form="'+id+'">'+
+   fields({...r,date:next||tomorrow},false)+
+   '<div class="future-form-actions"><button class="btn primary" type="submit">Save schedule</button>'+
+    '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
+  const estimateForm=isEstimating?'<form class="schedule-form" data-schedule-estimate-form="'+id+'">'+
+   '<p>Change an estimate without moving its due date or changing another bill.</p><div class="future-fields">'+
+   '<label>Estimated amount ($)<input name="amount" min=".01" max="999999999" type="number" step=".01" required value="'+
+   escapeHTML(estimate.amount)+'"></label>'+
+   '<label>Applies to<select name="scope" data-schedule-amount-scope><option value="range">Part of forecast</option>'+
+    '<option value="all">All future payments</option></select></label></div>'+
+   '<div class="future-fields" data-schedule-estimate-dates>'+
+   '<label>From<input name="from" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,360))+
+   '" value="'+tomorrow+'"></label>'+
+   '<label>Through<input name="through" type="date" min="'+tomorrow+'" max="'+
+   escapeHTML(shiftDay(s.asOf,360))+'" value="'+escapeHTML(end)+'"></label></div>'+
+   '<div class="future-form-actions"><button class="btn primary" type="submit">Apply estimate</button>'+
+    '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
+  const windows=wins.map((w,i)=>'<div class="schedule-window"><span>'+
+   escapeHTML(w.from)+' to '+escapeHTML(w.through)+' · '+cash(w.amount)+'</span>'+
+   '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+'">Clear</button></div>').join('');
+  return '<article class="panel schedule-card" data-schedule-card="'+id+'">'+
+   '<div class="schedule-heading"><div><strong>'+escapeHTML(r.scheduleLabel||r.merchant)+'</strong>'+
+   '<small>'+escapeHTML(r.merchant)+' · '+escapeHTML(account?.name||'Account')+
+   ' · '+escapeHTML(r.frequency)+'</small></div><span class="status-tag">'+
+   (estimate.estimated?'ESTIMATE':'FIXED')+'</span></div>'+
+   '<div class="schedule-metrics"><span>Next: '+(next?escapeHTML(dayLabel(next)):'Outside forecast')+'</span>'+
+    '<strong>'+cash(estimate.amount)+'</strong><span>'+dates.length+' upcoming</span></div>'+
+   '<div class="schedule-actions">'+
+    '<button class="btn" type="button" data-schedule-edit="'+id+'">Edit schedule</button>'+
+    '<button class="btn" type="button" data-schedule-estimate="'+id+'">Set estimate</button>'+
+    '<button class="btn" type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
+    '<button class="btn" type="button" data-schedule-remove="'+id+'">'+
+     (scheduleRemoveTarget===r.id?'Confirm remove':'Remove')+'</button></div>'+
+   (windows?'<div class="schedule-windows"><small>Estimated ranges</small>'+windows+'</div>':'')+
+   edit+estimateForm+'</article>';
+ }).join('');
+ return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
+  '<h2>Payment schedules</h2><p>Each bill or paycheck has its own schedule. History supplies evidence; Predictions are the dated occurrences.</p></div>'+
+  '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
+  (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
+  create+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -703,6 +788,7 @@ function repeatingReviewForm(s){
   '<label class="future-second-day" hidden>Second day of month (1–31)<input name="secondDay" type="number" min="1" max="31" value="15"></label>'+
   '</div>'+
   historyLinkField(d.examples||[])+
+  '<label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> Create a separate bill even if another schedule shares this payee/date</label>'+
   '<p class="audit-footnote">For actual account-to-account transfers, select Transfer and two connected accounts. Otherwise use Expense or Deposit. Only the future forecast changes; the original bank record is never edited or duplicated.</p>'+
   '<div class="future-form-actions"><button type="submit" class="btn primary">Save recurring forecast</button>'+
   '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
@@ -1013,6 +1099,7 @@ function render(){
  const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
   activeTab==='history'?historyPage(bundle,s):
+  activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):
    activeTab==='summary'?summaryPage(bundle,s,selectedSource,derived,fresh):overviewPage(bundle,s,selectedSource,derived,fresh);
