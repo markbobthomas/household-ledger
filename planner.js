@@ -1353,6 +1353,7 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+
      escapeHTML(state().predictions?.cashCushion??500)+'" required></label>'+
     '<button class="btn primary" type="submit">Save threshold</button></form></section>'+
+  (Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
   '<section class="panel mini-panel" aria-label="Not recurring decisions">'+
    '<div class="section-title"><h2>Not recurring</h2><span class="status-tag">'+
     Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length+' EXCLUDED</span></div>'+
@@ -1364,9 +1365,7 @@ function settingsPage(bundle,s,chosen){
       item.manualRuleId?' · one saved schedule':item.phaseDate?' · one payday phase':'')+
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Allow predictions</button></div>').join('')+
-   (!Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
-     '<p class="audit-footnote">No recurring patterns have been excluded.</p>':'')+
-   '</section>'+
+   '</section>':'')+
   auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
 function render(){
