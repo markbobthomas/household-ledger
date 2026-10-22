@@ -549,6 +549,21 @@ const {chromium,webkit}=require('playwright');
    // Same merchant/date: separately saved streams and editable inline rows.
    await go('schedules');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
+   assert.equal(await page.locator('.schedule-heading,.schedule-metrics,.schedule-actions').count(),0,
+    'Collapsed schedules do not use three stacked rows of repeated details and buttons');
+   if(previousSchedules>0){
+    const rows=await page.locator('.schedule-compact-row').evaluateAll(els=>els.map(e=>{
+     const rect=e.getBoundingClientRect();return {height:rect.height,left:rect.left};
+    }));
+    assert.ok(rows.every(row=>row.height<=70),
+     'Each schedule header fits in one compact row, including on iPhone');
+    assert.ok(rows.every(row=>Math.abs(row.left-rows[0].left)<2),
+     'Schedules are presented as one scannable list instead of side-by-side cards');
+    assert.equal(await page.locator('.schedule-row-main[aria-expanded="false"]').count(),previousSchedules,
+     'All untouched schedule rows start collapsed');
+    assert.equal(await page.locator('.schedule-more:not([open])').count(),previousSchedules,
+     'Rare actions start hidden behind their own menu');
+   }
    assert.equal(await page.locator('.schedule-discovery,[data-schedule-from-actual]').count(),0,
     'Same-merchant charges no longer create an independent heuristic panel or extra-schedule prompts');
    const beforeNumbers=await page.locator('[data-schedule-card]').evaluateAll(cards=>
@@ -575,6 +590,8 @@ const {chromium,webkit}=require('playwright');
    let water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
     'Schedule settings and upcoming payments expand inside their own schedule');
+   await water.locator('.schedule-more > summary').click();
+   assert.equal(await water.locator('.schedule-more[open]').count(),1);
    await water.locator('[data-schedule-duplicate]').click();
    schedule=page.locator('[data-schedule-new-form]');
    await schedule.locator('[name=scheduleLabel]').fill('Water - Garden');
@@ -589,6 +606,16 @@ const {chromium,webkit}=require('playwright');
     'Distinct same-merchant schedules keep separate consecutive numbers');
    assert.equal(await page.locator('.schedule-discovery').count(),0,
     'Removing merchant discovery does not remove or merge separately saved bills');
+   // Rare actions remain accessible without consuming full rows.
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   await water.locator('.schedule-more > summary').click();
+   await water.locator('[data-schedule-remove]').click();
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   assert.equal(await water.locator('.schedule-more[open] [data-schedule-remove]').innerText(),
+    'Confirm remove','Deletion stays a two-step action inside the compact menu');
+   await water.locator('[data-schedule-cancel-remove]').click();
+   assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
+    'Canceling removal leaves both independent schedules intact');
 
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    if(!await water.locator('[data-schedule-inline-plan]').count())
