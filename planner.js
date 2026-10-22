@@ -788,8 +788,15 @@ function openInlineTransaction(button){
  const helper=rule?'<p class="inline-editor-explanation"><strong>Only this date:</strong> '+
   'The repeating payment plan is unchanged. Other dates keep their amounts and accounts.</p>':
   '<p class="inline-editor-explanation">Edit the values directly below. Actual posted bank records stay untouched.</p>';
+ const settings=rule?'<details class="inline-plan-settings">'+
+  '<summary>Edit repeating plan defaults <small>affects other scheduled dates</small></summary>'+
+  '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
+   scheduleFields({...rule,date:window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,
+    shiftDay(s.asOf,360))[0]||shiftDay(s.asOf,1)},false,s)+
+   '<div class="future-form-actions"><button class="btn primary" type="submit">Save repeating plan</button>'+
+   '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
  const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
-  helper+editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+'</div>';
+  helper+editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+settings+'</div>';
  wrapper.insertAdjacentHTML('beforeend',html);
  button.setAttribute('aria-expanded','true');
  wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
@@ -907,10 +914,8 @@ function newTransactionForm(s){
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
 
-function schedulesPage(bundle,s){
- const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
-  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
- const fields=(r,isNew)=>{
+function scheduleFields(r,isNew,s){
+  const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1);
   const type=r.kind==='movement'?'transfer':r.type||'expense',transfer=isNew&&type==='transfer'||r.kind==='movement',
    accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id;
   return '<div class="future-fields">'+
@@ -934,7 +939,11 @@ function schedulesPage(bundle,s){
    '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
- };
+ }
+function schedulesPage(bundle,s){
+ const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
+  T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
+ const fields=(r,isNew)=>scheduleFields(r,isNew,s);
  // Count separate posted charges on the same day. A shared merchant identity
  // cannot explain two obligations unless there are two saved schedules.
  const groups=new Map(),norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1453,7 +1462,10 @@ document.addEventListener('click',async e=>{
   transactionDetail.mode='edit';
   render();return;
  }
- const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
+ if(e.target.closest?.('[data-cancel-inline-schedule]')){
+  closeInlineTransaction();return;
+ }
+  const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
  if(opening?.hasAttribute('data-open-transaction')&&openInlineTransaction(opening))return;
  if(opening){
   if(opening.hasAttribute('data-open-transaction'))
