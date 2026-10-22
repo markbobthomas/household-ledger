@@ -210,3 +210,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - Changes: row-level category picker, search with visible-group totals, safe bank-ID matching and explicit review link; added smoke and desktop/mobile browser checks. Bank source records remain read-only; no new duplicate schedules created by review.
 - Verification: CI smoke and pilot checks pending on PR; private Render deployment not independently confirmed.
 - Next: review PR checks, merge when passing, independently confirm private Render deployment.
+
+### 2026-10-22 — correct Schedules income category totals
+
+- **Reported issue:** The Income category total on the Schedule page was not showing an accurate, verifiable monthly total. The previous heading labeled a rolling 365-day average as `In $X/mo`. That is not a given calendar month's sum and particularly misleads with alternating four-week salaries (two or three paychecks in different months).
+- **Correction:** Summarize the **next full calendar month** separately from the **following 12 full calendar months** and its distinctly labeled per-month average, using the already reconciled canonical dated forecast ledger. The next-month amount is an actual sum of payments due in that month; 12-month totals include 13 payments per four-week salary stream when appropriate. Use cents for summation to avoid accumulating rounding discrepancies. Continue to keep incoming, outgoing and transfer totals separate. Search/filter recalculates group totals from visible schedule contributions and derives dates from the actual bank snapshot rather than a hardcoded current date.
+- **Regression:** Desktop Chromium and iPhone WebKit tests check two independent alternating four-week paychecks of $3,040 and $3,075: next-November income **$6,115**, twelve months **$79,495**, and twelve-month monthly average **$6,624.58**. These are fictional fixtures, not user bank data.
+- **Scope:** Included in the open work for quick category edits, schedule search and posted-payment matching. No modification to underlying financial predictions, actual bank records, schedule amounts or recurring identities.
+- **Verification:** Required banking-safety and browser CI must pass before merge; private Render deployment must be verified separately.
+
