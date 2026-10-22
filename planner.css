@@ -634,3 +634,24 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .calendar-tap-edit{width:100%;border:0;border-bottom:1px solid #e9edf3;background:transparent;text-align:left;cursor:pointer;color:inherit}
 .calendar-tap-edit:hover,.calendar-tap-edit:focus-visible{background:#f1f6fb;outline-offset:-2px}
 .calendar-tap-edit>.calendar-item-edit{display:inline-flex;align-items:center}
+
+/* Keep navigation in the visible viewport even on the smallest iPhones.
+   The previous nowrap heading + action group could push Menu offscreen. */
+.planner-menu{min-width:0}
+.planner-menu-content{max-height:min(500px,calc(100dvh - 100px));overflow-y:auto;overscroll-behavior:contain}
+.recurring-schedule-choice{margin:12px 0;padding:13px;border:1px solid #d7e3ee;border-radius:9px;background:#f7faff}
+.recurring-schedule-choice label{display:flex;flex-direction:column;gap:7px;font-weight:710;font-size:12px;color:#30475e}
+.recurring-schedule-choice select{display:block;width:100%;min-width:0;min-height:42px;padding:9px;border:1px solid #b9cddd;background:#fff;border-radius:7px;color:#24384b}
+.recurring-schedule-choice p{color:#66798b;font-size:11px;line-height:1.5;margin:9px 0 0}
+@media(max-width:780px){
+ .topbar{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
+ .topbar>div:first-child{width:100%;min-width:0}
+ .topbar h1{max-width:100%;overflow-wrap:anywhere}
+ .top-actions{display:flex;flex:0 1 auto;width:100%;min-width:0;margin-left:0;justify-content:flex-start;flex-wrap:wrap}
+ .top-actions .planner-menu{order:100;margin-left:auto}
+ .planner-menu-content{position:fixed;left:auto;right:max(10px,env(safe-area-inset-right));top:max(82px,calc(env(safe-area-inset-top) + 60px));width:min(270px,calc(100vw - 20px));max-height:calc(100dvh - 96px);max-height:calc(100vh - 96px);overflow-y:auto}
+}
+@media(max-width:350px){
+ .top-actions>.mode-box{max-width:103px}
+ .planner-menu>summary{padding:7px 10px}
+}
