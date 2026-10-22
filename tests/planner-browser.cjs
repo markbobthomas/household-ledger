@@ -333,13 +333,9 @@ const {chromium,webkit}=require('playwright');
    await recurringRepair.locator('[data-edit-future]').click();
    assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
     'Confirmed recurring transactions open their complete payment plan');
-   await page.locator('.transaction-detail-close').click();
-   await page.locator('.transaction-detail-close').click();
-   await go('schedules');
-   const repairPlan=page.locator('[data-schedule-card]').filter({hasText:'One-time home repair'}).first();
-   await repairPlan.locator('[data-schedule-remove]').click();
-   await repairPlan.locator('[data-schedule-remove]').click();
-   await go('transactions');
+   await page.locator('.transaction-detail [data-stop-plan]').click();
+   assert.match(await page.locator('.transaction-detail [data-stop-plan]').innerText(),/Confirm stop/);
+   await page.locator('.transaction-detail [data-stop-plan]').click();
    assert.equal(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count(),1,
     'Stopping recurrence returns to the original single user-added payment');
    await page.locator('[data-show-new]').click();
