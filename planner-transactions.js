@@ -142,6 +142,17 @@ function scheduleCategory(name,state){
  if(!match)throw Error('Choose an existing schedule category or add it first');
  return match;
 }
+function setScheduleCategory(state,id,category){
+ const list=state?.predictions?.futureRecurringRules||[];
+ const rule=list.find(r=>String(r.id)===String(id));
+ if(!rule)throw Error('This schedule changed. Open the list again.');
+ const value=scheduleCategory(category,state);
+ const p=ensure(state);
+ const current=p.futureRecurringRules.find(r=>String(r.id)===String(id));
+ if(!current)throw Error('This schedule changed. Open the list again.');
+ current.category=value;
+ return {id:current.id,category:value};
+}
 function addScheduleCategory(state,name){
  const value=String(name||'').trim().replace(/\s+/g,' ');
  if(value.length<2||value.length>40||
@@ -659,55 +670,113 @@ function matchesRecurring(rule,event,accounts){
 
 /* Source bank balances already include posted transactions. One posted payment
  * can cover at most one future scheduled occurrence; never forecast it again. */
+/* A posted bank fact may cover ONE upcoming obligation, never every schedule
+ * with the same merchant. Explicit bank IDs outrank renamed Plaid descriptions.
+ * If competing independent schedules cannot be differentiated, keep their
+ * projections and surface one actionable review item instead of guessing. */
 function postedCoverage(generated,rules,records,accounts,asOf){
- const byId=new Map((rules||[]).map(r=>[r.id,r])),
+ const byId=new Map((rules||[]).map(r=>[String(r.id),r])),
   posted=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&
    t.date<=asOf&&Number(t.amount)>0&&String(t.id||'')),
   items=[...(generated.events||[]).map(item=>({item,kind:'event',id:item.ruleId})),
    ...(generated.plans||[]).map(item=>({item,kind:'movement',id:item.seriesRuleId}))],
-  pairs=[];
- // Reconcile as a GROUP, not in schedule creation order. When one of two
- // same-day water bills posts early, match the actual amount to the most
- // plausible obligation; leave the OTHER bill in the cash forecast.
- items.forEach(({item,kind,id},index)=>{
-  const r=byId.get(id);if(!r)return;
-  const effective=kind==='movement'&&item._postedView?item._postedView:item,
-   date=String(effective.date||effective.anchorDate||item.anchorDate||''),
-   account=String(kind==='movement'?effective.fromAccountId:effective.accountId),
-   tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
-  if(!validDate(date))return;
-  posted.forEach((t,p)=>{
-   if(!sameDirection(t,kind==='event'?r.type:'transfer')||
-    accountRef(t.accountId||t.account,accounts)!==account||
-    !(r.matchNames||[]).includes(merchantKey(t.merchant||t.name)))return;
+  pairs=[],byPosted=new Map(),review=[];
+ posted.forEach((t,p)=>{
+  const matched=historicalScheduleMatches(t,accounts,rules);
+  if(!matched.length)return;
+  const linked=matched.filter(r=>(r.exampleIds||[]).some(id=>String(id)===String(t.id)));
+  const candidates=linked.length?linked:matched;
+  for(let index=0;index<items.length;index++){
+   const {item,kind,id}=items[index],r=byId.get(String(id));
+   if(!r||!candidates.some(x=>String(x.id)===String(id)))continue;
+   const effective=kind==='movement'&&item._postedView?item._postedView:item,
+    date=String(effective.date||effective.anchorDate||item.anchorDate||''),
+    account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
+   if(!validDate(date)||date<=asOf||
+    !sameDirection(t,kind==='event'?r.type:'transfer')||
+    accountRef(t.accountId||t.account,accounts)!==account)continue;
    const gap=Math.abs(daysBetween(t.date,date)),
+    tolerance=r.frequency==='weekly'?2:
+     ['biweekly','every-4-weeks'].includes(r.frequency)?3:6,
+    explicit=linked.some(x=>String(x.id)===String(r.id)),
     cycle=['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
-     t.date.slice(0,7)===date.slice(0,7);
-   if(gap>tolerance&&!cycle)return;
+     t.date.slice(0,7)===date.slice(0,7)&&gap<=21,
+    maxGap=explicit?Math.max(tolerance,14):tolerance;
+   if(gap>maxGap&&!cycle)continue;
    const expected=Math.max(1,Number(item.amount)||1),
     deviation=Math.abs(Number(t.amount)-expected)/expected,
-    // Historical links indicate source identity but do not guarantee
-    // future bill amounts. Amount then date are safer than creation order.
-    linked=(r.exampleIds||[]).includes(String(t.id));
-   pairs.push({index,p,score:(linked?-100:0)+deviation*10+gap*.01,
-    tie:String(r.id)+'|'+date+'|'+String(t.id)});
-  });
+    candidate={index,p,ruleId:String(r.id),date,gap,deviation,explicit,
+     score:(explicit?-100:0)+Math.min(2,deviation)*4+gap*.16,
+     tie:String(r.id)+'|'+date+'|'+String(t.id)};
+   pairs.push(candidate);
+   if(!byPosted.has(p))byPosted.set(p,[]);
+   byPosted.get(p).push(candidate);
+  }
  });
+ const unresolved=new Set();
+ for(const [p,matches] of byPosted){
+  const future=matches.slice().sort((a,b)=>a.score-b.score||a.tie.localeCompare(b.tie)),
+   bestByRule=new Map();
+  for(const m of future)if(!bestByRule.has(m.ruleId))bestByRule.set(m.ruleId,m);
+  const distinct=[...bestByRule.values()].sort((a,b)=>a.score-b.score||a.tie.localeCompare(b.tie));
+  if(distinct.length<2)continue;
+  const [first,second]=distinct,
+   uniqueExplicit=first.explicit&&!second.explicit,
+   amountClear=first.deviation<=.18&&
+    (second.deviation-first.deviation>.18||second.gap-first.gap>=3);
+  if(uniqueExplicit||amountClear)continue;
+  const t=posted[p];
+  // Only genuinely competing FUTURE confirmed obligations require a decision.
+  unresolved.add(p);
+  review.push({bankId:String(t.id),merchant:String(t.merchant||t.name||'Bank payment'),
+   amount:Number(t.amount),date:t.date,accountId:accountRef(t.accountId||t.account,accounts),
+   candidates:distinct.map(m=>({ruleId:m.ruleId,date:m.date,
+    amount:Number(items[m.index].item.amount),label:String(byId.get(m.ruleId)?.scheduleLabel||
+     byId.get(m.ruleId)?.merchant||'Scheduled payment')}))});
+ }
  pairs.sort((a,b)=>a.score-b.score||a.tie.localeCompare(b.tie));
  const usedItems=new Set(),usedPosted=new Set();
  for(const pair of pairs){
-  if(usedItems.has(pair.index)||usedPosted.has(pair.p))continue;
+  if(unresolved.has(pair.p)||usedItems.has(pair.index)||usedPosted.has(pair.p))continue;
   usedItems.add(pair.index);usedPosted.add(pair.p);
  }
  const n=(generated.events||[]).length;
  return {
   events:(generated.events||[]).filter((_,i)=>!usedItems.has(i)),
-  plans:(generated.plans||[]).filter((_,i)=>!usedItems.has(n+i))
+  plans:(generated.plans||[]).filter((_,i)=>!usedItems.has(n+i)),
+  review
  };
 }
+function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
+ const rules=state?.predictions?.futureRecurringRules||[],
+  target=rules.find(r=>String(r.id)===String(ruleId)),
+  bank=(records||[]).find(t=>String(t.id)===String(bankId));
+ if(!target||!bank||bank.pending||!validDate(bank.date)||!(Number(bank.amount)>0))
+  throw Error('This posted payment or schedule changed. Refresh and try again.');
+ const account=accountRef(bank.accountId||bank.account,accounts);
+ if(String(target.originalAccountId||target.accountId||target.fromAccountId)!==account||
+  !sameDirection(bank,target.kind==='movement'?'transfer':target.type))
+  throw Error('Bank account or payment direction does not match this schedule.');
+ const p=ensure(state),r=p.futureRecurringRules.find(x=>String(x.id)===String(ruleId));
+ // A deliberate decision may reassign a bank posting, but never alters
+ // the bank record, creates another schedule, or rewrites future amounts.
+ for(const other of p.futureRecurringRules){
+  if(String(other.id)===String(ruleId))continue;
+  if(Array.isArray(other.exampleIds))
+   other.exampleIds=other.exampleIds.filter(id=>String(id)!==String(bankId));
+ }
+ r.exampleIds=[...new Set([...(r.exampleIds||[]).map(String),String(bankId)])];
+ // User-confirmed aliases help recognize future bank postings even if
+ // Plaid's displayed payee differs from the schedule name. Shared aliases
+ // across two obligations remain ambiguous and require another decision.
+ const alias=merchantKey(bank.merchant||bank.name);
+ if(alias)r.matchNames=[...new Set([...(r.matchNames||[]),alias])];
+ return r.id;
+}
+
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
+ frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;

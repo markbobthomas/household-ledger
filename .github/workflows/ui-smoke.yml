@@ -63,5 +63,6 @@ jobs:
           node tests/planner-summary-smoke.cjs
           node tests/planner-three-year-smoke.cjs
           node tests/planner-schedule-categories-smoke.cjs
+          node tests/planner-posted-matching-smoke.cjs
           node tests/planner-coverage-smoke.cjs
           node tests/mortgage-prediction-smoke.cjs

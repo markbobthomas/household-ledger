@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -40,7 +40,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='order',scheduleCategoryFilter='';
+let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -998,24 +998,62 @@ function scheduleFields(r,isNew,s){
     '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
    '</div>';
  }
-function scheduleCategorySummary(items,bundle,asOf,through){
- // Use the canonical forecast ledger, so posted-coverage suppression and
- // individual predicted payment edits affect totals exactly once.
- const ids=new Set(items.map(({rule})=>String(rule.id)));
- let withdrawals=0,deposits=0,transfers=0;
+function applyScheduleSearch(root=document){
+ // Some non-browser integrations expose a partial DOM. Search is optional:
+ // never let its absence interrupt scheduled payment editing or forecasts.
+ if(!root||typeof root.querySelector!=='function'||
+  typeof root.querySelectorAll!=='function')return;
+ const input=root.querySelector('[data-schedule-search]');
+ if(!input)return;
+ const q=String(scheduleSearch||'').trim().toLowerCase();
+ let shown=0;
+ for(const row of root.querySelectorAll('[data-schedule-card]')){
+  const matches=!q||String(row.dataset.scheduleSearchText||'').includes(q);
+  row.hidden=!matches;
+  if(matches)shown++;
+ }
+ for(const group of root.querySelectorAll('[data-schedule-category-group]')){
+  const rows=[...group.querySelectorAll('[data-schedule-card]')].filter(row=>!row.hidden);
+  group.hidden=rows.length===0;
+  const count=group.querySelector('[data-schedule-group-count]'),
+   total=group.querySelector('[data-schedule-group-total]'),
+   sum={out:0,in:0,transfers:0};
+  if(count)count.textContent='('+rows.length+')';
+  for(const row of rows)
+   for(const key of ['out','in','transfers'])
+    sum[key]+=Number(row.dataset['scheduleMonthly'+key[0].toUpperCase()+key.slice(1)]||0);
+  if(total)total.textContent=formatScheduleTotals(sum);
+ }
+ const empty=root.querySelector('[data-schedule-search-empty]');
+ if(empty)empty.hidden=shown!==0||!q;
+}
+function scheduleMonthAmounts(rule,bundle,asOf,through){
+ const result={out:0,in:0,transfers:0};
  for(const row of bundle?.ledger||[]){
   if(!(row.date>asOf&&row.date<=through)||
-   !ids.has(String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')))continue;
+   String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')!==String(rule.id))continue;
   const average=Number(row.amount)/12;
-  if(row.kind==='movement')transfers+=average;
-  else if(['income','refund'].includes(row.type))deposits+=average;
-  else withdrawals+=average;
+  if(row.kind==='movement')result.transfers+=average;
+  else if(['income','refund'].includes(row.type))result.in+=average;
+  else result.out+=average;
  }
+ return result;
+}
+function formatScheduleTotals({out=0,in:income=0,transfers=0}){
  const parts=[];
- if(withdrawals)parts.push('Out '+cash(withdrawals)+'/mo');
- if(deposits)parts.push('In '+cash(deposits)+'/mo');
+ if(out)parts.push('Out '+cash(out)+'/mo');
+ if(income)parts.push('In '+cash(income)+'/mo');
  if(transfers)parts.push('Transfers '+cash(transfers)+'/mo');
  return parts.join(' · ')||cash(0)+'/mo';
+}
+function scheduleCategorySummary(items,bundle,asOf,through){
+ // Use canonical dated predictions after individual edits and posted-coverage matching.
+ const total={out:0,in:0,transfers:0};
+ for(const {rule} of items){
+  const a=scheduleMonthAmounts(rule,bundle,asOf,through);
+  for(const key of ['out','in','transfers'])total[key]+=a[key];
+ }
+ return formatScheduleTotals(total);
 }
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
@@ -1060,10 +1098,14 @@ function schedulesPage(bundle,s){
    escapeHTML(w.from)+' to '+escapeHTML(w.through)+' · '+cash(w.amount)+'</span>'+
    '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
-  const number=index+1, title=escapeHTML(r.scheduleLabel||r.merchant),
-   pendingRemove=scheduleRemoveTarget===r.id;
+  const number=index+1,title=escapeHTML(r.scheduleLabel||r.merchant),
+   pendingRemove=scheduleRemoveTarget===r.id,
+   monthly=scheduleMonthAmounts(r,bundle,s.asOf,nextYear),
+   searchText=[r.scheduleLabel,r.merchant,categoryOf(r)].filter(Boolean).join(' ').toLowerCase();
   return '<article class="panel schedule-card" data-schedule-card="'+id+
-   '" data-schedule-number="'+number+'">'+
+   '" data-schedule-number="'+number+'" data-schedule-search-text="'+escapeHTML(searchText)+
+   '" data-schedule-monthly-out="'+monthly.out+'" data-schedule-monthly-in="'+monthly.in+
+   '" data-schedule-monthly-transfers="'+monthly.transfers+'">'+
    '<div class="schedule-compact-row">'+
    '<button class="schedule-row-main" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
@@ -1072,7 +1114,7 @@ function schedulesPage(bundle,s){
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-      ' · '+escapeHTML(r.frequency)+' · '+escapeHTML(categoryOf(r))+'</small></span></span>'+
+      ' · '+escapeHTML(r.frequency)+'</small></span></span>'+
     '<span class="schedule-row-next"><small>Next</small><span>'+
      (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
     '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
@@ -1080,6 +1122,11 @@ function schedulesPage(bundle,s){
     '<span class="schedule-row-chevron" aria-hidden="true"><span class="schedule-edit-label">'+
      (isEditing?'Close':'Edit')+' </span>'+(isEditing?'⌃':'⌄')+'</span>'+
    '</button>'+
+   '<select class="schedule-row-category" data-schedule-quick-category="'+id+'" '+
+    'aria-label="Category for schedule '+number+': '+title+'">'+
+    categories.map(category=>'<option value="'+escapeHTML(category)+'"'+
+     (category===categoryOf(r)?' selected':'')+'>'+escapeHTML(category)+'</option>').join('')+
+   '</select>'+
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for schedule '+number+'" title="More actions">⋯</summary>'+
     '<div class="schedule-more-menu">'+
@@ -1108,7 +1155,7 @@ function schedulesPage(bundle,s){
    const items=visible.filter(({rule})=>categoryOf(rule)===category);
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
     '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
-    ' <small>('+items.length+')</small></strong><span>'+
+    ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
     scheduleCategorySummary(items,bundle,s.asOf,nextYear)+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
@@ -1118,6 +1165,8 @@ function schedulesPage(bundle,s){
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" aria-label="Schedule organization">'+
+   '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
+    'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Sort <select data-schedule-sort>'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
@@ -1135,7 +1184,8 @@ function schedulesPage(bundle,s){
     '<p data-schedule-category-notice role="status"></p></details></div>'+ 
   create+'<div class="schedule-grid">'+
    (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
-   '</div></div>';
+   '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
+   'No matching schedules. Try a different search.</p></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -1281,8 +1331,10 @@ function reviewsPage(bundle,s){
  const autoLow=(bundle?.automaticRecurrence?.review||[]).filter(a=>
   !weak.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant))&&
   !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
- const duplicates=bundle?.duplicateConflicts||[];
- const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length;
+ const duplicates=bundle?.duplicateConflicts||[],
+  postedAmbiguities=bundle?.postedMatchReview||[];
+ const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length+
+  postedAmbiguities.length;
  const cards=weak.map(p=>
   '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
    '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
@@ -1317,6 +1369,21 @@ function reviewsPage(bundle,s){
     escapeHTML(p.merchant)+'</strong><small>'+cash(p.amount)+' · '+escapeHTML(p.reason)+
     '</small></div><button type="button" class="btn" data-view="history">Review in History</button></div>').join('')+
    '</section>':'')+
+  (postedAmbiguities.length?'<section class="panel" data-posted-match-review>'+
+    '<div class="section-title"><h2>Which schedule was paid?</h2>'+
+    '<span class="status-tag warn">'+postedAmbiguities.length+' NEEDS REVIEW</span></div>'+
+    '<p class="lead">A posted bank payment may cover one of several separate schedules. '+
+    'Choose the correct schedule so only that future payment is removed from the balance forecast.</p>'+
+    postedAmbiguities.map(row=>'<article class="review-candidate">'+
+     '<div class="review-candidate-main"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+     '<small>Posted '+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+
+     ' · Bank record remains unchanged</small></div>'+
+     '<div class="review-candidate-actions">'+row.candidates.map(c=>
+      '<button class="btn" type="button" data-posted-match-bank="'+escapeHTML(row.bankId)+
+       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
+       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+
+       ' · '+escapeHTML(dayLabel(c.date))+'</button>').join('')+'</div></article>').join('')+
+    '</section>':'')+
   (duplicates.length?'<section class="panel"><div class="section-title"><h2>Ambiguous predicted payments</h2>'+
    '<span class="status-tag warn">'+duplicates.length+' NEEDS REVIEW</span></div>'+
    '<p class="lead">Possible duplicate predictions cannot be matched confidently. Review them before relying on the projected balance.</p>'+
@@ -1398,9 +1465,9 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  }).join('');
  return '<div class="planner-page overview-page">'+
   accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
-  ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length||bundle?.automaticRecurrence?.review?.length||bundle?.duplicateConflicts?.length)?
+  ((bundle?.missingMortgages?.length||bundle?.historyCandidates?.length||bundle?.routines?.review?.length||bundle?.automaticRecurrence?.review?.length||bundle?.duplicateConflicts?.length||bundle?.postedMatchReview?.length)?
     '<section class="panel review-spotlight"><div><strong>Recurring payments may need review</strong>'+
-    '<p>Recent bank transactions may repeat. Confirm uncertain patterns before they affect your balance.</p></div>'+
+    '<p>Bank transactions or repeating payments need a decision before your forecast can be trusted.</p></div>'+
     '<button type="button" class="btn" data-view="reviews">Review suggestions</button></section>':'')+
   incomeStatus(bundle,s,chosen,derived)+upcomingCardBills(bundle,s)+
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
@@ -1491,6 +1558,7 @@ function render(){
    'An actual '+cash(m.amount)+' mortgage payment from '+m.account+' is not in the forecast. Review its proposed recurring schedule below.')),
   ...((bundle?.routines?.warnings||[]).slice(0,2).map(w=>
    'Possible mortgage withdrawal not included: '+w.merchant+' ('+w.reason+'). Confirm its recurrence before relying on the projected balance.')),
+  ...((bundle?.postedMatchReview||[]).length?['Some posted payments may cover one of several confirmed schedules. Choose the matching schedule under Needs review before relying on the projected balance.']:[]),
   ...((bundle?.forecast?.suppressedDuplicates||[]).length?['Older overlapping one-time forecasts were excluded to avoid duplicate payments.']:[]),
   ...((statuses.unassigned||[]).length?['Some expected payments lack a confirmed account, so those are not included in the balance.']:[]),
   ...((statuses.unmatchedTransfers||[]).length?['Some scheduled transfers do not have a verified counterpart; review before relying on cash coverage.']:[])
@@ -1499,7 +1567,11 @@ function render(){
  if(error)note='<div class="notice danger"><strong>Forecast calculation unavailable.</strong> '+escapeHTML(error)+
   '. Your bank balances have not been changed.</div>';
  else if(latestError)note='<div class="notice danger">'+escapeHTML(latestError)+'</div>';
- else if(caution.length)note='<div class="notice danger"><div><strong>Forecast needs review.</strong> '+escapeHTML(caution.join(' '))+'</div></div>';
+ else if(caution.length)note='<div class="notice danger"><div><strong>Forecast needs review.</strong> '+
+  escapeHTML(caution.join(' '))+'</div>'+
+  ((bundle?.postedMatchReview||[]).length?
+   '<button type="button" class="btn" data-view="reviews">Choose matching schedule</button>':'')+
+  '</div>';
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
@@ -1526,6 +1598,7 @@ function render(){
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
  drawTransactionDetail(bundle,s);
+ if(activeTab==='schedules')applyScheduleSearch(root);
 }
 document.addEventListener('click',async e=>{
  if(e.target.closest?.('[data-close-transaction-detail]')){dismissTransaction();return}
@@ -1569,6 +1642,23 @@ document.addEventListener('click',async e=>{
    if(row)openPrediction(row.key,opening);
    else setNotice('This card payment has changed. Reopen its dated prediction.');
   }
+  return;
+ }
+ const postedChoice=e.target.closest?.('[data-posted-match-bank][data-posted-match-rule]');
+ if(postedChoice){
+  const bankId=postedChoice.dataset.postedMatchBank,
+   ruleId=postedChoice.dataset.postedMatchRule;
+  try{
+   const current=forecastFor(snapshot()),
+    candidate=(current?.postedMatchReview||[]).find(item=>item.bankId===bankId&&
+     item.candidates.some(c=>c.ruleId===ruleId));
+   if(!candidate)throw Error('This bank payment has changed. Refresh Needs review.');
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.linkPostedToSchedule(
+    state(),bankId,ruleId,model.records(state()),activeAccounts(snapshot())));
+   reviewNotice='Linked the posted payment to schedule #'+
+    (scheduleListNumber(ruleId)||'?')+'. The forecast has been recalculated.';
+   render();
+  }catch(err){reviewNotice=String(err.message||err);render()}
   return;
  }
  const linkedSchedule=e.target.closest?.('[data-open-linked-schedule]');
@@ -2366,12 +2456,49 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('input',e=>{
+ if(e.target.matches?.('[data-schedule-search]')){
+  scheduleSearch=e.target.value;
+  applyScheduleSearch(document.querySelector('#planner-main'));return;
+ }
  if(e.target.matches?.('[data-history-link-search],[data-future-new-form] [name=merchant],'+
   '[data-future-edit-form] [name=merchant],[data-history-recurring-form] [name=merchant]')){
   const form=e.target.closest('form');updateHistoryLinks(form);
  }
 });
-document.addEventListener('change',e=>{
+document.addEventListener('change',async e=>{
+ const quick=e.target.closest?.('[data-schedule-quick-category]');
+ if(quick){
+  const id=quick.dataset.scheduleQuickCategory,
+   saved=(state().predictions?.futureRecurringRules||[]).find(rule=>String(rule.id)===String(id)),
+   original=saved?.category||'Uncategorized',
+   form=document.querySelector('[data-schedule-edit-form],[data-schedule-new-form]');
+  if(!saved){quick.value=original;setNotice('Schedule changed. Refresh and try again.');return}
+  if(quick.value===original)return;
+  const dirty=form&&[...form.querySelectorAll('input,select,textarea')].some(field=>{
+   if(field.type==='hidden')return false;
+   if(field.type==='checkbox'||field.type==='radio')return field.checked!==field.defaultChecked;
+   if(field.tagName==='SELECT')return [...field.options].some(o=>o.selected!==o.defaultSelected);
+   return field.value!==field.defaultValue;
+  });
+  if(dirty&&!window.confirm('Discard unsaved schedule edits to change this category?')){
+   quick.value=original;return;
+  }
+  quick.disabled=true;
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,quick.value));
+   scheduleNotice='';
+   render();
+   [...document.querySelectorAll('[data-schedule-quick-category]')].find(el=>
+    el.dataset.scheduleQuickCategory===id)?.focus({preventScroll:true});
+  }catch(err){quick.disabled=false;quick.value=original;
+   scheduleNotice='Could not save category: '+String(err.message||err);
+   const note=document.querySelector('.future-notice');
+   if(note)note.textContent=scheduleNotice;
+   else{quick.insertAdjacentHTML('afterend','<span class="schedule-quick-error" role="alert">'+
+    escapeHTML(scheduleNotice)+'</span>');}
+  }
+  return;
+ }
  const sorter=e.target.closest?.('[data-schedule-sort]'),
   filter=e.target.closest?.('[data-schedule-category-filter]');
  if(sorter||filter){
