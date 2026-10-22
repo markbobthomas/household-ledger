@@ -247,20 +247,20 @@ function monthlyPredictions(state){
    ' in recent posted purchases (not an issued statement)</span>'+
    '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
  return '<details class="calendar-monthly-list" open>'+
-  '<summary>All '+rows.length+' predicted transactions in '+esc(monthName(calendarMonth))+
-   '<span>View every dated prediction</span></summary>'+
+  '<summary>Transactions · '+esc(monthName(calendarMonth))+' ('+rows.length+')'+
+   '<span>One editable list · selected day is highlighted</span></summary>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
   (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>{
    const d=paymentDetail(e);
-   const entry='<button type="button" class="calendar-monthly-row" data-calendar-list-date="'+date+
+   const entry='<button type="button" class="calendar-monthly-row calendar-detail-item" data-calendar-list-date="'+date+
     '" data-calendar-list-index="'+index+'" data-open-transaction="'+esc(predictionIdentity(e))+'"><span class="calendar-monthly-date">'+esc(shortDate(date))+
     '</span><span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
     (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
     '<strong class="'+(signed(e,credit)>0?'in':'out')+'">'+fullSigned(e,credit)+
     '</strong><span class="calendar-monthly-view">Edit ↓</span></button>';
-   return '<div class="calendar-monthly-entry'+(date===calendarDate?' selected-date':'')+
+   return '<div class="calendar-monthly-entry calendar-detail-entry'+(date===calendarDate?' selected-date':'')+
     '" data-calendar-entry-date="'+date+'" data-inline-row-wrapper>'+entry+
     (d?'<button type="button" class="card-breakdown-action" data-open-card-payment="'+esc(d.id)+
      '">Payment calculation →</button>':'')+'</div>';
@@ -356,6 +356,8 @@ function showCalendar(date){
  calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
+ const row=document.querySelector('[data-calendar-entry-date="'+date+'"]');
+ if(row&&row.closest('.calendar-monthly-rows'))row.scrollIntoView({block:'nearest',behavior:'instant'});
 }
 
 function reviewDetails(bundle,accounts,chosen,prefs,ready,coverage){
