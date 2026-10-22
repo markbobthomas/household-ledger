@@ -1023,11 +1023,13 @@ function applyScheduleSearch(root=document){
     year[key]+=Number(row.dataset['scheduleYearly'+suffix]||0);
    }
   if(total){
-   const period=scheduleTotalPeriod(document.querySelector('[data-schedule-as-of]')?.dataset.scheduleAsOf||
-    root.querySelector('[data-schedule-as-of]')?.dataset.scheduleAsOf||'2026-10-22');
-   total.textContent=period.label+': '+formatScheduleTotals(month)+
-    ' · 12-month total: '+formatScheduleTotals(year)+
-    ' · avg/month: '+formatScheduleTotals(year,{average:true});
+   const asOf=root.querySelector('[data-schedule-as-of]')?.dataset.scheduleAsOf;
+   if(asOf){
+    const period=scheduleTotalPeriod(asOf);
+    total.textContent=period.label+': '+formatScheduleTotals(month)+
+     ' · 12-month total: '+formatScheduleTotals(year)+
+     ' · avg/month: '+formatScheduleTotals(year,{average:true});
+   }
   }
  }
  const empty=root.querySelector('[data-schedule-search-empty]');
