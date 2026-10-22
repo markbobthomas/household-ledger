@@ -125,6 +125,15 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Follow-up decision (not implemented):** Reconsider essential-payment completeness as a small user-confirmed roster referencing **existing schedule IDs** and canonical prediction events, not a separate heuristic category/mortgage confidence engine. Do not add this yet.
 - **Deployment:** GitHub merge, Pages publishing and private Render revision require independent verification. Never treat a green test as proof of the private banking deployment.
 
+
+### 2026-10-22 — chart-only horizons and raw reported current
+
+- **Goal:** Provide six independent Balance Trend views (10, 30, 90, 180, 360 days and 3 years) while showing the actual Plaid-reported current account balance directly beside the unchanged 3-year projected minimum.
+- **Decision:** Trend selection is a view-only redraw of existing canonical daily balances. It cannot change forecast materialization, saved schedules, the selected Calendar day or the fixed three-year headline minimum. The trend defaults to three years when the Summary is freshly rendered. The current value comes exclusively from the read-only snapshot `account.current`, **not** `account.available`, the projection opening balance or guessed transactions. Missing `current` displays "Not reported"; Demo is labeled as sample data.
+- **Files:** `planner-summary.js`, `planner.css`, `index.html`, and browser/smoke tests. No bank state writes or changes to the core forecasting engine.
+- **Validation:** Check required GitHub desktop Chromium/iPhone WebKit and banking-safety test results before merge; then record their status and whether private Render deployment is independently confirmed.
+- **Next:** Preserve distinction between bank-reported current, potentially different available cash, and forecast lows when improving balance explanations.
+
 ## Reusable new-chat prompt
 
 > Continue Household Ledger. Read https://github.com/markbobthomas/household-ledger/blob/main/PROJECT_LEDGER.md and AGENTS.md first, inspect current GitHub main, then handle my request. Update the ledger in GitHub after **every prompt**, including discussions. Preserve the existing Plaid/Render setup and verify deployment before claiming it is live.
