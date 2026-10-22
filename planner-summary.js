@@ -276,8 +276,9 @@ function monthlyPredictions(state){
    ' in recent posted purchases (not an issued statement)</span>'+
    '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
  return '<details class="calendar-monthly-list" data-calendar-monthly'+(calendarMonthExpanded?' open':'')+'>'+
-  '<summary>All upcoming predictions · '+esc(monthName(calendarMonth))+' ('+rows.length+')'+
-   '<span>'+contextLabel+'</span></summary>'+
+  '<summary>See all '+esc(monthName(calendarMonth))+' predictions ('+rows.length+')'+
+   '<span>Expand ↓</span></summary>'+
+  '<p class="calendar-monthly-context">'+contextLabel+'</p>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
