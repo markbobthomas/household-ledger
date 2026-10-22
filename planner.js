@@ -1839,6 +1839,17 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',e=>{
+ if(e.target.name==='separateSchedule'&&e.target.checked){
+  const form=e.target.closest?.('[data-history-recurring-form]');
+  // A second bill cannot claim the historical examples already associated
+  // with its sibling merely because the payee name is identical.
+  if(form&&recurringDraft?.sourceRow?.id){
+   form.dataset.linkedExampleIds=JSON.stringify([String(recurringDraft.sourceRow.id)]);
+   form.dataset.historyLinksChanged='1';
+   updateHistoryLinks(form);
+  }
+  return;
+ }
  if(e.target.matches?.('[data-schedule-amount-scope]')){
   const dates=e.target.closest('form')?.querySelector('[data-schedule-estimate-dates]');
   if(dates)dates.hidden=e.target.value==='all';
