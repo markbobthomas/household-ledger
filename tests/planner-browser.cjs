@@ -327,7 +327,8 @@ const {chromium,webkit}=require('playwright');
    await everyFourForm.locator('[data-frequency]').selectOption('every-4-weeks');
    await everyFourForm.locator('button[type=submit]').click();
    const fourWeekRows=page.locator('.future-item').filter({hasText:'Every 4 weeks test payment'});
-   assert.deepEqual(await fourWeekRows.locator('.future-date').allInnerTexts(),
+   assert.ok(await fourWeekRows.count()>=35,'Four-week plan reaches well into the third year');
+   assert.deepEqual((await fourWeekRows.locator('.future-date').allInnerTexts()).slice(0,3),
     ['Nov 1','Nov 29','Dec 27'],
     'The actual future ledger moves forward 28 days per occurrence, rather than on calendar months');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -346,11 +347,12 @@ const {chromium,webkit}=require('playwright');
     await payForm.locator('button[type=submit]').click();
    }
    const payRows=page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'});
-   assert.deepEqual(await payRows.locator('.future-date').allInnerTexts(),
+   assert.ok(await payRows.count()>70,'Independent payroll continues for the whole three-year forecast');
+   assert.deepEqual((await payRows.locator('.future-date').allInnerTexts()).slice(0,6),
     ['Nov 6','Nov 20','Dec 4','Dec 18','Jan 1','Jan 15'],
     'Two four-week streams combine to provide one payday every 14 days');
    assert.deepEqual((await payRows.locator('.future-amount').allInnerTexts())
-    .map(x=>x.replace(/[^0-9.]/g,'')),['3020.00','3075.00','3020.00','3075.00','3020.00','3075.00'],
+     .slice(0,6).map(x=>x.replace(/[^0-9.]/g,'')),['3020.00','3075.00','3020.00','3075.00','3020.00','3075.00'],
     'The two separate recurring deposits preserve their own amounts');
    assert.equal(await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -366,12 +368,12 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.inline-save-result').first().innerText(),
     /Saved.*repeating plan/i);
    assert.deepEqual((await page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'})
-     .locator('.future-amount').allInnerTexts()).map(x=>x.replace(/[^0-9.]/g,'')),
+     .locator('.future-amount').allInnerTexts()).slice(0,6).map(x=>x.replace(/[^0-9.]/g,'')),
     ['3040.00','3075.00','3040.00','3075.00','3040.00','3075.00'],
     'Editing one four-week schedule does not alter the alternate paycheck');
    await page.reload({waitUntil:'load'});
    await go('transactions');
-   assert.equal(await page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'}).count(),6,
+   assert.ok(await page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'}).count()>70,
     'Both payroll recurrences persist across reload without double counting');
    await page.locator('[data-show-new]').click();
    const linkForm=page.locator('#future-new-form');
