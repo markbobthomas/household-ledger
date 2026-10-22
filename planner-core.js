@@ -277,7 +277,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   if(!configuredCard(e.accountId)||e.type==='transfer'||
    rules.some(r=>r.sourceAddedId===e.id))continue;
   if(!valid(e.date)||e.date<=asOf||e.date>end)continue;
-  if(ownerFor(e))continue;
+  // A one-time explicit payment from the same payee is NOT the recurring
+  // schedule. Only an explicitly promoted sourceAddedId replaces that entry.
   const clash=entries.find(a=>a.accountId===e.accountId&&
    norm(a.merchant)===norm(e.merchant)&&a.type===e.type&&
    a.date.slice(0,7)===e.date.slice(0,7)&&Math.abs(diff(a.date,e.date))<=7);
@@ -333,10 +334,11 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const ledger=[];
  for(const e of finalEvents){
   const key=String(e.accountId)+'|'+e.date+'|'+norm(e.merchant)+'|'+e.type;
-  if(bySignature.has(key)&&bySignature.get(key).source!==e.source){
-   warnings.push('Competing future amounts for '+e.merchant+' require review');
-   continue;
-  }
+  // Independent user schedules (and intentional one-offs) may share the
+  // merchant, date, account and even amount. Dedupe by durable IDs, not payee.
+  // The earlier explicit-versus-inferred cleanup still applies above.
+  if(bySignature.has(key)&&bySignature.get(key).source!==e.source)
+   warnings.push('Same-day entries for '+e.merchant+' are included separately');
   bySignature.set(key,e);
   ledger.push({...e,kind:'event'});
  }
@@ -348,7 +350,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   }
   if(ledger.some(e=>e.kind==='movement'&&e.fromAccountId===p.fromAccountId&&
    e.toAccountId===p.toAccountId&&Math.abs(diff(e.date,p.date))<=3&&
-   Math.abs(cents(e.amount)-cents(p.amount))<=1)){
+   Math.abs(cents(e.amount)-cents(p.amount))<=1&&
+   // Two separately confirmed linked obligations must never collapse.
+   !(e.recurringRuleId&&p.recurringRuleId&&e.recurringRuleId!==p.recurringRuleId))){
    checks.push({id:p.id,reason:'Already represented as a linked account movement'});continue;
   }
   ledger.push({...p,kind:'movement'});
