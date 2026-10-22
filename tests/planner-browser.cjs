@@ -426,17 +426,17 @@ const {chromium,webkit}=require('playwright');
    const incomeGroup=page.locator('[data-schedule-category-group="Income"]');
    assert.equal(await incomeGroup.locator('[data-schedule-card]').count(),2);
    let total=await incomeGroup.locator('[data-schedule-group-total]').innerText();
-   assert.match(total,/Nov 2026: In \\$6,115\\.00/,
+   assert.ok(total.includes('Nov 2026: In $6,115.00'),
     'November income must be the two actual dated deposits, not a prorated annual average');
-   assert.match(total,/12-month total: In \\$79,495\\.00/,
+   assert.ok(total.includes('12-month total: In $79,495.00'),
     'Annual income includes thirteen four-week deposits for each independent pay stream');
-   assert.match(total,/avg\\/month: In \\$6,624\\.58/,
+   assert.ok(total.includes('avg/month: In $6,624.58'),
     'The 12-month average is separately identified and cannot be mistaken for November');
    await page.locator('[data-schedule-search]').fill('Nonexistent schedule');
    assert.equal(await incomeGroup.locator('[data-schedule-card]:visible').count(),0);
    await page.locator('[data-schedule-search]').fill('Alternating Employer Paycheck');
    total=await incomeGroup.locator('[data-schedule-group-total]').innerText();
-   assert.match(total,/12-month total: In \\$79,495\\.00/,
+   assert.ok(total.includes('12-month total: In $79,495.00'),
     'Filtering and clearing schedules preserves the same income totals');
    await page.locator('[data-schedule-sort]').selectOption('order');
    await page.reload({waitUntil:'load'});
