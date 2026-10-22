@@ -2,7 +2,7 @@
    No new financial data source, confidence score, or automatic prediction is invented. */
 (function(root){
 'use strict';
-let series=[],selected=0;
+let series=[],trendSeries=[],selected=0,trendDays=1095,trendContext=null;
 const range=(n,a,b)=>Math.max(a,Math.min(b,n));
 const plotWidth=920,plotLeft=20,plotRight=900,top=18,bottom=274;
 const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unverified';
@@ -455,8 +455,17 @@ function issues(bundle,accounts,chosen,prefs,ready){
   !ready(prefs?.paymentRules?.[a.id],a,accounts)).length;
  return pending+general+missing;
 }
-function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}){
+function rawBalanceMarkup(account,real){
+ const raw=account?.current;
+ const n=raw==null||raw===''?null:Number(raw);
+ const displayed=n!==null&&Number.isFinite(n)?money(n):'Not reported';
+ return '<div class="summary-bank"><small>'+(real?'Plaid current balance':'Demo current balance')+
+  '</small><strong data-bank-current-value>'+displayed+'</strong>'+
+  '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
+}
+function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
+ trendDays=1095; // Chart reset after switching account or bank refresh.
  const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
   (String(a.id)===String(chosen.id)?' selected':'')+'>'+
   esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
@@ -466,6 +475,8 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   options+'</select></label></div>';
  const points=getPoints(derived,snapshot.asOf,days);
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
+ trendContext=series.length?{points:series,credit,prefs,derived}:null;
+ trendSeries=series;
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
   calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
   calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;calendarFocus=null;
@@ -488,6 +499,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
    series.at(-1).date,chosen.id,series):new Map()};
  if(series.length<2)return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
+  '<div class="summary-minimum"><div class="summary-overline">Lowest projected balance · next 3 years</div>'+
+  '<strong class="summary-low">Unverified</strong></div></div>'+
   '<div class="summary-empty">A current, verifiable account balance is required before this forecast can be shown. Refresh your bank data and check its balance date.</div>'+
   '</section></div>';
  const vals=series.map(p=>p.balance),low=Math.min(...vals),high=Math.max(...vals),
@@ -504,13 +518,13 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
   emptySchedule=moves===0;
  const zero=!credit&&floor<0&&ceil>0?
-  '<line x1="'+plotLeft+'" x2="'+plotRight+'" y1="'+y(0).toFixed(2)+'" y2="'+y(0).toFixed(2)+
+  '<line data-trend-zero x1="'+plotLeft+'" x2="'+plotRight+'" y1="'+y(0).toFixed(2)+'" y2="'+y(0).toFixed(2)+
   '" stroke="#c68687" stroke-width="1" stroke-dasharray="4 7"/>':'';
  const listed=lowDay.events||[];
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers"><div class="summary-minimum">'+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+'<div class="summary-minimum">'+
   '<div class="summary-overline">'+(credit?'Lowest modeled card debt':'Lowest projected balance')+
   ' · next 3 years</div>'+
   '<strong class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
@@ -522,27 +536,31 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend (3-year illustration)</summary>'+
   '<section class="summary-stage summary-legacy">'+
+  '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+
+  [10,30,90,180,360,1095].map(n=>'<button type="button" data-trend-days="'+n+
+   '" aria-pressed="'+(n===trendDays)+'" class="summary-trend-range'+(n===trendDays?' active':'')+
+   '">'+(n===1095?'3 years':n+'d')+'</button>').join('')+'</div>'+
   '<div class="summary-plot"><svg data-summary-plot role="img" tabindex="0" viewBox="0 0 '+plotWidth+
   ' 294" aria-label="Interactive '+days+'-day forecast. Use arrow keys or tap the curve to inspect a day.">'+
   '<defs><linearGradient id="summary-blue-fill" x1="0" y1="0" x2="0" y2="1">'+
   '<stop offset="0" stop-color="#315ebd" stop-opacity=".14"/><stop offset="1" stop-color="#315ebd" stop-opacity="0"/></linearGradient></defs>'+
   '<line x1="'+plotLeft+'" x2="'+plotRight+'" y1="'+bottom+'" y2="'+bottom+'" stroke="#e8edf2"/>'+
-  zero+'<path d="'+path+' L '+plotRight+' '+bottom+' L '+plotLeft+' '+bottom+
+  zero+'<path data-trend-area d="'+path+' L '+plotRight+' '+bottom+' L '+plotLeft+' '+bottom+
   ' Z" fill="url(#summary-blue-fill)"/>'+
-  '<path d="'+path+'" stroke="#315ebd" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>'+
-  '<circle cx="'+pin[0]+'" cy="'+pin[1]+'" r="6" fill="'+(below?'#b9444b':'#315ebd')+
+  '<path data-trend-line d="'+path+'" stroke="#315ebd" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>'+
+  '<circle data-trend-pin cx="'+pin[0]+'" cy="'+pin[1]+'" r="6" fill="'+(below?'#b9444b':'#315ebd')+
   '" stroke="#fff" stroke-width="3"/>'+
   '<line data-summary-cursor x1="'+pin[0]+'" x2="'+pin[0]+'" y1="'+top+'" y2="'+bottom+
   '" stroke="#8395ae" stroke-width="1" stroke-dasharray="3 7"/>'+
   '<circle data-summary-dot cx="'+pin[0]+'" cy="'+pin[1]+'" r="7" stroke="#315ebd" stroke-width="2.5" fill="#fff"/>'+
-  '</svg><div class="summary-axis"><span>'+esc(shortDate(first.date))+'</span><span>'+
+  '</svg><div class="summary-axis"><span data-trend-first>'+esc(shortDate(first.date))+'</span><span data-trend-last>'+
   esc(shortDate(last.date))+'</span></div></div>'+
   '<div class="summary-peek" aria-live="off"><div><span data-summary-peek-date>'+esc(dateLabel(lowDay.date))+
   '</span><strong data-summary-peek-amount>'+money(low)+'</strong></div>'+
   '<small data-summary-peek-events>'+causes+'</small></div>'+
   '<div class="summary-caption">'+(credit?'Credit card debt · Higher means more owed':
   'Spendable cash · From scheduled deposits and withdrawals')+' · '+
-  moves+' dated movement'+(moves===1?'':'s')+
+  '<span data-trend-count>'+moves+' dated movement'+(moves===1?'':'s')+'</span>'+
   '<span>Tap or move along the curve to explore a day</span></div></section>'+
   '</details>'+
   '<section class="summary-trust" aria-label="Forecast assumptions">'+
@@ -555,11 +573,11 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
 }
 function setDay(index){
  const svg=document.querySelector('[data-summary-plot]');
- if(!svg||!series.length)return;
- selected=range(index,0,series.length-1);
- const point=series[selected],vals=series.map(p=>p.balance),
+ if(!svg||!trendSeries.length)return;
+ selected=range(index,0,trendSeries.length-1);
+ const point=trendSeries[selected],vals=trendSeries.map(p=>p.balance),
   lo=Math.min(...vals),hi=Math.max(...vals),pad=Math.max(50,(hi-lo)*.14),
-  x=plotLeft+selected*(plotRight-plotLeft)/(series.length-1),
+  x=plotLeft+selected*(plotRight-plotLeft)/(trendSeries.length-1),
   y=bottom-(point.balance-(lo-pad))/(hi+pad-(lo-pad))*(bottom-top);
  const guide=svg.querySelector('[data-summary-cursor]'),dot=svg.querySelector('[data-summary-dot]');
  guide.setAttribute('x1',x);guide.setAttribute('x2',x);
@@ -572,12 +590,46 @@ function setDay(index){
   (events.length>2?' · +'+(events.length-2)+' more':''):'No dated transactions that day';
  svg.setAttribute('aria-valuetext',dateLabel(point.date)+': '+money(point.balance));
 }
+function paintTrend(days){
+ const svg=document.querySelector('[data-summary-plot]');
+ if(!svg||!series.length)return;
+ trendDays=days;
+ trendSeries=series.slice(0,Math.min(days,series.length-1)+1);
+ const vals=trendSeries.map(p=>p.balance),lo=Math.min(...vals),hi=Math.max(...vals),
+  pad=Math.max(50,(hi-lo)*.14),floor=lo-pad,ceil=hi+pad,
+  x=i=>plotLeft+i*(plotRight-plotLeft)/(trendSeries.length-1),
+  y=v=>bottom-(v-floor)/(ceil-floor)*(bottom-top),
+  path=vals.map((v,i)=>(i?'L':'M')+x(i).toFixed(2)+' '+y(v).toFixed(2)).join(' ');
+ const line=svg.querySelector('[data-trend-line]'),area=svg.querySelector('[data-trend-area]'),
+  pin=svg.querySelector('[data-trend-pin]');
+ line?.setAttribute('d',path);
+ area?.setAttribute('d',path+' L '+plotRight+' '+bottom+' L '+plotLeft+' '+bottom+' Z');
+ const index=vals.indexOf(lo);
+ pin?.setAttribute('cx',x(index).toFixed(2));pin?.setAttribute('cy',y(lo).toFixed(2));
+ const zero=svg.querySelector('[data-trend-zero]');
+ if(zero){zero.style.display=floor<0&&ceil>0?'':'none';
+  zero.setAttribute('y1',y(0).toFixed(2));zero.setAttribute('y2',y(0).toFixed(2));}
+ const label=days===1095?'3-year':days+'-day';
+ svg.setAttribute('aria-label','Interactive '+label+
+  ' balance trend. Use arrow keys or tap the curve to inspect a day.');
+ const first=document.querySelector('[data-trend-first]'),last=document.querySelector('[data-trend-last]'),
+  count=document.querySelector('[data-trend-count]');
+ if(first)first.textContent=shortDate(trendSeries[0].date);
+ if(last)last.textContent=shortDate(trendSeries.at(-1).date);
+ const movements=trendSeries.reduce((sum,p)=>sum+(p.events||[]).length,0);
+ if(count)count.textContent=movements+' dated movement'+(movements===1?'':'s');
+ document.querySelectorAll('[data-trend-days]').forEach(btn=>{
+  const active=Number(btn.dataset.trendDays)===days;
+  btn.setAttribute('aria-pressed',String(active));btn.classList.toggle('active',active);
+ });
+ setDay(index);
+}
 function byPointer(e){
  const svg=e.target.closest?.('[data-summary-plot]');
- if(!svg||series.length<2)return;
+ if(!svg||trendSeries.length<2)return;
  const rect=svg.getBoundingClientRect();
  const position=(e.clientX-rect.left)/rect.width;
- setDay(Math.round((position*plotWidth-plotLeft)/(plotRight-plotLeft)*(series.length-1)));
+ setDay(Math.round((position*plotWidth-plotLeft)/(plotRight-plotLeft)*(trendSeries.length-1)));
 }
 document.addEventListener('pointermove',e=>{
  if(e.pointerType!=='touch')byPointer(e);
@@ -587,6 +639,12 @@ document.addEventListener('click',e=>{
  if(low){showCalendar(low.dataset.summaryLowDate);
   document.querySelector('[data-calendar-stage]')?.scrollIntoView?.({block:'start',behavior:'auto'});
  }
+});
+document.addEventListener('click',e=>{
+ const btn=e.target.closest?.('[data-trend-days]');
+ if(!btn)return;
+ const days=Number(btn.dataset.trendDays);
+ if([10,30,90,180,360,1095].includes(days))paintTrend(days);
 });
 document.addEventListener('click',byPointer);
 // Keep the optional month drawer open across ordinary forecast re-renders,
@@ -599,7 +657,7 @@ document.addEventListener('keydown',e=>{
  if(!e.target.matches?.('[data-summary-plot]')||
   !['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
  e.preventDefault();
- setDay(e.key==='Home'?0:e.key==='End'?series.length-1:
+ setDay(e.key==='Home'?0:e.key==='End'?trendSeries.length-1:
   selected+(e.key==='ArrowRight'?1:-1));
 });
 document.addEventListener('click',e=>{

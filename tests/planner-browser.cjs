@@ -71,6 +71,9 @@ const {chromium,webkit}=require('playwright');
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
    assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
+    'The demo current balance uses the bank snapshot current, not available $5,400.25');
+   assert.match(await page.locator('.summary-bank').innerText(),/Demo current balance/);
    assert.match(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),
     /All predictions/,'Advanced bulk prediction view remains available without a fourth tab');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
@@ -150,9 +153,19 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-summary-plot]').count(),1,
     'Previous trend is still available in optional details');
    await page.locator('.summary-extras > summary').click();
+   assert.equal(await page.locator('[data-trend-days]').count(),6);
+   const fullMinimum=await page.locator('.summary-low').innerText();
+   for(const n of [10,30,90,180,360,1095]){
+    await page.locator('[data-trend-days="'+n+'"]').click();
+    assert.equal(await page.locator('[data-trend-days][aria-pressed="true"]').count(),1);
+    assert.equal(await page.locator('.summary-low').innerText(),fullMinimum,
+     'Trend windows must never change the three-year lowest balance');
+    assert.equal(await page.locator('.calendar-day.selected').count(),1,
+     'Trend windows do not change the selected calendar date');
+   }
    assert.equal(await page.locator('.coverage-table,.calendar-checklist').count(),0);
    assert.match(await page.locator('.summary-trust').innerText(),/not a guaranteed minimum/i);
-   assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),/1095-day forecast/);
+   assert.match(await page.locator('[data-summary-plot]').getAttribute('aria-label'),/3-year balance trend/);
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
    const beforeDate=await page.locator('[data-summary-peek-date]').innerText();
    await page.locator('[data-summary-plot]').focus();
@@ -691,6 +704,10 @@ const {chromium,webkit}=require('playwright');
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
   assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+  assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
+   'Live bank current must be the Plaid current, not $4,800 available');
+  assert.match(await page.locator('.summary-bank').innerText(),/Plaid current balance/);
+
   assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
   assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
    'Long-range calculation does not resurrect old major-payment coverage checks');
