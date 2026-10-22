@@ -2006,7 +2006,8 @@ document.addEventListener('submit',async e=>{
  const submit=form.querySelector('[type=submit]');if(submit)submit.disabled=true;
  try{
   const fields=Object.fromEntries(new FormData(form)),
-   T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s);
+   T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s),
+   originatingKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||'';
   let savedPlanId='';
   if(form.hasAttribute('data-schedule-new-form')){
    const saved=await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
@@ -2032,6 +2033,11 @@ document.addEventListener('submit',async e=>{
   schedulePreset=null;scheduleRemoveTarget='';
   if(activeTab==='schedules'&&savedPlanId&&!transactionDetail){
    scheduleMode='edit';scheduleTarget=savedPlanId;render();
+   const card=[...document.querySelectorAll('[data-schedule-card]')].find(x=>x.dataset.scheduleCard===savedPlanId);
+   card?.insertAdjacentHTML('afterbegin','<p class="inline-save-result" role="status">'+escapeHTML(scheduleNotice)+'</p>');
+  }else if(originatingKey&&savedPlanId){
+   render();
+   confirmInlineSave(originatingKey,'Saved — repeating plan defaults updated.');
   }else if(transactionDetail?.kind==='schedule'&&savedPlanId){
    scheduleMode='edit';scheduleTarget=savedPlanId;
    transactionDetail={kind:'schedule',id:savedPlanId,mode:'edit',selectedKey:''};
