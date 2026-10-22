@@ -983,3 +983,28 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .calendar-monthly-entry.calendar-detail-entry{display:flex;flex-wrap:wrap}
 .calendar-monthly-entry.calendar-detail-entry>.calendar-monthly-row{flex:1 1 0;min-width:0}
 @media(max-width:600px){.calendar-monthly-row.calendar-detail-item{grid-template-columns:54px minmax(0,1fr) auto;gap:7px}.calendar-monthly-row .calendar-monthly-view{display:none}}
+
+/* Calendar-first focus: edit ONLY the selected day's payments by default.
+   Full-month transactions are an optional, collapsed disclosure. */
+.calendar-day-transactions{margin:15px 0 3px;border-top:1px solid #e1e9f1}
+.calendar-day-transactions-head{display:flex;align-items:center;justify-content:space-between;
+ gap:8px;padding:13px 1px 9px;color:#314b65}
+.calendar-day-transactions-head strong{font-size:12px}
+.calendar-day-transactions-head span{font-size:11px;color:#7c8d9b}
+.calendar-day-transactions .calendar-monthly-entry{background:#fff;border:1px solid #e5ebf2;
+ border-radius:8px;margin-top:7px;overflow:hidden}
+.calendar-day-transactions .calendar-monthly-entry.selected-date{box-shadow:none}
+.calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{background:#fff;
+ grid-template-columns:minmax(0,1fr) minmax(70px,auto) 45px;padding:12px}
+.calendar-day-transactions .calendar-monthly-date{display:none}
+.calendar-day-transactions .calendar-monthly-entry>.calendar-monthly-row:hover,
+.calendar-day-transactions .calendar-monthly-entry>.calendar-monthly-row:focus-visible{background:#eff5fb}
+.calendar-day-transactions .inline-transaction-editor{flex-basis:100%;min-width:0}
+.calendar-monthly-list:not([open]){background:#fafbfd}
+.calendar-monthly-list:not([open])>summary{color:#466481}
+.calendar-monthly-context{margin:0;padding:10px 16px;font-size:11px;color:#75899a;line-height:1.5}
+@media(max-width:600px){
+ .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{
+  grid-template-columns:minmax(0,1fr) auto;padding:12px 9px}
+ .calendar-day-transactions-head{align-items:flex-start}
+}
