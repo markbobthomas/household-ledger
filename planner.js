@@ -643,7 +643,9 @@ function editableForecastRow(row,opts={}){
   (row.recurringRuleId?' · Repeats':row.seriesKey?' · Auto-detected':' · One time');
  return '<div class="unified-payment-row'+(opts.kind==='schedule'?' schedule-occurrence-entry':'')+
   '" data-inline-row-wrapper data-payment-key="'+escapeHTML(row.key)+'">'+
-  '<button type="button" class="unified-payment-trigger" data-open-transaction="'+escapeHTML(row.key)+
+  '<button type="button" class="unified-payment-trigger" '+
+   (opts.advanced?'data-edit-future="'+escapeHTML(row.key)+'" ':'')+
+   'data-open-transaction="'+escapeHTML(row.key)+
   '" aria-expanded="false">'+
   '<span class="unified-payment-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
   '<span class="unified-payment-name"><strong>'+escapeHTML(row.merchant)+'</strong>'+
@@ -980,7 +982,7 @@ function schedulesPage(bundle,s){
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
-   isEstimating=(scheduleMode==='estimate'||planOpen)&&scheduleTarget===r.id,
+   isEstimating=(isEditing||scheduleMode==='estimate'||planOpen)&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
@@ -1013,11 +1015,11 @@ function schedulesPage(bundle,s){
    '<div class="schedule-metrics"><span>Next: '+(next?escapeHTML(dayLabel(next)):'Outside forecast')+'</span>'+
     '<strong>'+cash(estimate.amount)+'</strong><span>'+dates.length+' upcoming</span></div>'+
    '<div class="schedule-actions">'+
-    '<button class="btn primary" type="button" data-schedule-edit="'+id+'">Open plan →</button>'+
+    '<button class="btn primary" type="button" data-schedule-edit="'+id+'">'+(isEditing?'Close plan −':'Edit plan ↓')+'</button>'+
     '<button class="btn" type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
     '<button class="btn" type="button" data-schedule-remove="'+id+'">'+
      (scheduleRemoveTarget===r.id?'Confirm remove':'Remove')+'</button></div>'+
-   (windows?'<div class="schedule-windows"><small>Estimated ranges</small>'+windows+'</div>':'')+
+   (windows&&wins.length?'<div class="schedule-windows"><small>Estimated ranges</small>'+windows+'</div>':'')+
    (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
      '<p class="plan-edit-guide">Repeating defaults apply across future payments. '+
       'Each dated payment below can be changed separately.</p>'+
@@ -1041,20 +1043,8 @@ function transactionsPage(bundle,s){
    r.fromAccountId===transactionFilter||r.toAccountId===transactionFilter:
    r.accountId===transactionFilter));
  const opts=accountSelect(accounts,transactionFilter,'transactionFilter',true);
- const lines=visible.map(row=>{
-  const paired=row.kind==='movement',incoming=row.type==='income'||row.type==='refund',
-   desc=paired?row.from+' → '+row.to:row.account+' · '+
-    (row.type==='income'?'Deposit':row.type==='refund'?'Refund':
-     row.type==='transfer'?(row.cashDirection==='in'?'Transfer in':'Transfer out'):'Withdrawal / card purchase');
-  return '<article class="future-item" data-future-item="'+escapeHTML(row.key)+'">'+
-   '<div class="future-row"><div class="future-date">'+escapeHTML(dayLabel(row.date))+'</div>'+
-   '<div class="future-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-   '<small>'+escapeHTML(desc)+(row.seriesKey?' · Recurring':'')+
-    (row.seriesKey&&state().predictions?.futureSeriesEdits?.[row.seriesKey]?' · SERIES EDITED':'')+'</small>'+
-   '</div>'+
-   '<div class="future-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':paired?'↔ ':'−')+cash(row.amount)+'</div>'+
-   '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">Details →</button></div></article>';
- }).join('');
+ const lines=visible.map(row=>'<article class="future-item" data-future-item="'+
+  escapeHTML(row.key)+'">'+editableForecastRow(row,{advanced:true})+'</article>').join('');
  const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([k,v])=>
   v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter||
    String(v.toAccountId)===transactionFilter));
@@ -1844,7 +1834,8 @@ document.addEventListener('click',async e=>{
  }
  const edit=e.target.closest('[data-edit-future]');
  if(edit){showNewTransaction=false;transactionNotice='';
-  openPrediction(edit.dataset.editFuture,edit);return}
+  if(!openInlineTransaction(edit))openPrediction(edit.dataset.editFuture,edit);
+  return}
  const skip=e.target.closest('[data-skip-future]');
  if(skip){
   const row=futureRows(forecastFor(snapshot()),snapshot()).find(r=>r.key===skip.dataset.skipFuture);
