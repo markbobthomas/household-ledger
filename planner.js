@@ -635,21 +635,30 @@ function relatedCardCalculation(bundle,row){
 }
 // The live forecast, not unedited schedule defaults, owns each occurrence:
  // edited dates/amounts and skipped payments are reflected here exactly.
-function scheduleOccurrencesHtml(bundle,s,rule){
+function scheduleOccurrencesHtml(bundle,s,rule,selectedKey=''){
  if(!rule)return '';
- const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id));
- const rows=occurrences.map(row=>'<button type="button" class="schedule-occurrence" data-open-transaction="'+
-  escapeHTML(row.key)+'" data-schedule-occurrence-key="'+escapeHTML(row.key)+'">'+
+ const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id)),
+  selected=occurrences.find(r=>r.key===selectedKey);
+ const rows=occurrences.map(row=>'<button type="button" class="schedule-occurrence'+
+  (row.key===selectedKey?' selected':'')+'" data-select-plan-payment="'+
+  escapeHTML(row.key)+'" data-schedule-occurrence-key="'+escapeHTML(row.key)+'" aria-pressed="'+
+  (row.key===selectedKey?'true':'false')+'">'+
   '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
   '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
    '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
     row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
   '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">Edit →</span></button>').join('');
+ const selectedForm=selected?'<div class="plan-occurrence-editor" data-plan-occurrence-editor>'+
+  '<div class="plan-section-label"><strong>Editing just this payment</strong>'+
+   '<span>'+escapeHTML(dayLabel(selected.date))+' · '+cash(selected.amount)+'</span></div>'+
+  '<p>You can change the date, amount or account for this occurrence. The other '+
+   'payments in this plan stay exactly as they are.</p>'+
+  editorFor(selected,s,bundle?.rows||[],{oneOnly:true})+'</div>':'';
  return '<section class="schedule-occurrence-section" aria-label="Upcoming individual payments">'+
   '<div class="schedule-occurrence-heading"><h3>Individual upcoming payments</h3>'+
    '<span>'+occurrences.length+' in next '+horizon+' days</span></div>'+
-  '<p>Choose a payment to change or skip <strong>only that occurrence</strong>. '+
-   'Other payments remain unchanged unless you explicitly choose “this and all future” in its editor.</p>'+
+  '<p>Select a date to adjust just that payment. Schedule settings and all other dates stay unchanged.</p>'+
+  selectedForm+
   (rows?'<div class="schedule-occurrence-list">'+rows+'</div>':
    '<p class="schedule-occurrence-empty">No remaining payments for this schedule within the selected forecast. '+
     'A payment may have already posted, been skipped, or be outside the forecast window.</p>')+
