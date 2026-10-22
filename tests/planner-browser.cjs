@@ -608,6 +608,20 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-schedule-card]').last().locator('.schedule-number').innerText(),
     String(previousSchedules+1));
    let water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   assert.equal(await water.locator('[data-schedule-quick-category]').inputValue(),'Water bills');
+   await water.locator('[data-schedule-quick-category]').selectOption('Insurance');
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   assert.equal(await water.locator('[data-schedule-quick-category]').inputValue(),'Insurance',
+    'Category changes with one row-level picker, without the schedule editor');
+   await page.reload({waitUntil:'load'});
+   await go('schedules');
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   assert.equal(await water.locator('[data-schedule-quick-category]').inputValue(),'Insurance',
+    'Quick category assignment persists after reload');
+   await water.locator('[data-schedule-quick-category]').selectOption('Water bills');
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   if(!await water.locator('[data-schedule-inline-plan]').count())
+    await water.locator('[data-schedule-edit]').click();
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
     'Schedule settings and upcoming payments expand inside their own schedule');
    await water.locator('.schedule-more > summary').click();
@@ -648,8 +662,22 @@ const {chromium,webkit}=require('playwright');
     'Category grouping shows a normalized monthly withdrawal total');
    assert.match(await group.locator('.schedule-category-heading').innerText(),/355/,
     'Category total includes both independently forecast monthly bills');
-   assert.ok((await group.locator('.schedule-row-title').allInnerTexts()).every(v=>v.includes('Water bills')),
-    'Each row displays its assigned schedule category');
+   assert.deepEqual(await group.locator('[data-schedule-quick-category]').evaluateAll(rows=>
+    rows.map(row=>row.value)),['Water bills','Water bills'],
+    'Every grouped row carries its saved category as directly editable data');
+   await page.locator('[data-schedule-search]').fill('Garden');
+   assert.equal(await page.locator('[data-schedule-card]:visible').count(),1,
+    'Search filters instantly without navigating or reopening editors');
+   assert.match(await group.locator('[data-schedule-group-total]').innerText(),/220/,
+    'Visible category totals reflect only matching scheduled predictions');
+   await page.locator('[data-schedule-search]').fill('');
+   assert.equal(await page.locator('[data-schedule-card]:visible').count(),2);
+   assert.match(await group.locator('[data-schedule-group-total]').innerText(),/355/,
+    'Clearing search restores all category totals');
+   await page.locator('[data-schedule-search]').fill('Nothing matches');
+   assert.equal(await page.locator('[data-schedule-card]:visible').count(),0);
+   assert.equal(await page.locator('[data-schedule-search-empty]:visible').count(),1);
+   await page.locator('[data-schedule-search]').fill('');
    await page.locator('[data-schedule-category-filter]').selectOption('');
    await page.locator('[data-schedule-sort]').selectOption('order');
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
