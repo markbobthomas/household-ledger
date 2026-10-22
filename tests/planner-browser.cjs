@@ -74,8 +74,14 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await monthlyEntries.count()>0,'Monthly list contains actual forecast events');
    const pickedMonth=await monthlyEntries.first().getAttribute('data-calendar-list-date');
    await monthlyEntries.first().click();
-   assert.equal(await page.locator('.calendar-day.selected').getAttribute('data-calendar-day'),pickedMonth,
-    'Selecting a prediction from the monthly list focuses the matching date');
+   assert.equal(await page.locator('.transaction-detail[role="dialog"]').count(),1,
+    'The month list opens the single transaction detail panel');
+   assert.equal(await page.locator('.transaction-detail .future-edit-form').count(),1,
+    'Calendar list reuses the same full editor as Predictions');
+   assert.match(await page.locator('.transaction-detail').innerText(),/Forecast source|Expected amount/);
+   await page.locator('.transaction-detail-close').click();
+   assert.equal(await page.locator('.transaction-detail').count(),0,
+    'Closing returns to the month list, not another page');
    assert.equal(await page.locator('[data-calendar-stage]').count(),1,
     'Summary defaults to a daily balance calendar');
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
@@ -461,10 +467,11 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.calendar-notice').innerText().then(x=>x.includes('recalculated')));
    const playground=page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'});
    await playground.click();
-   assert.equal(await quick.locator('[name=amount]').inputValue(),'25',
-    'Existing predicted transaction opens in the calendar editor');
-   await quick.locator('[name=amount]').fill('40');
-   await quick.locator('button[type=submit]').click();
+   const universal=page.locator('.transaction-detail .future-edit-form');
+   assert.equal(await universal.locator('[name=amount]').inputValue(),'25',
+    'Calendar and Predictions use the identical form');
+   await universal.locator('[name=amount]').fill('40');
+   await universal.locator('button[type=submit]').click();
    assert.match(await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/);
    await page.reload({waitUntil:'load'});
@@ -475,7 +482,7 @@ const {chromium,webkit}=require('playwright');
     'Calendar-only edits persist across reload');
    await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).click();
-   await quick.locator('[data-calendar-skip]').click();
+   await page.locator('.transaction-detail [data-skip-future]').click();
    assert.equal(await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).count(),0,
     'Skipping a selected occurrence removes it from the same balance forecast');
@@ -743,14 +750,15 @@ const {chromium,webkit}=require('playwright');
   await page.locator('[data-calendar-nav="1"]').click();
   const cardNov=page.locator('.calendar-monthly-entry').filter({hasText:'Credit-card payment'}).first();
   assert.ok(await cardNov.count()>0,'The projected checking card payment has an itemized breakdown');
-  await cardNov.locator('[data-card-breakdown]').click();
-  const itemized=page.locator('[data-card-breakdown-panel]');
+  await cardNov.locator('[data-open-card-payment]').click();
+  const itemized=page.locator('.transaction-detail');
   assert.equal(await itemized.isVisible(),true);
-  assert.match(await itemized.innerText(),/Posted card purchases and refunds/);
-  assert.match(await itemized.innerText(),/Scheduled and recurring card transactions/);
-  assert.match(await itemized.innerText(),/Identified net card activity/);
+  assert.match(await itemized.innerText(),/Actual posted card transactions/);
+  assert.match(await itemized.innerText(),/Scheduled\/recurring card transactions/);
+  assert.match(await itemized.innerText(),/Identifiable activity/);
   assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
-  await itemized.locator('[data-card-breakdown-close]').click();
+  assert.equal(await itemized.locator('.future-edit-form').count(),1);
+  await page.locator('.transaction-detail-close').click();
   await page.locator('.summary-extras > summary').click();
   const cardCoverage=page.locator('.coverage-table tbody tr').filter({hasText:'Household Visa'});
   assert.equal(await cardCoverage.locator('.coverage-cell.covered').count(),2,
