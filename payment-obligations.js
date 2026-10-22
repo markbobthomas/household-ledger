@@ -129,7 +129,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
       amountEstimate:'bank-activity-estimate'});
     }
     warnings.push(card.name+': provisional card withdrawals estimated from Plaid payment history. Confirm billing dates and statement amounts in Settings.');
-   }else warnings.push(card.name+': no card withdrawal can be predicted yet. '+
+   }else warnings.push(card.name+': credit-card setup required; no checking withdrawal can be predicted yet. '+
     candidate.reason+'. Set payment dates and funding account in Settings.');
   }
  const settled=new Map(records.filter(t=>t&&t.id).map(t=>[String(t.id),t]));
