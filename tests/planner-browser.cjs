@@ -78,10 +78,15 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.summary-current').count(),1);
    assert.equal(await page.locator('.summary-coverage-metric').count(),1);
    assert.ok(await page.locator('.calendar-checklist').count()>0);
+   assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
+    'Full-month prediction list is collapsed by default');
+   assert.equal(await page.locator('.calendar-day-transactions .calendar-monthly-row').count(),0,
+    'No selected-day payments are invented on an empty starting day');
+   await page.locator('.calendar-monthly-list > summary').click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),1,
-    'Every monthly prediction is listed by default beneath the calendar');
-   const monthlyEntries=page.locator('.calendar-monthly-row');
-   assert.ok(await monthlyEntries.count()>0,'Monthly list contains actual forecast events');
+    'Optional month list expands on demand');
+   const monthlyEntries=page.locator('.calendar-monthly-list .calendar-monthly-row');
+   assert.ok(await monthlyEntries.count()>0,'Expanded month contains actual forecast events');
    const pickedMonth=await monthlyEntries.first().getAttribute('data-calendar-list-date');
    await monthlyEntries.first().click();
    assert.equal(await page.locator('.transaction-detail[role="dialog"]').count(),0,
@@ -106,16 +111,31 @@ const {chromium,webkit}=require('playwright');
     has:page.locator('.calendar-event')}).first();
    assert.ok(await projectedDay.count()>0,'Daily dates show predicted transaction labels and amounts');
    await projectedDay.click();
-   assert.equal(await page.locator('.calendar-detail-items').count(),0,
-    'Selected day no longer duplicates the monthly transaction list');
-   assert.ok(await page.locator('.calendar-monthly-rows .selected-date').count()>0,
-    'Selecting a date highlights its payments in the single monthly list');
+   assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
+    'Selecting a new date returns to the focused view instead of retaining a long month list');
+   const chosenDate=await projectedDay.getAttribute('data-calendar-day');
+   const selectedPayments=page.locator('.calendar-day-transactions .calendar-monthly-row');
+   assert.ok(await selectedPayments.count()>0,
+    'Selected forecast day immediately lists its own editable predictions');
+   assert.equal(await selectedPayments.count(),await page.locator(
+    '.calendar-monthly-list .calendar-monthly-row[data-calendar-list-date="'+chosenDate+'"]').count(),
+    'Selected day contains exactly the predictions belonging to that date');
+   assert.equal(await page.locator('.calendar-monthly-list .calendar-monthly-row:visible').count(),0,
+    'Other days are hidden until explicitly expanding the month');
+   await selectedPayments.first().click();
+   assert.equal(await page.locator('.calendar-day-transactions [data-inline-transaction-editor]').count(),1,
+    'A payment can be edited directly on its selected date');
+   await page.locator('.calendar-day-transactions [data-cancel-future]').click();
+   assert.equal(await page.locator('[data-inline-transaction-editor]').count(),0);
+
    const selectedAria=await page.locator('.calendar-day.selected').getAttribute('aria-label'),
     balanceText=await page.locator('.calendar-detail-balance strong').innerText();
    assert.ok(selectedAria.includes(balanceText),
     'Detailed balance is identical to the calendar projected balance for that date');
    await page.locator('[data-calendar-actual-day]').last().click();
    assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
+   assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
+    'Historical date selections do not open full-month predictions');
       await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
    assert.ok(await page.locator('[data-calendar-day="2026-11-01"]').count()>0,
