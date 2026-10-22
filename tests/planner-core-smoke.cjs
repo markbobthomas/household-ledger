@@ -67,6 +67,75 @@ assert.equal(state.predictions.futureRecurringRules.length,1,
  'Confirming another source row updates one rule instead of making duplicates');
 b=C.materialize(snapshot,history,state.predictions,T,P,90);
 assert.equal(find(b,'Mortgage ACH').length,2);
+// A variable utility must still be recognized as the SAME confirmed plan,
+// regardless of whether a particular posted amount differs from its default.
+const utilityHistory=[
+ tx('utility-old','2026-09-14','Valley Electric',105.45),
+ tx('utility-new','2026-10-14','Valley Electric',167.82)];
+const utilityState={predictions:{}};
+const utility=T.defineRecurring(utilityState,{
+ date:'2026-11-14',merchant:'Valley Electric',amount:140,
+ type:'expense',accountId:'checking',frequency:'monthly'
+},accounts,snapshot.asOf,{
+ kind:'event',accountId:'checking',type:'expense',merchant:'Valley Electric',
+ amount:105.45,date:'2026-09-14'
+},utilityHistory,['utility-old']);
+const linkedUtility=T.historicalScheduleMatches(utilityHistory[1],accounts,
+ utilityState.predictions.futureRecurringRules);
+assert.equal(linkedUtility.length,1);
+assert.equal(linkedUtility[0].id,utility.id,
+ 'Variable bill with different amount resolves to the confirmed schedule');
+const beforeGuard=JSON.stringify(utilityState.predictions);
+assert.throws(()=>T.defineRecurring(utilityState,{
+ date:'2026-11-20',merchant:'Valley Electric',amount:168,
+ type:'expense',accountId:'checking',frequency:'monthly',
+ separateSchedule:'on'
+},accounts,snapshot.asOf,{
+ kind:'event',accountId:'checking',type:'expense',merchant:'Valley Electric',
+ amount:167.82,date:'2026-10-14',bankTransactionId:'utility-new'
+},utilityHistory,['utility-new']),/already belongs to a schedule/i,
+ 'No historical record can be used to create a conflicting separate schedule');
+assert.equal(JSON.stringify(utilityState.predictions),beforeGuard,
+ 'Blocked creation must not mutate saved planning preferences');
+assert.throws(()=>T.defineRecurring(utilityState,{
+ date:'2026-11-20',merchant:'Valley Electric',amount:168,
+ type:'expense',accountId:'checking',frequency:'monthly'
+},accounts,snapshot.asOf,{
+ kind:'event',accountId:'checking',type:'expense',merchant:'Valley Electric',
+ amount:167.82,date:'2026-10-14',bankTransactionId:'utility-new'
+},utilityHistory,['utility-new']),error=>error.code==='RECURRING_SCHEDULE_CHOICE',
+ 'Stale creation form must demand an existing schedule, not silently duplicate it');
+// Two legitimate four-week streams from one employer remain independent.
+const payrollHistory=[
+ tx('wage-a','2026-09-18','Shared Employer',3100,'income'),
+ tx('wage-b','2026-10-02','Shared Employer',2850,'income')];
+const payrollState={predictions:{}};
+const firstPay=T.defineRecurring(payrollState,{
+ date:'2026-10-30',merchant:'Shared Employer',amount:3100,
+ type:'income',accountId:'checking',frequency:'every-4-weeks'
+},accounts,snapshot.asOf,{
+ kind:'event',accountId:'checking',type:'income',
+ merchant:'Shared Employer',amount:3100,date:'2026-09-18'
+},payrollHistory,['wage-a']);
+const secondPay=T.defineRecurring(payrollState,{
+ date:'2026-11-13',merchant:'Shared Employer',amount:2850,
+ type:'income',accountId:'checking',frequency:'every-4-weeks',
+ separateSchedule:'on'
+},accounts,snapshot.asOf,{
+ kind:'event',accountId:'checking',type:'income',
+ merchant:'Shared Employer',amount:2850,date:'2026-10-02'
+},payrollHistory,['wage-b']);
+assert.notEqual(firstPay.id,secondPay.id);
+assert.equal(T.historicalScheduleMatches(payrollHistory[0],accounts,
+ payrollState.predictions.futureRecurringRules)[0].id,firstPay.id);
+assert.equal(T.historicalScheduleMatches(payrollHistory[1],accounts,
+ payrollState.predictions.futureRecurringRules)[0].id,secondPay.id);
+const duplicatePay=payrollHistory.map(t=>({...t,id:'unspecified-pay',date:'2026-10-01'}))[0];
+assert.equal(T.historicalScheduleMatches(duplicatePay,accounts,[
+ {...firstPay,frequency:'monthly',exampleIds:[]},
+ {...secondPay,frequency:'monthly',exampleIds:[]}]).length,2,
+ 'Ambiguous same-merchant history must never silently select a schedule');
+
 const generic=find(b,'ABC Draft 984')[0];
 T.saveEdit(state,T.keyEvent(generic.id,generic.accountId),{
  date:'2026-11-13',merchant:'ABC Draft 984',amount:88,type:'expense',
