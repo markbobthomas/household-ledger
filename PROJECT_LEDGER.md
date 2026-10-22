@@ -163,6 +163,15 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Safety:** No new bank writes, no changes to Plaid state, forecast arithmetic, recurring schedule creation logic, duplicate prevention or reconciliation. Remove only the heuristic *presentation*.
 - **Verification and deployment:** [PR #40](https://github.com/markbobthomas/household-ledger/pull/40) passed both required GitHub checks on final head `c8cee1b5df2eed520e5bac87e07e1e9bf3cdc4a2`: **Real-account pilot banking-safety checks** and **Browser interaction test** (desktop Chromium and iPhone WebKit), including independent same-merchant payments and numbered schedule cards. Merged to `main` as `3201286e2cb7e80a19610bfd56a59e0be5a4404a`. Private Render deployment was not independently verified; do not claim live availability from the GitHub merge.
 
+
+### 2026-10-22 — compact, single-row Schedule list
+
+- **Request:** Fit substantially more schedules on the Schedules screen without losing editing, duplication, removal, or any other schedule function.
+- **UI decision:** Replace stacked multi-line cards and 3 always-visible action buttons with a **one-column, dense list**. Each collapsed schedule has a single full-width clickable row displaying its existing 1-based list number, name, account/cadence, next date, amount, and estimated/fixed distinction; opening the row expands the same inline schedule editor and dated payment overrides as before. A separate keyboard- and touch-accessible **⋯** menu retains **+ Separate bill** and **Remove schedule**. Removing a schedule still requires the existing second confirmation and now offers explicit cancellation inside the menu. Display numbering continues to derive from saved rule order; internal rule IDs never change.
+- **Safety:** No forecast, recurrence inference, Plaid source, bank balance, canonical prediction identity, account mapping, or saved financial preference calculations changed. Existing per-occurrence and all-future editor, historical date-range exceptions, independent same-merchant schedules, and double-count safeguards remain.
+- **Files:** `planner.js`, `planner.css`, `index.html`, and `tests/planner-browser.cjs`. Tests check row height/density and single-column alignment on desktop and mobile, existing edit opening, separate-bill creation through More, and two-step remove/cancel without data loss.
+- **Verification:** Run both required GitHub real-account banking-safety and desktop Chromium/iPhone WebKit browser checks before merge. No private Render deployment is implied by GitHub CI or merge.
+
 ## Reusable new-chat prompt
 
 > Continue Household Ledger. Read https://github.com/markbobthomas/household-ledger/blob/main/PROJECT_LEDGER.md and AGENTS.md first, inspect current GitHub main, then handle my request. Update the ledger in GitHub after **every prompt**, including discussions. Preserve the existing Plaid/Render setup and verify deployment before claiming it is live.
