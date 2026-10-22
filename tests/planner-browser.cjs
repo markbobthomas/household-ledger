@@ -966,7 +966,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await storageForm.locator('[name=frequency]').inputValue(),'monthly');
   await storageForm.locator('button[type=submit]').click();
   await page.locator('.history-actual-row').filter({hasText:'Storage Unit Monthly'})
-   .first().locator('[data-history-plan]').getByText('Edit forecast',{exact:true}).waitFor();
+   .first().locator('[data-history-plan]').getByText('View schedule',{exact:true}).waitFor();
   assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
    r.merchant==='Storage Unit Monthly'&&r.amount===79&&r.accountId==='checking-real')),
    'Low-confidence candidate becomes a saved private rule only after approval');
