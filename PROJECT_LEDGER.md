@@ -203,3 +203,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 ## Reusable new-chat prompt
 
 > Continue Household Ledger. Read https://github.com/markbobthomas/household-ledger/blob/main/PROJECT_LEDGER.md and AGENTS.md first, inspect current GitHub main, then handle my request. Update the ledger in GitHub after **every prompt**, including discussions. Preserve the existing Plaid/Render setup and verify deployment before claiming it is live.
+
+### 2026-10-22 — Schedule quick actions and posted matching (1, 2, 3)
+- Goal: one-tap category updates from compact schedule rows; instant search by schedule, merchant or category; posted-vs-predicted reconciliation with minimal false matches.
+- Decision: keep independently confirmed schedules separate; explicit linked bank IDs outrank changed merchant descriptions; uncertain competing matches remain in forecast and require choice in Needs review.
+- Changes: row-level category picker, search with visible-group totals, safe bank-ID matching and explicit review link; added smoke and desktop/mobile browser checks. Bank source records remain read-only; no new duplicate schedules created by review.
+- Verification: CI smoke and pilot checks pending on PR; private Render deployment not independently confirmed.
+- Next: review PR checks, merge when passing, independently confirm private Render deployment.
