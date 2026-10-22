@@ -846,7 +846,9 @@ const {chromium,webkit}=require('playwright');
   await page.locator('[data-summary-days="60"]').click();
   await page.locator('[data-calendar-today]').click();
   await page.locator('[data-calendar-nav="1"]').click();
-  const cardNov=page.locator('.calendar-monthly-entry').filter({hasText:'Credit-card payment'}).first();
+  await page.locator('[data-calendar-day="2026-11-11"]').click();
+  const cardNov=page.locator('.calendar-day-transactions .calendar-monthly-entry')
+   .filter({hasText:'Credit-card payment'}).first();
   assert.ok(await cardNov.count()>0,'The projected checking card payment has an itemized breakdown');
   await cardNov.locator('[data-open-card-payment]').click();
   const itemized=cardNov.locator('[data-inline-transaction-editor]');
