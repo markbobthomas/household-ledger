@@ -153,6 +153,16 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Verification:** [PR #39](https://github.com/markbobthomas/household-ledger/pull/39) passed its final required **Real-account pilot safety checks** and **desktop Chromium/iPhone WebKit browser interaction checks** on final head `21fcce630e20f3695dc0e426220b4bbd2c1125bc`; merged to `main` as `cdc48a3cac702f223ebca407b04cca950e0da417`. Interim regression runs uncovered outdated assertions expecting the former zero-value daily breakdown; the new suite tests empty dates, adding an actual predicted expense, and the one closing footer at the panel bottom. The forecast engine and Plaid data remain unchanged.
 - **Deployment:** GitHub branch/PR validation is independent of the private Render deployment; do not claim live until commit is checked.
 
+
+### 2026-10-22 — remove heuristic same-merchant section and number schedules
+
+- **Request:** Reconsider the "Multiple payments to the same merchant" Schedules section and give each saved schedule an easy human-readable number starting with 1.
+- **Decision:** Remove the same-day/same-merchant bank-history discovery panel and its "Create separate schedule" prompts; it is speculative and can encourage conflicting schedules when bank records have legitimate same-merchant repeats. Preserve the **actual safeguards** and independent saved schedule identities, the main **+ New schedule** action, History's schedule-aware editing, and each card's **+ Separate bill** option. Simplify the New Schedule heading.
+- **Numbering:** Show a subdued numeric label **1, 2, 3…** on every schedule card, following the existing saved `futureRecurringRules` array order, and use the same reference in linked-schedule choices/edit dialogs. Labels are **view-only ordinals**. Existing canonical `rule.id` values and rules are unchanged. Numbers are deterministic across a refresh as long as saved order is unchanged, but **renumber after a schedule is removed or list order changes**; they are not permanent IDs. If immutable human references become necessary, that would require a separately approved persisted numbering design.
+- **Code:** `planner.js` eliminates duplicate-detection UI, removes now-unreachable handler, adds an ID-to-ordinal display helper and schedule numbers to cards and linked choices. `planner.css` styles the identifiers; `index.html` refreshes browser asset versions; `tests/planner-browser.cjs` checks ordered consecutive numbers and two saved same-merchant plans remaining independent.
+- **Safety:** No new bank writes, no changes to Plaid state, forecast arithmetic, recurring schedule creation logic, duplicate prevention or reconciliation. Remove only the heuristic *presentation*.
+- **Verification and deployment:** Await required banking-safety and desktop Chromium/iPhone WebKit checks and merge on success. GitHub merge does not establish private Render deployment.
+
 ## Reusable new-chat prompt
 
 > Continue Household Ledger. Read https://github.com/markbobthomas/household-ledger/blob/main/PROJECT_LEDGER.md and AGENTS.md first, inspect current GitHub main, then handle my request. Update the ledger in GitHub after **every prompt**, including discussions. Preserve the existing Plaid/Render setup and verify deployment before claiming it is live.
