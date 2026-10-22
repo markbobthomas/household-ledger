@@ -700,7 +700,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
      ['biweekly','every-4-weeks'].includes(r.frequency)?3:6,
     explicit=linked.some(x=>String(x.id)===String(r.id)),
     cycle=['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
-     t.date.slice(0,7)===date.slice(0,7)&&gap<=15,
+     t.date.slice(0,7)===date.slice(0,7)&&gap<=21,
     maxGap=explicit?Math.max(tolerance,14):tolerance;
    if(gap>maxGap&&!cycle)continue;
    const expected=Math.max(1,Number(item.amount)||1),
