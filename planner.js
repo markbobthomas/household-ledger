@@ -27,6 +27,14 @@ try{
  }
 }catch{}
 const horizon=1095; // Three-year modeled floor. No user-selectable time windows.
+// Human-facing list number. Canonical rule IDs remain unchanged. Numbers follow
+// the saved list order and are recalculated if schedules are removed/reordered.
+function scheduleListNumber(id){
+ const rules=state().predictions?.futureRecurringRules||[];
+ const index=rules.findIndex(r=>String(r.id)===String(id));
+ return index<0?null:index+1;
+}
+
 let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSuggestions=[];
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
@@ -720,7 +728,8 @@ function detailHtml(bundle,s){
   const ids=transactionDetail.ids||[],
    rules=(state().predictions?.futureRecurringRules||[]).filter(r=>ids.includes(r.id)),
    options=rules.map(r=>'<button type="button" class="btn" data-choose-history-schedule="'+
-    escapeHTML(r.id)+'">'+escapeHTML(r.scheduleLabel||r.merchant||'Scheduled payment')+
+    escapeHTML(r.id)+'">#'+scheduleListNumber(r.id)+' · '+
+    escapeHTML(r.scheduleLabel||r.merchant||'Scheduled payment')+
     ' · '+escapeHTML(r.frequency||'Recurring')+' · '+cash(r.amount)+'</button>').join(' ');
   return detailShell('Choose the existing schedule',
    'This posted payment may belong to more than one confirmed schedule.',
@@ -985,40 +994,14 @@ function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),tomorrow=shiftDay(s.asOf,1);
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
- // Count separate posted charges on the same day. A shared merchant identity
- // cannot explain two obligations unless there are two saved schedules.
- const groups=new Map(),norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
- for(const t of bundle?.rows||[]){
-  if(t.pending||t.pairedTransactionId||t.date>s.asOf||!t.date||!(Number(t.amount)>0))continue;
-  const account=window.HouseholdPlannerHistory.accountOf(t,accounts),
-   dir=t.type==='transfer'?t.cashDirection==='in'?'income':'expense':t.type,
-   name=norm(t.merchant||t.name);
-  if(!name||!account)continue;
-  const key=[account,dir,name,t.date].join('|'),g=groups.get(key)||{account,dir,name,date:t.date,rows:[]};
-  g.rows.push(t);groups.set(key,g);
- }
- const warnings=[...groups.values()].filter(g=>g.rows.length>1).filter(g=>{
-  const found=rules.filter(r=>String(r.originalAccountId||r.accountId||r.fromAccountId)===g.account&&
-   (r.kind==='movement'?'transfer':r.type)===g.dir&&
-   (r.matchNames||[r.originalMerchant||r.merchant]).some(n=>norm(n)===g.name));
-  return found.length<g.rows.length;
- }).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4);
- const unexplained=warnings.length?'<section class="panel schedule-discovery">'+
-  '<h3>Multiple payments to the same merchant</h3>'+
-  '<p>Bank history contains separate charges from one payee on the same day. Confirm an independent schedule for each recurring bill if appropriate.</p>'+
-  warnings.map(g=>'<div class="schedule-discovery-group"><strong>'+escapeHTML(g.name)+
-   ' · '+escapeHTML(dayLabel(g.date))+' · '+g.rows.length+' posted charges</strong>'+
-   g.rows.map(t=>'<div class="schedule-discovery-row"><span>'+cash(t.amount)+'</span>'+
-    '<button class="btn" type="button" data-schedule-from-actual="'+escapeHTML(t.id)+'">'+
-    'Create separate schedule</button></div>').join('')+'</div>').join('')+'</section>':'';
  const create=scheduleMode==='new'?'<form class="panel schedule-form" data-schedule-new-form>'+
-  '<h3>Create a separate payment schedule</h3><p>This will not merge with another bill, even from the same merchant on the same day.</p>'+
+  '<h3>New schedule</h3>'+
   '<input name="separateSchedule" type="hidden" value="on">'+
   (schedulePreset?.historyExampleId?'<input type="hidden" name="historyExampleId" value="'+escapeHTML(schedulePreset.historyExampleId)+'">':'')+
   fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
   '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
- const cards=rules.map(r=>{
+ const cards=rules.map((r,index)=>{
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
@@ -1034,11 +1017,14 @@ function schedulesPage(bundle,s){
    escapeHTML(w.from)+' to '+escapeHTML(w.through)+' · '+cash(w.amount)+'</span>'+
    '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
-  return '<article class="panel schedule-card" data-schedule-card="'+id+'">'+
-   '<div class="schedule-heading"><div><strong>'+escapeHTML(r.scheduleLabel||r.merchant)+'</strong>'+
+  return '<article class="panel schedule-card" data-schedule-card="'+id+
+   '" data-schedule-number="'+(index+1)+'">'+
+   '<div class="schedule-heading"><div class="schedule-heading-ident">'+
+   '<span class="schedule-number" aria-label="Schedule '+(index+1)+'">'+(index+1)+'</span>'+
+   '<div class="schedule-heading-text"><strong>'+escapeHTML(r.scheduleLabel||r.merchant)+'</strong>'+
    '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
     escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-   ' · '+escapeHTML(r.frequency)+'</small></div><span class="status-tag">'+
+   ' · '+escapeHTML(r.frequency)+'</small></div></div><span class="status-tag">'+
    (estimate.estimated?'ESTIMATE':'FIXED')+'</span></div>'+
    '<div class="schedule-metrics"><span>Next: '+(next?escapeHTML(dayLabel(next)):'Outside forecast')+'</span>'+
     '<strong>'+cash(estimate.amount)+'</strong></div>'+
@@ -1061,10 +1047,10 @@ function schedulesPage(bundle,s){
      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</article>';
  }).join('');
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
-  '<h2>Payment schedules</h2><p>Manage repeating bills and paychecks here. Open any schedule to edit one upcoming payment without changing the others.</p></div>'+
+  '<h2>Payment schedules</h2><p>Edit any schedule or an individual upcoming payment.</p></div>'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  create+unexplained+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
+  create+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
