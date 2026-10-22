@@ -768,6 +768,33 @@ function drawTransactionDetail(bundle,s){
   updateHistoryLinks(form);
  }
 }
+function closeInlineTransaction(){
+ document.querySelectorAll('[data-inline-transaction-editor]').forEach(el=>el.remove());
+ document.querySelectorAll('[data-inline-row-wrapper] [data-open-transaction]').forEach(el=>{
+  el.setAttribute('aria-expanded','false');
+ });
+}
+function openInlineTransaction(button){
+ const wrapper=button?.closest?.('[data-inline-row-wrapper]');
+ if(!wrapper)return false;
+ const existing=wrapper.querySelector('[data-inline-transaction-editor]');
+ if(existing){closeInlineTransaction();return true}
+ const focused=button.dataset.openTransaction;
+ const s=snapshot(),bundle=forecastFor(s),
+  row=futureRows(bundle,s).find(r=>r.key===focused);
+ if(!row){setNotice('That forecast has changed. Refresh the calendar and select the updated payment.');return true}
+ closeInlineTransaction();
+ const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
+ const helper=rule?'<p class="inline-editor-explanation"><strong>Only this date:</strong> '+
+  'The repeating payment plan is unchanged. Other dates keep their amounts and accounts.</p>':
+  '<p class="inline-editor-explanation">Edit the values directly below. Actual posted bank records stay untouched.</p>';
+ const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
+  helper+editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+'</div>';
+ wrapper.insertAdjacentHTML('beforeend',html);
+ button.setAttribute('aria-expanded','true');
+ wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
+ return true;
+}
 function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===id);
  if(!rule)return false;
@@ -1427,6 +1454,7 @@ document.addEventListener('click',async e=>{
   render();return;
  }
  const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
+ if(opening?.hasAttribute('data-open-transaction')&&openInlineTransaction(opening))return;
  if(opening){
   if(opening.hasAttribute('data-open-transaction'))
    openPrediction(opening.dataset.openTransaction,opening);
@@ -1777,7 +1805,13 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('[data-cancel-new]')){
   showNewTransaction=false;mortgageDraft=null;transactionNotice='';render();return;
  }
- if(e.target.closest('[data-cancel-future]')){dismissTransaction();return}
+ if(e.target.closest('[data-cancel-future]')){
+  if(e.target.closest('[data-inline-transaction-editor]')){closeInlineTransaction();return}
+  if(transactionDetail?.kind==='schedule'&&transactionDetail.selectedKey){
+   transactionDetail.selectedKey='';render();return;
+  }
+  dismissTransaction();return;
+ }
  const edit=e.target.closest('[data-edit-future]');
  if(edit){showNewTransaction=false;transactionNotice='';
   openPrediction(edit.dataset.editFuture,edit);return}
@@ -2058,6 +2092,9 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&document.querySelector('[data-inline-transaction-editor]')){
+  closeInlineTransaction();return;
+ }
  if(e.key==='Escape'&&transactionDetail){dismissTransaction();return}
  if((e.key==='Enter'||e.key===' ')&&e.target.matches?.('[data-historical-transaction]')){
   e.preventDefault();e.target.click();return;
