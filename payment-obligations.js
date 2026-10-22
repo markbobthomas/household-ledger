@@ -307,7 +307,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    if(amount>0&&autopay&&!paid){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
      anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay',
-     merchant:card.name+' Credit-card payment',amountEstimate:confirmedFirst?null:'estimated-statement'};
+     merchant:card.name+' Credit-card payment (autopay)',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
     plannedCardPayments=round(plannedCardPayments+amount);
     obligations.push({id:plan.id,date:due,amount,fromAccountId:from.id,
