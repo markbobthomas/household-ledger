@@ -226,20 +226,23 @@ function dayDetail(point,card){
   plus=events.reduce((n,e)=>n+Math.max(0,moneyDelta(e,card)),0),
   minus=events.reduce((n,e)=>n+Math.max(0,-moneyDelta(e,card)),0),
   gaps=calendarContext.gaps.get(point.date)||[];
+ const breakdown=events.length?'<div class="calendar-math">'+
+   '<div><span>'+(previousIndex<0?'Reported starting balance':'Yesterday')+
+   '</span><strong>'+money(previous)+'</strong></div>'+
+   (plus?'<div><span>'+(card?'Debt increases':'Deposits')+'</span>'+
+    '<strong class="in">+'+money(plus)+'</strong></div>':'')+
+   (minus?'<div><span>'+(card?'Debt payments':'Withdrawals')+'</span>'+
+    '<strong class="out">−'+money(minus)+'</strong></div>':'')+
+   '</div>':'';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
   '<div class="calendar-detail-heading"><div><span>SELECTED DAY</span><strong>'+
    esc(dateLabel(point.date))+'</strong></div></div>'+
-  '<div class="calendar-math">'+
-   '<div><span>'+(previousIndex<0?'Reported starting balance':'Yesterday')+'</span><strong>'+money(previous)+'</strong></div>'+
-   '<div><span>'+(card?'Debt increases':'Deposits')+'</span><strong class="in">+'+money(plus)+'</strong></div>'+
-   '<div><span>'+(card?'Debt payments':'Withdrawals')+'</span><strong class="out">−'+money(minus)+'</strong></div>'+
-   '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
-  '<div class="calendar-day-transactions" aria-label="Predictions for selected date">'+
+  breakdown+
+  (events.length?'<div class="calendar-day-transactions" aria-label="Predictions for selected date">'+
    '<div class="calendar-day-transactions-head"><strong>Transactions ('+events.length+
    ')</strong></div>'+
-   (events.length?events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join(''):
-    '<p class="calendar-empty">No payments predicted. Balance carries forward.</p>')+
-   '</div>'+
+   events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join('')+'</div>':
+   '<p class="calendar-empty">No transactions predicted for this day.</p>')+
   (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
    gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
     '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
@@ -248,8 +251,9 @@ function dayDetail(point,card){
   (calendarEditor?'<button type="button" class="calendar-editor-backdrop" data-calendar-cancel aria-label="Close editor"></button>':'')+
   quickEditor()+
   '<div class="calendar-day-actions"><button type="button" class="calendar-add" data-calendar-add'+
-   (point.date===first.date?' disabled':'')+'>+ Add transaction</button>'+
-   '</div>'+
+   (point.date===first.date?' disabled':'')+'>+ Add transaction</button></div>'+
+  '<div class="calendar-math-total calendar-day-ending"><span>'+(card?'End-of-day card debt':'End-of-day balance')+
+  '</span><strong>'+money(point.balance)+'</strong></div>'+
  '</section>';
 }
 
