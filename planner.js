@@ -1311,12 +1311,14 @@ document.addEventListener('click',async e=>{
    schedulePreset={merchant:d.merchant,amount:d.amount,accountId:d.accountId,
     date:d.nextDate,type:d.type,frequency:d.frequency||'monthly',
     amountBasis:'estimate',historyExampleId:String(t.id)};
-   scheduleMode='new';scheduleTarget='';scheduleNotice='';render();
+   scheduleMode='new';scheduleTarget='';scheduleNotice='';
+   transactionDetail={kind:'schedule',id:'new',mode:'new'};render();
   }catch(err){scheduleNotice=String(err.message||err);render()}
   return;
  }
  const newSchedule=e.target.closest?.('[data-schedule-new]');
- if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';render();return}
+ if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
+  transactionDetail={kind:'schedule',id:'new',mode:'new'};render();return}
  const duplicate=e.target.closest?.('[data-schedule-duplicate]');
  if(duplicate){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===duplicate.dataset.scheduleDuplicate);
@@ -1328,7 +1330,8 @@ document.addEventListener('click',async e=>{
    toAccountId:rule.toAccountId,type:rule.kind==='movement'?'transfer':rule.type,
    frequency:rule.frequency,date:next||shiftDay(snapshot().asOf,1),
    amountBasis:'estimate'};
-  scheduleMode='new';scheduleTarget='';scheduleNotice='';render();return;
+  scheduleMode='new';scheduleTarget='';scheduleNotice='';
+  transactionDetail={kind:'schedule',id:'new',mode:'new'};render();return;
  }
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
  const scheduleEstimate=e.target.closest?.('[data-schedule-estimate]');
@@ -1336,7 +1339,9 @@ document.addEventListener('click',async e=>{
   const mode=scheduleEdit?'edit':'estimate',id=(scheduleEdit||scheduleEstimate).dataset[
    scheduleEdit?'scheduleEdit':'scheduleEstimate'];
   scheduleMode=scheduleMode===mode&&scheduleTarget===id?'':mode;
-  scheduleTarget=id;scheduleRemoveTarget='';scheduleNotice='';render();return;
+  scheduleTarget=id;scheduleRemoveTarget='';scheduleNotice='';
+  transactionDetail=scheduleMode?{kind:'schedule',id,mode:scheduleMode}:null;
+  render();return;
  }
  const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
  if(removeWindow){
@@ -1473,7 +1478,7 @@ document.addEventListener('click',async e=>{
  }
  const view=e.target.closest('[data-view]');
  if(view){
-  activeTab=view.dataset.view;
+  activeTab=view.dataset.view;transactionDetail=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   render();
@@ -1494,8 +1499,10 @@ document.addEventListener('click',async e=>{
     row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
    reviewNotice='';
   }catch(error){setNotice(String(error.message||error));return}
-  reviewNotice='';activeTab='history';render();
-  document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
+  transactionDetail={kind:'actual',id:String(row.id),account};
+  // Bank facts remain read-only; its future schedule can be created here.
+  drawTransactionDetail(forecastFor(snapshot()),snapshot());
+  document.querySelector('.transaction-detail-close')?.focus();
   return;
  }
  const restorePattern=e.target.closest('[data-restore-recurrence]');
@@ -1608,10 +1615,10 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('[data-cancel-new]')){
   showNewTransaction=false;mortgageDraft=null;transactionNotice='';render();return;
  }
- if(e.target.closest('[data-cancel-future]')){editingKey='';render();return}
+ if(e.target.closest('[data-cancel-future]')){dismissTransaction();return}
  const edit=e.target.closest('[data-edit-future]');
- if(edit){editingKey=editingKey===edit.dataset.editFuture?'':edit.dataset.editFuture;
-  showNewTransaction=false;transactionNotice='';render();return}
+ if(edit){showNewTransaction=false;transactionNotice='';
+  openPrediction(edit.dataset.editFuture,edit);return}
  const skip=e.target.closest('[data-skip-future]');
  if(skip){
   const row=futureRows(forecastFor(snapshot()),snapshot()).find(r=>r.key===skip.dataset.skipFuture);
