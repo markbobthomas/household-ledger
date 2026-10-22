@@ -2,7 +2,7 @@
    No new financial data source, confidence score, or automatic prediction is invented. */
 (function(root){
 'use strict';
-let series=[],selected=0;
+let series=[],trendSeries=[],selected=0,trendDays=90,trendContext=null;
 const range=(n,a,b)=>Math.max(a,Math.min(b,n));
 const plotWidth=920,plotLeft=20,plotRight=900,top=18,bottom=274;
 const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unverified';
@@ -455,7 +455,7 @@ function issues(bundle,accounts,chosen,prefs,ready){
   !ready(prefs?.paymentRules?.[a.id],a,accounts)).length;
  return pending+general+missing;
 }
-function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}){
+function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
  const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
   (String(a.id)===String(chosen.id)?' selected':'')+'>'+
@@ -466,6 +466,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
   options+'</select></label></div>';
  const points=getPoints(derived,snapshot.asOf,days);
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
+ trendContext=series.length?{points:series,credit,prefs,derived}:null;
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
   calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
   calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;calendarFocus=null;
