@@ -32,8 +32,13 @@ const {chromium,webkit}=require('playwright');
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
-   assert.equal(await page.locator('.side-link').count(),6,'Summary and Predictions keep History, Reviews and Settings separate');
+   assert.equal(await page.locator('.side-link').count(),0,
+    'No duplicate sidebar navigation');
+   assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
+    'One primary navigation row: calendar, predictions, schedules, history');
    const go=async tab=>{
+    const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
+    if(await primary.count()){await primary.click();return}
     await page.locator('#planner-menu > summary').click();
     await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
    };
@@ -62,7 +67,9 @@ const {chromium,webkit}=require('playwright');
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
    assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
-   assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),'All predictions');
+   assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').textContent(),'Predictions');
+   assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').count(),0,
+    'Primary destinations are not duplicated in the menu');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
    assert.equal(await page.locator('[data-summary-days]').count(),6);
    assert.equal(await page.locator('.summary-current').count(),1);
@@ -623,6 +630,8 @@ const {chromium,webkit}=require('playwright');
   await real.addInitScript(()=>localStorage.setItem('household-ledger-view-mode','real'));
   const page=await real.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   const go=async tab=>{
+   const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
+   if(await primary.count()){await primary.click();return}
    await page.locator('#planner-menu > summary').click();
    await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
   };
