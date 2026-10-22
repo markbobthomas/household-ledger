@@ -34,8 +34,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
-   assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
-    'One primary navigation row: calendar, predictions, schedules, history');
+   assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),3,
+    'One primary navigation row: calendar, schedules, history');
+   assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
+    ['Calendar','Schedules','History']);
+   assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
+    'Predictions is not an additional primary tab');
    const go=async tab=>{
     const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
     if(await primary.count()){await primary.click();return}
@@ -67,9 +71,8 @@ const {chromium,webkit}=require('playwright');
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
    assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
-   assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').textContent(),'Predictions');
-   assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').count(),0,
-    'Primary destinations are not duplicated in the menu');
+   assert.match(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),
+    /All predictions/,'Advanced bulk prediction view remains available without a fourth tab');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
    assert.equal(await page.locator('[data-summary-days]').count(),6);
    assert.equal(await page.locator('.summary-current').count(),1);
@@ -540,6 +543,38 @@ const {chromium,webkit}=require('playwright');
    await amountForm.locator('button[type=submit]').click();
    assert.match(await page.locator('[data-schedule-card]').filter({hasText:'Water - House'})
     .first().innerText(),/175/,'A dated forecast estimate is saved only to that schedule');
+   // Editing one payment from inside its saved schedule must not edit the
+   // rest of its recurring series, or another bill from the same merchant.
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   await water.locator('[data-schedule-edit]').click();
+   const scheduleDialog=page.locator('.transaction-detail');
+   assert.equal(await scheduleDialog.count(),1,'Schedules use the shared detail panel');
+   const upcoming=scheduleDialog.locator('[data-schedule-occurrence-key]');
+   assert.ok(await upcoming.count()>=2,'A schedule exposes its individual dated future predictions');
+   const november=upcoming.filter({hasText:'Nov 10'}).first();
+   assert.equal(await november.count(),1,'November is independently editable in its schedule');
+   await november.click();
+   const onePayment=page.locator('.transaction-detail .future-edit-form');
+   assert.equal(await onePayment.locator('[name=scope][value=one]').isChecked(),true,
+    'Single occurrence editing is the safe default inside schedules');
+   await onePayment.locator('[name=amount]').fill('147');
+   await onePayment.locator('button[type=submit]').click();
+   await page.locator('.transaction-detail [data-schedule-occurrence-key]').first().waitFor();
+   assert.equal(await page.locator('.transaction-detail [data-schedule-occurrence-key]')
+    .filter({hasText:'Nov 10'}).count(),1,'Saving returns to the parent schedule');
+   assert.match(await page.locator('.transaction-detail [data-schedule-occurrence-key]')
+    .filter({hasText:'Nov 10'}).innerText(),/147/,'November override is reflected in the schedule');
+   assert.match(await page.locator('.transaction-detail [data-schedule-occurrence-key]')
+    .filter({hasText:'Dec 10'}).innerText(),/175/,'December retains its separate estimate');
+   await page.locator('.transaction-detail [data-schedule-occurrence-key]')
+    .filter({hasText:'Dec 10'}).click();
+   await page.locator('.transaction-detail-close').click();
+   assert.equal(await page.locator('.transaction-detail [data-schedule-occurrence-key]').count()>0,true,
+    'Closing one occurrence returns to the parent schedule editor');
+   await page.locator('.transaction-detail-close').click();
+   assert.equal(await page.locator('.transaction-detail').count(),0);
+   assert.ok(await water.locator('[data-schedule-edit]').count(),
+    'Parent schedule stays on the same page after detail navigation');
    await go('summary');
    await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
