@@ -529,13 +529,13 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await water.locator('[data-schedule-estimate-form]').count(),0,
     'Range amount forms are removed');
    // Set a specific December amount by expanding its own payment row.
-   await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).click();
+   await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).first().click();
    let decemberEdit=water.locator('[data-inline-transaction-editor] .future-edit-form');
    assert.equal(await decemberEdit.locator('[name=scope][value=one]').isChecked(),true);
    await decemberEdit.locator('[name=amount]').fill('175');
    await decemberEdit.locator('button[type=submit]').click();
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
-   assert.match(await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).innerText(),/175/,
+   assert.match(await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).first().innerText(),/175/,
     'An individual December estimate is set directly on December, without a date range');
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
     'The repeating schedule stays expanded after changing one date');
@@ -551,11 +551,11 @@ const {chromium,webkit}=require('playwright');
    await onePayment.locator('button[type=submit]').click();
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    assert.match(await water.locator('[data-schedule-occurrence-key]')
-    .filter({hasText:'Nov 10'}).innerText(),/147/);
+    .filter({hasText:'Nov 10'}).first().innerText(),/147/);
    assert.match(await water.locator('[data-schedule-occurrence-key]')
-    .filter({hasText:'Dec 10'}).innerText(),/175/,
+    .filter({hasText:'Dec 10'}).first().innerText(),/175/,
     'December keeps its independent one-date override');
-   await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).click();
+   await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).first().click();
    assert.equal(await water.locator('[data-inline-transaction-editor]').count(),1,
     'Clicking December expands editing immediately underneath its own row');
    await water.locator('[data-cancel-future]').click();
