@@ -689,9 +689,10 @@ function detailHtml(bundle,s){
  return '';
 }
 function drawTransactionDetail(bundle,s){
- const root=$('planner-main'),prior=root?.querySelector('[data-transaction-overlay]');
- if(prior)prior.remove();
- if(!transactionDetail||!root)return;
+ const root=$('planner-main');
+ if(!transactionDetail||!root||typeof root.insertAdjacentHTML!=='function')return;
+ const prior=root.querySelector('[data-transaction-overlay]');
+ if(prior&&typeof prior.remove==='function')prior.remove();
  root.insertAdjacentHTML('beforeend',detailHtml(bundle,s));
  const form=root.querySelector('.transaction-overlay form[data-history-recurring-form]');
  if(form&&recurringDraft?.examples){
