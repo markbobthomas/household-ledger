@@ -138,7 +138,11 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
       caveat:'Payment dates are inferred from linked bank transfers; the issuer statement closing date is not known. '+
        'Only posted charges and specifically dated predictions are counted.'});
     }
-    warnings.push(card.name+': transaction-based card payment uses only posted purchases and dated forecasts. Confirm payment and statement dates in Settings.');
+    if(!paymentDetails.some(p=>p.cardId===String(card.id))){
+     candidate.eligible=false;
+     candidate.reason='A recurring payment date was found, but no identifiable posted or scheduled card transactions support an amount';
+     warnings.push(card.name+': payment timing is inferred, but no posted or specifically scheduled charges justify a checking withdrawal. Review card billing dates.');
+    }else warnings.push(card.name+': transaction-based card payment uses only posted purchases and dated forecasts. Confirm payment and statement dates in Settings.');
    }else warnings.push(card.name+': credit-card setup required; no checking withdrawal can be predicted yet. '+
     candidate.reason+'. Set payment dates and funding account in Settings.');
   }
