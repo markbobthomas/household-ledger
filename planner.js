@@ -1036,7 +1036,8 @@ function schedulesPage(bundle,s){
      (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
     '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
      '<small>'+(estimate.estimated?'Estimated':'Fixed')+'</small></span>'+
-    '<span class="schedule-row-chevron" aria-hidden="true">'+(isEditing?'⌃':'⌄')+'</span>'+
+    '<span class="schedule-row-chevron" aria-hidden="true"><span class="schedule-edit-label">'+
+     (isEditing?'Close':'Edit')+' </span>'+(isEditing?'⌃':'⌄')+'</span>'+
    '</button>'+
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for schedule '+number+'" title="More actions">⋯</summary>'+
