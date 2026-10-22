@@ -488,10 +488,9 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#summary-account').selectOption(await checkingOption.getAttribute('value'));
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-09"]').click();
-   assert.match(await page.locator('.calendar-math').innerText(),/Yesterday/);
-   assert.match(await page.locator('.calendar-math').innerText(),/Deposits/);
-   assert.match(await page.locator('.calendar-math').innerText(),/Withdrawals/);
-   assert.match(await page.locator('.calendar-math').innerText(),/End of day/);
+   assert.equal(await page.locator('.calendar-math').count(),0,
+    'No zero-only arithmetic before a forecast payment is added');
+   assert.equal(await page.locator('.calendar-day-ending').count(),1);
    await page.locator('[data-calendar-add]').click();
    const quick=page.locator('[data-calendar-quick-form]');
    assert.equal(await quick.locator('[name=date]').inputValue(),'2026-11-09');
@@ -499,6 +498,13 @@ const {chromium,webkit}=require('playwright');
    await quick.locator('[name=amount]').fill('25');
    await quick.locator('button[type=submit]').click();
    await page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Playground one-time expense'}).waitFor();
+   assert.match(await page.locator('.calendar-math').innerText(),/Yesterday/);
+   assert.match(await page.locator('.calendar-math').innerText(),/Withdrawals/);
+   assert.equal(await page.locator('.calendar-math').getByText('Deposits').count(),0,
+    'There is no empty deposit row for an expense-only day');
+   assert.equal(await page.locator('.calendar-day-detail > :last-child').getAttribute('class'),
+    'calendar-math-total calendar-day-ending',
+    'Single ending balance remains at bottom after adding a transaction');
    assert.ok(await page.locator('.calendar-notice').innerText().then(x=>x.includes('recalculated')));
    const playground=page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Playground one-time expense'});
    await playground.click();
