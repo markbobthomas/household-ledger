@@ -202,3 +202,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 ## Reusable new-chat prompt
 
 > Continue Household Ledger. Read https://github.com/markbobthomas/household-ledger/blob/main/PROJECT_LEDGER.md and AGENTS.md first, inspect current GitHub main, then handle my request. Update the ledger in GitHub after **every prompt**, including discussions. Preserve the existing Plaid/Render setup and verify deployment before claiming it is live.
+
+### 2026-10-22 — correct income category totals using calendar-month deposits
+
+- **Issue:** The Income category group showed an `In $X/mo` number calculated as a rolling 365-day average. This was mistaken for (and is not) the amount deposited in a specific month, especially with alternating paychecks every four weeks.
+- **Resolution:** On the Schedules page, use the bank-safe canonical forecast ledger to show (1) the **next complete calendar month** and its exact sum, (2) the following **12 complete calendar months** and their sum, and (3) the distinctly labeled monthly average. Aggregate in integer cents to avoid accumulated rounding error. Use forecast event identities, preserving individual payment edits, account separation, and incoming/outgoing/internal transfer distinctions. When searching within category groups, recalculate totals using only matching visible schedules and the current snapshot date.
+- **Regression:** Desktop Chromium + iPhone WebKit test uses fictional independent four-week paychecks of $3,040 and $3,075: November 2026 $6,115; next 12 full months $79,495 (13 payments each); average/month $6,624.58. Verify no other financial computation changed.
+- **Integration:** Port only this correction on a new branch from the latest `main` (which already includes 1/2/3 from PR #46); do not merge the older divergent PR #48. Private Render deployed version remains unverified.
+
