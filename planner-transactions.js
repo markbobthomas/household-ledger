@@ -350,6 +350,13 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   ...(old?.sourceKey||reference?.key?{sourceKey:old?.sourceKey||reference?.key}:{})};
  const index=p.futureRecurringRules.findIndex(r=>r.id===id);
  if(index<0)p.futureRecurringRules.push(rule);else p.futureRecurringRules[index]=rule;
+ // Explicitly transferring posted examples to a newly created independent
+ // bill prevents one bank record being "owned" by both saved schedules.
+ if(separate&&chosen.length){
+  const moved=new Set(chosen);
+  for(const sibling of p.futureRecurringRules)if(sibling.id!==id)
+   sibling.exampleIds=(sibling.exampleIds||[]).filter(example=>!moved.has(String(example)));
+ }
  // Explicit confirmation reverses any earlier "Not recurring" decision for
  // this precise merchant, account and movement direction.
  const exclusionKey=recurrenceKey(
@@ -557,29 +564,49 @@ function matchesRecurring(rule,event,accounts){
 /* Source bank balances already include posted transactions. One posted payment
  * can cover at most one future scheduled occurrence; never forecast it again. */
 function postedCoverage(generated,rules,records,accounts,asOf){
- const byId=new Map((rules||[]).map(r=>[r.id,r]));
- const used=new Set(),posted=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&
-  t.date<=asOf&&Number(t.amount)>0&&String(t.id||''));
- function covered(item,id,kind){
-  const r=byId.get(id);if(!r)return false;
-  const effective=kind==='movement'&&item._postedView?item._postedView:item;
-  const date=String(effective.date||effective.anchorDate||item.anchorDate||''),
-   account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
-  const type=kind==='movement'?'transfer':item.type;
-  const tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
-  const sameBillingCycle=t=>['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
-   t.date.slice(0,7)===date.slice(0,7);
-  const possible=posted.find(t=>!used.has(String(t.id))&&
-   sameDirection(t,kind==='event'?r.type:'transfer')&&
-   accountRef(t.accountId||t.account,accounts)===account&&
-   (r.matchNames||[]).includes(merchantKey(t.merchant||t.name))&&
-   (Math.abs(daysBetween(t.date,date))<=tolerance||sameBillingCycle(t)));
-  if(!possible)return false;
-  used.add(String(possible.id));return true;
+ const byId=new Map((rules||[]).map(r=>[r.id,r])),
+  posted=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&
+   t.date<=asOf&&Number(t.amount)>0&&String(t.id||'')),
+  items=[...(generated.events||[]).map(item=>({item,kind:'event',id:item.ruleId})),
+   ...(generated.plans||[]).map(item=>({item,kind:'movement',id:item.seriesRuleId}))],
+  pairs=[];
+ // Reconcile as a GROUP, not in schedule creation order. When one of two
+ // same-day water bills posts early, match the actual amount to the most
+ // plausible obligation; leave the OTHER bill in the cash forecast.
+ items.forEach(({item,kind,id},index)=>{
+  const r=byId.get(id);if(!r)return;
+  const effective=kind==='movement'&&item._postedView?item._postedView:item,
+   date=String(effective.date||effective.anchorDate||item.anchorDate||''),
+   account=String(kind==='movement'?effective.fromAccountId:effective.accountId),
+   tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
+  if(!validDate(date))return;
+  posted.forEach((t,p)=>{
+   if(!sameDirection(t,kind==='event'?r.type:'transfer')||
+    accountRef(t.accountId||t.account,accounts)!==account||
+    !(r.matchNames||[]).includes(merchantKey(t.merchant||t.name)))return;
+   const gap=Math.abs(daysBetween(t.date,date)),
+    cycle=['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
+     t.date.slice(0,7)===date.slice(0,7);
+   if(gap>tolerance&&!cycle)return;
+   const expected=Math.max(1,Number(item.amount)||1),
+    deviation=Math.abs(Number(t.amount)-expected)/expected,
+    // Historical links indicate source identity but do not guarantee
+    // future bill amounts. Amount then date are safer than creation order.
+    linked=(r.exampleIds||[]).includes(String(t.id));
+   pairs.push({index,p,score:(linked?-100:0)+deviation*10+gap*.01,
+    tie:String(r.id)+'|'+date+'|'+String(t.id)});
+  });
+ });
+ pairs.sort((a,b)=>a.score-b.score||a.tie.localeCompare(b.tie));
+ const usedItems=new Set(),usedPosted=new Set();
+ for(const pair of pairs){
+  if(usedItems.has(pair.index)||usedPosted.has(pair.p))continue;
+  usedItems.add(pair.index);usedPosted.add(pair.p);
  }
+ const n=(generated.events||[]).length;
  return {
-  events:(generated.events||[]).filter(e=>!covered(e,e.ruleId,'event')),
-  plans:(generated.plans||[]).filter(p=>!covered(p,p.seriesRuleId,'movement'))
+  events:(generated.events||[]).filter((_,i)=>!usedItems.has(i)),
+  plans:(generated.plans||[]).filter((_,i)=>!usedItems.has(n+i))
  };
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
