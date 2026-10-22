@@ -169,11 +169,11 @@ function dayDetail(point,card){
    '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
   (events.length?'<div class="calendar-detail-items">'+events.map((e,i)=>{
    const dir=signed(e,card)>0?'in':'out';
-   return '<div class="calendar-detail-item"><span class="calendar-transaction-name">'+
+   return '<button type="button" class="calendar-detail-item calendar-tap-edit" data-calendar-edit="'+i+'"><span class="calendar-transaction-name">'+
     esc(e.merchant||'Predicted transaction')+
     (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':e.amountEstimate?'<small>Estimated prediction</small>':'<small>Predicted · not posted</small>')+
     '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong>'+
-    '<button type="button" class="calendar-item-edit" data-calendar-edit="'+i+'">Edit</button></div>';
+    '<span class="calendar-item-edit">Edit</span></button>';
   }).join('')+'</div>':
    '<p class="calendar-empty">'+(point.date===first.date?
     'Starting balance. No future transactions yet.':
@@ -218,7 +218,7 @@ function calendarGrid(){
    return '<button type="button" class="calendar-day actual'+(calendarDate===iso?' selected':'')+
     '" data-calendar-actual-day="'+iso+'" aria-label="'+esc(dateLabel(iso)+', '+
     rows.length+' actual bank transactions, no predicted balance')+'">'+
-    '<span class="calendar-day-number">'+dom+'</span><span class="calendar-day-balance">Posted</span>'+
+    '<span class="calendar-day-number">'+dom+'</span><span class="calendar-day-balance">'+(rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No activity')+'</span>'+
     '<span class="calendar-day-events">'+rows.slice(0,2).map(t=>
      '<span class="calendar-event"><span class="calendar-event-name">'+
      esc(t.merchant||'Transaction')+'</span></span>').join('')+
@@ -359,7 +359,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers"><div class="summary-current"><div class="summary-overline">Bank balance · '+esc(shortDate(snapshot.asOf))+'</div><strong>'+money(first.balance)+'</strong></div><div><div class="summary-overline">'+
+  '<div class="summary-numbers"><div class="summary-current"><div class="summary-overline">'+(credit?'Reported card debt':'Available now')+' · '+esc(shortDate(snapshot.asOf))+'</div><strong>'+money(first.balance)+'</strong></div><div><div class="summary-overline">'+
   (credit?'Lowest estimated card debt':'Lowest projected balance')+'</div>'+
   '<div class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</div>'+
   '<div class="summary-date">'+esc(dateLabel(lowDay.date))+
