@@ -224,16 +224,19 @@ function movementRows(a,derived,s,routine){
  (later.length?'<details class="details"><summary>Show '+later.length+' more expected movement'+(later.length===1?'':'s')+'</summary>'+
   later.map(single).join('')+'</details>':'');
 }
-function connectionPanel(s,models){
- const list=activeAccounts(s);
- const real=live(),source=available(),connected=source&&real;
- const text=real?list.length+' connected account'+(list.length===1?'':'s')+' · last sync '+(s.lastSuccessfulSync?escapeHTML(new Date(s.lastSuccessfulSync).toLocaleString()):'unknown'):
-  'Fictional accounts shown. Connected bank balances appear when Real mode is selected.';
- return '<section class="small-grid" aria-label="Planning foundation">'+
-  '<div class="panel mini-panel"><h3>Accounts and bank connection</h3><p>'+text+'</p>'+
-  (source?'<a class="btn" href="/bank-connect">Manage bank connections</a>':'<span class="status-tag warn">PRIVATE BANK CONNECTION REQUIRED FOR REAL DATA</span>')+
-  '</div><div class="panel mini-panel"><h3>Planning assumptions</h3><p>For now the model uses existing bank history and any saved payment schedules. Income is an estimate, not a confirmed future deposit. Unscheduled purchases are not included as precise withdrawals.</p>'+
-  '<span class="status-tag">FOUNDATION · READY FOR YOUR DECISIONS</span></div></section>';
+function connectionPanel(s){
+ const list=activeAccounts(s),real=live(),source=available(),
+  count=list.length,
+  status=real?
+   count+' connected account'+(count===1?'':'s')+
+    (s.lastSuccessfulSync?' · last synced '+escapeHTML(new Date(s.lastSuccessfulSync).toLocaleString()):' · sync time unavailable'):
+   'Showing sample data. Select Real to work with your connected bank accounts.';
+ return '<section class="panel mini-panel" aria-label="Bank connection status">'+
+  '<div class="section-title"><h2>Bank connections</h2></div>'+
+  '<p>'+status+'</p>'+
+  (source?'<a class="btn" href="/bank-connect">Manage connections →</a>':
+   '<span class="status-tag warn">Real bank data is not connected</span>')+
+  '</section>';
 }
 
 function routineReviewPanel(bundle){
