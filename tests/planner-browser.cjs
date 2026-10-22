@@ -331,7 +331,15 @@ const {chromium,webkit}=require('playwright');
     'Explicitly confirmed recurrence is saved, independent of detection');
    const recurringRepair=page.locator('.future-item').filter({hasText:'One-time home repair'}).first();
    await recurringRepair.locator('[data-edit-future]').click();
-   await page.locator('.future-edit-form [data-remove-recurring]').click();
+   assert.equal(await page.locator('.transaction-detail [data-plan-settings]').count(),1,
+    'Confirmed recurring transactions open their complete payment plan');
+   await page.locator('.transaction-detail-close').click();
+   await page.locator('.transaction-detail-close').click();
+   await go('schedules');
+   const repairPlan=page.locator('[data-schedule-card]').filter({hasText:'One-time home repair'}).first();
+   await repairPlan.locator('[data-schedule-remove]').click();
+   await repairPlan.locator('[data-schedule-remove]').click();
+   await go('transactions');
    assert.equal(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count(),1,
     'Stopping recurrence returns to the original single user-added payment');
    await page.locator('[data-show-new]').click();
@@ -382,10 +390,15 @@ const {chromium,webkit}=require('playwright');
      .futureRecurringRules?.filter(x=>x.merchant==='Alternating Employer Paycheck').length),2,
     'Same employer creates exactly two independent saved rules');
    await payRows.first().locator('[data-edit-future]').click();
-   const editPay=page.locator('.future-edit-form');
-   await editPay.locator('[name=scope][value=all]').check();
-   await editPay.locator('[name=amount]').fill('3040');
-   await editPay.locator('button[type=submit]').click();
+   const editPay=page.locator('.transaction-detail');
+   assert.equal(await editPay.locator('[data-plan-settings]').count(),1,
+    'A confirmed payroll stream is managed as one payment plan');
+   await editPay.locator('[data-plan-settings] > summary').click();
+   await editPay.locator('[data-schedule-edit-form] [name=amount]').fill('3040');
+   await editPay.locator('[data-schedule-edit-form] button[type=submit]').click();
+   assert.match(await page.locator('.transaction-detail [role=status]').innerText(),
+    /Schedule saved/);
+   await page.locator('.transaction-detail-close').click();
    assert.deepEqual((await page.locator('.future-item').filter({hasText:'Alternating Employer Paycheck'})
      .locator('.future-amount').allInnerTexts()).map(x=>x.replace(/[^0-9.]/g,'')),
     ['3040.00','3075.00','3040.00','3075.00','3040.00','3075.00'],
