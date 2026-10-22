@@ -497,6 +497,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
    series.at(-1).date,chosen.id,series):new Map()};
  if(series.length<2)return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
+  '<div class="summary-minimum"><div class="summary-overline">Lowest projected balance · next 3 years</div>'+
+  '<strong class="summary-low">Unverified</strong></div></div>'+
   '<div class="summary-empty">A current, verifiable account balance is required before this forecast can be shown. Refresh your bank data and check its balance date.</div>'+
   '</section></div>';
  const vals=series.map(p=>p.balance),low=Math.min(...vals),high=Math.max(...vals),
@@ -519,7 +522,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal)+'<div class="summary-minimum">'+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+'<div class="summary-minimum">'+
   '<div class="summary-overline">'+(credit?'Lowest modeled card debt':'Lowest projected balance')+
   ' · next 3 years</div>'+
   '<strong class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
