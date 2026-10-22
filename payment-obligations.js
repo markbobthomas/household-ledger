@@ -222,7 +222,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   // The statement is calculated from the *card's own* settled purchases and
   // refunds during each billing cycle, plus future explicitly predicted charges.
   // An account balance is not itself a statement balance (it may carry debt).
-  for(let n=0;n<=18;n++){
+  for(let n=0;n<=Math.ceil(days/28)+2;n++){
    const due=plus(rule.nextPaymentDate,n),actualDue=plus(String(rule.nextDueDate||rule.nextPaymentDate),n);
    if(due>through)break;
    if(due<=asOf)continue;
