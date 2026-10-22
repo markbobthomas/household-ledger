@@ -704,6 +704,10 @@ const {chromium,webkit}=require('playwright');
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
   assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+  assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
+   'Live bank current must be the Plaid current, not $4,800 available');
+  assert.match(await page.locator('.summary-bank').innerText(),/Plaid current balance/);
+
   assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
   assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
    'Long-range calculation does not resurrect old major-payment coverage checks');
