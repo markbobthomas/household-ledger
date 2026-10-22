@@ -999,6 +999,10 @@ function scheduleFields(r,isNew,s){
    '</div>';
  }
 function applyScheduleSearch(root=document){
+ // Some non-browser integrations expose a partial DOM. Search is optional:
+ // never let its absence interrupt scheduled payment editing or forecasts.
+ if(!root||typeof root.querySelector!=='function'||
+  typeof root.querySelectorAll!=='function')return;
  const input=root.querySelector('[data-schedule-search]');
  if(!input)return;
  const q=String(scheduleSearch||'').trim().toLowerCase();
