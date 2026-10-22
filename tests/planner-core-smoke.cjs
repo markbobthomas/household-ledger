@@ -111,14 +111,14 @@ const payrollHistory=[
  tx('wage-b','2026-10-02','Shared Employer',2850,'income')];
 const payrollState={predictions:{}};
 const firstPay=T.defineRecurring(payrollState,{
- date:'2026-10-30',merchant:'Shared Employer',amount:3100,
+ date:'2026-11-13',merchant:'Shared Employer',amount:3100,
  type:'income',accountId:'checking',frequency:'every-4-weeks'
 },accounts,snapshot.asOf,{
  kind:'event',accountId:'checking',type:'income',
  merchant:'Shared Employer',amount:3100,date:'2026-09-18'
 },payrollHistory,['wage-a']);
 const secondPay=T.defineRecurring(payrollState,{
- date:'2026-11-13',merchant:'Shared Employer',amount:2850,
+ date:'2026-10-30',merchant:'Shared Employer',amount:2850,
  type:'income',accountId:'checking',frequency:'every-4-weeks',
  separateSchedule:'on'
 },accounts,snapshot.asOf,{
