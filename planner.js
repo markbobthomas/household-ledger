@@ -31,6 +31,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
+ let transactionDetail=null,detailReturnFocus=null;
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -585,6 +586,135 @@ function editorFor(row,s,records){
      (row.type==='income'&&!row.recurringRuleId?'Remove inferred series':'Not recurring')+'</button>':'')+
    '</div></form>';
 }
+
+/*
+ * ONE transaction detail surface for calendar, Predictions, bank history,
+ * and saved schedules. Never copy a projected transaction into a second
+ * editable state: every route resolves the canonical ledger identity.
+ */
+function detailShell(title,subtitle,body,status){
+ return '<div class="transaction-overlay" data-transaction-overlay>'+
+  '<button type="button" class="transaction-overlay-backdrop" data-close-transaction-detail aria-label="Close details"></button>'+
+  '<section class="transaction-detail" role="dialog" aria-modal="true" aria-label="'+escapeHTML(title)+'">'+
+  '<header class="transaction-detail-head"><div><small>'+escapeHTML(status)+'</small>'+
+  '<h2>'+escapeHTML(title)+'</h2><p>'+escapeHTML(subtitle)+'</p></div>'+
+  '<button type="button" class="transaction-detail-close" data-close-transaction-detail aria-label="Close transaction details">×</button></header>'+
+  '<div class="transaction-detail-body">'+body+'</div></section></div>';
+}
+function relatedCardCalculation(bundle,row){
+ if(row.kind!=='movement')return '';
+ const detail=(bundle?.payments?.paymentDetails||[]).find(p=>String(p.id)===String(row.id));
+ if(!detail)return '';
+ const actual=detail.postedTransactions||[],scheduled=detail.predictedTransactions||[],
+  net=arr=>Math.round(arr.reduce((n,t)=>n+(t.type==='refund'?-1:1)*Number(t.amount),0)*100)/100,
+  entry=t=>'<div class="transaction-evidence-item"><span>'+
+   escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant||'Card transaction')+
+   (t.type==='refund'?' · refund':'')+'</span><strong>'+
+   (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>';
+ return '<details class="transaction-evidence" open><summary>What makes up this card payment?</summary>'+
+  '<p>'+escapeHTML(detail.periodSource==='configured-statement'?'Statement period':'Activity window; issuer closing date is unconfirmed')+
+   ': '+escapeHTML(dayLabel(detail.periodStart))+' – '+escapeHTML(dayLabel(detail.periodEnd))+'</p>'+
+  '<div class="transaction-evidence-group"><strong>Actual posted card transactions</strong><strong>'+cash(net(actual))+'</strong></div>'+
+  (actual.length?actual.map(entry).join(''):'<p>No posted purchases or refunds found.</p>')+
+  '<div class="transaction-evidence-group"><strong>Scheduled/recurring card transactions</strong><strong>'+cash(net(scheduled))+'</strong></div>'+
+  (scheduled.length?scheduled.map(entry).join(''):'<p>No additional dated card charges forecast in this period.</p>')+
+  '<div class="transaction-evidence-total"><span>Identifiable activity</span><strong>'+cash(net(actual)+net(scheduled))+'</strong></div>'+
+  (Math.abs(Number(row.amount)-(net(actual)+net(scheduled)))>.011?
+   '<p>Actual payment estimate differs from transaction total because of '+(detail.confirmed?
+   'the separately confirmed issuer statement amount.':'the selected payment method, current card balance or a payment override.')+
+   ' The forecast uses '+cash(row.amount)+'.</p>':'')+
+  '<p>No historical-average spending allowance or synthetic purchases are added.</p></details>';
+}
+function detailHtml(bundle,s){
+ if(!transactionDetail)return '';
+ if(transactionDetail.kind==='prediction'){
+  const row=futureRows(bundle,s).find(r=>r.key===transactionDetail.key);
+  if(!row)return detailShell('Prediction unavailable','It may have posted, been skipped, or changed. Close and refresh.',
+   '<p class="transaction-detail-help">Nothing has been changed in your bank or forecast.</p>','NOT FOUND');
+  const linked=row.kind==='movement';
+  const account=linked?row.from+' → '+row.to:row.account;
+  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
+  const source=rule?'Confirmed schedule':
+   row.seriesKey?'Recurring forecast':row.addedId?'Manually added':
+   row.source||'Predicted from available information';
+  const impact='<div class="transaction-detail-info">'+
+   '<div><span>Date</span><strong>'+escapeHTML(dayLabel(row.date))+'</strong></div>'+
+   '<div><span>Account'+(linked?'s':'')+'</span><strong>'+escapeHTML(account)+'</strong></div>'+
+   '<div><span>Forecast source</span><strong>'+escapeHTML(source)+'</strong></div>'+
+   '<div><span>Expected amount</span><strong>'+cash(row.amount)+'</strong></div></div>'+
+   '<p class="transaction-edit-impact" data-edit-impact>'+
+   'This payment only: only this occurrence will change. Future scheduled payments stay as they are.</p>';
+  const schedule=rule?'<div class="transaction-related"><strong>Connected schedule: '+
+   escapeHTML(rule.scheduleLabel||rule.merchant||row.merchant)+'</strong>'+
+   '<span>'+escapeHTML(rule.frequency||'Repeating')+' · Change future dates, estimates and historical links in its schedule.</span>'+
+   '<div><button type="button" class="btn" data-open-linked-schedule="'+escapeHTML(rule.id)+'">Edit schedule →</button>'+
+   '<button type="button" class="btn" data-open-linked-schedule="'+escapeHTML(rule.id)+'" data-schedule-panel="estimate">Set amount estimate →</button></div></div>':'';
+  return detailShell(row.merchant,
+   'Predicted '+(linked?'linked transfer':row.type==='income'?'deposit':'transaction')+
+   ' · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
+   impact+relatedCardCalculation(bundle,row)+editorFor(row,s,bundle?.rows||[])+schedule,
+   'PREDICTION · EDITABLE');
+ }
+ if(transactionDetail.kind==='actual'){
+  const row=(bundle?.rows||lastHistoryRows).find(t=>String(t.id)===String(transactionDetail.id)&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(s))===transactionDetail.account);
+  if(!row)return detailShell('Bank transaction unavailable','This bank record could not be found.',
+   '<p>No changes were made.</p>','BANK HISTORY');
+  const account=activeAccounts(s).find(a=>String(a.id)===transactionDetail.account);
+  const summary='<div class="transaction-detail-info">'+
+   '<div><span>Bank date</span><strong>'+escapeHTML(dayLabel(row.date))+'</strong></div>'+
+   '<div><span>Account</span><strong>'+escapeHTML(account?.name||transactionDetail.account)+'</strong></div>'+
+   '<div><span>Bank amount</span><strong>'+cash(row.amount)+'</strong></div>'+
+   '<div><span>Bank record</span><strong>'+escapeHTML(row.pending?'Pending':'Posted')+'</strong></div></div>'+
+   '<p class="transaction-detail-help">This is an actual bank record. Its amount, date and classification are read-only. To predict future occurrences, save a separate schedule below.</p>';
+  return detailShell(row.merchant||'Bank transaction',
+   'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
+   summary+(recurringDraft?repeatingReviewForm(s):'<p>Unable to create a schedule from this transaction.</p>'),
+   'ACTUAL · BANK-RECORDED');
+ }
+ if(transactionDetail.kind==='schedule'){
+  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===transactionDetail.id);
+  const form=document.querySelector(transactionDetail.mode==='new'?'[data-schedule-new-form]':
+   transactionDetail.mode==='estimate'?'[data-schedule-estimate-form]':'[data-schedule-edit-form]');
+  const formHtml=form?.outerHTML||'<p>Schedule editor not available. Close and reopen it.</p>';
+  form?.remove();
+  return detailShell(transactionDetail.mode==='new'?'New payment schedule':rule?.scheduleLabel||rule?.merchant||'Payment schedule',
+   transactionDetail.mode==='new'?'Create an independent recurring payment':
+    'Edit only this saved schedule; its bank history remains untouched.',
+   '<p class="transaction-detail-help">Schedule edits change future forecast occurrences. Actual bank transactions are never changed.</p>'+
+    formHtml,
+   'CONFIRMED SCHEDULE · FORECAST ONLY');
+ }
+ return '';
+}
+function drawTransactionDetail(bundle,s){
+ const root=$('planner-main'),prior=root?.querySelector('[data-transaction-overlay]');
+ if(prior)prior.remove();
+ if(!transactionDetail||!root)return;
+ root.insertAdjacentHTML('beforeend',detailHtml(bundle,s));
+ const form=root.querySelector('.transaction-overlay form[data-history-recurring-form]');
+ if(form&&recurringDraft?.examples){
+  form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
+  updateHistoryLinks(form);
+ }
+}
+function openPrediction(key,origin){
+ detailReturnFocus=origin||null;
+ transactionDetail={kind:'prediction',key:String(key)};
+ try{drawTransactionDetail(forecastFor(snapshot()),snapshot())}
+ catch(err){transactionDetail=null;setNotice(String(err.message||err));return}
+ document.querySelector('.transaction-detail-close')?.focus();
+}
+function dismissTransaction(){
+ const mode=transactionDetail?.kind;
+ transactionDetail=null;
+ if(mode==='schedule'){
+  scheduleMode='';scheduleTarget='';schedulePreset=null;render();
+ }else document.querySelector('[data-transaction-overlay]')?.remove();
+ if(detailReturnFocus?.isConnected)detailReturnFocus.focus();
+ detailReturnFocus=null;
+}
+
 function missingMortgagePanel(bundle){
  const missing=bundle?.missingMortgages||[];
  if(!missing.length)return '';
