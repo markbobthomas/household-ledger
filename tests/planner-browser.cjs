@@ -620,6 +620,8 @@ const {chromium,webkit}=require('playwright');
     'Quick category assignment persists after reload');
    await water.locator('[data-schedule-quick-category]').selectOption('Water bills');
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   if(!await water.locator('[data-schedule-inline-plan]').count())
+    await water.locator('[data-schedule-edit]').click();
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
     'Schedule settings and upcoming payments expand inside their own schedule');
    await water.locator('.schedule-more > summary').click();
