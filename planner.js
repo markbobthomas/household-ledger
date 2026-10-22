@@ -1019,22 +1019,36 @@ function schedulesPage(bundle,s){
    escapeHTML(w.from)+' to '+escapeHTML(w.through)+' · '+cash(w.amount)+'</span>'+
    '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
+  const number=index+1, title=escapeHTML(r.scheduleLabel||r.merchant),
+   pendingRemove=scheduleRemoveTarget===r.id;
   return '<article class="panel schedule-card" data-schedule-card="'+id+
-   '" data-schedule-number="'+(index+1)+'">'+
-   '<div class="schedule-heading"><div class="schedule-heading-ident">'+
-   '<span class="schedule-number" aria-label="Schedule '+(index+1)+'">'+(index+1)+'</span>'+
-   '<div class="schedule-heading-text"><strong>'+escapeHTML(r.scheduleLabel||r.merchant)+'</strong>'+
-   '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
-    escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-   ' · '+escapeHTML(r.frequency)+'</small></div></div><span class="status-tag">'+
-   (estimate.estimated?'ESTIMATE':'FIXED')+'</span></div>'+
-   '<div class="schedule-metrics"><span>Next: '+(next?escapeHTML(dayLabel(next)):'Outside forecast')+'</span>'+
-    '<strong>'+cash(estimate.amount)+'</strong></div>'+
-   '<div class="schedule-actions">'+
-    '<button class="btn primary" type="button" data-schedule-edit="'+id+'">'+(isEditing?'Close plan −':'Edit plan ↓')+'</button>'+
-    '<button class="btn" type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
-    '<button class="btn" type="button" data-schedule-remove="'+id+'">'+
-     (scheduleRemoveTarget===r.id?'Confirm remove':'Remove')+'</button></div>'+
+   '" data-schedule-number="'+number+'">'+
+   '<div class="schedule-compact-row">'+
+   '<button class="schedule-row-main" type="button" data-schedule-edit="'+id+
+    '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
+    ' schedule '+number+': '+title+'">'+
+    '<span class="schedule-row-identity"><span class="schedule-number" aria-hidden="true">'+number+
+     '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
+     '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
+      escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
+      ' · '+escapeHTML(r.frequency)+'</small></span></span>'+
+    '<span class="schedule-row-next"><small>Next</small><span>'+
+     (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
+    '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
+     '<small>'+(estimate.estimated?'Estimated':'Fixed')+'</small></span>'+
+    '<span class="schedule-row-chevron" aria-hidden="true"><span class="schedule-edit-label">'+
+     (isEditing?'Close':'Edit')+' </span>'+(isEditing?'⌃':'⌄')+'</span>'+
+   '</button>'+
+   '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
+    '<summary aria-label="More actions for schedule '+number+'" title="More actions">⋯</summary>'+
+    '<div class="schedule-more-menu">'+
+     '<button type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
+     '<button type="button" data-schedule-remove="'+id+'"'+
+      (pendingRemove?' class="danger"':'')+'>'+
+      (pendingRemove?'Confirm remove':'Remove schedule')+'</button>'+
+     (pendingRemove?'<button type="button" data-schedule-cancel-remove>Cancel</button>':'')+
+    '</div></details></div>'+
+   '<div class="schedule-card-detail">'+
    (wins.length?'<details class="schedule-legacy-windows"><summary>'+wins.length+
     ' previously saved amount exception'+(wins.length===1?'':'s')+'</summary>'+
     '<p>Older date-range estimates are still included so your balances do not change unexpectedly. '+
@@ -1046,7 +1060,7 @@ function schedulesPage(bundle,s){
      '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span>'+
       '<small>Amount, date, frequency, payee and accounts</small></summary>'+
       '<div class="plan-settings-body">'+edit+'</div></details>'+
-     scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</article>';
+     scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</div></article>';
  }).join('');
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
   '<h2>Payment schedules</h2><p>Edit any schedule or an individual upcoming payment.</p></div>'+
@@ -1538,6 +1552,10 @@ document.addEventListener('click',async e=>{
    scheduleNotice='Estimated range cleared. All projected balances recalculated.';render()}
   catch(e){scheduleNotice=String(e.message||e);render()}
   return;
+ }
+ const cancelScheduleRemoval=e.target.closest?.('[data-schedule-cancel-remove]');
+ if(cancelScheduleRemoval){
+  scheduleRemoveTarget='';render();return;
  }
  const removeSchedule=e.target.closest?.('[data-schedule-remove]');
  if(removeSchedule){
