@@ -485,7 +485,50 @@ const {chromium,webkit}=require('playwright');
     .filter({hasText:'Playground recurring payment'}).count()>0,
     'Creating a recurring expense from one calendar date creates its next month too');
 
-   assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
+
+   // Same payee, same date: two completely separate obligations and estimates.
+   await go('schedules');
+   const previousSchedules=await page.locator('[data-schedule-card]').count();
+   await page.locator('[data-schedule-new]').click();
+   let schedule=page.locator('[data-schedule-new-form]');
+   await schedule.locator('[name=scheduleLabel]').fill('Water - House');
+   await schedule.locator('[name=merchant]').fill('Same Merchant Water');
+   await schedule.locator('[name=amount]').fill('135');
+   await schedule.locator('[name=date]').fill('2026-11-10');
+   await schedule.locator('button[type=submit]').click();
+   assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+1,
+    'An independent water obligation is stored');
+   let water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   await water.locator('[data-schedule-duplicate]').click();
+   schedule=page.locator('[data-schedule-new-form]');
+   await schedule.locator('[name=scheduleLabel]').fill('Water - Garden');
+   await schedule.locator('[name=amount]').fill('220');
+   await schedule.locator('[name=date]').fill('2026-11-10');
+   await schedule.locator('button[type=submit]').click();
+   assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
+    'Adding a second same-merchant/same-day bill never updates the first');
+   water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   await water.locator('[data-schedule-estimate]').click();
+   const amountForm=page.locator('[data-schedule-estimate-form]');
+   await amountForm.locator('[name=amount]').fill('175');
+   await amountForm.locator('[name=from]').fill('2026-12-01');
+   await amountForm.locator('[name=through]').fill('2026-12-31');
+   await amountForm.locator('button[type=submit]').click();
+   assert.match(await page.locator('[data-schedule-card]').filter({hasText:'Water - House'})
+    .first().innerText(),/175/,'A dated forecast estimate is saved only to that schedule');
+   await go('summary');
+   await page.locator('[data-calendar-today]').click();
+   await page.locator('[data-calendar-nav="1"]').click();
+   await page.locator('[data-calendar-day="2026-11-10"]').click();
+   assert.ok(await page.locator('.calendar-detail-item').filter({hasText:'Water - House'}).count()>0);
+   assert.ok(await page.locator('.calendar-detail-item').filter({hasText:'Water - Garden'}).count()>0);
+   await page.locator('[data-calendar-nav="1"]').click();
+   await page.locator('[data-calendar-day="2026-12-10"]').click();
+   assert.match(await page.locator('.calendar-detail-item')
+    .filter({hasText:'Water - House'}).innerText(),/175/);
+   assert.match(await page.locator('.calendar-detail-item')
+    .filter({hasText:'Water - Garden'}).innerText(),/220/);
+      assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');
    if(mobile){

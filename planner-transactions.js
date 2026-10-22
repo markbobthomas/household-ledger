@@ -93,7 +93,8 @@ function applySeries(source,baseDate,seriesKey,rules){
  const useCalendar=change.calendarDay&&change.cadence!=='twice monthly';
  const date=useCalendar?baseDate.slice(0,7)+'-'+String(Math.min(change.calendarDay,monthEnd(baseDate.slice(0,7)))).padStart(2,'0'):
   shift(baseDate,Number(change.dayOffset)||0);
- return {...source,date,amount:change.amount,
+ return {...source,date,amount:source.scopedEstimate||!validAmount(change.amount)?
+  source.amount:change.amount,
   ...(change.merchant?{merchant:change.merchant}:{}),
   ...(change.accountId?{accountId:change.accountId,account:change.accountId}:{}),
   ...(change.fromAccountId?{fromAccountId:change.fromAccountId}:{}),
@@ -175,7 +176,12 @@ function recurrenceDates(rule,asOf,through){
   for(let i=n;i<n+60;i++){const d=shift(start,i*step);if(d>through)break;if(d>asOf&&d>=start)dates.push(d)}
  }else{
   const spacing={monthly:1,'twice-monthly':1,quarterly:3,semiannual:6,annual:12}[rule.frequency];
-  for(let i=0;i<=16;i+=spacing){
+  // A saved monthly bill should not expire just because its anchor is old.
+  // Preserve its original month phase while skipping elapsed months.
+  const index=iso=>Number(iso.slice(0,4))*12+Number(iso.slice(5,7)),
+   elapsed=index(asOf)-index(start),last=index(through)-index(start),
+   begin=Math.max(0,Math.floor(elapsed/spacing)*spacing-spacing);
+  for(let i=begin;i<=last+spacing;i+=spacing){
    for(const day of rule.frequency==='twice-monthly'?[Number(start.slice(-2)),Number(rule.secondDay)]:[Number(start.slice(-2))]){
     const d=monthAt(start,i,day);
     if(d>=start&&d>asOf&&d<=through)dates.push(d);
@@ -212,7 +218,8 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   if(!Number.isInteger(secondDay)||secondDay<1||secondDay>31||
    secondDay===Number(fields.date.slice(-2)))throw Error('Choose a different second payday (1–31)');
  }
- const p=ensure(state),requestedId=String(data.existingRuleId||'');
+ const p=ensure(state),requestedId=String(data.existingRuleId||''),
+  separate=data.separateSchedule===true||data.separateSchedule==='yes'||data.separateSchedule==='on';
  const baseAccount=reference?.kind==='movement'?String(reference.sourceAccountId||reference.fromAccountId):
   String(reference?.sourceAccountId||reference?.accountId||fields.accountId);
  const originalMerchant=reference?.originalMerchant||reference?.sourceMerchant||reference?.merchant||fields.merchant;
@@ -224,12 +231,23 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),
   frequency==='every-4-weeks'?'phase'+phaseOf(fields.date):round(originalAmount)]
   .map(encodeURIComponent).join('|');
+ // A separately named obligation has a durable payment-stream ID, not a
+ // merchant/date/amount identity. Both bills may post on the same day.
+ if(separate){
+  if(reference?.recurringRuleId||requestedId)
+   throw Error('Create a separate schedule without selecting an existing one.');
+  const prefix='manual|stream|'+[transfer?'movement':'event',baseAccount,
+   merchantKey(originalMerchant)].map(encodeURIComponent).join('|')+'|';
+  let n=1;
+  while(p.futureRecurringRules.some(r=>r.id===prefix+n))n++;
+  id=prefix+n;
+ }
  // Different historical rows can be labeled expense vs ACH transfer, but
  // refer to the same one mortgage payment. Reuse its existing rule instead
  // of saving two recurring schedules with distinct source type identities.
  // Account and amount are required; two different paying accounts, or a
  // real internal transfer and an expense, must remain separate.
- if(!reference?.recurringRuleId){
+ if(!reference?.recurringRuleId&&!separate){
   const sameMerchant=p.futureRecurringRules.filter(r=>
    r.kind===(transfer?'movement':'event')&&
    String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
@@ -273,7 +291,9 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  // Plaid descriptions to the same manually named utility or paycheck.
  const phaseRecords=rows=>frequency==='every-4-weeks'?
   rows.filter(t=>samePhase(t.date,fields.date)):rows;
- const autoLinks=phaseRecords(candidates.filter(t=>sameDirection(t,forecastType)&&
+ // Do not claim ALL same-merchant bank transactions for a new independent
+ // stream. Its bank evidence must be individually selected by the owner.
+ const autoLinks=separate?[]:phaseRecords(candidates.filter(t=>sameDirection(t,forecastType)&&
   merchantKey(t.merchant||t.name)===merchantKey(originalMerchant)));
  // Same employer, opposite paycheck phase is deliberately NOT linked as
  // source evidence for this four-week rule.
@@ -283,7 +303,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  // The user may label a bill "Electric" while Plaid calls it "PSE".
  // An explicitly linked bank payee must also merge with any existing rule
  // that already owns that same bank payee, not create a duplicate schedule.
- if(!reference?.recurringRuleId&&evidence.length){
+ if(!reference?.recurringRuleId&&!separate&&evidence.length){
   const overlapping=p.futureRecurringRules.filter(r=>
    r.kind===(transfer?'movement':'event')&&
    String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
@@ -312,6 +332,10 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(!names.length)throw Error('Enter a merchant name');
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
+  scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
+  amountBasis:data.amountBasis==='estimate'||data.amountBasis==='fixed'?data.amountBasis:
+   old?.amountBasis||'fixed',
+  amountWindows:Array.isArray(old?.amountWindows)?old.amountWindows.slice():[],
   originalAccountId:old?.originalAccountId||baseAccount,
   sourceAnchorDate:frequency==='every-4-weeks'?
    (old?.sourceAnchorDate&&samePhase(old.sourceAnchorDate,fields.date)?
@@ -331,7 +355,20 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   ...(old?.sourceAddedId||reference?.addedId?{sourceAddedId:old?.sourceAddedId||reference?.addedId}:{}),
   ...(old?.sourceKey||reference?.key?{sourceKey:old?.sourceKey||reference?.key}:{})};
  const index=p.futureRecurringRules.findIndex(r=>r.id===id);
- if(index<0)p.futureRecurringRules.push(rule);else p.futureRecurringRules[index]=rule;
+ if(index<0)p.futureRecurringRules.push(rule);
+ else{
+  p.futureRecurringRules[index]=rule;
+  // Explicit edits to the authoritative schedule replace parallel legacy
+  // series edits to prevent hidden amount/date overrides.
+  delete p.futureSeriesEdits?.[manualSeriesKey(id)];
+ }
+ // Explicitly transferring posted examples to a newly created independent
+ // bill prevents one bank record being "owned" by both saved schedules.
+ if(separate&&chosen.length){
+  const moved=new Set(chosen);
+  for(const sibling of p.futureRecurringRules)if(sibling.id!==id)
+   sibling.exampleIds=(sibling.exampleIds||[]).filter(example=>!moved.has(String(example)));
+ }
  // Explicit confirmation reverses any earlier "Not recurring" decision for
  // this precise merchant, account and movement direction.
  const exclusionKey=recurrenceKey(
@@ -457,18 +494,62 @@ function removeRecurring(state,id){
  for(const key of Object.keys(p.futureTransactionEdits||{}))
   if(key.includes(prefix))delete p.futureTransactionEdits[key];
 }
+
+// A default amount applies to every occurrence. A dated estimate replaces
+// only occurrences in its interval; latest explicit interval wins.
+function scheduleAmount(rule,date){
+ const windows=Array.isArray(rule.amountWindows)?rule.amountWindows:[];
+ const override=windows.filter(w=>validDate(w.from)&&validDate(w.through)&&
+  w.from<=date&&date<=w.through&&validAmount(w.amount)).at(-1);
+ return {amount:round(override?.amount??rule.amount),
+  estimated:override?true:rule.amountBasis==='estimate',
+  scoped:Boolean(override)};
+}
+function setScheduleEstimate(state,id,data,asOf){
+ const p=ensure(state),r=p.futureRecurringRules.find(v=>v.id===id);
+ if(!r)throw Error('That schedule no longer exists.');
+ if(!validAmount(data.amount))throw Error('Enter a positive estimated amount.');
+ const value=round(data.amount),scope=String(data.scope||'all');
+ if(scope==='all'){
+  r.amount=value;r.amountBasis='estimate';
+  // Schedule estimates supersede older all-future amount edits but not
+  // their unrelated date/account customizations.
+  const old=p.futureSeriesEdits?.[manualSeriesKey(id)];
+  if(old)delete old.amount;
+  return r;
+ }
+ if(scope!=='range')throw Error('Choose all future payments or a date range.');
+ const from=String(data.from||''),through=String(data.through||'');
+ if(!validDate(from)||!validDate(through)||from<=asOf||through<from||
+  daysBetween(through,asOf)>366)
+  throw Error('Choose a valid future date range within the next year.');
+ r.amountWindows??=[];
+ if(r.amountWindows.length>=50)throw Error('Too many custom forecast ranges; remove an older one first.');
+ r.amountWindows.push({from,through,amount:value});
+ return r;
+}
+function removeScheduleEstimate(state,id,index){
+ const r=ensure(state).futureRecurringRules.find(v=>v.id===id);
+ if(!r)throw Error('The saved schedule no longer exists.');
+ if(!Number.isInteger(index)||index<0||index>=r.amountWindows?.length)
+  throw Error('That forecast estimate no longer exists.');
+ r.amountWindows.splice(index,1);
+}
 function generatedRecurring(rules,asOf,through){
  const events=[],plans=[];
  for(const r of rules||[]){
   for(const d of recurrenceDates(r,asOf,through)){
-   const amount=r.amount;
+   const estimated=scheduleAmount(r,d),amount=estimated.amount,
+    merchant=r.scheduleLabel||r.merchant,scopedEstimate=estimated.scoped;
    if(r.kind==='movement'){
     plans.push({id:'user|'+r.id+'|'+d,anchorDate:d,frequency:'once',
      amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
-     merchant:r.merchant,seriesRuleId:r.id,source:'user-recurring'});
+     merchant,scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     seriesRuleId:r.id,source:'user-recurring'});
    }else{
     events.push({id:'user|'+r.id+'|'+d,date:d,amount,
-     merchant:r.merchant,accountId:r.accountId,type:r.type,category:'Confirmed recurring',
+     merchant,scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     accountId:r.accountId,type:r.type,category:'Confirmed recurring',
      cashDirection:r.cashDirection,source:'user-recurring',cadence:r.frequency,
      ruleId:r.id,_seriesKey:manualSeriesKey(r.id),_seriesDate:d});
    }
@@ -501,34 +582,54 @@ function matchesRecurring(rule,event,accounts){
 /* Source bank balances already include posted transactions. One posted payment
  * can cover at most one future scheduled occurrence; never forecast it again. */
 function postedCoverage(generated,rules,records,accounts,asOf){
- const byId=new Map((rules||[]).map(r=>[r.id,r]));
- const used=new Set(),posted=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&
-  t.date<=asOf&&Number(t.amount)>0&&String(t.id||''));
- function covered(item,id,kind){
-  const r=byId.get(id);if(!r)return false;
-  const effective=kind==='movement'&&item._postedView?item._postedView:item;
-  const date=String(effective.date||effective.anchorDate||item.anchorDate||''),
-   account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
-  const type=kind==='movement'?'transfer':item.type;
-  const tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
-  const sameBillingCycle=t=>['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
-   t.date.slice(0,7)===date.slice(0,7);
-  const possible=posted.find(t=>!used.has(String(t.id))&&
-   sameDirection(t,kind==='event'?r.type:'transfer')&&
-   accountRef(t.accountId||t.account,accounts)===account&&
-   (r.matchNames||[]).includes(merchantKey(t.merchant||t.name))&&
-   (Math.abs(daysBetween(t.date,date))<=tolerance||sameBillingCycle(t)));
-  if(!possible)return false;
-  used.add(String(possible.id));return true;
+ const byId=new Map((rules||[]).map(r=>[r.id,r])),
+  posted=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&
+   t.date<=asOf&&Number(t.amount)>0&&String(t.id||'')),
+  items=[...(generated.events||[]).map(item=>({item,kind:'event',id:item.ruleId})),
+   ...(generated.plans||[]).map(item=>({item,kind:'movement',id:item.seriesRuleId}))],
+  pairs=[];
+ // Reconcile as a GROUP, not in schedule creation order. When one of two
+ // same-day water bills posts early, match the actual amount to the most
+ // plausible obligation; leave the OTHER bill in the cash forecast.
+ items.forEach(({item,kind,id},index)=>{
+  const r=byId.get(id);if(!r)return;
+  const effective=kind==='movement'&&item._postedView?item._postedView:item,
+   date=String(effective.date||effective.anchorDate||item.anchorDate||''),
+   account=String(kind==='movement'?effective.fromAccountId:effective.accountId),
+   tolerance=r.frequency==='weekly'?2:['biweekly','every-4-weeks'].includes(r.frequency)?3:6;
+  if(!validDate(date))return;
+  posted.forEach((t,p)=>{
+   if(!sameDirection(t,kind==='event'?r.type:'transfer')||
+    accountRef(t.accountId||t.account,accounts)!==account||
+    !(r.matchNames||[]).includes(merchantKey(t.merchant||t.name)))return;
+   const gap=Math.abs(daysBetween(t.date,date)),
+    cycle=['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
+     t.date.slice(0,7)===date.slice(0,7);
+   if(gap>tolerance&&!cycle)return;
+   const expected=Math.max(1,Number(item.amount)||1),
+    deviation=Math.abs(Number(t.amount)-expected)/expected,
+    // Historical links indicate source identity but do not guarantee
+    // future bill amounts. Amount then date are safer than creation order.
+    linked=(r.exampleIds||[]).includes(String(t.id));
+   pairs.push({index,p,score:(linked?-100:0)+deviation*10+gap*.01,
+    tie:String(r.id)+'|'+date+'|'+String(t.id)});
+  });
+ });
+ pairs.sort((a,b)=>a.score-b.score||a.tie.localeCompare(b.tie));
+ const usedItems=new Set(),usedPosted=new Set();
+ for(const pair of pairs){
+  if(usedItems.has(pair.index)||usedPosted.has(pair.p))continue;
+  usedItems.add(pair.index);usedPosted.add(pair.p);
  }
+ const n=(generated.events||[]).length;
  return {
-  events:(generated.events||[]).filter(e=>!covered(e,e.ruleId,'event')),
-  plans:(generated.plans||[]).filter(p=>!covered(p,p.seriesRuleId,'movement'))
+  events:(generated.events||[]).filter((_,i)=>!usedItems.has(i)),
+  plans:(generated.plans||[]).filter((_,i)=>!usedItems.has(n+i))
  };
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,findExamples,bankDirection,sameDirection,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring,postedCoverage,
+ frequencies,findExamples,bankDirection,sameDirection,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
  recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
