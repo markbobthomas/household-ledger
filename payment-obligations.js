@@ -24,15 +24,94 @@ const ready=(rule,card,accounts=[])=>Boolean(rule&&card&&credit(card)&&
  ['statement','full','minimum','fixed'].includes(rule.method||'statement')&&
  (rule.autopayEnabled===false||
   accounts.some(a=>String(a.id)===String(rule.fromAccountId)&&cash(a))));
+// Plaid transactions provide amounts, but not a reliable issuer due date or
+// funding account on their own. Only independently paired checking→card
+// settlements can establish a provisional recurring checking debit.
+function inferPayment(card,accounts,records,asOf){
+ const same=(t,a)=>{
+  const key=String(t.accountId||t.account||'');
+  if(key===String(a.id))return true;
+  const found=accounts.filter(x=>x.name===key||x.transactionAccount===key);
+  return found.length===1&&String(found[0].id)===String(a.id);
+ };
+ const posted=new Map(records.filter(t=>t?.id&&!t.pending).map(t=>[String(t.id),t]));
+ const matches=[];
+ for(const t of records){
+  if(!t||t.pending||t.type!=='transfer'||t.accountingKind!=='card_payment'||
+   t.cashDirection!=='out'||!t.pairedTransactionId||!date(t.date)||t.date>asOf)continue;
+  const other=posted.get(String(t.pairedTransactionId));
+  if(!other||other.type!=='transfer'||other.cashDirection!=='in'||
+   !same(other,card)||Math.abs(Number(other.amount)-Number(t.amount))>.011)continue;
+  const from=accounts.find(a=>cash(a)&&same(t,a));
+  if(from)matches.push({date:t.date,amount:Number(t.amount),fromAccountId:String(from.id)});
+ }
+ const groups=new Map();
+ for(const p of matches){
+  const key=p.fromAccountId;
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(p);
+ }
+ const recent=[...groups.entries()].map(([id,rows])=>{
+  const payments=[...rows].sort((a,b)=>a.date.localeCompare(b.date));
+  const last=payments.at(-1),before=payments.at(-2),
+   daysBetween=before?Math.round((Date.parse(last.date)-Date.parse(before.date))/86400000):null;
+  return {id,payments,last,interval:daysBetween};
+ }).filter(g=>g.payments.length>=2&&g.interval>=26&&g.interval<=36&&
+  (Date.parse(asOf)-Date.parse(g.last.date))/86400000<=48)
+ .sort((a,b)=>b.last.date.localeCompare(a.last.date));
+ const net=(from,to)=>{
+  let total=0,count=0;
+  for(const t of records)if(!t.pending&&same(t,card)&&t.date>=from&&t.date<=to&&
+   (t.type==='expense'||t.type==='refund')){
+    total+=(t.type==='refund'?-1:1)*Number(t.amount||0);count++;
+  }
+  return {amount:round(Math.max(0,total)),count};
+ };
+ const lastThirty=net(shift(asOf,-29),asOf);
+ const result={cardId:String(card.id),cardName:card.name,
+  observedCharges:lastThirty.amount,observedCount:lastThirty.count,
+  evidence:recent[0]?.payments.length||0};
+ if(recent.length!==1)return {...result,eligible:false,
+  reason:recent.length>1?'Payments appear to use multiple funding accounts':
+   'No reliable pair of monthly checking-to-card payments was found'};
+ const match=recent[0],previous=net(shift(asOf,-59),shift(asOf,-30));
+ const estimate=round(Math.max(lastThirty.amount,previous.count?previous.amount:0));
+ if(!(estimate>0))return {...result,eligible:false,
+  reason:'No settled card purchases were found to support a positive payment estimate'};
+ let next=plus(match.last.date,1);
+ for(let i=0;i<18&&next<=asOf;i++)next=plus(next,1);
+ return {...result,eligible:true,fromAccountId:match.id,
+  fromName:accounts.find(a=>String(a.id)===match.id)?.name||match.id,
+  nextPaymentDate:next,estimatedAmount:estimate,
+  lastPaymentDate:match.last.date,
+  reason:'Estimated from posted card charges and recurring matched bank transfers'};
+}
 function build(snapshot,records=[],expected=[],predictions={},options={}){
  const asOf=String(snapshot.asOf||''),days=options.days||90,through=shift(asOf,days);
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
- const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],historyStatements=[],suppressedExpectedIds=[];
+ const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],historyStatements=[],suppressedExpectedIds=[],
+  cardEstimates=[];
  for(const card of accounts.filter(credit))
-  if(!ready(cards[card.id],card,accounts))
-   warnings.push(card.name+': credit-card setup required in Settings before forecasting purchases or payments');
+  if(!ready(cards[card.id],card,accounts)){
+   const candidate=inferPayment(card,accounts,records,asOf);
+   cardEstimates.push(candidate);
+   if(candidate.eligible){
+    // Estimated monthly autopay is provisionally forecast when the bank
+    // demonstrates a unique, repeated linked card-payment history. Nothing
+    // is saved or claimed as the issuer's actual statement amount.
+    for(let when=candidate.nextPaymentDate;when<=through;when=plus(when,1)){
+     plans.push({id:'card-history-estimate|'+card.id+'|'+when,
+      fromAccountId:candidate.fromAccountId,toAccountId:String(card.id),
+      anchorDate:when,amount:candidate.estimatedAmount,frequency:'once',
+      origin:'card-history-estimate',status:'estimated',
+      amountEstimate:'bank-activity-estimate'});
+    }
+    warnings.push(card.name+': provisional card withdrawals estimated from Plaid payment history. Confirm billing dates and statement amounts in Settings.');
+   }else warnings.push(card.name+': no November card withdrawal can be predicted yet. '+
+    candidate.reason+'. Set payment dates and funding account in Settings.');
+  }
  const settled=new Map(records.filter(t=>t&&t.id).map(t=>[String(t.id),t]));
  const matchesAccount=(row,account)=>{
   const key=String(row.accountId||row.account||''),id=String(account.id);
@@ -252,9 +331,9 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   }
  }
  return {plans,billEvents,suppressedExpectedIds,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
-  historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
+  cardEstimates,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
-const api={build,plus,closeFor,ready};
+const api={build,plus,closeFor,ready,inferPayment};
 root.HouseholdPaymentObligations=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
