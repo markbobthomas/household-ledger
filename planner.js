@@ -31,7 +31,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
- let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null;
+ let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null;
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
@@ -626,6 +626,28 @@ function relatedCardCalculation(bundle,row){
    ' The forecast uses '+cash(row.amount)+'.</p>':'')+
   '<p>No historical-average spending allowance or synthetic purchases are added.</p></details>';
 }
+// The live forecast, not unedited schedule defaults, owns each occurrence:
+ // edited dates/amounts and skipped payments are reflected here exactly.
+function scheduleOccurrencesHtml(bundle,s,rule){
+ if(!rule)return '';
+ const occurrences=futureRows(bundle,s).filter(r=>String(r.recurringRuleId||'')===String(rule.id));
+ const rows=occurrences.map(row=>'<button type="button" class="schedule-occurrence" data-open-transaction="'+
+  escapeHTML(row.key)+'" data-schedule-occurrence-key="'+escapeHTML(row.key)+'">'+
+  '<span class="schedule-occurrence-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+  '<span class="schedule-occurrence-description">'+escapeHTML(row.merchant)+
+   '<small>'+escapeHTML(row.kind==='movement'?row.from+' → '+row.to:
+    row.account)+' · '+(row.amountEstimate?'Estimated':'Forecast')+'</small></span>'+
+  '<strong>'+cash(row.amount)+'</strong><span class="schedule-occurrence-arrow">Edit →</span></button>').join('');
+ return '<section class="schedule-occurrence-section" aria-label="Upcoming individual payments">'+
+  '<div class="schedule-occurrence-heading"><h3>Individual upcoming payments</h3>'+
+   '<span>'+occurrences.length+' in next '+horizon+' days</span></div>'+
+  '<p>Choose a payment to change or skip <strong>only that occurrence</strong>. '+
+   'Other payments remain unchanged unless you explicitly choose “this and all future” in its editor.</p>'+
+  (rows?'<div class="schedule-occurrence-list">'+rows+'</div>':
+   '<p class="schedule-occurrence-empty">No remaining payments for this schedule within the selected forecast. '+
+    'A payment may have already posted, been skipped, or be outside the forecast window.</p>')+
+  '</section>';
+}
 function detailHtml(bundle,s){
  if(!transactionDetail)return '';
  if(transactionDetail.kind==='prediction'){
@@ -683,7 +705,7 @@ function detailHtml(bundle,s){
    transactionDetail.mode==='new'?'Create an independent recurring payment':
     'Edit only this saved schedule; its bank history remains untouched.',
    '<p class="transaction-detail-help">Schedule edits change future forecast occurrences. Actual bank transactions are never changed.</p>'+
-    formHtml,
+    formHtml+scheduleOccurrencesHtml(bundle,s,rule),
    'CONFIRMED SCHEDULE · FORECAST ONLY');
  }
  return '';
@@ -701,15 +723,32 @@ function drawTransactionDetail(bundle,s){
  }
 }
 function openPrediction(key,origin){
+ // A schedule is the parent of its dated occurrences. Opening a single
+ // occurrence keeps the parent ready to return to after closing or saving.
+ if(transactionDetail?.kind==='schedule')detailParentSchedule={...transactionDetail};
+ else detailParentSchedule=null;
  detailReturnFocus=origin||null;
  transactionDetail={kind:'prediction',key:String(key)};
  try{drawTransactionDetail(forecastFor(snapshot()),snapshot())}
  catch(err){transactionDetail=null;setNotice(String(err.message||err));return}
  document.querySelector('.transaction-detail-close')?.focus();
 }
+function restoreScheduleAfterOccurrence(){
+ if(detailParentSchedule){
+  const parent=detailParentSchedule;detailParentSchedule=null;
+  if((state().predictions?.futureRecurringRules||[]).some(r=>r.id===parent.id)){
+   transactionDetail=parent;return;
+  }
+ }
+ transactionDetail=null;
+}
 function dismissTransaction(){
  const mode=transactionDetail?.kind;
- transactionDetail=null;
+ if(mode==='prediction'&&detailParentSchedule){
+  restoreScheduleAfterOccurrence();
+  detailReturnFocus=null;render();return;
+ }
+ transactionDetail=null;detailParentSchedule=null;
  if(mode==='schedule'){
   scheduleMode='';scheduleTarget='';schedulePreset=null;
   if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null;}
@@ -873,7 +912,7 @@ function schedulesPage(bundle,s){
    edit+estimateForm+'</article>';
  }).join('');
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
-  '<h2>Payment schedules</h2><p>Each bill or paycheck has its own schedule. History supplies evidence; Predictions are the dated occurrences.</p></div>'+
+  '<h2>Payment schedules</h2><p>Manage repeating bills and paychecks here. Open any schedule to edit one upcoming payment without changing the others.</p></div>'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+unexplained+'<div class="schedule-grid">'+(cards||'<section class="panel">No confirmed schedules yet.</section>')+'</div></div>';
@@ -1490,7 +1529,7 @@ document.addEventListener('click',async e=>{
  }
  const view=e.target.closest('[data-view]');
  if(view){
-  activeTab=view.dataset.view;transactionDetail=null;detailOriginTab=null;
+  activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   render();
