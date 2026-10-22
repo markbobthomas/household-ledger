@@ -1127,7 +1127,7 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .schedule-toolbar>label{display:flex;flex-direction:column;gap:4px;font-size:10px;
  color:#697f93;font-weight:700;min-width:155px}
 .schedule-toolbar select{min-height:36px;max-width:220px;padding:7px 9px;border-radius:8px;
- border:1px solid #d8e1eb;background:#fff;color:#30485d;font:600 12px inherit}
+ border:1px solid #d8e1eb;background:#fff;color:#30485d;font-size:12px;font-weight:600;font-family:inherit}
 .schedule-category-manager{position:relative;align-self:end;margin-left:auto}
 .schedule-category-manager>summary{list-style:none;border:1px solid #dce4ed;border-radius:8px;
  background:#f7f9fc;color:#3b586e;padding:10px 12px;min-height:36px;
