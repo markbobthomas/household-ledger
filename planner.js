@@ -768,11 +768,31 @@ function drawTransactionDetail(bundle,s){
   updateHistoryLinks(form);
  }
 }
-function closeInlineTransaction(){
+function inlineDraftChanged(){
+ const editor=document.querySelector('[data-inline-transaction-editor]');
+ if(!editor)return false;
+ return [...editor.querySelectorAll('form')].some(form=>{
+  const initial=form.dataset.initialValues;
+  return initial!==undefined&&initial!==JSON.stringify([...new FormData(form)]);
+ });
+}
+function closeInlineTransaction(force=false){
+ if(!force&&inlineDraftChanged()&&typeof window.confirm==='function'&&
+   !window.confirm('Discard unsaved changes to this payment?'))return false;
  document.querySelectorAll('[data-inline-transaction-editor]').forEach(el=>el.remove());
  document.querySelectorAll('[data-inline-row-wrapper] [data-open-transaction]').forEach(el=>{
   el.setAttribute('aria-expanded','false');
  });
+ return true;
+}
+function confirmInlineSave(key,message){
+ const rows=[...document.querySelectorAll('[data-inline-row-wrapper]')];
+ const row=rows.find(el=>el.dataset.paymentKey===key||
+  el.querySelector('[data-open-transaction]')?.dataset.openTransaction===key);
+ const target=row||document.querySelector('#planner-main .planner-page');
+ if(!target)return;
+ target.insertAdjacentHTML(row?'beforeend':'afterbegin',
+  '<p class="inline-save-result" role="status">'+escapeHTML(message)+'</p>');
 }
 function openInlineTransaction(button){
  const wrapper=button?.closest?.('[data-inline-row-wrapper]');
@@ -783,7 +803,7 @@ function openInlineTransaction(button){
  const s=snapshot(),bundle=forecastFor(s),
   row=futureRows(bundle,s).find(r=>r.key===focused);
  if(!row){setNotice('That forecast has changed. Refresh the calendar and select the updated payment.');return true}
- closeInlineTransaction();
+ if(!closeInlineTransaction())return true;
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
  const nearby=rule?futureRows(bundle,s).filter(r=>r.recurringRuleId===rule.id&&r.date>=row.date).length:0;
  const helper='<p class="inline-editor-explanation" data-edit-impact>'+
@@ -803,6 +823,9 @@ function openInlineTransaction(button){
   editorFor(row,s,bundle?.rows||[])+settings+'</div>';
  wrapper.insertAdjacentHTML('beforeend',html);
  button.setAttribute('aria-expanded','true');
+ wrapper.querySelectorAll('[data-inline-transaction-editor] form').forEach(form=>{
+  form.dataset.initialValues=JSON.stringify([...new FormData(form)]);
+ });
  wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
  return true;
 }
@@ -2068,7 +2091,12 @@ document.addEventListener('submit',async e=>{
   const origin=draft.merchant;
   recurringDraft=null;transactionDetail=null;reviewNotice='Saved recurring forecast for '+origin+'.';
   transactionNotice=reviewNotice;
+  const inlineKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||
+   (form.hasAttribute('data-future-edit-form')?form.dataset.futureEditForm:'');
+  const savedMessage=form.hasAttribute('data-future-edit-form')?
+   (fields.scope==='all'?'Saved — this and future payments updated.':'Saved — only this payment changed.'):null;
   render();
+  if(savedMessage)confirmInlineSave(inlineKey,savedMessage);
  }catch(err){
   if(button)button.disabled=false;
   if(showRecurringScheduleChoice(form,err))return;
