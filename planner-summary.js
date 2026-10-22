@@ -519,7 +519,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers"><div class="summary-minimum">'+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal)+'<div class="summary-minimum">'+
   '<div class="summary-overline">'+(credit?'Lowest modeled card debt':'Lowest projected balance')+
   ' · next 3 years</div>'+
   '<strong class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
