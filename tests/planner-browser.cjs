@@ -431,7 +431,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'}).waitFor();
    assert.ok(await page.locator('.calendar-notice').innerText().then(x=>x.includes('recalculated')));
    const playground=page.locator('.calendar-detail-item').filter({hasText:'Playground one-time expense'});
-   await playground.locator('[data-calendar-edit]').click();
+   await playground.click();
    assert.equal(await quick.locator('[name=amount]').inputValue(),'25',
     'Existing predicted transaction opens in the calendar editor');
    await quick.locator('[name=amount]').fill('40');
@@ -445,7 +445,7 @@ const {chromium,webkit}=require('playwright');
     .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/,
     'Calendar-only edits persist across reload');
    await page.locator('.calendar-detail-item')
-    .filter({hasText:'Playground one-time expense'}).locator('[data-calendar-edit]').click();
+    .filter({hasText:'Playground one-time expense'}).click();
    await quick.locator('[data-calendar-skip]').click();
    assert.equal(await page.locator('.calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).count(),0,
