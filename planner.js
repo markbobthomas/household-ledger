@@ -885,7 +885,6 @@ function transactionsPage(bundle,s){
    desc=paired?row.from+' → '+row.to:row.account+' · '+
     (row.type==='income'?'Deposit':row.type==='refund'?'Refund':
      row.type==='transfer'?(row.cashDirection==='in'?'Transfer in':'Transfer out'):'Withdrawal / card purchase');
-  const canEdit=editingKey===row.key;
   return '<article class="future-item" data-future-item="'+escapeHTML(row.key)+'">'+
    '<div class="future-row"><div class="future-date">'+escapeHTML(dayLabel(row.date))+'</div>'+
    '<div class="future-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
@@ -893,9 +892,7 @@ function transactionsPage(bundle,s){
     (row.seriesKey&&state().predictions?.futureSeriesEdits?.[row.seriesKey]?' · SERIES EDITED':'')+'</small>'+
    '</div>'+
    '<div class="future-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':paired?'↔ ':'−')+cash(row.amount)+'</div>'+
-   '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">'+
-    (canEdit?'Close':'Edit')+'</button></div>'+
-   (canEdit?editorFor(row,s,bundle?.rows||[]):'')+'</article>';
+   '<button type="button" class="btn" data-edit-future="'+escapeHTML(row.key)+'">Details →</button></div></article>';
  }).join('');
  const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([k,v])=>
   v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter||
@@ -1005,7 +1002,7 @@ function historyPage(bundle,s){
   '<p>Every transaction retrieved from your connected accounts. These are bank records—not predictions.</p></div>'+
   '<span class="status-tag">'+records.length+' TRANSACTIONS</span></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
-  (recurringDraft?repeatingReviewForm(s):'')+
+  (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   '<section class="panel"><form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Search transactions<input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -1054,7 +1051,7 @@ function reviewsPage(bundle,s){
   '<p>We check bank history aggressively, but uncertain patterns need your decision before becoming future bills.</p></div>'+
   '<span class="status-tag">'+count+' PAYMENT'+(count===1?'':'S')+' TO REVIEW</span></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
-  (recurringDraft?repeatingReviewForm(s):'')+
+  (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   ((bundle?.duplicateChecks||[]).length?'<p class="audit-footnote">Duplicate protection: '+
     (bundle.duplicateChecks.length)+' overlapping forecast entr'+
     (bundle.duplicateChecks.length===1?'y was':'ies were')+
@@ -1278,10 +1275,33 @@ function render(){
  }
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
+ drawTransactionDetail(bundle,s);
 }
 document.addEventListener('click',async e=>{
+ if(e.target.closest?.('[data-close-transaction-detail]')){dismissTransaction();return}
+ const opening=e.target.closest?.('[data-open-transaction],[data-open-card-payment]');
+ if(opening){
+  if(opening.hasAttribute('data-open-transaction'))
+   openPrediction(opening.dataset.openTransaction,opening);
+  else{
+   const row=futureRows(forecastFor(snapshot()),snapshot()).find(r=>
+    r.kind==='movement'&&r.id===opening.dataset.openCardPayment);
+   if(row)openPrediction(row.key,opening);
+   else setNotice('This card payment has changed. Reopen its dated prediction.');
+  }
+  return;
+ }
+ const linkedSchedule=e.target.closest?.('[data-open-linked-schedule]');
+ if(linkedSchedule){
+  const id=linkedSchedule.dataset.openLinkedSchedule;
+  if(!(state().predictions?.futureRecurringRules||[]).some(r=>r.id===id))return;
+  activeTab='schedules';scheduleTarget=id;
+  scheduleMode=linkedSchedule.dataset.schedulePanel==='estimate'?'estimate':'edit';
+  transactionDetail={kind:'schedule',id,mode:scheduleMode};
+  render();return;
+ }
  const closeSchedule=e.target.closest?.('[data-schedule-close]');
- if(closeSchedule){scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render();return}
+ if(closeSchedule){transactionDetail=null;scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render();return}
  const fromActual=e.target.closest?.('[data-schedule-from-actual]');
  if(fromActual){
   const t=lastHistoryRows.find(r=>String(r.id)===fromActual.dataset.scheduleFromActual);
