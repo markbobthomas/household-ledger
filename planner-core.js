@@ -439,6 +439,7 @@ function project(snapshot,ledger,days=90){
   if(!account||!account.valid){diagnostics.unassigned.push({id:entry.id,accountId:aid});return;}
   const x={id:entry.id,accountId:String(aid),date:entry.date,amount:round(entry.amount),
    merchant:entry.merchant||'Future payment',type:entry.type||'transfer',kind,
+   category:entry.category||null,
    sourceAccountId:entry._forecastOriginalAccountId||entry.accountId||entry.fromAccountId||null,
    sourceMerchant:entry._forecastOriginalMerchant||entry.merchant||null,
    sourceType:entry._forecastOriginalType||entry.type||null,
