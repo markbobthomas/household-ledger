@@ -335,7 +335,11 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
   amountBasis:data.amountBasis==='estimate'||data.amountBasis==='fixed'?data.amountBasis:
    old?.amountBasis||'fixed',
-  amountWindows:Array.isArray(old?.amountWindows)?old.amountWindows.slice():[],
+  // Honor previously saved date-range amounts until the owner explicitly
+  // changes the repeating amount. A new "all future" edit supersedes them.
+  amountWindows:old&&Number(fields.amount)===Number(old.amount)&&
+   data.resetAmountWindows!=='on'&&Array.isArray(old.amountWindows)?
+    old.amountWindows.slice():[],
   originalAccountId:old?.originalAccountId||baseAccount,
   sourceAnchorDate:frequency==='every-4-weeks'?
    (old?.sourceAnchorDate&&samePhase(old.sourceAnchorDate,fields.date)?
@@ -511,22 +515,13 @@ function setScheduleEstimate(state,id,data,asOf){
  if(!r)throw Error('That schedule no longer exists.');
  if(!validAmount(data.amount))throw Error('Enter a positive estimated amount.');
  const value=round(data.amount),scope=String(data.scope||'all');
- if(scope==='all'){
-  r.amount=value;r.amountBasis='estimate';
-  // Schedule estimates supersede older all-future amount edits but not
-  // their unrelated date/account customizations.
-  const old=p.futureSeriesEdits?.[manualSeriesKey(id)];
-  if(old)delete old.amount;
-  return r;
- }
- if(scope!=='range')throw Error('Choose all future payments or a date range.');
- const from=String(data.from||''),through=String(data.through||'');
- if(!validDate(from)||!validDate(through)||from<=asOf||through<from||
-  daysBetween(through,asOf)>366)
-  throw Error('Choose a valid future date range within the next year.');
- r.amountWindows??=[];
- if(r.amountWindows.length>=50)throw Error('Too many custom forecast ranges; remove an older one first.');
- r.amountWindows.push({from,through,amount:value});
+ if(scope!=='all')throw Error('Edit one dated payment, or change the entire repeating schedule.');
+ r.amount=value;r.amountBasis='estimate';
+ // All future means ALL future: old date-range overrides are superseded,
+ // whereas individually saved transaction edits remain independent.
+ r.amountWindows=[];
+ const old=p.futureSeriesEdits?.[manualSeriesKey(id)];
+ if(old)delete old.amount;
  return r;
 }
 function removeScheduleEstimate(state,id,index){
