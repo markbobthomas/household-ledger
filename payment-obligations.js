@@ -75,14 +75,17 @@ function inferPayment(card,accounts,records,asOf){
   reason:recent.length>1?'Payments appear to use multiple funding accounts':
    'No reliable pair of monthly checking-to-card payments was found'};
  const match=recent[0],previous=net(shift(asOf,-59),shift(asOf,-30));
- const estimate=round(Math.max(lastThirty.amount,previous.count?previous.amount:0));
+ const estimate=round(Math.max(lastThirty.amount,previous.count?previous.amount:0)),
+  debt=Number(card.current);
  if(!(estimate>0))return {...result,eligible:false,
   reason:'No settled card purchases were found to support a positive payment estimate'};
+ if(card.current==null||!Number.isFinite(debt)||debt<=0)
+  return {...result,eligible:false,reason:'Current card debt is not positive and requires confirmation'};
  let next=plus(match.last.date,1);
  for(let i=0;i<18&&next<=asOf;i++)next=plus(next,1);
  return {...result,eligible:true,fromAccountId:match.id,
   fromName:accounts.find(a=>String(a.id)===match.id)?.name||match.id,
-  nextPaymentDate:next,estimatedAmount:estimate,
+  nextPaymentDate:next,estimatedAmount:estimate,firstAmount:round(Math.min(estimate,debt)),
   lastPaymentDate:match.last.date,
   reason:'Estimated from posted card charges and recurring matched bank transfers'};
 }
@@ -101,15 +104,29 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     // Estimated monthly autopay is provisionally forecast when the bank
     // demonstrates a unique, repeated linked card-payment history. Nothing
     // is saved or claimed as the issuer's actual statement amount.
-    for(let when=candidate.nextPaymentDate;when<=through;when=plus(when,1)){
+    for(let when=candidate.nextPaymentDate,n=0;when<=through;when=plus(when,1),n++){
+     const amount=n===0?candidate.firstAmount:candidate.estimatedAmount;
+     if(!(amount>0))continue;
+     // First card payment draws from existing card debt; later monthly
+     // payments require corresponding estimated future card charges.
+     if(n>0){
+      const chargeDay=shift(when,-15);
+      if(chargeDay>asOf)billEvents.push({
+       id:'card-spend-estimate|'+card.id+'|'+when,
+       accountId:String(card.id),date:chargeDay,amount,
+       type:'expense',merchant:card.name+' estimated monthly card spending',
+       source:'card-history-estimate',amountEstimate:'bank-activity-estimate'
+      });
+     }
      plans.push({id:'card-history-estimate|'+card.id+'|'+when,
       fromAccountId:candidate.fromAccountId,toAccountId:String(card.id),
-      anchorDate:when,amount:candidate.estimatedAmount,frequency:'once',
+      anchorDate:when,amount,frequency:'once',
+      merchant:card.name+' Credit-card payment (estimated)',
       origin:'card-history-estimate',status:'estimated',
       amountEstimate:'bank-activity-estimate'});
     }
     warnings.push(card.name+': provisional card withdrawals estimated from Plaid payment history. Confirm billing dates and statement amounts in Settings.');
-   }else warnings.push(card.name+': no November card withdrawal can be predicted yet. '+
+   }else warnings.push(card.name+': no card withdrawal can be predicted yet. '+
     candidate.reason+'. Set payment dates and funding account in Settings.');
   }
  const settled=new Map(records.filter(t=>t&&t.id).map(t=>[String(t.id),t]));
@@ -286,7 +303,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // confirmed full-statement autopay rule schedules a checking withdrawal.
    if(amount>0&&autopay&&!paid){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
-     anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay'};
+     anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay',
+     merchant:card.name+' Credit-card payment',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
     plannedCardPayments=round(plannedCardPayments+amount);
     obligations.push({id:plan.id,date:due,amount,fromAccountId:from.id,
