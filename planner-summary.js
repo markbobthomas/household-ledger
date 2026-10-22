@@ -455,6 +455,14 @@ function issues(bundle,accounts,chosen,prefs,ready){
   !ready(prefs?.paymentRules?.[a.id],a,accounts)).length;
  return pending+general+missing;
 }
+function rawBalanceMarkup(account,real){
+ const raw=account?.current;
+ const n=raw==null||raw===''?null:Number(raw);
+ const displayed=n!==null&&Number.isFinite(n)?money(n):'Not reported';
+ return '<div class="summary-bank"><small>'+(real?'Plaid current balance':'Demo current balance')+
+  '</small><strong data-bank-current-value>'+displayed+'</strong>'+
+  '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
+}
 function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
  const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
