@@ -6,15 +6,14 @@
 <meta name="theme-color" content="#151b21">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Household Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=trend-range1">
+<link rel="stylesheet" href="planner.css?v=ui-cleanup1">
 </head>
 <body>
 <main class="shell"><div class="content">
   <header class="topbar">
     <div>
-      <p class="eyebrow">HOUSEHOLD LEDGER / NEW FOUNDATION</p>
+      <p class="eyebrow">HOUSEHOLD LEDGER</p>
       <h1>Know your balance before the bill.</h1>
-      <p class="lead">A simpler, account-by-account view of what's coming in, what's leaving, and how much cash may be left.</p>
     </div>
     <div class="top-actions">
       <details class="planner-menu" id="planner-menu"><summary aria-label="Open other planning tools">☰ <span>Menu</span></summary>
@@ -28,7 +27,6 @@
         </div>
       </details>
       <span class="status-tag" id="source-type" aria-live="polite">DEMO DATA</span>
-      <label for="ledger-mode-switch" style="font-size:11px;color:var(--muted)">Source</label>
       <select id="ledger-mode-switch" class="mode-box" aria-label="Bank data source"><option value="demo">Demo</option><option value="real">Real / Plaid</option></select>
       <button class="btn primary" type="button" id="audit-launch" data-run-backtest hidden>Check accuracy</button>
       <button class="btn" type="button" id="refresh-bank" hidden>Refresh bank</button>
@@ -54,8 +52,8 @@
 <script src="planner-history.js?v=altpay1"></script>
 <script src="planner-core.js?v=three-year1"></script>
 <script src="planner-coverage.js?v=category-learning1"></script>
-<script src="planner-summary.js?v=trend-range1"></script>
-<script src="planner.js?v=three-year1"></script>
+<script src="planner-summary.js?v=ui-cleanup1"></script>
+<script src="planner.js?v=ui-cleanup1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>

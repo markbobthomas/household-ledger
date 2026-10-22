@@ -120,15 +120,14 @@ function postedDay(date){
    action=matches.length===1?'View schedule':matches.length>1?'Choose schedule':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row"><span class="calendar-transaction-name">'+
    esc(t.merchant||'Bank transaction')+
-   '<small>'+(t.pending?'Pending bank transaction':'Posted bank transaction')+'</small></span>'+
+   '<small>'+(t.pending?'Pending':'Posted')+'</small></span>'+
    '<strong class="'+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
    '</strong><button type="button" class="calendar-item-edit" data-calendar-history-plan="'+
    esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">'+action+'</button></div>';
  }).join('');
  return '<section class="calendar-day-detail calendar-actual-detail" data-calendar-detail>'+
   '<div class="calendar-detail-heading"><div><span>BANK HISTORY · NOT A PREDICTION</span><strong>'+
-   esc(dateLabel(date))+'</strong></div><div class="calendar-detail-balance"><small>Recorded transactions</small>'+
-   '<strong>'+rows.length+'</strong></div></div>'+
+   esc(dateLabel(date))+'</strong></div></div>'+
   (rows.length?'<div class="calendar-detail-items">'+body+'</div>':
    '<p class="calendar-empty">No bank transactions recorded on this date.</p>')+
   '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
@@ -226,22 +225,20 @@ function dayDetail(point,card){
   previous=previousIndex>=0?calendarContext.points[previousIndex].balance:point.balance,
   plus=events.reduce((n,e)=>n+Math.max(0,moneyDelta(e,card)),0),
   minus=events.reduce((n,e)=>n+Math.max(0,-moneyDelta(e,card)),0),
-  gaps=calendarContext.gaps.get(point.date)||[],
-  label=card?'Projected card debt':'Projected account balance';
+  gaps=calendarContext.gaps.get(point.date)||[];
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
   '<div class="calendar-detail-heading"><div><span>SELECTED DAY</span><strong>'+
-   esc(dateLabel(point.date))+'</strong></div><div class="calendar-detail-balance"><small>'+
-   label+' · end of day</small><strong>'+money(point.balance)+'</strong></div></div>'+
+   esc(dateLabel(point.date))+'</strong></div></div>'+
   '<div class="calendar-math">'+
    '<div><span>'+(previousIndex<0?'Reported starting balance':'Yesterday')+'</span><strong>'+money(previous)+'</strong></div>'+
    '<div><span>'+(card?'Debt increases':'Deposits')+'</span><strong class="in">+'+money(plus)+'</strong></div>'+
    '<div><span>'+(card?'Debt payments':'Withdrawals')+'</span><strong class="out">−'+money(minus)+'</strong></div>'+
    '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
   '<div class="calendar-day-transactions" aria-label="Predictions for selected date">'+
-   '<div class="calendar-day-transactions-head"><strong>Predicted transactions ('+events.length+
-   ')</strong><span>'+(events.length?'Tap a payment to edit':'No payments predicted')+'</span></div>'+
+   '<div class="calendar-day-transactions-head"><strong>Transactions ('+events.length+
+   ')</strong></div>'+
    (events.length?events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join(''):
-    '<p class="calendar-empty">No predicted payments on this date. The balance carries forward.</p>')+
+    '<p class="calendar-empty">No payments predicted. Balance carries forward.</p>')+
    '</div>'+
   (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
    gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
@@ -277,7 +274,7 @@ function monthlyPredictions(state){
    '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
  return '<details class="calendar-monthly-list" data-calendar-monthly'+(calendarMonthExpanded?' open':'')+'>'+
   '<summary>See all '+esc(monthName(calendarMonth))+' predictions ('+rows.length+')'+
-   '<span>Expand ↓</span></summary>'+
+   '</summary>'+
   '<p class="calendar-monthly-context">'+contextLabel+'</p>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
@@ -534,7 +531,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
    below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
   '</div></div>'+
   calendarGrid()+'</section>'+
-  '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend (3-year illustration)</summary>'+
+  '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
   '<section class="summary-stage summary-legacy">'+
   '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+
   [10,30,90,180,360,1095].map(n=>'<button type="button" data-trend-days="'+n+

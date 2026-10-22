@@ -77,6 +77,16 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),
     /All predictions/,'Advanced bulk prediction view remains available without a fourth tab');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
+   assert.equal(await page.locator('.topbar .lead').count(),0,
+    'Global header does not repeat the planner introduction');
+   assert.equal(await page.locator('.top-actions label[for="ledger-mode-switch"]').count(),0,
+    'The source selector has its own accessible name without an extra label');
+   await go('settings');
+   assert.equal(await page.locator('[aria-label="Not recurring decisions"]').count(),0,
+    'An empty recurrence-exclusion manager does not occupy space in Settings');
+   assert.equal(await page.locator('[aria-label="Recurring forecast changes"]').count(),0,
+    'Schedules, not a second Settings shortcut, own recurrence editing');
+   await go('summary');
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0,
     'No 30/60/90 period selectors in the simplified planner');
    assert.equal(await page.locator('.summary-low').count(),1,
@@ -88,6 +98,10 @@ const {chromium,webkit}=require('playwright');
     'Full-month prediction list is collapsed by default');
    assert.equal(await page.locator('.calendar-day-transactions .calendar-monthly-row').count(),0,
     'No selected-day payments are invented on an empty starting day');
+   assert.equal((await page.locator('.calendar-day-detail').innerText()).match(/No payments predicted/g)?.length,1,
+    'Empty days state the absence of transactions once');
+   assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
+    'The native monthly disclosure does not repeat Expand');
    await page.locator('.calendar-monthly-list > summary').click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),1,
     'Optional month list expands on demand');
@@ -135,9 +149,13 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-inline-transaction-editor]').count(),0);
 
    const selectedAria=await page.locator('.calendar-day.selected').getAttribute('aria-label'),
-    balanceText=await page.locator('.calendar-detail-balance strong').innerText();
+    balanceText=await page.locator('.calendar-math-total strong').innerText();
    assert.ok(selectedAria.includes(balanceText),
     'Detailed balance is identical to the calendar projected balance for that date');
+   assert.equal(await page.locator('.calendar-day-detail .calendar-detail-balance').count(),0,
+    'End-of-day balance does not repeat in the selected-day heading');
+   assert.equal(await page.locator('.calendar-math-total').count(),1,
+    'Only one end-of-day total remains at the bottom of the calculation');
    await page.locator('[data-calendar-actual-day]').last().click();
    assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,

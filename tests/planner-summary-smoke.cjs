@@ -32,8 +32,16 @@ for(const days of [1095]){
  assert.match(html,/Deposits/);
  assert.match(html,/Withdrawals/);
  assert.match(html,/End of day/);
+ assert.equal((html.match(/calendar-math-total/g)||[]).length,1,
+  'A selected date has one end-of-day total in its calculation footer');
+ assert.doesNotMatch(html,/calendar-detail-balance/,
+  'Do not repeat end-of-day balance in the selected date header');
+ assert.equal((html.match(/No payments predicted/g)||[]).length,1,
+  'An empty selected day explains its absence of payments once');
+ assert.doesNotMatch(html,/Expand ↓/,
+  'Native monthly disclosure should not also print a redundant expand prompt');
  assert.match(html,/data-calendar-add/,'Add an existing-day transaction without a tab change');
- assert.match(html,/Balance trend \(3-year illustration\)/);
+ assert.match(html,/Balance trend<\/summary>/);
  assert.match(html,/Illustration, not a guaranteed minimum/);
  assert.match(html,/everyday unplanned spending is excluded/);
  assert.equal(tool.getPoints(derived,iso(0),days).length,days+1);
