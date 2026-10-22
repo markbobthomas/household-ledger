@@ -34,6 +34,7 @@ jobs:
           node --check planner-coverage.js
           node --check account-forecast.js
           node --check planner-intelligence.js
+          node tests/planner-integrity-smoke.cjs
           node tests/planner-browser.cjs
           node tests/pilot-remove-account-browser.cjs
           node tests/planner-routine-smoke.cjs
