@@ -1357,7 +1357,7 @@ document.addEventListener('click',async e=>{
   if(scheduleRemoveTarget!==id){scheduleRemoveTarget=id;render();return}
   try{await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeRecurring(state(),id));
    scheduleMode='';scheduleTarget='';scheduleRemoveTarget='';
-   scheduleNotice='Removed this schedule only. Bank transactions and other schedules were not changed.';render()}
+   scheduleNotice='Removed this schedule only. Bank transactions and other schedules were not changed.';transactionDetail=null;render()}
   catch(e){scheduleNotice=String(e.message||e);render()}
   return;
  }
@@ -1384,8 +1384,7 @@ document.addEventListener('click',async e=>{
    all.find(r=>r.kind==='event'&&r.id===String(item.id)&&
     r.accountId===String(item.accountId));
   if(!row){setNotice('This prediction changed. Open Predictions to inspect it.');return}
-  calendar.openEditor({mode:'edit',row});
-  document.querySelector('[data-calendar-quick-form] [name=amount]')?.focus();
+  openPrediction(row.key,editCalendar);
   return;
  }
  if(e.target.closest('[data-calendar-cancel]')){calendar.closeEditor();return;}
@@ -1627,7 +1626,7 @@ document.addEventListener('click',async e=>{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.skip(state(),row.key,
     {label:row.merchant,date:row.date,accountId:row.accountId||row.fromAccountId,
      toAccountId:row.toAccountId}));
-   editingKey='';transactionNotice='Skipped '+row.merchant+' on '+dateLong(row.date)+'.';render();
+   editingKey='';transactionDetail=null;transactionNotice='Skipped '+row.merchant+' on '+dateLong(row.date)+'.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
@@ -1635,7 +1634,7 @@ document.addEventListener('click',async e=>{
  if(restore){
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.restore(state(),restore.dataset.restoreFuture));
-   editingKey='';transactionNotice='Forecast occurrence restored.';render();
+   editingKey='';transactionDetail=null;transactionNotice='Forecast occurrence restored.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
@@ -1643,7 +1642,7 @@ document.addEventListener('click',async e=>{
  if(removeAdded){
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.removeAdded(state(),removeAdded.dataset.removeAdded));
-   editingKey='';transactionNotice='Added transaction removed.';render();
+   editingKey='';transactionDetail=null;transactionNotice='Added transaction removed.';render();
   }catch(err){transactionNotice=String(err.message||err);render()}
   return;
  }
@@ -1782,7 +1781,7 @@ document.addEventListener('submit',async e=>{
    await commitForecastChange(()=>T.setScheduleEstimate(state(),form.dataset.scheduleEstimateForm,fields,s.asOf));
    scheduleNotice='Amount estimate applied only to the selected schedule and range.';
   }
-  scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';render();
+  scheduleMode='';scheduleTarget='';schedulePreset=null;scheduleRemoveTarget='';transactionDetail=null;render();
  }catch(error){if(submit)submit.disabled=false;
   scheduleNotice=String(error.message||error);
   // Preserve entered dates/amounts on error; don't reset the form.
@@ -1832,7 +1831,7 @@ document.addEventListener('submit',async e=>{
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
    model.records(state()),linked?[]:linkedHistoryIds(form)));
   const origin=draft.merchant;
-  recurringDraft=null;reviewNotice='Saved recurring forecast for '+origin+'.';
+  recurringDraft=null;transactionDetail=null;reviewNotice='Saved recurring forecast for '+origin+'.';
   transactionNotice=reviewNotice;
   render();
  }catch(err){
@@ -1884,6 +1883,7 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&transactionDetail){dismissTransaction();return}
  if(e.key==='Escape'&&document.querySelector('[data-calendar-quick-form]')){
   window.HouseholdPlannerSummary.closeEditor();
   return;
@@ -1942,7 +1942,7 @@ document.addEventListener('submit',async e=>{
     await commitForecastChange(()=>planner.saveEdit(state(),key,fields,accounts,asOf));
     transactionNotice='Updated only this predicted payment.';
    }
-   editingKey='';
+   editingKey='';transactionDetail=null;
   }else if(form.hasAttribute('data-future-new-form')){
    if(fields.frequency&&fields.frequency!=='once'){
     await commitForecastChange(()=>planner.defineRecurring(state(),fields,accounts,asOf,
