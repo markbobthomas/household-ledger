@@ -465,6 +465,7 @@ function rawBalanceMarkup(account,real){
 }
 function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
+ trendDays=1095; // Chart reset after switching account or bank refresh.
  const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
   (String(a.id)===String(chosen.id)?' selected':'')+'>'+
   esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
