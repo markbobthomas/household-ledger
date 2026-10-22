@@ -34,6 +34,12 @@ Product priorities:
 - Private Render's running deployment SHA has **not** been independently confirmed here. A GitHub merge or Pages publish does not establish the private server's deployed revision. See [DEPLOYMENT_STATUS.md](DEPLOYMENT_STATUS.md).
 - No new application work is pending from the previous request; wait for the next user-specified improvement.
 
+## Open UI/forecast questions (2026-10-22)
+
+- **Historical calendar action incorrectly says "Make recurring" for already confirmed schedules.** `planner-summary.js` `postedDay()` unconditionally uses that label. The separate History screen in `planner.js` tries to detect linked saved rules, but currently matches on account, type, normalized name **and exact amount**, which can miss variable bills. This is a display/recognition bug, not proof the actual transaction lacks a schedule. Proposed future fix: recognize confirmed schedules using stable identity/explicit history links, avoid fragile amount equality, handle multiple same-merchant rules without conflation; show **View/Edit schedule** when clearly linked, or a choice when ambiguous.
+- **Calendar "Transactions · Month (N)" is actually future-only.** `planner-summary.js` `getPoints()` starts at the current source snapshot date and `monthlyPredictions()` reads only those projected point events for the chosen account. Earlier real transactions appear only in historical calendar cells and the History tab; the monthly count is **not** all month-to-date activity. Proposed future fix: label the list **Upcoming predictions** with actual start/end dates and account; optionally show a separate historical count, with no double counting.
+- **Unverified private forecast coverage:** A short list might simply reflect the remaining days of the month or selected account, but could also expose an omitted recurring bill. The public code and a user-provided screenshot cannot establish which saved private schedules exist or whether Render has the same revision. Verify privately and safely by comparing saved schedule identifiers against canonical future-ledger events and posted-cycle reconciliation; no account data in GitHub.
+
 ## Historical decisions / why the app looks this way
 
 **Oct 15–18 — foundational app:** Early versions emphasized budgets, spending categorization and a synthetic recurrence/accuracy laboratory. Those experiments are preserved in the repo but are not the current product goal. Synthetic tests show algorithm behavior, not proven real-bank forecast accuracy.
@@ -75,6 +81,16 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Validation:** Docs only. Do not imply that banking/browser tests were re-run.
 - **Deployment:** No private Render deployment claimed.
 - **Next:** Continue from current `main` and append the next task outcome here.
+
+
+### 2026-10-22 — explain historical calendar recurrence buttons and two-entry monthly forecast
+
+- **Goal:** Determine why two already scheduled posted utility transactions offer “Make recurring,” and why the October monthly transaction list contains only two items.
+- **Findings:** Calendar historical row actions are hardcoded in `planner-summary.js:postedDay()`, unlike History's partial linked-rule lookup; History's exact-amount requirement can miss variable charges. The monthly list counts only projected, future-dated events for the chosen account (starting at the source as-of date), while prior October bank postings are displayed separately as actuals. A small future list alone does not prove incorrect forecasting.
+- **Decision:** Explain the distinction, recommend stable schedule-aware historical actions and a clearer **Upcoming predictions** label; investigate possible missing scheduled future events only with private/authorized forecast data.
+- **Changes:** Documentation only; no runtime, forecast or bank-state modifications. No new recurring schedule was created.
+- **Verification:** Read `main` versions of `planner-summary.js`, `planner.js`, `planner-transactions.js` and `PROJECT_LEDGER.md`; private Render deployment and private recurring-rule data unavailable for verification. No browser or banking tests run for this docs change.
+- **Next action:** With explicit request to fix, implement guarded schedule-aware buttons, forecast-range labeling, and browser regressions; validate on fictional fixtures and separately verify Render.
 
 ## Reusable new-chat prompt
 
