@@ -1017,48 +1017,80 @@ function applyScheduleSearch(root=document){
   group.hidden=rows.length===0;
   const count=group.querySelector('[data-schedule-group-count]'),
    total=group.querySelector('[data-schedule-group-total]'),
-   sum={out:0,in:0,transfers:0};
+   month={out:0,in:0,transfers:0},
+   year={out:0,in:0,transfers:0};
   if(count)count.textContent='('+rows.length+')';
   for(const row of rows)
-   for(const key of ['out','in','transfers'])
-    sum[key]+=Number(row.dataset['scheduleMonthly'+key[0].toUpperCase()+key.slice(1)]||0);
-  if(total)total.textContent=formatScheduleTotals(sum);
+   for(const key of ['out','in','transfers']){
+    const suffix=key[0].toUpperCase()+key.slice(1);
+    month[key]+=Number(row.dataset['scheduleMonthly'+suffix]||0);
+    year[key]+=Number(row.dataset['scheduleYearly'+suffix]||0);
+   }
+  if(total){
+   const asOf=root.querySelector('[data-schedule-as-of]')?.dataset.scheduleAsOf;
+   if(asOf){
+    const period=scheduleTotalPeriod(asOf);
+    total.textContent=period.label+': '+formatScheduleTotals(month)+
+     ' · 12-month total: '+formatScheduleTotals(year)+
+     ' · avg/month: '+formatScheduleTotals(year,{average:true});
+   }
+  }
  }
  const empty=root.querySelector('[data-schedule-search-empty]');
  if(empty)empty.hidden=shown!==0||!q;
 }
-function scheduleMonthAmounts(rule,bundle,asOf,through){
- const result={out:0,in:0,transfers:0};
+function scheduleTotalPeriod(asOf){
+ const y=Number(asOf.slice(0,4)),m=Number(asOf.slice(5,7));
+ const iso=(month,day)=>new Date(Date.UTC(y,month,day)).toISOString().slice(0,10);
+ const start=iso(m,1),monthEnd=iso(m+1,0),yearEnd=iso(m+12,0),
+  label=new Date(Date.UTC(y,m,1)).toLocaleDateString('en-US',
+   {month:'short',year:'numeric',timeZone:'UTC'});
+ return {start,monthEnd,yearEnd,label};
+}
+function schedulePeriodAmounts(rule,bundle,from,to){
+ const total={out:0,in:0,transfers:0};
  for(const row of bundle?.ledger||[]){
-  if(!(row.date>asOf&&row.date<=through)||
+  if(!(row.date>=from&&row.date<=to)||
    String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')!==String(rule.id))continue;
-  const average=Number(row.amount)/12;
-  if(row.kind==='movement')result.transfers+=average;
-  else if(['income','refund'].includes(row.type))result.in+=average;
-  else result.out+=average;
+  const amount=Math.round(Number(row.amount)*100);
+  if(!Number.isFinite(amount)||amount<=0)continue;
+  const kind=row.kind==='movement'?'transfers':
+   ['income','refund'].includes(row.type)?'in':'out';
+  total[kind]+=amount;
  }
- return result;
+ // Sum in cents to avoid floating rounding errors across many deposits.
+ return total;
 }
-function formatScheduleTotals({out=0,in:income=0,transfers=0}){
- const parts=[];
- if(out)parts.push('Out '+cash(out)+'/mo');
- if(income)parts.push('In '+cash(income)+'/mo');
- if(transfers)parts.push('Transfers '+cash(transfers)+'/mo');
- return parts.join(' · ')||cash(0)+'/mo';
-}
-function scheduleCategorySummary(items,bundle,asOf,through){
- // Use canonical dated predictions after individual edits and posted-coverage matching.
+function sumScheduleAmounts(items,bundle,from,to){
  const total={out:0,in:0,transfers:0};
  for(const {rule} of items){
-  const a=scheduleMonthAmounts(rule,bundle,asOf,through);
-  for(const key of ['out','in','transfers'])total[key]+=a[key];
+  const value=schedulePeriodAmounts(rule,bundle,from,to);
+  for(const key of ['out','in','transfers'])total[key]+=value[key];
  }
- return formatScheduleTotals(total);
+ return total;
+}
+function scheduleAmountText(cents,{average=false}={}){
+ const amount=cents/(average?1200:100);
+ return cash(amount);
+}
+function formatScheduleTotals(total,{average=false}={}){
+ const parts=[];
+ if(total.out)parts.push('Out '+scheduleAmountText(total.out,{average}));
+ if(total.in)parts.push('In '+scheduleAmountText(total.in,{average}));
+ if(total.transfers)parts.push('Transfers '+scheduleAmountText(total.transfers,{average}));
+ return parts.join(' · ')||(average?'$0/mo':'$0');
+}
+function scheduleCategorySummary(items,bundle,period){
+ const month=sumScheduleAmounts(items,bundle,period.start,period.monthEnd),
+  year=sumScheduleAmounts(items,bundle,period.start,period.yearEnd);
+ return period.label+': '+formatScheduleTotals(month)+
+  ' · 12-month total: '+formatScheduleTotals(year)+
+  ' · avg/month: '+formatScheduleTotals(year,{average:true});
 }
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
-  nextYear=shiftDay(s.asOf,365),tomorrow=shiftDay(s.asOf,1),
+  totalPeriod=scheduleTotalPeriod(s.asOf),tomorrow=shiftDay(s.asOf,1),
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
  const indexed=rules.map((rule,index)=>({rule,index}));
@@ -1100,12 +1132,15 @@ function schedulesPage(bundle,s){
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
   const number=index+1,title=escapeHTML(r.scheduleLabel||r.merchant),
    pendingRemove=scheduleRemoveTarget===r.id,
-   monthly=scheduleMonthAmounts(r,bundle,s.asOf,nextYear),
+   monthly=schedulePeriodAmounts(r,bundle,totalPeriod.start,totalPeriod.monthEnd),
+   yearly=schedulePeriodAmounts(r,bundle,totalPeriod.start,totalPeriod.yearEnd),
    searchText=[r.scheduleLabel,r.merchant,categoryOf(r)].filter(Boolean).join(' ').toLowerCase();
   return '<article class="panel schedule-card" data-schedule-card="'+id+
    '" data-schedule-number="'+number+'" data-schedule-search-text="'+escapeHTML(searchText)+
    '" data-schedule-monthly-out="'+monthly.out+'" data-schedule-monthly-in="'+monthly.in+
-   '" data-schedule-monthly-transfers="'+monthly.transfers+'">'+
+   '" data-schedule-monthly-transfers="'+monthly.transfers+
+   '" data-schedule-yearly-out="'+yearly.out+'" data-schedule-yearly-in="'+yearly.in+
+   '" data-schedule-yearly-transfers="'+yearly.transfers+'">'+
    '<div class="schedule-compact-row">'+
    '<button class="schedule-row-main" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
@@ -1156,7 +1191,7 @@ function schedulesPage(bundle,s){
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
     '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
     ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
-    scheduleCategorySummary(items,bundle,s.asOf,nextYear)+'</span></div>'+
+    scheduleCategorySummary(items,bundle,totalPeriod)+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
@@ -1164,7 +1199,8 @@ function schedulesPage(bundle,s){
   '<h2>Payment schedules</h2><p>Edit any schedule or an individual upcoming payment.</p></div>'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  '<div class="schedule-toolbar" aria-label="Schedule organization">'+
+  '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
+   '" aria-label="Schedule organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Sort <select data-schedule-sort>'+
