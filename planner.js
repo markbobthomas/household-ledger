@@ -999,6 +999,8 @@ function scheduleFields(r,isNew,s){
    '</div>';
  }
 function applyScheduleSearch(root=document){
+ // Non-browser forecast integration tests provide deliberately minimal DOM mocks.
+ if(!root||typeof root.querySelector!=='function'||typeof root.querySelectorAll!=='function')return;
  const input=root.querySelector('[data-schedule-search]');
  if(!input)return;
  const q=String(scheduleSearch||'').trim().toLowerCase();
