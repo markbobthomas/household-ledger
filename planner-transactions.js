@@ -93,7 +93,8 @@ function applySeries(source,baseDate,seriesKey,rules){
  const useCalendar=change.calendarDay&&change.cadence!=='twice monthly';
  const date=useCalendar?baseDate.slice(0,7)+'-'+String(Math.min(change.calendarDay,monthEnd(baseDate.slice(0,7)))).padStart(2,'0'):
   shift(baseDate,Number(change.dayOffset)||0);
- return {...source,date,amount:change.amount,
+ return {...source,date,amount:source.scopedEstimate||!validAmount(change.amount)?
+  source.amount:change.amount,
   ...(change.merchant?{merchant:change.merchant}:{}),
   ...(change.accountId?{accountId:change.accountId,account:change.accountId}:{}),
   ...(change.fromAccountId?{fromAccountId:change.fromAccountId}:{}),
@@ -354,7 +355,13 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   ...(old?.sourceAddedId||reference?.addedId?{sourceAddedId:old?.sourceAddedId||reference?.addedId}:{}),
   ...(old?.sourceKey||reference?.key?{sourceKey:old?.sourceKey||reference?.key}:{})};
  const index=p.futureRecurringRules.findIndex(r=>r.id===id);
- if(index<0)p.futureRecurringRules.push(rule);else p.futureRecurringRules[index]=rule;
+ if(index<0)p.futureRecurringRules.push(rule);
+ else{
+  p.futureRecurringRules[index]=rule;
+  // Explicit edits to the authoritative schedule replace parallel legacy
+  // series edits to prevent hidden amount/date overrides.
+  delete p.futureSeriesEdits?.[manualSeriesKey(id)];
+ }
  // Explicitly transferring posted examples to a newly created independent
  // bill prevents one bank record being "owned" by both saved schedules.
  if(separate&&chosen.length){
@@ -495,7 +502,8 @@ function scheduleAmount(rule,date){
  const override=windows.filter(w=>validDate(w.from)&&validDate(w.through)&&
   w.from<=date&&date<=w.through&&validAmount(w.amount)).at(-1);
  return {amount:round(override?.amount??rule.amount),
-  estimated:override?true:rule.amountBasis==='estimate'};
+  estimated:override?true:rule.amountBasis==='estimate',
+  scoped:Boolean(override)};
 }
 function setScheduleEstimate(state,id,data,asOf){
  const p=ensure(state),r=p.futureRecurringRules.find(v=>v.id===id);
@@ -503,7 +511,12 @@ function setScheduleEstimate(state,id,data,asOf){
  if(!validAmount(data.amount))throw Error('Enter a positive estimated amount.');
  const value=round(data.amount),scope=String(data.scope||'all');
  if(scope==='all'){
-  r.amount=value;r.amountBasis='estimate';return r;
+  r.amount=value;r.amountBasis='estimate';
+  // Schedule estimates supersede older all-future amount edits but not
+  // their unrelated date/account customizations.
+  const old=p.futureSeriesEdits?.[manualSeriesKey(id)];
+  if(old)delete old.amount;
+  return r;
  }
  if(scope!=='range')throw Error('Choose all future payments or a date range.');
  const from=String(data.from||''),through=String(data.through||'');
@@ -527,15 +540,15 @@ function generatedRecurring(rules,asOf,through){
  for(const r of rules||[]){
   for(const d of recurrenceDates(r,asOf,through)){
    const estimated=scheduleAmount(r,d),amount=estimated.amount,
-    merchant=r.scheduleLabel||r.merchant;
+    merchant=r.scheduleLabel||r.merchant,scopedEstimate=estimated.scoped;
    if(r.kind==='movement'){
     plans.push({id:'user|'+r.id+'|'+d,anchorDate:d,frequency:'once',
      amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
-     merchant,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     merchant,scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
      seriesRuleId:r.id,source:'user-recurring'});
    }else{
     events.push({id:'user|'+r.id+'|'+d,date:d,amount,
-     merchant,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     merchant,scopedEstimate,amountEstimate:estimated.estimated?'schedule-estimate':null,
      accountId:r.accountId,type:r.type,category:'Confirmed recurring',
      cashDirection:r.cashDirection,source:'user-recurring',cadence:r.frequency,
      ruleId:r.id,_seriesKey:manualSeriesKey(r.id),_seriesDate:d});
