@@ -1033,7 +1033,9 @@ function schedulesPage(bundle,s){
    (wins.length?'<details class="schedule-legacy-windows"><summary>'+wins.length+
     ' previously saved amount exception'+(wins.length===1?'':'s')+'</summary>'+
     '<p>Older date-range estimates are still included so your balances do not change unexpectedly. '+
-    'You can clear an old rule or change a specific payment below.</p>'+windows+'</details>':'')+
+    'You can clear an old rule or change a specific payment below. '+
+    'Changing the repeating amount for all future payments will replace these older rules.</p>'+
+    windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
      '<p class="plan-edit-guide">Two choices: change the repeating schedule for all future payments, '+
       'or open a dated payment below to change only that one.</p>'+
@@ -1357,7 +1359,7 @@ function settingsPage(bundle,s,chosen){
    '<div class="section-title"><h2>Recurring payment changes</h2>'+
     '<span class="status-tag">'+Object.keys(state().predictions?.futureSeriesEdits||{}).length+' CUSTOMIZED</span></div>'+
    '<p>To change all future payments, edit the repeating defaults in Schedules. To change one date, click that payment in Calendar or Schedules.</p>'+
-   '<button type="button" class="btn" data-view="transactions">Manage future payments</button>'+
+   '<button type="button" class="btn" data-view="schedules">Manage schedules</button>'+
    '</section>'+
   auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
