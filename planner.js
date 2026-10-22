@@ -566,7 +566,7 @@ function editorFor(row,s,records,opts={}){
    'To change every future payment, edit Schedule settings above.</p></fieldset>':
   '<fieldset class="future-scope"><legend>Apply changes to</legend>'+
   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
-  '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
+  '<label><input type="radio" name="scope" value="all"> This and future payments</label>'+
   '<p>For a repeating payment, choose all future to create or change its schedule. '+
    'Only this payment keeps all other dates unchanged.</p></fieldset>'+
   '<div class="future-repeat-fields" hidden>'+
@@ -785,9 +785,12 @@ function openInlineTransaction(button){
  if(!row){setNotice('That forecast has changed. Refresh the calendar and select the updated payment.');return true}
  closeInlineTransaction();
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
- const helper=rule?'<p class="inline-editor-explanation"><strong>Only this date:</strong> '+
-  'The repeating payment plan is unchanged. Other dates keep their amounts and accounts.</p>':
-  '<p class="inline-editor-explanation">Edit the values directly below. Actual posted bank records stay untouched.</p>';
+ const nearby=rule?futureRows(bundle,s).filter(r=>r.recurringRuleId===rule.id&&r.date>=row.date).length:0;
+ const helper='<p class="inline-editor-explanation" data-edit-impact>'+
+  (rule?'Change this date only, or choose all future to update the repeating plan ('+nearby+
+   ' upcoming payments in your forecast).':
+   row.seriesKey?'Update one payment, or confirm changes for later recurring payments.':
+   'Edit these values here. Actual posted bank records remain read-only.')+'</p>';
  const settings=rule?'<details class="inline-plan-settings">'+
   '<summary>Edit repeating plan defaults <small>affects other scheduled dates</small></summary>'+
   '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
@@ -797,7 +800,7 @@ function openInlineTransaction(button){
    '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
  const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
   helper+relatedCardCalculation(bundle,row)+
-  editorFor(row,s,bundle?.rows||[],{oneOnly:!!rule})+settings+'</div>';
+  editorFor(row,s,bundle?.rows||[])+settings+'</div>';
  wrapper.insertAdjacentHTML('beforeend',html);
  button.setAttribute('aria-expanded','true');
  wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
@@ -2157,7 +2160,7 @@ document.addEventListener('submit',async e=>{
      const existingCadence=cadenceOption(row.cadence);
      // Converting an inferred payroll phase to an explicit recurring rule
      // must retain its distinct four-week identity.
-     const useSeries=Boolean(row.seriesKey&&
+     const useSeries=Boolean(!row.recurringRuleId&&row.seriesKey&&
       fields.frequency===existingCadence&&row.cadence&&!row.addedId&&
       !form.dataset.historyLinksChanged&&
       row.amountEstimate!=='four-week-paycheck');
@@ -2295,10 +2298,11 @@ document.addEventListener('change',e=>{
  }
  if(e.target.name==='scope'){
   const form=e.target.closest('[data-future-edit-form]');
-  const impact=document.querySelector('[data-edit-impact]');
+  const impact=form?.closest('[data-inline-transaction-editor]')?.querySelector('[data-edit-impact]')||
+   document.querySelector('[data-edit-impact]');
   if(impact)impact.textContent=e.target.value==='all'?
-   'This and all future: the repeating forecast from this date forward will change. Past bank transactions never change.':
-   'This payment only: just this date and amount will change. Other recurring payments stay as they are.';
+   'All future payments beginning with this date will change. Posted bank transactions are never changed.':
+   'Only this dated payment will change. Other scheduled payments stay as they are.';
   const section=form?.querySelector('.future-repeat-fields');
   if(section)section.hidden=e.target.value!=='all';
   if(e.target.value==='all')updateHistoryLinks(form);
