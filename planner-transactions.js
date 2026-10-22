@@ -212,7 +212,8 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   if(!Number.isInteger(secondDay)||secondDay<1||secondDay>31||
    secondDay===Number(fields.date.slice(-2)))throw Error('Choose a different second payday (1–31)');
  }
- const p=ensure(state),requestedId=String(data.existingRuleId||'');
+ const p=ensure(state),requestedId=String(data.existingRuleId||''),
+  separate=data.separateSchedule===true||data.separateSchedule==='yes'||data.separateSchedule==='on';
  const baseAccount=reference?.kind==='movement'?String(reference.sourceAccountId||reference.fromAccountId):
   String(reference?.sourceAccountId||reference?.accountId||fields.accountId);
  const originalMerchant=reference?.originalMerchant||reference?.sourceMerchant||reference?.merchant||fields.merchant;
@@ -224,12 +225,23 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),
   frequency==='every-4-weeks'?'phase'+phaseOf(fields.date):round(originalAmount)]
   .map(encodeURIComponent).join('|');
+ // A separately named obligation has a durable payment-stream ID, not a
+ // merchant/date/amount identity. Both bills may post on the same day.
+ if(separate){
+  if(reference?.recurringRuleId||requestedId)
+   throw Error('Create a separate schedule without selecting an existing one.');
+  const prefix='manual|stream|'+[transfer?'movement':'event',baseAccount,
+   merchantKey(originalMerchant)].map(encodeURIComponent).join('|')+'|';
+  let n=1;
+  while(p.futureRecurringRules.some(r=>r.id===prefix+n))n++;
+  id=prefix+n;
+ }
  // Different historical rows can be labeled expense vs ACH transfer, but
  // refer to the same one mortgage payment. Reuse its existing rule instead
  // of saving two recurring schedules with distinct source type identities.
  // Account and amount are required; two different paying accounts, or a
  // real internal transfer and an expense, must remain separate.
- if(!reference?.recurringRuleId){
+ if(!reference?.recurringRuleId&&!separate){
   const sameMerchant=p.futureRecurringRules.filter(r=>
    r.kind===(transfer?'movement':'event')&&
    String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
@@ -273,7 +285,9 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  // Plaid descriptions to the same manually named utility or paycheck.
  const phaseRecords=rows=>frequency==='every-4-weeks'?
   rows.filter(t=>samePhase(t.date,fields.date)):rows;
- const autoLinks=phaseRecords(candidates.filter(t=>sameDirection(t,forecastType)&&
+ // Do not claim ALL same-merchant bank transactions for a new independent
+ // stream. Its bank evidence must be individually selected by the owner.
+ const autoLinks=separate?[]:phaseRecords(candidates.filter(t=>sameDirection(t,forecastType)&&
   merchantKey(t.merchant||t.name)===merchantKey(originalMerchant)));
  // Same employer, opposite paycheck phase is deliberately NOT linked as
  // source evidence for this four-week rule.
@@ -283,7 +297,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  // The user may label a bill "Electric" while Plaid calls it "PSE".
  // An explicitly linked bank payee must also merge with any existing rule
  // that already owns that same bank payee, not create a duplicate schedule.
- if(!reference?.recurringRuleId&&evidence.length){
+ if(!reference?.recurringRuleId&&!separate&&evidence.length){
   const overlapping=p.futureRecurringRules.filter(r=>
    r.kind===(transfer?'movement':'event')&&
    String(r.originalAccountId||r.accountId||r.fromAccountId)===baseAccount&&
@@ -312,6 +326,10 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(!names.length)throw Error('Enter a merchant name');
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
+  scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
+  amountBasis:data.amountBasis==='estimate'||data.amountBasis==='fixed'?data.amountBasis:
+   old?.amountBasis||'fixed',
+  amountWindows:Array.isArray(old?.amountWindows)?old.amountWindows.slice():[],
   originalAccountId:old?.originalAccountId||baseAccount,
   sourceAnchorDate:frequency==='every-4-weeks'?
    (old?.sourceAnchorDate&&samePhase(old.sourceAnchorDate,fields.date)?
@@ -457,18 +475,56 @@ function removeRecurring(state,id){
  for(const key of Object.keys(p.futureTransactionEdits||{}))
   if(key.includes(prefix))delete p.futureTransactionEdits[key];
 }
+
+// A default amount applies to every occurrence. A dated estimate replaces
+// only occurrences in its interval; latest explicit interval wins.
+function scheduleAmount(rule,date){
+ const windows=Array.isArray(rule.amountWindows)?rule.amountWindows:[];
+ const override=windows.filter(w=>validDate(w.from)&&validDate(w.through)&&
+  w.from<=date&&date<=w.through&&validAmount(w.amount)).at(-1);
+ return {amount:round(override?.amount??rule.amount),
+  estimated:override?true:rule.amountBasis==='estimate'};
+}
+function setScheduleEstimate(state,id,data,asOf){
+ const p=ensure(state),r=p.futureRecurringRules.find(v=>v.id===id);
+ if(!r)throw Error('That schedule no longer exists.');
+ if(!validAmount(data.amount))throw Error('Enter a positive estimated amount.');
+ const value=round(data.amount),scope=String(data.scope||'all');
+ if(scope==='all'){
+  r.amount=value;r.amountBasis='estimate';return r;
+ }
+ if(scope!=='range')throw Error('Choose all future payments or a date range.');
+ const from=String(data.from||''),through=String(data.through||'');
+ if(!validDate(from)||!validDate(through)||from<=asOf||through<from||
+  daysBetween(through,asOf)>366)
+  throw Error('Choose a valid future date range within the next year.');
+ r.amountWindows??=[];
+ if(r.amountWindows.length>=50)throw Error('Too many custom forecast ranges; remove an older one first.');
+ r.amountWindows.push({from,through,amount:value});
+ return r;
+}
+function removeScheduleEstimate(state,id,index){
+ const r=ensure(state).futureRecurringRules.find(v=>v.id===id);
+ if(!r)throw Error('The saved schedule no longer exists.');
+ if(!Number.isInteger(index)||index<0||index>=r.amountWindows?.length)
+  throw Error('That forecast estimate no longer exists.');
+ r.amountWindows.splice(index,1);
+}
 function generatedRecurring(rules,asOf,through){
  const events=[],plans=[];
  for(const r of rules||[]){
   for(const d of recurrenceDates(r,asOf,through)){
-   const amount=r.amount;
+   const estimated=scheduleAmount(r,d),amount=estimated.amount,
+    merchant=r.scheduleLabel||r.merchant;
    if(r.kind==='movement'){
     plans.push({id:'user|'+r.id+'|'+d,anchorDate:d,frequency:'once',
      amount,fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
-     merchant:r.merchant,seriesRuleId:r.id,source:'user-recurring'});
+     merchant,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     seriesRuleId:r.id,source:'user-recurring'});
    }else{
     events.push({id:'user|'+r.id+'|'+d,date:d,amount,
-     merchant:r.merchant,accountId:r.accountId,type:r.type,category:'Confirmed recurring',
+     merchant,amountEstimate:estimated.estimated?'schedule-estimate':null,
+     accountId:r.accountId,type:r.type,category:'Confirmed recurring',
      cashDirection:r.cashDirection,source:'user-recurring',cadence:r.frequency,
      ruleId:r.id,_seriesKey:manualSeriesKey(r.id),_seriesDate:d});
    }
@@ -528,7 +584,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
 }
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,findExamples,bankDirection,sameDirection,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,matchesRecurring,postedCoverage,
+ frequencies,findExamples,bankDirection,sameDirection,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,
  recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
