@@ -534,7 +534,7 @@ function updateHistoryLinks(form){
    ' · '+cash(t.amount)+'</label>').join('')||
    '<p class="audit-footnote">No matching posted bank transactions. Try a different payee search, or save without linking.</p>');
 }
-function editorFor(row,s,records){
+function editorFor(row,s,records,opts={}){
  const accounts=activeAccounts(s),isMovement=row.kind==='movement';
  const kind=row.type||'expense',date=row.date,merchant=row.merchant;
  const options=['expense','income','refund','transfer'].map(type=>
@@ -559,11 +559,16 @@ function editorFor(row,s,records){
  const currentSeries=row.seriesKey?state().predictions?.futureSeriesEdits?.[row.seriesKey]:null;
  const selectedRule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
  const cadence=selectedRule?.frequency||cadenceOption(row.cadence);
- const scope='<fieldset class="future-scope"><legend>Apply changes to</legend>'+
+ const scope=opts.oneOnly?
+  '<fieldset class="future-scope plan-single-scope"><legend>Change affects</legend>'+
+   '<label><input type="radio" name="scope" value="one" checked> Only this payment</label>'+
+   '<p>Changing or skipping this payment does not change the schedule or any other date. '+
+   'To change every future payment, edit Schedule settings above.</p></fieldset>':
+  '<fieldset class="future-scope"><legend>Apply changes to</legend>'+
   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
   '<label><input type="radio" name="scope" value="all"> This and all future payments</label>'+
-  '<p>Even if this payment was not detected as recurring, you can define its schedule. We match recurring bank history by account, payee, timing and money direction. Amounts can vary; your confirmed schedule takes priority.</p>'+
-  '</fieldset>'+
+  '<p>For a repeating payment, choose all future to create or change its schedule. '+
+   'Only this payment keeps all other dates unchanged.</p></fieldset>'+
   '<div class="future-repeat-fields" hidden>'+
    '<div class="future-fields"><label>Repeat frequency'+frequencyChoices(cadence)+'</label>'+
    '<label class="future-second-day"'+(cadence==='twice-monthly'?'':' hidden')+'>Second day of month (1–31)'+
@@ -573,9 +578,11 @@ function editorFor(row,s,records){
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
   scope+
   '<div class="future-fields">'+fields+'</div>'+
-  '<p class="audit-footnote">Individual exceptions and repeating rules are separate. '+
+  '<p class="audit-footnote">'+(opts.oneOnly?
+    'You are editing one date within this payment plan. The repeating rule stays unchanged. ':
+    'You are editing a forecast, not a posted bank transaction. ')+
    (isMovement?'Both linked accounts update together. ':'')+
-   'Forecast edits never change actual bank transactions.</p>'+
+   'Actual bank transactions are never changed.</p>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Save changes</button>'+
    '<button class="btn" type="button" data-cancel-future>Cancel</button>'+
    (row.addedId?'<button class="btn" type="button" data-remove-added="'+escapeHTML(row.addedId)+'">Remove</button>':
