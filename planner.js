@@ -1532,7 +1532,7 @@ document.addEventListener('click',async e=>{
     date:d.nextDate,type:d.type,frequency:d.frequency||'monthly',
     amountBasis:'estimate',historyExampleId:String(t.id)};
    scheduleMode='new';scheduleTarget='';scheduleNotice='';
-   transactionDetail={kind:'schedule',id:'new',mode:'new'};render();
+   transactionDetail=null;activeTab='schedules';render();
   }catch(err){scheduleNotice=String(err.message||err);render()}
   return;
  }
@@ -1553,7 +1553,7 @@ document.addEventListener('click',async e=>{
    frequency:rule.frequency,date:next||shiftDay(snapshot().asOf,1),
    amountBasis:'estimate'};
   scheduleMode='new';scheduleTarget='';scheduleNotice='';
-  transactionDetail={kind:'schedule',id:'new',mode:'new'};render();return;
+  transactionDetail=null;activeTab='schedules';render();return;
  }
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
  const scheduleEstimate=e.target.closest?.('[data-schedule-estimate]');
