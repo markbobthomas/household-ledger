@@ -553,16 +553,21 @@ const {chromium,webkit}=require('playwright');
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    if(!await water.locator('[data-schedule-inline-plan]').count())
     await water.locator('[data-schedule-edit]').click();
-   await water.locator('[data-plan-estimates] > summary').click();
-   const amountForm=water.locator('[data-schedule-estimate-form]');
-   await amountForm.locator('[name=amount]').fill('175');
-   await amountForm.locator('[name=from]').fill('2026-12-01');
-   await amountForm.locator('[name=through]').fill('2026-12-31');
-   await amountForm.locator('button[type=submit]').click();
+   assert.equal(await water.locator('[data-plan-estimates]').count(),0,
+    'There is no separate option to batch-edit an arbitrary set of dates');
+   assert.equal(await water.locator('[data-schedule-estimate-form]').count(),0,
+    'Range amount forms are removed');
+   // Set a specific December amount by expanding its own payment row.
+   await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).click();
+   let decemberEdit=water.locator('[data-inline-transaction-editor] .future-edit-form');
+   assert.equal(await decemberEdit.locator('[name=scope][value=one]').isChecked(),true);
+   await decemberEdit.locator('[name=amount]').fill('175');
+   await decemberEdit.locator('button[type=submit]').click();
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
-   assert.match(await water.locator('.inline-save-result').innerText(),/Estimate saved/);
+   assert.match(await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).innerText(),/175/,
+    'An individual December estimate is set directly on December, without a date range');
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
-    'Schedule remains expanded after saving its dated estimate');
+    'The repeating schedule stays expanded after changing one date');
    const november=water.locator('[data-schedule-occurrence-key]').filter({hasText:'Nov 10'}).first();
    assert.equal(await november.count(),1,'November payment is visible directly in its plan');
    await november.click();
@@ -578,7 +583,7 @@ const {chromium,webkit}=require('playwright');
     .filter({hasText:'Nov 10'}).innerText(),/147/);
    assert.match(await water.locator('[data-schedule-occurrence-key]')
     .filter({hasText:'Dec 10'}).innerText(),/175/,
-    'December keeps its independently estimated amount');
+    'December keeps its independent one-date override');
    await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).click();
    assert.equal(await water.locator('[data-inline-transaction-editor]').count(),1,
     'Clicking December expands editing immediately underneath its own row');
