@@ -84,5 +84,9 @@ T.removeRecurring(state,house.id);
 assert.equal(state.predictions.futureRecurringRules.length,1);
 assert.equal(state.predictions.futureRecurringRules[0].id,garden.id,
  'Removing one independent water bill preserves its sibling');
+const historic={...garden,anchorDate:'2023-02-10'};
+assert.deepEqual(T.recurrenceDates(historic,'2026-10-21','2027-01-15'),
+ ['2026-11-10','2026-12-10','2027-01-10'],
+ 'A schedule saved years ago must continue generating future monthly bills');
 assert.equal(JSON.stringify(history),immutable,'All posted bank records stay untouched');
 console.log('PASS independent same-payee/same-day variable bills, calendar amounts, scoped estimates, real posting, immutable bank history');
