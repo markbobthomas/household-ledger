@@ -18,7 +18,7 @@ function getPoints(derived,asOf,days){
 /* Daily calendar uses ONLY the same per-account daily projection and its
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
-let extrasOpen=false,calendarEditor=null,calendarNotice='';
+let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null;
 const monthName=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',
  {month:'long',year:'numeric',timeZone:'UTC'});
 const signed=(e,card)=>card?
@@ -108,6 +108,48 @@ function quickEditor(){
   '</div><p class="calendar-quick-error" role="alert" data-calendar-error></p></form>';
 }
 
+
+function postedDay(date){
+ const rows=calendarContext.actual.get(date)||[];
+ const body=rows.map(t=>{
+  const incoming=['income','refund'].includes(t.type)||t.type==='transfer'&&t.cashDirection==='in';
+  return '<div class="calendar-detail-item calendar-actual-row"><span class="calendar-transaction-name">'+
+   esc(t.merchant||'Bank transaction')+
+   '<small>'+(t.pending?'Pending bank transaction':'Posted bank transaction')+'</small></span>'+
+   '<strong class="'+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
+   '</strong><button type="button" class="calendar-item-edit" data-calendar-history-plan="'+
+   esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">Make recurring</button></div>';
+ }).join('');
+ return '<section class="calendar-day-detail calendar-actual-detail" data-calendar-detail>'+
+  '<div class="calendar-detail-heading"><div><span>BANK HISTORY · NOT A PREDICTION</span><strong>'+
+   esc(dateLabel(date))+'</strong></div><div class="calendar-detail-balance"><small>Recorded transactions</small>'+
+   '<strong>'+rows.length+'</strong></div></div>'+
+  (rows.length?'<div class="calendar-detail-items">'+body+'</div>':
+   '<p class="calendar-empty">No bank transactions recorded on this date.</p>')+
+  '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
+  '<button type="button" class="calendar-edit" data-view="history">All bank history →</button></section>';
+}
+function coverageChecklist(){
+ const coverage=calendarContext?.coverage,month=calendarMonth;
+ const idx=coverage?.months?.findIndex(m=>m.key===month)??-1;
+ if(idx<0)return '';
+ const rows=coverage.rows.map((r,i)=>{
+  const cell=r.cells[idx];if(!cell)return '';
+  const warning=['missing','setup','review','unknown'].includes(cell.status),
+   ok=['covered','posted'].includes(cell.status),
+   label=ok?'Included':cell.status==='external'?'Other account':
+    cell.status==='na'?'Not due':warning?'Review':'Check';
+  return '<button type="button" class="calendar-check-row'+(warning?' needs-review':'')+
+   '" data-coverage-focus="'+i+'|'+idx+'" title="'+esc(cell.detail)+'" aria-label="'+
+   esc(r.title+', '+label+'. '+cell.detail)+'"><span class="calendar-check-icon">'+
+   (ok?'✓':warning?'!':'—')+'</span><span>'+esc(r.title)+'</span>'+
+   '<strong>'+label+'</strong></button>';
+ }).join('');
+ return '<div class="calendar-checklist" aria-label="Monthly payment checklist">'+
+  '<div class="calendar-check-heading"><strong>Major payments · '+esc(monthName(month))+
+  '</strong><small>Tap a payment to inspect</small></div>'+
+  '<div class="calendar-check-rows">'+rows+'</div></div>';
+}
 function dayDetail(point,card){
  const events=point.events||[],first=calendarContext.points[0],
   previousIndex=calendarContext.points.indexOf(point)-1,
@@ -127,11 +169,11 @@ function dayDetail(point,card){
    '<div class="calendar-math-total"><span>End of day</span><strong>'+money(point.balance)+'</strong></div></div>'+
   (events.length?'<div class="calendar-detail-items">'+events.map((e,i)=>{
    const dir=signed(e,card)>0?'in':'out';
-   return '<div class="calendar-detail-item"><span class="calendar-transaction-name">'+
+   return '<button type="button" class="calendar-detail-item calendar-tap-edit" data-calendar-edit="'+i+'"><span class="calendar-transaction-name">'+
     esc(e.merchant||'Predicted transaction')+
-    (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':'')+
+    (e.kind==='transfer_in'||e.kind==='transfer_out'?'<small>Linked transfer</small>':e.amountEstimate?'<small>Estimated prediction</small>':'<small>Predicted · not posted</small>')+
     '</span><strong class="'+dir+'">'+fullSigned(e,card)+'</strong>'+
-    '<button type="button" class="calendar-item-edit" data-calendar-edit="'+i+'">Edit</button></div>';
+    '<span class="calendar-item-edit">Edit</span></button>';
   }).join('')+'</div>':
    '<p class="calendar-empty">'+(point.date===first.date?
     'Starting balance. No future transactions yet.':
@@ -141,6 +183,7 @@ function dayDetail(point,card){
     '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
    '<small>Only confirmed schedules. These items do not change your balance.</small></div>':'')+
   (calendarNotice?'<p class="calendar-notice" role="status">'+esc(calendarNotice)+'</p>':'')+
+  (calendarEditor?'<button type="button" class="calendar-editor-backdrop" data-calendar-cancel aria-label="Close editor"></button>':'')+
   quickEditor()+
   '<div class="calendar-day-actions"><button type="button" class="calendar-add" data-calendar-add'+
    (point.date===first.date?' disabled':'')+'>+ Add transaction</button>'+
@@ -150,11 +193,13 @@ function dayDetail(point,card){
 function calendarGrid(){
  const state=calendarContext;
  if(!state||!state.points.length)return '';
- const keys=[...new Set(state.points.map(p=>p.date.slice(0,7)))];
+ const keys=[...new Set([...state.points.map(p=>p.date.slice(0,7)),
+  ...[...state.actual.keys()].map(d=>d.slice(0,7))])].sort();
  if(!keys.includes(calendarMonth))calendarMonth=keys[0];
  const currentPoints=state.points.filter(p=>p.date.startsWith(calendarMonth));
- if(!currentPoints.length)return '';
- if(!currentPoints.some(p=>p.date===calendarDate))calendarDate=currentPoints[0].date;
+ if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
+ if(!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
+  calendarDate=currentPoints[0]?.date||[...state.actual.keys()].find(d=>d.startsWith(calendarMonth));
  const start=calendarMonth+'-01',
   firstWeek=(new Date(start+'T12:00:00Z').getUTCDay()+6)%7,
   monthDays=new Date(Number(calendarMonth.slice(0,4)),
@@ -168,6 +213,18 @@ function calendarGrid(){
   const dom=i-firstWeek+1;
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
+  if(!p&&state.actual.has(iso)){
+   const rows=state.actual.get(iso)||[];
+   return '<button type="button" class="calendar-day actual'+(calendarDate===iso?' selected':'')+
+    '" data-calendar-actual-day="'+iso+'" aria-label="'+esc(dateLabel(iso)+', '+
+    rows.length+' actual bank transactions, no predicted balance')+'">'+
+    '<span class="calendar-day-number">'+dom+'</span><span class="calendar-day-balance">'+(rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No activity')+'</span>'+
+    '<span class="calendar-day-events">'+rows.slice(0,2).map(t=>
+     '<span class="calendar-event"><span class="calendar-event-name">'+
+     esc(t.merchant||'Transaction')+'</span></span>').join('')+
+    (rows.length>2?'<span class="calendar-more">+'+(rows.length-2)+' more</span>':'')+
+    '</span></button>';
+  }
   if(!p)return '<div class="calendar-outside" aria-hidden="true"><span>'+
    dom+'</span></div>';
   const events=p.events||[],gaps=state.gaps.get(iso)||[],low=!state.card&&p.balance<state.cushion,
@@ -185,6 +242,7 @@ function calendarGrid(){
    (negative?', below zero':low?', below cash cushion':'');
   return '<button type="button" class="calendar-day'+
    (calendarDate===iso?' selected':'')+(iso===state.asOf?' today':'')+
+   (calendarFocus?.dates?.includes(iso)?' coverage-highlight':'')+
    (negative?' negative':low?' low':'')+
    '" data-calendar-day="'+iso+'" aria-pressed="'+(calendarDate===iso)+
    '" aria-label="'+esc(aria)+'">'+
@@ -209,12 +267,13 @@ function calendarGrid(){
     '>Start</button>'+
    '<button type="button" data-calendar-nav="1"'+
     (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
-  '</div><div class="calendar-grid" role="group" aria-label="'+
+  '</div>'+coverageChecklist()+'<div class="calendar-grid" role="group" aria-label="'+
    esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
-   dayDetail(active,state.card)+'</div>';
+   (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+'</div>';
 }
 function showCalendar(date){
- if(!calendarContext||!calendarContext.points.some(p=>p.date===date))return;
+ if(!calendarContext||!calendarContext.points.some(p=>p.date===date)&&
+  !calendarContext.actual.has(date))return;
  calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
@@ -250,10 +309,19 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
  if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
   calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
-  calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;
+  calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;calendarFocus=null;
    calendarEditor=null;calendarNotice='';
  }
- calendarContext={points:series,asOf:snapshot.asOf,card:credit,
+ const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf;
+ for(let n=45;n>=1;n--){
+  const dt=new Date(snapshot.asOf+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()-n);
+  actual.set(dt.toISOString().slice(0,10),[]);
+ }
+ for(const r of bundle?.rows||[]){
+  if(!actual.has(r.date)||String(accountOf?.(r,accounts)||r.accountId)!==String(chosen.id))continue;
+  actual.get(r.date).push(r);
+ }
+ calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,
   cushion:Number(prefs?.cashCushion??500),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
@@ -273,6 +341,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  selected=lowIndex;
  const coverageTool=root.HouseholdPlannerCoverage;
  const coverage=coverageTool?.analyze?.({snapshot,chosen,bundle,prefs,days,accounts,ready});
+ calendarContext.coverage=coverage;
  const coverageHtml=coverage?coverageTool.render(coverage):'';
  const pin=locate(lowIndex),
   warnings=issues(bundle,accounts,chosen,prefs,ready)+(coverage?.attention||0),
@@ -290,13 +359,13 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready}
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers"><div><div class="summary-overline">'+
+  '<div class="summary-numbers"><div class="summary-current"><div class="summary-overline">'+(credit?'Reported card debt':'Available now')+' · '+esc(shortDate(snapshot.asOf))+'</div><strong>'+money(first.balance)+'</strong></div><div><div class="summary-overline">'+
   (credit?'Lowest estimated card debt':'Lowest projected balance')+'</div>'+
   '<div class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</div>'+
   '<div class="summary-date">'+esc(dateLabel(lowDay.date))+
   (negative?' · below $0':below?' · below your cash cushion':'')+'</div></div>'+
   '<div class="summary-end"><span>End of '+days+' days</span><strong>'+money(last.balance)+'</strong>'+
-  '<small>'+esc(shortDate(last.date))+'</small></div></div>'+
+  '<small>'+esc(shortDate(last.date))+'</small></div><div class="summary-coverage-metric"><span>Payment checklist</span><strong>'+(warnings?warnings+' to review':'No flagged gaps')+'</strong></div></div>'+
   calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend &amp; coverage checks</summary>'+
   '<section class="summary-stage summary-legacy">'+
@@ -371,13 +440,34 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('click',e=>{
  const legacy=e.target.closest?.('.summary-extras > summary');
  if(legacy){extrasOpen=!legacy.parentElement.open;return;}
+ const coverageButton=e.target.closest?.('[data-coverage-focus]');
+ if(coverageButton){
+  const [ri,mi]=coverageButton.dataset.coverageFocus.split('|').map(Number),
+   cell=calendarContext?.coverage?.rows?.[ri]?.cells?.[mi],
+   dates=(cell?.items||[]).map(x=>x.date).filter(Boolean);
+  calendarFocus={dates};
+  const selectedDate=dates.find(d=>calendarContext.points.some(p=>p.date===d)||calendarContext.actual.has(d));
+  if(selectedDate)showCalendar(selectedDate);
+  else{const stage=document.querySelector('[data-calendar-stage]');if(stage)stage.outerHTML=calendarGrid();}
+  if(!selectedDate||['missing','review','setup','unknown'].includes(cell?.status)){
+   const extra=document.querySelector('.summary-extras');if(extra){extra.open=true;extrasOpen=true;}
+   const target=document.querySelector('[data-coverage-cell="'+(ri*calendarContext.coverage.months.length+mi)+'"]');
+   target?.click();target?.scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+  return;
+ }
+ const actual=e.target.closest?.('[data-calendar-actual-day]');
+ if(actual){showCalendar(actual.dataset.calendarActualDay);return;}
  const day=e.target.closest?.('[data-calendar-day]');
  if(day){showCalendar(day.dataset.calendarDay);return;}
  const nav=e.target.closest?.('[data-calendar-nav]');
  if(nav&&calendarContext?.points?.length){
-  const keys=[...new Set(calendarContext.points.map(p=>p.date.slice(0,7)))],
+  const keys=[...new Set([...calendarContext.points.map(p=>p.date.slice(0,7)),
+  ...[...calendarContext.actual.keys()].map(d=>d.slice(0,7))])].sort(),
    index=keys.indexOf(calendarMonth),next=keys[index+Number(nav.dataset.calendarNav)];
-  if(next)showCalendar(calendarContext.points.find(p=>p.date.startsWith(next)).date);
+  if(next)showCalendar(calendarContext.points.find(p=>p.date.startsWith(next))?.date||
+   [...calendarContext.actual.keys()].find(d=>d.startsWith(next)));
+
   return;
  }
  if(e.target.closest?.('[data-calendar-today]')&&calendarContext?.points?.length)

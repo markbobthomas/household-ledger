@@ -552,3 +552,85 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .calendar-day-actions{justify-content:space-between;gap:6px}
 }
 @media(max-width:360px){.calendar-quick-fields{grid-template-columns:1fr}}
+
+/* Calendar-first navigation: all advanced views remain accessible from one quiet menu. */
+.sidebar,.planner-tabs,.mobile-titlebar{display:none!important}
+.shell{margin-left:0!important}
+.content{max-width:1170px;padding:25px 30px 55px}
+.topbar{align-items:center;gap:15px;margin-bottom:8px}
+.topbar h1{font-size:21px;letter-spacing:-.4px}
+.topbar .eyebrow,.topbar .lead{display:none}
+.planner-menu{position:relative;order:10;z-index:12}
+.planner-menu>summary{list-style:none;display:flex;gap:7px;align-items:center;justify-content:center;min-height:36px;padding:7px 12px;border:1px solid #d8e1eb;border-radius:8px;color:#284057;background:#fff;font-weight:680;cursor:pointer;white-space:nowrap}
+.planner-menu>summary::-webkit-details-marker{display:none}
+.planner-menu[open]>summary{background:#f3f6f9}
+.planner-menu-content{position:absolute;right:0;top:calc(100% + 7px);width:218px;background:#fff;border:1px solid #dce5ed;border-radius:11px;box-shadow:0 14px 40px #1c32462a;padding:8px;display:flex;flex-direction:column;gap:2px;z-index:20}
+.planner-menu-content button,.planner-menu-content a{width:100%;border:0;background:transparent;text-align:left;padding:10px 12px;color:#253b50;border-radius:7px;cursor:pointer;font-size:12px;text-decoration:none;font-weight:640}
+.planner-menu-content button:hover,.planner-menu-content a:hover,.planner-menu-content button.active{background:#f2f6fb;color:#284e83}
+.planner-menu-content small{padding:8px 10px;color:#8392a0;font-size:10px;border-top:1px solid #ecf1f5;margin-top:5px}
+.calendar-editor-backdrop{display:none}
+@media(max-width:780px){
+ .content{padding:15px 12px 60px}
+ .topbar{align-items:center;gap:8px}
+ .topbar h1{font-size:17px}
+ .top-actions{margin-left:auto;align-items:center;gap:5px}
+ .top-actions>label{display:none}.top-actions>.mode-box{display:block;max-width:122px;padding:6px 7px}
+ .planner-menu{order:0}
+ .planner-menu>summary{min-height:36px}
+ .planner-menu-content{width:min(250px,85vw)}
+ .calendar-editor-backdrop{display:block;position:fixed;inset:0;background:#12223678;border:0;z-index:79;cursor:pointer}
+ .calendar-quick-form{position:fixed;bottom:0;left:0;right:0;z-index:80;background:#fff;box-shadow:0 -18px 60px #122a4640;max-height:min(88dvh,760px);overflow-y:auto;margin:0;padding:19px 17px max(19px,env(safe-area-inset-bottom));border-radius:18px 18px 0 0;border-color:#dce5ed}
+ .calendar-quick-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .calendar-quick-fields label:nth-child(2){grid-column:1 / -1}
+}
+
+/* Focused balance metrics and monthly schedule assurance, not a second forecast. */
+.summary-page{max-width:1100px}
+.summary-ranges{margin:11px 0 17px}
+.summary-numbers{display:grid;grid-template-columns:1fr 1.25fr 1fr;align-items:start;gap:15px;border:1px solid #e7edf3;border-radius:12px;padding:17px 20px;background:#fff}
+.summary-numbers>div{min-width:0}
+.summary-numbers>div+div{padding-left:17px;border-left:1px solid #eef1f5}
+.summary-current strong{display:block;margin:7px 0;font:720 clamp(19px,2.5vw,28px)/1.22 var(--mono);letter-spacing:-.8px;color:#1d3449}
+.summary-numbers .summary-low{font-size:clamp(24px,3vw,37px);letter-spacing:-1.3px}
+.summary-numbers .summary-end{grid-column:1 / -1;flex-direction:row;gap:9px;border-top:1px solid #eef1f5;padding:9px 0 0;text-align:left;justify-content:flex-start}
+.summary-numbers .summary-end strong{font-size:12px;letter-spacing:0}
+.summary-numbers .summary-end span,.summary-numbers .summary-end small{font-size:10px}
+.summary-coverage-metric{display:flex;flex-direction:column;gap:7px;text-align:left}
+.summary-coverage-metric span{color:#778491;font-weight:620;font-size:12px}
+.summary-coverage-metric strong{font-size:14px;color:#344c60}
+.calendar-wrapper{margin-top:18px}
+.calendar-checklist{border:1px solid #e1e9f1;border-radius:10px;margin:15px 0;padding:12px 14px;background:#fbfcfe}
+.calendar-check-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:9px;flex-wrap:wrap}
+.calendar-check-heading strong{font-size:12px;color:#263d54}
+.calendar-check-heading small{font-size:10px;color:#8291a1}
+.calendar-check-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 12px}
+.calendar-check-row{display:flex;align-items:center;gap:8px;min-width:0;border:0;border-radius:6px;background:transparent;padding:9px 10px;text-align:left;cursor:pointer;color:#41566d;font-size:11px}
+.calendar-check-row:hover,.calendar-check-row:focus-visible{background:#eef4fa}
+.calendar-check-row span:nth-child(2){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calendar-check-row strong{white-space:nowrap;font-size:10px;color:#597265}
+.calendar-check-row.needs-review strong,.calendar-check-row.needs-review .calendar-check-icon{color:#99662d}
+.calendar-check-icon{font-size:13px;color:#438267;font-weight:800;width:14px}
+.calendar-day.coverage-highlight{outline:2px solid #7da9d4;outline-offset:-2px}
+.calendar-day.actual{background:#fbfcfd;border-color:#e9edf1}
+.calendar-day.actual .calendar-day-balance{font-size:11px;color:#8898a7;letter-spacing:0;font-weight:650}
+.calendar-actual-note{font-size:11px;color:#718293;margin:14px 0 0}
+.calendar-actual-row .calendar-item-edit{white-space:nowrap}
+@media(max-width:780px){
+ .summary-numbers{grid-template-columns:1fr 1fr;gap:11px;padding:12px 12px}
+ .summary-numbers>div+div{padding-left:10px}
+ .summary-numbers .summary-low{font-size:25px}
+ .summary-coverage-metric{grid-column:1 / -1;border-left:0!important;border-top:1px solid #eef1f5;padding:10px 0 0!important;flex-direction:row;justify-content:space-between}
+ .summary-numbers .summary-end{grid-column:1 / -1;order:4}
+ .calendar-checklist{padding:10px 8px}
+ .calendar-check-rows{grid-template-columns:1fr 1fr;gap:2px}
+ .calendar-check-row{padding:8px 5px;gap:5px;font-size:10px}
+ .calendar-check-row strong{font-size:9px}
+ .calendar-actual-row{flex-wrap:wrap}
+}
+@media(max-width:380px){
+ .calendar-check-rows{grid-template-columns:1fr}
+}
+
+.calendar-tap-edit{width:100%;border:0;border-bottom:1px solid #e9edf3;background:transparent;text-align:left;cursor:pointer;color:inherit}
+.calendar-tap-edit:hover,.calendar-tap-edit:focus-visible{background:#f1f6fb;outline-offset:-2px}
+.calendar-tap-edit>.calendar-item-edit{display:inline-flex;align-items:center}

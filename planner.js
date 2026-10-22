@@ -1145,15 +1145,17 @@ document.addEventListener('click',async e=>{
  const view=e.target.closest('[data-view]');
  if(view){
   activeTab=view.dataset.view;
+  document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   render();
   window.scrollTo({top:0,behavior:'auto'});
   return;
  }
- const fromHistory=e.target.closest('[data-history-plan]');
+ const fromHistory=e.target.closest('[data-history-plan]')||e.target.closest('[data-calendar-history-plan]');
  if(fromHistory){
   const account=fromHistory.dataset.historyAccount;
-  const row=lastHistoryRows.find(t=>String(t.id)===fromHistory.dataset.historyPlan&&
+  const historyId=fromHistory.dataset.historyPlan||fromHistory.dataset.calendarHistoryPlan;
+  const row=lastHistoryRows.find(t=>String(t.id)===historyId&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
   if(!row||!window.HouseholdPlannerHistory.canPlan(row)){
    setNotice('That bank transaction is no longer available for review.');return;
@@ -1163,7 +1165,7 @@ document.addEventListener('click',async e=>{
     row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
    reviewNotice='';
   }catch(error){setNotice(String(error.message||error));return}
-  reviewNotice='';render();
+  reviewNotice='';activeTab='history';render();
   document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
@@ -1483,6 +1485,13 @@ document.addEventListener('submit',async e=>{
   if(target)target.textContent=String(err.message||err);
  }
 });
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&document.querySelector('[data-calendar-quick-form]')){
+  window.HouseholdPlannerSummary.closeEditor();
+  return;
+ }
+ if(e.key==='Escape')document.getElementById('planner-menu')?.removeAttribute('open');
+});
 document.addEventListener('change',e=>{
  if(!e.target.matches?.('[data-calendar-type]'))return;
  const form=e.target.closest('[data-calendar-quick-form]');
@@ -1669,4 +1678,14 @@ if(available()){
  $('ledger-mode-switch').querySelector('option[value="real"]').disabled=true;
 }
 render();
+// /healthz reveals only the currently running server revision; a GitHub merge
+// is never treated as proof that the private Render service deployed it.
+if(typeof fetch==='function')fetch('/healthz',{cache:'no-store'}).then(async response=>{
+ if(!response.ok)return null;
+ const data=await response.json();
+ return data?.commit&&/^[a-f0-9]{40}$/i.test(data.commit)?data.commit:null;
+}).then(sha=>{
+ const target=document.getElementById('deployment-version');
+ if(target)target.textContent=sha?'Server revision '+sha.slice(0,9):'Server revision not verified';
+}).catch(()=>{});
 })();

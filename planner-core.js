@@ -355,6 +355,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  }
  ledger.sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
  const projection=project(snapshot,ledger,days);
+ const integrity=auditProjection(projection);
+ projection.diagnostics.balanceMismatches=integrity.errors;
+ if(!integrity.ok)throw Error('Forecast integrity check failed; inconsistent daily balances were not displayed');
  return {ledger,projection,rows,events:ledger.filter(e=>e.kind==='event'),
   payments:{...payment,warnings:[...(payment.warnings||[]),...warnings]},
   forecast:{suppressedDuplicates:checks},routines:{events:[],review:[],warnings:[],
@@ -362,6 +365,35 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts};
+}
+/* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
+function auditProjection(projection){
+ const errors=[],round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
+ for(const a of projection?.accounts||[]){
+  if(!a.valid)continue;
+  let current=Number(a.openingCurrent),
+   available=a.openingAvailable==null?null:Number(a.openingAvailable);
+  for(const point of a.series||[]){
+   let delta=0;
+   for(const e of point.events||[]){
+    const sign=a.type==='credit'?
+     (['card_purchase','transfer_out'].includes(e.kind)?1:-1):
+     (['income','refund','transfer_in'].includes(e.kind)?1:-1);
+    delta=round(delta+sign*Number(e.amount));
+   }
+   current=round(current+delta);
+   if(available!==null)available=round(available+delta);
+   const expected=a.type==='credit'?current:available??current;
+   if(!Number.isFinite(expected)||!Number.isFinite(point.balance)||
+     Math.abs(round(point.balance-expected))>.001||
+     Math.abs(round(point.currentBalance-current))>.001)
+    errors.push({accountId:a.id,date:point.date,reason:'Daily account balance does not reconcile'});
+  }
+ }
+ if(projection?.household?.conservationDifference!=null&&
+    Math.abs(Number(projection.household.conservationDifference))>.001)
+  errors.push({reason:'Household money movement fails conservation check'});
+ return {ok:errors.length===0,errors,daysChecked:(projection?.series||[]).length};
 }
 function project(snapshot,ledger,days=90){
  const asOf=snapshot.asOf,end=horizon(asOf,days),accounts=[],byId=new Map(),
@@ -525,7 +557,7 @@ function backtest(records,accounts,asOf,account,months=6){
   coverageRate:totals.eligible?Math.round(totals.matched/totals.eligible*100):null,
   issues:issues.slice(0,12),issueCount:issues.length,cardSettlements};
 }
-const api={analyze,materialize,project,backtest,accountId,cadence};
+const api={analyze,materialize,project,auditProjection,backtest,accountId,cadence};
 root.HouseholdFutureLedger=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
