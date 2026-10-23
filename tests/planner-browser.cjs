@@ -135,8 +135,14 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('0');
    await page.locator('[data-low-alert-form] button[type=submit]').click();
    await go('summary');
-   assert.equal(await page.locator('.summary-numbers .summary-low-alert').count(),0,
-    'Changing the saved threshold removes both red warnings immediately');
+   for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
+    const actual=await page.locator(selector).evaluate(el=>({
+     value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
+     red:el.classList.contains('summary-low-alert')
+    }));
+    assert.equal(actual.red,actual.value<0,
+     'At a $0 threshold, only negative projected lows remain red');
+   }
    await go('settings');
    await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('6000');
    await page.locator('[data-low-alert-form] button[type=submit]').click();
