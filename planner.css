@@ -1737,3 +1737,76 @@ html{scrollbar-gutter:stable}
   font-size:clamp(16px,4.5vw,26px)!important;
  }
 }
+
+/* First-use clarity: reveal actions without adding another navigation layer. */
+.calendar-balance-explainer,.page-task-hint{
+ margin:6px 0 12px;color:var(--muted);font-size:12px;line-height:1.45;
+}
+.calendar-first-tip{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ margin:8px 0 12px;padding:9px 11px;background:#f5f8f5;
+ border-radius:8px;color:#455b4e;font-size:12px;line-height:1.45;
+}
+.calendar-first-tip strong{font-weight:750}
+.calendar-first-tip button{
+ flex:0 0 auto;border:0;background:transparent;color:#20513d;
+ padding:7px 9px;border-radius:6px;cursor:pointer;
+ text-decoration:underline;text-underline-offset:3px;font-size:11px;font-weight:700;font-family:inherit;
+}
+.calendar-first-tip button:focus-visible,.calendar-first-tip button:hover{
+ outline:2px solid #789f8b;outline-offset:1px;
+}
+.calendar-day-detail .calendar-detail-heading{gap:10px;flex-wrap:wrap}
+.calendar-day-detail .calendar-detail-heading .calendar-add{
+ margin-left:auto;min-height:40px;white-space:nowrap;font-size:12px;
+}
+.calendar-monthly-row .calendar-monthly-view{
+ display:inline-block!important;color:#20513d;font-size:11px;font-weight:750;
+ text-decoration:underline;text-underline-offset:3px;white-space:nowrap;
+}
+.unified-payment-trigger{
+ grid-template-columns:66px minmax(0,1fr) minmax(80px,auto) 52px;
+}
+.unified-payment-chevron{
+ display:inline-flex;gap:4px;align-items:center;justify-content:flex-end;
+ color:#20513d;font-size:11px;white-space:nowrap;transform:none!important;
+}
+.unified-payment-chevron .payment-edit-cue{
+ text-decoration:underline;text-underline-offset:3px;font-weight:750;
+}
+.unified-payment-chevron .payment-edit-arrow{font-size:15px}
+.unified-payment-trigger[aria-expanded="true"] .payment-edit-arrow{transform:rotate(180deg)}
+.schedule-page .schedule-edit-label{display:inline!important;font-weight:750;font-size:11px}
+.history-page .history-row-hint{color:#20513d;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:620px){
+ .calendar-first-tip{align-items:flex-start;font-size:11px}
+ .calendar-balance-explainer,.page-task-hint{font-size:11px}
+ .calendar-monthly-row.calendar-detail-item{
+  grid-template-columns:50px minmax(0,1fr) auto 38px!important;
+  gap:5px;padding:11px 7px;
+ }
+ .calendar-monthly-row .calendar-monthly-view{font-size:10px}
+ .unified-payment-trigger{
+  grid-template-columns:44px minmax(0,1fr) auto 46px;gap:7px;padding:12px 7px;
+ }
+ .unified-payment-chevron{font-size:10px;gap:3px}
+ .unified-payment-chevron .payment-edit-arrow{font-size:13px}
+ .schedule-page .schedule-edit-label{font-size:10px}
+}
+@media(max-width:360px){
+ .calendar-day-detail .calendar-detail-heading .calendar-add{font-size:11px;padding:7px 8px}
+}
+
+/* Four discoverable task tabs on small phones; never hide Review offscreen. */
+@media(max-width:390px){
+ .planner-tabs.planner-nav-primary{
+  display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:2px!important;overflow:visible!important;width:100%;
+ }
+ .planner-nav-primary .tab-link{
+  min-width:0;min-height:44px!important;
+  white-space:normal!important;overflow-wrap:normal;
+  font-size:12px!important;line-height:1.15;
+  padding:6px 2px!important;text-align:center;
+ }
+}

@@ -33,15 +33,15 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-metrics-20261023-r2','The loaded HTML identifies the new Calendar styling release');
-   assert.match(await page.locator('#deployment-version').textContent(),/Calendar UI r2/,
+    'first-use-navigation-20261023-v1','The loaded HTML identifies the task-based UI release');
+   assert.match(await page.locator('#deployment-version').textContent(),/UI guide v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
     'One primary navigation row: calendar, schedules, history');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Schedules','History','Needs Review']);
+    ['Calendar','Repeating','Bank activity','Needs review']);
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
     'Predictions is available through More instead of the main row');
    const go=async tab=>{
@@ -54,7 +54,8 @@ const {chromium,webkit}=require('playwright');
      });
      return;
     }
-    await page.locator('#planner-menu > summary').click();
+    if(await page.locator('#planner-menu').getAttribute('open')===null)
+     await page.locator('#planner-menu > summary').click();
     await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
    };
    // The menu must stay usable on desktop and the narrowest supported iPhones.
@@ -75,6 +76,11 @@ const {chromium,webkit}=require('playwright');
     await visibleMenu();
     const menu=await page.locator('#planner-menu > summary').boundingBox();
     assert.ok(menu&&menu.x>=0&&menu.x+menu.width<=321,'Menu trigger itself stays onscreen at 320px');
+    const tabs=await page.locator('.planner-nav-primary .tab-link').evaluateAll(els=>
+     els.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,visible:r.width>0&&r.height>0}}));
+    assert.equal(tabs.length,4);
+    assert.ok(tabs.every(r=>r.visible&&r.left>=-1&&r.right<=321),
+     'All four task-based tabs are reachable without sideways navigation at 320px: '+JSON.stringify(tabs));
     await page.setViewportSize({width:390,height:844});
    }
 
@@ -116,6 +122,16 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[aria-label="Recurring forecast changes"]').count(),0,
     'Schedules, not a second Settings shortcut, own recurrence editing');
    await go('summary');
+   assert.match(await page.locator('.calendar-balance-explainer').innerText(),
+    /first balance is sample data.*Future daily balances and lows are estimates/i,
+    'A first-time user can distinguish sample bank values from estimated future balances');
+   assert.match(await page.locator('[data-calendar-first-tip]').innerText(),/Choose a future date.*Edit/s,
+    'The Calendar shows contextual first-use editing guidance');
+   await page.locator('[data-calendar-tip-dismiss]').click();
+   assert.equal(await page.locator('[data-calendar-first-tip]').count(),0,
+    'A newcomer can dismiss the single first-use hint without opening a tutorial');
+   assert.equal(await page.evaluate(()=>localStorage.getItem('household-ledger-calendar-tip-hidden-v1')),'1',
+    'Dismissed guidance persists independently of bank and forecast data');
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0,
     'No 30/60/90 period selectors in the simplified planner');
    assert.equal(await page.locator('.summary-numbers .summary-low').count(),2,
@@ -202,6 +218,9 @@ const {chromium,webkit}=require('playwright');
     'Selecting a new date returns to the focused view instead of retaining a long month list');
    const chosenDate=await projectedDay.getAttribute('data-calendar-day');
    const selectedPayments=page.locator('.calendar-day-transactions .calendar-monthly-row');
+   assert.equal(await page.locator('.calendar-detail-heading [data-calendar-add]').isVisible(),true,
+    'Add prediction is directly beside the selected future date');
+   assert.match(await page.locator('.calendar-detail-heading [data-calendar-add]').innerText(),/Add prediction/);
    assert.ok(await selectedPayments.count()>0,
     'Selected forecast day immediately lists its own editable predictions');
    assert.equal(await selectedPayments.count(),await page.locator(
@@ -209,6 +228,9 @@ const {chromium,webkit}=require('playwright');
     'Selected day contains exactly the predictions belonging to that date');
    assert.equal(await page.locator('.calendar-monthly-list .calendar-monthly-row:visible').count(),0,
     'Other days are hidden until explicitly expanding the month');
+   assert.equal(await selectedPayments.first().locator('.calendar-monthly-view').isVisible(),true,
+    'A visible Edit affordance appears on predicted payments even on iPhone');
+   assert.match(await selectedPayments.first().locator('.calendar-monthly-view').innerText(),/Edit/);
    await selectedPayments.first().click();
    assert.equal(await page.locator('.calendar-day-transactions [data-inline-transaction-editor]').count(),1,
     'A payment can be edited directly on its selected date');
@@ -617,6 +639,8 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/);
    await page.reload({waitUntil:'load'});
+   assert.equal(await page.locator('[data-calendar-first-tip]').count(),0,
+    'Dismissed first-use guidance stays dismissed after a reload');
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-09"]').click();
    assert.match(await page.locator('.calendar-day-transactions .calendar-detail-item')
@@ -647,6 +671,10 @@ const {chromium,webkit}=require('playwright');
 
    // Same merchant/date: separately saved streams and editable inline rows.
    await go('schedules');
+   assert.match(await page.locator('[data-schedule-new]').innerText(),/Repeating payment/,
+    'Adding a recurring payment is visible where repeating payments are listed');
+   assert.match(await page.locator('.schedule-page .page-task-hint').innerText(),/upcoming date/,
+    'The Repeating screen explains how to edit one occurrence or the whole schedule');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
    assert.equal(await page.locator('[data-schedule-sort]').count(),1);
    assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
@@ -681,6 +709,10 @@ const {chromium,webkit}=require('playwright');
      'All untouched schedule rows start collapsed');
     assert.equal(await page.locator('.schedule-more:not([open])').count(),previousSchedules,
      'Rare actions start hidden behind their own menu');
+   }
+   if(previousSchedules>0){
+    assert.equal(await page.locator('.schedule-card .schedule-edit-label').first().isVisible(),true,
+     'Schedule Edit is a visible affordance on desktop and iPhone');
    }
    assert.equal(await page.locator('.schedule-discovery,[data-schedule-from-actual]').count(),0,
     'Same-merchant charges no longer create an independent heuristic panel or extra-schedule prompts');
@@ -934,7 +966,8 @@ const {chromium,webkit}=require('playwright');
     });
     return;
    }
-   await page.locator('#planner-menu > summary').click();
+   if(await page.locator('#planner-menu').getAttribute('open')===null)
+    await page.locator('#planner-menu > summary').click();
    await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
   };
   await page.route('**/api/ledger',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(realPayload)}));
