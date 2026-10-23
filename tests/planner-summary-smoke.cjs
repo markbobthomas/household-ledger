@@ -24,6 +24,11 @@ for(const days of [1095]){
  assert.match(html,/data-summary-low-date/);
  assert.match(html,new RegExp(days+'-day forecast'));
  assert.match(html,/data-calendar-stage/);
+ assert.match(html,/data-summary-month-low/);
+ assert.match(html,/data-summary-month-value/);
+ assert.match(html,/data-calendar-month-low/);
+ assert.match(html,/month-minimum/);
+ assert.match(html,/Monthly low/);
  assert.match(html,/data-calendar-day="2026-10-21"/);
  assert.match(html,/Projected account balance|Account balance after daily activity/);
  assert.match(html,/calendar-day-detail/);
