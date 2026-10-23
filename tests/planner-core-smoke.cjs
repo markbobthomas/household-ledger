@@ -224,4 +224,21 @@ const adjustedCard=C.materialize(snapshot,history,revisedCard.predictions,T,P,90
 assert.ok(adjustedCard.projection.plans.filter(p=>p.toAccountId==='visa')
  .every(p=>p.amount===675),
  'Editing card autopay for all future dates replaces each linked payment amount once');
+
+const priorTZ=process.env.TZ;
+try {
+ process.env.TZ='America/Los_Angeles';
+ const real={asOf:'2026-10-22',mode:'plaid',connected:true,accounts:[
+  {id:'income',name:'Income checking',accountType:'checking',current:5000,
+   available:4800,balanceAsOf:'2026-10-23T04:22:00.000Z'}]};
+ const local=C.project(real,[],2).accounts[0];
+ assert.equal(local.balanceStatus,'fresh',
+  'Evening Pacific observation must not be flagged as tomorrow in UTC');
+ const future=C.project({...real,accounts:[{...real.accounts[0],
+  balanceAsOf:'2026-10-24T04:22:00.000Z'}]},[],2).accounts[0];
+ assert.equal(future.balanceStatus,'future-dated',
+  'A genuinely future local balance observation remains unverified');
+} finally {
+ if(priorTZ===undefined)delete process.env.TZ;else process.env.TZ=priorTZ;
+}
 console.log('PASS unified future ledger: automatic recurrence, reviews, immutable Plaid, owner overrides, one-time edits, linked transfers, cash/card balances, and autopay');
