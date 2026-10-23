@@ -1539,3 +1539,53 @@ button,select,input,textarea{font-family:inherit}
  .history-row-actions{grid-column:2/-1;justify-content:flex-start;flex-wrap:wrap;gap:6px}
  .history-row-actions .btn{grid-column:auto!important;justify-self:auto;margin:0}
 }
+
+
+/* Schedules and History share the same list, toolbar, typography and row rhythm. */
+.schedule-page .schedule-toolbar,.history-page .history-filters{
+ display:flex;align-items:end;flex-wrap:wrap;gap:10px;
+ margin:0 0 12px;padding:11px;
+ background:#fff;border:1px solid #e7ede5;border-radius:11px;
+}
+.schedule-page .schedule-toolbar>label,.history-page .history-filters>label{
+ flex:1 1 185px;min-width:150px;display:flex;flex-direction:column;gap:5px;
+ font-size:12px;font-weight:600;color:var(--muted);
+}
+.schedule-page .schedule-toolbar input,.schedule-page .schedule-toolbar select,
+.history-page .history-filters input,.history-page .history-filters select{
+ width:100%;max-width:none;min-height:36px;padding:7px 10px;
+ border:1px solid #e1e9e0;border-radius:7px;background:#f9fbf8;
+ font-size:13px;line-height:1.35;
+}
+.schedule-page .schedule-grid,.history-page .history-list-surface{
+ width:100%;background:#fff;border:1px solid #e6ede5;
+ border-radius:12px;box-shadow:none;
+}
+.history-page .history-list-surface{padding:12px 13px}
+.schedule-page .schedule-compact-row,.history-page .history-actual-row{
+ min-height:56px;border-bottom:1px solid #edf2ec;
+ background:transparent;margin:0;
+}
+.schedule-page .schedule-row-main,.history-page .history-actual-row{
+ padding-top:10px;padding-bottom:10px;line-height:1.4;
+}
+.history-page .history-actual-row{grid-template-columns:72px minmax(0,1fr) 105px minmax(170px,max-content);gap:12px}
+.history-page .history-actual-description strong,.schedule-page .schedule-row-title strong{
+ font-family:inherit;font-weight:650;font-size:13px;line-height:1.4;color:#233c2e;
+}
+.history-page .history-actual-description small,.schedule-page .schedule-row-title small{
+ font-family:inherit;font-size:11px;line-height:1.4;color:#859588;
+}
+.history-page .history-actual-amount,.schedule-page .schedule-row-amount strong{
+ font-family:inherit;font-size:13px;font-weight:700;
+ font-variant-numeric:tabular-nums;letter-spacing:0;
+}
+.history-page .history-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.history-page .history-row-actions .btn{font-size:11px;min-height:34px;padding:7px 9px}
+@media(max-width:780px){
+ .schedule-page .schedule-toolbar,.history-page .history-filters{padding:8px;gap:8px}
+ .schedule-page .schedule-toolbar>label,.history-page .history-filters>label{flex:1 1 130px;min-width:0}
+ .history-page .history-list-surface{padding:8px 7px}
+ .history-page .history-actual-row{grid-template-columns:56px minmax(0,1fr) 92px;gap:7px}
+ .history-page .history-row-actions{grid-column:2/-1;justify-content:flex-start;flex-wrap:wrap}
+}
