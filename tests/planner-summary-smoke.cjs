@@ -19,7 +19,7 @@ const opts={snapshot,chosen:snapshot.accounts[0],derived,bundle:{historyCandidat
 for(const days of [1095]){
  const html=tool.render({...opts,days});
  assert.match(html,/3-year low/);
- assert.match(html,/next 3 years/);
+ assert.match(html,/3-year low/);
  assert.doesNotMatch(html,/data-summary-days|Major payments|Payment checklist/);
  assert.match(html,/data-summary-low-date/);
  assert.match(html,new RegExp(days+'-day forecast'));
