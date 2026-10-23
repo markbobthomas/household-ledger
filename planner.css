@@ -1348,7 +1348,7 @@ body{background:#fff;color:#24313b}
 .calendar-quick-form .calendar-quick-head{padding-right:4px}
 @media(max-width:780px){.transactions-page .transaction-panel{padding:0}}
 /* Calendar is home; detailed predictions and reviews are contextual, not extra tabs. */
-.calendar-drilldowns{display:flex;flex-wrap:wrap;gap:15px;padding:9px 0 15px;border-top:1px solid #edf0f2;margin-top:8px}
+.calendar-drilldowns{display:flex;flex-wrap:wrap;gap:15px;padding:2px 0 8px;margin:0}
 .calendar-drilldowns button{background:transparent;border:0;padding:8px 2px;color:#405f76;font-size:12px;font-weight:650;font-family:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .calendar-drilldowns button:hover{color:#152f43}
 .calendar-drilldowns button:focus-visible{outline:2px solid #3978ad;outline-offset:2px}
