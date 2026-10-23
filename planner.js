@@ -1188,8 +1188,9 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- return '<div class="planner-page schedule-page"><div class="page-heading">'+
-  '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
+ return '<div class="planner-page schedule-page"><div class="page-heading"><div><h2>Schedules</h2>'+
+  '<p>Recurring payments and deposits used in your forecast.</p></div>'+
+  '<button class="btn primary" type="button" data-schedule-new>+ Schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
    '" aria-label="Schedule organization">'+
@@ -1607,7 +1608,16 @@ function render(){
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
- $('planner-notice').innerHTML=activeTab==='summary'&&!error&&!latestError?'':note;
+ const informational=!error&&!latestError&&!caution.length;
+ $('planner-notice').innerHTML=informational||activeTab==='summary'&&!error&&!latestError?'':note;
+ const finePrint=$('planner-fine-print');
+ if(finePrint){
+  finePrint.hidden=!informational;
+  finePrint.textContent=informational?
+   (live()?'Bank balances are reported by your bank. Future transactions and balances are estimates.':
+    'Demo uses fictional accounts and transactions, not your actual household.')+
+   ' · As of '+(s.asOf||dateToday()):'';
+ }
  if(!selectedSource){root.innerHTML='<section class="panel"><h2>No connected accounts</h2><p>Add a bank account to start planning.</p>'+
   (available()?'<a class="btn primary" href="/bank-connect">Connect a bank</a>':'')+'</section>';return}
  const fresh=derived&&freshness(derived);
