@@ -1512,12 +1512,6 @@ function summaryPage(bundle,s,chosen,derived,fresh){
  // Calendar is the entry point for forecast details and unresolved decisions.
  // Retain the full Predictions editor and skipped-payment restore functionality
  // as drill-down views, rather than competing permanent navigation entries.
- const reviewCount=(bundle?.routines?.review||[]).length+
-  (bundle?.missingMortgages||[]).length+
-  (bundle?.historyCandidates||[]).length+
-  (bundle?.automaticRecurrence?.review||[]).length+
-  (bundle?.duplicateConflicts||[]).length+
-  (bundle?.postedMatchReview||[]).length;
  const actions='<nav class="calendar-drilldowns" aria-label="Forecast detail and review">'+
   '<button type="button" data-view="transactions">All predictions</button>'+
   '<button type="button" data-view="reviews">Needs review</button>'+
