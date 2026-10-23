@@ -290,7 +290,7 @@ function monthlyPredictions(state){
 }
 function monthLow(month){
  const points=(calendarContext?.points||[]).filter(p=>p.date.startsWith(month)&&Number.isFinite(p.balance));
- return points.length?points.reduce((a,b)=>b.balance<a.balance?a:b):null;
+ return points.length?points.reduce((a,b)=>b.balance<a.balance?b:a):null;
 }
 function updateMonthLow(){
  const el=document.querySelector('[data-summary-month-low]');

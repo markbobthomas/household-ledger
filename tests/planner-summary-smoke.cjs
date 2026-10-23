@@ -29,6 +29,12 @@ for(const days of [1095]){
  assert.match(html,/data-calendar-month-low/);
  assert.match(html,/month-minimum/);
  assert.match(html,/Monthly low/);
+ assert.match(html,/data-summary-month-value>\$5,000\.00<\/strong>/,
+  'October monthly low must be the first $5,000 day rather than later higher balances');
+ assert.match(html,/data-calendar-month-low="2026-10-21"/,
+  'Monthly minimum date must match the actual lowest day');
+ assert.match(html,/data-calendar-day="2026-10-21"[^>]*month-minimum|month-minimum[^>]*data-calendar-day="2026-10-21"/,
+  'Calendar must highlight the minimum day, not the maximum');
  assert.match(html,/data-calendar-day="2026-10-21"/);
  assert.match(html,/Projected account balance|Account balance after daily activity/);
  assert.match(html,/calendar-day-detail/);
