@@ -76,7 +76,9 @@ const {chromium,webkit}=require('playwright');
 
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
+   await page.locator('#planner-menu > summary').click();
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
+   await page.keyboard.press('Escape');
    assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
    assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
