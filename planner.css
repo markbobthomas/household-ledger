@@ -1685,3 +1685,10 @@ html{scrollbar-gutter:stable}
 .planner-menu-bank .btn{width:100%;justify-content:center}
 .planner-menu-content{min-width:230px;max-width:min(300px,calc(100vw - 20px))}
 @media(max-width:780px){.topbar{flex-direction:row;flex-wrap:nowrap;align-items:center}.top-actions{justify-content:flex-end}}
+
+/* Prevent collapsed vertical brand text on narrow screens. */
+.topbar{display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:space-between!important;flex-wrap:nowrap!important;gap:12px;min-width:0}
+.topbar>div:first-child{flex:1 1 auto;min-width:0;width:auto;max-width:none}
+.topbar h1{display:block;max-width:100%;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;word-break:normal;line-height:1.2}
+.topbar .top-actions{flex:0 0 auto!important;width:auto!important;margin-left:auto;justify-content:flex-end}
+@media(max-width:390px){.topbar h1{font-size:clamp(15px,4.7vw,19px)!important}.topbar{gap:8px}}
