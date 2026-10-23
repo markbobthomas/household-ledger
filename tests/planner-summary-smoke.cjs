@@ -66,7 +66,10 @@ const caution=tool.render({...opts,days:180,bundle:{
 assert.doesNotMatch(caution,/Major payments|Payment checklist/,
  'Forecast uncertainty must not reintroduce ambiguous automatic coverage UI');
 const bad=tool.render({...opts,days:90,fresh:false});
-assert.match(bad,/verifiable account balance/);
+assert.match(bad,/Calendar needs attention/);
+assert.match(bad,/data-repair-refresh/);
+assert.match(bad,/data-repair-close/);
+assert.match(bad,/Bank connections/);
 assert.doesNotMatch(bad,/data-summary-plot/);
 assert.doesNotMatch(bad,/data-calendar-stage/);
 assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(1095),
