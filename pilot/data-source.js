@@ -181,6 +181,21 @@ function bind(callbacks){
  });
  if(localStorage.getItem(MODE)==='real')enter();
 }
+// Reveal the running private service's public commit ID in the existing More footer.
+// This fetch contains no bank information or credentials and never affects forecasts.
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function'){
+ document.addEventListener('DOMContentLoaded',()=>{
+  const label=document.getElementById('deployment-version');
+  if(!label||typeof fetch!=='function')return;
+  fetch('/healthz',{cache:'no-store',credentials:'same-origin'}).then(response=>
+   response.ok?response.json():null).then(info=>{
+    if(!info||info.mode!=='multi-account-private')return;
+    const commit=String(info.commit||'');
+    label.textContent='Calendar UI r2 · '+(/^[a-f0-9]{40}$/i.test(commit)?
+     'Render '+commit.slice(0,8):'Server unverified');
+  }).catch(()=>{/* The static UI revision remains readable without a health response. */});
+ });
+}
 if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
 root.HouseholdLiveSource={bind,panel,persist,persistForecast,enterReal:enter,refresh,mode:selection,
  get loading(){return loading},get error(){return lastError}};
