@@ -184,6 +184,21 @@ const {chromium,webkit}=require('playwright');
     'Historical date selections do not open full-month predictions');
       await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
+   const monthLowFromCells=async()=>page.evaluate(()=>{
+    const rows=[...document.querySelectorAll('[data-calendar-day]')];
+    const vals=rows.map(el=>({date:el.dataset.calendarDay,
+     value:Number(el.querySelector('.calendar-money-wide')?.textContent?.replace(/[^0-9.-]/g,''))}))
+     .filter(x=>Number.isFinite(x.value));
+    const expected=vals.reduce((a,b)=>b.value<a.value?b:a);
+    const metric=document.querySelector('[data-summary-month-value]');
+    const date=document.querySelector('[data-calendar-month-low]');
+    return {expected,shown:Number(metric?.textContent?.replace(/[^0-9.-]/g,'')),
+     date:date?.dataset.calendarMonthLow,marked:document.querySelector('.calendar-day.month-minimum')?.dataset.calendarDay};
+   });
+   const novemberLow=await monthLowFromCells();
+   assert.equal(novemberLow.shown,novemberLow.expected.value,'Monthly low matches the lowest displayed November day');
+   assert.equal(novemberLow.date,novemberLow.expected.date,'Monthly low date matches November minimum');
+   assert.equal(novemberLow.marked,novemberLow.date,'The actual minimum day is highlighted');
    assert.ok(await page.locator('[data-calendar-day="2026-11-01"]').count()>0,
     'Next month contains projected balances starting on its first day');
    await page.locator('[data-calendar-today]').click();
