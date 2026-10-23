@@ -5,6 +5,7 @@
 let series=[],trendSeries=[],selected=0,trendDays=1095,trendContext=null;
 const range=(n,a,b)=>Math.max(a,Math.min(b,n));
 const plotWidth=920,plotLeft=20,plotRight=900,top=18,bottom=274;
+const alertThreshold=prefs=>{const value=Number(prefs?.lowAlertThreshold);return prefs?.lowAlertThreshold!=null&&Number.isFinite(value)&&value>=0?value:6000};
 const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unverified';
 const dateLabel=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 const shortDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
@@ -298,7 +299,7 @@ function updateMonthLow(){
  const point=monthLow(calendarMonth),value=el.querySelector('[data-summary-month-value]'),
   button=el.querySelector('[data-calendar-month-low]');
  if(value){value.textContent=point?money(point.balance):'Not projected';
-   value.classList.toggle('summary-low-alert',Boolean(point&&point.balance<6000));}
+   value.classList.toggle('summary-low-alert',Boolean(point&&point.balance<alertThreshold(calendarContext?.prefs)));}
  if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
   button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
 }
@@ -569,14 +570,14 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+'<div class="summary-monthly" data-summary-month-low>'+
   '<div class="summary-overline">Monthly low</div>'+
-  '<strong class="summary-low'+(monthLow(calendarMonth)?.balance<6000?' summary-low-alert':'')+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
+  '<strong class="summary-low'+(monthLow(calendarMonth)?.balance<alertThreshold(prefs)?' summary-low-alert':'')+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
   '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
   (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
   '</div>'+
 
 '<div class="summary-minimum">'+
   '<div class="summary-overline">'+(credit?'3-year card debt low':'3-year low')+'</div>'+
-  '<strong class="summary-low'+(low<6000?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
+  '<strong class="summary-low'+(low<alertThreshold(prefs)?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
   '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
   '">'+esc(dateLabel(lowDay.date))+' →</button>'+
   (negative?'<small class="summary-low-warning">Below $0</small>':
