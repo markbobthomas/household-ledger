@@ -1296,44 +1296,74 @@ function historyPage(bundle,s){
  });
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
  const savedRules=state().predictions?.futureRecurringRules||[];
+ const projections=futureRows(bundle,s),
+  exclusions=state().predictions?.futureRecurrenceExclusions||{};
  const rows=visible.map(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
    t.type==='transfer'&&t.cashDirection==='in';
   const tools=window.HouseholdPlannerTransactions,
    matches=tools.historicalScheduleMatches(t,accounts,savedRules),
-   linked=matches.length===1,ambiguous=matches.length>1;
+   ambiguous=matches.length>1;
   const kind=t.type==='transfer'&&!t.pairedTransactionId?
    (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':'transfer'):t.type;
   const rejectedKey=tools.recurrenceKey(aid,kind,t.merchant);
-  const rejected=Boolean(state().predictions?.futureRecurrenceExclusions?.[rejectedKey]);
-  const predicted=futureRows(bundle,s).some(r=>r.kind==='event'&&
+  const relevant=Object.entries(exclusions).filter(([key,entry])=>{
+   if(key===rejectedKey)return true;
+   if(!entry||String(entry.accountId)!==aid||entry.type!==kind||
+    tools.recurrenceKey(aid,kind,entry.merchant)!==rejectedKey)return false;
+   if(!entry.phaseDate)return true;
+   const distance=Math.abs(Math.round((Date.parse(t.date)-Date.parse(entry.phaseDate))/86400000)%28);
+   return Math.min(distance,28-distance)<=3;
+  });
+  const rejected=relevant.length>0,rejectedRestoreKey=
+   exclusions[rejectedKey]?rejectedKey:relevant.length===1?relevant[0][0]:'';
+  const predicted=projections.some(r=>r.kind==='event'&&
    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey);
-  // Opening the bank row already offers schedule creation/editing.
-  // Keep only the exceptional automatic-prediction toggle visible.
-  const action='<div class="history-row-actions">'+
-   (rejected?'<button class="btn" type="button" data-restore-recurrence="'+escapeHTML(rejectedKey)+
-    '" title="Undo Not recurring and permit automatic suggestions">Undo “Not recurring”</button>':
-    !matches.length&&predicted?
-    '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
-    '" data-history-account="'+escapeHTML(aid)+'" title="Stop automatic predictions for this merchant">Mark not recurring</button>':
-    '<span class="history-row-hint">View / plan ›</span>')+'</div>';
-  return '<div class="history-actual-row" role="button" tabindex="0" aria-label="View bank transaction: '+
-   escapeHTML(t.merchant||'Bank transaction')+'" data-historical-transaction="'+escapeHTML(String(t.id))+
-   '" data-historical-account="'+escapeHTML(aid)+'">'+
+  const canPlan=window.HouseholdPlannerHistory.canPlan(t),
+   status=matches.length?(ambiguous?'Several repeating plans':'Recurring confirmed'):
+    rejected?'Auto predictions off':predicted?'Automatically predicted':'No repeating plan',
+   primary=matches.length?(ambiguous?'Choose plan':'Edit plan'):
+    canPlan?'Plan repeating':'View bank record';
+  // Primary and secondary actions are siblings: no interactive buttons nested
+  // inside a clickable row, and every available action states its effect.
+  let secondary='';
+  if(!matches.length){
+   if(rejected){
+    secondary=rejectedRestoreKey?
+     '<button type="button" class="btn history-decision" data-restore-recurrence="'+
+      escapeHTML(rejectedRestoreKey)+'" title="Allow future automatic predictions for this payee">Allow predictions</button>':
+     '<button type="button" class="btn history-decision" data-view="settings">Review exclusions</button>';
+   }else if(predicted){
+    secondary='<button type="button" class="btn history-decision" data-stop-history-recurrence="'+
+     escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
+     '" title="Remove automatically predicted payments for this payee">Stop auto predictions</button>';
+   }else if(canPlan){
+    secondary='<button type="button" class="btn history-decision" data-ignore-history-recurrence="'+
+     escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
+     '" title="Do not suggest future repeating payments for this payee">Don’t suggest</button>';
+   }
+  }
+  return '<div class="history-actual-row" data-history-recurring-state="'+
+   (matches.length?'confirmed':rejected?'excluded':predicted?'automatic':'unscheduled')+'">'+
+   '<button type="button" class="history-row-open" data-historical-transaction="'+
+   escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
+   '" aria-label="'+escapeHTML(primary+': '+(t.merchant||'Bank transaction'))+'">'+
    '<span class="history-actual-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
-   '<div class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
+   '<span class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
-    (t.pending?' · Pending':' · Posted')+(matches.length?' · '+(ambiguous?'Several matching schedules':'Recurring confirmed'):'')+
-    (rejected?' · NOT RECURRING':'')+'</small></div>'+
-   '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':'−')+cash(t.amount)+'</strong>'+
-   action+'</div>';
+    (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
+    escapeHTML(status)+'</span></small></span>'+
+   '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+
+    (incoming?'+':'−')+cash(t.amount)+'</strong>'+
+   '<span class="history-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
+   '<div class="history-row-actions">'+secondary+'</div></div>';
  }).join('');
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  '<p class="page-task-hint">These are bank-recorded transactions. Select one to inspect it or plan a future repeating payment.</p>'+
+  '<p class="page-task-hint">Bank records are read-only. Plan repeating payments here, or use “Don’t suggest” to prevent automatic future predictions. Existing plans can be edited without changing bank history.</p>'+
   '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -1894,8 +1924,7 @@ document.addEventListener('click',async e=>{
  }
  const actualRow=e.target.closest?.('[data-historical-transaction]');
  const fromHistory=e.target.closest('[data-history-plan]')||
-  e.target.closest('[data-calendar-history-plan]')||
-  (actualRow&&!e.target.closest('button,input,a,select')?actualRow:null);
+  e.target.closest('[data-calendar-history-plan]')||actualRow;
  if(fromHistory){
   const account=fromHistory.dataset.historyAccount||fromHistory.dataset.historicalAccount;
   const historyId=fromHistory.dataset.historyPlan||fromHistory.dataset.calendarHistoryPlan||
@@ -1947,6 +1976,24 @@ document.addEventListener('click',async e=>{
    recurringDraft=null;
    reviewNotice='Automatic recurrence detection is allowed again for this merchant.';
    transactionNotice=reviewNotice;
+   render();
+  }catch(err){setNotice(String(err.message||err))}
+  return;
+ }
+ const ignoreHistory=e.target.closest('[data-ignore-history-recurrence]');
+ if(ignoreHistory){
+  const aid=ignoreHistory.dataset.historyAccount;
+  const bank=lastHistoryRows.find(t=>String(t.id)===ignoreHistory.dataset.ignoreHistoryRecurrence&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===aid);
+  if(!bank||!window.HouseholdPlannerHistory.canPlan(bank)){
+   setNotice('This bank transaction is no longer available.');return;
+  }
+  const kind=window.HouseholdPlannerTransactions.bankDirection(bank);
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.excludeHistorySuggestions(
+    state(),{accountId:aid,type:kind,merchant:bank.merchant}));
+   reviewNotice='Automatic repeating suggestions are off for '+bank.merchant+
+    '. Posted bank activity and saved plans were not changed. Use Allow predictions to reverse this.';
    render();
   }catch(err){setNotice(String(err.message||err))}
   return;
