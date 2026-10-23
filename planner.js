@@ -1518,10 +1518,11 @@ function summaryPage(bundle,s,chosen,derived,fresh){
   (bundle?.automaticRecurrence?.review||[]).length+
   (bundle?.duplicateConflicts||[]).length+
   (bundle?.postedMatchReview||[]).length;
- return calendar+'<nav class="calendar-drilldowns" aria-label="Forecast detail and review">'+
+ const actions='<nav class="calendar-drilldowns" aria-label="Forecast detail and review">'+
   '<button type="button" data-view="transactions">All predictions</button>'+
-  '<button type="button" data-view="reviews">Needs review'+(reviewCount?' ('+reviewCount+')':'')+'</button>'+
+  '<button type="button" data-view="reviews">Needs review</button>'+
   '</nav>';
+ return calendar.replace('<div class="summary-numbers">',actions+'<div class="summary-numbers">');
 }
 function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
