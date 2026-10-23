@@ -269,3 +269,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Checks:** Require pilot safety and desktop Chromium/iPhone WebKit browser tests before merging. Private Render deployment unverified.
 
 - **Post-merge verification (2026-10-22):** [PR #58](https://github.com/markbobthomas/household-ledger/pull/58) merged to `main` as `a331b74b7655fd5989d6ef7dfbfcdebe0e7b2f96` after successful **Real-account pilot safety checks** and **Browser interaction test** (desktop Chromium and iPhone WebKit) on feature head `3526f770cdce82a6e06d50ed542342581c4a6e25`. No financial logic was modified. Private Render deployment and Pages publication unverified.
+
+### 2026-10-22 — clarify redundant Separate bill shortcut
+
+- **Request:** Explain why Schedule items have a “+ Separate bill” action and whether it is needed.
+- **Finding:** `planner.js` duplicates a schedule as an editable new-schedule preset, copies payee, amount, frequency, account and category, and appends “— second bill” to its title. It does not edit the source schedule. Independent recurring streams remain necessary for distinct obligations and alternating paychecks, but the `+ New schedule` path already creates independent rules.
+- **Decision/recommendation:** The duplicate shortcut is redundant UI; recommend removing it in a follow-up implementation while preserving independently editable schedules and existing forecast/deduplication behavior. Discussion only; no app code changed.
+- **Verification:** Inspected current `main` behavior; no functional checks or private Render deployment verification for this documentation-only record.
