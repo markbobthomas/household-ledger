@@ -1367,7 +1367,7 @@ body{background:#f8faf7;color:var(--ink);font-size:13px}
 .planner-nav-primary .tab-link:not(.active):hover{background:#eaf0e9;color:#224739}
 .top-actions .btn,.mode-box,.planner-menu>summary{min-height:36px;border:1px solid #e1e8e0;background:#fff;color:#315044;border-radius:9px;padding:7px 11px;font-size:11px;box-shadow:none}
 .top-actions .btn.primary{background:#1f493b;border-color:#1f493b;color:#fff}
-#source-type{border-radius:8px;background:#e6eee8;color:#315f4e;padding:7px 9px;letter-spacing:0;font:650 10px inherit}
+#source-type{border-radius:8px;background:#e6eee8;color:#315f4e;padding:7px 9px;letter-spacing:0;font-size:10px;font-weight:650;font-family:inherit}
 .panel{background:#fff;border:1px solid #e8eee8;border-radius:13px;box-shadow:0 4px 22px rgba(26,51,38,.035);margin-bottom:15px;padding:17px 19px}
 .page-heading h2{font-size:19px!important;color:#203a2f}
 .btn{border:1px solid #dce6df;border-radius:8px;background:#fff;color:#305344;font-weight:650;box-shadow:none}
