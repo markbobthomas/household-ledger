@@ -229,14 +229,14 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.history-actual-row').count()>20,
     'All loaded bank records can be inspected individually');
    const demoHistoricalMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
-   await demoHistoricalMortgage.locator('[data-history-plan]').click();
+   await demoHistoricalMortgage.click();
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
     'History can propose future recurrence based on an actual bank record');
    await page.locator('[data-cancel-review-form]').click();
    const historyTransfer=page.locator('.history-actual-row').filter({hasText:'Transfer to Savings'}).first();
-   assert.equal(await historyTransfer.locator('[data-history-plan]').count(),1,
-    'Every actual bank transfer has a Create recurring schedule action');
-   await historyTransfer.locator('[data-history-plan]').click();
+   assert.equal(await historyTransfer.locator('[data-history-plan]').count(),0,
+    'History opens from the row without redundant schedule buttons');
+   await historyTransfer.click();
    const transferDraft=page.locator('.history-schedule-form');
    assert.equal(await transferDraft.locator('[name=type]').inputValue(),'expense',
     'An unmatched outgoing bank transfer is proposed as an expense, not blocked');
@@ -468,7 +468,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-cancel-new]').click();
    await go('history');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
-   await insuranceHistory.locator('[data-history-plan]').click();
+   await insuranceHistory.click();
    await page.locator('.history-schedule-form [name=frequency]').selectOption('monthly');
    await page.locator('.history-schedule-form button[type=submit]').click();
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -934,7 +934,7 @@ const {chromium,webkit}=require('playwright');
   assert.match(await page.locator('.history-page').innerText(),/Home Mortgage ACH/,
    'Plaid posted mortgage visible separately from future predictions');
   const ambiguousMortgage=page.locator('.history-actual-row').filter({hasText:'House Loan ACH Unrecognized'}).first();
-  await ambiguousMortgage.locator('[data-history-plan]').click();
+  await ambiguousMortgage.click();
   assert.match(await ambiguousMortgage.innerText(),/transfer/i,
    'The source ACH entry really is a transfer, not a pre-classified mortgage expense');
   const uncertainForm=page.locator('.history-schedule-form');
@@ -949,7 +949,7 @@ const {chromium,webkit}=require('playwright');
    'The recurring mortgage is also in that same future ledger');
   await go('history');
   await page.locator('.history-actual-row').filter({hasText:'Home Mortgage ACH'})
-   .first().locator('[data-history-plan]').click();
+   .first().click();
   const homeForm=page.locator('.history-schedule-form');
   await homeForm.locator('button[type=submit]').click();
   await page.locator('.history-page .future-notice').getByText(/Saved recurring forecast/).waitFor();
@@ -1085,7 +1085,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(predictedDatesBefore,36,'Automatic mortgage estimate repeats throughout the three-year modeled period');
   await go('history');
   const actualMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage Servicer X'}).first();
-  await actualMortgage.locator('[data-history-plan]').click();
+  await actualMortgage.click();
   const mortgageForm=page.locator('.history-schedule-form');
   assert.equal(await mortgageForm.locator('[name=amount]').inputValue(),'2000');
   assert.equal(await mortgageForm.locator('[name=accountId]').inputValue(),'checking-real');
@@ -1113,14 +1113,14 @@ const {chromium,webkit}=require('playwright');
    'Owner-selected mortgage date takes priority over the historical posting day');
   await go('history');
   await page.locator('.history-actual-row').filter({hasText:'Storage Unit Monthly'})
-   .first().locator('[data-history-plan]').click();
+   .first().click();
   const storageForm=page.locator('.history-schedule-form');
   assert.equal(await storageForm.locator('[name=amount]').inputValue(),'79');
   assert.equal(await storageForm.locator('[name=accountId]').inputValue(),'checking-real');
   assert.equal(await storageForm.locator('[name=frequency]').inputValue(),'monthly');
   await storageForm.locator('button[type=submit]').click();
   await page.locator('.history-actual-row').filter({hasText:'Storage Unit Monthly'})
-   .first().locator('[data-history-plan]').getByText('View schedule',{exact:true}).waitFor();
+   .first().locator('.history-actual-description').getByText('Recurring confirmed',{exact:false}).waitFor();
   assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
    r.merchant==='Storage Unit Monthly'&&r.amount===79&&r.accountId==='checking-real')),
    'Low-confidence candidate becomes a saved private rule only after approval');
