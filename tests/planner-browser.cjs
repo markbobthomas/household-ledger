@@ -31,7 +31,7 @@ const {chromium,webkit}=require('playwright');
    const page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(staticUrl,{waitUntil:'load'});
-   assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
+   assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),3,
@@ -70,12 +70,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
-   assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
    assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
    assert.match(await page.locator('.summary-bank').innerText(),/Demo current balance/);
    assert.match(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),
-    /All predictions/,'Advanced bulk prediction view remains available without a fourth tab');
+    /Predictions/,'Advanced predictions remain available without a fourth tab');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
    assert.equal(await page.locator('.topbar .lead').count(),0,
     'Global header does not repeat the planner introduction');
@@ -95,7 +95,7 @@ const {chromium,webkit}=require('playwright');
     'No 30/60/90 period selectors in the simplified planner');
    assert.equal(await page.locator('.summary-low').count(),1,
     'Only the lowest modeled balance is emphasized');
-   assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
+   assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
    assert.equal(await page.locator('.calendar-checklist,.coverage-table,.summary-coverage-metric').count(),0,
     'Ambiguous major-payment assurance panels have been removed');
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
@@ -877,12 +877,12 @@ const {chromium,webkit}=require('playwright');
   await page.route('**/api/sync',r=>{refreshed++;return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'})});
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
-  assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+  assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
    'Live bank current must be the Plaid current, not $4,800 available');
   assert.match(await page.locator('.summary-bank').innerText(),/Plaid current balance/);
 
-  assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
+  assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
   assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
    'Long-range calculation does not resurrect old major-payment coverage checks');
   assert.match(await page.locator('.calendar-monthly-unplanned').innerText(),/Household Visa/,

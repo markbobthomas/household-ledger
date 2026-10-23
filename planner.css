@@ -1186,3 +1186,71 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  .schedule-row-main{grid-template-columns:minmax(0,1fr) 65px 10px;gap:3px}
  .schedule-row-category{max-width:72px;font-size:9px}
 }
+
+
+/* Minimal workspace: preserve all controls, interactions and financial indicators. */
+body{background:#fff;color:#24313b}
+.content{max-width:1250px;padding:18px 24px 40px}
+.topbar{align-items:center;gap:14px;margin-bottom:8px}
+.topbar h1{font-size:19px;letter-spacing:-.45px;line-height:1.2}
+.topbar .eyebrow{display:none}
+.top-actions{gap:6px}
+.top-actions .btn,.mode-box,.planner-menu>summary{min-height:34px;padding:5px 9px;border-radius:6px}
+.planner-tabs.planner-nav-primary{background:transparent;border:0;border-bottom:1px solid #e5e9ed;border-radius:0;margin:2px 0 14px;padding:0;gap:3px}
+.planner-nav-primary .tab-link{border-radius:0;padding:10px 15px;min-height:37px;color:#617080;font-weight:650}
+.planner-nav-primary .tab-link.active{background:transparent!important;box-shadow:inset 0 -2px #344e63;color:#243846}
+.planner-nav-primary .tab-link:hover{background:#f6f8fa}
+.planner-footer{display:none}
+.page-heading{margin-bottom:12px!important;gap:9px}
+.page-heading h2{font-size:18px!important;letter-spacing:-.3px}
+.page-heading p{display:none}
+.summary-heading{margin-bottom:10px!important;gap:9px}
+.summary-eyebrow{display:none}
+.summary-numbers{margin-bottom:14px!important}
+.summary-stage{padding:0!important}
+.summary-overline{font-size:11px!important;letter-spacing:0!important}
+.summary-low-date{font-size:11px}
+.calendar-wrapper{margin-top:10px!important}
+.calendar-navigation{margin-bottom:9px!important}
+.calendar-navigation h2{font-size:18px!important}
+.calendar-nav-actions{gap:4px!important}
+.calendar-day{border-radius:3px!important}
+.calendar-day-events{gap:2px!important}
+.calendar-event{border-radius:3px!important}
+.calendar-day-detail{margin-top:10px!important}
+.calendar-day-detail .calendar-detail-heading{margin-bottom:8px!important}
+.calendar-monthly-list{margin-top:10px!important}
+.schedule-toolbar{gap:7px;margin-bottom:9px}
+.schedule-toolbar>label{font-size:10px;gap:3px}
+.schedule-toolbar select,.schedule-search-wrap input{min-height:33px;border-radius:5px}
+.schedule-category-manager>summary{min-height:33px;border-radius:5px;background:#fff;padding:8px 10px}
+.schedule-grid{gap:4px!important}
+.schedule-category-group{gap:2px}
+.schedule-category-heading{padding:9px 2px 4px}
+.schedule-category-group+.schedule-category-group{margin-top:5px}
+.schedule-card{margin-bottom:0!important}
+.schedule-compact-row{min-height:0!important}
+.schedule-row-category{height:30px;border-radius:5px;background:#fff}
+.schedule-card .schedule-card-detail{border-top-color:#edf0f3}
+.schedule-row-next small,.schedule-row-amount small{font-size:9px}
+.panel{box-shadow:none!important}
+.btn{box-shadow:none!important}
+.status-tag{letter-spacing:0}
+.planner-page p.plan-edit-guide{margin:5px 0 10px;color:#687683}
+.schedule-occurrence-heading{margin:8px 0}
+.schedule-form,.future-edit-form{gap:10px}
+@media(max-width:780px){
+ .content{padding:12px 12px 28px}
+ .topbar{gap:8px;flex-wrap:wrap}
+ .topbar h1{font-size:17px}
+ .top-actions{gap:5px}
+ .planner-tabs.planner-nav-primary{margin:2px 0 11px}
+ .planner-nav-primary .tab-link{padding:9px 13px}
+ .summary-numbers{gap:10px!important}
+ .calendar-navigation h2{font-size:17px!important}
+ .schedule-toolbar{gap:6px}
+}
+@media(max-width:390px){
+ .topbar h1{font-size:16px}
+ .content{padding-left:9px;padding-right:9px}
+}

@@ -239,3 +239,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Next:** Merge only with required checks green; keep the category view uncluttered and prioritize forecast integrity in future changes.
 
 - **Post-merge verification (2026-10-22):** Both required checks **passed** on rebased PR #52 feature head `d031d6075a19e43e4002c90ff169d864a1064291`: **Real-account pilot safety checks** and **Browser interaction test** (desktop Chromium and iPhone WebKit). PR #52 merged to `main` as `6aa387ea79bc23856c59836a723f742a85236ad3`, and the updated ledger entry was confirmed on `main`. Private Render deployment remains **unverified**; browser checks test fictional fixtures and code, not private bank deployment.
+
+### 2026-10-22 — minimal, calendar-first visual overhaul
+
+- **Request:** Substantially simplify the entire visual interface and remove unnecessary decorative text and UI while retaining usable functionality.
+- **Decision:** Keep Calendar, Schedules and History as main navigation; keep advanced tools in existing More menu. Maintain visible bank source/mode, forecast low-balance alerts, actual-versus-predicted distinctions, forms and interactive actions. Do not hide financial warnings, essential labels or edit paths.
+- **UI changes:** Simplified page identity/header and removed duplicated decorative footer copy; flattened navigation into understated text tabs; reduced whitespace, borders, colors, roundness and extra headings; tightened calendar, category toolbar, schedule list and editors across desktop/mobile. Shortened selected schedule/forecast labels. Preserved original control IDs and event handlers.
+- **Source:** `index.html`, `planner.css`, `planner.js`, `planner-summary.js`. No accounting model, recurrence, forecast rules, bank source, private preferences, Plaid, security or deployment modifications.
+- **Verification:** Target PR requires passing Real-account pilot safety checks and desktop Chromium/iPhone WebKit Browser interaction tests; document final outcome when known. No live account tests. Private Render deployment unverified.
+- **Next:** Visually evaluate the compact layouts on actual desktop/iPhone after deploying, and make targeted follow-up adjustments without restoring decorative clutter.
