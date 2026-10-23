@@ -31,7 +31,7 @@ const {chromium,webkit}=require('playwright');
    const page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(staticUrl,{waitUntil:'load'});
-   assert.equal(await page.locator('h1').innerText(),'Know your balance before the bill.');
+   assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),3,
