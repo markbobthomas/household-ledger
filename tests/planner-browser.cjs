@@ -562,27 +562,29 @@ const {chromium,webkit}=require('playwright');
     'Linked history persists while trying different payee searches');
    await page.locator('[data-cancel-new]').click();
    await go('history');
-   const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
-   assert.equal(await insuranceHistory.getAttribute('data-history-recurring-state'),'unscheduled',
-    'History explicitly distinguishes a payee with no repeating plan');
-   assert.match(await insuranceHistory.locator('.history-row-open').innerText(),/Plan repeating/,
-    'Any unscheduled history item shows its primary plan action');
-   assert.equal(await insuranceHistory.locator('[data-ignore-history-recurrence]').count(),1,
+   const unscheduledHistory=page.locator('.history-actual-row[data-history-recurring-state="unscheduled"]').first();
+   assert.ok(await unscheduledHistory.count()>0,'At least one actual payment has no repeating plan');
+   assert.match(await unscheduledHistory.locator('.history-row-open').innerText(),/Plan repeating/,
+    'An unscheduled payment has an obvious primary plan action');
+   assert.equal(await unscheduledHistory.locator('[data-ignore-history-recurrence]').count(),1,
     'Even a payee without inferred schedules can reject future automatic suggestions');
-   assert.equal(await insuranceHistory.locator('button button').count(),0,
-    'Primary History action does not nest secondary buttons');
+   assert.equal(await unscheduledHistory.locator('button button').count(),0,
+    'History primary actions never nest secondary buttons');
    const oldRules=await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
-   await insuranceHistory.locator('[data-ignore-history-recurrence]').click();
-   assert.equal(await insuranceHistory.getAttribute('data-history-recurring-state'),'excluded');
-   assert.match(await insuranceHistory.innerText(),/Auto predictions off/);
-   assert.equal(await insuranceHistory.locator('[data-restore-recurrence]').count(),1);
+   await unscheduledHistory.locator('[data-ignore-history-recurrence]').click();
+   assert.equal(await unscheduledHistory.getAttribute('data-history-recurring-state'),'excluded');
+   assert.match(await unscheduledHistory.innerText(),/Auto predictions off/);
+   assert.equal(await unscheduledHistory.locator('[data-restore-recurrence]').count(),1);
    assert.equal(await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0),
     oldRules,'Declining future auto suggestions does not alter any saved schedule');
-   await insuranceHistory.locator('[data-restore-recurrence]').click();
-   assert.equal(await insuranceHistory.getAttribute('data-history-recurring-state'),'unscheduled',
-    'Allow predictions restores unscheduled merchant eligibility immediately');
+   await unscheduledHistory.locator('[data-restore-recurrence]').click();
+   assert.equal(await unscheduledHistory.getAttribute('data-history-recurring-state'),'unscheduled',
+    'Allow predictions restores an unscheduled payee immediately');
+   const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
+   assert.equal(await insuranceHistory.getAttribute('data-history-recurring-state'),'automatic',
+    'Automatically predicted insurance is not incorrectly labeled as unscheduled');
    await insuranceHistory.locator('.history-row-open').click();
    await page.locator('.history-schedule-form [name=frequency]').selectOption('monthly');
    await page.locator('.history-schedule-form button[type=submit]').click();
