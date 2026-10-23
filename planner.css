@@ -1810,3 +1810,50 @@ html{scrollbar-gutter:stable}
   padding:6px 2px!important;text-align:center;
  }
 }
+
+/* History: consistent, independent actions rather than clickable parent rows
+   containing nested buttons. Every row shows an explicit plan action and a
+   context-specific automatic-prediction decision when safe. */
+.history-page .history-actual-row{
+ display:grid;grid-template-columns:minmax(0,1fr) auto;
+ align-items:center;gap:8px 12px;padding:0;min-height:58px;
+}
+.history-page .history-row-open{
+ display:grid;grid-template-columns:72px minmax(0,1fr) 105px minmax(92px,max-content);
+ align-items:center;gap:12px;min-width:0;width:100%;
+ border:0;border-radius:6px;padding:11px 7px;
+ background:transparent;color:inherit;text-align:left;
+ font-family:inherit;font-size:inherit;cursor:pointer;
+}
+.history-page .history-row-open:hover,.history-page .history-row-open:focus-visible{
+ background:#f1f6f2;outline-offset:-2px;
+}
+.history-page .history-actual-description{min-width:0}
+.history-page .history-recurring-status{font-weight:700;color:#425c4d}
+.history-page .history-row-open .history-row-hint{
+ color:#20513d;font-size:11px;font-weight:720;
+ text-decoration:underline;text-underline-offset:3px;text-align:right;white-space:nowrap;
+}
+.history-page .history-row-actions{
+ display:flex;align-items:center;justify-content:flex-end;
+ min-width:0;padding-right:7px;
+}
+.history-page .history-row-actions:empty{display:none}
+.history-page .history-decision{
+ min-height:36px;white-space:nowrap;background:transparent;
+ border-color:#dbe4db;color:#365b48;font-weight:700;
+}
+@media(max-width:850px){
+ .history-page .history-actual-row{grid-template-columns:minmax(0,1fr);gap:0}
+ .history-page .history-row-open{
+  grid-template-columns:56px minmax(0,1fr) auto;
+  gap:8px;padding:9px 4px;
+ }
+ .history-page .history-row-open .history-row-hint{
+  grid-column:2 / -1;text-align:left;
+ }
+ .history-page .history-row-actions{
+  grid-column:1/-1;justify-content:flex-start;padding:0 4px 10px 60px;
+ }
+ .history-page .history-decision{min-height:36px}
+}
