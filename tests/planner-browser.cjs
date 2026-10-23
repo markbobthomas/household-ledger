@@ -316,6 +316,11 @@ const {chromium,webkit}=require('playwright');
     'History uses selected tab as title without repeating it');
    assert.ok(await page.locator('.history-actual-row').count()>20,
     'All loaded bank records can be inspected individually');
+   assert.equal(await page.locator('.history-row-open').count(),
+    await page.locator('.history-actual-row').count(),
+    'Every bank-history row has one explicit accessible primary button');
+   assert.equal(await page.locator('.history-actual-row button button').count(),0,
+    'History rows contain no nested interactive elements');
    const demoHistoricalMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
    await demoHistoricalMortgage.click();
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
@@ -558,12 +563,39 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-cancel-new]').click();
    await go('history');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
-   await insuranceHistory.click();
+   assert.equal(await insuranceHistory.getAttribute('data-history-recurring-state'),'unscheduled',
+    'History explicitly distinguishes a payee with no repeating plan');
+   assert.match(await insuranceHistory.locator('.history-row-open').innerText(),/Plan repeating/,
+    'Any unscheduled history item shows its primary plan action');
+   assert.equal(await insuranceHistory.locator('[data-ignore-history-recurrence]').count(),1,
+    'Even a payee without inferred schedules can reject future automatic suggestions');
+   assert.equal(await insuranceHistory.locator('button button').count(),0,
+    'Primary History action does not nest secondary buttons');
+   const oldRules=await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
+   await insuranceHistory.locator('[data-ignore-history-recurrence]').click();
+   assert.equal(await insuranceHistory.getAttribute('data-history-recurring-state'),'excluded');
+   assert.match(await insuranceHistory.innerText(),/Auto predictions off/);
+   assert.equal(await insuranceHistory.locator('[data-restore-recurrence]').count(),1);
+   assert.equal(await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0),
+    oldRules,'Declining future auto suggestions does not alter any saved schedule');
+   await insuranceHistory.locator('[data-restore-recurrence]').click();
+   assert.equal(await insuranceHistory.getAttribute('data-history-recurring-state'),'unscheduled',
+    'Allow predictions restores unscheduled merchant eligibility immediately');
+   await insuranceHistory.locator('.history-row-open').click();
    await page.locator('.history-schedule-form [name=frequency]').selectOption('monthly');
    await page.locator('.history-schedule-form button[type=submit]').click();
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
     .futureRecurringRules?.some(r=>r.merchant==='State Farm Insurance')),
     'History creates user-confirmed recurring forecasts in saved planning preferences');
+   await go('history');
+   const savedInsurance=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
+   assert.equal(await savedInsurance.getAttribute('data-history-recurring-state'),'confirmed');
+   assert.match(await savedInsurance.locator('.history-row-open').innerText(),/Edit plan/,
+    'Confirmed bank history goes to its existing repeating plan');
+   assert.equal(await savedInsurance.locator('[data-ignore-history-recurrence],[data-stop-history-recurrence]').count(),0,
+    'A confirmed plan cannot be silently removed by a broad merchant exclusion');
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'State Farm Insurance'}).count()>=1,
     'History-to-forecast confirmation creates future payments');
@@ -583,6 +615,9 @@ const {chromium,webkit}=require('playwright');
     'Allow predictions restores the original auto-inferred schedule');
    await go('history');
    const mortgageHistory=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
+   assert.equal(await mortgageHistory.getAttribute('data-history-recurring-state'),'automatic',
+    'History clearly labels recognized but unconfirmed future predictions');
+   assert.match(await mortgageHistory.locator('[data-stop-history-recurrence]').innerText(),/Stop auto predictions/);
    assert.ok(await mortgageHistory.locator('[data-stop-history-recurrence]').count()>0,
     'History also permits rejecting a recognized recurrence');
    await mortgageHistory.locator('[data-stop-history-recurrence]').click();
