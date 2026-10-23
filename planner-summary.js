@@ -297,7 +297,8 @@ function updateMonthLow(){
  if(!el)return;
  const point=monthLow(calendarMonth),value=el.querySelector('[data-summary-month-value]'),
   button=el.querySelector('[data-calendar-month-low]');
- if(value)value.textContent=point?money(point.balance):'Not projected';
+ if(value){value.textContent=point?money(point.balance):'Not projected';
+   value.classList.toggle('summary-low-alert',Boolean(point&&point.balance<6000));}
  if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
   button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
 }
@@ -566,19 +567,21 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+'<div class="summary-minimum">'+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+'<div class="summary-monthly" data-summary-month-low>'+
+  '<div class="summary-overline">Monthly low</div>'+
+  '<strong class="summary-low'+(monthLow(calendarMonth)?.balance<6000?' summary-low-alert':'')+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
+  '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
+  (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
+  '</div>'+
+
+'<div class="summary-minimum">'+
   '<div class="summary-overline">'+(credit?'3-year card debt low':'3-year low')+'</div>'+
-  '<strong class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
+  '<strong class="summary-low'+(low<6000?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
   '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
   '">'+esc(dateLabel(lowDay.date))+' →</button>'+
   (negative?'<small class="summary-low-warning">Below $0</small>':
    below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
-  '</div><div class="summary-monthly" data-summary-month-low>'+
-  '<div class="summary-overline">Monthly low</div>'+
-  '<strong class="summary-low" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
-  '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
-  (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
-  '</div></div>'+
+  '</div>'+
   calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
   '<section class="summary-stage summary-legacy">'+
