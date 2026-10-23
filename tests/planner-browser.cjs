@@ -37,9 +37,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),3,
     'One primary navigation row: calendar, schedules, history');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Schedules','History']);
-   assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
-    'Predictions is not an additional primary tab');
+    ['Calendar','Schedules','History','All Predictions','Needs Review']);
+   assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),1,
+    'Predictions is available in the main navigation');
    const go=async tab=>{
     const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
     if(await primary.count()){await primary.click();return}
@@ -49,10 +49,6 @@ const {chromium,webkit}=require('playwright');
       b.hidden=true;document.body.appendChild(b);b.click();b.remove();
      });
      return;
-    }
-    if(tab==='transactions'||tab==='reviews'){
-     await page.locator('.planner-nav-primary [data-view="summary"]').click();
-     await page.locator('.calendar-drilldowns [data-view="'+tab+'"]').click();return;
     }
     await page.locator('#planner-menu > summary').click();
     await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
