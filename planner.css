@@ -1696,3 +1696,44 @@ html{scrollbar-gutter:stable}
 /* Tabs already announce page identity; show only actions and actionable counts. */
 .schedule-page .page-actions{display:flex;justify-content:flex-end;align-items:center;min-height:36px;margin:0 0 12px}
 .reviews-page .review-count-line{display:flex;justify-content:flex-end;align-items:center;min-height:24px;margin:0 0 12px}
+
+
+/* Calendar headline: one consistent three-column rhythm, without inherited dividers. */
+.summary-page .summary-numbers{
+ display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));
+ align-items:start!important;gap:clamp(10px,2.5vw,30px)!important;
+ padding:clamp(12px,2vw,20px)!important;
+ border:0!important;border-radius:0;background:transparent;
+ box-sizing:border-box;
+}
+.summary-page .summary-numbers>div{
+ box-sizing:border-box;min-width:0;margin:0!important;
+ padding:0!important;border:0!important;
+}
+.summary-page .summary-bank,.summary-page .summary-monthly,.summary-page .summary-minimum{
+ display:grid;grid-template-rows:minmax(30px,auto) minmax(42px,auto) minmax(22px,auto);
+ align-content:start;align-items:center;justify-items:start;gap:5px;
+}
+.summary-page .summary-bank strong{
+ color:#23714a!important;font-size:clamp(28px,3.8vw,48px)!important;
+ line-height:1.1!important;
+}
+.summary-page .summary-monthly .summary-low,.summary-page .summary-minimum .summary-low{
+ font-size:clamp(22px,2.8vw,35px)!important;
+ line-height:1.1!important;color:var(--ink)!important;
+}
+.summary-page .summary-monthly .summary-low.summary-low-alert,
+.summary-page .summary-minimum .summary-low.summary-low-alert{color:#b43b36!important}
+.summary-page .summary-overline,.summary-page .summary-bank small{
+ min-height:0!important;line-height:1.35!important;align-self:end;
+}
+@media(max-width:780px){
+ .summary-page .summary-numbers{gap:8px!important;padding:12px 4px!important}
+ .summary-page .summary-bank,.summary-page .summary-monthly,.summary-page .summary-minimum{
+  grid-template-rows:minmax(35px,auto) minmax(32px,auto) minmax(20px,auto);gap:3px;
+ }
+ .summary-page .summary-bank strong{font-size:clamp(19px,5.5vw,32px)!important}
+ .summary-page .summary-monthly .summary-low,.summary-page .summary-minimum .summary-low{
+  font-size:clamp(16px,4.5vw,26px)!important;
+ }
+}
