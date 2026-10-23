@@ -335,3 +335,13 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Testing/deployment:** Branch implementation, pending PR checks and private Render confirmation at time of this entry. Next: test and merge only with safety/browser checks; then verify private deployed revision and the exact issue shown by the dialog.
 
 - **Post-merge verification (2026-10-22):** [PR #71](https://github.com/markbobthomas/household-ledger/pull/71) passed Real-account pilot safety and desktop Chromium/iPhone WebKit browser checks on head `bbb0e636369101c382a9f0d9607f42f7cf10955b`, merged into `main` as `33e213170bc1541b7d91ed6b42e7e000fa6b57a0`. This validates the recovery UI on fictional fixtures, **not** resolution of the private account's original verification failure. Private Render deployment remains unverified.
+
+
+### 2026-10-22 — streamline legacy test and verification overhead
+
+- **Request:** Reduce testing and verification overhead after simplification to calendar-first navigation.
+- **Audit:** Required pilot workflow previously ran 39 smoke tests plus syntax checks of modules retained for legacy features. These included retired coverage, mortgage, heuristic/backtest and sandbox concerns. The mandatory gate duplicated work for every PR and main push; docs-only modifications triggered tests too. Browser CI is a separate workflow.
+- **Changes:** Simplified `.github/workflows/pilot-safety.yml` to 14 core smoke tests for authentication/Plaid, account removal, canonical projection integrity, recurrence/independent schedules, posted-payment matching, card setup/statement cycles, editing, and forecast-only persistence, with 7 active runtime syntax checks. Run on code PRs or manual dispatch only; skip Markdown-only PRs and remove duplicate main push trigger. Retain older tests as opt-in specialized diagnostics rather than deleting historical files. Update `AGENTS.md` so browser validation is relevant to UI changes, not every request.
+- **Safety:** Never remove protections against writes to actual bank data, invented balances, double-counted linked settlements, or unverified projected values. CI success is not private Render deployment evidence.
+- **Limitations:** The separate browser workflow is not removed by this change; its workflow file was not identified in this focused audit. Further browser CI reduction should be based on its actual configuration and GitHub branch protection.
+- **Checks/deployment:** Workflow change requires validation by GitHub PR; no actual bank data or infrastructure changed. Private Render unchanged/unverified.
