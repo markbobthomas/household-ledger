@@ -478,3 +478,20 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Implementation status:** Changes authored in PR #93 (current-main clean branch), preserving Plaid/Render and existing forecast-only preference storage; includes earlier unmerged Calendar metric layout consolidation. No source bank records, recurrence, or forecasting math altered.
 - **Verification:** PR #93's Real-account pilot safety check passed. Browser interaction CI remains in progress; no app code merged or private Render revision verified at documentation time.
 - **Next:** Merge PR #93 only after UI checks pass and reconcile this ledger entry without duplication; then verify private deployment independently.
+
+
+### 2026-10-23 — investigate unchanged Calendar styling in live app
+
+- **Report:** Calendar still shows a vertical divider and no red projected-low figures after requested styling and threshold changes.
+- **Verified cause:** Current GitHub `main` still serves `planner.css?v=tab-headings-removed1` with pre-change metric styles; application PR #93 containing the Calendar layout and editable red threshold is **open, not merged**. Prior merged PRs #92/#94 updated documentation only, not runtime appearance.
+- **Validation:** PR #93 head `8b6d639c6d9e1e4ca7e95632ac5760ec02d38f77` passed Real-account pilot safety workflow, but desktop/iPhone browser workflow run `39974997654` remained in progress at the browser installation step when inspected. No confirmed UI pass, no application merge, no verified private Render deployment. Do not infer the user's displayed version from unverified Render state.
+- **Action:** Investigated source and CI; no additional runtime changes for this report. Retain the open PR pending browser verification rather than claim a live release.
+- **Next:** Resolve/complete browser validation, merge #93 with passing checks, then separately compare private Render `/healthz` commit with merged `main` and confirm the appearance on an iPhone.
+
+
+### 2026-10-23 — reconcile deployed-but-unchanged Calendar metrics
+
+- **Issue:** User reports successful Render deployment but Calendar still shows a vertical divider and no red projected lows.
+- **Confirmed:** Source on GitHub `main` was still using `planner.css?v=tab-headings-removed1`; only the ledger documentation was merged. The actual layout/threshold source remained in open UI PR #93. A successful deployment of old `main` does not publish unmerged source; independent Render `/healthz` commit verification was unavailable.
+- **Changes:** Continued PR #93; added updated desktop Chromium/iPhone WebKit regression assertions for three-column order, absence of dividers, computed green/red colors, separate persistent threshold setting and changes at $100,000/$0, preserving valid red for negative values. Kept main ledger notes synchronized; no changes to Plaid, the financial forecast, the private service configuration or bank records.
+- **Release check:** Banking-safety suite previously passed on PR #93; browser suite must pass on the new head before merge. After merge, verify Render points to the merged code and new cache-keyed assets, not merely a successful prior deployment.
