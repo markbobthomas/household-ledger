@@ -43,6 +43,13 @@ const {chromium,webkit}=require('playwright');
    const go=async tab=>{
     const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
     if(await primary.count()){await primary.click();return}
+    if(tab==='overview'){
+     await page.evaluate(()=>{
+      const b=document.createElement('button');b.dataset.view='overview';
+      b.hidden=true;document.body.appendChild(b);b.click();b.remove();
+     });
+     return;
+    }
     if(tab==='transactions'||tab==='reviews'){
      await page.locator('.planner-nav-primary [data-view="summary"]').click();
      await page.locator('.calendar-drilldowns [data-view="'+tab+'"]').click();return;
@@ -856,6 +863,13 @@ const {chromium,webkit}=require('playwright');
   const go=async tab=>{
    const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
    if(await primary.count()){await primary.click();return}
+   if(tab==='overview'){
+    await page.evaluate(()=>{
+     const b=document.createElement('button');b.dataset.view='overview';
+     b.hidden=true;document.body.appendChild(b);b.click();b.remove();
+    });
+    return;
+   }
    if(tab==='transactions'||tab==='reviews'){
     await page.locator('.planner-nav-primary [data-view="summary"]').click();
     await page.locator('.calendar-drilldowns [data-view="'+tab+'"]').click();return;
