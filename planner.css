@@ -1613,3 +1613,28 @@ button,select,input,textarea{font-family:inherit}
  .history-page .history-actual-row{grid-template-columns:56px minmax(0,1fr) 92px;gap:7px;padding:9px 3px}
  .history-page .history-row-actions{grid-column:2/-1;justify-content:flex-start}
 }
+
+
+/* One shared content frame across Schedules, History, and Needs Review. */
+html{scrollbar-gutter:stable}
+.schedule-page,.history-page,.reviews-page{
+ width:100%;max-width:1050px;margin-inline:auto;min-width:0;
+ box-sizing:border-box;
+}
+.schedule-page .schedule-toolbar,.history-page .history-filters,
+.schedule-page .schedule-grid,.history-page .history-list-surface,
+.reviews-page>.panel{
+ width:100%;max-width:none;box-sizing:border-box;margin-left:0;margin-right:0;
+}
+.reviews-page>.panel{
+ padding:12px 13px;border:1px solid #e6ede5;border-radius:12px;
+ background:#fff;box-shadow:none;
+}
+.reviews-page .review-candidate{min-height:56px;padding:10px 7px}
+.reviews-page .review-candidate-main>strong{font-size:13px;font-weight:650;line-height:1.4}
+.reviews-page .review-candidate-main small{font-size:11px;line-height:1.4}
+@media(max-width:780px){
+ .schedule-page,.history-page,.reviews-page{max-width:100%}
+ .reviews-page>.panel{padding:8px 7px}
+ .reviews-page .review-candidate{padding:9px 3px}
+}

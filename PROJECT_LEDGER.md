@@ -390,3 +390,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Issue:** Prior CSS-only styling left History filters inside the list's outer panel while Schedules filters were separate. Competing History schedule and prediction buttons also added confusion.
 - **Change:** Restructured History to use the exact Schedules outer pattern: standalone bordered filter toolbar followed by a separately bordered ledger. Matched outside margins, padding, border radii, list row rhythm and mobile gutters. Removed redundant History create/edit schedule buttons: clicking a bank transaction row already opens its existing schedule/details workflow. Only exceptional auto-prediction exclusion controls remain, labeled **Mark not recurring** or **Undo ‘Not recurring’**. Financial behavior and bank state untouched; browser tests updated for row-driven actions.
 - **Verification:** PR and relevant browser validation pending; deployed Render revision unverified. Do not claim literal pixel-perfect parity without actual rendered screenshot comparison on target devices.
+
+
+### 2026-10-22 — matching tab container widths
+
+- **Request:** Switching among Schedules, History and Needs Review should not change the content container dimensions.
+- **Cause:** `.schedule-page` had `max-width:1050px` and centered margins, while History and Needs Review had no matching page-width limit; their panels and row padding differed. Scrollbar presence could also shift horizontal alignment.
+- **Change:** Apply the same 1050px maximum width, centered frame, box sizing and responsive width to all three pages; standardize Review panel borders and padding and row rhythm, preserving each tab's special controls. Use stable scrollbar gutter and stylesheet cache update. CSS-only, no bank/forecast behavior changes.
+- **Status:** PR validation and deployed Render revision unverified at creation; assess actual screenshots separately for pixel-level assurance.
