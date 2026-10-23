@@ -434,3 +434,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **User request:** Move circled Real bank indicator, Real/Plaid selector, Refresh bank and Bank connections out of top of Calendar and into hamburger/More menu. User screenshot shows these controls consuming a full mobile row.
 - **Change:** Retain existing IDs and event handlers, group data source selector, status indicator, refresh bank and connections in More menu, remove them from topbar. Keep app title and More trigger aligned on one row on mobile, preserve focus/menu access, and change targeted browser test to open More before refresh. Financial forecasts, Plaid connection, permissions and saved state unchanged.
 - **Status:** GitHub PR/CI and private Render deployment require verification.
+
+
+### 2026-10-22 — iPhone header brand wrapping regression
+
+- **Observed:** Screenshot showed the Household Ledger title broken into individual letters down the page after moving bank controls to More.
+- **Fix:** Constrain header flex layout to one row and prevent the title from wrapping within its flex child; preserve More at natural width and truncate the brand only if truly necessary. Updated stylesheet cache key. No financial functionality or data changed.
+- **Verification:** Mobile rendering and private Render deploy remain to be independently verified.
