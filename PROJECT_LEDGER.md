@@ -398,3 +398,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Cause:** `.schedule-page` had `max-width:1050px` and centered margins, while History and Needs Review had no matching page-width limit; their panels and row padding differed. Scrollbar presence could also shift horizontal alignment.
 - **Change:** Apply the same 1050px maximum width, centered frame, box sizing and responsive width to all three pages; standardize Review panel borders and padding and row rhythm, preserving each tab's special controls. Use stable scrollbar gutter and stylesheet cache update. CSS-only, no bank/forecast behavior changes.
 - **Status:** PR validation and deployed Render revision unverified at creation; assess actual screenshots separately for pixel-level assurance.
+
+
+### 2026-10-22 — Schedules title and quiet footer disclaimer
+
+- **Request:** Make Schedules heading consistent with History/Needs Review, put + Schedule beside title, and move generic bank/demo disclaimer below tabs to small bottom-of-page print.
+- **Change:** Schedules now has a heading, short purpose line and same-row + Schedule action. General informational notice renders in a quiet footer below page content; serious forecast errors, unresolved reviews and bank-unavailable warnings remain prominent above content. Update stylesheet and script cache keys. No forecasts, bank records or editing semantics changed.
+- **Status:** Targeted GitHub PR; production Render and live screenshots unverified.
