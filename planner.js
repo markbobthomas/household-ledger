@@ -668,7 +668,7 @@ function editableForecastRow(row,opts={}){
    '<small>'+escapeHTML(subtitle)+'</small></span>'+
   '<span class="unified-payment-value future-amount'+(inbound?' incoming':'')+'">'+
    (inbound?'+':'−')+cash(row.amount)+'</span>'+
-  '<span class="unified-payment-chevron" aria-hidden="true">⌄</span></button></div>';
+  '<span class="unified-payment-chevron" aria-hidden="true"><span class="payment-edit-cue">Edit</span><span class="payment-edit-arrow">⌄</span></span></button></div>';
 }
 function scheduleOccurrencesHtml(bundle,s,rule){
  if(!rule)return '';
@@ -1151,7 +1151,7 @@ function schedulesPage(bundle,s){
     '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
      '<small>'+(estimate.estimated?'Estimated':'Fixed')+'</small></span>'+
     '<span class="schedule-row-chevron" aria-hidden="true"><span class="schedule-edit-label">'+
-     (isEditing?'Close':'Edit')+' </span>'+(isEditing?'⌃':'⌄')+'</span>'+
+     (isEditing?'Close':'Edit')+'</span> '+(isEditing?'⌃':'⌄')+'</span>'+
    '</button>'+
    '<select class="schedule-row-category" data-schedule-quick-category="'+id+'" '+
     'aria-label="Category for schedule '+number+': '+title+'">'+
@@ -1189,7 +1189,8 @@ function schedulesPage(bundle,s){
   }).join(''):
   visible.map(cardHtml).join(''); 
  return '<div class="planner-page schedule-page"><div class="page-actions">'+
-  '<button class="btn primary" type="button" data-schedule-new>+ Schedule</button></div>'+
+  '<button class="btn primary" type="button" data-schedule-new>+ Repeating payment</button></div>'+
+  '<p class="page-task-hint">Repeating payments appear automatically on your Calendar. Select a payment to change the schedule or an upcoming date to edit just that payment.</p>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
    '" aria-label="Schedule organization">'+
@@ -1317,7 +1318,7 @@ function historyPage(bundle,s){
     !matches.length&&predicted?
     '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
     '" data-history-account="'+escapeHTML(aid)+'" title="Stop automatic predictions for this merchant">Mark not recurring</button>':
-    '<span class="history-row-hint">View details ›</span>')+'</div>';
+    '<span class="history-row-hint">View / plan ›</span>')+'</div>';
   return '<div class="history-actual-row" role="button" tabindex="0" aria-label="View bank transaction: '+
    escapeHTML(t.merchant||'Bank transaction')+'" data-historical-transaction="'+escapeHTML(String(t.id))+
    '" data-historical-account="'+escapeHTML(aid)+'">'+
@@ -1332,6 +1333,7 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
+  '<p class="page-task-hint">These are bank-recorded transactions. Select one to inspect it or plan a future repeating payment.</p>'+
   '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
