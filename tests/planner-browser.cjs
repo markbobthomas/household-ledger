@@ -562,9 +562,18 @@ const {chromium,webkit}=require('playwright');
     'Linked history persists while trying different payee searches');
    await page.locator('[data-cancel-new]').click();
    await go('history');
-   const unscheduledHistory=page.locator('.history-actual-row[data-history-recurring-state="unscheduled"][data-history-kind="expense"]')
+   const firstUnscheduled=page.locator('.history-actual-row[data-history-recurring-state="unscheduled"][data-history-kind="expense"]')
     .filter({has:page.locator('[data-ignore-history-recurrence]')}).first();
-   assert.ok(await unscheduledHistory.count()>0,'At least one actual payment has no repeating plan');
+   assert.ok(await firstUnscheduled.count()>0,'At least one actual payment has no repeating plan');
+   // Track the original bank identity, not the changing "unscheduled" state:
+   // after exclusion the row must no longer match that state selector.
+   const selectedBank=firstUnscheduled.locator('.history-row-open');
+   const selectedId=await selectedBank.getAttribute('data-historical-transaction');
+   const selectedAccount=await selectedBank.getAttribute('data-historical-account');
+   const unscheduledHistory=page.locator('.history-actual-row').filter({
+    has:page.locator('.history-row-open[data-historical-transaction="'+selectedId+
+     '"][data-historical-account="'+selectedAccount+'"]')
+   });
    assert.match(await unscheduledHistory.locator('.history-row-open').innerText(),/Plan repeating/,
     'An unscheduled payment has an obvious primary plan action');
    assert.equal(await unscheduledHistory.locator('[data-ignore-history-recurrence]').count(),1,
@@ -574,6 +583,9 @@ const {chromium,webkit}=require('playwright');
    const oldRules=await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
    await unscheduledHistory.locator('[data-ignore-history-recurrence]').click();
+   await page.locator('.history-actual-row[data-history-recurring-state="excluded"]')
+    .filter({has:page.locator('.history-row-open[data-historical-transaction="'+selectedId+
+     '"][data-historical-account="'+selectedAccount+'"]')}).waitFor({state:'visible'});
    assert.equal(await unscheduledHistory.getAttribute('data-history-recurring-state'),'excluded');
    assert.match(await unscheduledHistory.innerText(),/Auto predictions off/);
    assert.equal(await unscheduledHistory.locator('[data-restore-recurrence]').count(),1);
@@ -581,6 +593,9 @@ const {chromium,webkit}=require('playwright');
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0),
     oldRules,'Declining future auto suggestions does not alter any saved schedule');
    await unscheduledHistory.locator('[data-restore-recurrence]').click();
+   await page.locator('.history-actual-row[data-history-recurring-state="unscheduled"]')
+    .filter({has:page.locator('.history-row-open[data-historical-transaction="'+selectedId+
+     '"][data-historical-account="'+selectedAccount+'"]')}).waitFor({state:'visible'});
    assert.equal(await unscheduledHistory.getAttribute('data-history-recurring-state'),'unscheduled',
     'Allow predictions restores an unscheduled payee immediately');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
