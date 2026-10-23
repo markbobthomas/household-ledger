@@ -1161,7 +1161,6 @@ function schedulesPage(bundle,s){
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for schedule '+number+'" title="More actions">⋯</summary>'+
     '<div class="schedule-more-menu">'+
-     '<button type="button" data-schedule-duplicate="'+id+'">+ Separate bill</button>'+
      '<button type="button" data-schedule-remove="'+id+'"'+
       (pendingRemove?' class="danger"':'')+'>'+
       (pendingRemove?'Confirm remove':'Remove schedule')+'</button>'+
@@ -1714,20 +1713,6 @@ document.addEventListener('click',async e=>{
   transactionDetail=null;render();
   document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
   return}
- const duplicate=e.target.closest?.('[data-schedule-duplicate]');
- if(duplicate){
-  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===duplicate.dataset.scheduleDuplicate);
-  if(!rule)return;
-  const next=window.HouseholdPlannerTransactions.recurrenceDates(rule,snapshot().asOf,
-   shiftDay(snapshot().asOf,horizon))[0];
-  schedulePreset={merchant:rule.merchant,scheduleLabel:(rule.scheduleLabel||rule.merchant)+' — second bill',
-   amount:rule.amount,accountId:rule.accountId||rule.fromAccountId,
-   toAccountId:rule.toAccountId,type:rule.kind==='movement'?'transfer':rule.type,
-   frequency:rule.frequency,date:next||shiftDay(snapshot().asOf,1),
-   amountBasis:'estimate',category:rule.category||'Uncategorized'};
-  scheduleMode='new';scheduleTarget='';scheduleNotice='';
-  transactionDetail=null;activeTab='schedules';render();return;
- }
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
  if(scheduleEdit){
   const id=scheduleEdit.dataset.scheduleEdit;

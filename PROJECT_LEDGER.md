@@ -276,3 +276,9 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Finding:** `planner.js` duplicates a schedule as an editable new-schedule preset, copies payee, amount, frequency, account and category, and appends “— second bill” to its title. It does not edit the source schedule. Independent recurring streams remain necessary for distinct obligations and alternating paychecks, but the `+ New schedule` path already creates independent rules.
 - **Decision/recommendation:** The duplicate shortcut is redundant UI; recommend removing it in a follow-up implementation while preserving independently editable schedules and existing forecast/deduplication behavior. Discussion only; no app code changed.
 - **Verification:** Inspected current `main` behavior; no functional checks or private Render deployment verification for this documentation-only record.
+
+### 2026-10-22 — remove duplicate-schedule shortcut
+
+- **Request:** Remove the redundant “+ Separate bill” action and explain how to create a second independent payment instead.
+- **Decision/implementation:** Remove its Schedule row menu action and preset-copy handler. Preserve `+ New schedule`, whose hidden `separateSchedule=on` creates a new independent recurring stream, even with the same payee/date; edit the name, merchant, amount, account, category and recurrence in the regular form. No cloning behavior or financial rules changed.
+- **Tests:** Update browser regression to create two same-merchant bills using the normal new-schedule form and assert shortcut absence; run pilot security and Chromium/iPhone WebKit workflows before merging. Private Render deployment unverified.

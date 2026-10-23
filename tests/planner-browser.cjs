@@ -647,12 +647,15 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
     'Schedule settings and upcoming payments expand inside their own schedule');
    await water.locator('.schedule-more > summary').click();
-   assert.equal(await water.locator('.schedule-more[open]').count(),1);
-   await water.locator('[data-schedule-duplicate]').click();
+   assert.equal(await water.locator('[data-schedule-duplicate]').count(),0,
+    'Redundant Separate bill action is removed');
+   await page.locator('[data-schedule-new]').click();
    schedule=page.locator('[data-schedule-new-form]');
+   assert.equal(await schedule.locator('[name=separateSchedule]').inputValue(),'on',
+    'New schedule always creates an independent recurring stream');
    await schedule.locator('[name=scheduleLabel]').fill('Water - Garden');
-   assert.equal(await schedule.locator('[name=category]').inputValue(),'Water bills',
-    'Separate same-merchant schedule copies category for the new independent stream');
+   await schedule.locator('[name=merchant]').fill('Same Merchant Water');
+   await schedule.locator('[name=category]').selectOption('Water bills');
    await schedule.locator('[name=amount]').fill('220');
    await schedule.locator('[name=date]').fill('2026-11-10');
    await schedule.locator('button[type=submit]').click();
