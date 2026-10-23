@@ -316,7 +316,9 @@ const {chromium,webkit}=require('playwright');
     'Refreshing does not erase bank-derived future predictions');
    await go('settings');
    const auditDetails=page.locator('#accuracy-audit');
-   assert.equal(await page.locator('#audit-launch').isVisible(),true,'One-click audit is visible in the main planner');
+   await page.locator('#planner-menu > summary').click();
+   assert.equal(await page.locator('#audit-launch').isVisible(),true,
+    'The one-click audit is available from More on Settings');
    await page.locator('#audit-launch').click();
    assert.ok(await auditDetails.getAttribute('open')!==null,'One click expands the audit results');
    assert.match(await auditDetails.innerText(),/Prediction accuracy/);
