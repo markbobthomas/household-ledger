@@ -1352,3 +1352,115 @@ body{background:#fff;color:#24313b}
 .calendar-drilldowns button{background:transparent;border:0;padding:8px 2px;color:#405f76;font-size:12px;font-weight:650;font-family:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .calendar-drilldowns button:hover{color:#152f43}
 .calendar-drilldowns button:focus-visible{outline:2px solid #3978ad;outline-offset:2px}
+
+
+/* 2026 visual redesign: warm editorial ledger, quiet controls, strong data hierarchy. */
+:root{--ink:#182723;--muted:#697b75;--line:#e5eae5;--soft:#f2f5f1;--nav:#162923;--blue:#246b57;--pink:#246b57;--red:#bb463d;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+body{background:#f8faf7;color:var(--ink);font-size:13px}
+.content{max-width:1380px;padding:22px clamp(16px,3.2vw,52px) 56px}
+.topbar{margin:0 0 21px;align-items:center;gap:12px}
+.topbar h1{font-size:22px;font-weight:750;letter-spacing:-.8px;color:#183329}
+.top-actions{gap:7px;align-items:center}
+.planner-tabs.planner-nav-primary{border:0;background:transparent;margin:0 0 23px;gap:7px;padding:0}
+.planner-nav-primary .tab-link{border:0!important;box-shadow:none!important;border-radius:9px!important;min-height:40px;padding:9px 18px;font-size:13px;font-weight:650;color:#65776e;background:transparent}
+.planner-nav-primary .tab-link.active{background:#1f493b!important;color:#fff!important;box-shadow:none!important}
+.planner-nav-primary .tab-link:not(.active):hover{background:#eaf0e9;color:#224739}
+.top-actions .btn,.mode-box,.planner-menu>summary{min-height:36px;border:1px solid #e1e8e0;background:#fff;color:#315044;border-radius:9px;padding:7px 11px;font-size:11px;box-shadow:none}
+.top-actions .btn.primary{background:#1f493b;border-color:#1f493b;color:#fff}
+#source-type{border-radius:8px;background:#e6eee8;color:#315f4e;padding:7px 9px;letter-spacing:0;font:650 10px inherit}
+.panel{background:#fff;border:1px solid #e8eee8;border-radius:13px;box-shadow:0 4px 22px rgba(26,51,38,.035);margin-bottom:15px;padding:17px 19px}
+.page-heading h2{font-size:19px!important;color:#203a2f}
+.btn{border:1px solid #dce6df;border-radius:8px;background:#fff;color:#305344;font-weight:650;box-shadow:none}
+.btn.primary{background:#245742;border-color:#245742;color:#fff}
+.btn.primary:hover{background:#193f31;border-color:#193f31}
+.btn:hover:not(:disabled){background:#f0f5ef}
+input,select,textarea{color:#243c31;accent-color:#276c50}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #398367;outline-offset:1px}
+.status-tag{background:#edf3ed;color:#526c5f;border-radius:7px;font-family:inherit;letter-spacing:0}
+.status-tag.warn{background:#fff3de;color:#926326}.status-tag.bad{background:#fff0ea;color:#ad4639}
+.notice{background:#eff5ef;border:1px solid #dfe9df;border-left:3px solid #80ae8d;border-radius:9px;color:#435c4c}
+.notice.danger{background:#fff4f2;border-color:#f2d6d2;border-left-color:var(--red);color:#954a43}
+.summary-page{max-width:none}
+.summary-stage{background:transparent!important;border:0!important;box-shadow:none!important}
+.summary-heading{margin-bottom:14px!important}
+.summary-account-picker select{background:#fff;border-radius:8px;border-color:#dce7dd}
+.summary-numbers{display:flex;gap:clamp(20px,5vw,80px)!important;align-items:flex-end;margin-bottom:20px!important}
+.summary-bank,.summary-minimum{padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important}
+.summary-bank strong{font-size:clamp(28px,4vw,51px)!important;letter-spacing:-1.9px!important;line-height:1.1}
+.summary-low{font-size:clamp(26px,3.5vw,45px)!important;letter-spacing:-1.4px!important}
+.summary-overline,.summary-bank small{color:#708278!important;text-transform:none!important;font-size:11px!important}
+.summary-low-warning{color:#b13d32!important;font-weight:700}
+.calendar-drilldowns{order:0;gap:8px;padding:0 0 13px;margin:0}
+.calendar-drilldowns button{font-size:11px;background:#ecf2eb;border-radius:7px;padding:8px 11px;color:#32604c;text-decoration:none}
+.calendar-drilldowns button:hover{background:#dfebdf}
+.calendar-wrapper{margin-top:13px!important}
+.calendar-navigation{margin-bottom:12px!important}
+.calendar-navigation h2{font-size:24px!important;letter-spacing:-.8px;color:#1c3e2e}
+.calendar-navigation button{border-radius:8px}
+.calendar-grid{gap:4px!important;background:transparent}
+.calendar-weekday{font-size:10px;letter-spacing:.4px;color:#86998b;text-transform:uppercase}
+.calendar-day{border:1px solid #e8eee7!important;border-radius:9px!important;background:#fff;min-height:90px;transition:background .12s,border-color .12s}
+.calendar-day:hover{background:#f1f6f0!important;border-color:#aec7b3!important}
+.calendar-day.selected,.calendar-day[aria-pressed="true"]{border-color:#398064!important;box-shadow:inset 0 0 0 1px #398064;background:#f5faf4}
+.calendar-day-number{font-weight:650;color:#4c6455}
+.calendar-day-balance{font-weight:740;color:#1f4832;letter-spacing:-.2px}
+.calendar-event{border-radius:5px!important}
+.calendar-day-detail{background:#fff;border:1px solid #e8eee7;border-radius:12px;padding:16px!important;margin-top:15px!important}
+.calendar-monthly-list{border-radius:10px!important}
+.summary-trust{color:#687b6e}
+.summary-extras{background:#fff;border:1px solid #e7ede6;border-radius:12px;padding:10px 15px}
+.schedule-page .page-heading{margin-bottom:13px!important}
+.schedule-page .page-heading .btn{background:#245742;border-color:#245742;color:#fff;min-height:36px;border-radius:8px}
+.schedule-toolbar{background:#fff;border:1px solid #e7ede5;padding:11px;border-radius:11px;margin:0 0 12px;gap:9px}
+.schedule-toolbar select,.schedule-search-wrap input{background:#f9fbf8!important;border:1px solid #e1e9e0!important;border-radius:7px!important}
+.schedule-category-manager>summary{border-radius:7px!important}
+.schedule-page .schedule-grid{gap:0!important;background:#fff;border:1px solid #e6ede5;border-radius:12px;overflow:visible;padding:3px 13px}
+.schedule-page .schedule-card,.schedule-page .schedule-category-group{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important}
+.schedule-page .schedule-compact-row{min-height:56px;border-bottom:1px solid #edf2ec;background:transparent}
+.schedule-page .schedule-card:last-child .schedule-compact-row{border-bottom:0}
+.schedule-page .schedule-row-main{padding:10px 7px;min-height:52px}
+.schedule-page .schedule-row-main:hover{background:#f5f8f3}
+.schedule-row-title strong{font-size:13px!important;color:#233c2e}
+.schedule-row-title small{color:#859588}
+.schedule-row-amount strong{color:#1b4933;font-size:13px!important}
+.schedule-page .schedule-number{color:#9aa99c}
+.schedule-page .schedule-row-category{color:#4b6854}
+.schedule-page .schedule-category-heading{border-color:#e8efe8}
+.schedule-page .schedule-card-detail:not(:empty){background:#f7faf5;border-radius:8px;border:0}
+.schedule-more-menu,.planner-menu-content{border:1px solid #e2eae0!important;border-radius:11px!important;box-shadow:0 15px 35px #243a2b22!important;background:#fff}
+.history-page .panel,.transactions-page .transaction-panel{background:#fff;border:1px solid #e8eee8;border-radius:12px;padding:13px 15px}
+.history-actual-row,.future-item{border-bottom-color:#edf1eb!important}
+.history-actual-row:hover,.future-item:hover{background:#f5f8f3}
+.history-filters{gap:10px}
+.history-filters input,.history-filters select{border-radius:8px}
+.settings-page>.panel,.reviews-page>.panel{border-radius:12px}
+.transaction-detail{border-radius:15px;background:#fff}
+.transaction-detail-head{background:#f6faf5;border-bottom:1px solid #e6eee4}
+.calendar-quick-form{border-radius:11px;background:#fff;border:1px solid #e2ebe1;box-shadow:0 18px 55px #1d3b2b1f}
+:where(button,a,summary):focus-visible{outline:2px solid #34745d;outline-offset:2px}
+@media(max-width:780px){
+ body{background:#fff}
+ .content{padding:13px 10px 35px}
+ .topbar{margin-bottom:13px;align-items:center;gap:8px}
+ .topbar h1{font-size:19px}
+ .planner-tabs.planner-nav-primary{margin-bottom:13px;gap:3px}
+ .planner-nav-primary .tab-link{padding:8px 12px;min-height:36px;font-size:12px}
+ .summary-numbers{gap:14px!important;align-items:flex-start}
+ .summary-bank strong{font-size:clamp(23px,6vw,34px)!important;letter-spacing:-.7px!important}
+ .summary-low{font-size:clamp(21px,5.5vw,33px)!important;letter-spacing:-.7px!important}
+ .calendar-navigation h2{font-size:21px!important}
+ .calendar-grid{gap:2px!important}
+ .calendar-day{border-radius:6px!important;min-height:67px;padding:4px!important}
+ .calendar-day-detail{padding:10px!important}
+ .schedule-toolbar{padding:8px}
+ .schedule-page .schedule-grid{padding:2px 7px}
+ .schedule-page .schedule-row-main{padding:8px 3px}
+ .top-actions{gap:4px}
+}
+@media(max-width:390px){
+ .content{padding-left:7px;padding-right:7px}
+ .topbar h1{font-size:17px}
+ .planner-nav-primary .tab-link{padding:8px 10px}
+ .summary-numbers{gap:9px!important}
+ .calendar-day{min-height:61px}
+}
