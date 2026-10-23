@@ -513,3 +513,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Browser regression follow-up:** The updated marker and Calendar styling checks were reached successfully. A later private-bank fixture still navigated to a deleted Calendar drilldown instead of More → All Predictions; fixed this test-only route. No live interaction changed.
 - **Validation:** Extend desktop Chromium/iPhone WebKit checks for HTML UI revision marker, the More-footer build label, zero borders and padding for all three Calendar metric columns, and the previously added threshold/color tests. Real-account pilot safety and browser CI must be checked before merge.
 - **Release status:** New GitHub PR/release work; current private Render revision still **unverified** from this session. A successful Render deployment of an old commit/service cannot prove these page assets are current. After merge, inspect the user's app **More → Calendar UI r2 · Render [short SHA]** and compare with GitHub `main` (avoid the fictional Sandbox when verifying the real account app).
+
+
+### 2026-10-23 — Calendar fix confirmed by user
+
+- The user reports: “It’s working.” This confirms that the corrected Calendar appearance is now visible to the user after application PR #99 (main commit `7741de9df93e9b281a393d524ab713e7d8f13290`). The earlier visible divider and styling-release mismatch can be considered resolved from the user perspective.
+- No application changes for this acknowledgment. Retain the working three-metric presentation, green current balance, configurable red projected-low threshold, and existing build identifier.
+- GitHub Pages publishing, reconciliation gate, Demo/Real audit, and pilot safety check succeeded for the release. Full browser workflow reported a failure; do not claim every test passed. Private Render commit was not independently read in this session, although user confirms the app is now working.
+- Next: preserve this working UI as the baseline; any remaining browser test maintenance should be handled separately and should not disrupt deployed financial workflows.
