@@ -242,7 +242,8 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
    await go('history');
-   assert.match(await page.locator('.history-page').innerText(),/Actual transaction history/);
+   assert.equal(await page.locator('.history-page > .page-heading').count(),0,
+    'History uses selected tab as title without repeating it');
    assert.ok(await page.locator('.history-actual-row').count()>20,
     'All loaded bank records can be inspected individually');
    const demoHistoricalMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
