@@ -585,7 +585,7 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .summary-ranges{margin:11px 0 17px}
 .summary-numbers{display:grid;grid-template-columns:1fr 1.25fr 1fr;align-items:start;gap:15px;border:1px solid #e7edf3;border-radius:12px;padding:17px 20px;background:#fff}
 .summary-numbers>div{min-width:0}
-.summary-numbers>div+div{padding-left:17px;border-left:1px solid #eef1f5}
+/* No dividers or shifted padding between the three Calendar balance figures. */
 .summary-current strong{display:block;margin:7px 0;font:720 clamp(19px,2.5vw,28px)/1.22 var(--mono);letter-spacing:-.8px;color:#1d3449}
 .summary-numbers .summary-low{font-size:clamp(24px,3vw,37px);letter-spacing:-1.3px}
 .summary-numbers .summary-end{grid-column:1 / -1;flex-direction:row;gap:9px;border-top:1px solid #eef1f5;padding:9px 0 0;text-align:left;justify-content:flex-start}
@@ -613,7 +613,7 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .calendar-actual-row .calendar-item-edit{white-space:nowrap}
 @media(max-width:780px){
  .summary-numbers{grid-template-columns:1fr 1fr;gap:11px;padding:12px 12px}
- .summary-numbers>div+div{padding-left:10px}
+ /* Metric columns keep equal padding on smaller screens, too. */
  .summary-numbers .summary-low{font-size:25px}
  .summary-coverage-metric{grid-column:1 / -1;border-left:0!important;border-top:1px solid #eef1f5;padding:10px 0 0!important;flex-direction:row;justify-content:space-between}
  .summary-numbers .summary-end{grid-column:1 / -1;order:4}
