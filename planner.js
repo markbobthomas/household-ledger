@@ -1120,7 +1120,7 @@ function schedulesPage(bundle,s){
    wins=Array.isArray(r.amountWindows)?r.amountWindows:[];
   const edit=isEditing?'<form class="schedule-form" data-schedule-edit-form="'+id+'">'+
    fields({...r,date:next||tomorrow},false)+
-   '<div class="future-form-actions"><button class="btn primary" type="submit">Save schedule</button>'+
+   '<div class="future-form-actions"><button class="btn primary" type="submit">Save</button>'+
     '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
   const windows=wins.map((w,i)=>'<div class="schedule-window"><span>'+
    escapeHTML(w.from)+' to '+escapeHTML(w.through)+' · '+cash(w.amount)+'</span>'+
@@ -1192,7 +1192,7 @@ function schedulesPage(bundle,s){
   }).join(''):
   visible.map(cardHtml).join(''); 
  return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
-  '<h2>Payment schedules</h2><p>Edit any schedule or an individual upcoming payment.</p></div>'+
+  '<h2>Schedules</h2></div>'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
