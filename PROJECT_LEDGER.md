@@ -469,3 +469,13 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Checks:** JavaScript syntax inspected via source parse. GitHub PR validation must be checked before merge; mobile/desktop rendered appearance and private live deployment still require separate verification.
 - **Deployment:** Private Render SHA remains unverified; a merged PR is not evidence that Render is live.
 - **Next:** Visually review the three-metric header on phone and desktop after confirmed deployment, especially narrow screens and monthly navigation.
+
+
+### 2026-10-23 — user-configurable red projected-low threshold
+
+- **Goal:** Let users select the Calendar low amount that turns red.
+- **Decision:** Add a separate Settings control labeled **Red highlight below ($)**, default $6,000. Do not repurpose the existing cash-cushion warning threshold, which has separate forecasting safety semantics. Only values **strictly below** the chosen threshold turn red. The same saved value controls the monthly and three-year projected lows, including after calendar month navigation.
+- **Implementation:** Store validated whole-dollar `predictions.lowAlertThreshold` in existing forecast preferences, alongside other settings; Demo local preference allowlist and private forecast preference persistence use current infrastructure. No Plaid records, projection math, schedules, or banking credentials changed.
+- **PR/checks:** Added to in-progress Calendar metrics PR #91; banking safety and responsive browser CI need to pass on the updated head before merge. The previous PR head passed banking-safety after a stale historical button assertion was fixed, but this must be rerun after the new changes.
+- **Deployment:** Private Render SHA is not verified. Do not claim these preferences are live until checked.
+- **Next:** Verify Settings saves and survives reload; confirm threshold color changes on Calendar and month navigation in desktop and iPhone browser coverage, then merge only after checks.
