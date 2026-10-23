@@ -1589,3 +1589,27 @@ button,select,input,textarea{font-family:inherit}
  .history-page .history-actual-row{grid-template-columns:56px minmax(0,1fr) 92px;gap:7px}
  .history-page .history-row-actions{grid-column:2/-1;justify-content:flex-start;flex-wrap:wrap}
 }
+
+
+/* Schedules / History: same outer geometry — toolbar above bordered ledger. */
+.schedule-page .schedule-toolbar,.history-page .history-filters{
+ width:100%;margin:0 0 12px;padding:11px;border:1px solid #e7ede5;
+ border-radius:11px;background:#fff;box-shadow:none;
+}
+.schedule-page .schedule-grid,.history-page .history-list-surface{
+ width:100%;margin:0;padding:3px 13px;border:1px solid #e6ede5;
+ border-radius:12px;background:#fff;box-shadow:none;overflow:visible;
+}
+.history-page .history-count{margin:0;padding:10px 7px 9px;color:var(--muted);font-size:11px}
+.history-page .history-actual-row{padding:10px 7px;min-height:56px;
+ grid-template-columns:72px minmax(0,1fr) 105px minmax(108px,max-content);
+ gap:12px}
+.history-page .history-row-actions{min-width:0;white-space:nowrap}
+.history-page .history-row-hint{font-size:11px;color:var(--muted)}
+.history-page .history-row-actions .btn{font-size:11px;padding:6px 9px}
+.history-page .history-actual-row:last-of-type{border-bottom:0}
+@media(max-width:780px){
+ .schedule-page .schedule-grid,.history-page .history-list-surface{padding:2px 7px}
+ .history-page .history-actual-row{grid-template-columns:56px minmax(0,1fr) 92px;gap:7px;padding:9px 3px}
+ .history-page .history-row-actions{grid-column:2/-1;justify-content:flex-start}
+}
