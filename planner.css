@@ -1673,3 +1673,15 @@ html{scrollbar-gutter:stable}
  .summary-page .summary-low-date{font-size:10px;white-space:normal}
 }
 @media(max-width:390px){:root{--type-metric:clamp(14px,4.2vw,19px)}.summary-page .summary-numbers{gap:5px!important}}
+
+
+/* Bank utilities belong in More, not the Calendar header. */
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap}
+.top-actions{margin-left:auto;flex:0 0 auto}
+.planner-menu-bank{display:grid;grid-template-columns:1fr;gap:7px;margin:8px 0;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.planner-menu-bank label{font-size:11px;font-weight:650;color:var(--muted)}
+.planner-menu-bank .mode-box{width:100%;min-height:36px}
+.planner-menu-bank .status-tag{justify-self:start}
+.planner-menu-bank .btn{width:100%;justify-content:center}
+.planner-menu-content{min-width:230px;max-width:min(300px,calc(100vw - 20px))}
+@media(max-width:780px){.topbar{flex-direction:row;flex-wrap:nowrap;align-items:center}.top-actions{justify-content:flex-end}}
