@@ -562,7 +562,8 @@ const {chromium,webkit}=require('playwright');
     'Linked history persists while trying different payee searches');
    await page.locator('[data-cancel-new]').click();
    await go('history');
-   const unscheduledHistory=page.locator('.history-actual-row[data-history-recurring-state="unscheduled"]').first();
+   const unscheduledHistory=page.locator('.history-actual-row[data-history-recurring-state="unscheduled"][data-history-kind="expense"]')
+    .filter({has:page.locator('[data-ignore-history-recurrence]')}).first();
    assert.ok(await unscheduledHistory.count()>0,'At least one actual payment has no repeating plan');
    assert.match(await unscheduledHistory.locator('.history-row-open').innerText(),/Plan repeating/,
     'An unscheduled payment has an obvious primary plan action');
