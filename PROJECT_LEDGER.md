@@ -423,7 +423,7 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 
 ### 2026-10-22 — corrected reversed monthly minimum comparator
 
-- **User evidence:** iPhone Calendar screenshot October 2026 displayed roughly $3.6K on Oct 26–29 but called $7,527.75 on Oct 31 the 'Monthly low'. This was not a timezone issue or stale UI.
+- **User evidence:** iPhone Calendar screenshot showed multiple days with clearly lower balances than the date marked 'Monthly low'. This was not a timezone issue or stale UI.
 - **Confirmed root cause:** `monthLow()` reduced over `calendarContext.points` using `b.balance<a.balance?a:b`, which returned the **higher** point when a smaller one was found. Thus the metric and day highlight selected the monthly *maximum*.
 - **Fix:** Reverse ternary to `b.balance<a.balance?b:a`, retaining the same projection series and highlighting selected minimum date. Add a targeted smoke assertion with rising balances (minimum first day) and retain browser comparison to visible calendar values. Do not touch bank data, schedules or forecast arithmetic.
 - **Verification:** GitHub checks and actual private Render deployment must be independently confirmed.
