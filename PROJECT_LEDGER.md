@@ -345,3 +345,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Safety:** Never remove protections against writes to actual bank data, invented balances, double-counted linked settlements, or unverified projected values. CI success is not private Render deployment evidence.
 - **Limitations:** The separate browser workflow is not removed by this change; its workflow file was not identified in this focused audit. Further browser CI reduction should be based on its actual configuration and GitHub branch protection.
 - **Checks/deployment:** Workflow change requires validation by GitHub PR; no actual bank data or infrastructure changed. Private Render unchanged/unverified.
+
+
+### 2026-10-22 — UTC/Pacific balance-date correction
+
+- **Issue:** Connected checking account balance was marked future-dated in the evening Pacific despite a valid bank observation, blanking the Calendar. Bank account disconnection is neither necessary nor appropriate.
+- **Root cause in source:** `pilot/server.cjs` timestamps a successful Plaid balance refresh with an ISO UTC instant. `pilot/data-source.js`/`planner.js` use local calendar day for snapshot `asOf`, but `planner-core.js` formerly compared it with the UTC timestamp date prefix. After 5 PM Pacific (during daylight saving), a valid same-day balance can look like tomorrow.
+- **Fix:** In `planner-core.js`, convert full ISO timestamp to the browser-local date before the freshness comparison; preserve date-only backwards compatibility and retain future-dated warnings for genuinely future dates. Add a Pacific-evening regression and a true-future timestamp control to `tests/planner-core-smoke.cjs`. Do not change Plaid connection, account deletion, source transactions, current balance or the forecast ledger math.
+- **Status:** Target PR, CI and private Render revision need independent verification; no live bank data accessed. Future work: verify the private deployed code and actual restored Calendar without requiring relinking.
