@@ -316,3 +316,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Next:** Compare actual phone/desktop screenshots and tune any remaining typography or calendar-density issues without changing source-of-truth finance behavior.
 
 - **Post-merge verification (2026-10-22):** [PR #68](https://github.com/markbobthomas/household-ledger/pull/68) merged into `main` as `32d40bf399b5953d2ee847d529428bed99ff84f3`. Real-account pilot safety and Browser interaction test (desktop Chromium + iPhone WebKit) both passed on head `9b9df901063c0f609659a517e6cfd4ed8a689b63`. Changes were confined to stylesheet, HTML cache reference/theme color, and documentation; no financial logic modified. Private Render deployment and Pages publication remain unverified.
+
+
+### 2026-10-22 — newly added card leads to unverified calendar
+
+- **Report:** Calendar disappears with an Unverified state after a newly connected credit card's billing/payment parameters were entered.
+- **Code finding:** `planner-summary.js` returns a no-calendar empty state whenever the selected account does not have a fresh, finite projected balance series; `planner-core.js` marks missing bank-reported `current` balance unavailable or missing observation date unknown-age. Card payment-rule readiness in `payment-obligations.js` is a separate condition and does not establish a bank-reported card balance. Selection in `planner.js` can remain on a credit account rather than main checking.
+- **Status:** No app code modified and no live private bank state inspected. Root cause on the user's deployment remains unverified; switching the Calendar Account selector to the main checking account is a diagnostic workaround, not a verified fix. Preserve truthful balance verification; future fix should keep a verified checking calendar usable despite an unrelated card's missing balance, show the specific blocker, and ensure uncertain card settlements aren't silently counted as certain.
+- **Checks/deployment:** Source inspection only; no automated functional/browser tests or private Render deployment verification. Next action is reproduce with fictional newly added credit-card fixture, implement targeted UX/gating correction and test before merging.
