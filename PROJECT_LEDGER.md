@@ -260,3 +260,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Next:** Confirm real-world calendar legibility and mobile tap usability after verified deployment; refine only any proven density problems.
 
 - **Post-merge verification (2026-10-22):** [PR #56](https://github.com/markbobthomas/household-ledger/pull/56) merged to `main` as `7f645e67b03e42d36f39ecb4f0d9e8ef5013c400` after **Real-account pilot safety checks** and **Browser interaction test** (desktop Chromium and iPhone WebKit) passed on feature commit `7c245153018db310e27612542cefb2a94d2f72b2`. The first browser run revealed a hidden historical-bank-versus-prediction label; restored it and reran green. Private Render live deployment and GitHub Pages publication remain independently unverified.
+
+### 2026-10-22 — uniform-width, border-light Schedule list
+
+- **Request:** Make all Schedule items the same width and remove excessive borders and framing.
+- **Diagnosis/decision:** Multiple historical grid/card rules compete with category-group and ungrouped flex layout. Enforce one full-width, stretch-aligned schedule list and consistent group/row widths; use subtle row separators instead of boxed cards. Retain keyboard focus styles, form controls, categories, menus and expanded editors.
+- **Changes:** Focused Schedule CSS overrides in `planner.css`, stylesheet cache refresh in `index.html`; no changes to prediction logic, bank data, account security, category persistence or schedule behavior.
+- **Checks:** Require pilot safety and desktop Chromium/iPhone WebKit browser tests before merging. Private Render deployment unverified.
