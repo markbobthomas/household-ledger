@@ -1529,3 +1529,13 @@ button,select,input,textarea{font-family:inherit}
  .planner-tabs.planner-nav-primary::-webkit-scrollbar{display:none}
  .planner-nav-primary .tab-link{flex:0 0 auto}
 }
+
+/* History: actions are a single aligned column, never free grid children. */
+.history-actual-row{grid-template-columns:72px minmax(0,1fr) 105px minmax(170px,max-content);column-gap:12px}
+.history-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;white-space:nowrap}
+.history-row-actions .btn{min-height:34px;margin:0;grid-column:auto!important;white-space:nowrap}
+@media(max-width:780px){
+ .history-actual-row{grid-template-columns:56px minmax(0,1fr) 92px;gap:7px}
+ .history-row-actions{grid-column:2/-1;justify-content:flex-start;flex-wrap:wrap;gap:6px}
+ .history-row-actions .btn{grid-column:auto!important;justify-self:auto;margin:0}
+}

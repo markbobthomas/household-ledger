@@ -369,3 +369,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Goal:** Present five navigation choices in the same primary row: Calendar, Schedules, History, All Predictions, Needs Review.
 - **Change:** Add Predictions/Needs Review to `index.html` primary tabs and remove their redundant secondary Calendar links in `planner.js`; maintain the existing views and handlers. Style nav as aligned, responsive row with horizontal scrolling on narrow phones. Update browser navigation assertions; no banking/forecast changes.
 - **Verification:** Focused PR pending CI; private Render status independently unverified.
+
+
+### 2026-10-22 — predictions moved to More; clearer History actions
+
+- **Request:** Keep Calendar, Schedules, History and Needs Review in the primary navigation; move All Predictions into More. Clarify actual-history actions and prevent Allow Predictions from falling onto another line.
+- **Implementation:** `index.html` More now links to All Predictions and the primary duplicate is removed. History uses a grouped, right-aligned action column on desktop and a single grouped action region on mobile; former Make recurring becomes Plan future payments, linked recurring becomes Edit schedule, Not recurring becomes Stop predictions. For excluded patterns, offer Allow future predictions without the contradictory plan action. Refine the History explanation/search label. Preserve existing event handlers and bank/forecast data semantics.
+- **Scope:** UI, CSS and browser navigation assertions only. No account mutation or forecast calculation changes. Browser CI and private Render deployment require separate verification.
