@@ -1647,3 +1647,29 @@ html{scrollbar-gutter:stable}
 .schedule-page .page-heading [data-schedule-new]{margin-left:auto;white-space:nowrap}
 .planner-fine-print{max-width:1050px;margin:28px auto 0;padding:12px 2px;color:var(--muted);font-size:10px;line-height:1.5;text-align:left}
 @media(max-width:780px){.schedule-page .page-heading{gap:8px}.schedule-page .page-heading [data-schedule-new]{min-height:36px}.planner-fine-print{margin-top:20px}}
+
+
+/* Shared typography scale and aligned three-value Calendar header. */
+:root{--type-title:19px;--type-section:15px;--type-body:13px;--type-detail:11px;--type-metric:clamp(24px,3vw,42px)}
+.planner-page .page-heading h2{font-size:var(--type-title)!important;font-weight:700;line-height:1.25;letter-spacing:-.35px}
+.planner-page .page-heading p{font-size:12px;line-height:1.45}
+.planner-page .section-title h2,.planner-page .schedule-category-heading h3{font-size:var(--type-section);font-weight:700;line-height:1.3;letter-spacing:-.2px;text-transform:none}
+.planner-page .schedule-row-title strong,.planner-page .history-actual-description strong,.planner-page .review-candidate-main>strong{font-size:var(--type-body)!important;line-height:1.4}
+.planner-page .schedule-row-title small,.planner-page .history-actual-description small,.planner-page .review-candidate-main small{font-size:var(--type-detail)!important;line-height:1.4}
+.summary-page .summary-numbers{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(12px,3vw,36px)!important;align-items:stretch!important;width:100%}
+.summary-page .summary-bank,.summary-page .summary-minimum,.summary-page .summary-monthly{display:grid;grid-template-rows:20px minmax(44px,auto) minmax(22px,auto);align-content:start;justify-items:start;align-items:center;gap:5px;min-width:0;margin:0;padding:0}
+.summary-page .summary-bank strong,.summary-page .summary-low{font-family:inherit;font-size:var(--type-metric)!important;font-weight:750!important;line-height:1.08!important;letter-spacing:-1.1px!important;font-variant-numeric:tabular-nums;white-space:nowrap;overflow-wrap:normal}
+.summary-page .summary-overline,.summary-page .summary-bank small{font-size:11px!important;line-height:20px!important;font-weight:600;color:var(--muted);min-height:20px}
+.summary-page .summary-low-date,.summary-page .summary-bank small:last-child{line-height:22px;min-height:22px;margin:0}
+.summary-page .calendar-day.month-minimum{border-color:#b48236!important;background:#fff9ee!important;box-shadow:inset 0 0 0 1px #b48236}
+.summary-page .calendar-day.month-minimum .calendar-day-number:after{content:" · low";font-size:9px;font-weight:700;color:#8b6129}
+.summary-page .calendar-day.month-minimum.selected{outline:2px solid #b48236;outline-offset:1px}
+@media(max-width:780px){
+ :root{--type-metric:clamp(16px,4.5vw,30px)}
+ .summary-page .summary-numbers{gap:8px!important}
+ .summary-page .summary-bank,.summary-page .summary-minimum,.summary-page .summary-monthly{grid-template-rows:32px minmax(34px,auto) minmax(20px,auto);gap:3px}
+ .summary-page .summary-overline,.summary-page .summary-bank small{font-size:10px!important;line-height:1.25!important;min-height:0;align-self:end}
+ .summary-page .summary-bank strong,.summary-page .summary-low{font-size:var(--type-metric)!important;letter-spacing:-.55px!important}
+ .summary-page .summary-low-date{font-size:10px;white-space:normal}
+}
+@media(max-width:390px){:root{--type-metric:clamp(14px,4.2vw,19px)}.summary-page .summary-numbers{gap:5px!important}}

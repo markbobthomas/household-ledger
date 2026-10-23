@@ -405,3 +405,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Request:** Make Schedules heading consistent with History/Needs Review, put + Schedule beside title, and move generic bank/demo disclaimer below tabs to small bottom-of-page print.
 - **Change:** Schedules now has a heading, short purpose line and same-row + Schedule action. General informational notice renders in a quiet footer below page content; serious forecast errors, unresolved reviews and bank-unavailable warnings remain prominent above content. Update stylesheet and script cache keys. No forecasts, bank records or editing semantics changed.
 - **Status:** Targeted GitHub PR; production Render and live screenshots unverified.
+
+
+### 2026-10-22 — calendar monthly low and typography consistency
+
+- **Request:** Add the current calendar month's minimum projected balance beside current balance and three-year low, highlight its date, and normalize inconsistent titles and font sizes.
+- **Implementation:** Compute monthly low from the same verified per-day projection as Calendar, highlight its day with a distinct low marker, and update the metric when navigating months. Three balance metrics now share a three-column grid and coordinated label/value/date typography with narrow-phone scale adjustments. Standardize common list title, merchant and detail sizes. No forecast arithmetic, bank source or saved planning data changes.
+- **Testing/deployment:** Targeted smoke assertions and GitHub PR verification pending. Do not claim private Render deployment or real-device pixel matching without evidence.
