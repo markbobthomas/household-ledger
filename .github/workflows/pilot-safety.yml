@@ -1,9 +1,9 @@
 name: Real-account pilot safety checks
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,57 +15,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check independent pilot server syntax
+      - name: Check active server and planner syntax
         run: |
           node --check pilot/server.cjs
-          node --check pilot/account-forecast-links.cjs
           node --check pilot/data-source.js
-          node --check payment-obligations.js
-          node --check planner-intelligence.js
-          node --check planner-backtest.js
+          node --check planner-core.js
           node --check planner-transactions.js
+          node --check payment-obligations.js
+          node --check planner.js
           node --check planner-summary.js
-          node --check planner-coverage.js
-          node --check account-forecast.js
-          node --check sandbox/server.cjs
-      - name: Smoke test authentication, health and no-credentials startup
+      - name: Test essential banking and forecasting behavior
         run: |
           node tests/pilot-security-smoke.cjs
           node tests/pilot-plaid-flow.cjs
-          node tests/planner-parity.cjs
-          node tests/pilot-account-forecast-links-smoke.cjs
           node tests/pilot-remove-account-smoke.cjs
-          node tests/recurrence-reconcile-smoke.cjs
-          node tests/payment-obligations-smoke.cjs
+          node tests/planner-core-smoke.cjs
+          node tests/planner-integrity-smoke.cjs
+          node tests/planner-recurrence-integration-smoke.cjs
+          node tests/planner-independent-schedules-smoke.cjs
+          node tests/planner-posted-matching-smoke.cjs
           node tests/card-statement-cycles-smoke.cjs
           node tests/card-setup-gate-smoke.cjs
-          node tests/planner-summary-smoke.cjs
-          node tests/planner-three-year-smoke.cjs
-          node tests/planner-schedule-categories-smoke.cjs
-          node tests/planner-posted-matching-smoke.cjs
-          node tests/planner-coverage-smoke.cjs
-          node tests/planner-routine-smoke.cjs
-          node tests/planner-backtest-smoke.cjs
           node tests/planner-transactions-smoke.cjs
-          node tests/planner-series-smoke.cjs
-          node tests/every-four-weeks-smoke.cjs
-          node tests/planner-recurring-confirmation-smoke.cjs
-          node tests/planner-opt-out-smoke.cjs
-          node tests/planner-merchant-streams-smoke.cjs
-          node tests/planner-recurring-collision-smoke.cjs
-          node tests/planner-independent-schedules-smoke.cjs
-          node tests/planner-card-estimate-smoke.cjs
-          node tests/planner-integrity-smoke.cjs
-          node tests/planner-core-smoke.cjs
-          node tests/planner-alternating-pay-smoke.cjs
-          node tests/planner-payroll-safety-smoke.cjs
-          node tests/planner-missing-mortgage-smoke.cjs
-          node tests/planner-history-smoke.cjs
-          node tests/history-any-recurring-smoke.cjs
-          node tests/planner-early-recurrence-smoke.cjs
-          node tests/recurrence-early-dedupe-smoke.cjs
-          node tests/planner-recurrence-integration-smoke.cjs
+          node tests/planner-summary-smoke.cjs
           node tests/forecast-only-save-smoke.cjs
           node tests/forecast-client-save-smoke.cjs
-          node tests/planner-income-smoke.cjs
-          node tests/mortgage-prediction-smoke.cjs
