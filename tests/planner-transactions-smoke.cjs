@@ -56,5 +56,34 @@ assert.throws(()=>T.saveEdit(state,cardKey,{date:'2026-11-21',amount:-4,
  fromAccountId:'checking',toAccountId:'card'},accounts,snapshot.asOf),/positive/);
 assert.throws(()=>T.add(state,{date:'2026-10-10',merchant:'Backdated',type:'expense',
  accountId:'checking',amount:10},accounts,snapshot.asOf),/future date/);
+// History can suppress future automatic suggestions without inventing a
+// schedule or affecting any actual/source transactions.
+const historyOnly={predictions:{}};
+const suppressed=T.excludeHistorySuggestions(historyOnly,{
+ accountId:'checking',type:'expense',merchant:'Occasional Vendor'});
+assert.equal(T.isNotRecurring(historyOnly.predictions,'checking','expense','Occasional Vendor'),true,
+ 'An unscheduled bank-history payee can be marked as excluded');
+assert.equal(T.isNotRecurring(historyOnly.predictions,'card','expense','Occasional Vendor'),false,
+ 'History exclusions remain account-specific');
+assert.equal(T.isNotRecurring(historyOnly.predictions,'checking','income','Occasional Vendor'),false,
+ 'History exclusions remain cash-direction-specific');
+assert.equal(historyOnly.predictions.futureRecurringRules.length,0,
+ 'Excluding an unscheduled payee never adds or removes a schedule');
+T.restoreRecurrence(historyOnly,suppressed.key);
+assert.equal(T.isNotRecurring(historyOnly.predictions,'checking','expense','Occasional Vendor'),false,
+ 'Allow predictions restores an unscheduled payee');
+const protectedHistory={predictions:{futureRecurringRules:[
+ {id:'salary-A',kind:'event',accountId:'checking',originalAccountId:'checking',
+  type:'income',merchant:'Employer Monthly',originalMerchant:'Employer Monthly'},
+ {id:'salary-B',kind:'event',accountId:'checking',originalAccountId:'checking',
+  type:'income',merchant:'Separate paycheck',originalMerchant:'Other Payroll',
+  matchNames:['employer monthly']}
+]}};
+const protectedBefore=JSON.stringify(protectedHistory);
+assert.throws(()=>T.excludeHistorySuggestions(protectedHistory,{
+ accountId:'checking',type:'income',merchant:'Employer Monthly'}),/saved repeating plan/i,
+ 'Do not apply a broad history exclusion across independently confirmed income streams');
+assert.equal(JSON.stringify(protectedHistory),protectedBefore,
+ 'Rejected broad history exclusions cannot alter financial schedules or preferences');
 assert.deepEqual(state.transactions,undefined,'No edits to any source bank transaction property');
 console.log('PASS editable mortgage, added income, linked transfer, edited card autopay, skipped/restored payment, deleted manual transfer, validations and immutable inputs');

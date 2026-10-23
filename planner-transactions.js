@@ -486,6 +486,27 @@ const recurringType=row=>row.kind==='movement'?'transfer':row.sourceType==='tran
 function isNotRecurring(preferences,accountId,type,merchant){
  return Boolean((preferences?.futureRecurrenceExclusions||{})[recurrenceKey(accountId,type,merchant)]);
 }
+/* Opt out of future automatic suggestions for a bank-history payee even when
+ * the engine has not yet recognized any repeating payments. This must never
+ * delete a confirmed independent schedule or mutate source bank history.
+ * It is distinct from stopRecurrence, which removes an existing prediction. */
+function excludeHistorySuggestions(state,{accountId,type,merchant}={}){
+ const aid=String(accountId||''),kind=String(type||''),name=String(merchant||'');
+ if(!aid||!sourceMerchant(name)||!['expense','income','refund','transfer'].includes(kind))
+  throw Error('Choose a valid bank transaction to exclude');
+ const prefs=state?.predictions||{};
+ const related=(prefs.futureRecurringRules||[]).some(r=>
+  String(r.originalAccountId||r.accountId||r.fromAccountId||'')===aid&&
+  (r.kind==='movement'?'transfer':r.type)===kind&&
+  [r.originalMerchant,r.merchant,...(r.matchNames||[])].some(alias=>
+   sourceMerchant(alias)===sourceMerchant(name)));
+ if(related)throw Error('This payee has a saved repeating plan. Open the plan to change it instead.');
+ const key=recurrenceKey(aid,kind,name);
+ const p=ensure(state);
+ p.futureRecurrenceExclusions??={};
+ p.futureRecurrenceExclusions[key]={accountId:aid,type:kind,merchant:name,historyOptOut:true};
+ return {key,accountId:aid,type:kind,merchant:name};
+}
 function restoreRecurrence(state,key){
  const p=ensure(state),entry=p.futureRecurrenceExclusions?.[key];
  if(!entry)throw Error('This recurrence is not currently excluded');
@@ -777,7 +798,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
  frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
- recurrenceKey,isNotRecurring,stopRecurrence,restoreRecurrence};
+ recurrenceKey,isNotRecurring,stopRecurrence,excludeHistorySuggestions,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
