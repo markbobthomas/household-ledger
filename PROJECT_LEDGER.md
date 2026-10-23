@@ -469,3 +469,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Checks:** JavaScript syntax inspected via source parse. GitHub PR validation must be checked before merge; mobile/desktop rendered appearance and private live deployment still require separate verification.
 - **Deployment:** Private Render SHA remains unverified; a merged PR is not evidence that Render is live.
 - **Next:** Visually review the three-metric header on phone and desktop after confirmed deployment, especially narrow screens and monthly navigation.
+
+
+### 2026-10-23 — configurable Calendar red-low threshold (pending UI validation)
+
+- **Request:** Make the dollar level that turns Calendar projected lows red user-selectable in Settings.
+- **Decision:** Keep the existing cash-cushion safety threshold separate. Add **Red highlight below ($)**, default $6,000; the saved whole-dollar value controls both monthly and three-year projected-low text, strictly below threshold, including after navigating months.
+- **Implementation status:** Changes authored in PR #93 (current-main clean branch), preserving Plaid/Render and existing forecast-only preference storage; includes earlier unmerged Calendar metric layout consolidation. No source bank records, recurrence, or forecasting math altered.
+- **Verification:** PR #93's Real-account pilot safety check passed. Browser interaction CI remains in progress; no app code merged or private Render revision verified at documentation time.
+- **Next:** Merge PR #93 only after UI checks pass and reconcile this ledger entry without duplication; then verify private deployment independently.
