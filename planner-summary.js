@@ -296,7 +296,7 @@ function updateMonthLow(){
  const el=document.querySelector('[data-summary-month-low]');
  if(!el)return;
  const point=monthLow(calendarMonth),value=el.querySelector('[data-summary-month-value]'),
-  button=el.querySelector('[data-summary-month-date]');
+  button=el.querySelector('[data-calendar-month-low]');
  if(value)value.textContent=point?money(point.balance):'Not projected';
  if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
   button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
