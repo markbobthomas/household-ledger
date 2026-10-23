@@ -499,12 +499,38 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
    series.at(-1).date,chosen.id,series):new Map()};
- if(series.length<2)return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
-  '<div class="summary-minimum"><div class="summary-overline">Lowest projected balance · next 3 years</div>'+
-  '<strong class="summary-low">Unverified</strong></div></div>'+
-  '<div class="summary-empty">A current, verifiable account balance is required before this forecast can be shown. Refresh your bank data and check its balance date.</div>'+
-  '</section></div>';
+ if(series.length<2){
+  const status=derived?.balanceStatus||(!bundle?.projection?'calculation':'unavailable');
+  const reason=status==='unavailable'?'The bank did not report a usable current balance for this account.':
+   status==='stale'?'The bank balance is more than two days old.':
+   status==='unknown-age'?'The bank has not supplied a usable balance observation date.':
+   status==='future-dated'?'The bank supplied a balance observation date in the future.':
+   status==='calculation'?'The forecast calculation could not be completed.':
+   status==='unverified'?'The account connection is not verified.':
+   'The account has no complete, trustworthy daily forecast.';
+  const detail=(bundle?.forecastError||'');
+  const repair='<div class="calendar-repair-overlay" role="presentation"><section class="calendar-repair-dialog" role="alertdialog" aria-modal="true" aria-labelledby="calendar-repair-title" aria-describedby="calendar-repair-detail">'+
+   '<h2 id="calendar-repair-title">Calendar needs attention</h2>'+
+   '<p id="calendar-repair-detail"><strong>'+esc(chosen.name||'Selected account')+':</strong> '+esc(reason)+'</p>'+
+   (detail?'<p class="calendar-repair-error">'+esc(detail)+'</p>':'')+
+   '<p><strong>What to do</strong></p><ol>'+
+   '<li>Refresh bank data and return to Calendar.</li>'+
+   '<li>If the balance is still missing or out of date, open Bank connections and reconnect the affected account.</li>'+
+   '<li>If the bank is connected but the problem persists, check the selected account and try again. Credit-card payment settings alone cannot verify a bank balance.</li>'+
+   '</ol><div class="calendar-repair-actions">'+
+   '<button type="button" class="btn primary" data-repair-refresh>Refresh bank data</button>'+
+   '<a class="btn" href="/bank-connect">Bank connections</a>'+
+   '<button type="button" class="btn" data-repair-close>Close</button></div>'+
+   '</section></div>';
+  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
+   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
+   '<div class="summary-minimum"><div class="summary-overline">Lowest projected balance · next 3 years</div>'+
+   '<strong class="summary-low">Unverified</strong></div></div>'+
+   '<div class="summary-empty">A verified starting balance is needed for this account. '+esc(reason)+
+   ' <button class="btn" type="button" data-repair-open>How to fix</button></div>'+
+   '</section>'+repair+'</div>';
+ }
+ /* VERIFIED calendar only: never fabricate an opening bank balance. */
  const vals=series.map(p=>p.balance),low=Math.min(...vals),high=Math.max(...vals),
   pad=Math.max(50,(high-low)*.14),floor=low-pad,ceil=high+pad,
   x=i=>plotLeft+i*(plotRight-plotLeft)/(series.length-1),
