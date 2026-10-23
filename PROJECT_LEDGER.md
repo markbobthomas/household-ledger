@@ -469,3 +469,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Checks:** JavaScript syntax inspected via source parse. GitHub PR validation must be checked before merge; mobile/desktop rendered appearance and private live deployment still require separate verification.
 - **Deployment:** Private Render SHA remains unverified; a merged PR is not evidence that Render is live.
 - **Next:** Visually review the three-metric header on phone and desktop after confirmed deployment, especially narrow screens and monthly navigation.
+
+
+### 2026-10-23 — configurable Calendar low-value red threshold
+
+- **Goal:** Let users change the dollar threshold at which forecast lows display in red.
+- **Decision:** Settings has a new **Red highlight below ($)** value (default $6,000), independent of the existing cash-cushion financial warning. Values below the new threshold are red; values equal to or above it are neutral. This one threshold controls the monthly and three-year low and recalculates the monthly color when navigating months.
+- **Changes:** `planner.js` renders/saves a validated whole-dollar threshold in existing forecast preferences; Demo preferences persist it in the current allowlisted local settings, and private forecasts reuse the existing encrypted save path. `planner-summary.js` reads it for both lows; styling/markup changes from Calendar metrics PR #91 are consolidated onto the current main baseline with an existing stale History-test assertion updated. `index.html` refreshes static asset keys; no bank data or forecast arithmetic changes.
+- **Testing:** Require passing pilot-safety and desktop/iPhone browser PR checks, including Settings save and red-state behavior. GitHub merge and Render live deployment are separate checks.
+- **Next:** Verify private Render revision and phone layout after merge, without changing the server configuration or bank data.
