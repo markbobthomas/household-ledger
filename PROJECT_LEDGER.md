@@ -306,3 +306,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **CI installer issue / safeguard (2026-10-22):** The first navigation PR browser workflows repeatedly canceled during Playwright's Chromium/WebKit installation because `.github/workflows/ui-smoke.yml` limited the *entire job* to 10 minutes. Increased the browser job timeout to 25 minutes so installation can finish and the existing desktop/iPhone checks can actually run. No functional runtime/deployment changes; must still wait for an actual passing browser run before merge.
 
 - **Post-merge verification (2026-10-22):** [PR #65](https://github.com/markbobthomas/household-ledger/pull/65) merged to `main` as `76d51dd8a804de45c99870ee7e8be24188fc1a03`. Both Real-account pilot safety checks and Browser interaction test (desktop Chromium and iPhone WebKit) passed on final feature head `e9e90bb0d30679a630d0b8c0f328bde3135cf1b0`. Legacy Overview remains internally accessible for compatibility tests but is absent from visible navigation; full predictions/review remain available through Calendar. Private Render deployment unverified.
+
+### 2026-10-22 — comprehensive visual redesign
+
+- **Request:** Make a drastic appearance improvement across the entire app, beyond incremental clutter reductions.
+- **Decision:** Introduce a unified editorial, warm-neutral/forest-green visual language with stronger hierarchy, generous balance typography, quiet navigation and soft surfaces. Retain Calendar-first forecasting, uncluttered full-width schedule rows, History and separate review/edit pathways. Use larger emphasis for meaningful amounts rather than repeating outlines and labels.
+- **Changes:** New responsive appearance layer in `planner.css` for header/navigation, core balances, calendar, schedule ledger, category filters, history rows, forms, settings, reviews, secondary menus and editing dialogs; `index.html` stylesheet version + mobile browser theme. Preserves semantics, controls, IDs, screen flows and all bank/forecast logic.
+- **Verification:** Require passing real-account pilot safety and desktop Chromium/iPhone WebKit browser interaction suites before merge. Private Render live deploy unverified.
+- **Next:** Compare actual phone/desktop screenshots and tune any remaining typography or calendar-density issues without changing source-of-truth finance behavior.
