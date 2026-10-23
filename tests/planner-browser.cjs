@@ -37,8 +37,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),3,
     'One primary navigation row: calendar, schedules, history');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Schedules','History','All Predictions','Needs Review']);
-   assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),1,
+    ['Calendar','Schedules','History','Needs Review']);
+   assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
     'Predictions is available in the main navigation');
    const go=async tab=>{
     const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
@@ -81,9 +81,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
    assert.match(await page.locator('.summary-bank').innerText(),/Demo current balance/);
-   assert.equal(await page.locator('.planner-menu-content [data-view="transactions"],.planner-menu-content [data-view="overview"],.planner-menu-content [data-view="reviews"]').count(),0,
+   assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').count(),1,
     'Overlapping forecast destinations are removed from the main menu');
-   assert.equal(await page.locator('.calendar-drilldowns [data-view="transactions"]').count(),1,
+   assert.equal(await page.locator('.calendar-drilldowns [data-view="transactions"]').count(),0,
     'Full forecast editing and skipped-payment restore stay accessible from Calendar');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
    assert.equal(await page.locator('.topbar .lead').count(),0,
@@ -235,7 +235,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-cancel-review-form]').click();
    const historyTransfer=page.locator('.history-actual-row').filter({hasText:'Transfer to Savings'}).first();
    assert.equal(await historyTransfer.locator('[data-history-plan]').count(),1,
-    'Every actual bank transfer has a Make recurring action');
+    'Every actual bank transfer has a Plan future payments action');
    await historyTransfer.locator('[data-history-plan]').click();
    const transferDraft=page.locator('.history-schedule-form');
    assert.equal(await transferDraft.locator('[name=type]').inputValue(),'expense',
