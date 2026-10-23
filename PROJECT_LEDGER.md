@@ -441,3 +441,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Observed:** Screenshot showed the Household Ledger title broken into individual letters down the page after moving bank controls to More.
 - **Fix:** Constrain header flex layout to one row and prevent the title from wrapping within its flex child; preserve More at natural width and truncate the brand only if truly necessary. Updated stylesheet cache key. No financial functionality or data changed.
 - **Verification:** Mobile rendering and private Render deploy remain to be independently verified.
+
+
+### 2026-10-23 — remove redundant titles inside main tabs
+
+- **User preference:** Highlighted navigation already names Schedules, History, and Needs Review; eliminate repeated page headings and explanatory lines.
+- **Change:** Remove duplicated in-page titles/descriptions from those three views; keep + Schedule as a compact right-aligned action and Needs Review count as a quiet status. Preserve filters, bank history actions, alerts, and recurrence logic. CSS alignment/cache key updated; no forecast or bank data changes.
+- **Verification:** GitHub PR and deployed Render/browser appearance require independent verification.
