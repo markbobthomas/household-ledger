@@ -2389,7 +2389,7 @@ document.addEventListener('change',e=>{
 });
 
 document.addEventListener('submit',async e=>{
- const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-cushion-form]');
+ const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-cushion-form],[data-low-alert-form]');
  if(!form)return;
  e.preventDefault();
  const button=form.querySelector('button[type="submit"]');
