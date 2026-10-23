@@ -95,7 +95,7 @@ const {chromium,webkit}=require('playwright');
     'No 30/60/90 period selectors in the simplified planner');
    assert.equal(await page.locator('.summary-low').count(),1,
     'Only the lowest modeled balance is emphasized');
-   assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
+   assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
    assert.equal(await page.locator('.calendar-checklist,.coverage-table,.summary-coverage-metric').count(),0,
     'Ambiguous major-payment assurance panels have been removed');
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
@@ -882,7 +882,7 @@ const {chromium,webkit}=require('playwright');
    'Live bank current must be the Plaid current, not $4,800 available');
   assert.match(await page.locator('.summary-bank').innerText(),/Plaid current balance/);
 
-  assert.match(await page.locator('.summary-numbers').innerText(),/next 3 years/);
+  assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
   assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
    'Long-range calculation does not resurrect old major-payment coverage checks');
   assert.match(await page.locator('.calendar-monthly-unplanned').innerText(),/Household Visa/,
