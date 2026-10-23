@@ -70,7 +70,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
-   assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
    assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
    assert.match(await page.locator('.summary-bank').innerText(),/Demo current balance/);
@@ -877,7 +877,7 @@ const {chromium,webkit}=require('playwright');
   await page.route('**/api/sync',r=>{refreshed++;return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'})});
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.locator('#source-type').getByText('REAL BANK').waitFor();
-  assert.match(await page.locator('.summary-page').innerText(),/Lowest projected balance/);
+  assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
    'Live bank current must be the Plaid current, not $4,800 available');
   assert.match(await page.locator('.summary-bank').innerText(),/Plaid current balance/);
