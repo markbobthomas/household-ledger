@@ -127,7 +127,7 @@ const {chromium,webkit}=require('playwright');
     elements.map(el=>({
      border:getComputedStyle(el).borderLeftWidth,
      padding:getComputedStyle(el).paddingLeft
-    })),Array.from({length:3},()=>({border:'0px',padding:'0px'})),
+    }))),Array.from({length:3},()=>({border:'0px',padding:'0px'})),
     'All three metrics have identical zero inner borders and left padding');
    assert.equal(await page.locator('.summary-bank [data-bank-current-value]').evaluate(el=>
     getComputedStyle(el).color),'rgb(35, 113, 74)',
