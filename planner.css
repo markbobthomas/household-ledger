@@ -1339,3 +1339,11 @@ body{background:#fff;color:#24313b}
  .schedule-page .schedule-grid,.schedule-page .schedule-category-group,.schedule-page .schedule-card{width:100%!important;max-width:none}
  .schedule-page .schedule-card-detail:not(:empty){padding:8px 7px 12px}
 }
+/* Comprehensive interaction audit: fewer visual outlines without removing focus or financial warnings. */
+.schedule-page .page-heading{justify-content:flex-end}
+.planner-page .page-heading{margin-bottom:8px!important}
+.schedule-page .schedule-more-menu{box-shadow:0 5px 14px #26394717;border-color:#e4e9ed}
+.schedule-page .schedule-card-detail:not(:empty) .plan-settings{border-color:#e7eaed}
+.transactions-page .transaction-panel{border:0;padding:5px 0;background:transparent}
+.calendar-quick-form .calendar-quick-head{padding-right:4px}
+@media(max-width:780px){.transactions-page .transaction-panel{padding:0}}
