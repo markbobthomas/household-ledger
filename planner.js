@@ -1624,7 +1624,7 @@ function render(){
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):
-   summaryPage(bundle,s,selectedSource,derived,fresh);
+   (window.HouseholdPlannerSummary?.render?summaryPage:overviewPage)(bundle,s,selectedSource,derived,fresh);
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('form:has([data-history-link])'):[])){
   if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples){
