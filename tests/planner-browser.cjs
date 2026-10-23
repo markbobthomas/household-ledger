@@ -88,8 +88,10 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
    assert.equal(await page.locator('.topbar .lead').count(),0,
     'Global header does not repeat the planner introduction');
-   assert.equal(await page.locator('.top-actions label[for="ledger-mode-switch"]').count(),0,
-    'The source selector has its own accessible name without an extra label');
+   assert.equal(await page.locator('.planner-menu-bank label[for="ledger-mode-switch"]').count(),1,
+    'The data source selector is explicitly labeled in More');
+   assert.equal(await page.locator('.top-actions > #refresh-bank,.top-actions > #ledger-mode-switch').count(),0,
+    'Bank controls no longer clutter the top-level header');
    await go('settings');
    assert.equal(await page.locator('[aria-label="Bank connection status"]').count(),1,
     'Connection information appears in one compact, actionable Settings section');
@@ -1089,6 +1091,7 @@ const {chromium,webkit}=require('playwright');
   await page.locator('.account-tile').filter({hasText:'Household Checking'}).click();
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
    'Switching back preserves bank-reported checking');
+  await page.locator('#planner-menu > summary').click();
   await page.locator('#refresh-bank').click();
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
