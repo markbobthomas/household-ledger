@@ -210,3 +210,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Regression:** [PR #49](https://github.com/markbobthomas/household-ledger/pull/49) passed both required checks on final head `2d7d811952ec39aafa5a5a4eabe1db45e7f7d5e4`: pilot banking-safety checks and desktop Chromium/iPhone WebKit interaction tests. Fictional independent four-week paychecks of $3,040 and $3,075 reconcile to November 2026 $6,115; next 12 full months $79,495 (13 payments each); average/month $6,624.58. PR merged to `main` as `9babafba84b2ee1474b6fd234e56d59e39d38eb8`. Actual private Render deployment remains unverified.
 - **Integration:** Port only this correction on a new branch from the latest `main` (which already includes 1/2/3 from PR #46); do not merge the older divergent PR #48. Private Render deployed version remains unverified.
 
+
+### 2026-10-22 — resume development and confirm working baseline
+
+- **Request:** Resume Household Ledger development, read the project ledger, AGENTS.md and latest code; keep an updated merged project ledger after every request.
+- **Decision:** Preserve GitHub/Plaid/private Render architecture, canonical calendar-first checking forecast, independent recurring schedules, bank-source immutability and straightforward inline editing. No additional feature was requested in this prompt.
+- **Review:** Read current main versions of PROJECT_LEDGER.md, AGENTS.md, planner.js, planner-transactions.js and planner-summary.js. Latest documented feature merge is PR #49 (calendar-month category income totals); previous PR #46 implemented quick categories, search and posted-payment matching.
+- **Changes:** Documentation-only continuity entry; no application, forecast, bank or infrastructure changes.
+- **Validation/deployment:** No functional tests required or run for this documentation-only entry. Private Render running commit remains unverified; do not claim deployment.
+- **Next:** Ask for the next specific product change, inspect the relevant complete code and tests, implement on a separate branch/PR, validate required safety and browser checks, merge, and record results here.
