@@ -235,7 +235,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-cancel-review-form]').click();
    const historyTransfer=page.locator('.history-actual-row').filter({hasText:'Transfer to Savings'}).first();
    assert.equal(await historyTransfer.locator('[data-history-plan]').count(),1,
-    'Every actual bank transfer has a Plan future payments action');
+    'Every actual bank transfer has a Create recurring schedule action');
    await historyTransfer.locator('[data-history-plan]').click();
    const transferDraft=page.locator('.history-schedule-form');
    assert.equal(await transferDraft.locator('[name=type]').inputValue(),'expense',
