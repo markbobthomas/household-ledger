@@ -1188,8 +1188,7 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- return '<div class="planner-page schedule-page"><div class="page-heading"><div><h2>Schedules</h2>'+
-  '<p>Recurring payments and deposits used in your forecast.</p></div>'+
+ return '<div class="planner-page schedule-page"><div class="page-actions">'+
   '<button class="btn primary" type="button" data-schedule-new>+ Schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
@@ -1330,8 +1329,7 @@ function historyPage(bundle,s){
    '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+(incoming?'+':'−')+cash(t.amount)+'</strong>'+
    action+'</div>';
  }).join('');
- return '<div class="planner-page history-page"><div class="page-heading"><div><h2>Actual transaction history</h2>'+
-  '<p>Select a transaction to review it or set up a recurring schedule. Automatic prediction exclusions can be undone directly from the row.</p></div></div>'+
+ return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   '<form class="history-filters" data-history-filter>'+
@@ -1381,9 +1379,9 @@ function reviewsPage(bundle,s){
     '<button class="btn" type="button" data-dismiss-candidate="'+escapeHTML(p.key)+
      '">Not recurring</button></div></article>').join('');
  const concerns=(bundle?.payments?.warnings||[]).slice(0,8);
- return '<div class="planner-page reviews-page"><div class="page-heading"><div><h2>Needs review</h2>'+
-  '<p>We check bank history aggressively, but uncertain patterns need your decision before becoming future bills.</p></div>'+
-  '<span class="status-tag">'+count+' PAYMENT'+(count===1?'':'S')+' TO REVIEW</span></div>'+
+ return '<div class="planner-page reviews-page">'+
+  '<div class="review-count-line"><span class="status-tag">'+count+
+  ' item'+(count===1?'':'s')+' to review</span></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   ((bundle?.duplicateChecks||[]).length?'<p class="audit-footnote">Duplicate protection: '+
