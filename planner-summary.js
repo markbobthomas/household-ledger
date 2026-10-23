@@ -471,7 +471,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   (String(a.id)===String(chosen.id)?' selected':'')+'>'+
   esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
   '</option>').join('');
- const lead='<div class="summary-heading"><span class="summary-eyebrow">YOUR FORECAST</span>'+
+ const lead='<div class="summary-heading">'+
   '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Summary account">'+
   options+'</select></label></div>';
  const points=getPoints(derived,snapshot.asOf,days);
@@ -526,11 +526,10 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+'<div class="summary-minimum">'+
-  '<div class="summary-overline">'+(credit?'Lowest modeled card debt':'Lowest projected balance')+
-  ' · next 3 years</div>'+
+  '<div class="summary-overline">'+(credit?'3-year card debt low':'3-year low')+'</div>'+
   '<strong class="summary-low'+(below?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
   '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
-  '">On '+esc(dateLabel(lowDay.date))+' · View day →</button>'+
+  '">'+esc(dateLabel(lowDay.date))+' →</button>'+
   (negative?'<small class="summary-low-warning">Below $0</small>':
    below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
   '</div></div>'+
@@ -559,10 +558,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '<div class="summary-peek" aria-live="off"><div><span data-summary-peek-date>'+esc(dateLabel(lowDay.date))+
   '</span><strong data-summary-peek-amount>'+money(low)+'</strong></div>'+
   '<small data-summary-peek-events>'+causes+'</small></div>'+
-  '<div class="summary-caption">'+(credit?'Credit card debt · Higher means more owed':
-  'Spendable cash · From scheduled deposits and withdrawals')+' · '+
+  '<div class="summary-caption">'+(credit?'Card debt':'Checking forecast')+' · '+
   '<span data-trend-count>'+moves+' dated movement'+(moves===1?'':'s')+'</span>'+
-  '<span>Tap or move along the curve to explore a day</span></div></section>'+
+  '</div></section>'+
   '</details>'+
   '<section class="summary-trust" aria-label="Forecast assumptions">'+
   '<strong>Illustration, not a guaranteed minimum.</strong>'+
