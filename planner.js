@@ -1174,9 +1174,7 @@ function schedulesPage(bundle,s){
     'Changing the repeating amount for all future payments will replace these older rules.</p>'+
     windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
-     '<p class="plan-edit-guide">Edit defaults for all future payments, or select one dated payment below.</p>'+
-     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span>'+
-      '<small>Amount, date, frequency, payee and accounts</small></summary>'+
+     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span></summary>'+
       '<div class="plan-settings-body">'+edit+'</div></details>'+
      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</div></article>';
  };
@@ -1190,8 +1188,7 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
-  '<h2>Schedules</h2></div>'+
+ return '<div class="planner-page schedule-page"><div class="page-heading">'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
@@ -1235,8 +1232,7 @@ function transactionsPage(bundle,s){
    ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
-  '<div class="page-heading"><div><h2>Predictions</h2>'+
-   '<p>All dated forecasts for the next '+horizon+' days. Select a payment to expand the same inline editor used in Calendar and Schedules.</p></div>'+
+  '<div class="page-heading"><div><h2>Predictions</h2></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -1244,7 +1240,6 @@ function transactionsPage(bundle,s){
    (showNewTransaction?newTransactionForm(s):'')+
    (lines||'<div class="empty-visual">No predicted transactions for this selection. Add one or choose another account.</div>')+
    undo+
-   '<p class="audit-footnote">Forecast-only changes recalculate balance predictions for affected accounts. Actual bank transactions remain untouched. Card payments and account transfers are represented once and affect both linked accounts.</p>'+
   '</section></div>';
 }
 
@@ -1346,7 +1341,7 @@ function historyPage(bundle,s){
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
-   '<p class="audit-footnote">Every historical transaction, including transfers, refunds and pending bank entries, can be turned into a proposed future schedule. Review its type, amount, and date. No bank transaction is changed and no payment is initiated.</p></section></div>';
+   '</section></div>';
 }
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
@@ -1425,9 +1420,7 @@ function reviewsPage(bundle,s){
    '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
    '<p class="lead">All recent payments are checked, including unfamiliar merchants and outgoing ACH debits. A single payment is a possibility, not proof of recurrence. Confirm amount, frequency and next date before uncertain items affect your balance.</p>'+
    cards+'</section>':'')+
-  (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div>'+
-   '<p class="lead">No uncertain recurring payment patterns currently need a decision. You can still review any posted transaction in History and make it recurring.</p>'+
-   '<button type="button" class="btn" data-view="history">View actual transactions</button></section>':'')+
+  (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div></section>':'')+
   (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
     concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
   '</div>';
@@ -1519,7 +1512,7 @@ function summaryPage(bundle,s,chosen,derived,fresh){
 }
 function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
-  '<h2>Settings</h2><p>Review recurring payments, your cash cushion, account connections and historical accuracy.</p></div></div>'+
+  '<h2>Settings</h2></div></div>'+
   '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
    '<form id="cushion-form" data-cushion-form><label class="cash-cushion-label">Low-balance warning threshold ($)'+
     '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+

@@ -78,7 +78,7 @@ function quickEditor(){
  return '<form data-calendar-quick-form="'+mode+'" class="calendar-quick-form"'+
   ' data-calendar-quick-key="'+esc(row?.key||'')+'" data-quick-kind="'+kind+'">'+
   '<div class="calendar-quick-head"><strong>'+(mode==='edit'?'Edit prediction':'Add prediction')+
-   '</strong><button type="button" data-calendar-cancel aria-label="Close transaction editor">×</button></div>'+
+   '</strong></div>'+
   '<p>Forecast only · No changes to bank records</p>'+
   '<div class="calendar-quick-fields">'+choices+
    '<label>Description<input name="merchant" maxlength="160" placeholder="e.g. Insurance" value="'+
