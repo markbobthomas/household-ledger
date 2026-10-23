@@ -1341,7 +1341,7 @@ function historyPage(bundle,s){
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
-   '<p class="audit-footnote">Every historical transaction, including transfers, refunds and pending bank entries, can be turned into a proposed future schedule. Review its type, amount, and date. No bank transaction is changed and no payment is initiated.</p></section></div>';
+   '</section></div>';
 }
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
@@ -1420,9 +1420,7 @@ function reviewsPage(bundle,s){
    '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
    '<p class="lead">All recent payments are checked, including unfamiliar merchants and outgoing ACH debits. A single payment is a possibility, not proof of recurrence. Confirm amount, frequency and next date before uncertain items affect your balance.</p>'+
    cards+'</section>':'')+
-  (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div>'+
-   '<p class="lead">No uncertain recurring payment patterns currently need a decision. You can still review any posted transaction in History and make it recurring.</p>'+
-   '<button type="button" class="btn" data-view="history">View actual transactions</button></section>':'')+
+  (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div></section>':'')+
   (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
     concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
   '</div>';
@@ -1514,7 +1512,7 @@ function summaryPage(bundle,s,chosen,derived,fresh){
 }
 function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
-  '<h2>Settings</h2><p>Review recurring payments, your cash cushion, account connections and historical accuracy.</p></div></div>'+
+  '<h2>Settings</h2></div></div>'+
   '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
    '<form id="cushion-form" data-cushion-form><label class="cash-cushion-label">Low-balance warning threshold ($)'+
     '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+
