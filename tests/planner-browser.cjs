@@ -960,7 +960,7 @@ const {chromium,webkit}=require('playwright');
   let refreshed=0;
   await page.route('**/api/sync',r=>{refreshed++;return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'})});
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
-  await page.locator('#source-type').getByText('REAL BANK').waitFor();
+  await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
    'Live bank current must be the Plaid current, not $4,800 available');
