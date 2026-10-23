@@ -1504,11 +1504,19 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    '</section></div>';
 }
 function summaryPage(bundle,s,chosen,derived,fresh){
- return window.HouseholdPlannerSummary.render({
+ const calendar=window.HouseholdPlannerSummary.render({
   snapshot:s,chosen,derived,bundle,days:horizon,
   prefs:state().predictions||{},accounts:activeAccounts(s),
   fresh,ready:window.HouseholdPaymentObligations.ready
  });
+ // Calendar is the entry point for forecast details and unresolved decisions.
+ // Retain the full Predictions editor and skipped-payment restore functionality
+ // as drill-down views, rather than competing permanent navigation entries.
+ const actions='<nav class="calendar-drilldowns" aria-label="Forecast detail and review">'+
+  '<button type="button" data-view="transactions">All predictions</button>'+
+  '<button type="button" data-view="reviews">Needs review</button>'+
+  '</nav>';
+ return calendar.replace('<div class="summary-numbers">',actions+'<div class="summary-numbers">');
 }
 function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
@@ -1611,7 +1619,7 @@ function render(){
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):
-   activeTab==='summary'?summaryPage(bundle,s,selectedSource,derived,fresh):overviewPage(bundle,s,selectedSource,derived,fresh);
+   (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('form:has([data-history-link])'):[])){
   if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples){
