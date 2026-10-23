@@ -288,6 +288,19 @@ function monthlyPredictions(state){
    '</div>':'<p class="calendar-empty">No upcoming predicted deposits or withdrawals for this account during the remaining forecast days this month.</p>')+
    '</details>'+unplanned;
 }
+function monthLow(month){
+ const points=(calendarContext?.points||[]).filter(p=>p.date.startsWith(month)&&Number.isFinite(p.balance));
+ return points.length?points.reduce((a,b)=>b.balance<a.balance?a:b):null;
+}
+function updateMonthLow(){
+ const el=document.querySelector('[data-summary-month-low]');
+ if(!el)return;
+ const point=monthLow(calendarMonth),value=el.querySelector('[data-summary-month-value]'),
+  button=el.querySelector('[data-summary-month-date]');
+ if(value)value.textContent=point?money(point.balance):'Not projected';
+ if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
+  button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
+}
 function calendarGrid(){
  const state=calendarContext;
  if(!state||!state.points.length)return '';
@@ -295,6 +308,7 @@ function calendarGrid(){
   ...[...state.actual.keys()].map(d=>d.slice(0,7))])].sort();
  if(!keys.includes(calendarMonth))calendarMonth=keys[0];
  const currentPoints=state.points.filter(p=>p.date.startsWith(calendarMonth));
+ const monthlyMinimum=monthLow(calendarMonth);
  if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
  if(!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
   calendarDate=currentPoints[0]?.date||[...state.actual.keys()].find(d=>d.startsWith(calendarMonth));
@@ -339,7 +353,7 @@ function calendarGrid(){
     ', no predicted transactions')+
    (negative?', below zero':low?', below cash cushion':'');
   return '<button type="button" class="calendar-day'+
-   (calendarDate===iso?' selected':'')+(iso===state.asOf?' today':'')+
+   (calendarDate===iso?' selected':'')+(monthlyMinimum?.date===iso?' month-minimum':'')+(iso===state.asOf?' today':'')+
    (calendarFocus?.dates?.includes(iso)?' coverage-highlight':'')+
    (negative?' negative':low?' low':'')+
    '" data-calendar-day="'+iso+'" aria-pressed="'+(calendarDate===iso)+
@@ -386,6 +400,7 @@ function showCalendar(date){
  calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
+ updateMonthLow();
  return true;
 }
 
@@ -558,6 +573,11 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '">'+esc(dateLabel(lowDay.date))+' →</button>'+
   (negative?'<small class="summary-low-warning">Below $0</small>':
    below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
+  '</div><div class="summary-monthly" data-summary-month-low>'+
+  '<div class="summary-overline">Monthly low</div>'+
+  '<strong class="summary-low" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
+  '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
+  (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
   '</div></div>'+
   calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
@@ -725,6 +745,8 @@ document.addEventListener('click',e=>{
  if(actual){showCalendar(actual.dataset.calendarActualDay);return;}
  const day=e.target.closest?.('[data-calendar-day]');
  if(day){showCalendar(day.dataset.calendarDay);return;}
+ const monthLowButton=e.target.closest?.('[data-calendar-month-low]');
+ if(monthLowButton?.dataset.calendarMonthLow){showCalendar(monthLowButton.dataset.calendarMonthLow);return;}
  const nav=e.target.closest?.('[data-calendar-nav]');
  if(nav&&calendarContext?.points?.length){
   const keys=[...new Set([...calendarContext.points.map(p=>p.date.slice(0,7)),
