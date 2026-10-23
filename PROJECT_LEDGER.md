@@ -25,15 +25,15 @@ Product priorities:
 
 ## Current state (as verified October 22, 2026)
 
-- GitHub repo: `markbobthomas/household-ledger`; default branch `main`.
+- GitHub repo: `markbobthomas/household-ledger`; default branch `main`. Development-resumption review baseline: `b9fc75928227c1661542ea8a4c8b91a14c0b9edb` (merged documentation PR #50).
 - [PR #30](https://github.com/markbobthomas/household-ledger/pull/30) **merged**: shared expandable editing rows across Calendar, Schedules and Predictions; day selection no longer creates a second, competing editing list.
 - [PR #31](https://github.com/markbobthomas/household-ledger/pull/31) **merged**: remove new partial-range schedule estimates; edit one payment or all future payments, while protecting existing saved overrides.
 - [PR #34](https://github.com/markbobthomas/household-ledger/pull/34) **merged** as `495b930720ad88750f99f0ccc1dbe5c896613aee`: schedule-aware historical actions and safer history-to-schedule saves; the monthly list now says **Upcoming predictions** with remaining dates and account.
-- Latest validated application merge: `495b930720ad88750f99f0ccc1dbe5c896613aee`. Always re-check `main` rather than treating this as permanent.
-- **PR #34 required checks passed** on head `f368657ec9844209cb8b5123628393652920418e`: GitHub Actions Real-account pilot safety checks and Browser interaction test (desktop Chromium/iPhone WebKit). They establish tested repository behavior, not live private Render deployment.
-- GitHub Pages publication for PR #34 merge: **not yet independently verified**; check post-merge Pages workflow.
+- Latest validated **functional** merge at this review: [PR #49](https://github.com/markbobthomas/household-ledger/pull/49), merged as `9babafba84b2ee1474b6fd234e56d59e39d38eb8` (Schedule calendar-month income totals). [PR #46](https://github.com/markbobthomas/household-ledger/pull/46), merged as `c05465ec51630d7fff16bd3f8efddaf9f7ed0462`, added inline schedule categories/search and posted-payment matching. Re-check `main` on every request.
+- **PR #49 required checks passed** on head `2d7d811952ec39aafa5a5a4eabe1db45e7f7d5e4`: Real-account pilot safety and Browser interaction test (desktop Chromium/iPhone WebKit). These are GitHub test results, not independent proof of private Render deployment.
+- GitHub Pages: **Publish Household Ledger** push workflow on reviewed baseline `b9fc75928227c1661542ea8a4c8b91a14c0b9edb` completed successfully (GitHub Actions run `39884872149`). Public-site content was not independently inspected; Pages success does not verify private Render.
 - Private Render's running deployment SHA has **not** been independently confirmed here. A GitHub merge or Pages publish does not establish the private server's deployed revision. See [DEPLOYMENT_STATUS.md](DEPLOYMENT_STATUS.md).
-- Requested items #1 and #2 are merged. Item #3 remains **assessment only**; do not implement new coverage logic until explicitly requested.
+- Earlier recommended work items #1–#3 (one-tap schedule categories, live schedule search, posted-payment matching) were implemented and merged in PR #46. Do not reintroduce the retired heuristic major-payment assurance screen or unrelated budgeting modules.
 
 ## UI/forecast follow-ups (2026-10-22)
 
@@ -219,3 +219,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Changes:** Documentation-only continuity entry; no application, forecast, bank or infrastructure changes.
 - **Validation/deployment:** No functional tests required or run for this documentation-only entry. Private Render running commit remains unverified; do not claim deployment.
 - **Next:** Ask for the next specific product change, inspect the relevant complete code and tests, implement on a separate branch/PR, validate required safety and browser checks, merge, and record results here.
+
+
+### 2026-10-22 — reconcile stale current-state handoff after resumption
+
+- **Request:** Resume development from the current repository and maintain a merged, concise per-prompt handoff, without changing app behavior absent a feature request. The prior docs-only resumption entry already exists in merged PR #50.
+- **Decision/results:** Reconciled the summary's obsolete PR #34 "latest validated" line against current source and merged PRs: PR #46 provides quick categories, schedule search and posted reconciliation; PR #49 is the latest verified functional merge for calendar-month income totals. At review start, `main` was `b9fc75928227c1661542ea8a4c8b91a14c0b9edb` (PR #50 documentation merge). Reviewed `AGENTS.md`, `README.md`, `DEPLOYMENT_STATUS.md`, core planner/transactions/summary/history code and private server design.
+- **Changes:** Documentation-only correction to this current-state snapshot plus this entry. No UI, forecast algorithm, source bank data, Plaid, secrets, persisted preferences or Render infrastructure changed.
+- **Checks:** No new banking/browser functional tests were run for this docs-only change. PR #49's required banking and browser checks were verified successful; GitHub Pages publish workflow on baseline `b9fc759` was successful. Private Render's deployed SHA and live status **remain unverified**; GitHub Pages does not establish a private deploy.
+- **Next:** Await a specific product/bug request; start from newest `main`, inspect relevant code, implement with focused tests and PR, separately confirm any private deploy, and append a concise ledger outcome for each request.
