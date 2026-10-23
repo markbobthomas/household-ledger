@@ -76,7 +76,9 @@ const {chromium,webkit}=require('playwright');
 
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
+   await page.locator('#planner-menu > summary').click();
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
+   await page.keyboard.press('Escape');
    assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
    assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
@@ -93,6 +95,14 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.top-actions > #refresh-bank,.top-actions > #ledger-mode-switch').count(),0,
     'Bank controls no longer clutter the top-level header');
    await go('settings');
+   const lowAlertInput=page.locator('[data-low-alert-form] [name=lowAlertThreshold]');
+   assert.equal(await lowAlertInput.inputValue(),'6000',
+    'Default low highlight threshold is $6,000');
+   await lowAlertInput.fill('100000');
+   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}').lowAlertThreshold),100000,
+    'Red threshold saves in forecast-only preferences');
    assert.equal(await page.locator('[aria-label="Bank connection status"]').count(),1,
     'Connection information appears in one compact, actionable Settings section');
    assert.equal(await page.locator('h3').filter({hasText:'Planning assumptions'}).count(),0,
@@ -104,8 +114,39 @@ const {chromium,webkit}=require('playwright');
    await go('summary');
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0,
     'No 30/60/90 period selectors in the simplified planner');
-   assert.equal(await page.locator('.summary-low').count(),1,
-    'Only the lowest modeled balance is emphasized');
+   assert.equal(await page.locator('.summary-numbers .summary-low').count(),2,
+    'Monthly and three-year lows are both shown');
+   assert.deepEqual(await page.locator('.summary-numbers > div').evaluateAll(elements=>
+    elements.map(el=>el.className)),['summary-bank','summary-monthly','summary-minimum'],
+    'Bank balance, monthly low, and three-year low appear in that order');
+   assert.equal(await page.locator('.summary-numbers > .summary-monthly').evaluate(el=>
+    getComputedStyle(el).borderLeftWidth),'0px',
+    'No vertical divider remains between monthly and account figures');
+   assert.equal(await page.locator('.summary-bank [data-bank-current-value]').evaluate(el=>
+    getComputedStyle(el).color),'rgb(35, 113, 74)',
+    'Bank-reported current balance is green');
+   for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
+    assert.ok(await page.locator(selector).evaluate(el=>el.classList.contains('summary-low-alert')),
+     'Projected lows below the saved threshold must be red');
+    assert.equal(await page.locator(selector).evaluate(el=>getComputedStyle(el).color),
+     'rgb(180, 59, 54)','Saved threshold turns projected low values red');
+   }
+   await go('settings');
+   await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('0');
+   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await go('summary');
+   for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
+    const actual=await page.locator(selector).evaluate(el=>({
+     value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
+     red:el.classList.contains('summary-low-alert')
+    }));
+    assert.equal(actual.red,actual.value<0,
+     'At a $0 threshold, only negative projected lows remain red');
+   }
+   await go('settings');
+   await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('6000');
+   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await go('summary');
    assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
    assert.equal(await page.locator('.calendar-checklist,.coverage-table,.summary-coverage-metric').count(),0,
     'Ambiguous major-payment assurance panels have been removed');
@@ -211,11 +252,11 @@ const {chromium,webkit}=require('playwright');
     'Previous trend is still available in optional details');
    await page.locator('.summary-extras > summary').click();
    assert.equal(await page.locator('[data-trend-days]').count(),6);
-   const fullMinimum=await page.locator('.summary-low').innerText();
+   const fullMinimum=await page.locator('.summary-minimum .summary-low').innerText();
    for(const n of [10,30,90,180,360,1095]){
     await page.locator('[data-trend-days="'+n+'"]').click();
     assert.equal(await page.locator('[data-trend-days][aria-pressed="true"]').count(),1);
-    assert.equal(await page.locator('.summary-low').innerText(),fullMinimum,
+    assert.equal(await page.locator('.summary-minimum .summary-low').innerText(),fullMinimum,
      'Trend windows must never change the three-year lowest balance');
     assert.equal(await page.locator('.calendar-day.selected').count(),1,
      'Trend windows do not change the selected calendar date');

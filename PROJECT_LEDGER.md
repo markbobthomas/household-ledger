@@ -487,3 +487,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Validation:** PR #93 head `8b6d639c6d9e1e4ca7e95632ac5760ec02d38f77` passed Real-account pilot safety workflow, but desktop/iPhone browser workflow run `39974997654` remained in progress at the browser installation step when inspected. No confirmed UI pass, no application merge, no verified private Render deployment. Do not infer the user's displayed version from unverified Render state.
 - **Action:** Investigated source and CI; no additional runtime changes for this report. Retain the open PR pending browser verification rather than claim a live release.
 - **Next:** Resolve/complete browser validation, merge #93 with passing checks, then separately compare private Render `/healthz` commit with merged `main` and confirm the appearance on an iPhone.
+
+
+### 2026-10-23 — deliver unmerged Calendar metrics after reported unchanged deployment
+
+- **Reason:** User deployed the latest main revision but still saw the divider/no red warning. Investigation confirmed old app assets on `main` and the true UI change stuck in unmerged PR #93; deployment alone cannot include a PR.
+- **Implementation:** Fresh branch from latest main publishes balanced headline tiles (account balance green, monthly low middle, three-year low right, smaller projections, no borders/dividers), persistent independently adjustable **Red highlight below ($)** in Settings (default $6,000), and runtime threshold recalculation on month navigation. Cache-keyed CSS/JS ensure changed assets fetch on deployed devices. Tests updated for the former History button and moved Demo status, with new desktop/iPhone browser assertions for correct order, no separator, computed green/red colors, preference save, and negative lows. No bank records or forecast arithmetic touched.
+- **Release:** Focused release PR created; banking-safety and browser checks required before merge. Do not claim Render release without independently confirming private `/healthz` SHA and visible page.
+- **Follow-up:** Supersede unmerged #91/#93 after validated release to avoid duplicate PRs.
