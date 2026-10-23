@@ -427,3 +427,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Confirmed root cause:** `monthLow()` reduced over `calendarContext.points` using `b.balance<a.balance?a:b`, which returned the **higher** point when a smaller one was found. Thus the metric and day highlight selected the monthly *maximum*.
 - **Fix:** Reverse ternary to `b.balance<a.balance?b:a`, retaining the same projection series and highlighting selected minimum date. Add a targeted smoke assertion with rising balances (minimum first day) and retain browser comparison to visible calendar values. Do not touch bank data, schedules or forecast arithmetic.
 - **Verification:** GitHub checks and actual private Render deployment must be independently confirmed.
+
+
+### 2026-10-22 — declutter top header: bank utilities in More
+
+- **User request:** Move circled Real bank indicator, Real/Plaid selector, Refresh bank and Bank connections out of top of Calendar and into hamburger/More menu. User screenshot shows these controls consuming a full mobile row.
+- **Change:** Retain existing IDs and event handlers, group data source selector, status indicator, refresh bank and connections in More menu, remove them from topbar. Keep app title and More trigger aligned on one row on mobile, preserve focus/menu access, and change targeted browser test to open More before refresh. Financial forecasts, Plaid connection, permissions and saved state unchanged.
+- **Status:** GitHub PR/CI and private Render deployment require verification.
