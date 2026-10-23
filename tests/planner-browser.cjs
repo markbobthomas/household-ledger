@@ -75,7 +75,7 @@ const {chromium,webkit}=require('playwright');
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
    assert.match(await page.locator('.summary-bank').innerText(),/Demo current balance/);
    assert.match(await page.locator('.planner-menu-content [data-view="transactions"]').textContent(),
-    /All predictions/,'Advanced bulk prediction view remains available without a fourth tab');
+    /Predictions/,'Advanced predictions remain available without a fourth tab');
    assert.ok(await page.locator('#planner-menu > summary').isVisible(),'Advanced tools use one compact menu');
    assert.equal(await page.locator('.topbar .lead').count(),0,
     'Global header does not repeat the planner introduction');
