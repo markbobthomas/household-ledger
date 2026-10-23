@@ -99,7 +99,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  // as confirmed, without offering a duplicate-creation action.
  await click('[data-view]',{view:'history'});
  assert.match(future(),/Recurring confirmed/, 'Known bank payment remains identified as recurring');
- assert.match(future(),/View details/, 'Linked payment uses the existing row details interaction');
+ assert.match(future(),/View \/ plan/, 'Linked payment uses the existing row details interaction');
  await click('[data-history-plan]',{
   historyPlan:'solo-bank-mortgage',historyAccount:'demo-checking'});
  assert.doesNotMatch(future(),/Confirm recurring transaction/,
