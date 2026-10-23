@@ -422,7 +422,12 @@ function project(snapshot,ledger,days=90){
   const id=String(a.id),credit=String(a.accountType||a.type||'').toLowerCase()==='credit',
    current=a.current==null?null:Number(a.current),avail=a.available==null?null:Number(a.available),
    validBalance=Number.isFinite(current),type=credit?'credit':'cash',
-   age=a.balanceAsOf?diff(asOf,String(a.balanceAsOf).slice(0,10)):null,
+   observation=String(a.balanceAsOf||''),
+   // The server records observations as UTC instants, but the forecast's
+   // asOf date is the browser's local calendar day.
+   observationDate=observation.includes('T')&&Number.isFinite(Date.parse(observation))?
+    new Date(observation).toLocaleDateString('en-CA'):observation.slice(0,10),
+   age=valid(observationDate)?diff(asOf,observationDate):null,
    status=!validBalance?'unavailable':a.simulated||snapshot.mode==='demo'?'simulated':
     !live?'unverified':age===null?'unknown-age':age>2?'stale':age<0?'future-dated':'fresh',
    x={id,name:a.name||id,type,valid:validBalance,balanceStatus:status,
