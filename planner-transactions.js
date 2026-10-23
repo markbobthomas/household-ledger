@@ -494,14 +494,15 @@ function excludeHistorySuggestions(state,{accountId,type,merchant}={}){
  const aid=String(accountId||''),kind=String(type||''),name=String(merchant||'');
  if(!aid||!sourceMerchant(name)||!['expense','income','refund','transfer'].includes(kind))
   throw Error('Choose a valid bank transaction to exclude');
- const p=ensure(state);
- const related=(p.futureRecurringRules||[]).some(r=>
+ const prefs=state?.predictions||{};
+ const related=(prefs.futureRecurringRules||[]).some(r=>
   String(r.originalAccountId||r.accountId||r.fromAccountId||'')===aid&&
   (r.kind==='movement'?'transfer':r.type)===kind&&
   [r.originalMerchant,r.merchant,...(r.matchNames||[])].some(alias=>
    sourceMerchant(alias)===sourceMerchant(name)));
  if(related)throw Error('This payee has a saved repeating plan. Open the plan to change it instead.');
  const key=recurrenceKey(aid,kind,name);
+ const p=ensure(state);
  p.futureRecurrenceExclusions??={};
  p.futureRecurrenceExclusions[key]={accountId:aid,type:kind,merchant:name,historyOptOut:true};
  return {key,accountId:aid,type:kind,merchant:name};
