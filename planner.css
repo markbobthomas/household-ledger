@@ -1638,3 +1638,12 @@ html{scrollbar-gutter:stable}
  .reviews-page>.panel{padding:8px 7px}
  .reviews-page .review-candidate{padding:9px 3px}
 }
+
+
+/* Consistent page titles and quiet footer disclosure. */
+.schedule-page .page-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:13px}
+.schedule-page .page-heading h2{margin:0;font-size:19px;font-weight:700;line-height:1.3}
+.schedule-page .page-heading p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.4}
+.schedule-page .page-heading [data-schedule-new]{margin-left:auto;white-space:nowrap}
+.planner-fine-print{max-width:1050px;margin:28px auto 0;padding:12px 2px;color:var(--muted);font-size:10px;line-height:1.5;text-align:left}
+@media(max-width:780px){.schedule-page .page-heading{gap:8px}.schedule-page .page-heading [data-schedule-new]{min-height:36px}.planner-fine-print{margin-top:20px}}
