@@ -471,10 +471,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Next:** Visually review the three-metric header on phone and desktop after confirmed deployment, especially narrow screens and monthly navigation.
 
 
-### 2026-10-23 — configurable Calendar low-value red threshold
+### 2026-10-23 — configurable Calendar red-low threshold (pending UI validation)
 
-- **Goal:** Let users change the dollar threshold at which forecast lows display in red.
-- **Decision:** Settings has a new **Red highlight below ($)** value (default $6,000), independent of the existing cash-cushion financial warning. Values below the new threshold are red; values equal to or above it are neutral. This one threshold controls the monthly and three-year low and recalculates the monthly color when navigating months.
-- **Changes:** `planner.js` renders/saves a validated whole-dollar threshold in existing forecast preferences; Demo preferences persist it in the current allowlisted local settings, and private forecasts reuse the existing encrypted save path. `planner-summary.js` reads it for both lows; styling/markup changes from Calendar metrics PR #91 are consolidated onto the current main baseline with an existing stale History-test assertion updated. `index.html` refreshes static asset keys; no bank data or forecast arithmetic changes.
-- **Testing:** Require passing pilot-safety and desktop/iPhone browser PR checks, including Settings save and red-state behavior. GitHub merge and Render live deployment are separate checks.
-- **Next:** Verify private Render revision and phone layout after merge, without changing the server configuration or bank data.
+- **Request:** Make the dollar level that turns Calendar projected lows red user-selectable in Settings.
+- **Decision:** Keep the existing cash-cushion safety threshold separate. Add **Red highlight below ($)**, default $6,000; the saved whole-dollar value controls both monthly and three-year projected-low text, strictly below threshold, including after navigating months.
+- **Implementation status:** Changes authored in PR #93 (current-main clean branch), preserving Plaid/Render and existing forecast-only preference storage; includes earlier unmerged Calendar metric layout consolidation. No source bank records, recurrence, or forecasting math altered.
+- **Verification:** PR #93's Real-account pilot safety check passed. Browser interaction CI remains in progress; no app code merged or private Render revision verified at documentation time.
+- **Next:** Merge PR #93 only after UI checks pass and reconcile this ledger entry without duplication; then verify private deployment independently.
