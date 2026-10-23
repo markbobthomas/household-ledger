@@ -1520,7 +1520,7 @@ function summaryPage(bundle,s,chosen,derived,fresh){
   (bundle?.postedMatchReview||[]).length;
  return calendar+'<nav class="calendar-drilldowns" aria-label="Forecast detail and review">'+
   '<button type="button" data-view="transactions">All predictions</button>'+
-  (reviewCount?'<button type="button" data-view="reviews">Needs review ('+reviewCount+')</button>':'')+
+  '<button type="button" data-view="reviews">Needs review'+(reviewCount?' ('+reviewCount+')':'')+'</button>'+
   '</nav>';
 }
 function settingsPage(bundle,s,chosen){
@@ -1624,7 +1624,7 @@ function render(){
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):
-   activeTab==='summary'?summaryPage(bundle,s,selectedSource,derived,fresh):summaryPage(bundle,s,selectedSource,derived,fresh);
+   summaryPage(bundle,s,selectedSource,derived,fresh);
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('form:has([data-history-link])'):[])){
   if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples){
