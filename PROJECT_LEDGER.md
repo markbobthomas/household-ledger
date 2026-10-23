@@ -228,3 +228,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Changes:** Documentation-only correction to this current-state snapshot plus this entry. No UI, forecast algorithm, source bank data, Plaid, secrets, persisted preferences or Render infrastructure changed.
 - **Checks:** No new banking/browser functional tests were run for this docs-only change. PR #49's required banking and browser checks were verified successful; GitHub Pages publish workflow on baseline `b9fc759` was successful. Private Render's deployed SHA and live status **remain unverified**; GitHub Pages does not establish a private deploy.
 - **Next:** Await a specific product/bug request; start from newest `main`, inspect relevant code, implement with focused tests and PR, separately confirm any private deploy, and append a concise ledger outcome for each request.
+
+### 2026-10-22 — compact Schedule category totals (next calendar month only)
+
+- **Request:** Remove the 12-month total and monthly average from category group headings on the Schedules page.
+- **Decision:** Retain only the exact **next complete calendar month's** category total, computed from the existing dated canonical forecast, for deposits, withdrawals and transfers. Live search recalculates this same month-only value using visible schedules. Keep category assignments, distinct recurring streams, individual occurrence adjustments and forecasting arithmetic unchanged.
+- **Changes:** [PR #52](https://github.com/markbobthomas/household-ledger/pull/52) updates both category-header rendering paths in `planner.js`, adds concise-label/search assertions in `tests/planner-browser.cjs`, and refreshes the planner asset version in `index.html`. No bank records, Plaid connections, private forecasts or deployment settings were touched.
+- **Checks:** Real-account pilot safety checks passed on application/test commit `088e34318813126db716af5f0fcb744c9fdffbc1`. Desktop Chromium and iPhone WebKit browser workflow was **in progress when this entry was recorded**; verify its final result on PR #52 before merging. No direct live-account testing was run.
+- **Deployment:** No private Render deployment asserted; independently verify live service revision before claiming the change appears in the private banking site. GitHub merge and Pages publishing are separate statuses.
+- **Next:** Merge only with required checks green; keep the category view uncluttered and prioritize forecast integrity in future changes.
