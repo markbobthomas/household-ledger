@@ -95,10 +95,11 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.match(after,/Nov 25/);
  assert.doesNotMatch(after,/Nov 15[^<]*.*Mortgage ACH/,
   'Old posting date must not produce a duplicate debit');
- // A bank transaction already attached to the recurring plan offers ONLY
- // View schedule, even when the bank categorized it as a transfer.
+ // A bank transaction already attached to the recurring plan is identified
+ // as confirmed, without offering a duplicate-creation action.
  await click('[data-view]',{view:'history'});
- assert.match(future(),/View schedule/, 'Known bank payment must not suggest creating recurrence');
+ assert.match(future(),/Recurring confirmed/, 'Known bank payment remains identified as recurring');
+ assert.match(future(),/View details/, 'Linked payment uses the existing row details interaction');
  await click('[data-history-plan]',{
   historyPlan:'solo-bank-mortgage',historyAccount:'demo-checking'});
  assert.doesNotMatch(future(),/Confirm recurring transaction/,
