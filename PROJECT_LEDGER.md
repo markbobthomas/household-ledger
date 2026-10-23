@@ -412,3 +412,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Request:** Add the current calendar month's minimum projected balance beside current balance and three-year low, highlight its date, and normalize inconsistent titles and font sizes.
 - **Implementation:** Compute monthly low from the same verified per-day projection as Calendar, highlight its day with a distinct low marker, and update the metric when navigating months. Three balance metrics now share a three-column grid and coordinated label/value/date typography with narrow-phone scale adjustments. Standardize common list title, merchant and detail sizes. No forecast arithmetic, bank source or saved planning data changes.
 - **Testing/deployment:** Targeted smoke assertions and GitHub PR verification pending. Do not claim private Render deployment or real-device pixel matching without evidence.
+
+
+### 2026-10-22 — monthly-low display stale after month navigation
+
+- **Bug:** `planner-summary.js` initially rendered the monthly minimum correctly, but `updateMonthLow()` searched for `[data-summary-month-date]` while the actual clickable date had `[data-calendar-month-low]`. Changing months updated calendar cells but left the minimum amount and date unchanged.
+- **Fix:** Use the existing clickable date selector in the update function. A browser regression calculates the minimum from all visible calendar daily amounts in November, then confirms both displayed metric and highlighted date match. No bank state or forecasting math changed.
+- **State:** PR/browser validation and private Render deployment require independent verification.
