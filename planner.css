@@ -1796,3 +1796,17 @@ html{scrollbar-gutter:stable}
 @media(max-width:360px){
  .calendar-day-detail .calendar-detail-heading .calendar-add{font-size:11px;padding:7px 8px}
 }
+
+/* Four discoverable task tabs on small phones; never hide Review offscreen. */
+@media(max-width:390px){
+ .planner-tabs.planner-nav-primary{
+  display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:2px!important;overflow:visible!important;width:100%;
+ }
+ .planner-nav-primary .tab-link{
+  min-width:0;min-height:44px!important;
+  white-space:normal!important;overflow-wrap:normal;
+  font-size:10px!important;line-height:1.15;
+  padding:6px 2px!important;text-align:center;
+ }
+}
