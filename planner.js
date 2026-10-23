@@ -1310,9 +1310,9 @@ function historyPage(bundle,s){
    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey);
   const primaryAction=rejected?'':('<button class="btn" type="button" data-history-plan="'+escapeHTML(String(t.id))+
-   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit schedule':ambiguous?'Choose schedule':'Plan future payments')+'</button>');
+   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit schedule':ambiguous?'Choose schedule':'Create recurring schedule')+'</button>');
   const secondaryAction=rejected?'<button class="btn" type="button" data-restore-recurrence="'+escapeHTML(rejectedKey)+
-   '">Allow future predictions</button>':!matches.length&&predicted?
+   '">Resume automatic predictions</button>':!matches.length&&predicted?
    '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
    '" data-history-account="'+escapeHTML(aid)+'">Stop predictions</button>':'';
   const action='<div class="history-row-actions">'+primaryAction+secondaryAction+'</div>';
@@ -1328,10 +1328,10 @@ function historyPage(bundle,s){
    action+'</div>';
  }).join('');
  return '<div class="planner-page history-page"><div class="page-heading"><div><h2>Actual transaction history</h2>'+
-  '<p>Actual bank transactions. Open a row for details, or use its action to plan future payments.</p></div></div>'+
+  '<p>Past bank transactions. Open a row to see details; create a recurring schedule only when you want future payments. “Resume automatic predictions” reverses a prior exclusion; it does not create a schedule.</p></div></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  '<section class="panel"><form class="history-filters" data-history-filter>'+
+  '<section class="panel history-list-surface"><form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+

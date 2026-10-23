@@ -376,3 +376,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Request:** Keep Calendar, Schedules, History and Needs Review in the primary navigation; move All Predictions into More. Clarify actual-history actions and prevent Allow Predictions from falling onto another line.
 - **Implementation:** `index.html` More now links to All Predictions and the primary duplicate is removed. History uses a grouped, right-aligned action column on desktop and a single grouped action region on mobile; former Make recurring becomes Plan future payments, linked recurring becomes Edit schedule, Not recurring becomes Stop predictions. For excluded patterns, offer Allow future predictions without the contradictory plan action. Refine the History explanation/search label. Preserve existing event handlers and bank/forecast data semantics.
 - **Scope:** UI, CSS and browser navigation assertions only. No account mutation or forecast calculation changes. Browser CI and private Render deployment require separate verification.
+
+
+### 2026-10-22 — unify Schedules and History presentation
+
+- **Request:** Make the two tabs follow the same visual format; clarify the difference between resuming predictions and making a recurring schedule without relying on explanation.
+- **Implementation:** History now labels the explicit scheduling action **Create recurring schedule**; the opt-in reversal of a previously blocked auto-inference is **Resume automatic predictions**. Add one short explanation to History so the distinct mechanisms are clear. Align the Schedules and History filter surfaces, typography, spacing, row heights, borders, amounts and action buttons while retaining each tab's needed controls. CSS, UI copy and browser assertions only; no changes to bank data, auto-inference, or persistence.
+- **Checks:** Pending PR workflow; private Render deployment separately unverified.
