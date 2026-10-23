@@ -1116,7 +1116,9 @@ const {chromium,webkit}=require('playwright');
     r.merchant==='Home Mortgage ACH'&&r.accountId==='checking-real')),
    'Confirmed mortgage schedule persists in private encrypted forecast preferences');
   const auditReal=page.locator('#accuracy-audit');
-  assert.equal(await page.locator('#audit-launch').isVisible(),true);
+  await page.locator('#planner-menu > summary').click();
+  assert.equal(await page.locator('#audit-launch').isVisible(),true,
+   'Real-bank accuracy audit is available from More on Settings');
   await page.locator('#audit-launch').click();
   assert.ok(await auditReal.getAttribute('open')!==null,'Real bank audit expands using one click');
   assert.match(await auditReal.innerText(),/Prediction accuracy/);
