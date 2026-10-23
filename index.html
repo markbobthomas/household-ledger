@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#f8faf7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Household Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=monthly-low-type1">
+<link rel="stylesheet" href="planner.css?v=bank-menu1">
 </head>
 <body>
 <main class="shell"><div class="content">
@@ -19,15 +19,18 @@
         <div class="planner-menu-content" role="group" aria-label="Other planning tools">
           <button type="button" data-view="transactions">All Predictions</button>
           <button type="button" data-view="settings">Settings</button>
-          <a href="/bank-connect">Bank connections</a>
+          <div class="planner-menu-bank">
+            <label for="ledger-mode-switch">Data source</label>
+            <select id="ledger-mode-switch" class="mode-box" aria-label="Bank data source"><option value="demo">Demo</option><option value="real">Real / Plaid</option></select>
+            <span class="status-tag" id="source-type" aria-live="polite">DEMO DATA</span>
+            <button class="btn" type="button" id="refresh-bank" hidden>Refresh bank</button>
+            <a href="/bank-connect">Bank connections</a>
+            <a class="btn" id="bank-connect" href="/bank-connect" hidden>Bank connections</a>
+          </div>
+          <button class="btn primary" type="button" id="audit-launch" data-run-backtest hidden>Check accuracy</button>
           <small id="deployment-version">Version not verified</small>
         </div>
       </details>
-      <span class="status-tag" id="source-type" aria-live="polite">DEMO DATA</span>
-      <select id="ledger-mode-switch" class="mode-box" aria-label="Bank data source"><option value="demo">Demo</option><option value="real">Real / Plaid</option></select>
-      <button class="btn primary" type="button" id="audit-launch" data-run-backtest hidden>Check accuracy</button>
-      <button class="btn" type="button" id="refresh-bank" hidden>Refresh bank</button>
-      <a class="btn" id="bank-connect" href="/bank-connect" hidden>Bank connections</a>
     </div>
   </header>
   <nav class="planner-tabs planner-nav-primary" aria-label="Main planner navigation">
