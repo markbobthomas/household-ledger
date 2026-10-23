@@ -1254,3 +1254,68 @@ body{background:#fff;color:#24313b}
  .topbar h1{font-size:16px}
  .content{padding-left:9px;padding-right:9px}
 }
+/* Second pass: content-first density, minimal chrome; no hidden editing paths. */
+.content{max-width:1320px;padding:12px 18px 24px}
+.topbar{margin-bottom:3px;min-height:36px}
+.topbar h1{font-size:16px;letter-spacing:-.2px;font-weight:700}
+.top-actions{gap:4px}
+.top-actions .btn,.mode-box,.planner-menu>summary{font-size:11px;min-height:32px;padding:5px 8px}
+.planner-tabs.planner-nav-primary{margin:0 0 10px;gap:0}
+.planner-nav-primary .tab-link{min-height:34px;padding:7px 12px;font-size:11px}
+.summary-heading{margin-bottom:5px!important}
+.summary-account-picker{gap:5px!important}
+.summary-numbers{margin-bottom:9px!important}
+.summary-bank,.summary-minimum{gap:2px!important}
+.summary-bank>small:last-child{display:none}
+.summary-low-date{margin-top:2px!important}
+.calendar-wrapper{margin-top:5px!important}
+.calendar-navigation{margin-bottom:6px!important}
+.calendar-navigation small{display:none}
+.calendar-grid{gap:2px!important}
+.calendar-weekday{padding-top:3px!important;padding-bottom:3px!important}
+.calendar-day{padding:6px!important}
+.calendar-day-number{margin-bottom:2px!important}
+.calendar-day-balance{margin-bottom:3px!important}
+.calendar-day-events{margin-top:1px!important}
+.calendar-day-detail{margin-top:7px!important}
+.calendar-day-transactions-head{margin-bottom:5px!important}
+.calendar-detail-heading>div>span{display:none}
+.calendar-math{margin-top:7px!important}
+.calendar-monthly-list{margin-top:8px!important}
+.summary-extras,.summary-trust{margin-top:10px!important}
+.summary-trust p{font-size:11px!important;line-height:1.4!important}
+.schedule-page>.page-heading{margin-bottom:8px!important}
+.schedule-page>.page-heading h2{font-size:16px!important}
+.schedule-page>.page-heading .btn{min-height:32px;padding:6px 10px}
+.schedule-toolbar{margin-bottom:7px;align-items:center}
+.schedule-toolbar>label{gap:2px}
+.schedule-toolbar select,.schedule-search-wrap input{min-height:32px}
+.schedule-card{border-radius:4px!important}
+.schedule-category-heading{padding:7px 2px 3px}
+.schedule-category-group{gap:1px}
+.schedule-category-group+.schedule-category-group{margin-top:3px}
+.schedule-row-category{height:28px}
+.schedule-compact-row{gap:5px!important}
+.schedule-row-main{padding-top:7px!important;padding-bottom:7px!important}
+.schedule-row-next small{display:none}
+.schedule-occurrence-section{padding-top:10px;margin-top:8px}
+.schedule-occurrence{padding:8px 10px}
+.future-fields{gap:9px!important}
+.future-form-actions{gap:6px!important}
+.future-form-actions .btn{min-height:34px}
+.panel{margin-bottom:11px}
+@media(max-width:780px){
+ .content{padding:9px 10px 20px}
+ .topbar h1{font-size:15px}
+ .planner-tabs.planner-nav-primary{margin-bottom:8px}
+ .calendar-day{padding:4px!important}
+ .calendar-grid{gap:1px!important}
+ .schedule-row-main{padding-top:6px!important;padding-bottom:6px!important}
+ .schedule-toolbar{gap:5px}
+}
+@media(max-width:390px){
+ .content{padding-left:7px;padding-right:7px}
+ .top-actions .btn,.mode-box,.planner-menu>summary{padding:4px 6px}
+ .planner-nav-primary .tab-link{padding:7px 10px}
+}
+
