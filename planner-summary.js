@@ -21,6 +21,9 @@ function getPoints(derived,asOf,days){
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
 let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false,cardBreakdownId='';
 let calendarMonthExpanded=false;
+let calendarTipHidden=false;
+try{calendarTipHidden=typeof localStorage!=='undefined'&&
+ localStorage.getItem('household-ledger-calendar-tip-hidden-v1')==='1'}catch{}
 const monthName=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',
  {month:'long',year:'numeric',timeZone:'UTC'});
 const signed=(e,card)=>card?
@@ -213,7 +216,7 @@ function predictionEntry(date,e,index,card,selected=false){
   '<span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
   (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
   '<strong class="'+(signed(e,card)>0?'in':'out')+'">'+fullSigned(e,card)+'</strong>'+
-  '<span class="calendar-monthly-view">Edit ↓</span></button>';
+  '<span class="calendar-monthly-view" aria-hidden="true">Edit ›</span></button>';
  return '<div class="calendar-monthly-entry calendar-detail-entry'+
   (selected?' selected-date':'')+'" data-calendar-entry-date="'+date+
   '" data-inline-row-wrapper>'+entry+
@@ -237,7 +240,9 @@ function dayDetail(point,card){
    '</div>':'';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
   '<div class="calendar-detail-heading"><div><span>SELECTED DAY</span><strong>'+
-   esc(dateLabel(point.date))+'</strong></div></div>'+
+   esc(dateLabel(point.date))+'</strong></div>'+
+   '<button type="button" class="calendar-add" data-calendar-add'+
+   (point.date===first.date?' disabled':'')+'>+ Add prediction</button></div>'+
   breakdown+
   (events.length?'<div class="calendar-day-transactions" aria-label="Predictions for selected date">'+
    '<div class="calendar-day-transactions-head"><strong>Transactions ('+events.length+
@@ -251,8 +256,7 @@ function dayDetail(point,card){
   (calendarNotice?'<p class="calendar-notice" role="status">'+esc(calendarNotice)+'</p>':'')+
   (calendarEditor?'<button type="button" class="calendar-editor-backdrop" data-calendar-cancel aria-label="Close editor"></button>':'')+
   quickEditor()+
-  '<div class="calendar-day-actions"><button type="button" class="calendar-add" data-calendar-add'+
-   (point.date===first.date?' disabled':'')+'>+ Add transaction</button></div>'+
+
   '<div class="calendar-math-total calendar-day-ending"><span>'+(card?'End-of-day card debt':'End-of-day balance')+
   '</span><strong>'+money(point.balance)+'</strong></div>'+
  '</section>';
@@ -381,7 +385,11 @@ function calendarGrid(){
     '>Today</button>'+
    '<button type="button" data-calendar-nav="1"'+
     (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
-  '</div>'+'<div class="calendar-grid" role="group" aria-label="'+
+  '</div>'+
+  (!calendarTipHidden?'<div class="calendar-first-tip" data-calendar-first-tip>'+
+   '<span>Choose a future date to see its payments. Tap <strong>Edit</strong> beside a payment to change it.</span>'+
+   '<button type="button" data-calendar-tip-dismiss aria-label="Dismiss calendar tip">Got it</button></div>':'')+
+  '<div class="calendar-grid" role="group" aria-label="'+
    esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
@@ -583,6 +591,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   (negative?'<small class="summary-low-warning">Below $0</small>':
    below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
   '</div></div>'+
+  '<p class="calendar-balance-explainer">'+
+  (isReal?'The first balance is bank-reported.':'The first balance is sample data.')+
+  ' Future daily balances and lows are estimates based on predicted payments.</p>'+
   calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
   '<section class="summary-stage summary-legacy">'+
@@ -710,7 +721,14 @@ document.addEventListener('keydown',e=>{
   selected+(e.key==='ArrowRight'?1:-1));
 });
 document.addEventListener('click',e=>{
-  const review=e.target.closest?.('[data-summary-review-toggle]');
+ const dismiss=e.target.closest?.('[data-calendar-tip-dismiss]');
+ if(dismiss){
+  calendarTipHidden=true;
+  try{localStorage.setItem('household-ledger-calendar-tip-hidden-v1','1')}catch{}
+  document.querySelector('[data-calendar-first-tip]')?.remove();
+  return;
+ }
+ const review=e.target.closest?.('[data-summary-review-toggle]');
  if(review){
   reviewOpen=!reviewOpen;
   const panel=document.querySelector('.summary-review-details');
