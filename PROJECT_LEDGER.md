@@ -355,3 +355,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Status:** Target PR, CI and private Render revision need independent verification; no live bank data accessed. Future work: verify the private deployed code and actual restored Calendar without requiring relinking.
 
 - **Post-merge verification (2026-10-22):** [PR #74](https://github.com/markbobthomas/household-ledger/pull/74) passed the lean banking-safety and desktop Chromium/iPhone WebKit browser workflows on final head `f8c6818404e885e21c8da32a1350a44cfdd5df40`, then merged to `main` as `89164c76af8c21c6b319cb52427bc54d8a7dcec8`. Private Render live version remains unverified; no bank unlinking required.
+
+
+### 2026-10-22 — visual alignment and typography consistency
+
+- **Goal:** Make the modern calendar-first interface consistently aligned, symmetric, evenly spaced, and typographically coherent without adding UI or changing interactions.
+- **Changes:** Shared 36px control rhythm, vertically centered headers and filters, two aligned balance headline columns with matched sizing and baselines, consistent date and amount typography, schedule row alignment/height, and responsive adjustments for phone widths. Updated CSS and stylesheet cache key only; no forecast, source accounts, Plaid, persistence or navigation behavior changes.
+- **Validation/deployment:** Proposed as focused styling PR. Verify CI/browser checks and merge before claiming completion; private Render deployment independently unverified.
