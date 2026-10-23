@@ -21,7 +21,7 @@ const DEMO_SETTINGS='household-planner-sample-settings-v1';
 try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
-  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion',
+  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold',
     'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
@@ -49,7 +49,7 @@ function savePlanning(){
  else {
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
-   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,
+   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
    scheduleCategories:p.scheduleCategories,
@@ -1523,7 +1523,11 @@ function settingsPage(bundle,s,chosen){
    '<form id="cushion-form" data-cushion-form><label class="cash-cushion-label">Low-balance warning threshold ($)'+
     '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+
      escapeHTML(state().predictions?.cashCushion??500)+'" required></label>'+
-    '<button class="btn primary" type="submit">Save threshold</button></form></section>'+
+    '<button class="btn primary" type="submit">Save threshold</button></form>'+ 
+   '<form data-low-alert-form><label class="cash-cushion-label">Red highlight below ($)'+
+    '<input type="number" name="lowAlertThreshold" min="0" max="999999999" step="1" value="'+
+    escapeHTML(Number.isFinite(Number(state().predictions?.lowAlertThreshold))&&state().predictions?.lowAlertThreshold!=null?state().predictions.lowAlertThreshold:6000)+'" required></label>'+
+    '<button class="btn primary" type="submit">Save highlight</button></form></section>'+
   (Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
   '<section class="panel mini-panel" aria-label="Not recurring decisions">'+
    '<div class="section-title"><h2>Not recurring</h2><span class="status-tag">'+
@@ -2447,6 +2451,11 @@ document.addEventListener('submit',async e=>{
     transactionNotice='Future transaction added to the selected account.';
    }
    showNewTransaction=false;mortgageDraft=null;
+  }else if(form.hasAttribute('data-low-alert-form')){
+   const raw=String(fields.lowAlertThreshold??'').trim(),value=Number(raw);
+   if(!raw||!Number.isInteger(value)||value<0||value>999999999)throw Error('Enter a valid whole-dollar amount.');
+   await commitForecastChange(()=>{state().predictions.lowAlertThreshold=value});
+   transactionNotice='Red highlight threshold saved.';
   }else{
    await commitForecastChange(()=>model.setCashCushion(state(),fields.cashCushion));
    transactionNotice='Safety threshold saved.';
