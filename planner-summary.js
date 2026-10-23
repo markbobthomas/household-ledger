@@ -582,7 +582,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '">'+esc(dateLabel(lowDay.date))+' →</button>'+
   (negative?'<small class="summary-low-warning">Below $0</small>':
    below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
-  '</div>'+
+  '</div></div>'+
   calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
   '<section class="summary-stage summary-legacy">'+
