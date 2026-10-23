@@ -1512,11 +1512,7 @@ function summaryPage(bundle,s,chosen,derived,fresh){
  // Calendar is the entry point for forecast details and unresolved decisions.
  // Retain the full Predictions editor and skipped-payment restore functionality
  // as drill-down views, rather than competing permanent navigation entries.
- const actions='<nav class="calendar-drilldowns" aria-label="Forecast detail and review">'+
-  '<button type="button" data-view="transactions">All predictions</button>'+
-  '<button type="button" data-view="reviews">Needs review</button>'+
-  '</nav>';
- return calendar.replace('<div class="summary-numbers">',actions+'<div class="summary-numbers">');
+ return calendar;
 }
 function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
