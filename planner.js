@@ -1174,9 +1174,7 @@ function schedulesPage(bundle,s){
     'Changing the repeating amount for all future payments will replace these older rules.</p>'+
     windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
-     '<p class="plan-edit-guide">Edit defaults for all future payments, or select one dated payment below.</p>'+
-     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span>'+
-      '<small>Amount, date, frequency, payee and accounts</small></summary>'+
+     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span></summary>'+
       '<div class="plan-settings-body">'+edit+'</div></details>'+
      scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</div></article>';
  };
@@ -1190,8 +1188,7 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- return '<div class="planner-page schedule-page"><div class="page-heading"><div>'+
-  '<h2>Schedules</h2></div>'+
+ return '<div class="planner-page schedule-page"><div class="page-heading">'+
   '<button class="btn primary" type="button" data-schedule-new>+ New schedule</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
@@ -1235,8 +1232,7 @@ function transactionsPage(bundle,s){
    ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
-  '<div class="page-heading"><div><h2>Predictions</h2>'+
-   '<p>All dated forecasts for the next '+horizon+' days. Select a payment to expand the same inline editor used in Calendar and Schedules.</p></div>'+
+  '<div class="page-heading"><div><h2>Predictions</h2></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -1244,7 +1240,6 @@ function transactionsPage(bundle,s){
    (showNewTransaction?newTransactionForm(s):'')+
    (lines||'<div class="empty-visual">No predicted transactions for this selection. Add one or choose another account.</div>')+
    undo+
-   '<p class="audit-footnote">Forecast-only changes recalculate balance predictions for affected accounts. Actual bank transactions remain untouched. Card payments and account transfers are represented once and affect both linked accounts.</p>'+
   '</section></div>';
 }
 
