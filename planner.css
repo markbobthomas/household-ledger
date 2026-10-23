@@ -1318,3 +1318,24 @@ body{background:#fff;color:#24313b}
  .planner-nav-primary .tab-link{padding:7px 10px}
 }
 
+/* Schedule: one full-width ledger, not variable-width floating cards. */
+.schedule-page .schedule-grid{display:flex!important;flex-direction:column;align-items:stretch;width:100%;gap:0!important;min-width:0}
+.schedule-page .schedule-category-group{display:flex;flex-direction:column;align-items:stretch;width:100%;max-width:none;min-width:0;gap:0}
+.schedule-page .schedule-card{display:block;width:100%!important;max-width:none;min-width:0;flex:0 0 auto;background:transparent;border:0!important;border-radius:0!important;box-shadow:none!important;margin:0!important}
+.schedule-page .schedule-compact-row{width:100%;max-width:none;border-bottom:1px solid #edf0f2;background:transparent}
+.schedule-page .schedule-row-main{min-width:0;width:100%;border:0;border-radius:0}
+.schedule-page .schedule-row-main:hover,.schedule-page .schedule-row-main:focus-visible{background:#f6f8f9}
+.schedule-page .schedule-more>summary{border-left:0;border-radius:0}
+.schedule-page .schedule-row-category{background:transparent;border:1px solid transparent;border-radius:3px}
+.schedule-page .schedule-row-category:hover,.schedule-page .schedule-row-category:focus-visible{border-color:#d7dfe5;background:#fff}
+.schedule-page .schedule-number{background:transparent;border:0;min-width:19px;width:19px;height:auto;color:#81909c;font-size:10px}
+.schedule-page .schedule-category-heading{width:100%;border-bottom:1px solid #dce2e7;padding:12px 2px 4px;margin:0}
+.schedule-page .schedule-category-group+.schedule-category-group{margin-top:9px}
+.schedule-page .schedule-card-detail:not(:empty){border-top:0;padding:10px 12px 14px;background:#fafbfc}
+.schedule-page .schedule-card:has(.schedule-row-main[aria-expanded="true"]){background:#fafbfc}
+.schedule-page .schedule-toolbar select,.schedule-page .schedule-search-wrap input{border:1px solid #e0e5e9;background:#fff}
+.schedule-page .schedule-category-manager>summary{border:1px solid #e0e5e9;background:transparent}
+@media(max-width:600px){
+ .schedule-page .schedule-grid,.schedule-page .schedule-category-group,.schedule-page .schedule-card{width:100%!important;max-width:none}
+ .schedule-page .schedule-card-detail:not(:empty){padding:8px 7px 12px}
+}
