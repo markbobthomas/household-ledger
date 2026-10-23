@@ -1520,3 +1520,12 @@ button,select,input,textarea{font-family:inherit}
  .summary-numbers{gap:8px!important}
  .summary-bank strong,.summary-low{font-size:clamp(19px,5.25vw,24px)!important}
 }
+
+/* Five equal-status destinations in a single, responsive navigation row. */
+.planner-tabs.planner-nav-primary{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.planner-nav-primary .tab-link{white-space:nowrap;text-align:center}
+@media(max-width:780px){
+ .planner-tabs.planner-nav-primary{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+ .planner-tabs.planner-nav-primary::-webkit-scrollbar{display:none}
+ .planner-nav-primary .tab-link{flex:0 0 auto}
+}

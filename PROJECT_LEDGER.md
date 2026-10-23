@@ -362,3 +362,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Goal:** Make the modern calendar-first interface consistently aligned, symmetric, evenly spaced, and typographically coherent without adding UI or changing interactions.
 - **Changes:** Shared 36px control rhythm, vertically centered headers and filters, two aligned balance headline columns with matched sizing and baselines, consistent date and amount typography, schedule row alignment/height, and responsive adjustments for phone widths. Updated CSS and stylesheet cache key only; no forecast, source accounts, Plaid, persistence or navigation behavior changes.
 - **Validation/deployment:** Proposed as focused styling PR. Verify CI/browser checks and merge before claiming completion; private Render deployment independently unverified.
+
+
+### 2026-10-22 — promote Predictions and Needs Review into main navigation
+
+- **Goal:** Present five navigation choices in the same primary row: Calendar, Schedules, History, All Predictions, Needs Review.
+- **Change:** Add Predictions/Needs Review to `index.html` primary tabs and remove their redundant secondary Calendar links in `planner.js`; maintain the existing views and handlers. Style nav as aligned, responsive row with horizontal scrolling on narrow phones. Update browser navigation assertions; no banking/forecast changes.
+- **Verification:** Focused PR pending CI; private Render status independently unverified.
