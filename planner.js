@@ -1322,6 +1322,8 @@ function historyPage(bundle,s){
    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey);
   const canPlan=window.HouseholdPlannerHistory.canPlan(t),
+   canSuppress=canPlan&&['expense','income','refund','transfer'].includes(kind)&&
+    Boolean(String(t.merchant||t.name||'').trim()),
    status=matches.length?(ambiguous?'Several repeating plans':'Recurring confirmed'):
     rejected?'Auto predictions off':predicted?'Automatically predicted':'No repeating plan',
    primary=matches.length?(ambiguous?'Choose plan':'Edit plan'):
@@ -1339,13 +1341,14 @@ function historyPage(bundle,s){
     secondary='<button type="button" class="btn history-decision" data-stop-history-recurrence="'+
      escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
      '" title="Remove automatically predicted payments for this payee">Stop auto predictions</button>';
-   }else if(canPlan){
+   }else if(canSuppress){
     secondary='<button type="button" class="btn history-decision" data-ignore-history-recurrence="'+
      escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
      '" title="Do not suggest future repeating payments for this payee">Don’t suggest</button>';
    }
   }
-  return '<div class="history-actual-row" data-history-recurring-state="'+
+  return '<div class="history-actual-row" data-history-kind="'+escapeHTML(kind||'unknown')+
+   '" data-history-recurring-state="'+
    (matches.length?'confirmed':rejected?'excluded':predicted?'automatic':'unscheduled')+'">'+
    '<button type="button" class="history-row-open" data-historical-transaction="'+
    escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
@@ -1991,8 +1994,8 @@ document.addEventListener('click',async e=>{
   const kind=window.HouseholdPlannerTransactions.bankDirection(bank);
   try{
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.excludeHistorySuggestions(
-    state(),{accountId:aid,type:kind,merchant:bank.merchant}));
-   reviewNotice='Automatic repeating suggestions are off for '+bank.merchant+
+    state(),{accountId:aid,type:kind,merchant:bank.merchant||bank.name}));
+   reviewNotice='Automatic repeating suggestions are off for '+(bank.merchant||bank.name)+
     '. Posted bank activity and saved plans were not changed. Use Allow predictions to reverse this.';
    render();
   }catch(err){setNotice(String(err.message||err))}
