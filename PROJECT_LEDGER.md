@@ -383,3 +383,10 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Request:** Make the two tabs follow the same visual format; clarify the difference between resuming predictions and making a recurring schedule without relying on explanation.
 - **Implementation:** History now labels the explicit scheduling action **Create recurring schedule**; the opt-in reversal of a previously blocked auto-inference is **Resume automatic predictions**. Add one short explanation to History so the distinct mechanisms are clear. Align the Schedules and History filter surfaces, typography, spacing, row heights, borders, amounts and action buttons while retaining each tab's needed controls. CSS, UI copy and browser assertions only; no changes to bank data, auto-inference, or persistence.
 - **Checks:** Pending PR workflow; private Render deployment separately unverified.
+
+
+### 2026-10-22 — structural parity between Schedules and History
+
+- **Issue:** Prior CSS-only styling left History filters inside the list's outer panel while Schedules filters were separate. Competing History schedule and prediction buttons also added confusion.
+- **Change:** Restructured History to use the exact Schedules outer pattern: standalone bordered filter toolbar followed by a separately bordered ledger. Matched outside margins, padding, border radii, list row rhythm and mobile gutters. Removed redundant History create/edit schedule buttons: clicking a bank transaction row already opens its existing schedule/details workflow. Only exceptional auto-prediction exclusion controls remain, labeled **Mark not recurring** or **Undo ‘Not recurring’**. Financial behavior and bank state untouched; browser tests updated for row-driven actions.
+- **Verification:** PR and relevant browser validation pending; deployed Render revision unverified. Do not claim literal pixel-perfect parity without actual rendered screenshot comparison on target devices.
