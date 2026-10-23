@@ -459,3 +459,13 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Checks:** GitHub source/document inspection only; no code-specific or browser tests required for a docs-only entry. No private bank data accessed.
 - **Deployment:** Current private Render revision and actual live behavior remain **unverified**; a GitHub merge does not prove deployment. Do not alter existing service, secrets, or persistent disk.
 - **Next:** Await a specific app change or investigation; inspect relevant current source, work in a focused PR, validate safety/desktop+iPhone as applicable, merge, append results to this ledger, and separately verify Render when accessible.
+
+
+### 2026-10-23 — consistent Calendar metric hierarchy and threshold colors
+
+- **Goal:** Align the three headline balances, remove the anomalous vertical divider, center monthly low, and distinguish current bank balance from projected lows.
+- **Decision:** Order the three metrics as bank-reported current balance, monthly projected low, and three-year projected low. Use equal internal padding and spacing, no vertical separator; current balance is prominent green, while projected figures are smaller and turn red **strictly below $6,000** (at $6,000 they remain neutral). The monthly warning style must update on calendar-month navigation. Preserve existing date links, low-date highlighting, projected-value calculation, separate bank/source labels, and below-cushion warning copy.
+- **Changes:** Presentation-only markup and conditional classes in `planner-summary.js`; consolidated metric styling in `planner.css`; cache key updates in `index.html`. No banking data, recurring rules, canonical forecast calculations, or persistent settings changed.
+- **Checks:** JavaScript syntax inspected via source parse. GitHub PR validation must be checked before merge; mobile/desktop rendered appearance and private live deployment still require separate verification.
+- **Deployment:** Private Render SHA remains unverified; a merged PR is not evidence that Render is live.
+- **Next:** Visually review the three-metric header on phone and desktop after confirmed deployment, especially narrow screens and monthly navigation.
