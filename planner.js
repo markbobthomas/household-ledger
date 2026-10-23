@@ -1573,6 +1573,7 @@ function render(){
     automaticRecurrence:{review:[]},duplicateConflicts:candidates.conflicts};
   }catch(_error){/* The visible forecast error remains available above. */}
  }
+ if(!bundle&&error)bundle={forecastError:error};
  const projection=bundle?.projection||null,selectedSource=selected(s);
  lastSuggestions=bundle?.routines?.review||[];
  lastMissingMortgages=bundle?.missingMortgages||[];
@@ -1745,6 +1746,17 @@ document.addEventListener('click',async e=>{
   return;
  }
  const calendar=window.HouseholdPlannerSummary;
+ const repairClose=e.target.closest('[data-repair-close]'),repairOpen=e.target.closest('[data-repair-open]');
+ if(repairClose||repairOpen){
+  const popup=document.querySelector('.calendar-repair-overlay');
+  if(popup){popup.hidden=!!repairClose; if(repairOpen)popup.querySelector('[data-repair-refresh]')?.focus();}
+  return;
+ }
+ if(e.target.closest('[data-repair-refresh]')){
+  const refresh=$('refresh-bank');
+  if(live()&&refresh){refresh.click();return;}
+  window.location.href='/bank-connect';return;
+ }
  const addCalendar=e.target.closest('[data-calendar-add]');
  const gap=e.target.closest('[data-calendar-fill-gap]');
  if(addCalendar||gap){
