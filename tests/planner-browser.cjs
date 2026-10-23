@@ -32,6 +32,10 @@ const {chromium,webkit}=require('playwright');
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
+   assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
+    'calendar-metrics-20261023-r2','The loaded HTML identifies the new Calendar styling release');
+   assert.match(await page.locator('#deployment-version').textContent(),/Calendar UI r2/,
+    'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
@@ -119,9 +123,12 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(await page.locator('.summary-numbers > div').evaluateAll(elements=>
     elements.map(el=>el.className)),['summary-bank','summary-monthly','summary-minimum'],
     'Bank balance, monthly low, and three-year low appear in that order');
-   assert.equal(await page.locator('.summary-numbers > .summary-monthly').evaluate(el=>
-    getComputedStyle(el).borderLeftWidth),'0px',
-    'No vertical divider remains between monthly and account figures');
+   assert.deepEqual(await page.locator('.summary-numbers > div').evaluateAll(elements=>
+    elements.map(el=>({
+     border:getComputedStyle(el).borderLeftWidth,
+     padding:getComputedStyle(el).paddingLeft
+    })),Array.from({length:3},()=>({border:'0px',padding:'0px'})),
+    'All three metrics have identical zero inner borders and left padding');
    assert.equal(await page.locator('.summary-bank [data-bank-current-value]').evaluate(el=>
     getComputedStyle(el).color),'rgb(35, 113, 74)',
     'Bank-reported current balance is green');
