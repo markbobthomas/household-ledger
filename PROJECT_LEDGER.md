@@ -448,3 +448,14 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **User preference:** Highlighted navigation already names Schedules, History, and Needs Review; eliminate repeated page headings and explanatory lines.
 - **Change:** Remove duplicated in-page titles/descriptions from those three views; keep + Schedule as a compact right-aligned action and Needs Review count as a quiet status. Preserve filters, bank history actions, alerts, and recurrence logic. CSS alignment/cache key updated; no forecast or bank data changes.
 - **Verification:** GitHub PR and deployed Render/browser appearance require independent verification.
+
+
+### 2026-10-23 — resume development from current source and project instructions
+
+- **Goal:** Re-establish the project baseline by reading this ledger, `AGENTS.md`, recent GitHub history, current forecasting modules and deployment instructions before subsequent development.
+- **Decision:** Preserve the calendar-first checking-balance predictor, one canonical dated forecast ledger, bank/source immutability, independent recurring schedules, existing Plaid/private Render infrastructure, and the minimal interface. Continue app changes only against inspected current `main`; append and merge a concise project-ledger update for every user request, even discussion-only.
+- **Reviewed:** `PROJECT_LEDGER.md`, `AGENTS.md`, `README.md`, `planner.js`, `planner-summary.js`, `planner-core.js`, `DEPLOYMENT_STATUS.md`, and recent GitHub commits. At review the newest reported main commit was `66eb801fc26f1bebd6e6b889fae68924bdaa32db` (PR #89, redundant tab heading removal). Recently merged changes also cover mobile title wrapping (#88), moving bank controls to More (#87), and correcting monthly-low calculation (#84/#85).
+- **Changes:** Documentation-only development resumption; no runtime code, banking integration, data schema, prediction arithmetic, or UI change.
+- **Checks:** GitHub source/document inspection only; no code-specific or browser tests required for a docs-only entry. No private bank data accessed.
+- **Deployment:** Current private Render revision and actual live behavior remain **unverified**; a GitHub merge does not prove deployment. Do not alter existing service, secrets, or persistent disk.
+- **Next:** Await a specific app change or investigation; inspect relevant current source, work in a focused PR, validate safety/desktop+iPhone as applicable, merge, append results to this ledger, and separately verify Render when accessible.
