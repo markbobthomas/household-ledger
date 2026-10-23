@@ -1692,3 +1692,7 @@ html{scrollbar-gutter:stable}
 .topbar h1{display:block;max-width:100%;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;word-break:normal;line-height:1.2}
 .topbar .top-actions{flex:0 0 auto!important;width:auto!important;margin-left:auto;justify-content:flex-end}
 @media(max-width:390px){.topbar h1{font-size:clamp(15px,4.7vw,19px)!important}.topbar{gap:8px}}
+
+/* Tabs already announce page identity; show only actions and actionable counts. */
+.schedule-page .page-actions{display:flex;justify-content:flex-end;align-items:center;min-height:36px;margin:0 0 12px}
+.reviews-page .review-count-line{display:flex;justify-content:flex-end;align-items:center;min-height:24px;margin:0 0 12px}
