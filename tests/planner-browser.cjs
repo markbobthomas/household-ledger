@@ -54,7 +54,8 @@ const {chromium,webkit}=require('playwright');
      });
      return;
     }
-    await page.locator('#planner-menu > summary').click();
+    if(await page.locator('#planner-menu').getAttribute('open')===null)
+     await page.locator('#planner-menu > summary').click();
     await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
    };
    // The menu must stay usable on desktop and the narrowest supported iPhones.
@@ -75,6 +76,11 @@ const {chromium,webkit}=require('playwright');
     await visibleMenu();
     const menu=await page.locator('#planner-menu > summary').boundingBox();
     assert.ok(menu&&menu.x>=0&&menu.x+menu.width<=321,'Menu trigger itself stays onscreen at 320px');
+    const tabs=await page.locator('.planner-nav-primary .tab-link').evaluateAll(els=>
+     els.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,visible:r.width>0&&r.height>0}}));
+    assert.equal(tabs.length,4);
+    assert.ok(tabs.every(r=>r.visible&&r.left>=-1&&r.right<=321),
+     'All four task-based tabs are reachable without sideways navigation at 320px: '+JSON.stringify(tabs));
     await page.setViewportSize({width:390,height:844});
    }
 
@@ -960,7 +966,8 @@ const {chromium,webkit}=require('playwright');
     });
     return;
    }
-   await page.locator('#planner-menu > summary').click();
+   if(await page.locator('#planner-menu').getAttribute('open')===null)
+    await page.locator('#planner-menu > summary').click();
    await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
   };
   await page.route('**/api/ledger',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(realPayload)}));
