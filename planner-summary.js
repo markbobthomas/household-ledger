@@ -362,7 +362,7 @@ function calendarGrid(){
     (index===0?' disabled':'')+' aria-label="Previous forecast month">‹</button>'+
    '<button type="button" class="calendar-today" data-calendar-today'+
     (calendarMonth===keys[0]&&calendarDate===state.asOf?' disabled':'')+
-    '>Start</button>'+
+    '>Today</button>'+
    '<button type="button" data-calendar-nav="1"'+
     (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
   '</div>'+'<div class="calendar-grid" role="group" aria-label="'+

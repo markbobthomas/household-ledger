@@ -250,3 +250,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Next:** Visually evaluate the compact layouts on actual desktop/iPhone after deploying, and make targeted follow-up adjustments without restoring decorative clutter.
 
 - **Post-merge verification (2026-10-22):** [PR #54](https://github.com/markbobthomas/household-ledger/pull/54) passed Real-account pilot safety and Browser interaction tests (desktop Chromium, iPhone WebKit) on feature head `48892722b4f3fb713664893c644427188e50e432`; merged to `main` as `708b2f13ad8ebb3651047be1322035e145edef5c`. Tests initially flagged assertions referencing intentionally removed labels; those were updated before the final green run. The visual cleanup does not alter forecast or bank state. GitHub Pages publication and private Render live revision are not independently confirmed.
+
+### 2026-10-22 — second-pass ultra-minimal interface
+
+- **Request:** Simplify the appearance further while retaining the direction of the preceding visual overhaul.
+- **Decision:** Prioritize dense calendar and schedule information over decorative framing; preserve keyboard/tap actions, account/source distinctions, projected minimum and warning text, schedules, edit forms, bank safety and forecasting calculations.
+- **Changes:** Second-pass responsive style reductions in `planner.css`: smaller header/navigation, tighter calendar cells and headings, more compact schedule rows and filters, reduced panel/form spacing, fewer duplicated helper captions. Removed empty footer from `index.html`, versioned CSS asset, and relabeled calendar return control from Start to Today in `planner-summary.js`. The CSS hides only repeated secondary summary context text, not the primary current-balance source label. All existing IDs, handlers, values, forecast/transaction paths retained.
+- **Checks:** Require green Real-account pilot safety and desktop Chromium/iPhone WebKit browser workflow on PR before merging; no live bank tests. Private Render deployed revision unverified.
+- **Next:** Confirm real-world calendar legibility and mobile tap usability after verified deployment; refine only any proven density problems.
