@@ -934,10 +934,6 @@ const {chromium,webkit}=require('playwright');
     });
     return;
    }
-   if(tab==='transactions'||tab==='reviews'){
-    await page.locator('.planner-nav-primary [data-view="summary"]').click();
-    await page.locator('.calendar-drilldowns [data-view="'+tab+'"]').click();return;
-   }
    await page.locator('#planner-menu > summary').click();
    await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
   };
