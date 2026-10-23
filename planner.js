@@ -1309,13 +1309,15 @@ function historyPage(bundle,s){
   const predicted=futureRows(bundle,s).some(r=>r.kind==='event'&&
    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey);
-  const primaryAction=rejected?'':('<button class="btn" type="button" data-history-plan="'+escapeHTML(String(t.id))+
-   '" data-history-account="'+escapeHTML(aid)+'">'+(linked?'Edit schedule':ambiguous?'Choose schedule':'Create recurring schedule')+'</button>');
-  const secondaryAction=rejected?'<button class="btn" type="button" data-restore-recurrence="'+escapeHTML(rejectedKey)+
-   '">Resume automatic predictions</button>':!matches.length&&predicted?
-   '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
-   '" data-history-account="'+escapeHTML(aid)+'">Stop predictions</button>':'';
-  const action='<div class="history-row-actions">'+primaryAction+secondaryAction+'</div>';
+  // Opening the bank row already offers schedule creation/editing.
+  // Keep only the exceptional automatic-prediction toggle visible.
+  const action='<div class="history-row-actions">'+
+   (rejected?'<button class="btn" type="button" data-restore-recurrence="'+escapeHTML(rejectedKey)+
+    '" title="Undo Not recurring and permit automatic suggestions">Undo “Not recurring”</button>':
+    !matches.length&&predicted?
+    '<button class="btn" type="button" data-stop-history-recurrence="'+escapeHTML(String(t.id))+
+    '" data-history-account="'+escapeHTML(aid)+'" title="Stop automatic predictions for this merchant">Mark not recurring</button>':
+    '<span class="history-row-hint">View details ›</span>')+'</div>';
   return '<div class="history-actual-row" role="button" tabindex="0" aria-label="View bank transaction: '+
    escapeHTML(t.merchant||'Bank transaction')+'" data-historical-transaction="'+escapeHTML(String(t.id))+
    '" data-historical-account="'+escapeHTML(aid)+'">'+
@@ -1328,21 +1330,21 @@ function historyPage(bundle,s){
    action+'</div>';
  }).join('');
  return '<div class="planner-page history-page"><div class="page-heading"><div><h2>Actual transaction history</h2>'+
-  '<p>Past bank transactions. Open a row to see details; create a recurring schedule only when you want future payments. “Resume automatic predictions” reverses a prior exclusion; it does not create a schedule.</p></div></div>'+
+  '<p>Select a transaction to review it or set up a recurring schedule. Automatic prediction exclusions can be undone directly from the row.</p></div></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  '<section class="panel history-list-surface"><form class="history-filters" data-history-filter>'+
+  '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
    '<button class="btn" type="submit">Search</button>'+
    (historySearch?'<button type="button" class="btn" data-clear-history-search>Clear</button>':'')+
-   '</form><p class="history-count">Showing '+visible.length+' of '+filtered.length+
+   '</form><div class="history-list-surface"><p class="history-count">Showing '+visible.length+' of '+filtered.length+
     ' matching transaction'+(filtered.length===1?'':'s')+
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
-   '</section></div>';
+   '</div></div>';
 }
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
