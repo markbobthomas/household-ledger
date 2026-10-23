@@ -34,12 +34,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
-   assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),3,
+   assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
     'One primary navigation row: calendar, schedules, history');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
     ['Calendar','Schedules','History','Needs Review']);
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
-    'Predictions is available in the main navigation');
+    'Predictions is available through More instead of the main row');
    const go=async tab=>{
     const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
     if(await primary.count()){await primary.click();return}
