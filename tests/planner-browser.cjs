@@ -428,16 +428,14 @@ const {chromium,webkit}=require('playwright');
    let total=await incomeGroup.locator('[data-schedule-group-total]').innerText();
    assert.ok(total.includes('Nov 2026: In $6,115.00'),
     'November income must be the two actual dated deposits, not a prorated annual average');
-   assert.ok(total.includes('12-month total: In $79,495.00'),
-    'Annual income includes thirteen four-week deposits for each independent pay stream');
-   assert.ok(total.includes('avg/month: In $6,624.58'),
-    'The 12-month average is separately identified and cannot be mistaken for November');
+   assert.doesNotMatch(total,/12-month|avg\/month|\/mo/,
+    'Category header must not show an annual total or monthly average');
    await page.locator('[data-schedule-search]').fill('Nonexistent schedule');
    assert.equal(await incomeGroup.locator('[data-schedule-card]:visible').count(),0);
    await page.locator('[data-schedule-search]').fill('Alternating Employer Paycheck');
    total=await incomeGroup.locator('[data-schedule-group-total]').innerText();
-   assert.ok(total.includes('12-month total: In $79,495.00'),
-    'Filtering and clearing schedules preserves the same income totals');
+   assert.equal(total,'Nov 2026: In $6,115.00',
+    'Search restores the same exact next-month income without extra totals');
    await page.locator('[data-schedule-sort]').selectOption('order');
    await page.reload({waitUntil:'load'});
    await go('transactions');
@@ -682,8 +680,8 @@ const {chromium,webkit}=require('playwright');
     'Category filter shows only the two assigned schedules');
    const group=page.locator('[data-schedule-category-group="Water bills"]');
    assert.equal(await group.count(),1);
-   assert.match(await group.locator('.schedule-category-heading').innerText(),/Out .*\/mo/,
-    'Category grouping shows a normalized monthly withdrawal total');
+   assert.match(await group.locator('.schedule-category-heading').innerText(),/[A-Z][a-z]{2} \d{4}: Out /,
+    'Category grouping shows exact next-calendar-month withdrawals');
    assert.match(await group.locator('.schedule-category-heading').innerText(),/355/,
     'Category total includes both independently forecast monthly bills');
    assert.deepEqual(await group.locator('[data-schedule-quick-category]').evaluateAll(rows=>
@@ -698,6 +696,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-schedule-card]:visible').count(),2);
    assert.match(await group.locator('[data-schedule-group-total]').innerText(),/355/,
     'Clearing search restores all category totals');
+   assert.doesNotMatch(await group.locator('[data-schedule-group-total]').innerText(),/12-month|avg\/month|\/mo/,
+    'Search does not reintroduce annual totals or averages');
    await page.locator('[data-schedule-search]').fill('Nothing matches');
    assert.equal(await page.locator('[data-schedule-card]:visible').count(),0);
    assert.equal(await page.locator('[data-schedule-search-empty]:visible').count(),1);

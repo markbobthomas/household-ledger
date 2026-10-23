@@ -1030,9 +1030,7 @@ function applyScheduleSearch(root=document){
    const asOf=root.querySelector('[data-schedule-as-of]')?.dataset.scheduleAsOf;
    if(asOf){
     const period=scheduleTotalPeriod(asOf);
-    total.textContent=period.label+': '+formatScheduleTotals(month)+
-     ' · 12-month total: '+formatScheduleTotals(year)+
-     ' · avg/month: '+formatScheduleTotals(year,{average:true});
+    total.textContent=period.label+': '+formatScheduleTotals(month);
    }
   }
  }
@@ -1083,9 +1081,7 @@ function formatScheduleTotals(total,{average=false}={}){
 function scheduleCategorySummary(items,bundle,period){
  const month=sumScheduleAmounts(items,bundle,period.start,period.monthEnd),
   year=sumScheduleAmounts(items,bundle,period.start,period.yearEnd);
- return period.label+': '+formatScheduleTotals(month)+
-  ' · 12-month total: '+formatScheduleTotals(year)+
-  ' · avg/month: '+formatScheduleTotals(year,{average:true});
+ return period.label+': '+formatScheduleTotals(month);
 }
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
