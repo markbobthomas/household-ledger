@@ -135,14 +135,22 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.top-actions > #refresh-bank,.top-actions > #ledger-mode-switch').count(),0,
     'Bank controls no longer clutter the top-level header');
    await go('settings');
-   const lowAlertInput=page.locator('[data-low-alert-form] [name=lowAlertThreshold]');
-   assert.equal(await lowAlertInput.inputValue(),'6000',
-    'Default low highlight threshold is $6,000');
+   const lowAlertInput=page.locator('[data-warning-form] [name=warnBelow]');
+   assert.equal(await lowAlertInput.inputValue(),'500',
+    'New forecasts default to one $500 warning limit');
    await lowAlertInput.fill('100000');
-   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await page.locator('[data-warning-form] button[type=submit]').click();
    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(
-    'household-planner-sample-settings-v1')||'{}').lowAlertThreshold),100000,
-    'Red threshold saves in forecast-only preferences');
+    'household-planner-sample-settings-v1')||'{}').warnBelow),100000,
+    'A single saved warning limit drives red and cash-cushion indicators');
+   assert.equal(await page.locator('[data-warning-form]').count(),1);
+   assert.equal(await page.locator('[data-low-alert-form],[data-cushion-form]').count(),0,
+    'Settings has exactly one low-balance control, not two competing values');
+   assert.deepEqual(await page.evaluate(()=>{
+    const p=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return [p.warnBelow,p.cashCushion,p.lowAlertThreshold];
+   }),[100000,100000,100000],
+    'Saving the single warning threshold synchronizes legacy forecast-only aliases');
    assert.equal(await page.locator('[aria-label="Bank connection status"]').count(),1,
     'Connection information appears in one compact, actionable Settings section');
    assert.equal(await page.locator('h3').filter({hasText:'Planning assumptions'}).count(),0,
@@ -227,8 +235,8 @@ const {chromium,webkit}=require('playwright');
      'rgb(180, 59, 54)','Saved threshold turns projected low values red');
    }
    await go('settings');
-   await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('0');
-   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await page.locator('[data-warning-form] [name=warnBelow]').fill('0');
+   await page.locator('[data-warning-form] button[type=submit]').click();
    await go('summary');
    for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
     const actual=await page.locator(selector).evaluate(el=>({
@@ -236,11 +244,11 @@ const {chromium,webkit}=require('playwright');
      red:el.classList.contains('summary-low-alert')
     }));
     assert.equal(actual.red,actual.value<0,
-     'At a $0 threshold, only negative projected lows remain red');
+     'At a $0 warning limit, only negative projected lows remain red');
    }
    await go('settings');
-   await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('6000');
-   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await page.locator('[data-warning-form] [name=warnBelow]').fill('6000');
+   await page.locator('[data-warning-form] button[type=submit]').click();
    await go('summary');
    assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
    assert.equal(await page.locator('.calendar-checklist,.coverage-table,.summary-coverage-metric').count(),0,
