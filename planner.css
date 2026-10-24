@@ -2634,3 +2634,62 @@ html{scrollbar-gutter:stable}
   gap:6px;
  }
 }
+
+/* Calendar-only density pass: shrink whitespace without shrinking tappable controls.
+   Equal compact minimums on real, blank and outside days prevent empty weeks
+   from being stretched by old placeholder-cell defaults. */
+body:has(.summary-page) .content{padding-top:14px}
+body:has(.summary-page) .topbar{margin-bottom:9px}
+body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:10px}
+.summary-page .summary-heading{margin-bottom:6px!important}
+.summary-page .summary-numbers{
+  padding:6px 0 8px!important;margin-bottom:4px!important;
+  gap:clamp(8px,2vw,22px)!important;
+}
+.summary-page .summary-bank,.summary-page .summary-monthly,.summary-page .summary-minimum{
+  grid-template-rows:minmax(21px,auto) minmax(34px,auto) minmax(20px,auto);
+  gap:2px;
+}
+.summary-page .calendar-balance-explainer{margin:2px 0 7px}
+.summary-page .calendar-wrapper{margin-top:4px!important}
+.summary-page .calendar-navigation{margin-bottom:6px!important}
+.summary-page .calendar-weekday{padding:2px 0 5px!important}
+.summary-page .calendar-grid{gap:3px!important}
+.summary-page .calendar-day,.summary-page .calendar-blank,.summary-page .calendar-outside{
+  min-height:82px;
+}
+.summary-page .calendar-day{padding:5px 6px!important;gap:2px}
+.summary-page .calendar-day-number,.summary-page .calendar-day-balance{margin-bottom:0!important}
+.summary-page .calendar-day-events{gap:2px;margin-top:0!important}
+.summary-page .calendar-day-detail{padding:12px!important;margin-top:9px!important}
+.summary-page .calendar-day-detail .calendar-detail-heading{margin-bottom:3px!important}
+.summary-page .calendar-day-reconciliation{margin-top:8px}
+.summary-page .calendar-day-reconciliation .calendar-day-opening{padding:8px 11px}
+.summary-page .calendar-day-reconciliation .calendar-day-transactions-head{
+  padding:7px 11px 1px;margin-bottom:0!important;
+}
+.summary-page .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{
+  padding:9px 11px;
+}
+.summary-page .calendar-day-reconciliation .calendar-day-net{padding:9px 11px}
+.summary-page .calendar-day-detail .calendar-day-ending{margin-top:9px;padding:10px 0 0}
+.summary-page .calendar-monthly-list{margin-top:9px!important}
+.summary-page .calendar-monthly-list>summary{padding:11px 13px}
+.summary-page .calendar-first-tip{margin:5px 0 7px;padding:7px 10px}
+@media(max-width:780px){
+  body:has(.summary-page) .content{padding-top:10px}
+  body:has(.summary-page) .topbar{margin-bottom:7px}
+  body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:8px}
+  .summary-page .summary-numbers{padding:4px 0 5px!important;gap:7px!important}
+  .summary-page .summary-bank,.summary-page .summary-monthly,.summary-page .summary-minimum{
+    grid-template-rows:minmax(29px,auto) minmax(32px,auto) minmax(18px,auto);gap:2px;
+  }
+  .summary-page .calendar-grid{gap:2px!important}
+  .summary-page .calendar-day,.summary-page .calendar-blank,.summary-page .calendar-outside{min-height:64px}
+  .summary-page .calendar-day{padding:4px 2px!important;gap:2px}
+  .summary-page .calendar-day-detail{padding:10px!important}
+  .summary-page .calendar-day-reconciliation .calendar-day-opening{padding:8px}
+  .summary-page .calendar-day-reconciliation .calendar-day-transactions-head{padding:7px 8px 1px}
+  .summary-page .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{padding:9px 8px}
+  .summary-page .calendar-day-reconciliation .calendar-day-net{padding:9px 8px}
+}
