@@ -2022,8 +2022,16 @@ document.addEventListener('click',async e=>{
    proposedDate=rec.nextDate||window.HouseholdPlannerHistory.nextDate(
     sourceRow?.date||rec.lastDate,rec.frequency||'monthly',s.asOf)||shiftDay(s.asOf,30),
    proposedAmount=Number(rec.amount)>0?rec.amount:Number(sourceRow?.amount||0),
+   categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+   fromBank=String(rec.category||'').trim(),
+   mapped={'Housing':'Mortgage','Utilities':'Utility','Subscriptions':'Subscription',
+    'Bills & Utilities':'Utility','Food & Drink':'Groceries','Payroll':'Income'}[fromBank]||
+    (/mortgage|home loan/i.test(rec.merchant)?'Mortgage':
+     /electric|water|gas utility|power/i.test(rec.merchant)?'Utility':
+     rec.type==='income'?'Income':fromBank),
+   category=categories.find(x=>x.toLowerCase()===String(mapped).toLowerCase())||'Uncategorized',
    data={accountId:rec.accountId,type:rec.type,merchant:rec.merchant,amount:proposedAmount,
-    frequency:rec.frequency||'monthly',date:proposedDate,category:rec.category||'Other'},
+    frequency:rec.frequency||'monthly',date:proposedDate,category},
    reference={kind:'event',accountId:rec.accountId,type:sourceRow?.type||rec.type,
     merchant:rec.merchant,originalMerchant:rec.merchant,
     amount:rec.amount,date:sourceRow?.date||rec.nextDate,
