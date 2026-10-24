@@ -75,7 +75,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
   'A single detected mortgage is never an approved forecast');
  assert.equal((initial.match(/ABC Draft 984/g)||[]).length,0,
   'Two unconfirmed monthly payments cannot create a forecast');
- assert.match(initial,/not included in the balance forecast/i,
+ assert.match(el('planner-notice').innerHTML,/NOT included in the balance forecast/i,
   'The incomplete recurring coverage is prominently called out');
  await click('[data-view]',{view:'reviews'});
  assert.match(future(),/Recommended repeating/,
