@@ -210,8 +210,13 @@ const repeatGrocery=[
 const repeatReview=C.analyze(repeatGrocery,accounts,snapshot.asOf);
 assert.equal(repeatReview.review.length,1);
 const dismissed={historyPatternDecisions:{[repeatReview.review[0].key]:'dismissed'}};
-assert.equal(C.analyze(repeatGrocery,accounts,snapshot.asOf,dismissed).review.length,0,
- 'Dismissed patterns stay dismissed');
+assert.equal(C.analyze(repeatGrocery,accounts,snapshot.asOf,dismissed).review.length,1,
+ 'Dismissed repeating candidates remain reviewable rather than disappearing');
+assert.ok(C.analyze(repeatGrocery,accounts,snapshot.asOf,dismissed).review[0].ignoredLegacy,
+ 'A historical dismissal is clearly marked for the user');
+assert.equal(C.analyze([tx('g1','2026-09-08','Safeway',97),
+ tx('g2','2026-10-08','Safeway',105)],accounts,snapshot.asOf).review[0].key,
+ repeatReview.review[0].key,'Variable bill amounts retain one stable recommendation identity');
 const twiceMonthly=[
  tx('t1','2026-09-01','Employer Payroll',1400,'income'),
  tx('t2','2026-09-15','Employer Payroll',1400,'income'),
@@ -223,6 +228,24 @@ assert.equal(find(twice,'Employer Payroll').length,0,
  'Even strong detected payroll must be approved before it affects balances');
 assert.ok(twice.historyCandidates.some(p=>p.merchant==='Employer Payroll'),
  'Detected twice-monthly salary is prominently recommended');
+// Two alternating A/B payroll deposits must never be collapsed into one
+// repeating amount. Approving a single four-week stream still leaves the other
+// in review, and neither is forecast until explicitly saved.
+const alternateHistory=[
+ tx('a1','2026-08-28','Alternating Employer Payroll',3100,'income'),
+ tx('b1','2026-09-11','Alternating Employer Payroll',2850,'income'),
+ tx('a2','2026-09-25','Alternating Employer Payroll',3100,'income'),
+ tx('b2','2026-10-09','Alternating Employer Payroll',2850,'income')
+];
+const alt=C.materialize(snapshot,alternateHistory,{},T,P,90);
+const altReview=alt.historyCandidates.filter(p=>p.merchant==='Alternating Employer Payroll');
+assert.equal(altReview.length,2,'Alternating deposits produce independent recommended schedules');
+assert.deepEqual(altReview.map(p=>p.amount).sort((a,b)=>a-b),[2850,3100]);
+assert.ok(altReview.every(p=>p.frequency==='every-4-weeks'));
+assert.equal(new Set(altReview.map(p=>p.key)).size,2,
+ 'Different paycheck phases retain independent stable identities');
+assert.equal(find(alt,'Alternating Employer Payroll').length,0,
+ 'No income can enter the forecast without saved approval');
 const historicalCardSettlements=[
  tx('cardpaid1','2026-09-10','Credit card payment',600),
  tx('cardpaid2','2026-10-10','Credit card payment',600)
@@ -272,4 +295,4 @@ try {
 } finally {
  if(priorTZ===undefined)delete process.env.TZ;else process.env.TZ=priorTZ;
 }
-console.log('PASS approved-schedule-only ledger, persistent recommendations, immutable Plaid, overrides, linked transfers and autopay');
+console.log('PASS approved-schedule-only ledger, persistent dismissed and alternating payroll recommendations, immutable bank records and autopay');
