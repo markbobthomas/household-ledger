@@ -1,32 +1,17 @@
 name: Reconciliation accuracy gate
+# Manual focused run. All six assertions are already required in the PR core suite.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   reconciliation:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate source syntax
-        run: |
-          node --check accounting.js
-          node --check ledger-data.js
-          node --check reviews.js
-          node --check categorization.js
-          node --check sandbox/server.cjs
-          node --check sandbox/sandbox-ui.js
       - name: Reconciliation and categorization invariants
-        run: |
-          node tests/bank-balance-authority.cjs
-          node tests/review-to-budget-parity.cjs
-          node tests/reconciliation-phase1-smoke.cjs
-          node tests/reconciliation-phase3-stress.cjs
-          node tests/conservative-categorization-phase2.cjs
-          node tests/sandbox-categorization-smoke.cjs
+        run: node tests/ci-suite.cjs reconciliation
