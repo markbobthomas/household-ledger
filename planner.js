@@ -1307,7 +1307,7 @@ function historyPage(bundle,s){
   const tools=window.HouseholdPlannerTransactions,
    matches=tools.historicalScheduleMatches(t,accounts,savedRules),
    ambiguous=matches.length>1,kind=tools.bankDirection(t),
-   predicted=projections.some(r=>r.kind==='event'&&r.source==='historical'&&
+   predicted=projections.some(r=>r.kind==='event'&&String(r.id||'').startsWith('auto|')&&
     String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
     tools.recurrenceKey(aid,kind,r.sourceMerchant)===
      tools.recurrenceKey(aid,kind,t.merchant||t.name)),
