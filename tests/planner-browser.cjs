@@ -992,7 +992,8 @@ const {chromium,webkit}=require('playwright');
     'Cutover becomes available only after every unsaved legacy stream has a decision');
    await switchMode.click();
    assert.equal(await page.locator('[data-activate-saved-schedules]').count(),0);
-   assert.match(await page.locator('[data-recommended-repeating]').innerText(),/Only approved saved schedules/);
+   assert.equal(await page.locator('[data-activate-saved-schedules]').count(),0,
+    'Successful migration removes the cutover control without adding duplicate settings');
    const storedMode=()=>page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').recurringForecastMode);
    assert.equal(await storedMode(),'approved-only',
