@@ -1090,6 +1090,14 @@ function scheduleCategorySummary(items,bundle,period){
   year=sumScheduleAmounts(items,bundle,period.start,period.yearEnd);
  return period.label+': '+formatScheduleTotals(month);
 }
+// Shared three-part amount grid: sign, fixed-position dollar glyph, digits.
+function ledgerMoney(amount,sign=''){
+ return '<span class="ledger-money">'+
+  '<span class="ledger-money-sign" aria-hidden="true">'+escapeHTML(sign)+'</span>'+
+  '<span class="ledger-money-dollar">$</span>'+
+  '<span class="ledger-money-digits">'+escapeHTML(cash(amount).replace('$',''))+'</span>'+
+  '</span>';
+}
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
@@ -1158,7 +1166,8 @@ function schedulesPage(bundle,s){
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
       ' · '+escapeHTML(r.frequency)+' · '+(estimate.estimated?'Estimated':'Fixed')+
       '</small></span></span>'+
-    '<span class="schedule-row-amount ledger-row-amount"><strong>'+cash(estimate.amount)+'</strong></span>'+
+    '<span class="schedule-row-amount ledger-row-amount"><strong>'+
+     ledgerMoney(estimate.amount)+'</strong></span>'+
     '<span class="schedule-row-chevron ledger-row-hint" aria-hidden="true">'+
      (isEditing?'⌃':'›')+'</span>'+
    '</button>'+
@@ -1198,10 +1207,7 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- return '<div class="planner-page schedule-page"><div class="page-actions">'+
-  '<button class="btn primary" type="button" data-schedule-new>+ Repeating payment</button></div>'+
-  '<p class="page-task-hint">Repeating payments appear automatically on your Calendar. Select a payment to change the schedule or an upcoming date to edit just that payment.</p>'+
-  (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
+ return '<div class="planner-page schedule-page">'+
   '<div class="schedule-toolbar ledger-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
    '" aria-label="Schedule organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
@@ -1220,11 +1226,14 @@ function schedulesPage(bundle,s){
     '<form data-schedule-category-add><label>New category<input name="categoryName" maxlength="40" '+
     'placeholder="e.g. Pet care" required></label>'+
     '<button type="submit" class="btn">Add</button></form>'+
-    '<p data-schedule-category-notice role="status"></p></details></div>'+ 
+    '<p data-schedule-category-notice role="status"></p></details>'+
+   '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
+  (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+'<div class="schedule-grid">'+
    (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
-   'No matching schedules. Try a different search.</p></div>';
+   'No matching schedules. Try a different search.</p>'+
+   '<p class="page-task-hint ledger-footer-hint">Repeating payments appear automatically on your Calendar. Select a payment to change the schedule or an upcoming date to edit just that payment.</p></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -1398,7 +1407,7 @@ function historyPage(bundle,s){
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
     escapeHTML(caption)+'</span></small></span>'+
    '<strong class="history-actual-amount ledger-row-amount '+(incoming?'incoming':'outgoing')+'">'+
-    (incoming?'+':'−')+cash(t.amount)+'</strong>'+
+    ledgerMoney(t.amount,incoming?'+':'−')+'</strong>'+
    '<span class="history-row-hint ledger-row-hint" aria-hidden="true">'+(isExpanded?'⌃':'›')+'</span></button>'+
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-history-category="'+
     escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
