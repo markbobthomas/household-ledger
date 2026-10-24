@@ -25,10 +25,12 @@ const history=[
 ];
 const find=(bundle,merchant)=>bundle.ledger.filter(e=>e.merchant===merchant);
 let b=C.materialize(snapshot,history,{},T,P,90);
-assert.deepEqual(find(b,'Mortgage ACH').map(x=>x.date),
- ['2026-11-15','2026-12-15','2027-01-15']);
-assert.deepEqual(find(b,'ABC Draft 984').map(x=>x.date),
- ['2026-11-09','2026-12-09','2027-01-09']);
+assert.equal(find(b,'Mortgage ACH').length,0,
+ 'Unapproved inferred mortgage no longer affects the balance');
+assert.equal(find(b,'ABC Draft 984').length,0,
+ 'Unapproved detected generic bill never creates a future debit');
+assert.ok(b.automaticRecurrence.events.some(e=>e.merchant==='Mortgage ACH'),
+ 'Formerly automatic mortgage now exists only as an approval candidate');
 assert.equal(find(b,'Safeway').length,0,
  'Shopping with just two monthly repeats must not automatically debit checking');
 assert.equal(find(b,'Transfer to Savings').length,0,
@@ -41,20 +43,17 @@ assert.equal(b.projection.accounts.find(a=>a.id==='visa').closing,600,
  'Unconfigured credit card keeps its bank-reported debt, but future charges are gated until setup');
 assert.ok(b.historyCandidates.some(x=>x.merchant==='Safeway'),
  'Low-confidence patterns go to Reviews');
-// Bank-history Auto-predict is a permission, not a manual recurring plan.
+// Changing detection permissions cannot create forecasts: a saved rule is required.
 const automaticPolicy={predictions:{}},originalHistory=JSON.stringify(history);
-assert.ok(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
- 'ABC Draft 984').length>0,'Fixture contains actual automatically inferred payment');
-T.setHistoryAutoPrediction(automaticPolicy,{
- accountId:'checking',type:'expense',merchant:'ABC Draft 984'},false);
-const offForecast=C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90);
-assert.equal(find(offForecast,'ABC Draft 984').length,0,
- 'Auto-predict Off removes engine-only future payments, not source History');
-assert.equal(JSON.stringify(history),originalHistory,'Auto-predict Off leaves posted bank data untouched');
-T.setHistoryAutoPrediction(automaticPolicy,{
- accountId:'checking',type:'expense',merchant:'ABC Draft 984'},true);
-assert.ok(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
- 'ABC Draft 984').length>0,'Turning On permits eligible automatic series again');
+T.setHistoryAutoPrediction(automaticPolicy,{accountId:'checking',
+ type:'expense',merchant:'ABC Draft 984'},false);
+assert.equal(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
+ 'ABC Draft 984').length,0);
+T.setHistoryAutoPrediction(automaticPolicy,{accountId:'checking',
+ type:'expense',merchant:'ABC Draft 984'},true);
+assert.equal(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
+ 'ABC Draft 984').length,0,'Turning on detection never adds an unapproved schedule');
+assert.equal(JSON.stringify(history),originalHistory,'Detection preferences do not change actuals');
 const source=JSON.stringify(history);
 const bankCount=history.length;
 const state={predictions:{}};
@@ -164,6 +163,13 @@ assert.equal(T.historicalScheduleMatches(duplicatePay,accounts,[
  {...secondPay,frequency:'monthly',exampleIds:[]}]).length,2,
  'Ambiguous same-merchant history must never silently select a schedule');
 
+// Explicitly approve generic proposed payment before it affects future balances.
+T.defineRecurring(state,{date:'2026-11-09',merchant:'ABC Draft 984',
+ amount:82.35,type:'expense',accountId:'checking',frequency:'monthly'},
+ accounts,snapshot.asOf,{kind:'event',accountId:'checking',type:'expense',
+ merchant:'ABC Draft 984',date:'2026-10-09',amount:82.35,
+ bankTransactionId:'generic2'},history,['generic1','generic2']);
+b=C.materialize(snapshot,history,state.predictions,T,P,90);
 const generic=find(b,'ABC Draft 984')[0];
 T.saveEdit(state,T.keyEvent(generic.id,generic.accountId),{
  date:'2026-11-13',merchant:'ABC Draft 984',amount:88,type:'expense',
@@ -265,4 +271,4 @@ try {
 } finally {
  if(priorTZ===undefined)delete process.env.TZ;else process.env.TZ=priorTZ;
 }
-console.log('PASS unified future ledger: automatic recurrence, reviews, immutable Plaid, owner overrides, one-time edits, linked transfers, cash/card balances, and autopay');
+console.log('PASS unified future ledger: approval-only recurrence, reviews, immutable Plaid, owner overrides, one-time edits, linked transfers, cash/card balances, and autopay');
