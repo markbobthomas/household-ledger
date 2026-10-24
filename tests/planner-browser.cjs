@@ -1292,6 +1292,20 @@ const {chromium,webkit}=require('playwright');
   const storage=await page.evaluate(()=>({...localStorage}));
   assert.equal(Object.keys(storage).some(k=>JSON.stringify(storage[k]).includes('mort-4')),false,
    'Raw Real bank transactions are not written to localStorage');
+  // Even if a later bank sync contains no historical transactions, previously
+  // surfaced proposals and approved plans must remain in Needs review.
+  realPayload.transactions=[];
+  await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
+  await go('reviews');
+  const permanent=page.locator('[aria-label="Recommended repeating"]');
+  for(const merchant of ['Home Mortgage ACH','Storage Unit Monthly','ACME Employer Payroll']){
+   const item=permanent.locator('[data-repeat-recommendation]').filter({hasText:merchant}).first();
+   assert.equal(await item.count(),1,'Archived bank pattern never disappears: '+merchant);
+   assert.equal(await item.getAttribute('data-recommendation-status'),'repeating',
+    'An approved archived pattern remains visibly linked to its saved plan: '+merchant);
+  }
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: fixed three-year minimum, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
