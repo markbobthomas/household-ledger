@@ -974,8 +974,8 @@ function newTransactionForm(s){
   '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00" value="'+escapeHTML(preset?.amount??'')+'"></label>'+
   '<label>Repeat'+frequencyChoices(preset?'monthly':'once',true)+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
-  '</div><label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> This is an additional independent bill or paycheck, even from the same merchant</label><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
-   '</p>'+
+  '</div><label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> Additional independent bill or paycheck from this merchant</label>'+
+  (preset?'<p class="audit-footnote">Check the proposed due date against your mortgage documents.</p>':'')+
   '<div class="future-history-container" data-new-history-link hidden>'+historyLinkField()+'</div>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
