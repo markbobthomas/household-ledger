@@ -1296,8 +1296,7 @@ function historyPage(bundle,s){
  });
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
  const savedRules=state().predictions?.futureRecurringRules||[];
- const projections=futureRows(bundle,s),
-  exclusions=state().predictions?.futureRecurrenceExclusions||{};
+ const projections=futureRows(bundle,s);
  const rows=visible.map(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
@@ -1305,39 +1304,37 @@ function historyPage(bundle,s){
   const tools=window.HouseholdPlannerTransactions,
    matches=tools.historicalScheduleMatches(t,accounts,savedRules),
    ambiguous=matches.length>1;
-  const kind=t.type==='transfer'&&!t.pairedTransactionId?
-   (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':'transfer'):t.type;
-  const rejectedKey=tools.recurrenceKey(aid,kind,t.merchant||t.name),
+  const kind=tools.bankDirection(t),
+   rejectedKey=tools.recurrenceKey(aid,kind,t.merchant||t.name),
    predicted=projections.some(r=>r.kind==='event'&&
     String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
     tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey),
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
    auto=tools.historyAutoPredictionEnabled(state().predictions||{},aid,kind,t.merchant||t.name),
    canAuto=auto!==null&&['expense','income','refund','transfer'].includes(kind),
-   status=matches.length?(ambiguous?'Several repeating plans':'Repeating plan saved'):
-    predicted?'Automatically predicted':'No repeating plan',
-   primary=matches.length?(ambiguous?'Choose plan':'Edit plan'):
-    canPlan?'Plan repeating':'View bank record';
-  // The same On/Off choice appears for every bank payment with a stable payee,
-  // account and direction, regardless of whether we inferred a repeat.
-  // Status explains what is currently forecast; the switch only controls
-  // whether the engine is ALLOWED to infer additional future payments.
-  const secondary=canAuto?'<div class="history-auto-control" role="group" aria-label="'+
-   'Auto-predict '+escapeHTML(t.merchant||t.name)+' on '+escapeHTML(label(aid))+'">'+
-   '<span class="history-auto-label">Auto-predict</span>'+
-   '<span class="history-auto-options">'+
-   '<button type="button" data-history-auto-prediction="on" data-history-bank="'+
-    escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" aria-pressed="'+String(auto)+'"'+(auto?' class="selected"':'')+'>On</button>'+
-   '<button type="button" data-history-auto-prediction="off" data-history-bank="'+
-    escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" aria-pressed="'+String(!auto)+'"'+(!auto?' class="selected"':'')+'>Off</button>'+
-   '</span></div>':
-   '<span class="history-auto-unavailable" title="A usable payee, account and payment direction are required">Auto-predict unavailable</span>';
+   // Saved plans take priority over estimates. Exclusions describe an opted-out
+   // source, not a missing bank record. Only show actionable controls.
+   status=matches.length?'confirmed':canAuto&&!auto?'excluded':predicted?'automatic':'unplanned',
+   caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
+    status==='automatic'?'Automatically predicted':
+    status==='excluded'?'Auto prediction excluded':'Not predicted',
+   primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
+    canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record';
+  // This is deliberately not an On/Off switch. Only inferred payments have an
+  // Exclude action; opted-out sources have a Restore action. A confirmed plan
+  // is edited in one place, without an unrelated competing toggle.
+  let secondary='';
+  if(canAuto&&!matches.length&&status==='automatic')
+   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="off" '+
+    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
+    '" title="Stop automatic future estimates for this payee on this account; bank records stay visible">Exclude</button>';
+  else if(canAuto&&!matches.length&&status==='excluded')
+   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="on" '+
+    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
+    '" title="Allow automatic future estimates again; this does not create a saved plan">Restore auto</button>';
   return '<div class="history-actual-row" data-history-kind="'+escapeHTML(kind||'unknown')+
-   '" data-history-recurring-state="'+
-   (matches.length?'confirmed':predicted?'automatic':'unscheduled')+
-   '" data-history-auto-state="'+(auto===null?'unavailable':auto?'on':'off')+'">'+
+   '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
+   '" data-history-forecast-state="'+status+'">'+
    '<button type="button" class="history-row-open" data-historical-transaction="'+
    escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
    '" aria-label="'+escapeHTML(primary+': '+(t.merchant||'Bank transaction'))+'">'+
@@ -1345,7 +1342,7 @@ function historyPage(bundle,s){
    '<span class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
-    escapeHTML(status)+'</span></small></span>'+
+    escapeHTML(caption)+'</span></small></span>'+
    '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+
     (incoming?'+':'−')+cash(t.amount)+'</strong>'+
    '<span class="history-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
@@ -1354,11 +1351,9 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  '<div class="history-explanation"><strong>Auto-predict: On / Off</strong> '+
-  'On lets the app estimate future payments <em>if it finds a repeating pattern</em>. '+
-  'Off stops automatic future estimates for this payee on this account. '+
-  'Neither choice hides bank transactions or changes repeating plans you saved. '+
-  'To make sure a future payment is included, choose <strong>Plan repeating</strong>.</div>'+
+  '<p class="page-task-hint history-explanation">Bank activity stays here. Automatically predicted payments are estimates; '+
+  'saved repeating plans take priority. Exclude stops future automatic estimates for a payee on this account, '+
+  'and Restore auto allows them again. To guarantee a repeating payment, save a plan.</p>'+
   '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -1989,10 +1984,10 @@ document.addEventListener('click',async e=>{
   try{
    await commitForecastChange(()=>tools.setHistoryAutoPrediction(state(),
     {accountId:aid,type,merchant},enabled));
-   reviewNotice=(enabled?'Auto-predict is on for ':'Auto-predict is off for ')+merchant+
-    '. '+(enabled?'A future payment appears only if the app detects a repeat. ':
-     'Automatic future estimates for this payee are excluded. ')+
-    'Bank transactions remain visible and saved repeating plans are unchanged.';
+   reviewNotice=(enabled?'Automatic predictions restored for ':'Automatic predictions excluded for ')+merchant+
+    '. '+(enabled?'Estimates reappear only if a repeat is detected. ':
+     'Matching automatic future estimates were removed. ')+
+    'Bank history and saved repeating plans were not changed.';
    recurringDraft=null;
    render();
   }catch(err){setNotice(String(err.message||err))}
@@ -2678,6 +2673,6 @@ if(typeof fetch==='function')fetch('/healthz',{cache:'no-store'}).then(async res
  return data?.commit&&/^[a-f0-9]{40}$/i.test(data.commit)?data.commit:null;
 }).then(sha=>{
  const target=document.getElementById('deployment-version');
- if(target)target.textContent=sha?'History Auto v1 · Render '+sha.slice(0,9):'History Auto v1 · Server unverified';
+ if(target)target.textContent=sha?'History Actions v1 · Render '+sha.slice(0,9):'History Actions v1 · Server unverified';
 }).catch(()=>{});
 })();
