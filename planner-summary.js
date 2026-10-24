@@ -328,7 +328,8 @@ function calendarGrid(){
   firstWeek=(new Date(start+'T12:00:00Z').getUTCDay()+6)%7,
   monthDays=new Date(Number(calendarMonth.slice(0,4)),
    Number(calendarMonth.slice(5,7)),0).getDate(),
-  count=Math.ceil((firstWeek+monthDays)/7)*7,
+  // All months reserve six weeks so date-grid height never varies.
+  count=42,
   points=new Map(currentPoints.map(p=>[p.date,p])),
   caption=state.card?'Card debt after daily activity':'Account balance after daily activity';
  const header=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>
