@@ -192,6 +192,7 @@ const {chromium,webkit}=require('playwright');
    await octoberFixture.locator('[name=amount]').fill('18');
    await octoberFixture.locator('[name=date]').fill('2026-10-28');
    await octoberFixture.locator('button[type=submit]').click();
+   await page.locator('[data-calendar-day="2026-10-27"]').click();
    await page.locator('.calendar-monthly-list > summary').click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),1,
     'Optional month list expands on demand');
