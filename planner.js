@@ -12,6 +12,11 @@ const cash=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable'
 const dateToday=()=>new Date().toLocaleDateString('en-CA');
 const dayLabel=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+ const warningThreshold=prefs=>{
+  for(const v of [prefs?.warnBelow,prefs?.lowAlertThreshold,prefs?.cashCushion])
+   if(v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))&&Number(v)>=0)return Number(v);
+  return 500;
+ };
 const model=window.HouseholdLedgerData;
 const available=()=>Boolean(window.HouseholdLiveSource);
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
@@ -20,7 +25,7 @@ const DEMO_SETTINGS='household-planner-sample-settings-v1';
 try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
-  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold',
+  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
     'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
@@ -55,7 +60,7 @@ function savePlanning(){
  else {
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
-   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,
+   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
    scheduleCategories:p.scheduleCategories,
@@ -159,7 +164,7 @@ function hero(a,derived,asOf){
  const credit=derived.type==='credit';
  const status=textForStatus(derived),fresh=freshness(derived),isCash=!credit;
  const opening=credit?derived.openingCurrent:derived.openingAvailable??derived.openingCurrent;
- const safety=Number(state().predictions?.cashCushion??500);
+ const safety=warningThreshold(state().predictions);
  const horizonSeries=(derived.series||[]).filter(d=>d.date<=shiftDay(asOf,horizon));
  const validPoints=horizonSeries.filter(d=>Number.isFinite(d.balance));
  const lowPoint=validPoints.length?validPoints.reduce((a,b)=>a.balance<=b.balance?a:b):null;
@@ -218,7 +223,7 @@ function movementRows(a,derived,s,routine){
    '<div><div class="payment-name">'+escapeHTML(e.merchant||'Scheduled movement')+'</div><div class="payment-meta">'+escapeHTML(suffix)+
     (tags.get(String(e.id))==='suggested'?' · SUGGESTED · confirm below':tags.get(String(e.id))==='confirmed'?' · Confirmed':' · Planned')+'</div></div>'+
    '<div class="payment-value '+(income?'incoming':'outgoing')+'">'+(income?'+':'−')+cash(e.amount)+'</div>'+
-   '<div class="after-value"><strong class="'+(!freshness(derived)||!Number.isFinite(ending)?'':derived.type!=='credit'&&ending<Number(state().predictions?.cashCushion??500)?'risk':'')+'">'+
+   '<div class="after-value"><strong class="'+(!freshness(derived)||!Number.isFinite(ending)?'':derived.type!=='credit'&&ending<warningThreshold(state().predictions)?'risk':'')+'">'+
     (freshness(derived)&&Number.isFinite(ending)?cash(ending):'Unverified')+'</strong><small>End of day</small></div></div>';
  };
  return '<div class="list-head"><span>Date</span><span>Expected movement</span><span style="text-align:right">Amount</span><span style="text-align:right">Balance after</span></div>'+
@@ -831,7 +836,7 @@ function openInlineTransaction(button){
    row.seriesKey?'Update one payment, or confirm changes for later recurring payments.':
    'Edit these values here. Actual posted bank records remain read-only.')+'</p>';
  const settings=rule?'<details class="inline-plan-settings">'+
-  '<summary>Edit repeating plan defaults <small>affects other scheduled dates</small></summary>'+
+  '<summary>More schedule settings <small>label, category, repeat rule</small></summary>'+
   '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
    scheduleFields({...rule,date:window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,
     shiftDay(s.asOf,horizon))[0]||shiftDay(s.asOf,1)},false,s)+
@@ -862,21 +867,45 @@ function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  document.querySelector('.transaction-detail-close')?.focus();
  return true;
 }
+// Every future payment uses the same inline editor regardless of its entry
+// point. Keep a same-page anchor for standalone buttons (e.g. card statements)
+// instead of routing the user to a different tab or modal.
 function openPrediction(key,origin){
- const current=transactionDetail?.kind==='schedule'?transactionDetail:null;
  const s=snapshot(),bundle=forecastFor(s),
   row=futureRows(bundle,s).find(r=>r.key===String(key));
- if(row?.recurringRuleId&&openSchedulePlan(row.recurringRuleId,row.key,origin))return;
- // Unconfirmed or one-time forecasts use this same plan shell, but do not
- // claim to have a saved repeating rule.
- if(current)detailParentSchedule={...current};
- else detailParentSchedule=null;
- detailReturnFocus=origin||null;
+ if(!row){setNotice('This forecast changed. Select the updated payment and try again.');return}
+ if(origin){
+  let wrapper=origin.closest?.('[data-inline-row-wrapper]'),
+   trigger=wrapper?.querySelector('[data-open-transaction]');
+  if(!trigger&&origin.hasAttribute?.('data-open-transaction')&&wrapper)
+   trigger=origin;
+  if(!wrapper&&origin.parentElement){
+   let host=origin.nextElementSibling;
+   if(!host?.matches?.('[data-standalone-inline]')){
+    host=document.createElement('div');
+    host.className='standalone-inline-editor';
+    host.dataset.standaloneInline='';
+    origin.insertAdjacentElement('afterend',host);
+   }
+   host.dataset.inlineRowWrapper='';
+   host.dataset.paymentKey=String(key);
+   let proxy=host.querySelector('[data-open-transaction]');
+   if(!proxy){
+    proxy=document.createElement('button');
+    proxy.type='button';proxy.hidden=true;proxy.dataset.openTransaction=String(key);
+    host.appendChild(proxy);
+   }
+   wrapper=host;trigger=proxy;
+  }
+  if(trigger&&openInlineTransaction(trigger))return;
+ }
+ // Defensive fallback only for programmatic callers without a visible row.
  transactionDetail={kind:'prediction',key:String(key)};
+ detailReturnFocus=origin||null;
  try{drawTransactionDetail(bundle,s)}
- catch(err){transactionDetail=null;setNotice(String(err.message||err));return}
- document.querySelector('.transaction-detail-close')?.focus();
+ catch(err){transactionDetail=null;setNotice(String(err.message||err))}
 }
+
 function restoreScheduleAfterOccurrence(){
  if(transactionDetail?.kind==='schedule'&&transactionDetail.selectedKey){
   transactionDetail.selectedKey='';
@@ -1166,14 +1195,23 @@ function schedulesPage(bundle,s){
   totalPeriod=scheduleTotalPeriod(s.asOf),tomorrow=shiftDay(s.asOf,1),
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
+ // Canonical prediction rows already include weekend-to-Friday posting,
+ // individual date overrides and skipped occurrences. Show their actual dates
+ // here; keep raw recurrence dates solely in the schedule-default editor.
+ const upcomingByRule=new Map();
+ for(const row of futureRows(bundle,s)){
+  if(row.recurringRuleId&&!upcomingByRule.has(String(row.recurringRuleId)))
+   upcomingByRule.set(String(row.recurringRuleId),row);
+ }
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>
   (scheduleAccount==='all'||[rule.accountId,rule.fromAccountId,rule.toAccountId]
    .some(id=>String(id||'')===scheduleAccount))&&
   (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter));
  const nextAmount=rule=>{
-  const first=T.recurrenceDates(rule,s.asOf,end)[0];
-  return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
+  const forecast=upcomingByRule.get(String(rule.id));
+  return forecast?Number(forecast.amount):
+   Number(rule.amount)||0;
  };
  visible.sort((a,b)=>scheduleSort==='value-desc'?
   nextAmount(b.rule)-nextAmount(a.rule)||a.index-b.index:
@@ -1197,7 +1235,10 @@ function schedulesPage(bundle,s){
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
+   occurrence=upcomingByRule.get(String(r.id)),
+   effectiveNext=occurrence?.date||null,
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
+   shownAmount=occurrence?occurrence.amount:estimate.amount,
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
    wins=Array.isArray(r.amountWindows)?r.amountWindows:[];
   const edit=isEditing?'<form class="schedule-form" data-schedule-edit-form="'+id+'">'+
@@ -1224,7 +1265,7 @@ function schedulesPage(bundle,s){
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' schedule '+number+': '+title+'">'+
     '<span class="schedule-row-next ledger-row-date"><span>'+
-     (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
+     (effectiveNext?escapeHTML(dayLabel(effectiveNext)):'Not forecast')+'</span></span>'+
     '<span class="schedule-row-identity ledger-row-description recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
@@ -1232,7 +1273,7 @@ function schedulesPage(bundle,s){
       ' · '+escapeHTML(r.frequency)+' · '+(estimate.estimated?'Estimated':'Fixed')+
       '</small></span></span>'+
     '<span class="schedule-row-amount ledger-row-amount"><strong>'+
-     ledgerMoney(estimate.amount)+'</strong></span>'+
+     ledgerMoney(shownAmount)+'</strong></span>'+
     '<span class="schedule-row-chevron ledger-row-hint" aria-hidden="true">'+
      (isEditing?'⌃':'›')+'</span>'+
    '</button>'+
@@ -1851,14 +1892,10 @@ function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
   '<h2>Settings</h2></div></div>'+
   '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
-   '<form id="cushion-form" data-cushion-form><label class="cash-cushion-label">Low-balance warning threshold ($)'+
-    '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+
-     escapeHTML(state().predictions?.cashCushion??500)+'" required></label>'+
-    '<button class="btn primary" type="submit">Save threshold</button></form>'+ 
-   '<form data-low-alert-form><label class="cash-cushion-label">Red highlight below ($)'+
-    '<input type="number" name="lowAlertThreshold" min="0" max="999999999" step="1" value="'+
-    escapeHTML(Number.isFinite(Number(state().predictions?.lowAlertThreshold))&&state().predictions?.lowAlertThreshold!=null?state().predictions.lowAlertThreshold:6000)+'" required></label>'+
-    '<button class="btn primary" type="submit">Save highlight</button></form></section>'+
+   '<form data-warning-form><label class="cash-cushion-label">Warn below ($)'+
+    '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
+    escapeHTML(warningThreshold(state().predictions))+'" required></label>'+
+    '<button class="btn primary" type="submit">Save</button></form></section>'+
   (state().predictions?.recurringForecastMode!=='approved-only'&&
    Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
   '<section class="panel mini-panel" aria-label="Automatic prediction exclusions">'+
@@ -2852,7 +2889,7 @@ document.addEventListener('change',e=>{
 });
 
 document.addEventListener('submit',async e=>{
- const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-cushion-form],[data-low-alert-form]');
+ const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-warning-form]');
  if(!form)return;
  e.preventDefault();
  const button=form.querySelector('button[type="submit"]');
@@ -2914,14 +2951,16 @@ document.addEventListener('submit',async e=>{
     transactionNotice='Future transaction added to the selected account.';
    }
    showNewTransaction=false;mortgageDraft=null;
-  }else if(form.hasAttribute('data-low-alert-form')){
-   const raw=String(fields.lowAlertThreshold??'').trim(),value=Number(raw);
-   if(!raw||!Number.isInteger(value)||value<0||value>999999999)throw Error('Enter a valid whole-dollar amount.');
-   await commitForecastChange(()=>{state().predictions.lowAlertThreshold=value});
-   transactionNotice='Red highlight threshold saved.';
-  }else{
-   await commitForecastChange(()=>model.setCashCushion(state(),fields.cashCushion));
-   transactionNotice='Safety threshold saved.';
+  }else if(form.hasAttribute('data-warning-form')){
+   const raw=String(fields.warnBelow??'').trim(),value=Number(raw);
+   if(!raw||!Number.isInteger(value)||value<0||value>999999999)
+    throw Error('Enter a valid whole-dollar warning amount.');
+   await commitForecastChange(()=>{
+    state().predictions.warnBelow=value;
+    model.setCashCushion(state(),value);
+    state().predictions.lowAlertThreshold=value; // keep old saved readers in sync
+   });
+   transactionNotice='Low-balance warning saved.';
   }
   render();
  }catch(err){

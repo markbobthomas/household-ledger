@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-weekdays-friday-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'ux-unified-three-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -135,14 +135,22 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.top-actions > #refresh-bank,.top-actions > #ledger-mode-switch').count(),0,
     'Bank controls no longer clutter the top-level header');
    await go('settings');
-   const lowAlertInput=page.locator('[data-low-alert-form] [name=lowAlertThreshold]');
-   assert.equal(await lowAlertInput.inputValue(),'6000',
-    'Default low highlight threshold is $6,000');
+   const lowAlertInput=page.locator('[data-warning-form] [name=warnBelow]');
+   assert.equal(await lowAlertInput.inputValue(),'500',
+    'New forecasts default to one $500 warning limit');
    await lowAlertInput.fill('100000');
-   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await page.locator('[data-warning-form] button[type=submit]').click();
    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(
-    'household-planner-sample-settings-v1')||'{}').lowAlertThreshold),100000,
-    'Red threshold saves in forecast-only preferences');
+    'household-planner-sample-settings-v1')||'{}').warnBelow),100000,
+    'A single saved warning limit drives red and cash-cushion indicators');
+   assert.equal(await page.locator('[data-warning-form]').count(),1);
+   assert.equal(await page.locator('[data-low-alert-form],[data-cushion-form]').count(),0,
+    'Settings has exactly one low-balance control, not two competing values');
+   assert.deepEqual(await page.evaluate(()=>{
+    const p=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return [p.warnBelow,p.cashCushion,p.lowAlertThreshold];
+   }),[100000,100000,100000],
+    'Saving the single warning threshold synchronizes legacy forecast-only aliases');
    assert.equal(await page.locator('[aria-label="Bank connection status"]').count(),1,
     'Connection information appears in one compact, actionable Settings section');
    assert.equal(await page.locator('h3').filter({hasText:'Planning assumptions'}).count(),0,
@@ -227,8 +235,8 @@ const {chromium,webkit}=require('playwright');
      'rgb(180, 59, 54)','Saved threshold turns projected low values red');
    }
    await go('settings');
-   await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('0');
-   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await page.locator('[data-warning-form] [name=warnBelow]').fill('0');
+   await page.locator('[data-warning-form] button[type=submit]').click();
    await go('summary');
    for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
     const actual=await page.locator(selector).evaluate(el=>({
@@ -236,11 +244,11 @@ const {chromium,webkit}=require('playwright');
      red:el.classList.contains('summary-low-alert')
     }));
     assert.equal(actual.red,actual.value<0,
-     'At a $0 threshold, only negative projected lows remain red');
+     'At a $0 warning limit, only negative projected lows remain red');
    }
    await go('settings');
-   await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('6000');
-   await page.locator('[data-low-alert-form] button[type=submit]').click();
+   await page.locator('[data-warning-form] [name=warnBelow]').fill('6000');
+   await page.locator('[data-warning-form] button[type=submit]').click();
    await go('summary');
    assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
    assert.equal(await page.locator('.calendar-checklist,.coverage-table,.summary-coverage-metric').count(),0,
@@ -1266,6 +1274,15 @@ const {chromium,webkit}=require('playwright');
      'Every Repeating row keeps its chevron as the only disclosure affordance');
     assert.equal(await page.locator('.schedule-card .schedule-row-chevron').first().innerText(),'›');
    }
+   const fourWeekPlan=page.locator('[data-schedule-card]').filter({hasText:'Every 4 weeks test payment'}).first();
+   assert.match(await fourWeekPlan.locator('.schedule-row-next').innerText(),/Oct 30/,
+    'Repeating shows the Friday forecast posting date, not the original Sunday');
+   assert.match(await fourWeekPlan.locator('.schedule-row-amount').innerText(),/55/,
+    'Repeating reads the canonically forecast amount');
+   await fourWeekPlan.locator('[data-schedule-edit]').click();
+   assert.equal(await fourWeekPlan.locator('[data-schedule-edit-form] [name=date]').inputValue(),
+    '2026-11-01','Editing the recurrence preserves its Sunday anchor without drift');
+   await fourWeekPlan.locator('[data-schedule-edit]').click();
    assert.equal(await page.locator('.schedule-discovery,[data-schedule-from-actual]').count(),0,
     'Same-merchant charges no longer create an independent heuristic panel or extra-schedule prompts');
    const beforeNumbers=await page.locator('[data-schedule-card]').evaluateAll(cards=>
@@ -1556,6 +1573,16 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await statementPage.locator('[data-repeating-statement-group]:visible').count(),0);
    await statementPage.locator('[data-schedule-search]').fill('');
    assert.equal(await statementPage.locator('[data-repeating-statement-group]:visible').count(),3);
+   const firstStatementRow=statementPage.locator('[data-statement-occurrence] [data-open-transaction]').first();
+   assert.ok(await firstStatementRow.count()>0,'Card statement groups expose their forecast items');
+   await firstStatementRow.click();
+   assert.equal(await statementPage.locator('[data-inline-transaction-editor]').count(),1,
+    'Credit-card statement prediction edits inline without navigation or a modal');
+   assert.equal(await statementPage.locator('.transaction-detail').count(),0);
+   assert.equal(await statementPage.locator('[data-inline-transaction-editor] [name=scope][value=one]').isChecked(),true);
+   await statementPage.locator('[data-inline-transaction-editor] [data-cancel-future]').click();
+   assert.equal(await statementPage.locator('[data-inline-transaction-editor]').count(),0);
+
    await statementAccount.selectOption('demo-checking');
    assert.equal(await statementPage.locator('[data-repeating-statement-periods]').count(),0);
    await statementPage.locator('.planner-nav-primary [data-view="history"]').click();
