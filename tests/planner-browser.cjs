@@ -369,6 +369,32 @@ const {chromium,webkit}=require('playwright');
      channels[0]>channels[2]*1.5,
      'Count receives visible red emphasis with the existing app theme: '+warningColor);
     const first=legacyRows.first(),countBefore=await legacyRows.count();
+    assert.equal(await first.locator('[data-review-inline-detail]').count(),0,
+     'Automatic estimates start as compact one-line proposals');
+    assert.equal(await first.locator('.review-row-open[aria-expanded="false"]').count(),1,
+     'Entire review data row is the disclosure button, not a separate Review control');
+    assert.equal(await first.locator('.review-row-open .review-row-chevron').innerText(),'›',
+     'A single chevron replaces explanatory Edit text on closed review rows');
+    assert.equal(await first.locator('.review-row-open button').count(),0,
+     'Review rows contain no nested buttons');
+    await first.locator('.review-row-open').click();
+    const activeEditor=first.locator('[data-review-inline-detail] .history-schedule-form');
+    assert.equal(await activeEditor.count(),1,
+     'Clicking the forecast row expands its schedule form directly beneath the row');
+    assert.equal(await page.locator('.reviews-page .transaction-overlay').count(),0,
+     'Review editor never opens a separate overlay');
+    assert.equal(await first.locator('.review-row-open').getAttribute('aria-expanded'),'true');
+    assert.equal(await activeEditor.locator('[name=category]').count(),1,
+     'The same schedule categories are available in the review editor');
+    assert.ok((await activeEditor.locator('[name=category] option').allTextContents()).includes('Utility'));
+    await activeEditor.locator('[name=category]').selectOption('Utility');
+    page.once('dialog',dialog=>dialog.dismiss());
+    await first.locator('.review-row-open').click();
+    assert.equal(await first.locator('[data-review-inline-detail]').count(),1,
+     'Closing a changed review schedule asks before discarding inputs');
+    await activeEditor.locator('[data-cancel-review-form]').click();
+    assert.equal(await first.locator('[data-review-inline-detail]').count(),0,
+     'Cancel collapses the exact row without saving a schedule');
     if(await first.getAttribute('data-recommendation-status')==='pending'){
      await first.locator('[data-ignore-recommendation]').click();
      assert.equal(await legacyRows.count(),countBefore,
@@ -430,6 +456,12 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await recommendedDraft.locator('[name=merchant]').inputValue());
    assert.ok(await recommendedDraft.locator('[name=frequency]').inputValue());
    assert.ok(Number(await recommendedDraft.locator('[name=amount]').inputValue())>0);
+   assert.equal(await trackedRecommendation.locator('[data-review-inline-detail] .history-schedule-form').count(),1,
+    'Ordinary suggested repeats expand within their own row');
+   assert.equal(await page.locator('.reviews-page > .history-schedule-form').count(),0,
+    'No detached review form appears above all rows');
+   assert.equal(await recommendedDraft.locator('[name=category]').count(),1);
+   await recommendedDraft.locator('[name=category]').selectOption('Insurance');
    await page.locator('[data-cancel-review-form]').click();
 
    }else{
@@ -441,7 +473,11 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await draft.count(),1,'Specific automatic estimate opens an editable schedule proposal');
     assert.ok(await draft.locator('[name=merchant]').inputValue());
     assert.ok(Number(await draft.locator('[name=amount]').inputValue())>0);
-    await page.locator('[data-cancel-review-form]').click();
+    assert.equal(await legacyRows.first().locator('[data-review-inline-detail]').count(),1);
+    assert.equal(await draft.locator('[name=category]').count(),1);
+    await legacyRows.first().locator('.review-row-open').click();
+    assert.equal(await legacyRows.first().locator('[data-review-inline-detail]').count(),0,
+     'Tapping the same row again closes its unchanged inline review form');
    }
    await go('history');
    await go('history');
@@ -906,8 +942,11 @@ const {chromium,webkit}=require('playwright');
      'Rare actions start hidden behind their own menu');
    }
    if(previousSchedules>0){
-    assert.equal(await page.locator('.schedule-card .schedule-edit-label').first().isVisible(),true,
-     'Schedule Edit is a visible affordance on desktop and iPhone');
+    assert.equal(await page.locator('.schedule-card .schedule-edit-label').count(),0,
+     'Repeating rows no longer show redundant Edit or Close text');
+    assert.equal(await page.locator('.schedule-card .schedule-row-chevron').count(),previousSchedules,
+     'Every Repeating row keeps its chevron as the only disclosure affordance');
+    assert.equal(await page.locator('.schedule-card .schedule-row-chevron').first().innerText(),'›');
    }
    assert.equal(await page.locator('.schedule-discovery,[data-schedule-from-actual]').count(),0,
     'Same-merchant charges no longer create an independent heuristic panel or extra-schedule prompts');
@@ -1304,8 +1343,15 @@ const {chromium,webkit}=require('playwright');
   await page.locator('.history-actual-row').filter({hasText:'Home Mortgage ACH'})
    .first().click();
   const homeForm=page.locator('.history-schedule-form');
+  assert.equal(await homeForm.locator('[name=category]').count(),1,
+   'Bank record to schedule confirmation shares the Category field');
+  await homeForm.locator('[name=category]').selectOption('Mortgage');
   await homeForm.locator('button[type=submit]').click();
   await page.locator('.history-page .future-notice').getByText(/Saved recurring forecast/).waitFor();
+  assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem(
+   'household-planner-sample-settings-v1')||'{}').futureRecurringRules?.some(r=>
+    r.merchant==='Home Mortgage ACH'&&r.category==='Mortgage')),
+   'Selected category is saved on the future schedule and not as a bank-record mutation');
   await go('settings');
   const cardSettings=page.locator('#card-autopay');
   if(await cardSettings.getAttribute('open')===null)
