@@ -2693,3 +2693,37 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:10px}
   .summary-page .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{padding:9px 8px}
   .summary-page .calendar-day-reconciliation .calendar-day-net{padding:9px 8px}
 }
+
+/* Calendar follow-up: compress top chrome; keep an invariant 6 x 7 month grid.
+   Only two transaction previews plus an overflow count are rendered per day;
+   all transactions remain editable in the selected-day panel. */
+body:has(.summary-page) .content{padding-top:8px}
+body:has(.summary-page) .topbar{margin-bottom:4px}
+body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
+.summary-page .summary-heading{margin-bottom:2px!important}
+.summary-page .summary-numbers{padding:2px 0 4px!important;margin-bottom:0!important}
+.summary-page .calendar-balance-explainer{margin:0 0 4px;line-height:1.35}
+.summary-page .calendar-wrapper{margin-top:0!important}
+.summary-page .calendar-navigation{margin-bottom:5px!important}
+.summary-page .calendar-grid{
+  grid-template-rows:23px repeat(6,124px);
+  align-items:stretch;
+}
+.summary-page .calendar-grid>.calendar-day,
+.summary-page .calendar-grid>.calendar-blank,
+.summary-page .calendar-grid>.calendar-outside{
+  height:124px;min-height:0!important;max-height:124px;overflow:hidden;
+}
+.summary-page .calendar-day-events{min-height:0;overflow:hidden;flex:1 1 auto}
+@media(max-width:780px){
+  body:has(.summary-page) .content{padding-top:6px}
+  body:has(.summary-page) .topbar{margin-bottom:3px}
+  body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:4px}
+  .summary-page .summary-numbers{padding:1px 0 3px!important}
+  .summary-page .calendar-grid{grid-template-rows:23px repeat(6,106px)}
+  .summary-page .calendar-grid>.calendar-day,
+  .summary-page .calendar-grid>.calendar-blank,
+  .summary-page .calendar-grid>.calendar-outside{
+    height:106px;max-height:106px;
+  }
+}
