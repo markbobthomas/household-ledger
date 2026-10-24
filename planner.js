@@ -1448,7 +1448,10 @@ function reviewsPage(bundle,s){
   postedAmbiguities.length;
  const recommendations=repeatedRecommendations(bundle,s);
  lastRecommendedRepeating=recommendations;
- const actionable=recommendations.filter(r=>r.status==='pending').length;
+ const actionable=recommendations.filter(r=>r.status==='pending').length,
+  migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
+  legacyCount=migration.legacySeries.length,
+  unresolved=recommendations.filter(r=>r.activeLegacyStreams?.length&&r.status==='pending').length;
  const recommendedCards=recommendations.map(r=>
   '<article class="review-candidate" data-recommended-repeat="'+escapeHTML(r.key)+
    '" data-recommendation-status="'+r.status+'">'+
@@ -1456,6 +1459,7 @@ function reviewsPage(bundle,s){
    '<small>'+escapeHTML(r.accountName)+' · Suggested '+escapeHTML(r.frequency)+
     ' · '+r.occurrences+' posted payment'+(r.occurrences===1?'':'s')+
     ' · Next '+escapeHTML(dayLabel(r.nextDate))+'</small>'+
+   (r.activeLegacyStreams?.length?'<small class="recommendation-state">Currently included in balance as an unconfirmed estimate (until migration)</small>':'')+
    '<small class="recommendation-state">'+(r.status==='scheduled'?'Scheduled — saved repeating payment':
     r.status==='ignored'?'Ignored — retained for reference':'Recommended — not yet approved')+
     '</small>'+
@@ -1481,9 +1485,19 @@ function reviewsPage(bundle,s){
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Recommended repeating</h2>'+
     '<span class="status-tag">'+recommendations.length+' FOUND</span></div>'+
-   '<p class="lead">Possible repeats stay on this list, even when ignored or already scheduled. '+
-    'Yes opens suggested dates, frequency and amount to review before saving; No flags an item as ignored. '+
-    'For now, existing automatic balance estimates are unchanged until the next migration step.</p>'+
+   (migration.approvedOnly?
+    '<p class="lead">Only approved saved schedules generate recurring balance predictions. '+
+    'Bank patterns below remain recommendations, never automatic charges.</p>':
+    '<p class="lead"><strong>Forecast transition:</strong> '+legacyCount+
+    ' unconfirmed recurring stream'+(legacyCount===1?' is':'s are')+
+    ' still included in balances. '+unresolved+' need a decision. Review Yes or No below before '+
+    'switching. Ignoring keeps the recommendation visible and does not remove its '+
+    'existing estimate until you complete the switch.</p>'+
+    '<button type="button" class="btn primary" data-activate-saved-schedules '+
+    (unresolved?'disabled title="Review the remaining automatically estimated payments first"':'')+
+    '>Use saved schedules only</button>')+
+   '<p class="lead">Possible repeats stay listed even when ignored or scheduled. '+
+    'Yes opens editable proposed values; No flags the recommendation as ignored.</p>'+
    (recommendedCards||'<p class="lead">No repeating candidates found yet. Future bank history will be checked here.</p>')+
    '</section>'+
   (mortgages.length?missingMortgagePanel(bundle):'')+
@@ -1684,6 +1698,9 @@ function render(){
  const caution=[
   ...(missingCards.length?['Credit-card payment schedule not set for '+missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.']:[]),
   ...((bundle?.payments?.warnings||[]).slice(0,3)),
+  ...(bundle?.recurrenceMigration&&!bundle.recurrenceMigration.approvedOnly&&
+   bundle.recurrenceMigration.legacySeries.length?
+   [bundle.recurrenceMigration.legacySeries.length+' unsaved automatic repeating estimate stream(s) still affect future balances. Review them in Needs review before switching to saved schedules only.']:[]),
   ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>
    'An actual '+cash(m.amount)+' mortgage payment from '+m.account+' is not in the forecast. Review its proposed recurring schedule below.')),
   ...((bundle?.routines?.warnings||[]).slice(0,2).map(w=>
@@ -2043,6 +2060,24 @@ document.addEventListener('click',async e=>{
   }catch(err){setNotice(String(err.message||err))}
   return;
  }
+ const cutover=e.target.closest('[data-activate-saved-schedules]');
+ if(cutover){
+  try{
+   if(state().predictions?.recurringForecastMode==='approved-only')return;
+   // Re-evaluate bank history at click time. A stale Review page cannot drop
+   // an unsaved automatic cash movement that arrived after its last render.
+   const fresh=forecastFor(snapshot()),current=repeatedRecommendations(fresh,snapshot());
+   const missing=current.filter(r=>r.activeLegacyStreams?.length&&r.status==='pending');
+   if(missing.length)throw Error('Review the '+missing.length+
+    ' remaining unconfirmed automatic payments before switching.');
+   await commitForecastChange(()=>{state().predictions.recurringForecastMode='approved-only'});
+   recurringDraft=null;
+   reviewNotice='Saved schedules are now the only source of recurring forecasts. '+
+    'Previously inferred, unsaved payments are no longer included; bank history is unchanged.';
+   render();
+  }catch(error){setNotice(String(error.message||error))}
+  return;
+ }
  const newRecommendation=e.target.closest('[data-review-recommendation]');
  if(newRecommendation){
   const candidate=lastRecommendedRepeating.find(r=>r.key===newRecommendation.dataset.reviewRecommendation);
@@ -2073,7 +2108,7 @@ document.addEventListener('click',async e=>{
     if(ignored)p.repeatingRecommendationDecisions[key]='ignored';
     else delete p.repeatingRecommendationDecisions[key];
    });
-   reviewNotice=ignored?'Marked ignored. This recommendation stays visible here.':
+   reviewNotice=ignored?'Marked ignored. This recommendation remains visible. Any older estimate stays in the forecast until you activate saved-schedules-only mode.':
     'Recommendation is available for approval again.';
    render();
   }catch(error){setNotice(String(error.message||error))}
