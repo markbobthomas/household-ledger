@@ -241,6 +241,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   return Boolean(paymentEngine?.ready?.(
    (prefs.paymentRules||{})[String(id)],account,accounts));
  };
+ // Legacy estimates remain included until the owner completes a guarded
+ // migration. Afterwards, history detection supplies suggestions only.
+ const approvedOnly=prefs.recurringForecastMode==='approved-only';
  const detected=analyze(rows,accounts,asOf,prefs,days),
   rules=(prefs.futureRecurringRules||[]).filter(r=>{
    const account=r.originalAccountId||r.accountId||r.fromAccountId,
@@ -275,7 +278,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
- for(const event of detected.automatic){
+ for(const event of approvedOnly?[]:detected.automatic){
   if(!configuredCard(event.accountId)||
    ownerFor(event)||suppressedRecurrence(prefs,event))continue;
   const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
@@ -384,7 +387,17 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  const integrity=auditProjection(projection);
  projection.diagnostics.balanceMismatches=integrity.errors;
  if(!integrity.ok)throw Error('Forecast integrity check failed; inconsistent daily balances were not displayed');
+ // These are active, unsaved historical forecasts, not persisted future rows.
+ // One representative per independent stream, including alternating payroll.
+ const legacySeries=[...new Map(ledger.filter(e=>e.source==='historical'&&e._seriesKey)
+  .map(e=>[e._seriesKey,e])).values()].map(e=>({
+  seriesKey:e._seriesKey,accountId:e.accountId,type:e.type,
+  merchant:e._forecastOriginalMerchant||e.merchant,
+  amount:e._forecastOriginalAmount||e.amount,date:e.date,
+  cadence:e.cadence,historicalIds:e.historicalIds||[]
+ }));
  return {ledger,projection,rows,events:ledger.filter(e=>e.kind==='event'),
+  recurrenceMigration:{approvedOnly,legacySeries},
   payments:{...payment,warnings:[...(payment.warnings||[]),...warnings]},
   forecast:{suppressedDuplicates:checks},routines:{events:[],review:[],warnings:[],
    counts:{confirmed:ownerEntries.length,suggested:detected.automatic.length,excluded:0}},
