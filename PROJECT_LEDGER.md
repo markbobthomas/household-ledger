@@ -946,3 +946,12 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Result:** The selected-day Calendar design remains opening balance → each editable signed transaction once → one signed **Total change** row (omitted when no transactions) → the original ending balance. No new functional change or reimplementation was requested or made in this handoff.
 - **Verification:** Existing PR #157 GitHub Actions were rechecked: Real-account pilot safety `40124824658` **success**, Browser interaction `40124824652` **success**. These are prior CI results, **not newly rerun tests**. This entry is docs-only.
 - **Deployment:** Private Render deployed SHA, live Deploys status and private UI remain unverified. Next: resume from current `main` on the user's next concrete request, keeping bank data and infrastructure untouched.
+
+
+### 2026-10-24 — Calendar density pass
+
+- **Goal:** Reduce excess white space on the Calendar while preserving all amounts, controls, and editing paths.
+- **Implementation:** Calendar-scoped CSS reduces header/tabs, metric-row, month-navigation, weekday, selected-day reconciliation, and month-disclosure spacing. Dated, blank and outside calendar cells have matching compact minimum heights (82px desktop, 64px mobile), growing as needed for actual content. Keep three aligned balance figures and legible clickable dates; no redundant summary or account data changes.
+- **Files:** `planner.css`, `index.html` (stylesheet cache version), `tests/planner-browser.cjs` (desktop Chromium and iPhone WebKit spacing assertions), and this ledger. Financial/Plaid/source records, forecast math, saved preferences, and Render configuration untouched.
+- **Validation:** Required financial/banking and browser CI to be checked on final PR head before merging; record exact results and merge SHA in a later entry.
+- **Deployment:** Existing private authenticated Render service remains independently unverified.
