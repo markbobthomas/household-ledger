@@ -990,35 +990,37 @@ function newTransactionForm(s){
 }
 
 function scheduleFields(r,isNew,s){
-  const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1);
-  const type=r.kind==='movement'?'transfer':r.type||'expense',transfer=isNew&&type==='transfer'||r.kind==='movement',
-   accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id;
-  return '<div class="future-fields">'+
-   '<label>Bill label (distinguishes same-payee bills)<input name="scheduleLabel" maxlength="110" placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||'')+'"></label>'+
-   '<label>Bank merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(r.merchant||'')+'"></label>'+
-   '<label>Category<select name="category">'+
-    window.HouseholdPlannerTransactions.scheduleCategories(state()).map(c=>
-     '<option value="'+escapeHTML(c)+'"'+(c===(r.category||'Uncategorized')?' selected':'')+'>'+
-      escapeHTML(c)+'</option>').join('')+'</select></label>'+
-   '<label>Expected amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
-   '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
-   '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
-   '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
+ const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1),
+  type=r.kind==='movement'?'transfer':r.type||'expense',
+  transfer=(isNew&&type==='transfer')||r.kind==='movement',
+  accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id,
+  categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+  category=categories.includes(r.category)?r.category:'Uncategorized';
+ // Friendly name is not the source bank merchant's matching identity.
+ return '<div class="future-fields schedule-primary-fields">'+
+  '<label>Name<input name="scheduleLabel" maxlength="110" required placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||r.merchant||'')+'"></label>'+
+  '<label>Amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
+  '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
+  '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
+  '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+accountSelect(accounts,accountId,'accountId')+'</label>'+
+  '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From account'+accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
+  '</div><details class="schedule-advanced" data-schedule-advanced'+(transfer?' open':'')+'>'+
+  '<summary>More options</summary><div class="future-fields">'+
+  (isNew?'<label>Type<select name="type" data-schedule-type>'+
+   [['expense','Withdrawal'],['income','Deposit'],['refund','Refund'],['transfer','Linked transfer']].map(([v,name])=>
+    '<option value="'+v+'"'+(type===v?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':
+   '<input type="hidden" name="type" value="'+escapeHTML(type)+'">')+
+  '<label>Bank merchant<input name="merchant" maxlength="160"'+(isNew?'':' required')+' value="'+escapeHTML(r.merchant||'')+'"></label>'+
+  '<label>Category<select name="category">'+categories.map(c=>
+   '<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+'</select></label>'+
+  '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
    '<option value="fixed"'+(r.amountBasis!=='estimate'?' selected':'')+'>Fixed</option></select></label>'+
-   (isNew?'<label>Type<select name="type" data-schedule-type>'+
-    [['expense','Withdrawal'],['income','Deposit'],['refund','Refund'],['transfer','Linked transfer']].map(([v,name])=>
-     '<option value="'+v+'"'+(type===v?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':
-    '<input type="hidden" name="type" value="'+escapeHTML(type)+'">')+
-   '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+
-    accountSelect(accounts,accountId,'accountId')+'</label>'+
-   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From'+
-    accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
-   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>To'+
-    accountSelect(accounts,r.toAccountId||accounts.find(a=>String(a.id)!==accountId)?.id||accountId,'toAccountId')+'</label>'+
-   '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
-    '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
-   '</div>';
- }
+  '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>To account'+
+   accountSelect(accounts,r.toAccountId||accounts.find(a=>String(a.id)!==accountId)?.id||accountId,'toAccountId')+'</label>'+
+  '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
+   '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
+  '</div></details>';
+}
 function applyScheduleSearch(root=document){
  // Some non-browser integrations expose a partial DOM. Search is optional:
  // never let its absence interrupt scheduled payment editing or forecasts.
@@ -2719,6 +2721,8 @@ document.addEventListener('submit',async e=>{
   const fields=Object.fromEntries(new FormData(form)),
    T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s),
    originatingKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||'';
+  if(form.hasAttribute('data-schedule-new-form')&&!String(fields.merchant||'').trim())
+   fields.merchant=String(fields.scheduleLabel||'').trim();
   let savedPlanId='';
   if(form.hasAttribute('data-schedule-new-form')){
    const saved=await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
@@ -3112,6 +3116,7 @@ document.addEventListener('change',async e=>{
   const form=e.target.closest('form'),transfer=e.target.value==='transfer';
   form?.querySelectorAll('.schedule-transfer-account').forEach(el=>el.hidden=!transfer);
   const single=form?.querySelector('.schedule-single-account');if(single)single.hidden=transfer;
+  if(transfer)form?.querySelector('[data-schedule-advanced]')?.setAttribute('open','');
   return;
  }
  if(e.target.matches?.('[data-card-rule] [name=method],[data-card-rule] [name=autopayEnabled]')){
@@ -3169,6 +3174,8 @@ document.addEventListener('change',async e=>{
   const form=e.target.closest('form');
   const second=form?.querySelector('.future-second-day');
   if(second)second.hidden=e.target.value!=='twice-monthly';
+  if(e.target.value==='twice-monthly'&&form?.matches?.('[data-schedule-new-form],[data-schedule-edit-form]'))
+   form.querySelector('[data-schedule-advanced]')?.setAttribute('open','');
   const holder=form?.querySelector('[data-new-history-link]');
   if(holder){holder.hidden=e.target.value==='once';updateHistoryLinks(form)}
   return;
