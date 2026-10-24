@@ -25,7 +25,7 @@ const prefs={
    type:'expense',frequency:'monthly',amount:50,merchant:'Monthly utility',scheduleLabel:'Monthly utility'}
  ],
  paymentRules:{visa:{
-  billingStartDate:'2026-10-01',billingEndDate:'2026-10-31',
+  billingStartDate:'2026-10-01',billingEndDate:'2026-10-31',closingDay:31,
   nextPaymentDate:'2026-11-22',nextDueDate:'2026-11-23',
   fromAccountId:'checking',autopayEnabled:true,method:'statement'
  }}
