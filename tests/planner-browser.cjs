@@ -1030,6 +1030,9 @@ const {chromium,webkit}=require('playwright');
      body:'{"error":"Forecast settings temporarily unavailable"}'});
    }
    writes.push(data);
+   // The mock private backend must behave like the encrypted real server:
+   // accepted forecasts survive a later /api/sync followed by GET /api/ledger.
+   realPayload.adjustments.predictions=structuredClone(data.predictions);
    return r.fulfill({status:200,contentType:'application/json',
     body:'{"saved":true,"scope":"predictions"}'});
   });
