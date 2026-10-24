@@ -46,7 +46,7 @@ let reviewCatalogSave=Promise.resolve();
 let historyAccount='all',historySearch='',historySort='newest',historyLimit=90,recurringDraft=null,reviewNotice='';
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
+let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1088,6 +1088,58 @@ function ledgerMoney(amount,sign=''){
   '<span class="ledger-money-digits">'+escapeHTML(cash(amount).replace('$',''))+'</span>'+
   '</span>';
 }
+// Statement cycles are display-only. Never count linked card payments as
+// purchases or equate a net-activity subtotal with an issued statement.
+function cardStatementPeriod(accountId,when){
+ return window.HouseholdPaymentObligations.statementPeriodFor(
+  state().predictions?.paymentRules?.[accountId],when);
+}
+function cardActivityCents(row){
+ if(row.pending||!['expense','refund'].includes(row.type))return 0;
+ const cents=Math.round(Math.abs(Number(row.amount))*100);
+ if(!Number.isFinite(cents))return 0;
+ return row.type==='refund'?-cents:cents;
+}
+function statementHeading(period,total,count,kind){
+ return '<div class="ledger-statement-divider" data-statement-divider="'+escapeHTML(period.end)+
+  '" data-statement-kind="'+escapeHTML(kind)+'">'+
+  '<strong>Statement closes '+escapeHTML(dateLong(period.end))+'</strong>'+
+  '<small>'+escapeHTML(dayLabel(period.start))+' – '+escapeHTML(dayLabel(period.end))+
+  ' · '+count+' '+(kind==='repeating'?'repeating charge':'shown bank transaction')+
+  (count===1?'':'s')+'</small>'+
+  '<span class="ledger-statement-total">Net charges '+cash(total/100)+'</span></div>';
+}
+function repeatingStatementPeriods(bundle,s,accountId,shownRules){
+ const rule=state().predictions?.paymentRules?.[accountId];
+ if(!rule?.billingEndDate&&!rule?.lastStatementClose)
+  return '<p class="ledger-statement-help">Set this card’s billing period in Settings to see statement totals.</p>';
+ const ids=new Set(shownRules.map(({rule})=>String(rule.id)));
+ const end=shiftDay(s.asOf,90),groups=new Map();
+ const rows=futureRows(bundle,s).filter(row=>row.kind==='event'&&
+  String(row.accountId)===String(accountId)&&ids.has(String(row.recurringRuleId||''))&&
+  row.date>s.asOf&&row.date<=end&&['expense','refund'].includes(row.type));
+ for(const row of rows){
+  const period=cardStatementPeriod(accountId,row.date);if(!period)continue;
+  if(!groups.has(period.end))groups.set(period.end,{period,rows:[]});
+  groups.get(period.end).rows.push(row);
+ }
+ const content=[...groups.values()].sort((a,b)=>a.period.end.localeCompare(b.period.end))
+  .map(({period,rows})=>{
+   const total=rows.reduce((sum,row)=>sum+cardActivityCents(row),0);
+   return '<section class="ledger-statement-group" data-repeating-statement-group="'+escapeHTML(period.end)+'">'+
+    statementHeading(period,total,rows.length,'repeating')+
+    rows.map(row=>'<div class="ledger-statement-occurrence" data-statement-occurrence '+
+     'data-statement-cents="'+cardActivityCents(row)+'" data-schedule-search-text="'+
+     escapeHTML([row.merchant,shownRules.find(x=>String(x.rule.id)===String(row.recurringRuleId))?.rule.category||''].join(' ').toLowerCase())+'">'+
+     '<button type="button" data-open-transaction="'+escapeHTML(row.key)+'">'+
+     '<span>'+escapeHTML(dayLabel(row.date))+'</span><strong>'+escapeHTML(row.merchant)+'</strong>'+
+     '<span>'+cash(row.amount)+'</span><span aria-hidden="true">›</span></button></div>').join('')+'</section>';
+  }).join('');
+ return '<section class="ledger-statement-periods schedule-statement-periods" data-repeating-statement-periods>'+
+  '<p class="ledger-statement-intro">Next 90 days · repeating card charges only · estimates, not issued statements</p>'+
+  (content||'<p class="ledger-statement-help">No repeating charges are forecast for this card in the next 90 days.</p>')+
+  '</section>';
+}
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
@@ -1095,7 +1147,10 @@ function schedulesPage(bundle,s){
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
  const indexed=rules.map((rule,index)=>({rule,index}));
- const visible=indexed.filter(({rule})=>!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter);
+ const visible=indexed.filter(({rule})=>
+  (scheduleAccount==='all'||[rule.accountId,rule.fromAccountId,rule.toAccountId]
+   .some(id=>String(id||'')===scheduleAccount))&&
+  (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter));
  const nextAmount=rule=>{
   const first=T.recurrenceDates(rule,s.asOf,end)[0];
   return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
@@ -1202,7 +1257,8 @@ function schedulesPage(bundle,s){
    '" aria-label="Schedule organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
-   '<label>Sort <select data-schedule-sort>'+
+   '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
+    '<label>Sort <select data-schedule-sort>'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
      '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
