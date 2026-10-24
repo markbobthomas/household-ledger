@@ -668,6 +668,34 @@ const {chromium,webkit}=require('playwright');
     'The three-month credit-card low never includes a date from years two or three');
    assert.equal(await page.locator('[data-summary-card-low-value].summary-low-alert').count(),0,
     'Lower card debt is not incorrectly highlighted as a checking cash shortfall');
+   // An intentionally lower debt point beyond day 90 must NOT determine
+   // the credit-card metric, and a future issued bill must not replace the
+   // earlier available estimate for the next statement.
+   const computedCard=await page.evaluate(()=>{
+    const account={id:'fixture-card',name:'Fixture card',type:'credit',accountType:'credit',current:900};
+    const markup=window.HouseholdPlannerSummary.render({
+     snapshot:{asOf:'2026-10-19'},chosen:account,
+     derived:{series:[
+      {date:'2026-10-19',balance:900,events:[]},
+      {date:'2026-11-19',balance:700,events:[]},
+      {date:'2027-01-17',balance:600,events:[]},
+      {date:'2027-04-19',balance:20,events:[]}],events:[]},
+     bundle:{rows:[],payments:{statements:[
+      {cardId:'fixture-card',dueDate:'2026-11-19',withdrawalDate:'2026-11-19',
+       confirmed:false,statementBalance:345},
+      {cardId:'fixture-card',dueDate:'2026-12-19',withdrawalDate:'2026-12-19',
+       confirmed:true,statementBalance:999}]}},
+     days:200,prefs:{},accounts:[account],fresh:true,ready:()=>true
+    });
+    const doc=new DOMParser().parseFromString(markup,'text/html');
+    return {label:doc.querySelector('[data-summary-card-statement] .summary-overline')?.textContent,
+     statement:doc.querySelector('[data-summary-statement-value]')?.textContent,
+     low:doc.querySelector('[data-summary-card-low-value]')?.textContent,
+     date:doc.querySelector('[data-summary-card-90day-low] [data-summary-low-date]')?.dataset.summaryLowDate};
+   });
+   assert.deepEqual(computedCard,{label:'Estimated statement',statement:'$345.00',
+    low:'$600.00',date:'2027-01-17'},
+    'Calendar uses next estimated statement and the lowest card debt only within day 90');
    await page.locator('#summary-account').selectOption('demo-checking');
    assert.equal(await page.locator('[data-summary-month-low]').count(),1);
    assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
