@@ -119,7 +119,7 @@ function nextDate(last,frequency,asOf){
  }
  return d>asOf?d:null;
 }
-function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
+function candidates(records,accounts,asOf,preferences={},forecastEvents=[],options={}){
  const dismissed=preferences.historyPatternDecisions||{},rules=preferences.futureRecurringRules||[],
   excluded=preferences.plannerRoutineDecisions||{};
  const groups=new Map();
@@ -156,7 +156,8 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
   // A single recent payment from *any* merchant can be offered for
   // confirmation, but never forecasts money by itself without clear
   // recurring evidence. Older ordinary one-offs do not clutter Reviews.
-  if(age>(g.rows.length===1&&!bill?45:tolerance))continue;
+  if((!options.includeOld&&age>(g.rows.length===1&&!bill?45:tolerance))||
+   options.includeOld&&g.rows.length===1&&!bill&&age>45)continue;
   if(dismissed[g.key]==='dismissed'||
    preferences.futureRecurrenceExclusions?.[
     [g.accountId,g.type,norm(g.merchant)].map(encodeURIComponent).join('|')])continue;
@@ -197,11 +198,19 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[]){
    // Rank coherent patterns before the many single, unproven purchases.
    _priority:(frequency?3:bill?2:1)});
  }
- return result.sort((a,b)=>b._priority-a._priority||
+ return (options.unlimited?result:result.slice(0,100)).sort((a,b)=>b._priority-a._priority||
   b.occurrences-a.occurrences||b.lastDate.localeCompare(a.lastDate)||
-  b.amount-a.amount).slice(0,100).map(({_priority,...item})=>item);
+  b.amount-a.amount).map(({_priority,...item})=>item);
 }
-const api={candidates,guessFrequency,nextDate,canPlan,accountOf,draftFor,isMortgage};
+// Review inventory is independent of the automatic forecast permission and
+// dismissed/saved states. Those decisions affect the *label*, never visibility.
+function recommendedRepeating(records,accounts,asOf,preferences={}){
+ return candidates(records,accounts,asOf,{
+  ...preferences,historyPatternDecisions:{},plannerRoutineDecisions:{},
+  futureRecurrenceExclusions:{},futureRecurringRules:[],mortgageReviewDismissals:[]
+ },[],{includeOld:true,unlimited:true});
+}
+const api={candidates,recommendedRepeating,guessFrequency,nextDate,canPlan,accountOf,draftFor,isMortgage};
 root.HouseholdPlannerHistory=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
