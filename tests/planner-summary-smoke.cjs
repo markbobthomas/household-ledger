@@ -19,7 +19,8 @@ const opts={snapshot,chosen:snapshot.accounts[0],derived,bundle:{historyCandidat
 for(const days of [1095]){
  const html=tool.render({...opts,days});
  assert.match(html,/3-year low/);
- assert.match(html,/3-year low/);
+ assert.doesNotMatch(html,/calendar-balance-explainer/,
+  'Redundant explanation does not consume space above calendar');
  assert.doesNotMatch(html,/data-summary-days|Major payments|Payment checklist/);
  assert.match(html,/data-summary-low-date/);
  assert.match(html,new RegExp(days+'-day forecast'));
@@ -28,7 +29,7 @@ for(const days of [1095]){
  assert.match(html,/data-summary-month-value/);
  assert.match(html,/data-calendar-month-low/);
  assert.match(html,/month-minimum/);
- assert.match(html,/Monthly low/);
+ assert.match(html,/Estimated Monthly Low/);
  assert.match(html,/data-summary-month-value>\$5,000\.00<\/strong>/,
   'October monthly low must be the first $5,000 day rather than later higher balances');
  assert.match(html,/data-calendar-month-low="2026-10-21"/,
@@ -88,7 +89,7 @@ assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(1095),
 const liveView=tool.render({...opts,days:1095,chosen:{...opts.chosen,current:5650.25,available:5400.25},
  snapshot:{...opts.snapshot,connected:true},isReal:true});
 assert.ok(liveView.includes('data-bank-current-value>$5,650.25<'));
-assert.match(liveView,/Plaid current balance/);
+assert.match(liveView,/Actual Current Balance/);
 assert.ok(!liveView.includes('data-bank-current-value>$5,400.25<'));
 for(const n of [10,30,90,180,360,1095])
  assert.ok(liveView.includes('data-trend-days="'+n+'"'));
