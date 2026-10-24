@@ -673,6 +673,7 @@ const {chromium,webkit}=require('playwright');
      snapshot:{asOf:'2026-10-19'},chosen:account,
      derived:{series:[
       {date:'2026-10-19',balance:900,events:[]},
+      {date:'2026-11-18',balance:800,events:[]},
       {date:'2026-11-19',balance:700,events:[]},
       {date:'2027-01-17',balance:600,events:[]},
       {date:'2027-04-19',balance:20,events:[]}],events:[]},
