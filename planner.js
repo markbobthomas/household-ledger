@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','repeatingRecommendations','mortgageCoverageRules','coverageAssignments'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -53,7 +53,7 @@ function savePlanning(){
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
    scheduleCategories:p.scheduleCategories,
-   futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
+   futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,repeatingRecommendations:p.repeatingRecommendations,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments}));
   return true;
  }
@@ -102,14 +102,40 @@ function forecastForPayments(events,s,additions){
  });
  return [...amended,...extras.filter(e=>e.type!=='transfer')];
 }
+// Keep an append-only bank-history recommendation record. A recommendation is
+// never erased by Ignoring, by an improved classification, or when a bank feed
+// no longer sends an older transaction. All values are forecast-only metadata.
+let recommendationArchiveSave=false;
+function archiveRepeatingRecommendations(candidates){
+ const p=state().predictions||{},existing=p.repeatingRecommendations||{};
+ let changed=false;
+ for(const c of candidates||[]){
+  if(!c?.key||existing[c.key])continue;
+  existing[c.key]={key:c.key,accountId:c.accountId,accountName:c.accountName,
+   merchant:c.merchant,type:c.type,amount:c.amount,frequency:c.frequency,
+   nextDate:c.nextDate,lastDate:c.lastDate,occurrences:c.occurrences,
+   examples:(c.examples||[]).slice(0,6),reason:c.reason};
+  changed=true;
+ }
+ if(!changed)return;
+ p.repeatingRecommendations=existing;
+ if(!recommendationArchiveSave){
+  recommendationArchiveSave=true;
+  Promise.resolve().then(()=>savePlanning()).catch(error=>{
+   latestError='Recommended repeating items could not be saved: '+String(error.message||error);
+  }).finally(()=>{recommendationArchiveSave=false});
+ }
+}
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  // The only planning entry point: normalize Plaid history, materialize one
  // editable future ledger, then calculate all balances from those entries.
  // Older inference and category forecast engines do not feed balances.
- return window.HouseholdFutureLedger.materialize(
+ const bundle=window.HouseholdFutureLedger.materialize(
   s,model.records(state()),state().predictions||{},
   window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon);
+ archiveRepeatingRecommendations(bundle.historyCandidates);
+ return bundle;
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function selected(s){
@@ -1383,10 +1409,13 @@ function reviewsPage(bundle,s){
   !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
  const duplicates=bundle?.duplicateConflicts||[],
   postedAmbiguities=bundle?.postedMatchReview||[];
- const count=regular.length+mortgages.length+(bundle?.historyCandidates||[]).filter(p=>
+ const count=regular.length+mortgages.length+Object.values({
+   ...(state().predictions?.repeatingRecommendations||{}),
+   ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))}).filter(p=>
   (state().predictions?.historyPatternDecisions||{})['recommendation|'+p.key]!=='ignored').length+autoLow.length+duplicates.length+
   postedAmbiguities.length;
- const allRecommendations=bundle?.historyCandidates||[],
+ const allRecommendations=Object.values({...(state().predictions?.repeatingRecommendations||{}),
+   ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))}),
   saved=state().predictions?.futureRecurringRules||[],
   decisionMap=state().predictions?.historyPatternDecisions||{},
   repeatingCards=allRecommendations.map(p=>{
@@ -2008,7 +2037,8 @@ document.addEventListener('click',async e=>{
  }
  const reviewCandidate=e.target.closest('[data-review-candidate]');
  if(reviewCandidate){
-  const candidate=lastReviewCandidates.find(x=>x.key===reviewCandidate.dataset.reviewCandidate);
+  const candidate=lastReviewCandidates.find(x=>x.key===reviewCandidate.dataset.reviewCandidate)||
+   state().predictions?.repeatingRecommendations?.[reviewCandidate.dataset.reviewCandidate];
   if(!candidate){setNotice('Review candidates changed. Refresh bank history.');return}
   const source=lastHistoryRows.find(t=>String(t.id)===candidate.examples[0]?.id);
   recurringDraft={accountId:candidate.accountId,merchant:candidate.merchant,
@@ -2021,7 +2051,8 @@ document.addEventListener('click',async e=>{
  }
  const dismissCandidate=e.target.closest('[data-dismiss-candidate]');
  if(dismissCandidate){
-  const item=lastReviewCandidates.find(x=>x.key===dismissCandidate.dataset.dismissCandidate);
+  const item=lastReviewCandidates.find(x=>x.key===dismissCandidate.dataset.dismissCandidate)||
+   state().predictions?.repeatingRecommendations?.[dismissCandidate.dataset.dismissCandidate];
   if(!item){setNotice('This recommendation is no longer in the available history.');return}
   try{
    await commitForecastChange(()=>{
