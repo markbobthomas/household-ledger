@@ -29,7 +29,7 @@ jobs:
           else
             while IFS= read -r changed; do
               case "$changed" in
-                index.html|modern.css|planner.css|demo-data.js|bank-feed.js|accounting.js|categorization.js|ledger-data.js|payment-obligations.js|planner*.js|pilot/data-source.js|tests/*browser.cjs|.github/workflows/ui-smoke.yml|tests/ci-suite.cjs)
+                index.html|modern.css|planner.css|demo-data.js|bank-feed.js|accounting.js|categorization.js|ledger-data.js|payment-obligations.js|planner*.js|pilot/data-source.js|tests/*browser.cjs|tests/planner-recurrence-integration-smoke.cjs|.github/workflows/ui-smoke.yml|tests/ci-suite.cjs)
                   run_browser=true ;;
               esac
             done < <(git diff --name-only 'HEAD^1' HEAD)
