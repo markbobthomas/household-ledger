@@ -46,6 +46,27 @@ const {spawn}=require('node:child_process');
   const saved=await request('/api/ledger/adjustments',preferences);
   assert.equal(saved.code,200,'Only non-bank adjustments can be stored');
   let after=await request('/api/ledger');
+  const sourceBankRecord=JSON.stringify(after.data.transactions[0]);
+  const categorySave=await request('/api/ledger/category',
+   {transactionId:'posted-1',category:'Dining'});
+  assert.equal(categorySave.code,200,'Private category endpoint accepts one source-scoped override');
+  assert.equal(categorySave.data.scope,'category');
+  after=await request('/api/ledger');
+  assert.equal(after.data.adjustments.categoryOverrides['posted-1'],'Dining');
+  assert.equal(after.data.adjustments.predictions.monthlyBudgets['Pet supplies'],200,
+   'Changing a category leaves previously saved forecast preferences intact');
+  assert.equal(JSON.stringify(after.data.transactions[0]),sourceBankRecord,
+   'Scoped category overrides never rewrite Plaid source records');
+  assert.equal((await request('/api/ledger/category',{
+   transactionId:'not-a-bank-transaction',category:'Dining'})).code,400,
+   'Unknown bank transaction IDs cannot create category changes');
+  assert.equal((await request('/api/ledger/category',{
+   transactionId:'posted-1',category:'Made-up category'})).code,400,
+   'Private server validates the category selection');
+  assert.equal((await request('/api/ledger/category',{
+   transactionId:'posted-1',category:'Pet supplies'})).code,200,
+   'Custom categories supported without changing the source bank transaction');
+  after=await request('/api/ledger');
   assert.equal(after.data.adjustments.customCategories[0],'Pet supplies');
   assert.equal(after.data.adjustments.categoryOverrides['posted-1'],'Pet supplies');
   assert.equal(after.data.account.current,321.45,'Category changes never recalculate bank balances');

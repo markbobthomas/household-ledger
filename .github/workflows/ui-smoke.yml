@@ -50,6 +50,7 @@ jobs:
           node tests/planner-payroll-safety-smoke.cjs
           node tests/planner-missing-mortgage-smoke.cjs
           node tests/planner-history-smoke.cjs
+          node tests/planner-focused-review-smoke.cjs
           node tests/history-any-recurring-smoke.cjs
           node tests/planner-early-recurrence-smoke.cjs
           node tests/recurrence-early-dedupe-smoke.cjs

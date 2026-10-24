@@ -198,10 +198,35 @@ async function start(port=Number(env.PORT||8788)){
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   try{
    if(accountRemovalBusy&&[
-    '/api/ledger/forecasts','/api/ledger/adjustments','/api/exchange',
+    '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
+   if(requestPath==='/api/ledger/category'){
+    // Scoped, read-only-source classification adjustment. Never upload entire
+    // bank history or a stale prediction snapshot to change one row's category.
+    if(!state.items.length)return respond(409,{error:'No bank account connected'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+     Object.keys(body).some(k=>!['transactionId','category'].includes(k))||
+     Object.keys(body).length!==2)return respond(400,{error:'Invalid category change'});
+    const id=String(body.transactionId||'');
+    if(!Object.prototype.hasOwnProperty.call(state.transactions,id))
+     return respond(400,{error:'Unknown bank transaction'});
+    const allowedCats=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health',
+     'Entertainment','Kids & Family','Insurance','Subscriptions','Other',
+     ...((state.ledgerAdjustments?.customCategories||[]).filter(c=>typeof c==='string'))]);
+    if(body.category!==null&&!allowedCats.has(body.category))
+     return respond(400,{error:'Invalid category'});
+    const before={...(state.ledgerAdjustments?.categoryOverrides||{})};
+    const overrides={...before};
+    if(body.category===null)delete overrides[id];else overrides[id]=body.category;
+    state.ledgerAdjustments={...state.ledgerAdjustments,categoryOverrides:overrides};
+    try{await save()}catch(error){
+     state.ledgerAdjustments.categoryOverrides=before;
+     throw error;
+    }
+    return respond(200,{saved:true,scope:'category'});
+   }
    if(requestPath==='/api/ledger/forecasts'){
     // Forecast rules are not edits to Plaid transactions, balances, or
     // classification overrides. Persist them separately to prevent an

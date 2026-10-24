@@ -33,8 +33,8 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'saved-schedules-migration-20261023-v1','The loaded HTML identifies the task-based UI release');
-   assert.match(await page.locator('#deployment-version').textContent(),/Saved Schedules v1/,
+    'focused-repeating-review-20261024-v1','The loaded HTML identifies the task-based UI release');
+   assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
@@ -318,15 +318,25 @@ const {chromium,webkit}=require('playwright');
    assert.ok(originalRecommendations>0,'Existing bank history produces recurring candidates');
    const suggestion=repeatingSection.locator('[data-recommendation-status="pending"]').first();
    assert.ok(await suggestion.count()>0,'An unconfirmed recommendation can be reviewed');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="ignored"]').count(),0,
+    'Only unreviewed recurring suggestions belong to the main queue');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="scheduled"]').count(),0,
+    'Saved schedules stay off the Needs review queue');
+   assert.equal(await repeatingSection.locator('[data-review-candidate]').count(),0,
+    'Ordinary bank transactions are not independently replicated on Needs review');
    const suggestionKey=await suggestion.getAttribute('data-recommended-repeat'),
-    trackedRecommendation=repeatingSection.locator('[data-recommended-repeat="'+suggestionKey+'"]');
+    trackedRecommendation=page.locator('[data-recommended-repeat="'+suggestionKey+'"]');
    const rulesBeforeIgnore=await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
    await trackedRecommendation.locator('[data-ignore-recommendation]').click();
    assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'ignored',
-    'Ignored recommendations stay in the same section with an explicit label');
-   assert.equal(await repeatingSection.locator('[data-recommended-repeat]').count(),originalRecommendations,
-    'Ignoring does not remove or hide a candidate');
+    'Ignored recommendations keep their saved decision');
+   assert.equal(await repeatingSection.locator('[data-recommended-repeat]').count(),originalRecommendations-1,
+    'Ignoring removes the row from the active queue');
+   assert.equal(await page.locator('[data-ignored-repeating] [data-recommended-repeat="'+suggestionKey+'"]').count(),1,
+    'Ignored recommendation moves to the separate collapsed section');
+   assert.equal(await page.locator('[data-ignored-repeating]').getAttribute('open'),null,
+    'Ignored section is collapsed by default');
    assert.equal(await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0),
     rulesBeforeIgnore,'No only records a review decision, never deletes a saved plan');
@@ -337,9 +347,10 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.evaluate(()=>Object.keys(JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').repeatingRecommendations||{}).length>0),
     'A durable recommendation inventory is retained in planning settings');
+   await page.locator('[data-ignored-repeating] > summary').click();
    await trackedRecommendation.locator('[data-unignore-recommendation]').click();
    assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'pending',
-    'Undo ignore restores the pending state without removing the record');
+    'Undo ignore moves the suggestion back into the active queue');
    await trackedRecommendation.locator('[data-review-recommendation]').click();
    const recommendedDraft=page.locator('.history-schedule-form');
    assert.equal(await recommendedDraft.count(),1,'Yes opens prefilled editable schedule fields');
@@ -358,6 +369,24 @@ const {chromium,webkit}=require('playwright');
     'Every bank-history row has one explicit accessible primary button');
    assert.equal(await page.locator('.history-actual-row button button').count(),0,
     'History rows contain no nested interactive elements');
+   const safewayHistory=page.locator('.history-actual-row').filter({hasText:'Safeway'}).first();
+   const safewayCategory=safewayHistory.locator('[data-history-category]');
+   assert.equal(await safewayCategory.inputValue(),'Groceries');
+   const safewayId=await safewayCategory.getAttribute('data-history-category');
+   const bankCategoryBefore=await page.evaluate(id=>window.HouseholdLedgerData&&
+    window.HouseholdLedgerData.migrate(window.createHouseholdLedgerDemo())
+     .transactions.find(t=>String(t.id)===id)?.category,safewayId);
+   await safewayCategory.selectOption('Shopping');
+   assert.equal(await safewayHistory.locator('[data-history-category]').inputValue(),'Shopping',
+    'Bank history lets the user categorize a single posted row in place');
+   assert.equal(await page.evaluate(id=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}').categoryOverrides?.[id],safewayId),'Shopping');
+   await page.reload({waitUntil:'load'});await go('history');
+   assert.equal(await page.locator('[data-history-category="'+safewayId+'"]').inputValue(),'Shopping',
+    'Manual category override survives reload');
+   assert.equal(await page.evaluate(id=>window.HouseholdLedgerData.migrate(
+    window.createHouseholdLedgerDemo()).transactions.find(t=>String(t.id)===id)?.category,safewayId),
+    bankCategoryBefore,'Classification overlay does not rewrite the underlying transaction');
    const demoHistoricalMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
    await demoHistoricalMortgage.click();
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
@@ -963,7 +992,8 @@ const {chromium,webkit}=require('playwright');
     'Cutover becomes available only after every unsaved legacy stream has a decision');
    await switchMode.click();
    assert.equal(await page.locator('[data-activate-saved-schedules]').count(),0);
-   assert.match(await page.locator('[data-recommended-repeating]').innerText(),/Only approved saved schedules/);
+   assert.equal(await page.locator('[data-activate-saved-schedules]').count(),0,
+    'Successful migration removes the cutover control without adding duplicate settings');
    const storedMode=()=>page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').recurringForecastMode);
    assert.equal(await storedMode(),'approved-only',
@@ -972,8 +1002,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await storedMode(),'approved-only',
     'Saved-schedules-only mode survives reload');
    await go('reviews');
-   assert.ok(await page.locator('[data-recommended-repeating] [data-recommended-repeat]').count()>0,
-    'Cutover does not erase permanent recommendations');
+   assert.ok(await page.evaluate(()=>Object.keys(JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}').repeatingRecommendations||{}).length>0),
+    'Cutover preserves recommendation history even when obsolete non-recurring purchases are filtered from view');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');
    if(mobile){
     const sizes=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,window:innerWidth}));
@@ -1054,7 +1085,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
   };
   await page.route('**/api/ledger',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(realPayload)}));
-  const writes=[];
+  const writes=[],categoryWrites=[];
   let failNextForecast=false,legacyAdjustmentCalls=0;
   // Simulate a stale/invalid historical category override: it must NOT block
   // saving a user-confirmed future bill.
@@ -1062,6 +1093,17 @@ const {chromium,webkit}=require('playwright');
    legacyAdjustmentCalls++;
    return r.fulfill({status:400,contentType:'application/json',
     body:'{"error":"Invalid category override"}'});
+  });
+  await page.route('**/api/ledger/category',r=>{
+   const data=r.request().postDataJSON();
+   assert.deepEqual(Object.keys(data).sort(),['category','transactionId'],
+    'Category changes send only a bank record ID and category');
+   categoryWrites.push(data);
+   realPayload.adjustments.categoryOverrides??={};
+   if(data.category===null)delete realPayload.adjustments.categoryOverrides[data.transactionId];
+   else realPayload.adjustments.categoryOverrides[data.transactionId]=data.category;
+   return r.fulfill({status:200,contentType:'application/json',
+    body:'{"saved":true,"scope":"category"}'});
   });
   await page.route('**/api/ledger/forecasts',r=>{
    const data=r.request().postDataJSON();
@@ -1092,6 +1134,24 @@ const {chromium,webkit}=require('playwright');
    'Missing card setup remains clearly visible without the removed checklist');
   assert.match(await page.locator('.summary-trust').innerText(),/everyday unplanned spending is excluded/);
   assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
+  await go('overview');
+  await go('history');
+  const immutableProviderCategory=JSON.stringify(realPayload.transactions.find(t=>t.id==='card-purchase').category);
+  await Promise.all([
+   page.waitForResponse(response=>response.url().endsWith('/api/ledger/category')),
+   page.locator('[data-history-category="card-purchase"]').selectOption('Shopping')
+  ]);
+  assert.equal(categoryWrites.length,1,'One category selection makes one scoped write');
+  assert.equal(categoryWrites[0].category,'Shopping');
+  assert.equal(await page.locator('[data-history-category="card-purchase"]').inputValue(),'Shopping');
+  assert.equal(JSON.stringify(realPayload.transactions.find(t=>t.id==='card-purchase').category),
+   immutableProviderCategory,'Bank category overrides do not rewrite Plaid facts');
+  assert.equal(legacyAdjustmentCalls,0,'No whole-account legacy adjustments write was attempted');
+  await page.reload({waitUntil:'load'});
+  await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
+  await go('history');
+  assert.equal(await page.locator('[data-history-category="card-purchase"]').inputValue(),'Shopping',
+   'Category override survives private bank refresh');
   await go('overview');
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',

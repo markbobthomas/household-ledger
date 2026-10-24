@@ -1893,3 +1893,42 @@ html{scrollbar-gutter:stable}
  .recommended-repeating .review-candidate-actions{width:100%;justify-content:flex-start}
  .recommended-repeating .review-candidate-actions .btn{min-height:40px}
 }
+
+/* Focused recurring queue and inline bank-history classification. */
+.history-page .history-actual-row{
+ grid-template-columns:minmax(0,1fr) minmax(125px,158px);
+}
+.history-page .history-row-category{
+ display:flex;flex-direction:column;gap:3px;min-width:0;
+ padding-right:7px;color:#718074;font-size:10px;font-weight:600;
+}
+.history-page .history-row-category select{
+ width:100%;min-width:0;min-height:36px;padding:6px 7px;
+ border:1px solid #dce4da;border-radius:6px;background:#fff;
+ color:#344e3e;font-size:11px;font-weight:600;
+}
+.history-page .history-category-error{
+ color:#9a3141;font-size:11px;font-weight:500;line-height:1.3;
+}
+.ignored-repeating{margin:0 0 20px}
+.ignored-repeating>summary{
+ padding:10px 12px;cursor:pointer;color:#65746b;
+ font-size:12px;font-weight:650;list-style:revert;
+}
+.ignored-repeating-items{padding:0 11px 9px}
+.ignored-repeating .review-candidate{padding:10px 2px}
+.ignored-repeating .review-candidate-main>strong{color:#62736a}
+.recurrence-transition{border-top:1px solid #edf0eb;margin-top:11px;padding-top:12px;
+ display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.recurrence-transition .lead{margin:0;max-width:590px}
+@media(max-width:850px){
+ .history-page .history-actual-row{grid-template-columns:minmax(0,1fr)}
+ .history-page .history-row-category{
+  grid-column:1/-1;padding:0 6px 10px 60px;
+  display:flex;flex-direction:row;align-items:center;gap:9px;
+ }
+ .history-page .history-row-category select{max-width:215px}
+}
+@media(max-width:380px){
+ .history-page .history-row-category{padding-left:4px}
+}

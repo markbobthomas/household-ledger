@@ -31,6 +31,7 @@ jobs:
           node tests/pilot-remove-account-smoke.cjs
           node tests/planner-core-smoke.cjs
           node tests/planner-schedule-only-smoke.cjs
+          node tests/planner-focused-review-smoke.cjs
           node tests/planner-integrity-smoke.cjs
           node tests/planner-recurrence-integration-smoke.cjs
           node tests/planner-independent-schedules-smoke.cjs
