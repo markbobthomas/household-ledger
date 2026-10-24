@@ -2731,3 +2731,26 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
 /* Five-day forecasting calendar: six invariant Monday-Friday rows per month.
    Day height is unchanged, including room for two prediction previews. */
 .summary-page .calendar-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+
+
+/* Repeating: five routine fields, with rare controls available on demand. */
+.schedule-form .schedule-advanced{
+ margin:7px 0 0;
+ border-top:1px solid var(--recurrence-rule, #e0e8e2);
+ padding-top:5px;
+}
+.schedule-form .schedule-advanced>summary{
+ display:flex;
+ align-items:center;
+ min-height:36px;
+ width:max-content;
+ max-width:100%;
+ padding:7px 4px;
+ cursor:pointer;
+ font:650 12px inherit;
+ color:var(--recurrence-foreground,#516e5e);
+}
+.schedule-form .schedule-advanced .future-fields{
+ margin-top:5px!important;
+}
+.schedule-form .schedule-primary-fields{margin-bottom:3px!important}
