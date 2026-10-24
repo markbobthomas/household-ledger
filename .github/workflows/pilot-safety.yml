@@ -24,9 +24,10 @@ jobs:
           node --check payment-obligations.js
           node --check planner.js
           node --check planner-summary.js
-      - name: Capture fictional behavior baseline and profile current pipeline
+          node --check tests/architecture-baseline.cjs
+      - name: Verify frozen fictional output and profile current pipeline
         run: |
-          node tests/architecture-baseline.cjs --capture
+          node tests/architecture-baseline.cjs
           node tests/architecture-baseline.cjs --profile
       - name: Test essential banking and forecasting behavior
         run: |
