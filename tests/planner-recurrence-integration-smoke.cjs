@@ -99,7 +99,8 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  // as confirmed, without offering a duplicate-creation action.
  await click('[data-view]',{view:'history'});
  assert.match(future(),/Repeating plan saved/, 'Known bank payment remains identified as recurring');
- assert.match(future(),/Edit plan/, 'Linked payment clearly opens its existing repeating plan');
+ assert.match(future(),/Open repeating payment details: Home Mortgage ACH/,
+  'Linked bank payment exposes its saved repeating plan through the in-row control');
  await click('[data-history-plan]',{
   historyPlan:'solo-bank-mortgage',historyAccount:'demo-checking'});
  assert.doesNotMatch(future(),/Confirm recurring transaction/,
