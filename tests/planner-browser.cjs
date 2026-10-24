@@ -1002,8 +1002,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await storedMode(),'approved-only',
     'Saved-schedules-only mode survives reload');
    await go('reviews');
-   assert.ok(await page.locator('[data-recommended-repeating] [data-recommended-repeat]').count()>0,
-    'Cutover does not erase permanent recommendations');
+   assert.ok(await page.evaluate(()=>Object.keys(JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}').repeatingRecommendations||{}).length>0),
+    'Cutover preserves recommendation history even when obsolete non-recurring purchases are filtered from view');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');
    if(mobile){
     const sizes=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,window:innerWidth}));
