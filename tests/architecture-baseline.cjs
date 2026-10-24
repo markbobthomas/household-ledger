@@ -117,6 +117,9 @@ function summary(bundle,scenario,context){
  assert.match(checkingHTML,/3-year low/);
  assert.match(cardHTML,/3-month estimated low/);
  assert.doesNotMatch(cardHTML,/Monthly low/);
+ const threeYear=(checkingHTML.match(/3-year low<\/div><strong[^>]*>([^<]+)/)||[])[1]||null;
+ assert.ok(threeYear,'Checking Calendar must retain its visible three-year low value');
+ assert.match(noneHTML,/Not available/,'Unconfigured credit cards must not show a fictional statement');
  const metric=(html,name)=>{
   const match=html.match(new RegExp('data-'+name+'[^>]*>([^<]+)'));
   return match?match[1]:null;
@@ -149,7 +152,7 @@ function summary(bundle,scenario,context){
    cardLowMetric:metric(cardHTML,'summary-card-low-value'),
    unconfiguredMetric:metric(noneHTML,'summary-statement-value')},
   checking:{monthLow:metric(checkingHTML,'summary-month-value'),
-   threeYearLow:metric(checkingHTML,'summary-low-value')},
+   threeYearLow:threeYear},
   warningsHash:sha(bundle.payments.warnings||[]),
   diagnosticsHash:sha(projection.diagnostics)
  };
@@ -174,7 +177,16 @@ function capture(){
   result[mode]=summary(model,prefs,context);
   assert.equal(JSON.stringify(context.state.transactions),original);
   assert.equal(JSON.stringify(context.raw),originalRaw);
-  if(mode==='base')assert.equal(model.ledger.filter(e=>e.source==='historical').length,0);
+  if(mode==='base'){
+   assert.equal(model.ledger.filter(e=>e.source==='historical').length,0);
+   assert.ok(model.ledger.some(e=>e.id==='user|pay-a|2026-10-30'));
+   assert.ok(model.ledger.some(e=>e.id==='user|pay-b|2026-11-13'));
+   assert.ok(!model.ledger.some(e=>e.id==='user|mortgage|2027-02-05'));
+  }
+  if(mode==='issued')assert.ok(model.payments.statements.some(e=>e.cardId==='visa'&&e.confirmed),
+   'Issued statement remains a distinct sourced amount');
+  if(mode==='estimate')assert.ok(model.payments.statements.some(e=>e.cardId==='visa'&&!e.confirmed),
+   'Calculated estimate must not be represented as an issued statement');
  }
  const recommendations=History.recommendedRepeating(rows,context.snapshot.accounts,AS_OF);
  result.review={count:recommendations.length,
