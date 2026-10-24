@@ -300,7 +300,8 @@ function monthlyPredictions(state){
    '</details>'+unplanned;
 }
 function monthLow(month){
- const points=(calendarContext?.points||[]).filter(p=>p.date.startsWith(month)&&Number.isFinite(p.balance));
+ const points=(calendarContext?.points||[]).filter(p=>p.date.startsWith(month)&&Number.isFinite(p.balance)&&
+  ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
  return points.length?points.reduce((a,b)=>b.balance<a.balance?b:a):null;
 }
 function updateMonthLow(){
@@ -322,8 +323,10 @@ function calendarGrid(){
  const currentPoints=state.points.filter(p=>p.date.startsWith(calendarMonth));
  const monthlyMinimum=monthLow(calendarMonth);
  if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
- if(!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
-  calendarDate=currentPoints[0]?.date||[...state.actual.keys()].find(d=>d.startsWith(calendarMonth));
+ const weekday=iso=>iso&&![0,6].includes(new Date(iso+'T12:00:00Z').getUTCDay());
+ if(!weekday(calendarDate)||!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
+  calendarDate=currentPoints.find(p=>weekday(p.date))?.date||
+   [...state.actual.keys()].find(d=>d.startsWith(calendarMonth)&&weekday(d));
  const start=calendarMonth+'-01',
   firstWeek=(new Date(start+'T12:00:00Z').getUTCDay()+6)%7,
   monthDays=new Date(Number(calendarMonth.slice(0,4)),
@@ -332,9 +335,11 @@ function calendarGrid(){
   count=42,
   points=new Map(currentPoints.map(p=>[p.date,p])),
   caption=state.card?'Card debt after daily activity':'Account balance after daily activity';
- const header=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>
+ const header=['Mon','Tue','Wed','Thu','Fri'].map(d=>
   '<div class="calendar-weekday" aria-hidden="true">'+d+'</div>').join('');
  const cells=Array.from({length:count},(_,i)=>{
+  // Six fixed Monday-Friday rows, keeping the actual date numbers unchanged.
+  if(i%7>=5)return '';
   const dom=i-firstWeek+1;
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
@@ -402,6 +407,12 @@ function calendarGrid(){
    monthlyPredictions(state)+'</div>';
 }
 function showCalendar(date){
+ // Weekend date links select the next day actually present in the 5-day grid.
+ if(date&&[0,6].includes(new Date(date+'T12:00:00Z').getUTCDay())){
+  const next=calendarContext?.points?.find(p=>p.date>=date&&
+   ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
+  if(next)date=next.date;
+ }
  if(!calendarContext||!calendarContext.points.some(p=>p.date===date)&&
   !calendarContext.actual.has(date))return;
  // Switching the day should refocus the compact day view, not jump to or
