@@ -1107,11 +1107,10 @@ const {chromium,webkit}=require('playwright');
   assert.ok(await page.locator('.future-item').filter({hasText:'Home Mortgage ACH'}).count()>0,
    'The recurring mortgage is also in that same future ledger');
   await go('history');
-  await page.locator('.history-actual-row').filter({hasText:'Home Mortgage ACH'})
-   .first().click();
-  const homeForm=page.locator('.history-schedule-form');
-  await homeForm.locator('button[type=submit]').click();
-  await page.locator('.history-page .future-notice').getByText(/Saved recurring forecast/).waitFor();
+  const confirmedHome=page.locator('.history-actual-row').filter({hasText:'Home Mortgage ACH'}).first();
+  assert.match(await confirmedHome.innerText(),/Repeating plan saved/);
+  assert.match(await confirmedHome.locator('.history-row-open').innerText(),/Edit plan/,
+   'Bank History opens the one approved mortgage rule instead of offering a second schedule');
   await go('settings');
   const cardSettings=page.locator('#card-autopay');
   if(await cardSettings.getAttribute('open')===null)
