@@ -2302,3 +2302,74 @@ html{scrollbar-gutter:stable}
  border-bottom:1px solid var(--recurrence-rule)!important;
 }
 .history-page .history-entry>.history-inline-detail[hidden]{display:none}
+
+/* One filter/Sort toolbar and one column grid across Repeating and Bank
+   activity. Per-tab controls can differ without drifting in font/spacing. */
+.planner-page .ledger-toolbar{
+ display:flex;flex-wrap:wrap;align-items:end;gap:9px;
+ padding:10px;margin:0 0 12px;width:100%;box-sizing:border-box;
+ border:1px solid #e7ede5;border-radius:10px;background:#fff;
+}
+.planner-page .ledger-toolbar>label{
+ flex:1 1 165px;min-width:140px;display:flex;flex-direction:column;
+ gap:4px;margin:0;font-size:var(--ui-label-size,11px);
+ line-height:1.4;font-weight:600;color:var(--muted);
+}
+.planner-page .ledger-toolbar>label:is(.schedule-search-wrap,.history-search-wrap){
+ flex:2 1 210px;min-width:180px;
+}
+.planner-page .ledger-toolbar :is(input,select){
+ display:block;width:100%;max-width:none;min-width:0;
+ min-height:36px;box-sizing:border-box;margin:0;padding:7px 10px;
+ border:1px solid #e1e9e0;border-radius:7px;
+ background:#f9fbf8;color:var(--ink);font-family:inherit;font-size:12px;line-height:1.35;
+}
+.planner-page .ledger-toolbar>button.btn{
+ align-self:end;min-height:36px;box-sizing:border-box;white-space:nowrap;
+}
+.planner-page .ledger-toolbar .schedule-category-manager{
+ align-self:end;
+}
+/* Keep identical outer list padding: Bank activity has an extra history-entry
+   wrapper; its data columns still share the same viewport x positions. */
+.schedule-page .schedule-grid,.history-page .history-list-surface{
+ box-sizing:border-box;padding:3px 8px;
+}
+.schedule-page .schedule-compact-row,.history-page .history-actual-row{
+ box-sizing:border-box;width:100%;
+}
+.schedule-page .ledger-list-row,.history-page .ledger-list-row{
+ grid-template-columns:minmax(0,1fr) 132px 36px;
+ padding-inline:5px;column-gap:8px!important;
+}
+.schedule-page .ledger-row-open,.history-page .ledger-row-open{
+ grid-template-columns:72px minmax(0,1fr) 105px 100px;
+ gap:12px;
+}
+.history-page .history-count{padding-inline:9px}
+@media(max-width:850px){
+ .planner-page .ledger-toolbar{gap:8px;padding:8px}
+ .planner-page .ledger-toolbar>label{flex:1 1 135px;min-width:0}
+ .planner-page .ledger-toolbar>label:is(.schedule-search-wrap,.history-search-wrap){
+  flex:1 1 190px;min-width:0;
+ }
+ .schedule-page .schedule-grid,.history-page .history-list-surface{
+  padding:2px 7px;
+ }
+ .schedule-page .ledger-list-row,.history-page .ledger-list-row{
+  grid-template-columns:minmax(0,1fr) 36px;
+  padding:0 3px 4px;column-gap:3px!important;
+ }
+ .schedule-page .ledger-row-open,.history-page .ledger-row-open{
+  grid-template-columns:54px minmax(0,1fr) 82px 40px;gap:7px;
+ }
+}
+@media(max-width:390px){
+ .planner-page .ledger-toolbar>label{flex:1 1 120px}
+ .planner-page .ledger-toolbar>label:is(.schedule-search-wrap,.history-search-wrap){
+  flex:1 1 100%;min-width:0;
+ }
+ .schedule-page .ledger-row-open,.history-page .ledger-row-open{
+  grid-template-columns:48px minmax(0,1fr) 75px 33px;gap:5px;
+ }
+}
