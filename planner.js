@@ -1384,6 +1384,8 @@ function historyPage(bundle,s){
     editor+'</div>':'';
   return '<div class="history-entry" data-history-entry="'+escapeHTML(String(t.id))+'">'+
    '<div class="history-actual-row ledger-list-row recurrence-row" data-history-kind="'+escapeHTML(kind||'unknown')+
+   '" data-history-sort-date="'+escapeHTML(t.date)+
+   '" data-history-sort-amount="'+escapeHTML(String(Math.abs(Number(t.amount)||0)))+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
    '<button type="button" class="history-row-open ledger-row-open recurrence-row-trigger" data-historical-transaction="'+
