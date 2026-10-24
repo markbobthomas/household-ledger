@@ -1156,8 +1156,8 @@ function schedulesPage(bundle,s){
       ' · '+escapeHTML(r.frequency)+' · '+(estimate.estimated?'Estimated':'Fixed')+
       '</small></span></span>'+
     '<span class="schedule-row-amount ledger-row-amount"><strong>'+cash(estimate.amount)+'</strong></span>'+
-    '<span class="schedule-row-chevron ledger-row-hint" aria-hidden="true"><span class="schedule-edit-label">'+
-     (isEditing?'Close':'Edit')+'</span> '+(isEditing?'⌃':'›')+'</span>'+
+    '<span class="schedule-row-chevron ledger-row-hint" aria-hidden="true">'+
+     (isEditing?'⌃':'›')+'</span>'+
    '</button>'+
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-schedule-quick-category="'+id+'" '+
     'aria-label="Category for schedule '+number+': '+title+'">'+
@@ -1250,22 +1250,28 @@ function transactionsPage(bundle,s){
   '</section></div>';
 }
 
-function repeatingReviewForm(s){
+function repeatingReviewForm(s,{inline=false}={}){
  if(!recurringDraft)return '';
  const d=recurringDraft,accounts=activeAccounts(s),
+  categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+  category=categories.find(c=>c.toLowerCase()===String(d.category||'').toLowerCase())||'Uncategorized',
   date=d.nextDate&&d.nextDate>s.asOf?d.nextDate:shiftDay(s.asOf,1),
   transfer=d.type==='transfer',
   otherAccount=accounts.find(a=>String(a.id)!==String(d.accountId))?.id||d.accountId;
  const from=d.fromAccountId||d.accountId,to=d.toAccountId&&d.toAccountId!==from?
   d.toAccountId:otherAccount;
  return '<form class="panel history-schedule-form" data-history-recurring-form>'+
-  '<div class="section-title"><h2>Confirm recurring transaction</h2><span class="status-tag">FORECAST ONLY</span></div>'+
-  '<p class="lead">Every bank transaction can become a repeating forecast, even if the bank assigned the wrong transaction type. Choose how it should affect future account balances.</p>'+
+  (inline?'<p class="review-inline-guide">Confirm the details for this repeating payment. Saving changes future forecasts only.</p>':
+   '<div class="section-title"><h2>Confirm recurring transaction</h2><span class="status-tag">FORECAST ONLY</span></div>'+
+   '<p class="lead">Every bank transaction can become a repeating forecast, even if the bank assigned the wrong transaction type. Choose how it should affect future account balances.</p>')+
   (d.sourceRow?.type==='transfer'&&!transfer?
    '<p class="history-type-explanation">The bank labeled this as a transfer without a confirmed matching household account. An outgoing ACH debit, such as a mortgage, is proposed as an expense. Change the future type if needed.</p>':'')+
   (d.sourcePending?'<p class="history-type-explanation">This bank transaction is pending; its date or amount may change. Review both before scheduling.</p>':'')+
   '<div class="future-fields">'+
   '<label>Merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(d.merchant)+'"></label>'+
+  '<label>Category<select name="category">'+
+   categories.map(c=>'<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+
+    escapeHTML(c)+'</option>').join('')+'</select></label>'+
   '<label>Future transaction type<select name="type" id="history-recurrence-type">'+
    '<option value="expense"'+(d.type==='expense'?' selected':'')+'>Expense / checking withdrawal</option>'+
    '<option value="income"'+(d.type==='income'?' selected':'')+'>Deposit / income</option>'+
@@ -1471,8 +1477,8 @@ function repeatedRecommendations(bundle,s){
   b.occurrences-a.occurrences||String(b.lastDate).localeCompare(String(a.lastDate)));
 }
 function reviewsPage(bundle,s){
- // One row per forecasted legacy stream. General recurrence suggestions
- // cannot obscure or change the count of unsaved estimated cash movements.
+ // Recurrence proposals edit in-place beneath the tapped row, just like the
+ // Repeating list. Each active legacy series remains a distinct review row.
  const recommendations=repeatedRecommendations(bundle,s);
  lastRecommendedRepeating=recommendations;
  const migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
@@ -1481,40 +1487,63 @@ function reviewsPage(bundle,s){
   legacyItems=legacySeries.map(auto=>({auto,owner:findOwner(auto)})),
   decisionsNeeded=legacyItems.filter(({owner})=>!owner||owner.status==='pending').length,
   pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
-  ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
- const actions=(r,legacyKey='')=>!r?
+  ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length),
+  expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
+   String(recurringDraft?.reviewLegacyKey||'')===String(legacyKey);
+ const controls=(r,legacyKey='')=>!r?
   '<span class="review-legacy-missing">Identify this payment in Bank activity</span>':
   r.status==='ignored'?
    '<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':
-   '<button type="button" class="btn primary" data-review-recommendation="'+escapeHTML(r.key)+
-    '"'+(legacyKey?' data-legacy-series="'+escapeHTML(legacyKey)+'"':'')+'>Review schedule</button>'+
    '<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">Ignore</button>';
- const card=r=>'<article class="review-candidate" data-recommended-repeat="'+escapeHTML(r.key)+
-  '" data-recommendation-status="'+r.status+'" data-legacy-active="false">'+
-  '<div class="review-candidate-main"><strong>'+escapeHTML(r.merchant)+'</strong>'+
-  '<small>'+escapeHTML(r.accountName)+' · '+escapeHTML(r.frequency)+
-  ' · '+r.occurrences+' previous payment'+(r.occurrences===1?'':'s')+
-  ' · Next '+escapeHTML(dayLabel(r.nextDate))+'</small></div>'+
-  '<strong class="review-candidate-amount">'+cash(r.amount)+'</strong>'+
-  '<div class="review-candidate-actions">'+actions(r)+'</div></article>';
+ const row=(r,{legacy=null,accountName,merchant,frequency,nextDate,amount,kind,statusText}={})=>{
+  const key=legacy?.seriesKey||'',
+   isOpen=expanded(r,key),
+   title=merchant||r?.merchant||'Unidentified payment',
+   account=accountName||r?.accountName||'Account',
+   cadence=frequency||r?.frequency||'Repeating',
+   date=nextDate||r?.nextDate||s.asOf,
+   value=amount??r?.amount,
+   isLegacy=Boolean(legacy),
+   isIgnored=r?.status==='ignored';
+  return '<article class="review-candidate review-inline-row'+(isLegacy?' legacy-estimate-row':'')+
+   (isOpen?' review-row-expanded':'')+'"'+
+   (isLegacy?' data-legacy-estimate="'+escapeHTML(key)+'"':'')+
+   (r?' data-recommended-repeat="'+escapeHTML(r.key)+'"':'')+
+   ' data-legacy-active="'+isLegacy+'" data-recommendation-status="'+
+     (isIgnored?'ignored':'pending')+'">'+
+   '<div class="review-row-top">'+
+    (r?'<button class="review-row-open" type="button" data-review-recommendation="'+escapeHTML(r.key)+'"'+
+     (isLegacy?' data-legacy-series="'+escapeHTML(key)+'"':'')+
+     ' aria-expanded="'+isOpen+'" aria-label="'+(isOpen?'Close':'Open')+
+     ' repeating payment details: '+escapeHTML(title)+'">':
+     '<div class="review-row-unavailable">')+
+    '<span class="review-candidate-main"><strong>'+escapeHTML(title)+'</strong>'+
+     '<small>'+escapeHTML(account)+' · '+escapeHTML(cadence)+
+      ' · Next '+escapeHTML(dayLabel(date))+
+      (kind?' · '+escapeHTML(kind):
+       !isLegacy?' · '+(r.occurrences||0)+' previous payment'+
+        (r.occurrences===1?'':'s'):'')+'</small>'+
+     (statusText?'<small class="legacy-estimate-state">'+statusText+'</small>':'')+
+    '</span><strong class="review-candidate-amount">'+cash(value||0)+'</strong>'+
+    (r?'<span class="review-row-chevron" aria-hidden="true">'+(isOpen?'⌃':'›')+'</span></button>':
+     '</div>')+
+    '<div class="review-candidate-actions">'+controls(r,key)+'</div>'+
+   '</div>'+
+   (isOpen?'<div class="review-inline-detail" data-review-inline-detail>'+
+    repeatingReviewForm(s,{inline:true})+'</div>':'')+
+   '</article>';
+ };
+ const normalCard=r=>row(r);
  const legacyCard=({auto,owner})=>{
   const account=activeAccounts(s).find(a=>String(a.id)===String(auto.accountId)),
    ignoredByUser=owner?.status==='ignored';
-  return '<article class="review-candidate legacy-estimate-row" data-legacy-estimate="'+
-   escapeHTML(auto.seriesKey)+'"'+
-   (owner?' data-recommended-repeat="'+escapeHTML(owner.key)+'"':'')+
-   ' data-legacy-active="true" data-recommendation-status="'+
-    (ignoredByUser?'ignored':'pending')+'">'+
-   '<div class="review-candidate-main"><strong>'+escapeHTML(auto.merchant||'Unidentified payment')+'</strong>'+
-   '<small>'+escapeHTML(account?.name||owner?.accountName||'Account')+' · '+
-    escapeHTML(auto.cadence||owner?.frequency||'Repeating')+
-    ' · Next '+escapeHTML(dayLabel(auto.date))+' · '+
-    escapeHTML(auto.type==='income'?'Deposit':'Withdrawal')+'</small>'+
-   '<small class="legacy-estimate-state">'+
-    (ignoredByUser?'Ignored, but still included in your forecast':
-     'Needs a decision — currently included in your forecast')+
-   '</small></div><strong class="review-candidate-amount">'+cash(auto.amount)+'</strong>'+
-   '<div class="review-candidate-actions">'+actions(owner,auto.seriesKey)+'</div></article>';
+  return row(owner,{legacy:auto,accountName:account?.name||owner?.accountName,
+   merchant:auto.merchant||'Unidentified payment',
+   frequency:auto.cadence||owner?.frequency,
+   nextDate:auto.date,amount:auto.amount,
+   kind:auto.type==='income'?'Deposit':'Withdrawal',
+   statusText:ignoredByUser?'Ignored, but still included in your forecast':
+    'Needs a decision — currently included in your forecast'});
  };
  return '<div class="planner-page reviews-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
@@ -1537,17 +1566,17 @@ function reviewsPage(bundle,s){
       (decisionsNeeded?'disabled title="Review remaining automatic estimates first"':'')+
       '>Use saved schedules only</button></div>'+
    '</section>':'')+
-  (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Other recommended repeating</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
-   (pending.length?pending.map(card).join(''):
+   (pending.length?pending.map(normalCard).join(''):
     '<p class="lead">No other recurring suggestions need review. You can create or edit repeating schedules from Bank activity or Repeating.</p>')+
    '</section>'+
-   (ignored.length?
-    '<details class="ignored-repeating" data-ignored-repeating><summary>Ignored ('+
+  (ignored.length?
+   '<details class="ignored-repeating" data-ignored-repeating'+
+    (ignored.some(r=>expanded(r))?' open':'')+'><summary>Ignored ('+
      ignored.length+')</summary><div class="ignored-repeating-items">'+
-      ignored.map(card).join('')+'</div></details>':'')+
+      ignored.map(normalCard).join('')+'</div></details>':'')+
   '</div>';
 }
 
