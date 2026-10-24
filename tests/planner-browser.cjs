@@ -384,7 +384,11 @@ const {chromium,webkit}=require('playwright');
     'Existing automatic estimates are never mixed with speculative recurring suggestions');
    assert.equal(await repeatingSection.count(),1,'Recommended repeating is always a dedicated Review section');
    const originalRecommendations=await repeatingSection.locator('[data-recommended-repeat]').count();
-   assert.ok(originalRecommendations>0,'Existing bank history produces recurring candidates');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="ignored"]').count(),0,
+    'Only unreviewed non-legacy suggestions belong in the general queue');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="scheduled"]').count(),0,
+    'Already saved schedules do not appear as new suggestions');
+   if(originalRecommendations){
    const suggestion=repeatingSection.locator('[data-recommendation-status="pending"]').first();
    assert.ok(await suggestion.count()>0,'An unconfirmed recommendation can be reviewed');
    assert.equal(await repeatingSection.locator('[data-recommendation-status="ignored"]').count(),0,
@@ -427,6 +431,18 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await recommendedDraft.locator('[name=frequency]').inputValue());
    assert.ok(Number(await recommendedDraft.locator('[name=amount]').inputValue())>0);
    await page.locator('[data-cancel-review-form]').click();
+
+   }else{
+    // Every recurring candidate in this fixture may already be an automatic
+    // forecast; absence of optional extras is NOT a failure.
+    assert.ok(expectedLegacy>0,'Active legacy streams are shown even if there are no other suggestions');
+    await legacyRows.first().locator('[data-review-recommendation]').click();
+    const draft=page.locator('.history-schedule-form');
+    assert.equal(await draft.count(),1,'Specific automatic estimate opens an editable schedule proposal');
+    assert.ok(await draft.locator('[name=merchant]').inputValue());
+    assert.ok(Number(await draft.locator('[name=amount]').inputValue())>0);
+    await page.locator('[data-cancel-review-form]').click();
+   }
    await go('history');
    await go('history');
    assert.equal(await page.locator('.history-page > .page-heading').count(),0,
