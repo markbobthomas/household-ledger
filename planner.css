@@ -2294,3 +2294,11 @@ html{scrollbar-gutter:stable}
  .history-page .history-entry>.history-inline-detail,
  .schedule-page .schedule-inline-plan.recurrence-inline-detail{padding:10px 5px 12px!important}
 }
+
+/* Legacy mobile rules once drew a second chevron and suppressed bank row
+   separators. A shared trigger must remain identical at every breakpoint. */
+.history-page .recurrence-row-trigger .history-row-hint::after{content:none!important}
+.history-page .history-entry:not(:last-child)>.recurrence-row{
+ border-bottom:1px solid var(--recurrence-rule)!important;
+}
+.history-page .history-entry>.history-inline-detail[hidden]{display:none}
