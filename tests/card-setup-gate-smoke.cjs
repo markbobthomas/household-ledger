@@ -31,8 +31,10 @@ const state=Model.migrate({});
 Model.setCardPaymentRule(state,'visa',choices);
 assert.ok(P.ready(state.predictions.paymentRules.visa,accounts[1],accounts));
 const configured=materialize(state.predictions);
-assert.ok(configured.ledger.some(e=>e.accountId==='visa'&&e.merchant==='Card Membership'),
- 'Future card purchases are considered only after valid setup');
+assert.equal(configured.ledger.some(e=>e.accountId==='visa'&&e.merchant==='Card Membership'),false,
+ 'Configuring card payments must not implicitly approve a recurring purchase');
+assert.ok(configured.recommendedRepeating.some(e=>e.accountId==='visa'&&e.merchant==='Card Membership'),
+ 'Card repeat remains visible as a proposal requiring owner approval');
 assert.ok(configured.payments.plans.some(p=>p.fromAccountId==='checking'&&p.toAccountId==='visa'),
  'Card statement payment becomes one linked checking withdrawal');
 const past=configured.payments.historyStatements.filter(x=>x.cardId==='visa');
