@@ -223,6 +223,9 @@ const {chromium,webkit}=require('playwright');
    const projectedDay=page.locator('[data-calendar-day]').filter({
     has:page.locator('.calendar-event')}).first();
    assert.ok(await projectedDay.count()>0,'Daily dates show predicted transaction labels and amounts');
+   // The explicitly added fixture was already selected; navigate to a
+   // different day first so this is a genuine focused-date change.
+   await page.locator('[data-calendar-day="2026-10-27"]').click();
    await projectedDay.click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
     'Selecting a new date returns to the focused view instead of retaining a long month list');
