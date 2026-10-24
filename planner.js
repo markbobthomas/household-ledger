@@ -836,7 +836,7 @@ function openInlineTransaction(button){
    row.seriesKey?'Update one payment, or confirm changes for later recurring payments.':
    'Edit these values here. Actual posted bank records remain read-only.')+'</p>';
  const settings=rule?'<details class="inline-plan-settings">'+
-  '<summary>Edit repeating plan defaults <small>affects other scheduled dates</small></summary>'+
+  '<summary>More schedule settings <small>label, category, repeat rule</small></summary>'+
   '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
    scheduleFields({...rule,date:window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,
     shiftDay(s.asOf,horizon))[0]||shiftDay(s.asOf,1)},false,s)+
@@ -867,21 +867,45 @@ function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  document.querySelector('.transaction-detail-close')?.focus();
  return true;
 }
+// Every future payment uses the same inline editor regardless of its entry
+// point. Keep a same-page anchor for standalone buttons (e.g. card statements)
+// instead of routing the user to a different tab or modal.
 function openPrediction(key,origin){
- const current=transactionDetail?.kind==='schedule'?transactionDetail:null;
  const s=snapshot(),bundle=forecastFor(s),
   row=futureRows(bundle,s).find(r=>r.key===String(key));
- if(row?.recurringRuleId&&openSchedulePlan(row.recurringRuleId,row.key,origin))return;
- // Unconfirmed or one-time forecasts use this same plan shell, but do not
- // claim to have a saved repeating rule.
- if(current)detailParentSchedule={...current};
- else detailParentSchedule=null;
- detailReturnFocus=origin||null;
+ if(!row){setNotice('This forecast changed. Select the updated payment and try again.');return}
+ if(origin){
+  let wrapper=origin.closest?.('[data-inline-row-wrapper]'),
+   trigger=wrapper?.querySelector('[data-open-transaction]');
+  if(!trigger&&origin.hasAttribute?.('data-open-transaction')&&wrapper)
+   trigger=origin;
+  if(!wrapper&&origin.parentElement){
+   let host=origin.nextElementSibling;
+   if(!host?.matches?.('[data-standalone-inline]')){
+    host=document.createElement('div');
+    host.className='standalone-inline-editor';
+    host.dataset.standaloneInline='';
+    origin.insertAdjacentElement('afterend',host);
+   }
+   host.dataset.inlineRowWrapper='';
+   host.dataset.paymentKey=String(key);
+   let proxy=host.querySelector('[data-open-transaction]');
+   if(!proxy){
+    proxy=document.createElement('button');
+    proxy.type='button';proxy.hidden=true;proxy.dataset.openTransaction=String(key);
+    host.appendChild(proxy);
+   }
+   wrapper=host;trigger=proxy;
+  }
+  if(trigger&&openInlineTransaction(trigger))return;
+ }
+ // Defensive fallback only for programmatic callers without a visible row.
  transactionDetail={kind:'prediction',key:String(key)};
+ detailReturnFocus=origin||null;
  try{drawTransactionDetail(bundle,s)}
- catch(err){transactionDetail=null;setNotice(String(err.message||err));return}
- document.querySelector('.transaction-detail-close')?.focus();
+ catch(err){transactionDetail=null;setNotice(String(err.message||err))}
 }
+
 function restoreScheduleAfterOccurrence(){
  if(transactionDetail?.kind==='schedule'&&transactionDetail.selectedKey){
   transactionDetail.selectedKey='';
