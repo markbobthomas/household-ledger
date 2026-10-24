@@ -95,4 +95,23 @@ assert.equal(T.historyAutoPredictionEnabled(protectedHistory.predictions,
  'checking','income','Employer Monthly'),true,
  'Previously excluded history payee can explicitly turn Auto-predict on');
 assert.deepEqual(state.transactions,undefined,'No edits to any source bank transaction property');
-console.log('PASS editable mortgage, added income, linked transfer, edited card autopay, skipped/restored payment, deleted manual transfer, validations and immutable inputs');
+// Shared identity/date primitives must preserve source aliases, ambiguous
+// account resolution, and month-end recurrence behavior across live modules.
+const Core=require('../planner-core.js'),History=require('../planner-history.js');
+const aliases=[{id:'first',name:'Shared Name',transactionAccount:'Bank A'},
+ {id:'second',name:'Shared Name',transactionAccount:'Bank B'}];
+assert.equal(T.accountRef('Shared Name',aliases),'Shared Name',
+ 'Ambiguous names must never silently resolve to one bank account');
+assert.equal(Core.accountId({account:'Shared Name'},aliases),'Shared Name');
+assert.equal(History.accountOf({account:'Shared Name'},aliases),'Shared Name');
+assert.equal(T.accountRef('Bank B',aliases),'second');
+assert.equal(Core.accountId({account:'Bank B'},aliases),'second');
+assert.equal(History.accountOf({account:'Bank B'},aliases),'second');
+assert.equal(T.merchantKey('  Coast--Payroll, Inc. '),'coast payroll inc');
+assert.equal(T.shift('2026-12-31',1),'2027-01-01');
+assert.equal(T.daysBetween('2027-01-01','2026-12-31'),1);
+assert.equal(T.monthAt('2026-01-31',1,31),'2026-02-28');
+assert.equal(History.nextDate('2026-01-31','monthly','2026-02-01'),'2026-02-28');
+assert.deepEqual(T.recurrenceDates({frequency:'monthly',anchorDate:'2026-01-31'},
+ '2026-02-01','2026-03-31'),['2026-02-28','2026-03-31']);
+console.log('PASS editable mortgage, added income, linked transfer, edited card autopay, skipped/restored payment, deleted manual transfer, validations and immutable inputs and shared account/date contracts');
