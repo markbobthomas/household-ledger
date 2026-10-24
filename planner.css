@@ -2747,7 +2747,7 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
  max-width:100%;
  padding:7px 4px;
  cursor:pointer;
- font:650 12px inherit;
+ font-size:12px;font-weight:650;
  color:var(--recurrence-foreground,#516e5e);
 }
 .schedule-form .schedule-advanced .future-fields{
