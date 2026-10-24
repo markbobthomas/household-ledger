@@ -185,6 +185,7 @@ const {chromium,webkit}=require('playwright');
     'Empty day still shows one closing balance at its bottom');
    assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
     'The native monthly disclosure does not repeat Expand');
+   await page.locator('[data-calendar-day="2026-10-28"]').click();
    await page.locator('[data-calendar-add]').click();
    const octoberFixture=page.locator('[data-calendar-quick-form]');
    await octoberFixture.locator('[name=merchant]').fill('October confirmed expense');
