@@ -1431,12 +1431,6 @@ function reviewsPage(bundle,s){
   !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
  const duplicates=bundle?.duplicateConflicts||[],
   postedAmbiguities=bundle?.postedMatchReview||[];
- const count=regular.length+mortgages.length+Object.values({
-   ...(state().predictions?.repeatingRecommendations||{}),
-   ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))}).filter(p=>
-  !((state().predictions?.historyPatternDecisions||{})['recommendation|'+p.key]==='ignored'||
-   (p.ignoredLegacy&&(state().predictions?.historyPatternDecisions||{})['recommendation|'+p.key]!=='active'))).length+autoLow.length+duplicates.length+
-  postedAmbiguities.length;
  const allRecommendations=Object.values({...(state().predictions?.repeatingRecommendations||{}),
    ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))})
    .sort((a,b)=>String(b.lastDate||'').localeCompare(String(a.lastDate||''))),
@@ -1464,6 +1458,12 @@ function reviewsPage(bundle,s){
      '<span class="status-tag">Saved</span>')+
     '</div></article>';
   }).join('');
+ const count=regular.length+mortgages.length+autoLow.length+duplicates.length+
+  postedAmbiguities.length+allRecommendations.filter(p=>{
+   const action=decisionMap['recommendation|'+p.key],
+    ignored=action==='ignored'||(p.ignoredLegacy&&action!=='active');
+   return !ignored&&!savedPlansForRecommendation(p,lastHistoryRows,accounts,saved).length;
+  }).length;
  const concerns=(bundle?.payments?.warnings||[]).slice(0,8);
  return '<div class="planner-page reviews-page">'+
   '<div class="review-count-line"><span class="status-tag">'+count+
