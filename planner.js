@@ -1992,27 +1992,51 @@ document.addEventListener('click',async e=>{
   }catch(err){setNotice(String(err.message||err))}
   return;
  }
- const autoHistory=e.target.closest('[data-history-auto-prediction]');
- if(autoHistory){
-  const aid=autoHistory.dataset.historyAccount,
-   enabled=autoHistory.dataset.historyAutoPrediction==='on',
-   bank=lastHistoryRows.find(t=>String(t.id)===autoHistory.dataset.historyBank&&
-    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===aid);
-  if(!bank){setNotice('This bank transaction is no longer available.');return}
-  const tools=window.HouseholdPlannerTransactions,
-   type=tools.bankDirection(bank),merchant=bank.merchant||bank.name,
-   current=tools.historyAutoPredictionEnabled(state().predictions||{},aid,type,merchant);
-  if(current===enabled)return;
+ const ignoreRecommended=e.target.closest('[data-repeating-ignore],[data-repeating-reconsider]');
+ if(ignoreRecommended){
+  const key=ignoreRecommended.dataset.repeatingIgnore||
+   ignoreRecommended.dataset.repeatingReconsider,ignored=Boolean(ignoreRecommended.dataset.repeatingIgnore);
   try{
-   await commitForecastChange(()=>tools.setHistoryAutoPrediction(state(),
-    {accountId:aid,type,merchant},enabled));
-   reviewNotice=(enabled?'Automatic predictions restored for ':'Automatic predictions excluded for ')+merchant+
-    '. '+(enabled?'Estimates reappear only if a repeat is detected. ':
-     'Matching automatic future estimates were removed. ')+
-    'Bank history and saved repeating plans were not changed.';
-   recurringDraft=null;
+   await commitForecastChange(()=>window.HouseholdRepeatingRecommendations.setIgnored(state(),key,ignored));
+   reviewNotice=ignored?'Marked as Ignored. The recommendation remains visible in Needs review.':
+    'Recommendation restored to Needs decision.';
    render();
   }catch(err){setNotice(String(err.message||err))}
+  return;
+ }
+ const acceptRecommended=e.target.closest('[data-repeating-yes]');
+ if(acceptRecommended){
+  const rec=lastRecommendedRepeating.find(x=>x.key===acceptRecommended.dataset.repeatingYes);
+  if(!rec){setNotice('This recommendation is no longer available.');return}
+  if(rec.decision==='scheduled'){
+   activeTab='schedules';render();return;
+  }
+  const rows=model.records(state()),s=snapshot(),accounts=activeAccounts(s),
+   exampleIds=(rec.examples||[]).map(x=>String(x.id)),
+   sourceRow=exampleIds.map(id=>rows.find(t=>String(t.id)===id)).find(Boolean),
+   selected=exampleIds.filter(id=>rows.some(t=>String(t.id)===id)),
+   data={accountId:rec.accountId,type:rec.type,merchant:rec.merchant,amount:rec.amount,
+    frequency:rec.frequency||'monthly',date:rec.nextDate,category:rec.category||'Other'},
+   reference={kind:'event',accountId:rec.accountId,type:sourceRow?.type||rec.type,
+    merchant:rec.merchant,originalMerchant:rec.merchant,
+    amount:rec.amount,date:sourceRow?.date||rec.nextDate,
+    sourceAmount:rec.amount,...(sourceRow?{bankTransactionId:sourceRow.id}:{})};
+  try{
+   await commitForecastChange(()=>window.HouseholdPlannerTransactions.defineRecurring(
+    state(),data,accounts,s.asOf,reference,rows,selected));
+   reviewNotice='Saved a repeating schedule for '+rec.merchant+
+    '. It is now included in your balance and can be edited in Repeating.';
+   recurringDraft=null;render();
+  }catch(err){
+   // If this source has multiple independent schedules or a date needs
+   // attention, keep every recommendation and show editable defaults.
+   recurringDraft={...data,nextDate:rec.nextDate,sourceRow,
+    originalType:sourceRow?.type||rec.type,examples:selected};
+   reviewNotice='Please check the suggested schedule before saving: '+
+    String(err.message||err);
+   activeTab='reviews';render();
+   document.querySelector('[data-history-recurring-form]')?.scrollIntoView({block:'start'});
+  }
   return;
  }
  const reviewCandidate=e.target.closest('[data-review-candidate]');
