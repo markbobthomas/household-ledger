@@ -158,7 +158,9 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    return d?.status==='excluded'&&Math.abs(cents(d.amount)-amount)<=1;
   }))||[g.kind,t.type].some(type=>dismiss[
    [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
-  ]==='dismissed')||(prefs.mortgageReviewDismissals||[]).includes(
+  ]==='dismissed'||[g.kind,t.type].some(type=>dismiss[
+   [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
+  ]?.status==='dismissed'))||(prefs.mortgageReviewDismissals||[]).includes(
    ['mortgage',g.accountId,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|'));
   if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant)){
    // A user's No is a retained decision, not grounds to lose the candidate.
@@ -222,7 +224,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
  }
  review.sort((a,b)=>b.priority-a.priority||b.occurrences-a.occurrences||
   b.lastDate.localeCompare(a.lastDate));
- return {automatic,review:review.slice(0,80).map(({priority,...p})=>p),conflicts};
+ return {automatic,review:review.map(({priority,...p})=>p),conflicts};
 }
 function reviewItem(g,same,f,t,planDate){
  return {key:[g.accountId,g.kind,norm(g.merchant),String(cents(t.amount))].map(encodeURIComponent).join('|'),
