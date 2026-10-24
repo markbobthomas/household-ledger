@@ -1305,35 +1305,17 @@ function historyPage(bundle,s){
    t.type==='transfer'&&t.cashDirection==='in';
   const tools=window.HouseholdPlannerTransactions,
    matches=tools.historicalScheduleMatches(t,accounts,savedRules),
-   ambiguous=matches.length>1;
-  const kind=tools.bankDirection(t),
-   rejectedKey=tools.recurrenceKey(aid,kind,t.merchant||t.name),
-   predicted=projections.some(r=>r.kind==='event'&&
+   ambiguous=matches.length>1,kind=tools.bankDirection(t),
+   predicted=projections.some(r=>r.kind==='event'&&r.source==='historical'&&
     String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
-    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey),
+    tools.recurrenceKey(aid,kind,r.sourceMerchant)===
+     tools.recurrenceKey(aid,kind,t.merchant||t.name)),
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
-   auto=tools.historyAutoPredictionEnabled(state().predictions||{},aid,kind,t.merchant||t.name),
-   canAuto=auto!==null&&['expense','income','refund','transfer'].includes(kind),
-   // Saved plans take priority over estimates. Exclusions describe an opted-out
-   // source, not a missing bank record. Only show actionable controls.
-   status=matches.length?'confirmed':canAuto&&!auto?'excluded':predicted?'automatic':'unplanned',
+   status=matches.length?'confirmed':predicted?'automatic':'unplanned',
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
-    status==='automatic'?'Automatically predicted':
-    status==='excluded'?'Auto prediction excluded':'Not predicted',
+    status==='automatic'?'Unconfirmed estimate — review in Needs review':'Not scheduled',
    primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
     canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record';
-  // This is deliberately not an On/Off switch. Only inferred payments have an
-  // Exclude action; opted-out sources have a Restore action. A confirmed plan
-  // is edited in one place, without an unrelated competing toggle.
-  let secondary='';
-  if(canAuto&&!matches.length&&status==='automatic')
-   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="off" '+
-    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" title="Stop automatic future estimates for this payee on this account; bank records stay visible">Exclude</button>';
-  else if(canAuto&&!matches.length&&status==='excluded')
-   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="on" '+
-    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" title="Allow automatic future estimates again; this does not create a saved plan">Restore auto</button>';
   return '<div class="history-actual-row" data-history-kind="'+escapeHTML(kind||'unknown')+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
@@ -1348,14 +1330,14 @@ function historyPage(bundle,s){
    '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+
     (incoming?'+':'−')+cash(t.amount)+'</strong>'+
    '<span class="history-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
-   '<div class="history-row-actions">'+secondary+'</div></div>';
+   '</div>';
  }).join('');
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  '<p class="page-task-hint history-explanation">Bank activity stays here. Automatically predicted payments are estimates; '+
-  'saved repeating plans take priority. Exclude stops future automatic estimates for a payee on this account, '+
-  'and Restore auto allows them again. To guarantee a repeating payment, save a plan.</p>'+
+  '<p class="page-task-hint history-explanation">Bank activity stays here. Saved repeating plans take priority. '+
+  'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
+  'older patterns in Needs review. New repeating payments require a saved schedule.</p>'+
   '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -2057,29 +2039,6 @@ document.addEventListener('click',async e=>{
    recurringDraft=null;
    reviewNotice='Automatic recurrence detection is allowed again for this merchant.';
    transactionNotice=reviewNotice;
-   render();
-  }catch(err){setNotice(String(err.message||err))}
-  return;
- }
- const autoHistory=e.target.closest('[data-history-auto-prediction]');
- if(autoHistory){
-  const aid=autoHistory.dataset.historyAccount,
-   enabled=autoHistory.dataset.historyAutoPrediction==='on',
-   bank=lastHistoryRows.find(t=>String(t.id)===autoHistory.dataset.historyBank&&
-    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===aid);
-  if(!bank){setNotice('This bank transaction is no longer available.');return}
-  const tools=window.HouseholdPlannerTransactions,
-   type=tools.bankDirection(bank),merchant=bank.merchant||bank.name,
-   current=tools.historyAutoPredictionEnabled(state().predictions||{},aid,type,merchant);
-  if(current===enabled)return;
-  try{
-   await commitForecastChange(()=>tools.setHistoryAutoPrediction(state(),
-    {accountId:aid,type,merchant},enabled));
-   reviewNotice=(enabled?'Automatic predictions restored for ':'Automatic predictions excluded for ')+merchant+
-    '. '+(enabled?'Estimates reappear only if a repeat is detected. ':
-     'Matching automatic future estimates were removed. ')+
-    'Bank history and saved repeating plans were not changed.';
-   recurringDraft=null;
    render();
   }catch(err){setNotice(String(err.message||err))}
   return;
