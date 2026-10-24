@@ -1383,23 +1383,34 @@ function reviewsPage(bundle,s){
   !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
  const duplicates=bundle?.duplicateConflicts||[],
   postedAmbiguities=bundle?.postedMatchReview||[];
- const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length+
+ const count=regular.length+mortgages.length+(bundle?.historyCandidates||[]).filter(p=>
+  (state().predictions?.historyPatternDecisions||{})['recommendation|'+p.key]!=='ignored').length+autoLow.length+duplicates.length+
   postedAmbiguities.length;
- const cards=weak.map(p=>
-  '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
-   '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
-   '<small>'+escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency)+
-    ' · '+p.occurrences+' actual payment'+(p.occurrences===1?'':'s')+
-    ' · Next suggested '+escapeHTML(dayLabel(p.nextDate))+'</small>'+
-   '<small>'+escapeHTML(p.reason)+' · '+escapeHTML(p.confidence==='Needs confirmation'?'Needs confirmation':p.confidence+' confidence')+'</small>'+
-   '<details class="review-examples"><summary>View matching bank transactions</summary>'+
-    p.examples.map(t=>'<div>'+escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+
-     ' · '+cash(t.amount)+'</div>').join('')+'</details></div>'+
-   '<strong class="review-candidate-amount">'+cash(p.amount)+'</strong>'+
-   '<div class="review-candidate-actions"><button class="btn primary" type="button" data-review-candidate="'+
-     escapeHTML(p.key)+'">Review and confirm</button>'+
-    '<button class="btn" type="button" data-dismiss-candidate="'+escapeHTML(p.key)+
-     '">Not recurring</button></div></article>').join('');
+ const allRecommendations=bundle?.historyCandidates||[],
+  saved=state().predictions?.futureRecurringRules||[],
+  decisionMap=state().predictions?.historyPatternDecisions||{},
+  repeatingCards=allRecommendations.map(p=>{
+   const source=lastHistoryRows.find(t=>p.examples.some(e=>String(e.id)===String(t.id)));
+   const matches=source?window.HouseholdPlannerTransactions.historicalScheduleMatches(
+    source,accounts,saved):[];
+   const ignored=decisionMap['recommendation|'+p.key]==='ignored',
+    label=matches.length?'Saved schedule':ignored?'Ignored':'Awaiting approval';
+   return '<article class="review-candidate" data-repeating-recommendation="'+escapeHTML(p.key)+
+    '" data-recommendation-state="'+(matches.length?'saved':ignored?'ignored':'pending')+'">'+
+    '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
+    '<small>'+escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency)+
+    ' · suggested '+cash(p.amount)+' · '+p.occurrences+' bank observation'+
+    (p.occurrences===1?'':'s')+'</small>'+
+    '<small>'+label+(matches.length?' · Included in forecast':
+     ' · Not included in predicted balances')+'</small></div>'+
+    '<div class="review-candidate-actions">'+
+    (!matches.length?'<button class="btn primary" type="button" data-review-candidate="'+
+     escapeHTML(p.key)+'">Yes · Save repeating</button>'+
+     '<button class="btn" type="button" data-dismiss-candidate="'+escapeHTML(p.key)+
+     '">'+(ignored?'Undo ignore':'Ignore')+'</button>':
+     '<span class="status-tag">Saved</span>')+
+    '</div></article>';
+  }).join('');
  const concerns=(bundle?.payments?.warnings||[]).slice(0,8);
  return '<div class="planner-page reviews-page">'+
   '<div class="review-count-line"><span class="status-tag">'+count+
@@ -1410,6 +1421,11 @@ function reviewsPage(bundle,s){
     (bundle.duplicateChecks.length)+' overlapping forecast entr'+
     (bundle.duplicateChecks.length===1?'y was':'ies were')+
     ' automatically consolidated. Bank transactions were not changed.</p>':'')+
+  '<section class="panel" data-recommended-repeating><div class="section-title">'+
+  '<h2>Recommended repeating</h2><span class="status-tag">'+allRecommendations.length+' FOUND</span></div>'+
+  '<p class="lead">Suggestions never affect future balances until you save a repeating plan. Ignore marks an item but never hides it. Important missing deposits and bills may affect balance forecasts.</p>'+
+  (repeatingCards||'<p class="lead">No repeating patterns identified in available bank history.</p>')+
+  '</section>'+
   (mortgages.length?missingMortgagePanel(bundle):'')+
   (regular.length?routineReviewPanel(bundle):'')+
   (autoLow.length?'<section class="panel"><div class="section-title"><h2>Uncertain repeating payments</h2>'+
@@ -2009,13 +2025,17 @@ document.addEventListener('click',async e=>{
  const dismissCandidate=e.target.closest('[data-dismiss-candidate]');
  if(dismissCandidate){
   const item=lastReviewCandidates.find(x=>x.key===dismissCandidate.dataset.dismissCandidate);
-  if(!item){setNotice('This suggestion is no longer available.');return}
+  if(!item){setNotice('This recommendation is no longer in the available history.');return}
   try{
-   await commitForecastChange(()=>window.HouseholdPlannerTransactions.stopRecurrence(state(),{
-    kind:'event',accountId:item.accountId,type:item.type,merchant:item.merchant
-   }));
-   recurringDraft=null;reviewNotice='Marked '+item.merchant+
-    ' as not recurring. You can reverse this in Settings.';render();
+   await commitForecastChange(()=>{
+    state().predictions.historyPatternDecisions??={};
+    const key='recommendation|'+item.key;
+    if(state().predictions.historyPatternDecisions[key]==='ignored')
+     delete state().predictions.historyPatternDecisions[key];
+    else state().predictions.historyPatternDecisions[key]='ignored';
+   });
+   reviewNotice='Recommendation status updated. The item remains in Recommended repeating.';
+   render();
   }catch(err){setNotice(String(err.message||err))}
   return;
  }
