@@ -71,13 +71,16 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
 (async()=>{
  await click('[data-view]',{view:'transactions'});
  const initial=future();
- assert.equal(occurrences(initial),36,
-  'One posted mortgage automatically creates November, December, January without review');
- assert.match(initial,/Nov 15/);
- assert.equal((initial.match(/ABC Draft 984/g)||[]).length,36,
-  'Unfamiliar merchant with two real equal monthly payments appears automatically');
- assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
-  'A bank-derived mortgage must not be absent from the future schedule');
+ assert.equal(occurrences(initial),0,
+  'A detected mortgage is only a recommendation until a saved plan is approved');
+ assert.equal((initial.match(/ABC Draft 984/g)||[]).length,0,
+  'Unapproved merchant patterns never enter projected balance');
+ assert.match(initial,/Forecast needs review|awaiting your approval/i,
+  'Missing unapproved recurring obligations warn before relying on balances');
+ await click('[data-view]',{view:'reviews'});
+ assert.match(future(),/Recommended repeating/);
+ assert.match(future(),/Home Mortgage ACH/);
+ assert.match(future(),/ABC Draft 984/);
  await click('[data-view]',{view:'history'});
  assert.match(future(),/Home Mortgage ACH/);
  await click('[data-history-plan]',{
@@ -125,5 +128,5 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
   'Owner-modified generic payment occurs once per month through the entire modeled period');
  assert.match(genericAfter,/Nov 26/);
  assert.doesNotMatch(genericAfter,/Nov 9[^<]*.*ABC Draft 984/);
- console.log('PASS mortgage and general-merchant automatic forecasting; owner edits due date and amount; no duplicate bills; bank history unchanged');
+ console.log('PASS suggestions never forecast without approval, confirmed plans do; no duplicates and immutable bank history');
 })().catch(e=>{console.error(e);process.exitCode=1});
