@@ -2814,6 +2814,6 @@ if(typeof fetch==='function')fetch('/healthz',{cache:'no-store'}).then(async res
  return data?.commit&&/^[a-f0-9]{40}$/i.test(data.commit)?data.commit:null;
 }).then(sha=>{
  const target=document.getElementById('deployment-version');
- if(target)target.textContent=sha?'Saved Schedules v1 · Render '+sha.slice(0,9):'Saved Schedules v1 · Server unverified';
+ if(target)target.textContent=sha?'Focused Review v1 · Render '+sha.slice(0,9):'Focused Review v1 · Server unverified';
 }).catch(()=>{});
 })();
