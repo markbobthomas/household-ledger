@@ -1471,113 +1471,56 @@ function repeatedRecommendations(bundle,s){
   b.occurrences-a.occurrences||String(b.lastDate).localeCompare(String(a.lastDate)));
 }
 function reviewsPage(bundle,s){
- const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
-  accounts=activeAccounts(s),normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
- const weak=(bundle?.historyCandidates||[]).filter(p=>
-  !mortgages.some(m=>m.accountId===p.accountId&&normalize(m.merchant)===normalize(p.merchant)&&
-   Math.abs(m.amount-p.amount)<.011)&&
-  !regular.some(r=>{
-   const aid=accounts.find(a=>[a.id,a.name,a.transactionAccount].some(k=>String(k)===String(r.account)))?.id;
-   return String(aid||r.account)===p.accountId&&normalize(r.merchant)===normalize(p.merchant)&&
-    Math.abs(r.amount-p.amount)<.011;
-  }));
- const autoLow=(bundle?.automaticRecurrence?.review||[]).filter(a=>
-  !weak.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant))&&
-  !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
- const duplicates=bundle?.duplicateConflicts||[],
-  postedAmbiguities=bundle?.postedMatchReview||[];
- const count=regular.length+mortgages.length+autoLow.length+duplicates.length+
-  postedAmbiguities.length;
+ // The only purpose of this page is deciding whether likely repeating
+ // historical activity should become a confirmed schedule. The full bank
+ // transaction list and its category editor live in Bank activity.
  const recommendations=repeatedRecommendations(bundle,s);
  lastRecommendedRepeating=recommendations;
- const actionable=recommendations.filter(r=>r.status==='pending').length,
+ const pending=recommendations.filter(r=>r.status==='pending'),
+  ignored=recommendations.filter(r=>r.status==='ignored'),
   migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
-  legacyCount=migration.legacySeries.length,
-  unresolved=recommendations.filter(r=>r.activeLegacyStreams?.length&&r.status==='pending').length;
- const recommendedCards=recommendations.map(r=>
-  '<article class="review-candidate" data-recommended-repeat="'+escapeHTML(r.key)+
-   '" data-recommendation-status="'+r.status+'" data-legacy-active="'+(r.activeLegacyStreams?.length?'true':'false')+'">'+
-   '<div class="review-candidate-main"><strong>'+escapeHTML(r.merchant)+'</strong>'+
-   '<small>'+escapeHTML(r.accountName)+' · Suggested '+escapeHTML(r.frequency)+
-    ' · '+r.occurrences+' posted payment'+(r.occurrences===1?'':'s')+
-    ' · Next '+escapeHTML(dayLabel(r.nextDate))+'</small>'+
-   (r.activeLegacyStreams?.length?'<small class="recommendation-state">Currently included in balance as an unconfirmed estimate (until migration)</small>':'')+
-   '<small class="recommendation-state">'+(r.status==='scheduled'?'Scheduled — saved repeating payment':
-    r.status==='ignored'?'Ignored — retained for reference':'Recommended — not yet approved')+
-    '</small>'+
-   '</div><strong class="review-candidate-amount">'+cash(r.amount)+'</strong>'+
-   '<div class="review-candidate-actions">'+
-    (r.status==='scheduled'&&r.ruleId?
-     '<button type="button" class="btn" data-choose-history-schedule="'+escapeHTML(r.ruleId)+'">Edit schedule</button>':
-     '<button type="button" class="btn primary" data-review-recommendation="'+escapeHTML(r.key)+'">'+
-      (r.status==='scheduled'?'Review plans':'Yes — review schedule')+'</button>')+
-    (r.status==='pending'?'<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">No — ignore</button>':
-     r.status==='ignored'?'<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':'')+
-   '</div></article>').join('');
- const concerns=(bundle?.payments?.warnings||[]).slice(0,8);
+  unresolved=pending.filter(r=>r.activeLegacyStreams?.length).length;
+ const card=r=>'<article class="review-candidate" data-recommended-repeat="'+escapeHTML(r.key)+
+  '" data-recommendation-status="'+r.status+
+  '" data-legacy-active="'+(r.activeLegacyStreams?.length?'true':'false')+'">'+
+  '<div class="review-candidate-main"><strong>'+escapeHTML(r.merchant)+'</strong>'+
+  '<small>'+escapeHTML(r.accountName)+' · '+escapeHTML(r.frequency)+
+  ' · '+r.occurrences+' previous payment'+(r.occurrences===1?'':'s')+
+  ' · Next '+escapeHTML(dayLabel(r.nextDate))+'</small>'+
+  (r.activeLegacyStreams?.length?
+   '<small class="recommendation-state">Existing automatic estimate still affects the forecast until cutover</small>':'')+
+  '</div><strong class="review-candidate-amount">'+cash(r.amount)+'</strong>'+
+  '<div class="review-candidate-actions">'+
+  (r.status==='ignored'?
+   '<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':
+   '<button type="button" class="btn primary" data-review-recommendation="'+escapeHTML(r.key)+'">Review schedule</button>'+
+   '<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">Ignore</button>')+
+  '</div></article>';
  return '<div class="planner-page reviews-page">'+
-  '<div class="review-count-line"><span class="status-tag">'+(count+actionable)+
-  ' item'+(count===1?'':'s')+' to review</span></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  ((bundle?.duplicateChecks||[]).length?'<p class="audit-footnote">Duplicate protection: '+
-    (bundle.duplicateChecks.length)+' overlapping forecast entr'+
-    (bundle.duplicateChecks.length===1?'y was':'ies were')+
-    ' automatically consolidated. Bank transactions were not changed.</p>':'')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Recommended repeating</h2>'+
-    '<span class="status-tag">'+recommendations.length+' FOUND</span></div>'+
-   (migration.approvedOnly?
-    '<p class="lead">Only approved saved schedules generate recurring balance predictions. '+
-    'Bank patterns below remain recommendations, never automatic charges.</p>':
-    '<p class="lead"><strong>Forecast transition:</strong> '+legacyCount+
-    ' unconfirmed recurring stream'+(legacyCount===1?' is':'s are')+
-    ' still included in balances. '+unresolved+' need a decision. Review Yes or No below before '+
-    'switching. Ignoring keeps the recommendation visible and does not remove its '+
-    'existing estimate until you complete the switch.</p>'+
-    '<button type="button" class="btn primary" data-activate-saved-schedules '+
-    (unresolved?'disabled title="Review the remaining automatically estimated payments first"':'')+
-    '>Use saved schedules only</button>')+
-   '<p class="lead">Possible repeats stay listed even when ignored or scheduled. '+
-    'Yes opens editable proposed values; No flags the recommendation as ignored.</p>'+
-   (recommendedCards||'<p class="lead">No repeating candidates found yet. Future bank history will be checked here.</p>')+
+   '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
+   (pending.length?pending.map(card).join(''):
+    '<p class="lead">Nothing to review. You can create or edit repeating schedules from Bank activity or Repeating.</p>')+
+   (!migration.approvedOnly?
+    '<div class="recurrence-transition"><p class="lead">'+
+     migration.legacySeries.length+' older unsaved repeating estimate'+
+     (migration.legacySeries.length===1?' is':'s are')+' still included in forecast balances. '+
+     (unresolved?unresolved+' need'+(unresolved===1?'s':'')+' a decision before switching.':
+      'All current estimates have been reviewed.')+
+     '</p><button type="button" class="btn" data-activate-saved-schedules '+
+      (unresolved?'disabled title="Review remaining automatic estimates first"':'')+
+      '>Use saved schedules only</button></div>':'')+
    '</section>'+
-  (mortgages.length?missingMortgagePanel(bundle):'')+
-  (regular.length?routineReviewPanel(bundle):'')+
-  (autoLow.length?'<section class="panel"><div class="section-title"><h2>Uncertain repeating payments</h2>'+
-   '<span class="status-tag warn">'+autoLow.length+' NEEDS REVIEW</span></div>'+
-   '<p class="lead">Two matching withdrawals were observed, but the merchant is not clearly a fixed monthly bill. These are not yet deducted from predicted balances. Open History to confirm a recurring schedule.</p>'+
-   autoLow.map(p=>'<div class="review-candidate"><div class="review-candidate-main"><strong>'+
-    escapeHTML(p.merchant)+'</strong><small>'+cash(p.amount)+' · '+escapeHTML(p.reason)+
-    '</small></div><button type="button" class="btn" data-view="history">Review in History</button></div>').join('')+
-   '</section>':'')+
-  (postedAmbiguities.length?'<section class="panel" data-posted-match-review>'+
-    '<div class="section-title"><h2>Which schedule was paid?</h2>'+
-    '<span class="status-tag warn">'+postedAmbiguities.length+' NEEDS REVIEW</span></div>'+
-    '<p class="lead">A posted bank payment may cover one of several separate schedules. '+
-    'Choose the correct schedule so only that future payment is removed from the balance forecast.</p>'+
-    postedAmbiguities.map(row=>'<article class="review-candidate">'+
-     '<div class="review-candidate-main"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-     '<small>Posted '+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+
-     ' · Bank record remains unchanged</small></div>'+
-     '<div class="review-candidate-actions">'+row.candidates.map(c=>
-      '<button class="btn" type="button" data-posted-match-bank="'+escapeHTML(row.bankId)+
-       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
-       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+
-       ' · '+escapeHTML(dayLabel(c.date))+'</button>').join('')+'</div></article>').join('')+
-    '</section>':'')+
-  (duplicates.length?'<section class="panel"><div class="section-title"><h2>Ambiguous predicted payments</h2>'+
-   '<span class="status-tag warn">'+duplicates.length+' NEEDS REVIEW</span></div>'+
-   '<p class="lead">Possible duplicate predictions cannot be matched confidently. Review them before relying on the projected balance.</p>'+
-   duplicates.map(d=>'<div class="review-candidate"><span>'+escapeHTML(d.merchant||d.reason||'Competing forecast payments')+
-    '</span><button type="button" class="btn" data-view="transactions">Review predicted payments</button></div>').join('')+
-   '</section>':'')+
-
-  (!count&&!actionable?'<p class="audit-footnote">No unresolved review alerts.</p>':'')+
-  (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
-    concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
+   (ignored.length?
+    '<details class="ignored-repeating" data-ignored-repeating><summary>Ignored ('+
+     ignored.length+')</summary><div class="ignored-repeating-items">'+
+      ignored.map(card).join('')+'</div></details>':'')+
   '</div>';
 }
+
 function incomeStatus(bundle,s,chosen,derived){
  const through=shiftDay(s.asOf,horizon),from=shiftDay(s.asOf,-100);
  const incoming=(derived?.events||[]).filter(t=>t.kind==='income'&&t.date>s.asOf&&t.date<=through);
@@ -1763,7 +1706,7 @@ function render(){
  else if(caution.length)note='<div class="notice danger"><div><strong>Forecast needs review.</strong> '+
   escapeHTML(caution.join(' '))+'</div>'+
   ((bundle?.postedMatchReview||[]).length?
-   '<button type="button" class="btn" data-view="reviews">Choose matching schedule</button>':'')+
+   '<button type="button" class="btn" data-view="history">Choose matching schedule</button>':'')+
   '</div>';
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
