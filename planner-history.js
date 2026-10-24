@@ -229,7 +229,11 @@ function recommendedRepeating(records,accounts,asOf){
   const latest=g.rows.at(-1),f=guessFrequency(g.rows),
    bill=namesBill.test(g.merchant)||g.rows.some(pfcRecurring)||
     ['Housing','Insurance','Subscriptions','Utilities'].includes(latest.category),
-   age=diff(asOf,latest.date);
+   age=diff(asOf,latest.date),
+   routineShopping=/\b(?:amazon|costco|safeway|walmart|target|starbucks|shell|chevron|gas|fuel|grocery|supermarket|restaurant|cafe|coffee|dining|home depot|lowe|walgreens|rite aid|uber|lyft)\b/i.test(g.merchant);
+  // Shopping at a similar time is not, by itself, a repeating obligation.
+  // A clearly labeled subscription or membership remains eligible.
+  if(routineShopping&&!bill)continue;
   // An old confirmed recurring pattern remains available in the permanent
   // inventory. A single recent recognizable bill is useful for confirmation,
   // but a random one-off charge is not.
