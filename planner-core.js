@@ -156,11 +156,16 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   const blocked=aliases.some(a=>[g.kind,t.type].some(type=>{
    const d=excluded[[type,a,norm(g.merchant)].join('|')];
    return d?.status==='excluded'&&Math.abs(cents(d.amount)-amount)<=1;
-  }))||[g.kind,t.type].some(type=>dismiss[
-   [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
-  ]==='dismissed')||(prefs.mortgageReviewDismissals||[]).includes(
+  }))||[g.kind,t.type].some(type=>{
+   const stable=[g.accountId,type,norm(g.merchant)].map(encodeURIComponent).join('|'),
+    legacy=[g.accountId,type,norm(g.merchant),String(amount)]
+     .map(encodeURIComponent).join('|');
+   return dismiss[stable]==='dismissed'||dismiss[legacy]==='dismissed';
+  })||(prefs.mortgageReviewDismissals||[]).includes(
    ['mortgage',g.accountId,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|'));
-  if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant))continue;
+  // Previously excluded/dismissed patterns remain visible as recommendations.
+  // They never produce projected entries before a schedule is approved.
+  const previouslyDismissed=blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant);
   const owners=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
    (!r.type||r.type===g.kind)&&
@@ -178,6 +183,36 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    const auto=Boolean(one||spaced)&&enough&&!multiCycle&&
     !transferRisk&&g.kind!=='refund';
    if(auto){
+    // Every strong detected repeat is a durable review candidate, never an
+    // automatic debit/credit in the future account-balance projection.
+    if(alternating){
+     // Independent A/B four-week pay streams share an employer but must never
+     // be combined into one biweekly amount.
+     for(const phase of [0,1]){
+      const samples=lastPaychecks.filter((_,i)=>i%2===phase),
+       last=samples.at(-1),nextDate=next(last.date,'every-4-weeks',1),
+       entry=reviewItem(g,samples,'every-4-weeks',last,nextDate);
+      review.push({...entry,key:entry.key+'|phase'+phaseOf(last.date),
+       amount:phase===0?payA:payB,frequency:'every-4-weeks',
+       confidence:'Suggested',ignoredLegacy:previouslyDismissed,
+       reason:'Separate alternating paycheck — approve this four-week stream individually',
+       priority:6});
+     }
+    }else if(semiMonthlyExact){
+     // Separate payroll calendar slots if their amounts differ; this avoids
+     // silently averaging distinct deposits into one shared schedule.
+     for(const slot of [0,1]){
+      const samples=[lastFour[slot],lastFour[slot+2]],
+       last=samples.at(-1),nextDate=monthDate(last.date,1,+last.date.slice(-2)),
+       entry=reviewItem(g,samples,'monthly',last,nextDate);
+      review.push({...entry,key:entry.key+'|day'+last.date.slice(-2),
+       confidence:'Suggested',ignoredLegacy:previouslyDismissed,
+       reason:'Separate recurring payroll date — approve independently',
+       priority:6});
+     }
+    }else review.push({...reviewItem(g,g.rows,f,t,planDate),
+     confidence:'Suggested',ignoredLegacy:previouslyDismissed,
+     reason:'Detected repeat — not included until a schedule is approved',priority:5});
     const rootSeries='series|'+g.id+'|',freq=f||'monthly';
     // Two alternating biweekly deposits are two independent four-week
     // schedules, 14 days apart. Each has its own ID, phase and dollar amount.
@@ -213,16 +248,16 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   // Reviews represent candidates only. Nothing here changes a balance.
   if(age<=(g.rows.length===1&&!trusted(t)?45:recent[f||'monthly']||75)&&
    (g.rows.length>=2||trusted(t)))
-   review.push(reviewItem(g,g.rows,f,t,planDate));
+   review.push({...reviewItem(g,g.rows,f,t,planDate),ignoredLegacy:previouslyDismissed});
  }
  review.sort((a,b)=>b.priority-a.priority||b.occurrences-a.occurrences||
   b.lastDate.localeCompare(a.lastDate));
- return {automatic,review:review.slice(0,80).map(({priority,...p})=>p),conflicts};
+ return {automatic,review:review.map(({priority,...p})=>p),conflicts};
 }
 function reviewItem(g,same,f,t,planDate){
- return {key:[g.accountId,g.kind,norm(g.merchant),String(cents(t.amount))].map(encodeURIComponent).join('|'),
+ return {key:[g.accountId,g.kind,norm(g.merchant)].map(encodeURIComponent).join('|'),
  accountId:g.accountId,accountName:g.accountName,merchant:g.merchant,type:g.kind,
- amount:money(t.amount),frequency:f||'monthly',nextDate:planDate,
+ amount:money(t.amount),category:t.category||'Other',frequency:f||'monthly',nextDate:planDate,
  confidence:f?'Low':'Needs confirmation',occurrences:same.length,lastDate:t.date,
  examples:same.slice(-6).reverse().map(r=>({id:String(r.id||''),date:r.date,
   amount:Number(r.amount),merchant:String(r.merchant||'')})),
@@ -275,15 +310,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
- for(const event of detected.automatic){
-  if(!configuredCard(event.accountId)||
-   ownerFor(event)||suppressedRecurrence(prefs,event))continue;
-  const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
-  if(adjusted.date<=asOf||adjusted.date>end)continue;
-  seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
-   _forecastOriginalAccountId:event.accountId,_forecastOriginalType:event.type,
-   _forecastOriginalAmount:event.amount});
- }
+ // Detected repeats are suggestions only. Nothing inferred from bank history
+ // becomes a future debit/credit until its owner approves a saved schedule.
+ // The unscheduled recommendation list is retained separately for review.
  // One-off forecast additions are independent of Plaid facts.
  for(const e of extras){
   if(e.type==='transfer'||
@@ -385,7 +414,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  projection.diagnostics.balanceMismatches=integrity.errors;
  if(!integrity.ok)throw Error('Forecast integrity check failed; inconsistent daily balances were not displayed');
  return {ledger,projection,rows,events:ledger.filter(e=>e.kind==='event'),
-  payments:{...payment,warnings:[...(payment.warnings||[]),...warnings]},
+  payments:{...payment,warnings:[...(payment.warnings||[]),...warnings,
+   ...(detected.review.some(p=>p.type==='expense'||p.type==='income')?
+    ['Potential recurring bills or deposits await approval in Needs review. Predicted balances exclude these unapproved payments.']:[])]},
   forecast:{suppressedDuplicates:checks},routines:{events:[],review:[],warnings:[],
    counts:{confirmed:ownerEntries.length,suggested:detected.automatic.length,excluded:0}},
   missingMortgages:[],historyCandidates:detected.review,

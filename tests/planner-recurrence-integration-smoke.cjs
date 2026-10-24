@@ -71,13 +71,19 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
 (async()=>{
  await click('[data-view]',{view:'transactions'});
  const initial=future();
- assert.equal(occurrences(initial),36,
-  'One posted mortgage automatically creates November, December, January without review');
- assert.match(initial,/Nov 15/);
- assert.equal((initial.match(/ABC Draft 984/g)||[]).length,36,
-  'Unfamiliar merchant with two real equal monthly payments appears automatically');
- assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
-  'A bank-derived mortgage must not be absent from the future schedule');
+ assert.equal(occurrences(initial),0,
+  'Even a recognizable mortgage does not debit balances without approval');
+ assert.equal((initial.match(/ABC Draft 984/g)||[]).length,0,
+  'Two matching bank payments create a recommendation, not a hidden future debit');
+ await click('[data-view]',{view:'reviews'});
+ assert.match(future(),/Recommended repeating/,
+  'Review has a dedicated permanent place for detected repeating candidates');
+ assert.match(future(),/Home Mortgage ACH/,
+  'High-priority mortgage history is recommended rather than silently forecast');
+ assert.match(future(),/ABC Draft 984/,
+  'Unfamiliar but repeating payments also remain available for approval');
+ assert.match(future(),/Not included in predicted balances/,
+  'Unapproved income and bills are visibly excluded from balance estimates');
  await click('[data-view]',{view:'history'});
  assert.match(future(),/Home Mortgage ACH/);
  await click('[data-history-plan]',{
@@ -125,5 +131,5 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
   'Owner-modified generic payment occurs once per month through the entire modeled period');
  assert.match(genericAfter,/Nov 26/);
  assert.doesNotMatch(genericAfter,/Nov 9[^<]*.*ABC Draft 984/);
- console.log('PASS mortgage and general-merchant automatic forecasting; owner edits due date and amount; no duplicate bills; bank history unchanged');
+ console.log('PASS mortgage/general recommendations require approved schedules, custom dates/amounts, duplicate protection and immutable bank history');
 })().catch(e=>{console.error(e);process.exitCode=1});

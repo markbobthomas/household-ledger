@@ -33,8 +33,8 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'history-forecast-actions-20261023-v1','The loaded HTML identifies the task-based UI release');
-   assert.match(await page.locator('#deployment-version').textContent(),/History Actions v1/,
+    'schedule-approval-20261023-v1','The loaded HTML identifies the task-based UI release');
+   assert.match(await page.locator('#deployment-version').textContent(),/Schedule Approval v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
@@ -185,6 +185,16 @@ const {chromium,webkit}=require('playwright');
     'Empty day still shows one closing balance at its bottom');
    assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
     'The native monthly disclosure does not repeat Expand');
+   // Without approved schedules an initial month is intentionally empty.
+   // Add one explicit one-off example so the inline Calendar editor is tested
+   // without requiring auto-detected bills to enter the forecast.
+   await page.locator('[data-calendar-day="2026-10-26"]').click();
+   await page.locator('[data-calendar-add]').click();
+   const openingQuick=page.locator('[data-calendar-quick-form]');
+   await openingQuick.locator('[name=merchant]').fill('Approved one-time fixture');
+   await openingQuick.locator('[name=amount]').fill('15');
+   await openingQuick.locator('button[type=submit]').click();
+   await page.locator('.calendar-day-transactions').getByText('Approved one-time fixture').waitFor();
    await page.locator('.calendar-monthly-list > summary').click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),1,
     'Optional month list expands on demand');
@@ -213,6 +223,9 @@ const {chromium,webkit}=require('playwright');
    const projectedDay=page.locator('[data-calendar-day]').filter({
     has:page.locator('.calendar-event')}).first();
    assert.ok(await projectedDay.count()>0,'Daily dates show predicted transaction labels and amounts');
+   // The explicitly added fixture was already selected; navigate to a
+   // different day first so this is a genuine focused-date change.
+   await page.locator('[data-calendar-day="2026-10-27"]').click();
    await projectedDay.click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
     'Selecting a new date returns to the focused view instead of retaining a long month list');
@@ -342,12 +355,32 @@ const {chromium,webkit}=require('playwright');
     'Linked transfers require an explicit receiving account');
    await page.locator('[data-cancel-review-form]').click();
    await go('transactions');
+   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
+    'An identified mortgage does not affect balances without approval');
+   await go('reviews');
+   const recommendedMortgage=page.locator('[data-repeating-recommendation]').filter({hasText:'Mortgage'}).first();
+   assert.ok(await recommendedMortgage.count()>0,'Mortgage remains prominently recommended for approval');
+   assert.match(await recommendedMortgage.innerText(),/Not included in predicted balances/);
+   await recommendedMortgage.locator('[data-review-candidate]').click();
+   try{
+    await page.waitForFunction(()=>JSON.parse(
+     localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+     .futureRecurringRules?.some(r=>r.merchant==='Mortgage'),null,{timeout:4000});
+   }catch(error){
+    const notices=await page.locator('.future-notice,.notice,.future-form-error').allInnerTexts();
+    const formState=await page.locator('.history-schedule-form').count();
+    throw Error('Yes failed to save the proposed mortgage rule; notices='+
+     JSON.stringify(notices)+' editorOpened='+formState+' '+String(error.message));
+   }
+   await page.locator('[data-repeating-recommendation][data-recommendation-state="saved"]')
+    .filter({hasText:'Mortgage'}).first().waitFor();
+   await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'One authoritative auto-detected mortgage appears in the future ledger');
+    'Approving the recommended mortgage creates the only recurring future payments');
    await page.reload({waitUntil:'load'});
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'Refreshing does not erase bank-derived future predictions');
+    'The explicitly saved mortgage survives refresh');
    await go('settings');
    const auditDetails=page.locator('#accuracy-audit');
    await page.locator('#planner-menu > summary').click();
@@ -407,10 +440,10 @@ const {chromium,webkit}=require('playwright');
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
    await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
-   assert.equal(await page.evaluate(amount=>Object.values(
-    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).some(x=>x.amount===amount),newAmount),true,
-    'Series edit is persisted and survives generation of next-month forecasts');
+   assert.equal(await page.evaluate(amount=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules?.some(r=>r.merchant==='Mortgage'&&r.amount===amount),newAmount),true,
+    'Editing all future occurrences updates the ONE saved repeating schedule');
    const futureMortgageRows=page.locator('.future-item').filter({hasText:'Mortgage'});
    if(await futureMortgageRows.count()>1){
     const repeated=await futureMortgageRows.locator('.future-amount').allInnerTexts();
@@ -418,11 +451,12 @@ const {chromium,webkit}=require('playwright');
      'Visible mortgage months adopt the same new series amount');
    }
    await futureMortgageRows.first().locator('[data-edit-future]').click();
-   assert.ok(await page.locator('[data-reset-series]').count(),'Entire repeating rule can be reset');
-   await page.locator('[data-reset-series]').click();
+   assert.equal(await page.locator('[data-reset-series]').count(),0,
+    'Confirmed schedule editing has no redundant series-override reset');
    assert.equal(await page.evaluate(()=>Object.keys(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).length),0,'Reset all future restores automatic recurring forecasts');
+   ).length),0,'No shadow automatic-series edits duplicate the saved plan');
+   await page.locator('[data-cancel-future]').click();
    await page.locator('[data-show-new]').click();
    await page.locator('#future-new-form [name=merchant]').fill('One-time home repair');
    await page.locator('#future-new-form [name=amount]').fill('125');
@@ -563,95 +597,105 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-cancel-new]').click();
    await go('history');
    const explanation=await page.locator('.history-explanation').innerText();
-   assert.match(explanation,/saved repeating plans take priority/i,
-    'History explains that owner-confirmed plans supersede estimates');
-   assert.match(explanation,/Bank activity stays here/i,
-    'The UI promises bank source records are never deleted');
-   assert.equal(await page.locator('[data-history-auto-prediction]').count()>0,true,
-    'Existing inferred series allow an optional exclusion');
-   assert.equal(await page.locator('.history-auto-control,.history-auto-options').count(),0,
-    'The former ambiguous On/Off controls are completely absent');
+   assert.match(explanation,/only saved schedules affect predicted balances/i,
+    'Bank history suggestions do not themselves create future payments');
+   assert.match(explanation,/Ignored suggestions remain visible/i,
+    'History clearly promises ignored suggestions are not hidden');
+   assert.equal(await page.locator('[data-history-auto-prediction]').count(),0,
+    'No direct automatic-forecasting controls remain');
    const unscheduledHistory=page.locator('.history-actual-row[data-history-forecast-state="unplanned"]').first();
-   assert.ok(await unscheduledHistory.count()>0,'Not-predicted bank rows remain visible');
-   assert.match(await unscheduledHistory.innerText(),/Not predicted/);
+   assert.ok(await unscheduledHistory.count()>0,'Bank transactions remain available without a recurring pattern');
+   assert.match(await unscheduledHistory.innerText(),/Not forecast/);
    assert.match(await unscheduledHistory.locator('.history-row-open').innerText(),/Add repeating/,
-    'Unpredicted rows provide one clear action to create a plan');
-   assert.equal(await unscheduledHistory.locator('[data-history-auto-prediction]').count(),0,
-    'Unpredicted rows do not have an extraneous Auto-predict permission toggle');
+    'Any unpredicted bank payment may still be manually proposed');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
-   assert.equal(await insuranceHistory.getAttribute('data-history-forecast-state'),'automatic');
-   assert.match(await insuranceHistory.locator('.history-row-open').innerText(),/Confirm repeating/,
-    'Existing inferred transaction offers confirmation instead of a second forecast mechanism');
-   assert.equal(await insuranceHistory.locator('[data-history-auto-prediction="off"]').count(),1);
+   assert.equal(await insuranceHistory.getAttribute('data-history-forecast-state'),'suggested');
+   assert.match(await insuranceHistory.locator('.history-row-open').innerText(),/Review repeating/,
+    'Detected repeat is a suggestion rather than an additional prediction mechanism');
    const historyCount=await page.locator('.history-actual-row').count();
    const ruleCount=await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
-   await insuranceHistory.locator('[data-history-auto-prediction="off"]').click();
-   await insuranceHistory.locator('[data-history-auto-prediction="on"]').waitFor();
-   assert.equal(await insuranceHistory.getAttribute('data-history-forecast-state'),'excluded');
-   assert.match(await insuranceHistory.innerText(),/Auto prediction excluded/);
+   await insuranceHistory.locator('[data-dismiss-candidate]').click();
+   await page.locator('.history-actual-row[data-history-forecast-state="ignored"]')
+    .filter({hasText:'State Farm Insurance'}).first().waitFor();
    assert.equal(await page.locator('.history-actual-row').count(),historyCount,
-    'Excluding a forecast does not remove any bank History row');
+    'Ignoring a suggestion does not delete historical bank transactions');
    assert.equal(await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0),
-    ruleCount,'Excluding an inferred prediction does not touch saved schedules');
-   assert.match(await insuranceHistory.locator('.history-row-open').innerText(),/Add repeating/,
-    'An excluded automatic estimate may still be replaced with a confirmed plan');
-   await insuranceHistory.locator('[data-history-auto-prediction="on"]').click();
-   await insuranceHistory.locator('[data-history-auto-prediction="off"]').waitFor();
-   assert.equal(await insuranceHistory.getAttribute('data-history-forecast-state'),'automatic',
-    'Restore auto re-enables only inferred eligible predictions');
-   await insuranceHistory.locator('.history-row-open').click();
-   await page.locator('.history-schedule-form [name=frequency]').selectOption('monthly');
-   await page.locator('.history-schedule-form button[type=submit]').click();
+    ruleCount,'Ignoring does not create or delete a saved schedule');
+   await go('reviews');
+   const reviewPanel=page.locator('[data-recommended-repeating]');
+   assert.match(await reviewPanel.innerText(),/Recommended repeating/);
+   const insuranceSuggestion=reviewPanel.locator('[data-repeating-recommendation]')
+    .filter({hasText:'State Farm Insurance'}).first();
+   assert.equal(await insuranceSuggestion.getAttribute('data-recommendation-state'),'ignored',
+    'An ignored candidate stays in the permanent recommendation section');
+   await insuranceSuggestion.locator('[data-dismiss-candidate]').click();
+   await reviewPanel.locator('[data-repeating-recommendation][data-recommendation-state="pending"]')
+    .filter({hasText:'State Farm Insurance'}).first().waitFor();
+   assert.match(await insuranceSuggestion.innerText(),/Not included in predicted balances/);
+   await insuranceSuggestion.locator('[data-review-candidate]').click();
+   await reviewPanel.locator('[data-repeating-recommendation][data-recommendation-state="saved"]')
+    .filter({hasText:'State Farm Insurance'}).first().waitFor();
    assert.ok(await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}')
     .futureRecurringRules?.some(r=>r.merchant==='State Farm Insurance')),
-    'Confirm repeating creates one explicitly saved repeating plan');
+    'Yes uses suggested defaults to save an actual editable recurring schedule');
+   assert.ok(await reviewPanel.locator('[data-repeating-recommendation]')
+    .filter({hasText:'State Farm Insurance'}).count()>0,
+    'Approving a repeating payment never erases its recommendation history');
    await go('history');
    const savedInsurance=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
    assert.equal(await savedInsurance.getAttribute('data-history-forecast-state'),'confirmed');
    assert.match(await savedInsurance.locator('.history-row-open').innerText(),/Edit plan/,
-    'After confirmation only Edit plan remains');
-   assert.equal(await savedInsurance.locator('[data-history-auto-prediction]').count(),0,
-    'Saved repeating plans no longer have the misleading exclusion toggle');
+    'Saved recommendations transition into one editable repeating schedule');
+   assert.equal(await savedInsurance.locator('[data-dismiss-candidate]').count(),0,
+    'Saved plans no longer offer a conflicting Ignore action in History');
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'State Farm Insurance'}).count()>=1,
-    'Confirmed recurring insurance remains in the canonical future ledger');
-   const inferredMortgage=page.locator('.future-item').filter({hasText:'Mortgage'}).first();
-   assert.ok(await inferredMortgage.count()>0);
-   await inferredMortgage.locator('[data-edit-future]').click();
-   await page.locator('.future-edit-form [data-remove-recurring]').click();
-   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
-    'Existing inferred recurrence removal still works in the prediction editor');
-   await go('settings');
-   const rejected=page.locator('[aria-label="Automatic prediction exclusions"]');
-   assert.match(await rejected.innerText(),/Mortgage/,'Exclusion is recorded and reversible');
-   await rejected.locator('.future-skip-line').filter({hasText:'Mortgage'})
-    .locator('[data-restore-recurrence]').first().click();
-   await go('transactions');
-   assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=2,
-    'Restoring eligibility regenerates the original inferred mortgage without a manual schedule');
-   await go('history');
-   const mortgageHistory=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
-   assert.equal(await mortgageHistory.getAttribute('data-history-forecast-state'),'automatic');
-   await mortgageHistory.locator('[data-history-auto-prediction="off"]').click();
-   await mortgageHistory.locator('[data-history-auto-prediction="on"]').waitFor();
-   assert.equal(await mortgageHistory.getAttribute('data-history-forecast-state'),'excluded');
-   await go('transactions');
-   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0);
+    'Approved insurance is included exactly through its saved recurring rule');
+   assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=1,
+    'Previously approved mortgage is still forecast from its saved schedule');
+   await go('reviews');
+   const grocerySuggestion=page.locator('[data-recommended-repeating] [data-repeating-recommendation]')
+    .filter({hasText:'Safeway'}).first();
+   assert.ok(await grocerySuggestion.count()>0,'Lower-confidence repeating purchases remain reviewable');
+   await grocerySuggestion.locator('[data-dismiss-candidate]').click();
+   await grocerySuggestion.locator('[data-dismiss-candidate]').getByText('Undo ignore').waitFor();
+   assert.equal(await grocerySuggestion.getAttribute('data-recommendation-state'),'ignored');
    await page.reload({waitUntil:'load'});
+   await go('reviews');
+   const ignoredGrocery=page.locator('[data-recommended-repeating] [data-repeating-recommendation]')
+    .filter({hasText:'Safeway'}).first();
+   assert.equal(await ignoredGrocery.getAttribute('data-recommendation-state'),'ignored',
+    'Ignored candidate remains visible and marked after a complete reload');
+   await ignoredGrocery.locator('[data-dismiss-candidate]').click();
+   await ignoredGrocery.locator('[data-dismiss-candidate]').getByText('Ignore',{exact:true}).waitFor();
+   assert.equal(await ignoredGrocery.getAttribute('data-recommendation-state'),'pending',
+    'Ignored candidates can be put back into active review without bank edits');
+   // A recommendation is retained even if its supporting bank transaction
+   // no longer appears in the feed's current lookback window.
+   await page.evaluate(()=>{
+    const key='archived-repeating-example';
+    const p=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    p.repeatingRecommendations??={};
+    p.repeatingRecommendations[key]={key,accountId:'demo-checking',accountName:'Checking',
+     merchant:'Archived Fictional Recurrence',type:'expense',amount:44,category:'Utilities',
+     frequency:'monthly',nextDate:'2026-11-14',lastDate:'2026-09-14',
+     occurrences:2,examples:[],reason:'Previously identified'};
+    p.historyPatternDecisions??={};
+    p.historyPatternDecisions['recommendation|'+key]='ignored';
+    localStorage.setItem('household-planner-sample-settings-v1',JSON.stringify(p));
+   });
+   await page.reload({waitUntil:'load'});
+   await go('reviews');
+   const oldRecommendation=page.locator('[data-recommended-repeating] [data-repeating-recommendation]')
+    .filter({hasText:'Archived Fictional Recurrence'});
+   assert.equal(await oldRecommendation.count(),1,
+    'Past recommendations survive even after historical source rows are unavailable');
+   assert.equal(await oldRecommendation.getAttribute('data-recommendation-state'),'ignored',
+    'Archived recommendations retain the explicit ignored decision');
    await go('transactions');
-   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
-    'Excluding an automatic forecast survives reload');
-   await go('history');
-   await page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first()
-    .locator('[data-history-auto-prediction="on"]').click();
-   await page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first()
-    .locator('[data-history-auto-prediction="off"]').waitFor();
-   await go('transactions');
-   assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>=2,
-    'Restoring the excluded automatic forecast does not require saving a schedule');
 
    // The calendar is the everyday planning editor, without navigating
    // to Predictions or inventing any separate account-balance calculation.
@@ -1230,10 +1274,14 @@ const {chromium,webkit}=require('playwright');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
   await go('transactions');
   const predictedMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
-  assert.ok(await predictedMortgage.count()>=1,
-   'One strongly identified actual $2,000 mortgage is forecast automatically without three months');
-  const predictedDatesBefore=await predictedMortgage.count();
-  assert.equal(predictedDatesBefore,36,'Automatic mortgage estimate repeats throughout the three-year modeled period');
+  assert.equal(await predictedMortgage.count(),0,
+   'A high-confidence real mortgage is not debited until the user approves a schedule');
+  await go('reviews');
+  const realRecommendation=page.locator('[data-repeating-recommendation]')
+   .filter({hasText:'Mortgage Servicer X'}).first();
+  assert.ok(await realRecommendation.count()>0,
+   'A strongly identified real mortgage appears in permanent Recommended repeating');
+  assert.match(await realRecommendation.innerText(),/Not included in predicted balances/);
   await go('history');
   const actualMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage Servicer X'}).first();
   await actualMortgage.click();
@@ -1242,8 +1290,8 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await mortgageForm.locator('[name=accountId]').inputValue(),'checking-real');
   assert.equal(await mortgageForm.locator('[name=date]').inputValue(),'2026-11-15');
   assert.equal(await mortgageForm.locator('[name=frequency]').inputValue(),'monthly');
-  // The manual due date must supersede inferred November 15, not create
-  // a second monthly $2,000 checking withdrawal.
+  // The manually approved date becomes the ONLY repeating prediction;
+  // there was no unapproved automatic November 15 debit to duplicate.
   await mortgageForm.locator('[name=date]').fill('2026-11-25');
   failNextForecast=true;
   await mortgageForm.locator('button[type=submit]').click();
@@ -1259,7 +1307,7 @@ const {chromium,webkit}=require('playwright');
   await go('transactions');
   const singleMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
   assert.equal(await singleMortgage.count(),35,
-   'One owner-confirmed mortgage per remaining billing month, without the inferred duplicate');
+   'Only one owner-confirmed mortgage per remaining billing month');
   assert.match(await singleMortgage.first().innerText(),/Nov 25/,
    'Owner-selected mortgage date takes priority over the historical posting day');
   await go('history');
