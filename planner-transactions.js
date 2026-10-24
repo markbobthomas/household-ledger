@@ -723,13 +723,22 @@ function postedCoverage(generated,rules,records,accounts,asOf){
    t.date<=asOf&&Number(t.amount)>0&&String(t.id||'')),
   items=[...(generated.events||[]).map(item=>({item,kind:'event',id:item.ruleId})),
    ...(generated.plans||[]).map(item=>({item,kind:'movement',id:item.seriesRuleId}))],
-  pairs=[],byPosted=new Map(),review=[];
+  pairs=[],byPosted=new Map(),review=[],
+  // A posting only needs occurrences from the rules it actually matched.
+  // Keep their original global indices and visit order for tie stability.
+  itemsByRule=new Map();
+ items.forEach(({id},index)=>{
+  const key=String(id);
+  if(!itemsByRule.has(key))itemsByRule.set(key,[]);
+  itemsByRule.get(key).push(index);
+ });
  posted.forEach((t,p)=>{
   const matched=historicalScheduleMatches(t,accounts,rules);
   if(!matched.length)return;
   const linked=matched.filter(r=>(r.exampleIds||[]).some(id=>String(id)===String(t.id)));
-  const candidates=linked.length?linked:matched;
-  for(let index=0;index<items.length;index++){
+  const candidates=linked.length?linked:matched,
+   relevant=[...new Set(candidates.flatMap(r=>itemsByRule.get(String(r.id))||[]))].sort((a,b)=>a-b);
+  for(const index of relevant){
    const {item,kind,id}=items[index],r=byId.get(String(id));
    if(!r||!candidates.some(x=>String(x.id)===String(id)))continue;
    const effective=kind==='movement'&&item._postedView?item._postedView:item,
