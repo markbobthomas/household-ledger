@@ -1129,6 +1129,10 @@ function repeatingStatementPeriods(bundle,s,accountId,shownRules){
  if(!rule?.billingEndDate&&!rule?.lastStatementClose)
   return '<p class="ledger-statement-help">Set this card’s billing period in Settings to see statement totals.</p>';
  const ids=new Set(shownRules.map(({rule})=>String(rule.id)));
+ const searchOf=row=>{
+  const saved=shownRules.find(x=>String(x.rule.id)===String(row.recurringRuleId))?.rule;
+  return [row.merchant,saved?.scheduleLabel,saved?.category].filter(Boolean).join(' ').toLowerCase();
+ };
  const end=shiftDay(s.asOf,90),groups=new Map();
  const rows=futureRows(bundle,s).filter(row=>row.kind==='event'&&
   String(row.accountId)===String(accountId)&&ids.has(String(row.recurringRuleId||''))&&
@@ -1145,7 +1149,7 @@ function repeatingStatementPeriods(bundle,s,accountId,shownRules){
     statementHeading(period,total,rows.length,'repeating')+
     rows.map(row=>'<div class="ledger-statement-occurrence" data-statement-occurrence '+
      'data-statement-cents="'+cardActivityCents(row)+'" data-schedule-search-text="'+
-     escapeHTML([row.merchant,shownRules.find(x=>String(x.rule.id)===String(row.recurringRuleId))?.rule.category||''].join(' ').toLowerCase())+'">'+
+     escapeHTML(searchOf(row))+'">'+
      '<button type="button" data-open-transaction="'+escapeHTML(row.key)+'">'+
      '<span>'+escapeHTML(dayLabel(row.date))+'</span><strong>'+escapeHTML(row.merchant)+'</strong>'+
      '<span>'+cash(row.amount)+'</span><span aria-hidden="true">›</span></button></div>').join('')+'</section>';
@@ -1521,7 +1525,8 @@ function historyPage(bundle,s){
    '<button class="btn ledger-history-search-button" type="submit">Search</button>'+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
-  (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':'')+
+  (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':
+   selectedHistoryCard?'<p class="ledger-statement-help">Set this card’s billing period in Settings to group transactions by statement.</p>':'')+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   // Minimal non-browser safety harnesses cannot emulate row expansion.
   // Preserve their bank-linked confirmation form without affecting browsers.
