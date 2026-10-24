@@ -1490,7 +1490,8 @@ function reviewsPage(bundle,s){
      ' · '+cash(r.amount)+' · '+escapeHTML(status)+'</small></div>'+
      '<div class="review-candidate-actions">'+
      (r.matched.length?'<button class="btn" type="button" data-recommended-edit="'+escapeHTML(String(i))+'">Edit</button>':
-      r.actual?'<button class="btn primary" type="button" data-recommended-yes="'+escapeHTML(String(i))+
+      accounts.some(a=>String(a.id)===String(r.accountId))?
+      '<button class="btn primary" type="button" data-recommended-yes="'+escapeHTML(String(i))+
       '">Yes, repeat</button>'+
       (!r.ignored?'<button class="btn" type="button" data-recommended-no="'+escapeHTML(String(i))+
       '">No, ignore</button>':'<span class="status-tag">Ignored</span>'):
@@ -2106,8 +2107,15 @@ document.addEventListener('click',async e=>{
    return;
   }
   const row=candidate.actual;
-  if(!row){setNotice('No original bank transaction available to create this schedule.');return}
-  recurringDraft=window.HouseholdPlannerHistory.draftFor(row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+  // When old bank records have aged out, the saved recommendation still
+  // contains enough owner-reviewed defaults to create a forecast-only plan.
+  // Its source bank transaction remains absent/immutable.
+  recurringDraft=row?
+   window.HouseholdPlannerHistory.draftFor(row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf):
+   {accountId:candidate.accountId,type:candidate.type,
+    merchant:candidate.merchant,amount:Number(candidate.amount)||0,
+    frequency:candidate.frequency||'monthly',nextDate:candidate.nextDate,
+    sourceRow:null,sourcePending:false,examples:[]};
   // The detector's verified cadence/amount overrides generic single-row
   // guesses, while the editable confirmation form remains authoritative.
   if(candidate.frequency)recurringDraft.frequency=candidate.frequency;
