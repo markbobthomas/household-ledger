@@ -1426,8 +1426,17 @@ function reviewsPage(bundle,s){
      window.HouseholdPlannerTransactions.recurrenceKey(item.accountId,item.type,t.merchant)===
      window.HouseholdPlannerTransactions.recurrenceKey(item.accountId,item.type,item.merchant))
     .sort((x,y)=>y.date.localeCompare(x.date))[0];
-  const matched=actual?window.HouseholdPlannerTransactions.historicalScheduleMatches(
-   actual,accounts,state().predictions?.futureRecurringRules||[]):[];
+  const saved=state().predictions?.futureRecurringRules||[],
+   sourceIds=new Set([...(item.historicalIds||[]),
+    ...(item.examples||[]).map(e=>e.id)].map(String)),
+   // If the bank later truncates old history, keep a previously approved
+   // recommendation marked Repeating based on explicitly linked source IDs.
+   archivedMatches=saved.filter(rule=>sourceIds.size&&
+    String(rule.originalAccountId||rule.accountId||rule.fromAccountId)===String(item.accountId)&&
+    (rule.kind==='movement'?'transfer':rule.type)===item.type&&
+    (rule.exampleIds||[]).some(id=>sourceIds.has(String(id)))),
+   matched=actual?window.HouseholdPlannerTransactions.historicalScheduleMatches(
+    actual,accounts,saved):archivedMatches;
   const ignoreKey=[item.accountId,item.type,
     String(item.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),
     String(Math.round(Number(item.amount||0)*100))].map(encodeURIComponent).join('|');
