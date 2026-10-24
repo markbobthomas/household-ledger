@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'card-statement-90day-low-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'card-next-statement-estimate-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -657,20 +657,16 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-summary-card-statement]').count(),1);
    assert.match(await page.locator('[data-summary-card-statement] .summary-overline').innerText(),
     /^(Statement balance|Estimated statement)$/);
-   assert.equal(await page.locator('[data-summary-card-90day-low] .summary-overline').innerText(),
-    '3-month estimated low');
-   assert.equal(await page.locator('[data-summary-card-low-value]').count(),1);
+   assert.equal(await page.locator('[data-summary-card-next-statement] .summary-overline').innerText(),
+    'Next statement estimate');
+   assert.equal(await page.locator('[data-summary-next-statement-value]').count(),1);
+   assert.equal(await page.locator('[data-summary-card-90day-low]').count(),0,
+    'Credit cards no longer show the unrelated 3-month debt minimum');
    assert.equal(await page.locator('.summary-numbers > div').count(),3,
-    'Credit-card summary retains the same 3-column geometry as checking');
-   const cardLowDate=await page.locator('[data-summary-card-90day-low] [data-summary-low-date]')
-    .getAttribute('data-summary-low-date');
-   assert.ok(cardLowDate>='2026-10-19'&&cardLowDate<='2027-01-17',
-    'The three-month credit-card low never includes a date from years two or three');
-   assert.equal(await page.locator('[data-summary-card-low-value].summary-low-alert').count(),0,
-    'Lower card debt is not incorrectly highlighted as a checking cash shortfall');
-   // An intentionally lower debt point beyond day 90 must NOT determine
-   // the credit-card metric, and a future issued bill must not replace the
-   // earlier available estimate for the next statement.
+    'Credit-card summary keeps the same three-column layout as checking');
+   // The following statement is a different billing cycle from the first
+   // displayed statement. An arbitrary future low/debt must never substitute
+   // for the next period's posted-and-scheduled statement estimate.
    const computedCard=await page.evaluate(()=>{
     const account={id:'fixture-card',name:'Fixture card',type:'credit',accountType:'credit',current:900};
     const markup=window.HouseholdPlannerSummary.render({
@@ -684,18 +680,21 @@ const {chromium,webkit}=require('playwright');
       {cardId:'fixture-card',dueDate:'2026-11-19',withdrawalDate:'2026-11-19',
        confirmed:false,statementBalance:345},
       {cardId:'fixture-card',dueDate:'2026-12-19',withdrawalDate:'2026-12-19',
-       confirmed:true,statementBalance:999}]}},
+       confirmed:false,statementBalance:999,periodEnd:'2026-11-18',
+       postedTransactions:[{id:'posted-a'},{id:'posted-refund'}],
+       predictedTransactions:[{id:'future-a'}]}]}},
      days:200,prefs:{},accounts:[account],fresh:true,ready:()=>true
     });
     const doc=new DOMParser().parseFromString(markup,'text/html');
     return {label:doc.querySelector('[data-summary-card-statement] .summary-overline')?.textContent,
      statement:doc.querySelector('[data-summary-statement-value]')?.textContent,
-     low:doc.querySelector('[data-summary-card-low-value]')?.textContent,
-     date:doc.querySelector('[data-summary-card-90day-low] [data-summary-low-date]')?.dataset.summaryLowDate};
+     next:doc.querySelector('[data-summary-next-statement-value]')?.textContent,
+     sources:doc.querySelector('.summary-card-estimate-sources')?.textContent,
+     close:doc.querySelector('[data-summary-card-next-statement] [data-calendar-card-statement-date]')?.dataset.calendarCardStatementDate};
    });
    assert.deepEqual(computedCard,{label:'Estimated statement',statement:'$345.00',
-    low:'$600.00',date:'2027-01-17'},
-    'Calendar uses next estimated statement and the lowest card debt only within day 90');
+    next:'$999.00',sources:'2 posted · 1 predicted',close:'2026-11-18'},
+    'Following period uses its own statement estimate, not current card debt or a future minimum');
    await page.locator('#summary-account').selectOption('demo-checking');
    assert.equal(await page.locator('[data-summary-month-low]').count(),1);
    assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
@@ -1682,8 +1681,10 @@ const {chromium,webkit}=require('playwright');
    'Statement balance','An issued statement is labeled separately from a forecast estimate');
   assert.equal(await page.locator('[data-summary-statement-value]').innerText(),'$1,200.00',
    'Calendar uses the validated issued amount, not the card current debt or checking withdrawal');
-  assert.equal(await page.locator('[data-summary-card-90day-low] .summary-overline').innerText(),
-   '3-month estimated low');
+  assert.equal(await page.locator('[data-summary-card-next-statement] .summary-overline').innerText(),
+   'Next statement estimate');
+  assert.equal(await page.locator('[data-summary-next-statement-value]').count(),1,
+   'Connected card shows the following statement estimate next to its issued statement');
   assert.equal(await page.locator('[data-summary-month-low]').count(),0);
   const dueButton=page.locator('[data-calendar-card-statement-date]');
   assert.equal(await dueButton.count(),1,'Issued card statement provides a due-date drilldown');
