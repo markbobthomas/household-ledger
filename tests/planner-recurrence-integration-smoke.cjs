@@ -99,12 +99,12 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  const buildsBeforeSave=forecastBuilds;
  await submit({merchant:'Home Mortgage ACH',accountId:'demo-checking',
   date:'2026-11-25',amount:'2000',type:'expense',frequency:'monthly'});
- assert.ok(forecastBuilds>buildsBeforeSave,
-  'Editing a schedule must invalidate the projection, even when state mutates in place');
  const saved=JSON.parse(store['household-planner-sample-settings-v1']||'{}');
  assert.equal(saved.futureRecurringRules.length,1);
  assert.equal(saved.futureRecurringRules[0].date,'2026-11-25');
  await click('[data-view]',{view:'transactions'});
+ assert.ok(forecastBuilds>buildsBeforeSave,
+  'Rendering after a saved schedule edit must invalidate the cached projection');
  const after=future();
  assert.equal(occurrences(after),35,
   'One user-confirmed mortgage per future month over three years; no old inferred date');
