@@ -387,8 +387,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(novemberLow.shown,novemberLow.expected.value,'Monthly low matches the lowest displayed November day');
    assert.equal(novemberLow.date,novemberLow.expected.date,'Monthly low date matches November minimum');
    assert.equal(novemberLow.marked,novemberLow.date,'The actual minimum day is highlighted');
-   assert.ok(await page.locator('[data-calendar-day="2026-11-01"]').count()>0,
-    'Next month contains projected balances starting on its first day');
+   assert.ok(await page.locator('[data-calendar-day="2026-11-02"]').count()>0,
+    'Next month contains projected balances starting on its first business day');
    await page.locator('[data-calendar-today]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
    assert.equal(await page.locator('[data-calendar-day="2026-10-19"].selected').count(),1,
