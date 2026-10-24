@@ -1840,6 +1840,8 @@ const {chromium,webkit}=require('playwright');
   // Previously imported balances must remain readable and never become Demo.
   loginRequired=true;
   await go('summary');
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
   await page.locator('#refresh-bank').click();
   await page.locator('#planner-notice').getByText('Bank connection needs attention.').waitFor();
   assert.match(await page.locator('#planner-notice').innerText(),/sign in again|renew permission/i);
