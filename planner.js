@@ -1370,36 +1370,34 @@ function historyPage(bundle,s){
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
   accounts=activeAccounts(s),normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
- const weak=(bundle?.historyCandidates||[]).filter(p=>
-  !mortgages.some(m=>m.accountId===p.accountId&&normalize(m.merchant)===normalize(p.merchant)&&
-   Math.abs(m.amount-p.amount)<.011)&&
-  !regular.some(r=>{
-   const aid=accounts.find(a=>[a.id,a.name,a.transactionAccount].some(k=>String(k)===String(r.account)))?.id;
-   return String(aid||r.account)===p.accountId&&normalize(r.merchant)===normalize(p.merchant)&&
-    Math.abs(r.amount-p.amount)<.011;
-  }));
- const autoLow=(bundle?.automaticRecurrence?.review||[]).filter(a=>
-  !weak.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant))&&
-  !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
- const duplicates=bundle?.duplicateConflicts||[],
-  postedAmbiguities=bundle?.postedMatchReview||[];
- const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length+
-  postedAmbiguities.length;
- const cards=weak.map(p=>
-  '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
-   '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
-   '<small>'+escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency)+
-    ' · '+p.occurrences+' actual payment'+(p.occurrences===1?'':'s')+
-    ' · Next suggested '+escapeHTML(dayLabel(p.nextDate))+'</small>'+
-   '<small>'+escapeHTML(p.reason)+' · '+escapeHTML(p.confidence==='Needs confirmation'?'Needs confirmation':p.confidence+' confidence')+'</small>'+
-   '<details class="review-examples"><summary>View matching bank transactions</summary>'+
-    p.examples.map(t=>'<div>'+escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+
-     ' · '+cash(t.amount)+'</div>').join('')+'</details></div>'+
-   '<strong class="review-candidate-amount">'+cash(p.amount)+'</strong>'+
-   '<div class="review-candidate-actions"><button class="btn primary" type="button" data-review-candidate="'+
-     escapeHTML(p.key)+'">Review and confirm</button>'+
-    '<button class="btn" type="button" data-dismiss-candidate="'+escapeHTML(p.key)+
-     '">Not recurring</button></div></article>').join('');
+ const recommended=bundle?.recommendedRepeating||[],
+  unresolved=recommended.filter(r=>r.decision==='pending').length,
+  ignored=recommended.filter(r=>r.decision==='ignored').length,
+  duplicates=bundle?.duplicateConflicts||[],
+  postedAmbiguities=bundle?.postedMatchReview||[],
+  count=unresolved+regular.length+mortgages.length+duplicates.length+postedAmbiguities.length,
+  cards=recommended.map(p=>{
+   const decision=p.decision,
+    words=decision==='scheduled'?'Scheduled':decision==='ignored'?'Ignored':'Needs decision',
+    details=escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency||'Frequency to confirm')+
+     ' · '+cash(p.amount)+' · '+escapeHTML(p.type)+
+     (p.nextDate?' · Suggested '+escapeHTML(dayLabel(p.nextDate)):'')+
+     (p.source==='strong'?' · Detected pattern':' · Possible repeat'),
+    actions=decision==='scheduled'?
+     '<button type="button" class="btn" data-view="schedules">Edit in Repeating</button>':
+     decision==='ignored'?
+      '<button type="button" class="btn" data-repeating-reconsider="'+escapeHTML(p.key)+'">Reconsider</button>':
+      '<button type="button" class="btn primary" data-repeating-yes="'+escapeHTML(p.key)+
+       '">Yes · Save schedule</button>'+
+      '<button type="button" class="btn" data-repeating-ignore="'+escapeHTML(p.key)+'">No · Ignore</button>';
+   return '<article class="review-candidate" data-repeating-recommendation="'+escapeHTML(p.key)+
+    '" data-recommendation-status="'+decision+'"><div class="review-candidate-main">'+
+    '<strong>'+escapeHTML(p.merchant)+'</strong>'+
+    '<small>'+details+'</small>'+
+    '<small>'+words+(decision==='ignored'?' · Still listed for future review':
+     decision==='pending'?' · Not counted in your balance':'')+'</small></div>'+
+    '<div class="review-candidate-actions">'+actions+'</div></article>';
+  }).join('');
  const concerns=(bundle?.payments?.warnings||[]).slice(0,8);
  return '<div class="planner-page reviews-page">'+
   '<div class="review-count-line"><span class="status-tag">'+count+
@@ -1410,15 +1408,17 @@ function reviewsPage(bundle,s){
     (bundle.duplicateChecks.length)+' overlapping forecast entr'+
     (bundle.duplicateChecks.length===1?'y was':'ies were')+
     ' automatically consolidated. Bank transactions were not changed.</p>':'')+
+  '<section class="panel recommended-repeating" aria-label="Recommended repeating">'+
+   '<div class="section-title"><h2>Recommended repeating</h2>'+
+   '<span class="status-tag '+(unresolved?'warn':'')+'">'+unresolved+' TO DECIDE'+
+   (ignored?' · '+ignored+' IGNORED':'')+'</span></div>'+
+   '<p class="lead">Detected payments never enter your balance forecast on their own. '+
+   'Choose Yes to save an editable repeating schedule, or No to mark a suggestion ignored. '+
+   'Every suggestion stays listed, including ignored and scheduled ones.</p>'+
+   (cards||'<p class="lead">No repeating candidates detected yet. New bank activity will be checked automatically.</p>')+
+   '</section>'+
   (mortgages.length?missingMortgagePanel(bundle):'')+
   (regular.length?routineReviewPanel(bundle):'')+
-  (autoLow.length?'<section class="panel"><div class="section-title"><h2>Uncertain repeating payments</h2>'+
-   '<span class="status-tag warn">'+autoLow.length+' NEEDS REVIEW</span></div>'+
-   '<p class="lead">Two matching withdrawals were observed, but the merchant is not clearly a fixed monthly bill. These are not yet deducted from predicted balances. Open History to confirm a recurring schedule.</p>'+
-   autoLow.map(p=>'<div class="review-candidate"><div class="review-candidate-main"><strong>'+
-    escapeHTML(p.merchant)+'</strong><small>'+cash(p.amount)+' · '+escapeHTML(p.reason)+
-    '</small></div><button type="button" class="btn" data-view="history">Review in History</button></div>').join('')+
-   '</section>':'')+
   (postedAmbiguities.length?'<section class="panel" data-posted-match-review>'+
     '<div class="section-title"><h2>Which schedule was paid?</h2>'+
     '<span class="status-tag warn">'+postedAmbiguities.length+' NEEDS REVIEW</span></div>'+
@@ -1440,10 +1440,6 @@ function reviewsPage(bundle,s){
    duplicates.map(d=>'<div class="review-candidate"><span>'+escapeHTML(d.merchant||d.reason||'Competing forecast payments')+
     '</span><button type="button" class="btn" data-view="transactions">Review predicted payments</button></div>').join('')+
    '</section>':'')+
-  (weak.length?'<section class="panel"><div class="section-title"><h2>Potential recurring payments</h2>'+
-   '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
-   '<p class="lead">All recent payments are checked, including unfamiliar merchants and outgoing ACH debits. A single payment is a possibility, not proof of recurrence. Confirm amount, frequency and next date before uncertain items affect your balance.</p>'+
-   cards+'</section>':'')+
   (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div></section>':'')+
   (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
     concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
