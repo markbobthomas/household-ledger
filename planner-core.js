@@ -158,9 +158,16 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    return d?.status==='excluded'&&Math.abs(cents(d.amount)-amount)<=1;
   }))||[g.kind,t.type].some(type=>dismiss[
    [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
-  ]==='dismissed')||(prefs.mortgageReviewDismissals||[]).includes(
+  ]==='dismissed'||[g.kind,t.type].some(type=>dismiss[
+   [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
+  ]?.status==='dismissed'))||(prefs.mortgageReviewDismissals||[]).includes(
    ['mortgage',g.accountId,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|'));
-  if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant))continue;
+  if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant)){
+   // A user's No is a retained decision, not grounds to lose the candidate.
+   // The review UI will display it as ignored with a reversible Yes choice.
+   review.push({...reviewItem(g,g.rows,f,t,planDate),ignored:true});
+   continue;
+  }
   const owners=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
    (!r.type||r.type===g.kind)&&
@@ -217,7 +224,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
  }
  review.sort((a,b)=>b.priority-a.priority||b.occurrences-a.occurrences||
   b.lastDate.localeCompare(a.lastDate));
- return {automatic,review:review.slice(0,80).map(({priority,...p})=>p),conflicts};
+ return {automatic,review:review.map(({priority,...p})=>p),conflicts};
 }
 function reviewItem(g,same,f,t,planDate){
  return {key:[g.accountId,g.kind,norm(g.merchant),String(cents(t.amount))].map(encodeURIComponent).join('|'),
@@ -275,15 +282,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
- for(const event of detected.automatic){
-  if(!configuredCard(event.accountId)||
-   ownerFor(event)||suppressedRecurrence(prefs,event))continue;
-  const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
-  if(adjusted.date<=asOf||adjusted.date>end)continue;
-  seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
-   _forecastOriginalAccountId:event.accountId,_forecastOriginalType:event.type,
-   _forecastOriginalAmount:event.amount});
- }
+ // Detected patterns are proposals only. Approval of a recurring rule is
+ // the single way a recurring merchant impacts the future balance. Do not
+ // materialize detected.automatic here, even for high-confidence bills.
  // One-off forecast additions are independent of Plaid facts.
  for(const e of extras){
   if(e.type==='transfer'||
@@ -389,6 +390,20 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   forecast:{suppressedDuplicates:checks},routines:{events:[],review:[],warnings:[],
    counts:{confirmed:ownerEntries.length,suggested:detected.automatic.length,excluded:0}},
   missingMortgages:[],historyCandidates:detected.review,
+  recommendedRepeating:(()=>{
+   const bySeries=new Map();
+   for(const e of detected.automatic){
+    if(!bySeries.has(e._seriesKey))bySeries.set(e._seriesKey,e);
+   }
+   // Detection reports are never ledger events. They are retained for review,
+   // including eligible recurring streams that haven't been approved yet.
+   return [...bySeries.values()].map(e=>({
+    key:e._seriesKey,accountId:e.accountId,type:e.type,
+    merchant:e.merchant,amount:e.amount,frequency:e.cadence,
+    nextDate:e.date,category:e.category,historicalIds:e.historicalIds||[],
+    source:'detected'
+   }));
+  })(),
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
   postedMatchReview:covered.review||[]};

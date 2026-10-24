@@ -37,7 +37,7 @@ function scheduleListNumber(id){
 
 let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSuggestions=[];
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
-let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
+let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRepeatRecommendations=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
@@ -1306,32 +1306,22 @@ function historyPage(bundle,s){
    ambiguous=matches.length>1;
   const kind=tools.bankDirection(t),
    rejectedKey=tools.recurrenceKey(aid,kind,t.merchant||t.name),
-   predicted=projections.some(r=>r.kind==='event'&&
-    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
-    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey),
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
    auto=tools.historyAutoPredictionEnabled(state().predictions||{},aid,kind,t.merchant||t.name),
-   canAuto=auto!==null&&['expense','income','refund','transfer'].includes(kind),
-   // Saved plans take priority over estimates. Exclusions describe an opted-out
-   // source, not a missing bank record. Only show actionable controls.
-   status=matches.length?'confirmed':canAuto&&!auto?'excluded':predicted?'automatic':'unplanned',
-   caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
-    status==='automatic'?'Automatically predicted':
-    status==='excluded'?'Auto prediction excluded':'Not predicted',
-   primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
-    canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record';
-  // This is deliberately not an On/Off switch. Only inferred payments have an
-  // Exclude action; opted-out sources have a Restore action. A confirmed plan
-  // is edited in one place, without an unrelated competing toggle.
-  let secondary='';
-  if(canAuto&&!matches.length&&status==='automatic')
-   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="off" '+
-    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" title="Stop automatic future estimates for this payee on this account; bank records stay visible">Exclude</button>';
-  else if(canAuto&&!matches.length&&status==='excluded')
-   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="on" '+
-    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" title="Allow automatic future estimates again; this does not create a saved plan">Restore auto</button>';
+   candidates=[...(bundle?.recommendedRepeating||[]),...(bundle?.historyCandidates||[])],
+   recommended=candidates.some(c=>String(c.accountId)===aid&&c.type===kind&&
+    tools.recurrenceKey(aid,kind,c.merchant)===rejectedKey),
+   dismissed=Object.values(state().predictions?.historyPatternDecisions||{}).some(d=>
+    d?.status==='dismissed'&&d.recommendation&&
+    String(d.recommendation.accountId)===aid&&d.recommendation.type===kind&&
+    tools.recurrenceKey(aid,kind,d.recommendation.merchant)===rejectedKey),
+   status=matches.length?'confirmed':dismissed||auto===false?'ignored':recommended?'suggested':'unplanned',
+   caption=matches.length?(ambiguous?'Several repeating plans':'Repeating plan saved'):
+    status==='ignored'?'Ignored repeating suggestion':
+    status==='suggested'?'Possible repeat':'Not repeating',
+   primary=matches.length?(ambiguous?'Choose plan':'Edit plan'):
+    canPlan?(recommended?'Review repeating':'Add repeating'):'View bank record',
+   secondary='';
   return '<div class="history-actual-row" data-history-kind="'+escapeHTML(kind||'unknown')+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
@@ -1351,9 +1341,9 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  '<p class="page-task-hint history-explanation">Bank activity stays here. Automatically predicted payments are estimates; '+
-  'saved repeating plans take priority. Exclude stops future automatic estimates for a payee on this account, '+
-  'and Restore auto allows them again. To guarantee a repeating payment, save a plan.</p>'+
+  '<p class="page-task-hint history-explanation">Bank activity is read-only. Possible repeats are listed under Needs review; '+
+  'only repeating schedules you approve are included in future balances. '+
+  'Ignored suggestions remain available for reconsideration.</p>'+
   '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -1366,6 +1356,34 @@ function historyPage(bundle,s){
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '</div></div>';
+}
+// Keep a durable copy of every candidate that has reached the Review page.
+ // Raw source history can later be shortened by the bank or refined by Plaid,
+ // but neither a recommendation nor a user's No should be silently forgotten.
+async function archiveRecommendedRepeats(){
+ const modelBundle=forecastFor(snapshot());
+ const discovered=[...(modelBundle?.recommendedRepeating||[]),
+  ...(modelBundle?.historyCandidates||[])];
+ const prefs=state().predictions||{},saved=prefs.historyPatternDecisions||{},
+  additions={};
+ for(const item of discovered){
+  const identity=String(item.key||[
+   item.accountId,item.type,item.merchant,item.frequency,item.amount
+  ].join('|'));
+  const key='review-archive|'+encodeURIComponent(identity);
+  if(saved[key])continue;
+  additions[key]={status:'recommended',recommendation:{
+   accountId:item.accountId,type:item.type,merchant:item.merchant,
+   amount:item.amount,frequency:item.frequency,nextDate:item.nextDate,
+   category:item.category||'',historicalIds:item.historicalIds||[],
+   examples:item.examples||[],key:item.key||identity,source:'archived'
+  }};
+ }
+ if(Object.keys(additions).length)
+  await commitForecastChange(()=>{
+   state().predictions.historyPatternDecisions??={};
+   Object.assign(state().predictions.historyPatternDecisions,additions);
+  });
 }
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
@@ -1383,8 +1401,60 @@ function reviewsPage(bundle,s){
   !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
  const duplicates=bundle?.duplicateConflicts||[],
   postedAmbiguities=bundle?.postedMatchReview||[];
- const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length+
-  postedAmbiguities.length;
+ const rawRecommendations=[
+  ...(bundle?.recommendedRepeating||[]),
+  ...(bundle?.historyCandidates||[]).map(c=>({...c,source:'needs-confirmation'})),
+  ...Object.values(state().predictions?.historyPatternDecisions||{})
+   .filter(d=>d&&typeof d==='object'&&
+    ['recommended','dismissed'].includes(d.status)&&d.recommendation)
+   .map(d=>({...d.recommendation,ignored:d.status==='dismissed',source:'archived'}))
+ ];
+ const recommendations=new Map();
+ for(const item of rawRecommendations){
+  const key=[item.accountId,item.type,String(item.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),
+   // Alternating four-week paychecks must not merge into one schedule.
+   item.frequency==='every-4-weeks'?item.key:''].join('|');
+  if(!recommendations.has(key)||item.source==='detected')
+   recommendations.set(key,item);
+ }
+ const reviewRows=[...recommendations.values()].map(item=>{
+  const sourceId=item.historicalIds?.[0]||item.examples?.[0]?.id,
+   actual=(bundle?.rows||[]).find(t=>String(t.id)===String(sourceId))||
+    (bundle?.rows||[]).filter(t=>
+     window.HouseholdPlannerHistory.accountOf(t,accounts)===String(item.accountId)&&
+     window.HouseholdPlannerTransactions.bankDirection(t)===item.type&&
+     window.HouseholdPlannerTransactions.recurrenceKey(item.accountId,item.type,t.merchant)===
+     window.HouseholdPlannerTransactions.recurrenceKey(item.accountId,item.type,item.merchant))
+    .sort((x,y)=>y.date.localeCompare(x.date))[0];
+  const saved=state().predictions?.futureRecurringRules||[],
+   sourceIds=new Set([...(item.historicalIds||[]),
+    ...(item.examples||[]).map(e=>e.id)].map(String)),
+   // If the bank later truncates old history, keep a previously approved
+   // recommendation marked Repeating based on explicitly linked source IDs.
+   archivedMatches=saved.filter(rule=>sourceIds.size&&
+    String(rule.originalAccountId||rule.accountId||rule.fromAccountId)===String(item.accountId)&&
+    (rule.kind==='movement'?'transfer':rule.type)===item.type&&
+    (rule.exampleIds||[]).some(id=>sourceIds.has(String(id)))),
+   matched=actual?window.HouseholdPlannerTransactions.historicalScheduleMatches(
+    actual,accounts,saved):archivedMatches;
+  const ignoreKey=[item.accountId,item.type,
+    String(item.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),
+    String(Math.round(Number(item.amount||0)*100))].map(encodeURIComponent).join('|');
+  const oldIgnored=Object.values(state().predictions?.historyPatternDecisions||{}).some(d=>
+   d&&typeof d==='object'&&d.status==='dismissed'&&d.recommendation&&
+   String(d.recommendation.accountId)===String(item.accountId)&&
+   String(d.recommendation.type)===String(item.type)&&
+   normalize(d.recommendation.merchant)===normalize(item.merchant)&&
+   (item.frequency!=='every-4-weeks'||String(d.recommendation.key)===String(item.key)));
+  const ignored=Boolean(item.ignored||oldIgnored||
+   (state().predictions?.historyPatternDecisions?.[ignoreKey]?.status||
+    state().predictions?.historyPatternDecisions?.[ignoreKey])==='dismissed');
+  return {...item,actual,matched,ignored,ignoreKey};
+ });
+ lastRepeatRecommendations=reviewRows;
+ const pendingRepeats=reviewRows.filter(r=>!r.matched.length&&!r.ignored);
+ const count=regular.length+mortgages.length+autoLow.length+duplicates.length+
+  postedAmbiguities.length+pendingRepeats.length;
  const cards=weak.map(p=>
   '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
    '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
@@ -1404,6 +1474,31 @@ function reviewsPage(bundle,s){
  return '<div class="planner-page reviews-page">'+
   '<div class="review-count-line"><span class="status-tag">'+count+
   ' item'+(count===1?'':'s')+' to review</span></div>'+
+  '<section class="panel recommended-repeating" aria-label="Recommended repeating">'+
+   '<div class="section-title"><h2>Recommended repeating</h2>'+
+   '<span class="status-tag">'+reviewRows.length+' FOUND</span></div>'+
+   '<p class="lead">Detected payments are suggestions only, not yet included in future balances. '+
+   'Choose Yes to review a prefilled schedule and save it. No marks the suggestion ignored; '+
+   'it stays on this list. Saved repeating plans remain visible here too.</p>'+
+   (reviewRows.length?reviewRows.map((r,i)=>{
+    const status=r.matched.length?'Repeating':r.ignored?'Ignored':'Recommended';
+    return '<article class="review-candidate" data-repeat-recommendation="'+escapeHTML(String(i))+
+     '" data-recommendation-status="'+escapeHTML(status.toLowerCase())+'">'+
+     '<div class="review-candidate-main"><strong>'+escapeHTML(r.merchant)+'</strong>'+
+     '<small>'+escapeHTML(r.accountName||accounts.find(a=>String(a.id)===String(r.accountId))?.name||r.accountId)+
+     ' · '+escapeHTML(r.frequency||'Frequency to confirm')+
+     ' · '+cash(r.amount)+' · '+escapeHTML(status)+'</small></div>'+
+     '<div class="review-candidate-actions">'+
+     (r.matched.length?'<button class="btn" type="button" data-recommended-edit="'+escapeHTML(String(i))+'">Edit</button>':
+      accounts.some(a=>String(a.id)===String(r.accountId))?
+      '<button class="btn primary" type="button" data-recommended-yes="'+escapeHTML(String(i))+
+      '">Yes, repeat</button>'+
+      (!r.ignored?'<button class="btn" type="button" data-recommended-no="'+escapeHTML(String(i))+
+      '">No, ignore</button>':'<span class="status-tag">Ignored</span>'):
+      '<span class="status-tag warn">Bank source unavailable</span>')+
+     '</div></article>';
+   }).join(''):'<p class="lead">No recurring candidates found in the available bank history.</p>')+
+   '</section>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   ((bundle?.duplicateChecks||[]).length?'<p class="audit-footnote">Duplicate protection: '+
@@ -1440,10 +1535,6 @@ function reviewsPage(bundle,s){
    duplicates.map(d=>'<div class="review-candidate"><span>'+escapeHTML(d.merchant||d.reason||'Competing forecast payments')+
     '</span><button type="button" class="btn" data-view="transactions">Review predicted payments</button></div>').join('')+
    '</section>':'')+
-  (weak.length?'<section class="panel"><div class="section-title"><h2>Potential recurring payments</h2>'+
-   '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
-   '<p class="lead">All recent payments are checked, including unfamiliar merchants and outgoing ACH debits. A single payment is a possibility, not proof of recurrence. Confirm amount, frequency and next date before uncertain items affect your balance.</p>'+
-   cards+'</section>':'')+
   (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div></section>':'')+
   (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
     concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
@@ -1608,7 +1699,14 @@ function render(){
  const statuses=projection?.diagnostics||{};
  const missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
   !window.HouseholdPaymentObligations.ready(state().predictions?.paymentRules?.[a.id],a,activeAccounts(s)));
+ const unsavedRepeats=(bundle?.recommendedRepeating||[]).filter(r=>
+  !(bundle?.rows||[]).some(t=>String(t.id)===(r.historicalIds||[])[0]&&
+   window.HouseholdPlannerTransactions.historicalScheduleMatches(
+    t,activeAccounts(s),state().predictions?.futureRecurringRules||[]).length));
  const caution=[
+  ...(unsavedRepeats.length?[
+   unsavedRepeats.length+' recurring payment pattern'+(unsavedRepeats.length===1?' is':'s are')+
+   ' awaiting your approval in Needs review. These estimated bills or deposits are NOT included in future balances until saved as repeating plans. Review before trusting the lowest balance.']:[]),
   ...(missingCards.length?['Credit-card payment schedule not set for '+missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.']:[]),
   ...((bundle?.payments?.warnings||[]).slice(0,3)),
   ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>
@@ -1633,7 +1731,7 @@ function render(){
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
  const informational=!error&&!latestError&&!caution.length;
- $('planner-notice').innerHTML=informational||activeTab==='summary'&&!error&&!latestError?'':note;
+ $('planner-notice').innerHTML=informational?'':note;
  const finePrint=$('planner-fine-print');
  if(finePrint){
   finePrint.hidden=!informational;
@@ -1899,6 +1997,11 @@ document.addEventListener('click',async e=>{
  }
  const view=e.target.closest('[data-view]');
  if(view){
+  if(view.dataset.view==='reviews'&&!requestedReal()||view.dataset.view==='reviews'&&live()){
+   try{await archiveRecommendedRepeats()}catch(err){
+    setNotice('Some recommended repeating payments could not be saved for long-term review: '+String(err.message||err));
+   }
+  }
   activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
@@ -1970,27 +2073,57 @@ document.addEventListener('click',async e=>{
   }catch(err){setNotice(String(err.message||err))}
   return;
  }
- const autoHistory=e.target.closest('[data-history-auto-prediction]');
- if(autoHistory){
-  const aid=autoHistory.dataset.historyAccount,
-   enabled=autoHistory.dataset.historyAutoPrediction==='on',
-   bank=lastHistoryRows.find(t=>String(t.id)===autoHistory.dataset.historyBank&&
-    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===aid);
-  if(!bank){setNotice('This bank transaction is no longer available.');return}
-  const tools=window.HouseholdPlannerTransactions,
-   type=tools.bankDirection(bank),merchant=bank.merchant||bank.name,
-   current=tools.historyAutoPredictionEnabled(state().predictions||{},aid,type,merchant);
-  if(current===enabled)return;
-  try{
-   await commitForecastChange(()=>tools.setHistoryAutoPrediction(state(),
-    {accountId:aid,type,merchant},enabled));
-   reviewNotice=(enabled?'Automatic predictions restored for ':'Automatic predictions excluded for ')+merchant+
-    '. '+(enabled?'Estimates reappear only if a repeat is detected. ':
-     'Matching automatic future estimates were removed. ')+
-    'Bank history and saved repeating plans were not changed.';
-   recurringDraft=null;
-   render();
-  }catch(err){setNotice(String(err.message||err))}
+ const repeatYes=e.target.closest('[data-recommended-yes]');
+ const repeatEdit=e.target.closest('[data-recommended-edit]');
+ const repeatNo=e.target.closest('[data-recommended-no]');
+ if(repeatYes||repeatEdit||repeatNo){
+  const number=Number((repeatYes||repeatEdit||repeatNo).dataset[
+   repeatYes?'recommendedYes':repeatEdit?'recommendedEdit':'recommendedNo']);
+  const candidate=lastRepeatRecommendations[number];
+  if(!candidate){setNotice('Recommendation changed. Open Needs review again.');return}
+  if(repeatNo){
+   // Four-week payroll phase decisions must stay independent, even when
+   // both paychecks happen to share employer and exact dollar amount.
+   const key=candidate.frequency==='every-4-weeks'?
+    'review-series|'+encodeURIComponent(String(candidate.key)):candidate.ignoreKey;
+   await commitForecastChange(()=>{
+    state().predictions.historyPatternDecisions??={};
+    state().predictions.historyPatternDecisions[key]={
+     status:'dismissed',recommendation:{
+      key:candidate.key,accountId:candidate.accountId,
+      type:candidate.type,merchant:candidate.merchant,
+      amount:candidate.amount,frequency:candidate.frequency,
+      nextDate:candidate.nextDate,historicalIds:candidate.historicalIds||[],
+      examples:candidate.examples||[],source:'archived'
+     }
+    };
+   });
+   reviewNotice='Marked '+candidate.merchant+' Ignored. It remains in Recommended repeating and is not forecast.';
+   render();return;
+  }
+  if(repeatEdit&&candidate.matched.length){
+   if(!openSchedulePlan(candidate.matched[0].id,'',e.target))
+    setNotice('That repeating plan is no longer available.');
+   return;
+  }
+  const row=candidate.actual;
+  // When old bank records have aged out, the saved recommendation still
+  // contains enough owner-reviewed defaults to create a forecast-only plan.
+  // Its source bank transaction remains absent/immutable.
+  recurringDraft=row?
+   window.HouseholdPlannerHistory.draftFor(row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf):
+   {accountId:candidate.accountId,type:candidate.type,
+    merchant:candidate.merchant,amount:Number(candidate.amount)||0,
+    frequency:candidate.frequency||'monthly',nextDate:candidate.nextDate,
+    sourceRow:null,sourcePending:false,examples:[]};
+  // The detector's verified cadence/amount overrides generic single-row
+  // guesses, while the editable confirmation form remains authoritative.
+  if(candidate.frequency)recurringDraft.frequency=candidate.frequency;
+  if(Number(candidate.amount)>0)recurringDraft.amount=Number(candidate.amount);
+  if(candidate.nextDate)recurringDraft.nextDate=candidate.nextDate;
+  reviewNotice='Review suggested amount, frequency and next date, then save to include it in future balances.';
+  activeTab='reviews';render();
+  document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
  const reviewCandidate=e.target.closest('[data-review-candidate]');
@@ -2673,6 +2806,6 @@ if(typeof fetch==='function')fetch('/healthz',{cache:'no-store'}).then(async res
  return data?.commit&&/^[a-f0-9]{40}$/i.test(data.commit)?data.commit:null;
 }).then(sha=>{
  const target=document.getElementById('deployment-version');
- if(target)target.textContent=sha?'History Actions v1 · Render '+sha.slice(0,9):'History Actions v1 · Server unverified';
+ if(target)target.textContent=sha?'Approved Repeating v1 · Render '+sha.slice(0,9):'Approved Repeating v1 · Server unverified';
 }).catch(()=>{});
 })();
