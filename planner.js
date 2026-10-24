@@ -1381,8 +1381,20 @@ function repeatedRecommendations(bundle,s){
   normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  const saved=prefs.repeatingRecommendations||{},discovered=history.recommendedRepeating(
   actual,accounts,s.asOf,prefs);
- const next={...saved};let modified=false;
- for(const r of discovered){
+ const next={...saved},decisions=prefs.repeatingRecommendationDecisions||{};
+ const discoveredKeys=new Set();let modified=false;
+ for(const candidate of discovered){
+  // Reuse a previously ignored review identity when variable amounts shifted.
+  // Bank transaction ID overlap differentiates independent same-payee salaries.
+  const existing=Object.values(saved).filter(old=>old&&
+   old.accountId===candidate.accountId&&old.type===candidate.type&&
+   String(old.merchant).toLowerCase()===String(candidate.merchant).toLowerCase()&&
+   decisions[old.key]==='ignored').map(old=>({
+    old,overlap:(old.examples||[]).filter(e=>(candidate.examples||[])
+     .some(newer=>String(e.id)===String(newer.id))).length
+   })).sort((a,b)=>b.overlap-a.overlap);
+  const r={...candidate,key:existing[0]?.overlap>0?existing[0].old.key:candidate.key};
+  discoveredKeys.add(r.key);
   const before=next[r.key];
   if(!before||JSON.stringify(before)!==JSON.stringify(r)){
    next[r.key]=r;modified=true;
@@ -1395,6 +1407,7 @@ function repeatedRecommendations(bundle,s){
  const attached=new Map();
  for(const auto of bundle?.recurrenceMigration?.legacySeries||[]){
   const eligible=Object.values(next).filter(r=>r&&
+   (discoveredKeys.has(r.key)||decisions[r.key]==='ignored')&&
    String(r.accountId)===String(auto.accountId)&&r.type===auto.type&&
    normalize(r.merchant)===normalize(auto.merchant));
   const scored=eligible.map(r=>({
@@ -1420,6 +1433,7 @@ function repeatedRecommendations(bundle,s){
     modified=true;
    }
    target=next[key];
+   discoveredKeys.add(key);
   }
   const keys=attached.get(target.key)||[];
   if(!keys.includes(auto.seriesKey))keys.push(auto.seriesKey);
@@ -1431,8 +1445,15 @@ function repeatedRecommendations(bundle,s){
    latestError='Could not save the repeating recommendations: '+String(error.message||error);
   });
  }
- const decisions=prefs.repeatingRecommendationDecisions||{};
- return Object.values(next).filter(r=>r&&r.key&&r.accountId&&r.merchant).map(r=>{
+ // Never delete older review evidence from private storage. Only display
+ // meaningful current recommendations or formerly ignored genuine patterns;
+ // generic isolated old purchases cannot fill Needs review forever.
+ const isCredibleOld=r=>r&&(
+  Number(r.occurrences)>=2&&Boolean(history.guessFrequency(r.examples||[]))||
+  /\\b(?:mortgage|rent|insurance|premium|subscription|membership|payroll|salary|internet|electric|utilities|water|sewer|tuition|autopay)\\b/i.test(r.merchant||''));
+ return Object.values(next).filter(r=>r&&r.key&&r.accountId&&r.merchant&&(
+  discoveredKeys.has(r.key)||attached.has(r.key)||
+  decisions[r.key]==='ignored'&&isCredibleOld(r))).map(r=>{
   const actualRow=(r.examples||[]).map(e=>actual.find(t=>String(t.id)===String(e.id)))
    .find(Boolean);
   const matches=actualRow?window.HouseholdPlannerTransactions.historicalScheduleMatches(actualRow,accounts,rules):
