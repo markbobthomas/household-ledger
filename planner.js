@@ -2072,11 +2072,16 @@ document.addEventListener('click',async e=>{
   const candidate=lastRepeatRecommendations[number];
   if(!candidate){setNotice('Recommendation changed. Open Needs review again.');return}
   if(repeatNo){
+   // Four-week payroll phase decisions must stay independent, even when
+   // both paychecks happen to share employer and exact dollar amount.
+   const key=candidate.frequency==='every-4-weeks'?
+    'review-series|'+encodeURIComponent(String(candidate.key)):candidate.ignoreKey;
    await commitForecastChange(()=>{
     state().predictions.historyPatternDecisions??={};
-    state().predictions.historyPatternDecisions[candidate.ignoreKey]={
+    state().predictions.historyPatternDecisions[key]={
      status:'dismissed',recommendation:{
-      accountId:candidate.accountId,type:candidate.type,merchant:candidate.merchant,
+      key:candidate.key,accountId:candidate.accountId,
+      type:candidate.type,merchant:candidate.merchant,
       amount:candidate.amount,frequency:candidate.frequency,
       nextDate:candidate.nextDate,historicalIds:candidate.historicalIds||[],
       examples:candidate.examples||[],source:'archived'
