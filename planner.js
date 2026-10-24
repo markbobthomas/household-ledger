@@ -1415,7 +1415,8 @@ function reviewsPage(bundle,s){
     '" data-recommendation-state="'+(matches.length?'saved':ignored?'ignored':'pending')+'">'+
     '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
     '<small>'+escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency)+
-    ' · suggested '+cash(p.amount)+' · '+p.occurrences+' bank observation'+
+    ' · suggested '+cash(p.amount)+' · next '+escapeHTML(p.nextDate||'review date')+
+    ' · '+p.occurrences+' bank observation'+
     (p.occurrences===1?'':'s')+'</small>'+
     '<small>'+label+(matches.length?' · Included in forecast':
      ' · Not included in predicted balances')+'</small></div>'+
@@ -2026,13 +2027,45 @@ document.addEventListener('click',async e=>{
  if(reviewCandidate){
   const candidate=lastReviewCandidates.find(x=>x.key===reviewCandidate.dataset.reviewCandidate)||
    state().predictions?.repeatingRecommendations?.[reviewCandidate.dataset.reviewCandidate];
-  if(!candidate){setNotice('Review candidates changed. Refresh bank history.');return}
-  const source=lastHistoryRows.find(t=>String(t.id)===candidate.examples[0]?.id);
+  if(!candidate){setNotice('The recommendation is no longer available.');return}
+  const s=snapshot(),T=window.HouseholdPlannerTransactions,
+   source=lastHistoryRows.find(t=>(candidate.examples||[]).some(ex=>String(ex.id)===String(t.id))),
+   fields={accountId:candidate.accountId,merchant:candidate.merchant,
+    type:candidate.type,amount:candidate.amount,frequency:candidate.frequency,
+    date:candidate.nextDate,category:candidate.category||'Other'},
+   reference={kind:'event',accountId:candidate.accountId,
+    type:source?.type||candidate.type,amount:candidate.amount,
+    merchant:candidate.merchant,date:source?.date||candidate.lastDate,
+    sourceAmount:candidate.amount,originalMerchant:candidate.merchant,
+    ...(source?{bankTransactionId:source.id}:{})},
+   exampleIds=source?(candidate.examples||[]).map(x=>x.id):[];
+  // If a candidate is stale, needs two linked paydates, or has a conflict,
+  // open the same prefilled schedule editor instead of guessing.
+  const needsReview=!fields.date||fields.date<=s.asOf||
+   fields.date>shiftDay(s.asOf,horizon)||fields.frequency==='twice-monthly'||
+   !['expense','income','refund'].includes(fields.type);
+  if(!needsReview){
+   try{
+    const rule=await commitForecastChange(()=>T.defineRecurring(
+     state(),fields,activeAccounts(s),s.asOf,reference,model.records(state()),exampleIds));
+    recurringDraft=null;reviewNotice='Saved repeating schedule for '+candidate.merchant+
+     '. It is now included in your balance forecast and can be edited in Repeating.';
+    render();
+    return;
+   }catch(err){
+    // Matching a preexisting stream can require an exact user choice. Never
+    // auto-merge two independent schedules with similar amounts or merchants.
+    if(err.code!=='RECURRING_SCHEDULE_CHOICE'&&!/already belongs|separate|schedule/i.test(String(err.message||err))){
+     setNotice(String(err.message||err));return;
+    }
+   }
+  }
   recurringDraft={accountId:candidate.accountId,merchant:candidate.merchant,
    type:candidate.type,amount:candidate.amount,frequency:candidate.frequency,
-   nextDate:candidate.nextDate,sourceRow:source,
-   examples:candidate.examples.map(x=>x.id)};
-  reviewNotice='';render();
+   category:candidate.category||'Other',nextDate:candidate.nextDate,
+   sourceRow:source,examples:(candidate.examples||[]).map(x=>x.id)};
+  reviewNotice='Review the suggested values and save this repeating schedule.';
+  render();
   document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
