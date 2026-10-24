@@ -1311,7 +1311,11 @@ function historyPage(bundle,s){
    candidates=[...(bundle?.recommendedRepeating||[]),...(bundle?.historyCandidates||[])],
    recommended=candidates.some(c=>String(c.accountId)===aid&&c.type===kind&&
     tools.recurrenceKey(aid,kind,c.merchant)===rejectedKey),
-   status=matches.length?'confirmed':auto===false?'ignored':recommended?'suggested':'unplanned',
+   dismissed=Object.values(state().predictions?.historyPatternDecisions||{}).some(d=>
+    d?.status==='dismissed'&&d.recommendation&&
+    String(d.recommendation.accountId)===aid&&d.recommendation.type===kind&&
+    tools.recurrenceKey(aid,kind,d.recommendation.merchant)===rejectedKey),
+   status=matches.length?'confirmed':dismissed||auto===false?'ignored':recommended?'suggested':'unplanned',
    caption=matches.length?(ambiguous?'Several repeating plans':'Repeating plan saved'):
     status==='ignored'?'Ignored repeating suggestion':
     status==='suggested'?'Possible repeat':'Not repeating',
