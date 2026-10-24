@@ -1202,7 +1202,7 @@ function schedulesPage(bundle,s){
   '<button class="btn primary" type="button" data-schedule-new>+ Repeating payment</button></div>'+
   '<p class="page-task-hint">Repeating payments appear automatically on your Calendar. Select a payment to change the schedule or an upcoming date to edit just that payment.</p>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
+  '<div class="schedule-toolbar ledger-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
    '" aria-label="Schedule organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
@@ -1426,7 +1426,7 @@ function historyPage(bundle,s){
       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
-  '<form class="history-filters" data-history-filter>'+
+  '<form class="history-filters ledger-toolbar" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
