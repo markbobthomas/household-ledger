@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-weekdays-friday-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'ux-unified-three-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -1274,6 +1274,15 @@ const {chromium,webkit}=require('playwright');
      'Every Repeating row keeps its chevron as the only disclosure affordance');
     assert.equal(await page.locator('.schedule-card .schedule-row-chevron').first().innerText(),'›');
    }
+   const fourWeekPlan=page.locator('[data-schedule-card]').filter({hasText:'Every 4 weeks test payment'}).first();
+   assert.match(await fourWeekPlan.locator('.schedule-row-next').innerText(),/Oct 30/,
+    'Repeating shows the Friday forecast posting date, not the original Sunday');
+   assert.match(await fourWeekPlan.locator('.schedule-row-amount').innerText(),/55/,
+    'Repeating reads the canonically forecast amount');
+   await fourWeekPlan.locator('[data-schedule-edit]').click();
+   assert.equal(await fourWeekPlan.locator('[data-schedule-edit-form] [name=date]').inputValue(),
+    '2026-11-01','Editing the recurrence preserves its Sunday anchor without drift');
+   await fourWeekPlan.locator('[data-schedule-edit]').click();
    assert.equal(await page.locator('.schedule-discovery,[data-schedule-from-actual]').count(),0,
     'Same-merchant charges no longer create an independent heuristic panel or extra-schedule prompts');
    const beforeNumbers=await page.locator('[data-schedule-card]').evaluateAll(cards=>
@@ -1564,6 +1573,16 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await statementPage.locator('[data-repeating-statement-group]:visible').count(),0);
    await statementPage.locator('[data-schedule-search]').fill('');
    assert.equal(await statementPage.locator('[data-repeating-statement-group]:visible').count(),3);
+   const firstStatementRow=statementPage.locator('[data-statement-occurrence] [data-open-transaction]').first();
+   assert.ok(await firstStatementRow.count()>0,'Card statement groups expose their forecast items');
+   await firstStatementRow.click();
+   assert.equal(await statementPage.locator('[data-inline-transaction-editor]').count(),1,
+    'Credit-card statement prediction edits inline without navigation or a modal');
+   assert.equal(await statementPage.locator('.transaction-detail').count(),0);
+   assert.equal(await statementPage.locator('[data-inline-transaction-editor] [name=scope][value=one]').isChecked(),true);
+   await statementPage.locator('[data-inline-transaction-editor] [data-cancel-future]').click();
+   assert.equal(await statementPage.locator('[data-inline-transaction-editor]').count(),0);
+
    await statementAccount.selectOption('demo-checking');
    assert.equal(await statementPage.locator('[data-repeating-statement-periods]').count(),0);
    await statementPage.locator('.planner-nav-primary [data-view="history"]').click();
