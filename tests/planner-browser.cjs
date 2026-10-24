@@ -119,10 +119,10 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#planner-menu > summary').click();
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
    await page.keyboard.press('Escape');
-   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
+   assert.match(await page.locator('.summary-page').innerText(),/Estimated 3-month low/);
    assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
-   assert.match(await page.locator('.summary-bank').innerText(),/Demo current balance/);
+   assert.match(await page.locator('.summary-bank').innerText(),/Sample Current Balance/);
    assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').count(),1,
     'Overlapping forecast destinations are removed from the main menu');
    assert.equal(await page.locator('.calendar-drilldowns [data-view="transactions"]').count(),0,
@@ -152,9 +152,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[aria-label="Recurring forecast changes"]').count(),0,
     'Schedules, not a second Settings shortcut, own recurrence editing');
    await go('summary');
-   assert.match(await page.locator('.calendar-balance-explainer').innerText(),
-    /first balance is sample data.*Future daily balances and lows are estimates/i,
-    'A first-time user can distinguish sample bank values from estimated future balances');
+   assert.equal(await page.locator('.calendar-balance-explainer').count(),0,
+    'The redundant explanation no longer occupies Calendar space');
+   assert.equal(await page.locator('.summary-monthly .summary-overline').innerText(),
+    'Estimated Monthly Low');
+   assert.equal(await page.locator('.summary-minimum .summary-overline').innerText(),
+    'Estimated 3-month low');
    assert.match(await page.locator('[data-calendar-first-tip]').innerText(),/Choose a future date.*Edit/s,
     'The Calendar shows contextual first-use editing guidance');
    await page.locator('[data-calendar-tip-dismiss]').click();
@@ -165,10 +168,10 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0,
     'No 30/60/90 period selectors in the simplified planner');
    assert.equal(await page.locator('.summary-numbers .summary-low').count(),2,
-    'Monthly and three-year lows are both shown');
+    'Both monthly and 90-day estimated lows are shown');
    assert.deepEqual(await page.locator('.summary-numbers > div').evaluateAll(elements=>
     elements.map(el=>el.className)),['summary-bank','summary-monthly','summary-minimum'],
-    'Bank balance, monthly low, and three-year low appear in that order');
+    'Current, monthly and 90-day low figures appear in that order');
    assert.deepEqual(await page.locator('.summary-numbers > div').evaluateAll(elements=>
     elements.map(el=>({
      border:getComputedStyle(el).borderLeftWidth,
@@ -234,7 +237,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-low-alert-form] [name=lowAlertThreshold]').fill('6000');
    await page.locator('[data-low-alert-form] button[type=submit]').click();
    await go('summary');
-   assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
+   assert.match(await page.locator('.summary-numbers').innerText(),/Estimated 3-month low/);
    assert.equal(await page.locator('.calendar-checklist,.coverage-table,.summary-coverage-metric').count(),0,
     'Ambiguous major-payment assurance panels have been removed');
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
@@ -394,7 +397,7 @@ const {chromium,webkit}=require('playwright');
     await page.locator('[data-trend-days="'+n+'"]').click();
     assert.equal(await page.locator('[data-trend-days][aria-pressed="true"]').count(),1);
     assert.equal(await page.locator('.summary-minimum .summary-low').innerText(),fullMinimum,
-     'Trend windows must never change the three-year lowest balance');
+     'Trend windows must never change the 90-day headline low');
     assert.equal(await page.locator('.calendar-day.selected').count(),1,
      'Trend windows do not change the selected calendar date');
    }
@@ -777,7 +780,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#summary-account').selectOption('demo-checking');
    assert.equal(await page.locator('[data-summary-month-low]').count(),1);
    assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
-    'Switching back restores the original checking-account monthly/three-year metrics');
+    'Switching back restores the original checking-account monthly/90-day metrics');
    await go('overview');
    await page.locator('.account-tile').filter({hasText:'Rewards Visa'}).click();
    assert.match(await page.locator('.balance-main').innerText(),/\$810\.00/,'Credit card balance is shown as debt, not checking cash');
@@ -1651,12 +1654,12 @@ const {chromium,webkit}=require('playwright');
   });
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
-  assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
+  assert.match(await page.locator('.summary-page').innerText(),/Estimated 3-month low/);
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
    'Live bank current must be the Plaid current, not $4,800 available');
-  assert.match(await page.locator('.summary-bank').innerText(),/Plaid current balance/);
+  assert.match(await page.locator('.summary-bank').innerText(),/Actual Current Balance/);
 
-  assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
+  assert.match(await page.locator('.summary-numbers').innerText(),/Estimated 3-month low/);
   assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
    'Long-range calculation does not resurrect old major-payment coverage checks');
   assert.match(await page.locator('.calendar-monthly-unplanned').innerText(),/Household Visa/,
@@ -1982,7 +1985,7 @@ const {chromium,webkit}=require('playwright');
   await connectionPage.close();
   assert.deepEqual(errors,[]);
   await real.close();
-  console.log('PASS compact planner in desktop Chromium and iPhone WebKit: fixed three-year minimum, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
+  console.log('PASS compact planner in desktop Chromium and iPhone WebKit: 90-day headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
  }finally{
   if(chrome)await chrome.close();if(iphone)await iphone.close();
   for(const child of children)child.kill('SIGTERM');
