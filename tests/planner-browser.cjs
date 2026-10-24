@@ -803,11 +803,15 @@ const {chromium,webkit}=require('playwright');
     'Category dropdowns have identical visual styles across Bank activity and Repeating');
    assert.deepEqual(repeatingListRow.titleStyle,bankListRow.titleStyle,
     'Payment names have identical typography across Bank activity and Repeating');
-   for(const field of ['date','description','amount','hint','category']){
+   for(const field of ['date','description','amount','category']){
     assert.ok(Math.abs(repeatingListRow[field].x-bankListRow[field].x)<=2,
      field+' aligns horizontally across Repeating and Bank activity: '+
       JSON.stringify({bank:bankListRow,repeating:repeatingListRow}));
    }
+   assert.ok(Math.abs(
+    repeatingListRow.hint.x+repeatingListRow.hint.width-
+    bankListRow.hint.x-bankListRow.hint.width)<=2,
+    'Both variable-length action hints align at their right edge');
    assert.ok(Math.abs(repeatingListRow.height-bankListRow.height)<=3,
     'Both tabs use the same compact row height, including on iPhone');
 
