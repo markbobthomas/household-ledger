@@ -777,6 +777,36 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(computedCard,{label:'Estimated statement',statement:'$345.00',
     next:'$999.00',details:'Closes Nov 18, 2026 · 2 posted, 1 predicted →',close:'2026-11-18'},
     'Following period uses its own statement estimate, not current card debt or a future minimum');
+   // 90-day headline is NOT the older full-3-year minimum. Include day 90,
+   // exclude day 91 and retain the exact selected-day jump target.
+   const shortLowFixture=await page.evaluate(()=>{
+    const account={id:'fixture-checking',name:'Fixture Checking',
+     accountType:'checking',current:900};
+    const markup=window.HouseholdPlannerSummary.render({
+     snapshot:{asOf:'2026-10-19'},chosen:account,derived:{events:[],series:[
+      {date:'2026-10-19',balance:900,events:[]},
+      {date:'2026-11-15',balance:650,events:[]},
+      {date:'2027-01-17',balance:100,events:[]},
+      {date:'2027-01-18',balance:-500,events:[]},
+      {date:'2027-10-19',balance:-1200,events:[]}
+     ]},bundle:{rows:[],payments:{statements:[]}},days:1095,
+     prefs:{lowAlertThreshold:200,cashCushion:200},accounts:[account],
+     fresh:true,ready:()=>true
+    });
+    const doc=new DOMParser().parseFromString(markup,'text/html');
+    const metric=doc.querySelector('.summary-minimum');
+    return {bank:doc.querySelector('.summary-bank small')?.textContent,
+     month:doc.querySelector('.summary-monthly .summary-overline')?.textContent,
+     label:metric?.querySelector('.summary-overline')?.textContent,
+     amount:metric?.querySelector('.summary-low')?.textContent,
+     lowDate:metric?.querySelector('[data-summary-low-date]')?.dataset.summaryLowDate,
+     alert:metric?.querySelector('.summary-low')?.classList.contains('summary-low-alert'),
+     noCaption:doc.querySelector('.calendar-balance-explainer')===null};
+   });
+   assert.deepEqual(shortLowFixture,{bank:'Sample Current Balance',
+    month:'Estimated Monthly Low',label:'Estimated 3-month low',
+    amount:'$100.00',lowDate:'2027-01-17',alert:true,noCaption:true},
+    '90-day headline includes day 90, excludes later lows, and links to correct date');
    await page.locator('#summary-account').selectOption('demo-checking');
    assert.equal(await page.locator('[data-summary-month-low]').count(),1);
    assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
