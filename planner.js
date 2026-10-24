@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -37,7 +37,8 @@ function scheduleListNumber(id){
 
 let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSuggestions=[];
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
-let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
+let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
+let reviewCatalogSave=Promise.resolve();
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
@@ -54,7 +55,8 @@ function savePlanning(){
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
    scheduleCategories:p.scheduleCategories,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
-    mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments}));
+    mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
+    repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions}));
   return true;
  }
 }
@@ -1367,6 +1369,45 @@ function historyPage(bundle,s){
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '</div></div>';
 }
+// A cumulative, forecast-only recommendation ledger. Discovered suggestions
+// are snapshotted so later dismissals, bank refreshes and approved schedules
+// never erase the review trail. It is stored with encrypted Real preferences.
+function repeatedRecommendations(bundle,s){
+ const prefs=state().predictions||{},history=window.HouseholdPlannerHistory;
+ const saved=prefs.repeatingRecommendations||{},discovered=history.recommendedRepeating(
+  bundle?.rows||[],activeAccounts(s),s.asOf,prefs);
+ const next={...saved};let modified=false;
+ for(const r of discovered){
+  const before=next[r.key];
+  // Update current evidence, preserving earlier recommendations even when
+  // subsequent bank data changes a proposed amount or merchant descriptor.
+  if(!before||JSON.stringify(before)!==JSON.stringify(r)){
+   next[r.key]=r;modified=true;
+  }
+ }
+ if(modified){
+  prefs.repeatingRecommendations=next;
+  // Background writes only run after a completed read/render. Forecast edits
+  // await this queued persistence to avoid overtaking discovery on Real.
+  reviewCatalogSave=reviewCatalogSave.catch(()=>{}).then(()=>savePlanning()).catch(error=>{
+   latestError='Could not save the repeating recommendations: '+String(error.message||error);
+  });
+ }
+ const actual=bundle?.rows||[],accounts=activeAccounts(s),
+  rules=prefs.futureRecurringRules||{},decisions=prefs.repeatingRecommendationDecisions||{};
+ return Object.values(next).filter(r=>r&&r.key&&r.accountId&&r.merchant).map(r=>{
+  const actualRow=(r.examples||[]).map(e=>actual.find(t=>String(t.id)===String(e.id)))
+   .find(Boolean);
+  const matches=actualRow?window.HouseholdPlannerTransactions.historicalScheduleMatches(actualRow,accounts,
+   Array.isArray(rules)?rules:[]):(Array.isArray(rules)?rules:[]).filter(rule=>
+    String(rule.originalAccountId||rule.accountId||rule.fromAccountId)===String(r.accountId)&&
+    (rule.matchNames||[]).includes(String(r.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()));
+  const status=matches.length?'scheduled':decisions[r.key]==='ignored'?'ignored':'pending';
+  return {...r,status,ruleId:matches.length===1?matches[0].id:null};
+ }).sort((a,b)=>({pending:0,ignored:1,scheduled:2}[a.status]??3)-
+  ({pending:0,ignored:1,scheduled:2}[b.status]??3)||
+  b.occurrences-a.occurrences||String(b.lastDate).localeCompare(String(a.lastDate)));
+}
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
   accounts=activeAccounts(s),normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1383,26 +1424,33 @@ function reviewsPage(bundle,s){
   !mortgages.some(w=>w.accountId===a.accountId&&normalize(w.merchant)===normalize(a.merchant)));
  const duplicates=bundle?.duplicateConflicts||[],
   postedAmbiguities=bundle?.postedMatchReview||[];
- const count=regular.length+mortgages.length+weak.length+autoLow.length+duplicates.length+
+ const count=regular.length+mortgages.length+autoLow.length+duplicates.length+
   postedAmbiguities.length;
- const cards=weak.map(p=>
-  '<article class="review-candidate" data-review-item="'+escapeHTML(p.key)+'">'+
-   '<div class="review-candidate-main"><strong>'+escapeHTML(p.merchant)+'</strong>'+
-   '<small>'+escapeHTML(p.accountName)+' · '+escapeHTML(p.frequency)+
-    ' · '+p.occurrences+' actual payment'+(p.occurrences===1?'':'s')+
-    ' · Next suggested '+escapeHTML(dayLabel(p.nextDate))+'</small>'+
-   '<small>'+escapeHTML(p.reason)+' · '+escapeHTML(p.confidence==='Needs confirmation'?'Needs confirmation':p.confidence+' confidence')+'</small>'+
-   '<details class="review-examples"><summary>View matching bank transactions</summary>'+
-    p.examples.map(t=>'<div>'+escapeHTML(dayLabel(t.date))+' · '+escapeHTML(t.merchant)+
-     ' · '+cash(t.amount)+'</div>').join('')+'</details></div>'+
-   '<strong class="review-candidate-amount">'+cash(p.amount)+'</strong>'+
-   '<div class="review-candidate-actions"><button class="btn primary" type="button" data-review-candidate="'+
-     escapeHTML(p.key)+'">Review and confirm</button>'+
-    '<button class="btn" type="button" data-dismiss-candidate="'+escapeHTML(p.key)+
-     '">Not recurring</button></div></article>').join('');
+ const recommendations=repeatedRecommendations(bundle,s);
+ lastRecommendedRepeating=recommendations;
+ const actionable=recommendations.filter(r=>r.status==='pending').length;
+ const recommendedCards=recommendations.map(r=>
+  '<article class="review-candidate" data-recommended-repeat="'+escapeHTML(r.key)+
+   '" data-recommendation-status="'+r.status+'">'+
+   '<div class="review-candidate-main"><strong>'+escapeHTML(r.merchant)+'</strong>'+
+   '<small>'+escapeHTML(r.accountName)+' · Suggested '+escapeHTML(r.frequency)+
+    ' · '+r.occurrences+' posted payment'+(r.occurrences===1?'':'s')+
+    ' · Next '+escapeHTML(dayLabel(r.nextDate))+'</small>'+
+   '<small class="recommendation-state">'+(r.status==='scheduled'?'Scheduled — saved repeating payment':
+    r.status==='ignored'?'Ignored — retained for reference':'Recommended — not yet approved')+
+    '</small>'+
+   '</div><strong class="review-candidate-amount">'+cash(r.amount)+'</strong>'+
+   '<div class="review-candidate-actions">'+
+    (r.status==='scheduled'&&r.ruleId?
+     '<button type="button" class="btn" data-choose-history-schedule="'+escapeHTML(r.ruleId)+'">Edit schedule</button>':
+     '<button type="button" class="btn primary" data-review-recommendation="'+escapeHTML(r.key)+'">'+
+      (r.status==='scheduled'?'Review plans':'Yes — review schedule')+'</button>')+
+    (r.status==='pending'?'<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">No — ignore</button>':
+     r.status==='ignored'?'<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':'')+
+   '</div></article>').join('');
  const concerns=(bundle?.payments?.warnings||[]).slice(0,8);
  return '<div class="planner-page reviews-page">'+
-  '<div class="review-count-line"><span class="status-tag">'+count+
+  '<div class="review-count-line"><span class="status-tag">'+(count+actionable)+
   ' item'+(count===1?'':'s')+' to review</span></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
@@ -1410,6 +1458,14 @@ function reviewsPage(bundle,s){
     (bundle.duplicateChecks.length)+' overlapping forecast entr'+
     (bundle.duplicateChecks.length===1?'y was':'ies were')+
     ' automatically consolidated. Bank transactions were not changed.</p>':'')+
+  '<section class="panel recommended-repeating" data-recommended-repeating>'+
+   '<div class="section-title"><h2>Recommended repeating</h2>'+
+    '<span class="status-tag">'+recommendations.length+' FOUND</span></div>'+
+   '<p class="lead">Possible repeats stay on this list, even when ignored or already scheduled. '+
+    'Yes opens suggested dates, frequency and amount to review before saving; No flags an item as ignored. '+
+    'For now, existing automatic balance estimates are unchanged until the next migration step.</p>'+
+   (recommendedCards||'<p class="lead">No repeating candidates found yet. Future bank history will be checked here.</p>')+
+   '</section>'+
   (mortgages.length?missingMortgagePanel(bundle):'')+
   (regular.length?routineReviewPanel(bundle):'')+
   (autoLow.length?'<section class="panel"><div class="section-title"><h2>Uncertain repeating payments</h2>'+
@@ -1440,11 +1496,8 @@ function reviewsPage(bundle,s){
    duplicates.map(d=>'<div class="review-candidate"><span>'+escapeHTML(d.merchant||d.reason||'Competing forecast payments')+
     '</span><button type="button" class="btn" data-view="transactions">Review predicted payments</button></div>').join('')+
    '</section>':'')+
-  (weak.length?'<section class="panel"><div class="section-title"><h2>Potential recurring payments</h2>'+
-   '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
-   '<p class="lead">All recent payments are checked, including unfamiliar merchants and outgoing ACH debits. A single payment is a possibility, not proof of recurrence. Confirm amount, frequency and next date before uncertain items affect your balance.</p>'+
-   cards+'</section>':'')+
-  (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div></section>':'')+
+
+  (!count&&!actionable?'<p class="audit-footnote">No unresolved review alerts.</p>':'')+
   (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
     concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
   '</div>';
@@ -1993,6 +2046,42 @@ document.addEventListener('click',async e=>{
   }catch(err){setNotice(String(err.message||err))}
   return;
  }
+ const newRecommendation=e.target.closest('[data-review-recommendation]');
+ if(newRecommendation){
+  const candidate=lastRecommendedRepeating.find(r=>r.key===newRecommendation.dataset.reviewRecommendation);
+  if(!candidate){setNotice('That recommendation changed. Open Needs review again.');return}
+  const source=(candidate.examples||[]).map(e=>lastHistoryRows.find(t=>String(t.id)===String(e.id))).find(Boolean);
+  try{
+   // Reuse the same bank-aware form as History so alternating paychecks,
+   // transfers and posted examples are linked safely to ONE approved plan.
+   const draft=source?window.HouseholdPlannerHistory.draftFor(source,lastHistoryRows,
+    activeAccounts(snapshot()),snapshot().asOf):null;
+   if(!draft)throw Error('Bank evidence is no longer available. Keep this recommendation for review.');
+   recurringDraft={...draft,merchant:candidate.merchant,examples:draft.examples||[]};
+   reviewNotice='Suggested values are prefilled. Confirm or edit before saving a repeating schedule.';
+   render();
+   document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(error){setNotice(String(error.message||error))}
+  return;
+ }
+ const ignoreRecommendation=e.target.closest('[data-ignore-recommendation],[data-unignore-recommendation]');
+ if(ignoreRecommendation){
+  const key=ignoreRecommendation.dataset.ignoreRecommendation||ignoreRecommendation.dataset.unignoreRecommendation,
+   ignored=Boolean(ignoreRecommendation.dataset.ignoreRecommendation);
+  if(!lastRecommendedRepeating.some(r=>r.key===key)){setNotice('That suggestion has changed.');return}
+  try{
+   await commitForecastChange(()=>{
+    const p=state().predictions;
+    p.repeatingRecommendationDecisions??={};
+    if(ignored)p.repeatingRecommendationDecisions[key]='ignored';
+    else delete p.repeatingRecommendationDecisions[key];
+   });
+   reviewNotice=ignored?'Marked ignored. This recommendation stays visible here.':
+    'Recommendation is available for approval again.';
+   render();
+  }catch(error){setNotice(String(error.message||error))}
+  return;
+ }
  const reviewCandidate=e.target.closest('[data-review-candidate]');
  if(reviewCandidate){
   const candidate=lastReviewCandidates.find(x=>x.key===reviewCandidate.dataset.reviewCandidate);
@@ -2202,6 +2291,7 @@ function showRecurringScheduleChoice(form,error){
  return true;
 }
 async function commitForecastChange(action){
+ await reviewCatalogSave.catch(()=>{});
  const current=state(),before=JSON.stringify(current.predictions||{});
  try{
   const result=action();
@@ -2673,6 +2763,6 @@ if(typeof fetch==='function')fetch('/healthz',{cache:'no-store'}).then(async res
  return data?.commit&&/^[a-f0-9]{40}$/i.test(data.commit)?data.commit:null;
 }).then(sha=>{
  const target=document.getElementById('deployment-version');
- if(target)target.textContent=sha?'History Actions v1 · Render '+sha.slice(0,9):'History Actions v1 · Server unverified';
+ if(target)target.textContent=sha?'Repeating Review v1 · Render '+sha.slice(0,9):'Repeating Review v1 · Server unverified';
 }).catch(()=>{});
 })();

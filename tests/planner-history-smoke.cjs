@@ -69,6 +69,18 @@ assert.equal(T.generatedRecurring([rule],asOf,'2027-01-30').events.length,3,
  'Confirming a low-confidence candidate creates future months');
 assert.equal(H.candidates(mortgage,accounts,asOf,store.predictions,[]).length,0,
  'Confirmed source recurring bill disappears from Reviews');
+assert.ok(H.recommendedRepeating(mortgage,accounts,asOf,store.predictions).some(x=>x.merchant==='Home Mortgage ACH'),
+ 'The permanent review catalog retains candidates after saving a repeating schedule');
+assert.ok(H.recommendedRepeating(mortgage,accounts,asOf,{
+ historyPatternDecisions:{[two[0].key]:'dismissed'},
+ futureRecurrenceExclusions:{[T.recurrenceKey('checking','expense','Home Mortgage ACH')]:{
+  accountId:'checking',type:'expense',merchant:'Home Mortgage ACH',historyOptOut:true}}
+}).some(x=>x.key===two[0].key),
+ 'Ignored/excluded bank payments remain discoverable in Recommended repeating');
+assert.equal(H.recommendedRepeating([tx('old1','2025-01-02','Mortgage',2000),
+ tx('old2','2025-02-02','Mortgage',2000)],accounts,asOf,{}).length,1,
+ 'Historically observed recurring bills stay recommended even when not recent');
+
 assert.ok(I.missingMortgages(mortgage,{},accounts,asOf).length>0,
  'Missing mortgage helper remains available independently');
 const obscureSingle=H.candidates([
