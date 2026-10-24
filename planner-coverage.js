@@ -3,26 +3,26 @@
  * saved card payment rule; a card merely being connected is not coverage. */
 (function(root){
 'use strict';
+const shared=root.HouseholdPlannerTransactions||
+ (typeof require==='function'?require('./planner-transactions.js'):null);
+if(!shared)throw Error('Planner scheduling helpers are required');
 const asId=x=>String(x??'');
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const dollars=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
 const date=s=>/^\d{4}-\d{2}-\d{2}$/.test(asId(s));
-const day=(iso,delta)=>{const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta);return d.toISOString().slice(0,10)};
+const day=shared.shift;
 const monthPlus=(iso,n)=>{const [y,m,d]=iso.split('-').map(Number);
  const x=new Date(Date.UTC(y,m-1+n,1)),end=new Date(Date.UTC(x.getUTCFullYear(),x.getUTCMonth()+1,0)).getUTCDate();
  return x.toISOString().slice(0,7)+'-'+String(Math.min(d,end)).padStart(2,'0')};
 const monthEnd=m=>monthPlus(m+'-01',1).slice(0,7)+'-01';
-const daysBetween=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
+const daysBetween=shared.daysBetween;
 const titleDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const monthTitle=m=>new Date(m+'-15T12:00:00Z').toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'});
 const mortgage=s=>/\b(?:mortgage|mtg|home[\s-]*loan|pennymac|loandepot|newrez|shellpoint|mr[\s.]*cooper|rocket[\s-]*mortgage)\b/i.test(asId(s));
 const norm=s=>asId(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const credit=a=>asId(a?.accountType||a?.type).toLowerCase()==='credit';
-const accountFor=(row,accounts)=>{
- const raw=asId(row?.accountId||row?.account||'');
- const aliases=(accounts||[]).filter(a=>[a.id,a.name,a.transactionAccount].some(v=>asId(v)===raw));
- return aliases.length===1?asId(aliases[0].id):raw;
-};
+const accountFor=(row,accounts)=>
+ shared.accountRef(row?.accountId||row?.account,accounts);
 const mortgageRow=r=>[r.merchant,r.description,r.name,r.source?.name,
  r.source?.merchantName,r.personal_finance_category?.detailed,
  r.personal_finance_category?.primary,r.source?.personalFinanceCategory?.detailed,
