@@ -226,7 +226,13 @@ function dayDetail(point,card){
  const events=point.events||[],first=calendarContext.points[0],
   previousIndex=calendarContext.points.indexOf(point)-1,
   previous=previousIndex>=0?calendarContext.points[previousIndex].balance:point.balance,
-  gaps=calendarContext.gaps.get(point.date)||[];
+  gaps=calendarContext.gaps.get(point.date)||[],
+  // Sum the exact signed amounts displayed in the editable rows. Integer
+  // cents avoid rounding drift; this is presentation only, not forecast math.
+  netCents=events.reduce((sum,e)=>sum+
+   signed(e,card)*Math.round(Number(e.amount||0)*100),0),
+  netSign=netCents>0?'+':netCents<0?'−':'';
+
  // Display exactly one arithmetic trail: yesterday's balance, each signed
  // canonical predicted movement, and the canonical end-of-day balance.
  // The transaction rows remain the same editable rows used elsewhere.
@@ -239,7 +245,10 @@ function dayDetail(point,card){
     '<div class="calendar-day-transactions-head"><strong>Transactions ('+events.length+
     ')</strong></div>'+
     events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join('')+
-   '</div></div>':
+   '</div>'+
+   '<div class="calendar-day-net" data-calendar-net-change data-net-cents="'+netCents+'">'+
+    '<span>Total change</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
+   '</div>':
   '<p class="calendar-empty">No transactions predicted for this day.</p>';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
   '<div class="calendar-detail-heading"><div><span>SELECTED DAY</span><strong>'+

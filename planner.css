@@ -528,6 +528,16 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{
  padding:11px 13px;
 }
+/* A single sum of the signed rows, without repeating deposit/withdrawal
+   categories; the separate canonical end-of-day balance remains the result. */
+.calendar-day-reconciliation .calendar-day-net{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ padding:12px 13px;border-top:1px solid var(--line);
+ background:var(--soft);font-size:12px;font-weight:700;
+}
+.calendar-day-reconciliation .calendar-day-net strong{
+ white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:750;
+}
 @media(max-width:600px){
  .calendar-day-reconciliation .calendar-day-opening{padding:10px 9px}
  .calendar-day-reconciliation .calendar-day-transactions-head{padding:9px 9px 2px}
