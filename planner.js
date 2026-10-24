@@ -109,11 +109,15 @@ function archiveRepeatingRecommendations(candidates){
  const p=state().predictions||{},existing=p.repeatingRecommendations||{};
  let changed=false;
  for(const c of candidates||[]){
-  if(!c?.key||existing[c.key])continue;
-  existing[c.key]={key:c.key,accountId:c.accountId,accountName:c.accountName,
-   merchant:c.merchant,type:c.type,amount:c.amount,frequency:c.frequency,
-   nextDate:c.nextDate,lastDate:c.lastDate,occurrences:c.occurrences,
-   examples:(c.examples||[]).slice(0,6),reason:c.reason};
+  if(!c?.key)continue;
+  const latest={...(existing[c.key]||{}),key:c.key,accountId:c.accountId,
+   accountName:c.accountName,merchant:c.merchant,type:c.type,amount:c.amount,
+   category:c.category||'Other',frequency:c.frequency,nextDate:c.nextDate,
+   lastDate:c.lastDate,occurrences:c.occurrences,
+   examples:(c.examples||[]).slice(0,6),reason:c.reason,
+   ignoredLegacy:Boolean(c.ignoredLegacy)};
+  if(JSON.stringify(latest)===JSON.stringify(existing[c.key]))continue;
+  existing[c.key]=latest;
   changed=true;
  }
  if(!changed)return;
@@ -1336,7 +1340,8 @@ function historyPage(bundle,s){
     currentCandidates.find(p=>p.accountId===aid&&p.type===kind&&
      tools.recurrenceKey(aid,kind,p.merchant)===
       tools.recurrenceKey(aid,kind,t.merchant||t.name)),
-   ignored=Boolean(candidate&&decisions['recommendation|'+candidate.key]==='ignored'),
+   ignored=Boolean(candidate&&(decisions['recommendation|'+candidate.key]==='ignored'||
+    candidate.ignoredLegacy&&decisions['recommendation|'+candidate.key]!=='active')),
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
    status=matches.length?'confirmed':candidate?(ignored?'ignored':'suggested'):'unplanned',
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
@@ -1380,6 +1385,36 @@ function historyPage(bundle,s){
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '</div></div>';
 }
+// A recommendation survives after its oldest supporting bank record ages out.
+// Match a saved schedule conservatively, including the four-week payday phase.
+function savedPlansForRecommendation(p,bankRows,accounts,rules){
+ const T=window.HouseholdPlannerTransactions,
+  source=bankRows.find(t=>(p.examples||[]).some(e=>String(e.id)===String(t.id)));
+ if(source){
+  const found=T.historicalScheduleMatches(source,accounts,rules);
+  if(found.length)return found;
+ }
+ const original=T.recurrenceKey(p.accountId,p.type,p.merchant);
+ return rules.filter(r=>{
+  const account=r.originalAccountId||r.accountId||r.fromAccountId,
+   type=r.kind==='movement'?'transfer':r.originalType||r.type,
+   merchant=r.originalMerchant||r.merchant;
+  if(T.recurrenceKey(account,type,merchant)!==original)return false;
+  if(p.frequency==='every-4-weeks'){
+   if(r.frequency!=='every-4-weeks')return false;
+   const a=Date.parse(String(p.nextDate||p.lastDate)+'T12:00:00Z'),
+    b=Date.parse(String(r.anchorDate||'')+'T12:00:00Z');
+   if(!Number.isFinite(a)||!Number.isFinite(b))return false;
+   const days=Math.abs(Math.round((a-b)/86400000))%28;
+   return Math.min(days,28-days)<=3;
+  }
+  if(p.key?.includes('|day')){
+   return String(r.anchorDate||'').slice(-2)===
+    String(p.nextDate||p.lastDate||'').slice(-2);
+  }
+  return true;
+ });
+}
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
   accounts=activeAccounts(s),normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1399,17 +1434,18 @@ function reviewsPage(bundle,s){
  const count=regular.length+mortgages.length+Object.values({
    ...(state().predictions?.repeatingRecommendations||{}),
    ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))}).filter(p=>
-  (state().predictions?.historyPatternDecisions||{})['recommendation|'+p.key]!=='ignored').length+autoLow.length+duplicates.length+
+  !((state().predictions?.historyPatternDecisions||{})['recommendation|'+p.key]==='ignored'||
+   (p.ignoredLegacy&&(state().predictions?.historyPatternDecisions||{})['recommendation|'+p.key]!=='active'))).length+autoLow.length+duplicates.length+
   postedAmbiguities.length;
  const allRecommendations=Object.values({...(state().predictions?.repeatingRecommendations||{}),
-   ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))}),
+   ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))})
+   .sort((a,b)=>String(b.lastDate||'').localeCompare(String(a.lastDate||''))),
   saved=state().predictions?.futureRecurringRules||[],
   decisionMap=state().predictions?.historyPatternDecisions||{},
   repeatingCards=allRecommendations.map(p=>{
-   const source=lastHistoryRows.find(t=>p.examples.some(e=>String(e.id)===String(t.id)));
-   const matches=source?window.HouseholdPlannerTransactions.historicalScheduleMatches(
-    source,accounts,saved):[];
-   const ignored=decisionMap['recommendation|'+p.key]==='ignored',
+   const matches=savedPlansForRecommendation(p,lastHistoryRows,accounts,saved),
+    decision=decisionMap['recommendation|'+p.key],
+    ignored=decision==='ignored'||Boolean(p.ignoredLegacy&&decision!=='active'),
     label=matches.length?'Saved schedule':ignored?'Ignored':'Awaiting approval';
    return '<article class="review-candidate" data-repeating-recommendation="'+escapeHTML(p.key)+
     '" data-recommendation-state="'+(matches.length?'saved':ignored?'ignored':'pending')+'">'+
@@ -2078,9 +2114,9 @@ document.addEventListener('click',async e=>{
    await commitForecastChange(()=>{
     state().predictions.historyPatternDecisions??={};
     const key='recommendation|'+item.key;
-    if(state().predictions.historyPatternDecisions[key]==='ignored')
-     delete state().predictions.historyPatternDecisions[key];
-    else state().predictions.historyPatternDecisions[key]='ignored';
+    const status=state().predictions.historyPatternDecisions[key],
+     ignored=status==='ignored'||(item.ignoredLegacy&&status!=='active');
+    state().predictions.historyPatternDecisions[key]=ignored?'active':'ignored';
    });
    reviewNotice='Recommendation status updated. The item remains in Recommended repeating.';
    render();
