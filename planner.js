@@ -1283,7 +1283,7 @@ function schedulesPage(bundle,s){
      (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
    '</select></label>'+
    '<details class="schedule-category-manager" data-schedule-category-manager>'+
-    '<summary>+ Category</summary>'+
+    '<summary title="Add category" aria-label="Add category">+</summary>'+
     '<form data-schedule-category-add><label>New category<input name="categoryName" maxlength="40" '+
     'placeholder="e.g. Pet care" required></label>'+
     '<button type="submit" class="btn">Add</button></form>'+
@@ -1521,6 +1521,7 @@ function historyPage(bundle,s){
    '<button class="btn ledger-history-search-button" type="submit">Search</button>'+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
+  (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':'')+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   // Minimal non-browser safety harnesses cannot emulate row expansion.
   // Preserve their bank-linked confirmation form without affecting browsers.
