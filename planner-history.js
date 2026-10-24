@@ -203,13 +203,71 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[],optio
   b.amount-a.amount);
  return (options.unlimited?sorted:sorted.slice(0,100)).map(({_priority,...item})=>item);
 }
-// Review inventory is independent of the automatic forecast permission and
-// dismissed/saved states. Those decisions affect the *label*, never visibility.
-function recommendedRepeating(records,accounts,asOf,preferences={}){
- return candidates(records,accounts,asOf,{
-  ...preferences,historyPatternDecisions:{},plannerRoutineDecisions:{},
-  futureRecurrenceExclusions:{},futureRecurringRules:[],mortgageReviewDismissals:[]
- },[],{includeOld:true,unlimited:true});
+// The dedicated Needs review queue is NOT the entire bank ledger. Ordinary
+// one-off purchases can always be scheduled in History but never appear here
+// unless there is credible recurring evidence. Variable utilities are grouped
+// by account/payee/direction rather than an exact amount.
+function recommendedRepeating(records,accounts,asOf){
+ const groups=new Map(),output=[];
+ for(const t of records||[]){
+  if(!canPlan(t)||t.pending||Number(t.amount)<=0||t.date>asOf||t.pairedTransactionId)continue;
+  const type=t.type==='transfer'?(t.cashDirection==='out'?'expense':
+   t.cashDirection==='in'?'income':null):t.type;
+  if(!['expense','income'].includes(type))continue;
+  const aid=accountOf(t,accounts),bank=accounts.find(a=>String(a.id)===aid);
+  if(!bank||String(bank.accountType||bank.type).toLowerCase()==='loan'||
+   String(bank.accountType||bank.type).toLowerCase()==='credit'&&type==='income')continue;
+  const merchant=norm(t.merchant||t.name);
+  if(!merchant)continue;
+  const id=[aid,type,merchant].map(encodeURIComponent).join('|');
+  if(!groups.has(id))groups.set(id,{accountId:aid,accountName:bank.name||aid,
+   merchant:String(t.merchant||t.name),type,rows:[],name:merchant});
+  groups.get(id).rows.push(t);
+ }
+ for(const g of groups.values()){
+  g.rows.sort((a,b)=>a.date.localeCompare(b.date));
+  const latest=g.rows.at(-1),f=guessFrequency(g.rows),
+   bill=namesBill.test(g.merchant)||g.rows.some(pfcRecurring)||
+    ['Housing','Insurance','Subscriptions','Utilities'].includes(latest.category),
+   age=diff(asOf,latest.date);
+  // An old confirmed recurring pattern remains available in the permanent
+  // inventory. A single recent recognizable bill is useful for confirmation,
+  // but a random one-off charge is not.
+  if(!f&&!(bill&&(g.rows.length>=3||g.rows.length===1&&age<=75)))continue;
+  const payroll=g.type==='income'&&f==='biweekly'&&g.rows.length>=4;
+  const pay=g.rows.slice(-4),a=payroll?(Number(pay[0].amount)+Number(pay[2].amount))/2:0,
+   b=payroll?(Number(pay[1].amount)+Number(pay[3].amount))/2:0,
+   tolerance=Math.max(3,(a+b)/2*.003),
+   alternating=payroll&&Math.abs(Number(pay[0].amount)-Number(pay[2].amount))<=tolerance&&
+    Math.abs(Number(pay[1].amount)-Number(pay[3].amount))<=tolerance&&
+    Math.abs(a-b)>=Math.max(2,(a+b)/2*.004);
+  const segments=alternating?[g.rows.filter(t=>Math.abs(diff(t.date,pay[2].date))%28<=3||
+    Math.abs(diff(t.date,pay[2].date))%28>=25),
+   g.rows.filter(t=>Math.abs(diff(t.date,pay[3].date))%28<=3||
+    Math.abs(diff(t.date,pay[3].date))%28>=25)]:[g.rows];
+  for(const segment of segments){
+   if(!segment.length)continue;
+   const newest=segment.at(-1),frequency=alternating?'every-4-weeks':f||'monthly',
+    equal=segment.every(t=>amount(t.amount)===amount(newest.amount)),
+    // Preserve legacy fixed-amount keys (and their previous Ignore decisions).
+    // Variable bills get a stable account/payee identity across later amounts.
+    identity=equal?String(amount(newest.amount)):alternating?
+     String(amount(newest.amount)):'variable',
+    key=[g.accountId,g.type,g.name,identity].map(encodeURIComponent).join('|'),
+    upcoming=nextDate(newest.date,frequency,asOf);
+   if(!upcoming)continue;
+   output.push({key,accountId:g.accountId,accountName:g.accountName,
+    merchant:g.merchant,amount:Number(newest.amount),type:g.type,frequency,
+    confidence:f?'Medium':'Needs confirmation',occurrences:segment.length,
+    lastDate:newest.date,nextDate:upcoming,
+    examples:segment.slice(-8).reverse().map(t=>({id:String(t.id||''),date:t.date,
+     amount:Number(t.amount),merchant:String(t.merchant||'')})),
+    reason:segment.length===1?'Recognizable bill awaiting confirmation':
+     'Repeated payment dates on this account; amounts may vary'});
+  }
+ }
+ return output.sort((a,b)=>b.occurrences-a.occurrences||
+  b.lastDate.localeCompare(a.lastDate));
 }
 const api={candidates,recommendedRepeating,guessFrequency,nextDate,canPlan,accountOf,draftFor,isMortgage};
 root.HouseholdPlannerHistory=api;
