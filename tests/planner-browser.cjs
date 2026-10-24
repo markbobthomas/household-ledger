@@ -1615,6 +1615,39 @@ const {chromium,webkit}=require('playwright');
    await statementPage.locator('[data-history-filter] button[type=submit]').click();
    assert.deepEqual(await historicalGroups.locator('.ledger-statement-total').allInnerTexts(),
     ['Net charges $50.00']);
+   // Five-field creation uses the friendly name as the default merchant;
+   // renaming later must not alter that bank-matching identity.
+   await statementPage.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await statementPage.locator('[data-schedule-new]').click();
+   const simpleForm=statementPage.locator('[data-schedule-new-form]');
+   assert.equal(await simpleForm.locator('[data-schedule-advanced]').getAttribute('open'),null);
+   assert.equal(await simpleForm.locator('.schedule-primary-fields > label:visible').count(),5);
+   await simpleForm.locator('[name=scheduleLabel]').fill('Simple forecast bill');
+   await simpleForm.locator('[name=amount]').fill('22');
+   await simpleForm.locator('[name=date]').fill('2026-11-11');
+   await simpleForm.locator('[name=accountId]').selectOption('demo-checking');
+   await simpleForm.locator('[type=submit]').click();
+   const simpleRule=await statementPage.evaluate(()=>{
+    const rules=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules||[];
+    return rules.find(r=>r.scheduleLabel==='Simple forecast bill');
+   });
+   assert.ok(simpleRule,'The short form saves a new recurring schedule');
+   assert.equal(simpleRule.merchant,'Simple forecast bill',
+    'A default bank merchant is generated without opening advanced options');
+   await statementPage.locator('[data-schedule-card]').filter({hasText:'Simple forecast bill'}).first()
+    .locator('[data-schedule-edit]').click();
+   const simpleEdit=statementPage.locator('[data-schedule-edit-form]').first();
+   assert.equal(await simpleEdit.locator('[name=merchant]').inputValue(),'Simple forecast bill');
+   await simpleEdit.locator('[name=scheduleLabel]').fill('Friendlier forecast bill');
+   await simpleEdit.locator('[type=submit]').click();
+   const renamedRule=await statementPage.evaluate(()=>{
+    const rules=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules||[];
+    return rules.find(r=>r.scheduleLabel==='Friendlier forecast bill');
+   });
+   assert.equal(renamedRule?.id,simpleRule.id,'Renaming retains the schedule identity');
+   assert.equal(renamedRule?.merchant,'Simple forecast bill',
+    'Renaming the friendly label never mutates the original matching merchant');
+   assert.deepEqual(statementErrors,[]);
    await statementCtx.close();
    assert.deepEqual(statementErrors,[]);
    await context.close();
