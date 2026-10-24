@@ -440,10 +440,10 @@ const {chromium,webkit}=require('playwright');
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
    await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
-   assert.equal(await page.evaluate(amount=>Object.values(
-    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).some(x=>x.amount===amount),newAmount),true,
-    'Series edit is persisted and survives generation of next-month forecasts');
+   assert.equal(await page.evaluate(amount=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules?.some(r=>r.merchant==='Mortgage'&&r.amount===amount),newAmount),true,
+    'Editing all future occurrences updates the ONE saved repeating schedule');
    const futureMortgageRows=page.locator('.future-item').filter({hasText:'Mortgage'});
    if(await futureMortgageRows.count()>1){
     const repeated=await futureMortgageRows.locator('.future-amount').allInnerTexts();
@@ -451,11 +451,12 @@ const {chromium,webkit}=require('playwright');
      'Visible mortgage months adopt the same new series amount');
    }
    await futureMortgageRows.first().locator('[data-edit-future]').click();
-   assert.ok(await page.locator('[data-reset-series]').count(),'Entire repeating rule can be reset');
-   await page.locator('[data-reset-series]').click();
+   assert.equal(await page.locator('[data-reset-series]').count(),0,
+    'Confirmed schedule editing has no redundant series-override reset');
    assert.equal(await page.evaluate(()=>Object.keys(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).length),0,'Reset all future restores the confirmed recurring schedule defaults');
+   ).length),0,'No shadow automatic-series edits duplicate the saved plan');
+   await page.locator('[data-cancel-future]').click();
    await page.locator('[data-show-new]').click();
    await page.locator('#future-new-form [name=merchant]').fill('One-time home repair');
    await page.locator('#future-new-form [name=amount]').fill('125');
