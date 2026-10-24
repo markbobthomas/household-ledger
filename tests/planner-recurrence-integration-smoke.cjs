@@ -53,6 +53,14 @@ sandbox.createHouseholdLedgerDemo=()=>{
  }];
  return original;
 };
+// Instrument the real UI's canonical engine, not a mock forecast. Tab switches
+// must reuse its result; a newly approved schedule must invalidate the cache.
+let forecastBuilds=0;
+const originalMaterialize=sandbox.HouseholdFutureLedger.materialize;
+sandbox.HouseholdFutureLedger.materialize=(...args)=>{
+ forecastBuilds++;
+ return originalMaterialize(...args);
+};
 vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../planner.js'),'utf8'),
  context,{filename:'planner.js'});
 async function click(marker,dataset){
@@ -74,6 +82,11 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.equal(occurrences(initial),36,
   'One posted mortgage automatically creates November, December, January without review');
  assert.match(initial,/Nov 15/);
+ const buildsBeforeNavigation=forecastBuilds;
+ await click('[data-view]',{view:'history'});
+ await click('[data-view]',{view:'transactions'});
+ assert.equal(forecastBuilds,buildsBeforeNavigation,
+  'Switching tabs without changing financial data must reuse the same three-year projection');
  assert.equal((initial.match(/ABC Draft 984/g)||[]).length,36,
   'Unfamiliar merchant with two real equal monthly payments appears automatically');
  assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
@@ -83,8 +96,11 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  await click('[data-history-plan]',{
   historyPlan:'solo-bank-mortgage',historyAccount:'demo-checking'});
  assert.match(future(),/Save recurring forecast/);
+ const buildsBeforeSave=forecastBuilds;
  await submit({merchant:'Home Mortgage ACH',accountId:'demo-checking',
   date:'2026-11-25',amount:'2000',type:'expense',frequency:'monthly'});
+ assert.ok(forecastBuilds>buildsBeforeSave,
+  'Editing a schedule must invalidate the projection, even when state mutates in place');
  const saved=JSON.parse(store['household-planner-sample-settings-v1']||'{}');
  assert.equal(saved.futureRecurringRules.length,1);
  assert.equal(saved.futureRecurringRules[0].date,'2026-11-25');
