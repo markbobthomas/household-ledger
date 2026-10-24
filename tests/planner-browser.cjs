@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'repeating-count-strip-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'card-statement-90day-low-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -647,6 +647,60 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.chart-caption').innerText(),/projection/i);
    assert.equal(await page.locator('#horizon').count(),0);
    assert.match(await page.locator('[aria-label="Projected balance curve"] .section-title').innerText(),/3 years|1095 days/);
+   // Card-only calendar metrics are intentionally different from checking lows.
+   await go('summary');
+   const demoCardId=await page.locator('#summary-account option').filter({hasText:'Rewards Visa'}).getAttribute('value');
+   assert.ok(demoCardId,'Demo has a selectable credit-card forecast');
+   await page.locator('#summary-account').selectOption(demoCardId);
+   assert.equal(await page.locator('[data-summary-month-low]').count(),0,
+    'A selected credit card does not show the checking-account monthly low');
+   assert.equal(await page.locator('[data-summary-card-statement]').count(),1);
+   assert.match(await page.locator('[data-summary-card-statement] .summary-overline').innerText(),
+    /^(Statement balance|Estimated statement)$/);
+   assert.equal(await page.locator('[data-summary-card-90day-low] .summary-overline').innerText(),
+    '3-month estimated low');
+   assert.equal(await page.locator('[data-summary-card-low-value]').count(),1);
+   assert.equal(await page.locator('.summary-numbers > div').count(),3,
+    'Credit-card summary retains the same 3-column geometry as checking');
+   const cardLowDate=await page.locator('[data-summary-card-90day-low] [data-summary-low-date]')
+    .getAttribute('data-summary-low-date');
+   assert.ok(cardLowDate>='2026-10-19'&&cardLowDate<='2027-01-17',
+    'The three-month credit-card low never includes a date from years two or three');
+   assert.equal(await page.locator('[data-summary-card-low-value].summary-low-alert').count(),0,
+    'Lower card debt is not incorrectly highlighted as a checking cash shortfall');
+   // An intentionally lower debt point beyond day 90 must NOT determine
+   // the credit-card metric, and a future issued bill must not replace the
+   // earlier available estimate for the next statement.
+   const computedCard=await page.evaluate(()=>{
+    const account={id:'fixture-card',name:'Fixture card',type:'credit',accountType:'credit',current:900};
+    const markup=window.HouseholdPlannerSummary.render({
+     snapshot:{asOf:'2026-10-19'},chosen:account,
+     derived:{series:[
+      {date:'2026-10-19',balance:900,events:[]},
+      {date:'2026-11-19',balance:700,events:[]},
+      {date:'2027-01-17',balance:600,events:[]},
+      {date:'2027-04-19',balance:20,events:[]}],events:[]},
+     bundle:{rows:[],payments:{statements:[
+      {cardId:'fixture-card',dueDate:'2026-11-19',withdrawalDate:'2026-11-19',
+       confirmed:false,statementBalance:345},
+      {cardId:'fixture-card',dueDate:'2026-12-19',withdrawalDate:'2026-12-19',
+       confirmed:true,statementBalance:999}]}},
+     days:200,prefs:{},accounts:[account],fresh:true,ready:()=>true
+    });
+    const doc=new DOMParser().parseFromString(markup,'text/html');
+    return {label:doc.querySelector('[data-summary-card-statement] .summary-overline')?.textContent,
+     statement:doc.querySelector('[data-summary-statement-value]')?.textContent,
+     low:doc.querySelector('[data-summary-card-low-value]')?.textContent,
+     date:doc.querySelector('[data-summary-card-90day-low] [data-summary-low-date]')?.dataset.summaryLowDate};
+   });
+   assert.deepEqual(computedCard,{label:'Estimated statement',statement:'$345.00',
+    low:'$600.00',date:'2027-01-17'},
+    'Calendar uses next estimated statement and the lowest card debt only within day 90');
+   await page.locator('#summary-account').selectOption('demo-checking');
+   assert.equal(await page.locator('[data-summary-month-low]').count(),1);
+   assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
+    'Switching back restores the original checking-account monthly/three-year metrics');
+   await go('overview');
    await page.locator('.account-tile').filter({hasText:'Rewards Visa'}).click();
    assert.match(await page.locator('.balance-main').innerText(),/\$810\.00/,'Credit card balance is shown as debt, not checking cash');
    assert.match(await page.locator('.hero-footnote').first().innerText(),/debt/);
@@ -1538,6 +1592,22 @@ const {chromium,webkit}=require('playwright');
   assert.match(await cardForm.locator('.card-statement-preview').first().innerText(),/Planned/,
    'Before bank posts withdrawal, its date is explicitly a plan, not actual history');
   await go('summary');
+  await page.locator('#summary-account').selectOption('credit-real');
+  assert.equal(await page.locator('[data-summary-card-statement] .summary-overline').innerText(),
+   'Statement balance','An issued statement is labeled separately from a forecast estimate');
+  assert.equal(await page.locator('[data-summary-statement-value]').innerText(),'$1,200.00',
+   'Calendar uses the validated issued amount, not the card current debt or checking withdrawal');
+  assert.equal(await page.locator('[data-summary-card-90day-low] .summary-overline').innerText(),
+   '3-month estimated low');
+  assert.equal(await page.locator('[data-summary-month-low]').count(),0);
+  const dueButton=page.locator('[data-calendar-card-statement-date]');
+  assert.equal(await dueButton.count(),1,'Issued card statement provides a due-date drilldown');
+  await dueButton.click();
+  assert.equal(await page.locator('.calendar-day.selected').getAttribute('data-calendar-day'),
+   '2026-11-12','Statement date opens the matching day inside the selected card calendar');
+  await page.locator('#summary-account').selectOption('checking-real');
+  assert.equal(await page.locator('[data-summary-month-low]').count(),1,
+   'Checking metrics are unaffected by selecting a credit card');
   await page.locator('[data-calendar-today]').click();
   await page.locator('[data-calendar-nav="1"]').click();
   await page.locator('[data-calendar-day="2026-11-11"]').click();
