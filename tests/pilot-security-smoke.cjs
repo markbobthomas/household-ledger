@@ -30,6 +30,13 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect accounts/,'Plaid authorization available on same website');
   assert.equal((await get('/pilot/data-source.js',true)).status,200);
   assert.equal((await get('/planner-transactions.js',true)).status,200,'Protected server serves forecast-only editing module');
+  // Retired Phase 4 accuracy/readiness research was not part of the site.
+  // The authenticated server must no longer expose those obsolete scripts.
+  for(const asset of ['feed-health.js','accuracy-fixture.js','accuracy-fixture-holdout.js',
+    'accuracy-fixture-seasonal.js','accuracy-lab.js','stress-lab.js','readiness-lab.js']){
+   assert.equal((await get('/'+asset,true)).status,404,
+    'Retired laboratory asset must not remain a served browser dependency: '+asset);
+  }
   const denied=await new Promise((resolve,reject)=>{
    const req=http.request({hostname:'127.0.0.1',port,path:'/api/ledger/adjustments?ref=planner',
     method:'POST',headers:{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64'),
