@@ -12,6 +12,11 @@ const cash=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable'
 const dateToday=()=>new Date().toLocaleDateString('en-CA');
 const dayLabel=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+ const warningThreshold=prefs=>{
+  for(const v of [prefs?.warnBelow,prefs?.lowAlertThreshold,prefs?.cashCushion])
+   if(v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))&&Number(v)>=0)return Number(v);
+  return 500;
+ };
 const model=window.HouseholdLedgerData;
 const available=()=>Boolean(window.HouseholdLiveSource);
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
@@ -20,7 +25,7 @@ const DEMO_SETTINGS='household-planner-sample-settings-v1';
 try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
-  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold',
+  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
     'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
@@ -55,7 +60,7 @@ function savePlanning(){
  else {
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
-   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,
+   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
    scheduleCategories:p.scheduleCategories,
@@ -159,7 +164,7 @@ function hero(a,derived,asOf){
  const credit=derived.type==='credit';
  const status=textForStatus(derived),fresh=freshness(derived),isCash=!credit;
  const opening=credit?derived.openingCurrent:derived.openingAvailable??derived.openingCurrent;
- const safety=Number(state().predictions?.cashCushion??500);
+ const safety=warningThreshold(state().predictions);
  const horizonSeries=(derived.series||[]).filter(d=>d.date<=shiftDay(asOf,horizon));
  const validPoints=horizonSeries.filter(d=>Number.isFinite(d.balance));
  const lowPoint=validPoints.length?validPoints.reduce((a,b)=>a.balance<=b.balance?a:b):null;
@@ -218,7 +223,7 @@ function movementRows(a,derived,s,routine){
    '<div><div class="payment-name">'+escapeHTML(e.merchant||'Scheduled movement')+'</div><div class="payment-meta">'+escapeHTML(suffix)+
     (tags.get(String(e.id))==='suggested'?' · SUGGESTED · confirm below':tags.get(String(e.id))==='confirmed'?' · Confirmed':' · Planned')+'</div></div>'+
    '<div class="payment-value '+(income?'incoming':'outgoing')+'">'+(income?'+':'−')+cash(e.amount)+'</div>'+
-   '<div class="after-value"><strong class="'+(!freshness(derived)||!Number.isFinite(ending)?'':derived.type!=='credit'&&ending<Number(state().predictions?.cashCushion??500)?'risk':'')+'">'+
+   '<div class="after-value"><strong class="'+(!freshness(derived)||!Number.isFinite(ending)?'':derived.type!=='credit'&&ending<warningThreshold(state().predictions)?'risk':'')+'">'+
     (freshness(derived)&&Number.isFinite(ending)?cash(ending):'Unverified')+'</strong><small>End of day</small></div></div>';
  };
  return '<div class="list-head"><span>Date</span><span>Expected movement</span><span style="text-align:right">Amount</span><span style="text-align:right">Balance after</span></div>'+
@@ -1851,14 +1856,10 @@ function settingsPage(bundle,s,chosen){
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
   '<h2>Settings</h2></div></div>'+
   '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
-   '<form id="cushion-form" data-cushion-form><label class="cash-cushion-label">Low-balance warning threshold ($)'+
-    '<input type="number" name="cashCushion" min="0" step="1" max="999999999" value="'+
-     escapeHTML(state().predictions?.cashCushion??500)+'" required></label>'+
-    '<button class="btn primary" type="submit">Save threshold</button></form>'+ 
-   '<form data-low-alert-form><label class="cash-cushion-label">Red highlight below ($)'+
-    '<input type="number" name="lowAlertThreshold" min="0" max="999999999" step="1" value="'+
-    escapeHTML(Number.isFinite(Number(state().predictions?.lowAlertThreshold))&&state().predictions?.lowAlertThreshold!=null?state().predictions.lowAlertThreshold:6000)+'" required></label>'+
-    '<button class="btn primary" type="submit">Save highlight</button></form></section>'+
+   '<form data-warning-form><label class="cash-cushion-label">Warn below ($)'+
+    '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
+    escapeHTML(warningThreshold(state().predictions))+'" required></label>'+
+    '<button class="btn primary" type="submit">Save</button></form></section>'+
   (state().predictions?.recurringForecastMode!=='approved-only'&&
    Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
   '<section class="panel mini-panel" aria-label="Automatic prediction exclusions">'+
@@ -2852,7 +2853,7 @@ document.addEventListener('change',e=>{
 });
 
 document.addEventListener('submit',async e=>{
- const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-cushion-form],[data-low-alert-form]');
+ const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-warning-form]');
  if(!form)return;
  e.preventDefault();
  const button=form.querySelector('button[type="submit"]');
@@ -2914,14 +2915,16 @@ document.addEventListener('submit',async e=>{
     transactionNotice='Future transaction added to the selected account.';
    }
    showNewTransaction=false;mortgageDraft=null;
-  }else if(form.hasAttribute('data-low-alert-form')){
-   const raw=String(fields.lowAlertThreshold??'').trim(),value=Number(raw);
-   if(!raw||!Number.isInteger(value)||value<0||value>999999999)throw Error('Enter a valid whole-dollar amount.');
-   await commitForecastChange(()=>{state().predictions.lowAlertThreshold=value});
-   transactionNotice='Red highlight threshold saved.';
-  }else{
-   await commitForecastChange(()=>model.setCashCushion(state(),fields.cashCushion));
-   transactionNotice='Safety threshold saved.';
+  }else if(form.hasAttribute('data-warning-form')){
+   const raw=String(fields.warnBelow??'').trim(),value=Number(raw);
+   if(!raw||!Number.isInteger(value)||value<0||value>999999999)
+    throw Error('Enter a valid whole-dollar warning amount.');
+   await commitForecastChange(()=>{
+    state().predictions.warnBelow=value;
+    model.setCashCushion(state(),value);
+    state().predictions.lowAlertThreshold=value; // keep old saved readers in sync
+   });
+   transactionNotice='Low-balance warning saved.';
   }
   render();
  }catch(err){
