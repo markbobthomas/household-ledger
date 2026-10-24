@@ -489,6 +489,46 @@ function rawBalanceMarkup(account,real){
   '</small><strong data-bank-current-value>'+displayed+'</strong>'+
   '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
 }
+// Issued card statements and reconstructed statement estimates are already
+// differentiated by the canonical card obligations engine. Never substitute
+// an outstanding card debt balance for a statement amount.
+function cardCalendarMetrics(bundle,cardId,asOf,points){
+ const statements=(bundle?.payments?.statements||[]).filter(p=>
+  String(p.cardId)===String(cardId)&&String(p.dueDate||'')>=asOf)
+  .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))||
+   String(a.withdrawalDate).localeCompare(String(b.withdrawalDate)));
+ const next=statements[0]||null,
+  hasStatement=next&&next.statementBalance!==null&&next.statementBalance!==undefined&&
+   Number.isFinite(Number(next.statementBalance))&&Number(next.statementBalance)>=0,
+  issued=Boolean(hasStatement&&next.confirmed);
+ const end=new Date(asOf+'T12:00:00Z');
+ end.setUTCDate(end.getUTCDate()+90);
+ const through=end.toISOString().slice(0,10),
+  eligible=(points||[]).filter(p=>p.date>=asOf&&p.date<=through&&
+   Number.isFinite(p.balance)),
+  low=eligible.length?eligible.reduce((a,b)=>b.balance<a.balance?b:a):null;
+ const statementDate=next?.dueDate||'',
+  navigable=Boolean(statementDate&&(points||[]).some(p=>p.date===statementDate));
+ return '<div class="summary-monthly" data-summary-card-statement>'+
+  '<div class="summary-overline">'+(issued?'Statement balance':'Estimated statement')+'</div>'+
+  '<strong class="summary-low" data-summary-statement-value>'+
+   (hasStatement?money(Number(next.statementBalance)):'Not available')+'</strong>'+
+  (hasStatement?
+   (navigable?'<button type="button" class="summary-low-date" data-calendar-card-statement-date="'+
+    esc(statementDate)+'">':'<small class="summary-low-date">')+
+    esc((issued?'Issued':'Estimated')+' · Due '+dateLabel(statementDate))+
+    (navigable?' →</button>':'</small>'):
+   '<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
+  '</div>'+
+  '<div class="summary-minimum" data-summary-card-90day-low>'+
+  '<div class="summary-overline">3-month estimated low</div>'+
+  '<strong class="summary-low" data-summary-card-low-value>'+
+   (low?money(low.balance):'Unverified')+'</strong>'+
+  (low?'<button type="button" class="summary-low-date" data-summary-low-date="'+
+    esc(low.date)+'">'+esc(dateLabel(low.date))+' →</button>':
+    '<small class="summary-low-date">No projected date</small>')+
+  '</div>';
+}
 function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
  trendDays=1095; // Chart reset after switching account or bank refresh.
@@ -549,8 +589,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
    '</section></div>';
   return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
    '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
-   '<div class="summary-minimum"><div class="summary-overline">Lowest projected balance · next 3 years</div>'+
-   '<strong class="summary-low">Unverified</strong></div></div>'+
+   (credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,[]):
+    '<div class="summary-minimum"><div class="summary-overline">Lowest projected balance · next 3 years</div>'+
+    '<strong class="summary-low">Unverified</strong></div>')+'</div>'+
    '<div class="summary-empty">A verified starting balance is needed for this account. '+esc(reason)+
    ' <button class="btn" type="button" data-repair-open>How to fix</button></div>'+
    '</section>'+repair+'</div>';
@@ -576,22 +617,22 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
-  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+'<div class="summary-monthly" data-summary-month-low>'+
-  '<div class="summary-overline">Monthly low</div>'+
-  '<strong class="summary-low'+(monthLow(calendarMonth)?.balance<alertThreshold(prefs)?' summary-low-alert':'')+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
-  '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
-  (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
-  '</div>'+
-
-'<div class="summary-minimum">'+
-  '<div class="summary-overline">'+(credit?'3-year card debt low':'3-year low')+'</div>'+
-  '<strong class="summary-low'+(low<alertThreshold(prefs)?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
-  '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
-  '">'+esc(dateLabel(lowDay.date))+' →</button>'+
-  (negative?'<small class="summary-low-warning">Below $0</small>':
-   below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
-  '</div></div>'+
-  '<p class="calendar-balance-explainer">'+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
+   '<div class="summary-monthly" data-summary-month-low>'+
+    '<div class="summary-overline">Monthly low</div>'+
+    '<strong class="summary-low'+(monthLow(calendarMonth)?.balance<alertThreshold(prefs)?' summary-low-alert':'')+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
+    '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
+     (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
+    '</div>'+
+    '<div class="summary-minimum">'+
+    '<div class="summary-overline">3-year low</div>'+
+    '<strong class="summary-low'+(low<alertThreshold(prefs)?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
+    '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
+    '">'+esc(dateLabel(lowDay.date))+' →</button>'+
+    (negative?'<small class="summary-low-warning">Below $0</small>':
+     below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
+    '</div>')+'</div>'+
+    '<p class="calendar-balance-explainer">'+
   (isReal?'The first balance is bank-reported.':'The first balance is sample data.')+
   ' Future daily balances and lows are estimates based on predicted payments.</p>'+
   calendarGrid()+'</section>'+
@@ -769,6 +810,10 @@ document.addEventListener('click',e=>{
  if(day){showCalendar(day.dataset.calendarDay);return;}
  const monthLowButton=e.target.closest?.('[data-calendar-month-low]');
  if(monthLowButton?.dataset.calendarMonthLow){showCalendar(monthLowButton.dataset.calendarMonthLow);return;}
+ const cardStatement=e.target.closest?.('[data-calendar-card-statement-date]');
+ if(cardStatement?.dataset.calendarCardStatementDate){
+  showCalendar(cardStatement.dataset.calendarCardStatementDate);return;
+ }
  const nav=e.target.closest?.('[data-calendar-nav]');
  if(nav&&calendarContext?.points?.length){
   const keys=[...new Set([...calendarContext.points.map(p=>p.date.slice(0,7)),
