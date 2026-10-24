@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'ux-unified-three-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'ux-compact-repeating-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -1169,8 +1169,8 @@ const {chromium,webkit}=require('playwright');
     'Add repeating occupies a reserved toolbar slot, not an extra top row');
    assert.equal(await page.locator('.schedule-page .page-actions').count(),0,
     'Repeating no longer reserves a separate full-height Add action row');
-   assert.match(await page.locator('.schedule-page .page-task-hint').innerText(),/upcoming date/,
-    'The Repeating screen explains how to edit one occurrence or the whole schedule');
+   assert.equal(await page.locator('.schedule-page .page-task-hint').count(),0,
+    'Repeating no longer needs repeated instructions below its controls');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
    const repeatingListRow=await rowLayout(page,'.schedule-page .ledger-list-row');
    const repeatingCount=page.locator('[data-schedule-visible-count]');
@@ -1298,7 +1298,14 @@ const {chromium,webkit}=require('playwright');
     'Repeating creates forecasts using the same shared inline editor as Needs review');
    assert.equal(await page.locator('.transaction-detail').count(),0,
     'Schedule creation does not open a separate popup editor');
+   assert.equal(await schedule.locator('[data-schedule-advanced]').getAttribute('open'),null,
+    'Advanced options are collapsed by default');
+   assert.equal(await schedule.locator('.schedule-primary-fields > label:visible').count(),5,
+    'Five core fields appear by default');
+   assert.equal(await schedule.locator('[name=merchant]').isVisible(),false,
+    'The bank matching identity is accessible, not in the routine form');
    await schedule.locator('[name=scheduleLabel]').fill('Water - House');
+   await schedule.locator('[data-schedule-advanced] > summary').click();
    await schedule.locator('[name=category]').selectOption('Water bills');
    await schedule.locator('[name=merchant]').fill('Same Merchant Water');
    await schedule.locator('[name=amount]').fill('135');
@@ -1326,6 +1333,12 @@ const {chromium,webkit}=require('playwright');
     await water.locator('[data-schedule-edit]').click();
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
     'Schedule settings and upcoming payments expand inside their own schedule');
+   assert.equal(await water.locator('[data-schedule-edit-form] [name=scheduleLabel]').inputValue(),
+    'Water - House','Friendly display name remains the routine editable name');
+   assert.equal(await water.locator('[data-schedule-edit-form] [name=merchant]').inputValue(),
+    'Same Merchant Water','The bank matching merchant does not change when editing the display name');
+   assert.equal(await water.locator('[data-schedule-edit-form] [data-schedule-advanced]').getAttribute('open'),null,
+    'Uncommon fields are collapsed on ordinary schedule edits');
    await water.locator('.schedule-more > summary').click();
    assert.equal(await water.locator('[data-schedule-duplicate]').count(),0,
     'Redundant Separate bill action is removed');
@@ -1334,6 +1347,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await schedule.locator('[name=separateSchedule]').inputValue(),'on',
     'New schedule always creates an independent recurring stream');
    await schedule.locator('[name=scheduleLabel]').fill('Water - Garden');
+   await schedule.locator('[data-schedule-advanced] > summary').click();
    await schedule.locator('[name=merchant]').fill('Same Merchant Water');
    await schedule.locator('[name=category]').selectOption('Water bills');
    await schedule.locator('[name=amount]').fill('220');
