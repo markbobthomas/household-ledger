@@ -1456,10 +1456,7 @@ function reviewsPage(bundle,s){
    duplicates.map(d=>'<div class="review-candidate"><span>'+escapeHTML(d.merchant||d.reason||'Competing forecast payments')+
     '</span><button type="button" class="btn" data-view="transactions">Review predicted payments</button></div>').join('')+
    '</section>':'')+
-  (weak.length?'<section class="panel"><div class="section-title"><h2>Potential recurring payments</h2>'+
-   '<span class="status-tag">'+weak.length+' TO CONFIRM</span></div>'+
-   '<p class="lead">All recent payments are checked, including unfamiliar merchants and outgoing ACH debits. A single payment is a possibility, not proof of recurrence. Confirm amount, frequency and next date before uncertain items affect your balance.</p>'+
-   cards+'</section>':'')+
+
   (!count?'<section class="panel"><div class="section-title"><h2>All caught up</h2></div></section>':'')+
   (concerns.length?'<section class="panel"><div class="section-title"><h2>Other planning alerts</h2></div>'+
     concerns.map(x=>'<p class="review-warning">'+escapeHTML(x)+'</p>').join('')+'</section>':'')+
