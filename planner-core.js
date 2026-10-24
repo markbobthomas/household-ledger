@@ -178,6 +178,9 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
    const auto=Boolean(one||spaced)&&enough&&!multiCycle&&
     !transferRisk&&g.kind!=='refund';
    if(auto){
+    // Every strong detected repeat is a durable review candidate, never an
+    // automatic debit/credit in the future account-balance projection.
+    review.push({...reviewItem(g,g.rows,f,t,planDate),confidence:'Suggested',reason:'Detected repeat — not included until a schedule is approved',priority:5});
     const rootSeries='series|'+g.id+'|',freq=f||'monthly';
     // Two alternating biweekly deposits are two independent four-week
     // schedules, 14 days apart. Each has its own ID, phase and dollar amount.
@@ -217,7 +220,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
  }
  review.sort((a,b)=>b.priority-a.priority||b.occurrences-a.occurrences||
   b.lastDate.localeCompare(a.lastDate));
- return {automatic,review:review.slice(0,80).map(({priority,...p})=>p),conflicts};
+ return {automatic,review:review.map(({priority,...p})=>p),conflicts};
 }
 function reviewItem(g,same,f,t,planDate){
  return {key:[g.accountId,g.kind,norm(g.merchant),String(cents(t.amount))].map(encodeURIComponent).join('|'),
@@ -275,15 +278,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
- for(const event of detected.automatic){
-  if(!configuredCard(event.accountId)||
-   ownerFor(event)||suppressedRecurrence(prefs,event))continue;
-  const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
-  if(adjusted.date<=asOf||adjusted.date>end)continue;
-  seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
-   _forecastOriginalAccountId:event.accountId,_forecastOriginalType:event.type,
-   _forecastOriginalAmount:event.amount});
- }
+ // Detected repeats are suggestions only. Nothing inferred from bank history
+ // becomes a future debit/credit until its owner approves a saved schedule.
+ // The unscheduled recommendation list is retained separately for review.
  // One-off forecast additions are independent of Plaid facts.
  for(const e of extras){
   if(e.type==='transfer'||
@@ -385,7 +382,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  projection.diagnostics.balanceMismatches=integrity.errors;
  if(!integrity.ok)throw Error('Forecast integrity check failed; inconsistent daily balances were not displayed');
  return {ledger,projection,rows,events:ledger.filter(e=>e.kind==='event'),
-  payments:{...payment,warnings:[...(payment.warnings||[]),...warnings]},
+  payments:{...payment,warnings:[...(payment.warnings||[]),...warnings,
+   ...(detected.review.some(p=>p.type==='expense'||p.type==='income')?
+    ['Potential recurring bills or deposits await approval in Needs review. Predicted balances exclude these unapproved payments.']:[])]},
   forecast:{suppressedDuplicates:checks},routines:{events:[],review:[],warnings:[],
    counts:{confirmed:ownerEntries.length,suggested:detected.automatic.length,excluded:0}},
   missingMortgages:[],historyCandidates:detected.review,
