@@ -142,5 +142,16 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
   'Owner-modified generic payment occurs once per month through the entire modeled period');
  assert.match(genericAfter,/Nov 26/);
  assert.doesNotMatch(genericAfter,/Nov 9[^<]*.*ABC Draft 984/);
- console.log('PASS mortgage and general-merchant automatic forecasting; owner edits due date and amount; no duplicate bills; bank history unchanged');
+ // A changed starting bank balance must invalidate the forecast even though
+ // the saved schedule state and selected view have not changed.
+ const existing=sandbox.HouseholdBankFeed.getSnapshot('2026-10-20'),
+  updated={...existing,accounts:existing.accounts.map(a=>
+   a.id==='demo-checking'?{...a,current:a.current+100,available:a.available+100}:a)};
+ const beforeBalanceRefresh=forecastBuilds;
+ sandbox.HouseholdBankFeed.setSandboxSnapshot(updated);
+ await click('[data-view]',{view:'transactions'});
+ assert.ok(forecastBuilds>beforeBalanceRefresh,
+  'Changed bank-reported balances must invalidate a previously cached projection');
+ sandbox.HouseholdBankFeed.setSandboxSnapshot(null);
+ console.log('PASS mortgage and general-merchant automatic forecasting; owner edits due date and amount; forecast cache invalidates for savings changes and bank balance revisions; no duplicate bills');
 })().catch(e=>{console.error(e);process.exitCode=1});
