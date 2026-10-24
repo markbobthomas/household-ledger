@@ -1418,14 +1418,24 @@ function historyPage(bundle,s){
    detail+'</div>';
  }).join('');
  return '<div class="planner-page history-page">'+
+  '<form class="history-filters ledger-toolbar" data-history-filter>'+
+   '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
+    '" placeholder="Merchant, date, amount"></label>'+
+   '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
+   '<label>Sort by<select name="historySort" data-history-sort>'+
+    [['newest','Newest first'],['oldest','Oldest first'],
+     ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
+     ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
+     '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
+      label+'</option>').join('')+'</select></label>'+
+   '<button class="btn ledger-history-search-button" type="submit">Search</button>'+
+   (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
+   '</form>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   // Minimal non-browser safety harnesses cannot emulate row expansion.
   // Preserve their bank-linked confirmation form without affecting browsers.
   (recurringDraft&&!transactionDetail&&typeof $('planner-main')?.insertAdjacentHTML!=='function'?
    repeatingReviewForm(s):'')+
-  '<p class="page-task-hint history-explanation">Bank activity stays here. Saved repeating plans take priority. '+
-  'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
-  'older patterns in Needs review. New repeating payments require a saved schedule.</p>'+
   ((bundle?.postedMatchReview||[]).length?
    '<section class="panel" data-posted-match-review><strong>Confirm which schedule was paid</strong>'+
    '<p class="lead">These actual bank payments could match more than one planned bill. Choose the matching plan once to prevent double counting.</p>'+
@@ -1437,24 +1447,14 @@ function historyPage(bundle,s){
       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
-  '<form class="history-filters ledger-toolbar" data-history-filter>'+
-   '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
-   '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
-    '" placeholder="Merchant, date, amount"></label>'+
-   '<label>Sort by<select name="historySort" data-history-sort>'+
-    [['newest','Newest first'],['oldest','Oldest first'],
-     ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
-     ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
-     '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
-      label+'</option>').join('')+'</select></label>'+
-   '<button class="btn" type="submit">Search</button>'+
-   (historySearch?'<button type="button" class="btn" data-clear-history-search>Clear</button>':'')+
-   '</form><div class="history-list-surface"><p class="history-count">Showing '+visible.length+' of '+filtered.length+
+  '<div class="history-list-surface"><p class="history-count">Showing '+visible.length+' of '+filtered.length+
     ' matching transaction'+(filtered.length===1?'':'s')+
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
-   '</div></div>';
+   '</div><p class="page-task-hint history-explanation ledger-footer-hint">Bank activity stays here. Saved repeating plans take priority. '+
+   'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
+   'older patterns in Needs review. New repeating payments require a saved schedule.</p></div>';
 }
 // A cumulative, forecast-only recommendation ledger. Discovered suggestions
 // are snapshotted so later dismissals, bank refreshes and approved schedules
