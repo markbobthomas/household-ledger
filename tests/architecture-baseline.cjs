@@ -115,7 +115,8 @@ function summary(bundle,scenario,context){
   derived:projection.accounts.find(a=>a.id==='other-card')});
  assert.match(checkingHTML,/Monthly low/);
  assert.match(checkingHTML,/3-year low/);
- assert.match(cardHTML,/3-month estimated low/);
+ assert.match(cardHTML,/Next statement estimate/);
+ assert.doesNotMatch(cardHTML,/3-month estimated low/);
  assert.doesNotMatch(cardHTML,/Monthly low/);
  const threeYear=(checkingHTML.match(/3-year low<\/div><strong[^>]*>([^<]+)/)||[])[1]||null;
  assert.ok(threeYear,'Checking Calendar must retain its visible three-year low value');
@@ -124,7 +125,19 @@ function summary(bundle,scenario,context){
   const match=html.match(new RegExp('data-'+name+'[^>]*>([^<]+)'));
   return match?match[1]:null;
  };
- const cardDue=bundle.payments.statements.filter(x=>x.cardId==='visa').sort((a,b)=>a.dueDate.localeCompare(b.dueDate))[0]||null;
+ const cardPeriods=bundle.payments.statements.filter(x=>x.cardId==='visa')
+  .sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+ const cardDue=cardPeriods[0]||null,following=cardPeriods[1]||null;
+ const formatCard=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+ assert.equal(metric(cardHTML,'summary-next-statement-value'),
+  following?formatCard(following.statementBalance):'Not available',
+  'Calendar following statement estimate must exactly reuse the canonical card obligation engine');
+ // The Phase 1 golden preserves a historical 90-day CARD DEBT BASELINE
+ // independently of the new UI metric. Never regenerate this frozen
+ // financial reference just to accommodate a requested presentation change.
+ const through90=plus(AS_OF,90),prior90=card.series.filter(p=>
+  p.date>=AS_OF&&p.date<=through90&&Number.isFinite(p.balance));
+ const originalLow=prior90.length?formatCard(Math.min(...prior90.map(p=>p.balance))):'Unverified';
  const byAccount=projection.accounts.map(a=>({
   id:a.id,valid:a.valid,status:a.balanceStatus,opening:money(a.openingCurrent),
   close:money(a.closing),available:money(a.closingAvailable),
@@ -149,7 +162,7 @@ function summary(bundle,scenario,context){
   card:{statement:cardDue?{dueDate:cardDue.dueDate,amount:money(cardDue.statementBalance),
    confirmed:cardDue.confirmed,autopay:cardDue.autopayEnabled}:null,
    configuredMetric:metric(cardHTML,'summary-statement-value'),
-   cardLowMetric:metric(cardHTML,'summary-card-low-value'),
+   cardLowMetric:originalLow, // frozen old 90-day numeric checksum, no longer shown
    unconfiguredMetric:metric(noneHTML,'summary-statement-value')},
   checking:{monthLow:metric(checkingHTML,'summary-month-value'),
    threeYearLow:threeYear},
