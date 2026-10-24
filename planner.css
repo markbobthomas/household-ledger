@@ -2373,3 +2373,113 @@ html{scrollbar-gutter:stable}
   grid-template-columns:48px minmax(0,1fr) 75px 33px;gap:5px;
  }
 }
+
+/* Shared Repeating / Bank activity toolbar baseline.
+   Both search controls occupy the same first grid slot. The compact Add
+   control uses Repeating's fifth slot instead of creating a new row above. */
+.schedule-page .ledger-toolbar,.history-page .ledger-toolbar{
+ display:grid!important;
+ grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 100px 132px;
+ align-items:end!important;
+ grid-auto-flow:row;
+ column-gap:9px;row-gap:0;
+ padding:10px!important;
+ margin:0 0 12px!important;
+ width:100%;
+ box-sizing:border-box;
+}
+.schedule-page .ledger-toolbar>label,.history-page .ledger-toolbar>label,
+.schedule-page .ledger-toolbar>label:is(.schedule-search-wrap,.history-search-wrap),
+.history-page .ledger-toolbar>label:is(.schedule-search-wrap,.history-search-wrap){
+ flex:initial!important;
+ display:flex;flex-direction:column;
+ gap:4px;min-width:0;width:100%;margin:0;
+ font-family:inherit;font-size:var(--ui-label-size,11px);
+ font-weight:600;line-height:1.4;box-sizing:border-box;
+}
+.schedule-page .ledger-toolbar>label:first-child,
+.history-page .ledger-toolbar>label:first-child{grid-column:1}
+.schedule-page .ledger-toolbar>label:nth-child(2),
+.history-page .ledger-toolbar>label:nth-child(2){grid-column:2}
+.schedule-page .ledger-toolbar>label:nth-child(3),
+.history-page .ledger-toolbar>label:nth-child(3){grid-column:3}
+.schedule-page .ledger-toolbar :is(input,select),
+.history-page .ledger-toolbar :is(input,select){
+ width:100%;min-width:0;max-width:none;
+ height:36px;min-height:36px;
+ padding:7px 9px;
+ box-sizing:border-box;
+ font-family:inherit;font-size:12px;
+}
+.schedule-page .ledger-toolbar>.schedule-category-manager{
+ grid-column:4;min-width:0;width:100%;align-self:end;
+}
+.schedule-page .ledger-toolbar>.schedule-category-manager>summary{
+ min-height:36px;display:flex;align-items:center;justify-content:center;
+ box-sizing:border-box;padding:4px;
+ font-size:11px;white-space:nowrap;
+}
+.schedule-page .ledger-toolbar>.ledger-add-repeating{
+ grid-column:5;
+ display:flex;align-items:center;justify-content:center;
+ width:100%;height:36px;min-height:36px;
+ box-sizing:border-box;white-space:nowrap;
+ padding:5px 6px;font-family:inherit;font-size:11px;
+ font-weight:650;
+}
+.history-page .ledger-toolbar>.ledger-history-search-button{grid-column:4;width:100%;height:36px}
+.history-page .ledger-toolbar>.ledger-history-clear-button{grid-column:5;width:100%;height:36px}
+.schedule-page .ledger-footer-hint,.history-page .ledger-footer-hint{
+ margin:14px 1px 0;
+ font-size:10px;line-height:1.5;color:var(--muted);
+}
+.history-page .history-explanation.ledger-footer-hint{
+ margin:14px 1px 0;padding:0;background:transparent;border:0;
+}
+/* Within the shared 105px amount column, reserve the same slots for
+   withdrawal/deposit sign, $ glyph and tabular numeric digits. This aligns
+   the actual symbol, which right-aligned variable-width strings cannot do. */
+.schedule-page .ledger-row-amount>strong,
+.history-page .ledger-row-amount{
+ width:100%!important;min-width:0!important;
+ display:block!important;
+ text-align:left!important;align-self:center;
+ box-sizing:border-box;
+}
+.schedule-page .ledger-money,.history-page .ledger-money{
+ display:grid;width:100%;min-width:0;
+ grid-template-columns:12px 10px minmax(0,1fr);
+ align-items:center;
+ white-space:nowrap;
+ font-family:inherit;font-size:13px;font-weight:700;line-height:1.4;
+ font-variant-numeric:tabular-nums;
+}
+.schedule-page .ledger-money-sign,.history-page .ledger-money-sign{
+ display:block;text-align:center;font:inherit;white-space:nowrap;
+}
+.schedule-page .ledger-money-dollar,.history-page .ledger-money-dollar{
+ display:block;text-align:left;font:inherit;white-space:nowrap;
+}
+.schedule-page .ledger-money-digits,.history-page .ledger-money-digits{
+ display:block;min-width:0;text-align:left;
+ font:inherit;font-variant-numeric:tabular-nums;
+ white-space:nowrap;
+}
+@media(max-width:850px){
+ .schedule-page .ledger-toolbar,.history-page .ledger-toolbar{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  column-gap:8px;row-gap:8px;
+  padding:8px!important;
+ }
+ .schedule-page .ledger-toolbar>label:first-child,
+ .history-page .ledger-toolbar>label:first-child{grid-column:1/-1;grid-row:1}
+ .schedule-page .ledger-toolbar>label:nth-child(2),
+ .history-page .ledger-toolbar>label:nth-child(2){grid-column:1;grid-row:2}
+ .schedule-page .ledger-toolbar>label:nth-child(3),
+ .history-page .ledger-toolbar>label:nth-child(3){grid-column:2;grid-row:2}
+ .schedule-page .ledger-toolbar>.schedule-category-manager,
+ .history-page .ledger-toolbar>.ledger-history-search-button{grid-column:1;grid-row:3}
+ .schedule-page .ledger-toolbar>.ledger-add-repeating,
+ .history-page .ledger-toolbar>.ledger-history-clear-button{grid-column:2;grid-row:3}
+ .schedule-page .ledger-money,.history-page .ledger-money{font-size:12px}
+}

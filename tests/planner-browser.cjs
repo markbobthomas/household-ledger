@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'bank-sort-alignment-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'money-toolbar-alignment-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -538,6 +538,16 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-clear-history-search]').click();
    await page.locator('[data-history-sort]').selectOption('newest');
    const bankListRow=await rowLayout(page,'.history-page .ledger-list-row');
+   const fieldGeometry=async(selector)=>page.locator(selector).first().evaluate(el=>{
+    const r=el.getBoundingClientRect();
+    return {x:r.x,y:r.y+window.scrollY,width:r.width,height:r.height};
+   });
+   const bankToolbar=await fieldGeometry('.history-page .ledger-toolbar');
+   const bankSearch=await fieldGeometry('.history-page .history-search-wrap input');
+   const bankDollar=await fieldGeometry('.history-page .ledger-money-dollar');
+   assert.equal(await page.locator('.history-page .ledger-money-dollar').count(),
+    await page.locator('.history-page .history-actual-row').count(),
+    'All Bank rows show their dollar symbol in the shared fixed amount slot');
    assert.equal(await page.locator('.history-page .ledger-row-category').count(),
     await page.locator('.history-actual-row').count(),
     'Every bank transaction has the same inline category selection affordance as Repeating');
@@ -948,11 +958,34 @@ const {chromium,webkit}=require('playwright');
    // Same merchant/date: separately saved streams and editable inline rows.
    await go('schedules');
    assert.match(await page.locator('[data-schedule-new]').innerText(),/Repeating payment/,
-    'Adding a recurring payment is visible where repeating payments are listed');
+    'Compact Add repeating button is visible within the search/sort toolbar');
+   assert.equal(await page.locator('.schedule-page .ledger-toolbar [data-schedule-new]').count(),1,
+    'Add repeating occupies a reserved toolbar slot, not an extra top row');
+   assert.equal(await page.locator('.schedule-page .page-actions').count(),0,
+    'Repeating no longer reserves a separate full-height Add action row');
    assert.match(await page.locator('.schedule-page .page-task-hint').innerText(),/upcoming date/,
     'The Repeating screen explains how to edit one occurrence or the whole schedule');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
    const repeatingListRow=await rowLayout(page,'.schedule-page .ledger-list-row');
+   const repeatingToolbar=await fieldGeometry('.schedule-page .ledger-toolbar');
+   const repeatingSearch=await fieldGeometry('.schedule-page .schedule-search-wrap input');
+   const repeatingDollar=await fieldGeometry('.schedule-page .ledger-money-dollar');
+   assert.equal(await page.locator('.schedule-page .ledger-money-dollar').count(),
+    await page.locator('.schedule-page .schedule-card').count(),
+    'All Repeating rows use the same anchored dollar symbol slot');
+   for(const metric of ['x','y','width','height']){
+    assert.ok(Math.abs(repeatingToolbar[metric]-bankToolbar[metric])<=2,
+     'Both search toolbars match exact document '+metric+' with no extra Repeating button row: '+
+      JSON.stringify({bank:bankToolbar,repeating:repeatingToolbar,mobile}));
+    assert.ok(Math.abs(repeatingSearch[metric]-bankSearch[metric])<=2,
+     'Search boxes match exact document '+metric+' between both pages: '+
+      JSON.stringify({bank:bankSearch,repeating:repeatingSearch,mobile}));
+   }
+   assert.ok(Math.abs(repeatingDollar.x-bankDollar.x)<=1,
+    'The literal $ glyph (not merely the amount column) aligns between pages: '+
+     JSON.stringify({bank:bankDollar,repeating:repeatingDollar,mobile}));
+   assert.ok(Math.abs(repeatingDollar.width-bankDollar.width)<=1,
+    'Both amount glyphs use identical physical widths');
    assert.equal(await page.locator('.schedule-page .ledger-row-category').count(),
     await page.locator('[data-schedule-card]').count(),
     'Every Repeating row uses the same visible inline category control');
