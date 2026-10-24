@@ -41,6 +41,20 @@ assert.equal(b.projection.accounts.find(a=>a.id==='visa').closing,600,
  'Unconfigured credit card keeps its bank-reported debt, but future charges are gated until setup');
 assert.ok(b.historyCandidates.some(x=>x.merchant==='Safeway'),
  'Low-confidence patterns go to Reviews');
+// Bank-history Auto-predict is a permission, not a manual recurring plan.
+const automaticPolicy={predictions:{}},originalHistory=JSON.stringify(history);
+assert.ok(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
+ 'ABC Draft 984').length>0,'Fixture contains actual automatically inferred payment');
+T.setHistoryAutoPrediction(automaticPolicy,{
+ accountId:'checking',type:'expense',merchant:'ABC Draft 984'},false);
+const offForecast=C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90);
+assert.equal(find(offForecast,'ABC Draft 984').length,0,
+ 'Auto-predict Off removes engine-only future payments, not source History');
+assert.equal(JSON.stringify(history),originalHistory,'Auto-predict Off leaves posted bank data untouched');
+T.setHistoryAutoPrediction(automaticPolicy,{
+ accountId:'checking',type:'expense',merchant:'ABC Draft 984'},true);
+assert.ok(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
+ 'ABC Draft 984').length>0,'Turning On permits eligible automatic series again');
 const source=JSON.stringify(history);
 const bankCount=history.length;
 const state={predictions:{}};
@@ -80,6 +94,16 @@ const utility=T.defineRecurring(utilityState,{
  kind:'event',accountId:'checking',type:'expense',merchant:'Valley Electric',
  amount:105.45,date:'2026-09-14'
 },utilityHistory,['utility-old']);
+// Turning auto discovery Off beside an already confirmed utility bill leaves
+// its exact saved amount/date and future balance unaffected.
+const utilityBefore=C.materialize(snapshot,utilityHistory,utilityState.predictions,T,P,90);
+T.setHistoryAutoPrediction(utilityState,{
+ accountId:'checking',type:'expense',merchant:'Valley Electric'},false);
+const utilityAfter=C.materialize(snapshot,utilityHistory,utilityState.predictions,T,P,90);
+assert.deepEqual(find(utilityAfter,'Valley Electric'),find(utilityBefore,'Valley Electric'),
+ 'Auto-predict Off does not remove a saved repeating bill or change its amounts');
+T.setHistoryAutoPrediction(utilityState,{
+ accountId:'checking',type:'expense',merchant:'Valley Electric'},true);
 const linkedUtility=T.historicalScheduleMatches(utilityHistory[1],accounts,
  utilityState.predictions.futureRecurringRules);
 assert.equal(linkedUtility.length,1);
