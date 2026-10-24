@@ -59,6 +59,13 @@ assert.equal(JSON.stringify(bank),JSON.stringify([
  {id:'p2',accountId:'checking',date:'2026-10-02',merchant:'Test Employer',amount:2800,type:'income'},
  {id:'p3',accountId:'checking',date:'2026-10-16',merchant:'Test Employer',amount:3100,type:'income'}
 ]),'Nothing in the bank source changed');
+const legacy=R.reconcile({}, {},[],bank,accounts,{
+ futureRecurrenceExclusions:{
+  'checking|expense|mortgage':{accountId:'checking',type:'expense',merchant:'Mortgage Test',historyOptOut:true}
+ }
+});
+assert.equal(legacy.items[0].decision,'ignored',
+ 'Previously excluded auto forecast survives migration as a visible Ignored recommendation');
 const split=R.reconcile({},{
  automaticRecurrence:{events:[
   {_seriesKey:'series|checking|income|employer|every-4-weeks|phase1',accountId:'checking',type:'income',merchant:'Employer',date:'2026-11-13',amount:3100,cadence:'every-4-weeks'},
