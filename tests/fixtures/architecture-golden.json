@@ -79,7 +79,7 @@
     },
     "checking": {
       "monthLow": "$12,400.00",
-      "threeYearLow": null
+      "threeYearLow": "$12,400.00"
     },
     "warningsHash": "1ef57a0235e84f0142525e7c1f9a8dbc378be2f5ccca490c0cc81d60f4a899d1",
     "diagnosticsHash": "9c75ee533ef9e5156394db435d1b6aafdec1a44f90560af04156c9a944ffe647"
@@ -161,7 +161,7 @@
     },
     "checking": {
       "monthLow": "$12,400.00",
-      "threeYearLow": null
+      "threeYearLow": "$12,400.00"
     },
     "warningsHash": "a2e61e107c1bf75f0f3dacc44d757ed17731800f077aaf8fdbfc9ec822363691",
     "diagnosticsHash": "07d989d3899f0b15ccbb6408570b25ded9f0b23903422359f193f051b63f9b42"
@@ -243,7 +243,7 @@
     },
     "checking": {
       "monthLow": "$12,400.00",
-      "threeYearLow": null
+      "threeYearLow": "$12,310.00"
     },
     "warningsHash": "a2e61e107c1bf75f0f3dacc44d757ed17731800f077aaf8fdbfc9ec822363691",
     "diagnosticsHash": "49c87af1394b830bb1d4fd8a6583bc388a92d5e6190994f6f521442582ae674f"
@@ -325,7 +325,7 @@
     },
     "checking": {
       "monthLow": "$12,400.00",
-      "threeYearLow": null
+      "threeYearLow": "$12,400.00"
     },
     "warningsHash": "a2e61e107c1bf75f0f3dacc44d757ed17731800f077aaf8fdbfc9ec822363691",
     "diagnosticsHash": "07d989d3899f0b15ccbb6408570b25ded9f0b23903422359f193f051b63f9b42"
