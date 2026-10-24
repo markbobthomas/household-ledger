@@ -299,16 +299,15 @@ const {chromium,webkit}=require('playwright');
     netCents=Number(await recon.locator('[data-calendar-net-change]').getAttribute('data-net-cents'));
    assert.equal(await recon.locator('[data-calendar-net-change]').count(),1,
     'There is exactly one net-change subtotal below all editable transactions');
-   assert.equal(await recon.locator('[data-calendar-net-change]').innerText().then(x=>x.split('\n')[0]),
+   assert.equal(await recon.locator('[data-calendar-net-change] > span').innerText(),
     'Total change');
    assert.equal(netCents,expectedCents,'Subtotal equals the exact signed line-item sum');
    assert.equal(Math.round(equation.start*100)+netCents,
     Math.round(equation.end*100),
     'Previous balance plus net change explains the canonical closing balance');
    assert.equal(await recon.locator('[data-calendar-net-change]').evaluate(el=>
-    el.compareDocumentPosition(el.parentElement.querySelector('.calendar-day-transactions'))&
-     Node.DOCUMENT_POSITION_PRECEDING),Node.DOCUMENT_POSITION_PRECEDING,
-    'Subtotal appears below the transaction rows, not before them');
+    Boolean(el.compareDocumentPosition(el.parentElement.querySelector('.calendar-day-transactions')) & 2)),
+    true,'Subtotal appears below the transaction rows, not before them');
    await page.locator('[data-calendar-actual-day]').last().click();
    assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
