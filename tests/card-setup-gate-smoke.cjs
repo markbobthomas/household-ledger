@@ -30,9 +30,16 @@ const choices={billingStartDate:'2026-10-19',billingEndDate:'2026-11-18',
 const state=Model.migrate({});
 Model.setCardPaymentRule(state,'visa',choices);
 assert.ok(P.ready(state.predictions.paymentRules.visa,accounts[1],accounts));
+T.defineRecurring(state,{
+ date:'2026-11-05',merchant:'Card Membership',type:'expense',
+ amount:30,accountId:'visa',frequency:'monthly'
+},accounts,snapshot.asOf,{
+ kind:'event',accountId:'visa',type:'expense',merchant:'Card Membership',
+ date:'2026-10-05',amount:30,bankTransactionId:'p3'
+},history,['p1','p2','p3']);
 const configured=materialize(state.predictions);
 assert.ok(configured.ledger.some(e=>e.accountId==='visa'&&e.merchant==='Card Membership'),
- 'Future card purchases are considered only after valid setup');
+ 'Approved card schedule adds future purchases after valid payment setup');
 assert.ok(configured.payments.plans.some(p=>p.fromAccountId==='checking'&&p.toAccountId==='visa'),
  'Card statement payment becomes one linked checking withdrawal');
 const past=configured.payments.historyStatements.filter(x=>x.cardId==='visa');

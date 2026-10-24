@@ -1882,3 +1882,23 @@ html{scrollbar-gutter:stable}
  }
  .history-page .history-secondary-action{min-height:40px}
 }
+
+/* One permanent review register: ignored, proposed, and saved stay visible. */
+.reviews-page .recommended-repeating{margin-bottom:16px}
+.reviews-page [data-repeating-recommendation]{gap:12px}
+.reviews-page [data-recommendation-status="ignored"] .review-candidate-main>small:last-child{
+ color:#866844;font-weight:650;
+}
+.reviews-page [data-recommendation-status="scheduled"] .review-candidate-main>small:last-child{
+ color:#386b4e;font-weight:650;
+}
+.reviews-page .review-candidate-actions{display:flex;gap:7px;flex-wrap:wrap}
+.history-page .history-row-actions .history-secondary-action{min-height:38px;text-decoration:none}
+.history-page .history-row-actions [data-repeating-ignore]{
+ color:var(--muted);border:0;background:transparent;text-decoration:underline;
+}
+@media(max-width:780px){
+ .reviews-page [data-repeating-recommendation]{align-items:flex-start}
+ .reviews-page [data-repeating-recommendation] .review-candidate-actions{width:100%}
+ .history-page .history-row-actions:not(:empty){grid-column:2/-1;padding-left:0}
+}

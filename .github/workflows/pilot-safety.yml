@@ -19,6 +19,7 @@ jobs:
         run: |
           node --check pilot/server.cjs
           node --check pilot/data-source.js
+          node --check planner-recommendations.js
           node --check planner-core.js
           node --check planner-transactions.js
           node --check payment-obligations.js
@@ -29,6 +30,7 @@ jobs:
           node tests/pilot-security-smoke.cjs
           node tests/pilot-plaid-flow.cjs
           node tests/pilot-remove-account-smoke.cjs
+          node tests/repeating-recommendations-smoke.cjs
           node tests/planner-core-smoke.cjs
           node tests/planner-integrity-smoke.cjs
           node tests/planner-recurrence-integration-smoke.cjs

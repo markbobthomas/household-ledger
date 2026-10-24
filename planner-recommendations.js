@@ -1,0 +1,159 @@
+/* Persistent, read-only-bank-derived repeating recommendations.
+ * Nothing here creates a future payment. Only an approved repeating rule does.
+ */
+(function(root){
+'use strict';
+const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const idFor=(accountId,type,merchant,phase='')=>
+ 'recommend|'+[accountId,type,norm(merchant),phase].map(encodeURIComponent).join('|');
+const phaseFor=series=>{
+ const m=String(series||'').match(/every-4-weeks\|phase(\d+)/);
+ return m?'28-day-phase-'+m[1]:'';
+};
+const valid=x=>x&&typeof x==='object'&&!Array.isArray(x)&&x.accountId&&x.merchant&&
+ ['income','expense'].includes(x.type);
+function discover(bundle={}){
+ const found=new Map();
+ const add=(raw,source)=>{
+  if(!valid(raw))return;
+  const phase=raw.phase||phaseFor(raw.seriesKey||raw._seriesKey);
+  const key=idFor(raw.accountId,raw.type,raw.merchant,phase);
+  const examples=(raw.examples||[]).map(x=>typeof x==='string'?{id:x}:x)
+   .filter(x=>x&&x.id).slice(0,8);
+  const candidate={key,accountId:String(raw.accountId),accountName:String(raw.accountName||raw.accountId),
+   merchant:String(raw.merchant),type:raw.type,category:String(raw.category||'Other'),
+   frequency:String(raw.frequency||raw.cadence||'monthly'),
+   amount:Number(raw.amount||0),nextDate:String(raw.nextDate||raw.date||''),
+   lastDate:String(raw.lastDate||''),phase,examples,
+   occurrences:Number(raw.occurrences||examples.length||1),source,
+   confidence:String(raw.confidence||'Needs confirmation')};
+  const old=found.get(key);
+  if(!old||source==='strong'||source==='history'&&old.source==='weak'){
+   if(old&&candidate.examples.length===0)candidate.examples=old.examples;
+   found.set(key,candidate);
+  }
+ };
+ // Potential repeated payments include strong, formerly auto-forecasted
+ // patterns as well as weaker ones. Every one now requires approval.
+ const groups=new Map();
+ for(const e of bundle.automaticRecurrence?.events||[]){
+  if(!e||!['income','expense'].includes(e.type))continue;
+  const phase=phaseFor(e._seriesKey);
+  const key=idFor(e.accountId,e.type,e.merchant,phase);
+  const old=groups.get(key);
+  if(!old||e.date<old.date)groups.set(key,e);
+ }
+ for(const e of groups.values())add({accountId:e.accountId,merchant:e.merchant,
+  type:e.type,category:e.category,frequency:e.cadence,amount:e.amount,date:e.date,
+  _seriesKey:e._seriesKey,examples:(e.historicalIds||[]).map(id=>({id})),
+  confidence:'Detected pattern'},'strong');
+ for(const e of bundle.historyCandidates||[])add(e,'weak');
+ // Historical candidate discovery catches a broader set of single/irregular
+ // bills. Keep them visible too; they are NOT approved forecasts.
+ for(const e of bundle.bankRecommendationCandidates||[])add(e,'history');
+ return [...found.values()];
+}
+function reconcile(existing={},bundle={},rules=[],records=[],accounts=[],prefs={}){
+ const stored=existing&&typeof existing==='object'&&!Array.isArray(existing)?existing:{};
+ const next={...stored},bank=records||[],all=discover(bundle);
+ let changed=false;
+ // Migrate previous "not recurring" decisions as visible Ignored entries,
+ // even when the detector now excludes them. Legacy exclusions must never
+ // turn into invisible missing bills after upgrading.
+ const legacy=[];
+ for(const [key,item] of Object.entries(prefs.futureRecurrenceExclusions||{})){
+  if(!item?.accountId||!item?.merchant||!['income','expense'].includes(item.type))continue;
+  const day=String(item.phaseDate||'');
+  const phase=day&&/^\d{4}-\d{2}-\d{2}$/.test(day)?
+   '28-day-phase-'+Math.floor(Date.parse(day+'T12:00:00Z')/86400000)%28:'';
+  legacy.push({accountId:item.accountId,type:item.type,merchant:item.merchant,phase});
+ }
+ for(const [key,value] of Object.entries(prefs.historyPatternDecisions||{})){
+  if(value!=='dismissed')continue;
+  const parts=key.split('|').map(x=>{try{return decodeURIComponent(x)}catch{return x}});
+  if(parts.length>=3&&['income','expense'].includes(parts[1]))
+   legacy.push({accountId:parts[0],type:parts[1],merchant:parts[2],phase:''});
+ }
+ for(const key of prefs.mortgageReviewDismissals||[]){
+  const parts=String(key).split('|').map(x=>{try{return decodeURIComponent(x)}catch{return x}});
+  if(parts.length>=3&&parts[0]==='mortgage')
+   legacy.push({accountId:parts[1],type:'expense',merchant:parts[2],phase:''});
+ }
+ for(const [key,value] of Object.entries(prefs.plannerRoutineDecisions||{})){
+  if(value?.status!=='excluded')continue;
+  const parts=String(key).split('|');
+  if(parts.length>=3&&['income','expense'].includes(parts[0]))
+   legacy.push({accountId:parts[1],type:parts[0],merchant:parts.slice(2).join('|'),phase:''});
+ }
+ for(const item of legacy){
+  const key=idFor(item.accountId,item.type,item.merchant,item.phase);
+  if(next[key])continue;
+  const latest=bank.filter(t=>String(t.accountId||t.account)===String(item.accountId)&&
+   norm(t.merchant||t.name)===norm(item.merchant)).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
+  const accountName=accounts.find(a=>String(a.id)===String(item.accountId))?.name||item.accountId;
+  next[key]={key,accountId:String(item.accountId),accountName,merchant:String(item.merchant),
+   type:item.type,category:latest?.category||'Other',frequency:'monthly',
+   amount:Number(latest?.amount||0),nextDate:'',lastDate:String(latest?.date||''),
+   phase:item.phase,examples:latest?[{id:String(latest.id)}]:[],
+   occurrences:1,source:'legacy',confidence:'Previously excluded',decision:'ignored'};
+  changed=true;
+ }
+ for(const candidate of all){
+  const old=next[candidate.key];
+  if(!old){
+   next[candidate.key]={...candidate,decision:'pending'};
+   changed=true;
+  }else{
+   const fresh={...old,
+    // Preserve decision and prior clues. New bank evidence may refine the
+    // suggested date/amount, but old recommendations never disappear.
+    ...candidate,decision:old.decision==='ignored'?'ignored':'pending',
+    examples:candidate.examples.length?candidate.examples:old.examples||[]};
+   if(JSON.stringify(fresh)!==JSON.stringify(old)){next[candidate.key]=fresh;changed=true}
+  }
+ }
+ const recordsById=new Map(bank.map(t=>[String(t.id),t]));
+ const items=Object.values(next).filter(valid).map(r=>{
+  const example=(r.examples||[]).map(x=>recordsById.get(String(x.id))).find(Boolean);
+  const phaseIndex=r.phase&&r.phase.startsWith('28-day-phase-')?
+   Number(r.phase.slice('28-day-phase-'.length)):null,
+   phaseMatches=rule=>{
+    if(phaseIndex===null)return true;
+    if(rule.frequency!=='every-4-weeks'||!/^\d{4}-\d{2}-\d{2}$/.test(String(rule.anchorDate||'')))
+     return false;
+    const actual=Math.floor(Date.parse(rule.anchorDate+'T12:00:00Z')/86400000)%28,
+     delta=Math.abs(actual-phaseIndex);
+    return Math.min(delta,28-delta)<=3;
+   },
+   matched=(example&&root.HouseholdPlannerTransactions?.historicalScheduleMatches(
+    example,accounts,rules)||[]).filter(phaseMatches);
+  const exact=rules.filter(rule=>
+   String(rule.originalAccountId||rule.accountId)===String(r.accountId)&&
+   rule.type===r.type&&phaseMatches(rule)&&
+   [rule.originalMerchant,rule.merchant,...(rule.matchNames||[])]
+    .some(name=>norm(name)===norm(r.merchant))&&
+   (!r.phase||rule.frequency==='every-4-weeks'&&
+    (r.examples||[]).some(x=>(rule.exampleIds||[]).includes(String(x.id)))));
+  const scheduled=matched.length||exact.length;
+  return {...r,decision:scheduled?'scheduled':r.decision==='ignored'?'ignored':'pending',
+   scheduleIds:[...new Set([...matched,...exact].map(x=>x.id))]};
+ }).sort((a,b)=>{
+  const rank=x=>x.decision==='pending'?0:x.decision==='ignored'?1:2;
+  return rank(a)-rank(b)||
+   (a.source==='strong'?-1:1)-(b.source==='strong'?-1:1)||
+   String(b.nextDate||'').localeCompare(String(a.nextDate||''))||
+   a.merchant.localeCompare(b.merchant);
+ });
+ return {stored:next,items,changed};
+}
+function setIgnored(state,key,ignored){
+ const p=state?.predictions||{};
+ const item=p.recurringRecommendations?.[key];
+ if(!item)throw Error('The recommendation is no longer available');
+ p.recurringRecommendations[key]={...item,decision:ignored?'ignored':'pending'};
+ return p.recurringRecommendations[key];
+}
+const api={discover,reconcile,setIgnored,idFor};
+root.HouseholdRepeatingRecommendations=api;
+if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof window!=='undefined'?window:globalThis);

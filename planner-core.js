@@ -275,15 +275,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
- for(const event of detected.automatic){
-  if(!configuredCard(event.accountId)||
-   ownerFor(event)||suppressedRecurrence(prefs,event))continue;
-  const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
-  if(adjusted.date<=asOf||adjusted.date>end)continue;
-  seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
-   _forecastOriginalAccountId:event.accountId,_forecastOriginalType:event.type,
-   _forecastOriginalAmount:event.amount});
- }
+ // Recurrence detection makes REVIEW SUGGESTIONS ONLY. An inferred pattern
+ // must never add an unapproved debit/credit to a balance. The only recurring
+ // future entries come from saved rules above; explicit one-offs below remain.
  // One-off forecast additions are independent of Plaid facts.
  for(const e of extras){
   if(e.type==='transfer'||
