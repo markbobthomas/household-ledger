@@ -1347,31 +1347,54 @@ function historyPage(bundle,s){
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
     status==='automatic'?'Unconfirmed estimate — review in Needs review':'Not scheduled',
    primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
-    canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record';
-  return '<div class="history-actual-row ledger-list-row" data-history-kind="'+escapeHTML(kind||'unknown')+
+    canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record',
+   isExpanded=historyExpandedId===String(t.id)&&historyExpandedAccount===aid,
+   editRule=isExpanded?matches.find(rule=>rule.id===historyExpandedRuleId)||
+    (matches.length===1?matches[0]:null):null,
+   editor=isExpanded?(editRule?
+    recurringEditor('<p class="review-inline-guide">Update the saved repeating payment. The bank record remains unchanged.</p>'+
+     '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(editRule.id)+'">'+
+       scheduleFields({...editRule,date:tools.recurrenceDates(editRule,s.asOf,shiftDay(s.asOf,horizon))[0]||
+        shiftDay(s.asOf,1)},false,s)+
+       '<div class="future-form-actions"><button class="btn primary" type="submit">Save recurring forecast</button>'+
+        '<button class="btn" type="button" data-history-inline-close>Cancel</button></div></form>','history'):
+    matches.length>1?recurringEditor('<p class="review-inline-guide">Choose which saved schedule belongs to this bank payment.</p>'+
+     '<div class="history-inline-choices">'+matches.map(rule=>
+      '<button type="button" class="btn" data-history-inline-rule="'+escapeHTML(rule.id)+'">'+
+       escapeHTML(rule.scheduleLabel||rule.merchant)+' · '+escapeHTML(rule.frequency)+
+       ' · '+cash(rule.amount)+'</button>').join('')+'</div>','history'):
+    recurringDraft?.historyRowId===String(t.id)?
+     recurringEditor(repeatingReviewForm(s,{inline:true}),'history'):
+    recurringEditor('<p class="review-inline-guide">This bank transaction is read-only. Repeating forecasts can only be created from eligible payments.</p>','history')
+   ):'',
+   detail=isExpanded?'<div class="history-inline-detail recurrence-inline-detail" data-history-inline-detail>'+
+    editor+'</div>':'';
+  return '<div class="history-entry" data-history-entry="'+escapeHTML(String(t.id))+'">'+
+   '<div class="history-actual-row ledger-list-row recurrence-row" data-history-kind="'+escapeHTML(kind||'unknown')+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
-   '<button type="button" class="history-row-open ledger-row-open" data-historical-transaction="'+
+   '<button type="button" class="history-row-open ledger-row-open recurrence-row-trigger" data-historical-transaction="'+
    escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
-   '" aria-label="'+escapeHTML(primary+': '+(t.merchant||'Bank transaction'))+'">'+
+   '" aria-expanded="'+isExpanded+'" aria-label="'+escapeHTML((isExpanded?'Close':'Open')+
+    ' repeating payment details: '+(t.merchant||'Bank transaction'))+'">'+
    '<span class="history-actual-date ledger-row-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
-   '<span class="history-actual-description ledger-row-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
+   '<span class="history-actual-description ledger-row-description recurrence-row-name"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
     escapeHTML(caption)+'</span></small></span>'+
    '<strong class="history-actual-amount ledger-row-amount '+(incoming?'incoming':'outgoing')+'">'+
     (incoming?'+':'−')+cash(t.amount)+'</strong>'+
-   '<span class="history-row-hint ledger-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
+   '<span class="history-row-hint ledger-row-hint" aria-hidden="true">'+(isExpanded?'⌃':'›')+'</span></button>'+
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-history-category="'+
     escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
     ' on '+escapeHTML(t.date)+'">'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
-   '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>';
+   '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
+   detail+'</div>';
  }).join('');
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
-  (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   '<p class="page-task-hint history-explanation">Bank activity stays here. Saved repeating plans take priority. '+
   'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
   'older patterns in Needs review. New repeating payments require a saved schedule.</p>'+
