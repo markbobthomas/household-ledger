@@ -366,8 +366,19 @@ const {chromium,webkit}=require('playwright');
    await go('reviews');
    await page.locator('[aria-label="Recommended repeating"] [data-repeating-recommendation]')
     .filter({hasText:'Mortgage'}).first().locator('[data-repeating-yes]').click();
-   await page.locator('[aria-label="Recommended repeating"] [data-repeating-recommendation][data-recommendation-status="scheduled"]')
-    .filter({hasText:'Mortgage'}).first().waitFor();
+   const mortgageApproved=await page.evaluate(()=>{
+    const rec=[...document.querySelectorAll('[data-repeating-recommendation]')]
+     .find(el=>el.innerText.includes('Mortgage'));
+    const raw=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return {status:rec?.dataset.recommendationStatus,
+     notice:document.querySelector('.future-notice')?.innerText||'',
+     planCount:(raw.futureRecurringRules||[]).length,
+     plans:(raw.futureRecurringRules||[]).map(x=>({merchant:x.merchant,frequency:x.frequency,
+      accountId:x.accountId,originalMerchant:x.originalMerchant})),
+     form:!!document.querySelector('[data-history-recurring-form]')};
+   });
+   assert.equal(mortgageApproved.status,'scheduled',
+    'Saving a recommendation must create and link its plan: '+JSON.stringify(mortgageApproved));
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
     'One explicitly approved mortgage schedule now drives future balances');
