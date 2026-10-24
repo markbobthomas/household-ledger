@@ -1365,6 +1365,85 @@ const {chromium,webkit}=require('playwright');
     const sizes=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,window:innerWidth}));
     assert.ok(sizes.scroll<=sizes.window+2,'Mobile planner does not overflow: '+JSON.stringify(sizes));
    }
+   // Isolated fictional card data: closing-date grouping, refunds, pending
+   // charges and future repeating occurrences in both browser engines.
+   const statementCtx=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1280,height:900}});
+   await statementCtx.addInitScript(fixedDate);
+   await statementCtx.addInitScript(()=>{
+    localStorage.setItem('household-planner-sample-settings-v1',JSON.stringify({
+     recurringForecastMode:'approved-only',
+     paymentRules:{'demo-visa':{
+      billingStartDate:'2026-10-01',billingEndDate:'2026-10-31',closingDay:31,
+      lastStatementClose:'2026-10-31',nextPaymentDate:'2026-11-20',
+      nextDueDate:'2026-11-20',fromAccountId:'demo-checking',
+      autopayEnabled:true,method:'statement'
+     }},
+     futureRecurringRules:[{
+      id:'fixture-card-repeating',kind:'event',accountId:'demo-visa',
+      originalAccountId:'demo-visa',merchant:'Fictional Card Membership',
+      originalMerchant:'Fictional Card Membership',type:'expense',
+      originalType:'expense',amount:15,matchAmount:15,category:'Subscriptions',
+      frequency:'monthly',anchorDate:'2026-10-22',sourceAnchorDate:'2026-10-22',
+      sourceFrequency:'monthly',amountBasis:'fixed',
+      matchNames:['fictional card membership'],exampleIds:[]
+     }]
+    }));
+    let original;
+    Object.defineProperty(window,'createHouseholdLedgerDemo',{
+     configurable:true,set(fn){original=fn},
+     get(){return original&&function(){
+      const data=original(),row=(id,date,merchant,type,amount,pending=false)=>({
+       id,date,merchant,type,amount,pending,category:'Other',account:'Visa',demo:true
+      });
+      data.transactions.push(
+       row('statement-previous','2026-09-29','Prior Statement Purchase','expense',20),
+       row('statement-current','2026-10-02','Current Statement Purchase','expense',50),
+       row('statement-refund','2026-10-10','Current Statement Refund','refund',10),
+       row('statement-pending','2026-10-11','Pending Card Charge','expense',500,true),
+       row('statement-payment','2026-10-15','Card Settlement','transfer',200)
+      );
+      return data;
+     }}
+    });
+   });
+   const statementPage=await statementCtx.newPage(),statementErrors=[];
+   statementPage.on('pageerror',e=>statementErrors.push(e.message));
+   await statementPage.goto(staticUrl,{waitUntil:'load'});
+   await statementPage.locator('.planner-nav-primary [data-view="schedules"]').click();
+   const statementAccount=statementPage.locator('[name="scheduleAccount"]');
+   assert.equal(await statementAccount.count(),1,'Repeating has an account selector');
+   assert.equal(await statementAccount.inputValue(),'all');
+   await statementAccount.selectOption('demo-visa');
+   assert.equal(await statementPage.locator('[data-schedule-card]').count(),1);
+   const cycles=statementPage.locator('[data-repeating-statement-group]');
+   assert.deepEqual(await cycles.evaluateAll(els=>els.map(x=>x.dataset.repeatingStatementGroup)),
+    ['2026-10-31','2026-11-30','2026-12-31']);
+   assert.deepEqual(await cycles.locator('.ledger-statement-total').allInnerTexts(),
+    ['Net charges $15.00','Net charges $15.00','Net charges $15.00']);
+   await statementPage.locator('[data-schedule-search]').fill('no matching card charge');
+   assert.equal(await statementPage.locator('[data-repeating-statement-group]:visible').count(),0);
+   await statementPage.locator('[data-schedule-search]').fill('');
+   assert.equal(await statementPage.locator('[data-repeating-statement-group]:visible').count(),3);
+   await statementAccount.selectOption('demo-checking');
+   assert.equal(await statementPage.locator('[data-repeating-statement-periods]').count(),0);
+   await statementPage.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(await statementPage.locator('[data-history-statement-group]').count(),0);
+   await statementPage.locator('[name=historyAccount]').selectOption('demo-visa');
+   const historicalGroups=statementPage.locator('[data-history-statement-group]');
+   assert.deepEqual(await historicalGroups.evaluateAll(els=>els.map(e=>e.dataset.historyStatementGroup)),
+    ['2026-10-31','2026-09-30']);
+   assert.deepEqual(await historicalGroups.locator('.ledger-statement-total').allInnerTexts(),
+    ['Net charges $40.00','Net charges $20.00']);
+   assert.equal(await statementPage.locator('.history-actual-row').count(),5);
+   await statementPage.locator('[data-history-sort]').selectOption('merchant');
+   assert.deepEqual(await historicalGroups.locator('.ledger-statement-total').allInnerTexts(),
+    ['Net charges $40.00','Net charges $20.00']);
+   await statementPage.locator('[data-history-filter] [name=search]').fill('Current Statement Purchase');
+   await statementPage.locator('[data-history-filter] button[type=submit]').click();
+   assert.deepEqual(await historicalGroups.locator('.ledger-statement-total').allInnerTexts(),
+    ['Net charges $50.00']);
+   await statementCtx.close();
+   assert.deepEqual(statementErrors,[]);
    await context.close();
   }
   const privateUrl='http://127.0.0.1:'+privatePort;
