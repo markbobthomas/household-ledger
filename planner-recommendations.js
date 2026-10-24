@@ -74,6 +74,17 @@ function reconcile(existing={},bundle={},rules=[],records=[],accounts=[],prefs={
   if(parts.length>=3&&['income','expense'].includes(parts[1]))
    legacy.push({accountId:parts[0],type:parts[1],merchant:parts[2],phase:''});
  }
+ for(const key of prefs.mortgageReviewDismissals||[]){
+  const parts=String(key).split('|').map(x=>{try{return decodeURIComponent(x)}catch{return x}});
+  if(parts.length>=3&&parts[0]==='mortgage')
+   legacy.push({accountId:parts[1],type:'expense',merchant:parts[2],phase:''});
+ }
+ for(const [key,value] of Object.entries(prefs.plannerRoutineDecisions||{})){
+  if(value?.status!=='excluded')continue;
+  const parts=String(key).split('|');
+  if(parts.length>=3&&['income','expense'].includes(parts[0]))
+   legacy.push({accountId:parts[1],type:parts[0],merchant:parts.slice(2).join('|'),phase:''});
+ }
  for(const item of legacy){
   const key=idFor(item.accountId,item.type,item.merchant,item.phase);
   if(next[key])continue;
