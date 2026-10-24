@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
+- **Calendar metrics simplified (pending verification):** Heading becomes Actual Current Balance for connected bank (Sample Current Balance for Demo), Estimated Monthly Low, and original **3-year low** for checking. Credit cards retain current balance, statement balance, and next statement estimate as third tile. Redundant explanatory caption removed; no change to 3-year forecasting or card statement logic. See latest entry.
+
 - **Latest fixed-height Calendar:** [PR #162](https://github.com/markbobthomas/household-ledger/pull/162) merges six-row 42-slot months, consistent two-preview day heights and tighter top spacing. Desktop Chromium/iPhone WebKit and financial safety checks green. Private Render remains unverified.
 
 - **Latest Calendar density pass:** [PR #160](https://github.com/markbobthomas/household-ledger/pull/160) merged with desktop/mobile spacing tightened, full bank/forecast invariants retained; private Render still unverified.
@@ -979,3 +981,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Merged:** [PR #162](https://github.com/markbobthomas/household-ledger/pull/162) squash merged as `9b0f55cf0ddc872d37805b050c110d41c652b76e`, independently checked on `main`. Calendar's date grid is consistently 42 slots / six Monday-first rows for four-, five-, and six-week months. Fixed 124px desktop and 106px iPhone day cells fit two transaction previews plus a **+N more** count; dates remain selectable for all transactions and the canonical selected-day calculation. Calendar page top margins reduced further.
 - **Final required checks on PR head `e39e2032f143d6f7c83aeb61b77401ecd5d61025`:** [Real-account pilot safety 40133756396](https://github.com/markbobthomas/household-ledger/actions/runs/40133756396) **success**, [Browser interaction 40133756415](https://github.com/markbobthomas/household-ledger/actions/runs/40133756415) **success**, including desktop Chromium/iPhone WebKit 4/5/6-week grid geometry, clipped-content safety and mobile interactions.
 - **Safety:** No forecast formulas, statements, banking source history, saved data, security settings, Plaid/Render service architecture or secrets changed. No bank records used in public tests. **Private Render live deployment SHA and successful Deploys status remain independently unverified**.
+
+
+### 2026-10-24 — Calendar label simplification, preserving 3-year checking low and third card estimate
+
+- **Request / correction:** Remove the sentence explaining actual vs projected balances to reclaim space. Use **Actual Current Balance** for verified real accounts (honest **Sample Current Balance** for Demo), **Estimated Monthly Low**, and **3-year low** on checking. A clarification explicitly keeps the original three-year minimum, **not** an interim 90-day/3-month value. On credit cards the third figure remains the **Next statement estimate** from the following card billing cycle, not a checking low.
+- **Implementation:** `planner-summary.js` changes only the labels and removes the redundant one-line caption; full canonical three-year low/date/threshold logic is preserved. Real bank current balance remains read-only and unchanged; Demo never claims sample dollars are actual bank data. `index.html` updates the cache revision. `tests/planner-browser.cjs` validates the full three-year trough (including a lower value beyond day 90), original linked low date/warning, absence of caption, the three metric titles, and the third credit-card statement tile on desktop Chromium and iPhone WebKit.
+- **Safety:** No changes to forecast computations, bank source records, Plaid, card statement calculations, saved predictions/settings, infrastructure, or frozen three-year reference fixture. Financial/banking and desktop/mobile browser CI required prior to merge. Final PR / checks / merged SHA to be recorded separately.
+- **Deployment:** Private authenticated Render service running SHA and successful live deployment remain independently **unverified**.

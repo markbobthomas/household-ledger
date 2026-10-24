@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-fixed-grid-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'calendar-compact-labels-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -122,7 +122,7 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
    assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
     'The demo current balance uses the bank snapshot current, not available $5,400.25');
-   assert.match(await page.locator('.summary-bank').innerText(),/Demo current balance/);
+   assert.match(await page.locator('.summary-bank').innerText(),/Sample Current Balance/);
    assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').count(),1,
     'Overlapping forecast destinations are removed from the main menu');
    assert.equal(await page.locator('.calendar-drilldowns [data-view="transactions"]').count(),0,
@@ -152,9 +152,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[aria-label="Recurring forecast changes"]').count(),0,
     'Schedules, not a second Settings shortcut, own recurrence editing');
    await go('summary');
-   assert.match(await page.locator('.calendar-balance-explainer').innerText(),
-    /first balance is sample data.*Future daily balances and lows are estimates/i,
-    'A first-time user can distinguish sample bank values from estimated future balances');
+   assert.equal(await page.locator('.calendar-balance-explainer').count(),0,
+    'The redundant explanation no longer occupies Calendar space');
+   assert.equal(await page.locator('.summary-monthly .summary-overline').innerText(),
+    'Estimated Monthly Low');
+   assert.equal(await page.locator('.summary-minimum .summary-overline').innerText(),
+    '3-year low');
    assert.match(await page.locator('[data-calendar-first-tip]').innerText(),/Choose a future date.*Edit/s,
     'The Calendar shows contextual first-use editing guidance');
    await page.locator('[data-calendar-tip-dismiss]').click();
@@ -165,10 +168,10 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-summary-days],#horizon').count(),0,
     'No 30/60/90 period selectors in the simplified planner');
    assert.equal(await page.locator('.summary-numbers .summary-low').count(),2,
-    'Monthly and three-year lows are both shown');
+    'Both estimated monthly and full three-year lows are shown');
    assert.deepEqual(await page.locator('.summary-numbers > div').evaluateAll(elements=>
     elements.map(el=>el.className)),['summary-bank','summary-monthly','summary-minimum'],
-    'Bank balance, monthly low, and three-year low appear in that order');
+    'Current, estimated monthly and three-year low figures appear in that order');
    assert.deepEqual(await page.locator('.summary-numbers > div').evaluateAll(elements=>
     elements.map(el=>({
      border:getComputedStyle(el).borderLeftWidth,
@@ -394,7 +397,7 @@ const {chromium,webkit}=require('playwright');
     await page.locator('[data-trend-days="'+n+'"]').click();
     assert.equal(await page.locator('[data-trend-days][aria-pressed="true"]').count(),1);
     assert.equal(await page.locator('.summary-minimum .summary-low').innerText(),fullMinimum,
-     'Trend windows must never change the three-year lowest balance');
+     'Optional trend windows must not change the full three-year headline low');
     assert.equal(await page.locator('.calendar-day.selected').count(),1,
      'Trend windows do not change the selected calendar date');
    }
@@ -737,6 +740,10 @@ const {chromium,webkit}=require('playwright');
     /^(Statement balance|Estimated statement)$/);
    assert.equal(await page.locator('[data-summary-card-next-statement] .summary-overline').innerText(),
     'Next statement estimate');
+   assert.equal(await page.locator('.summary-numbers > div:nth-child(3)[data-summary-card-next-statement]').count(),1,
+    'A credit card uses the third summary tile for the next statement estimate, never a checking 3-year low');
+   assert.equal(await page.locator('.summary-numbers .summary-overline').filter({hasText:'3-year low'}).count(),0,
+    'A selected credit card does not show a checking account long-range minimum');
    assert.equal(await page.locator('[data-summary-next-statement-value]').count(),1);
    assert.equal(await page.locator('[data-summary-card-90day-low]').count(),0,
     'Credit cards no longer show the unrelated 3-month debt minimum');
@@ -774,10 +781,40 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(computedCard,{label:'Estimated statement',statement:'$345.00',
     next:'$999.00',details:'Closes Nov 18, 2026 · 2 posted, 1 predicted →',close:'2026-11-18'},
     'Following period uses its own statement estimate, not current card debt or a future minimum');
+   // The checking headline must remain the lowest canonical balance across
+   // the full three-year model, including values after the first 90 days.
+   const fullLowFixture=await page.evaluate(()=>{
+    const account={id:'fixture-checking',name:'Fixture Checking',
+     accountType:'checking',current:900};
+    const markup=window.HouseholdPlannerSummary.render({
+     snapshot:{asOf:'2026-10-19'},chosen:account,derived:{events:[],series:[
+      {date:'2026-10-19',balance:900,events:[]},
+      {date:'2026-11-15',balance:650,events:[]},
+      {date:'2027-01-17',balance:100,events:[]},
+      {date:'2027-01-18',balance:-500,events:[]},
+      {date:'2027-10-19',balance:-1200,events:[]}
+     ]},bundle:{rows:[],payments:{statements:[]}},days:1095,
+     prefs:{lowAlertThreshold:200,cashCushion:200},accounts:[account],
+     fresh:true,ready:()=>true
+    });
+    const doc=new DOMParser().parseFromString(markup,'text/html');
+    const metric=doc.querySelector('.summary-minimum');
+    return {bank:doc.querySelector('.summary-bank small')?.textContent,
+     month:doc.querySelector('.summary-monthly .summary-overline')?.textContent,
+     label:metric?.querySelector('.summary-overline')?.textContent,
+     amount:metric?.querySelector('.summary-low')?.textContent,
+     lowDate:metric?.querySelector('[data-summary-low-date]')?.dataset.summaryLowDate,
+     alert:metric?.querySelector('.summary-low')?.classList.contains('summary-low-alert'),
+     noCaption:doc.querySelector('.calendar-balance-explainer')===null};
+   });
+   assert.deepEqual(fullLowFixture,{bank:'Sample Current Balance',
+    month:'Estimated Monthly Low',label:'3-year low',
+    amount:'-$1,200.00',lowDate:'2027-10-19',alert:true,noCaption:true},
+    'Three-year minimum reflects the later true trough and links to its date');
    await page.locator('#summary-account').selectOption('demo-checking');
    assert.equal(await page.locator('[data-summary-month-low]').count(),1);
    assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
-    'Switching back restores the original checking-account monthly/three-year metrics');
+    'Switching back restores checking-account estimated monthly and full three-year lows');
    await go('overview');
    await page.locator('.account-tile').filter({hasText:'Rewards Visa'}).click();
    assert.match(await page.locator('.balance-main').innerText(),/\$810\.00/,'Credit card balance is shown as debt, not checking cash');
@@ -1654,7 +1691,7 @@ const {chromium,webkit}=require('playwright');
   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
    'Live bank current must be the Plaid current, not $4,800 available');
-  assert.match(await page.locator('.summary-bank').innerText(),/Plaid current balance/);
+  assert.match(await page.locator('.summary-bank').innerText(),/Actual Current Balance/);
 
   assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
   assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
@@ -1982,7 +2019,7 @@ const {chromium,webkit}=require('playwright');
   await connectionPage.close();
   assert.deepEqual(errors,[]);
   await real.close();
-  console.log('PASS compact planner in desktop Chromium and iPhone WebKit: fixed three-year minimum, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
+  console.log('PASS compact planner in desktop Chromium and iPhone WebKit: three-year headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
  }finally{
   if(chrome)await chrome.close();if(iphone)await iphone.close();
   for(const child of children)child.kill('SIGTERM');

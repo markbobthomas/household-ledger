@@ -492,7 +492,7 @@ function rawBalanceMarkup(account,real){
  const raw=account?.current;
  const n=raw==null||raw===''?null:Number(raw);
  const displayed=n!==null&&Number.isFinite(n)?money(n):'Not reported';
- return '<div class="summary-bank"><small>'+(real?'Plaid current balance':'Demo current balance')+
+ return '<div class="summary-bank"><small>'+(real?'Actual Current Balance':'Sample Current Balance')+
   '</small><strong data-bank-current-value>'+displayed+'</strong>'+
   '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
 }
@@ -613,7 +613,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
    '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
    (credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,[]):
-    '<div class="summary-minimum"><div class="summary-overline">Lowest projected balance · next 3 years</div>'+
+    '<div class="summary-minimum"><div class="summary-overline">3-year low</div>'+
     '<strong class="summary-low">Unverified</strong></div>')+'</div>'+
    '<div class="summary-empty">A verified starting balance is needed for this account. '+esc(reason)+
    ' <button class="btn" type="button" data-repair-open>How to fix</button></div>'+
@@ -642,7 +642,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
    '<div class="summary-monthly" data-summary-month-low>'+
-    '<div class="summary-overline">Monthly low</div>'+
+    '<div class="summary-overline">Estimated Monthly Low</div>'+
     '<strong class="summary-low'+(monthLow(calendarMonth)?.balance<alertThreshold(prefs)?' summary-low-alert':'')+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
     '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
      (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
@@ -655,10 +655,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
     (negative?'<small class="summary-low-warning">Below $0</small>':
      below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
     '</div>')+'</div>'+
-    '<p class="calendar-balance-explainer">'+
-  (isReal?'The first balance is bank-reported.':'The first balance is sample data.')+
-  ' Future daily balances and lows are estimates based on predicted payments.</p>'+
-  calendarGrid()+'</section>'+
+    calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
   '<section class="summary-stage summary-legacy">'+
   '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+
