@@ -33,8 +33,8 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'saved-schedules-migration-20261023-v1','The loaded HTML identifies the task-based UI release');
-   assert.match(await page.locator('#deployment-version').textContent(),/Saved Schedules v1/,
+    'focused-repeating-review-20261024-v1','The loaded HTML identifies the task-based UI release');
+   assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
@@ -318,15 +318,25 @@ const {chromium,webkit}=require('playwright');
    assert.ok(originalRecommendations>0,'Existing bank history produces recurring candidates');
    const suggestion=repeatingSection.locator('[data-recommendation-status="pending"]').first();
    assert.ok(await suggestion.count()>0,'An unconfirmed recommendation can be reviewed');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="ignored"]').count(),0,
+    'Only unreviewed recurring suggestions belong to the main queue');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="scheduled"]').count(),0,
+    'Saved schedules stay off the Needs review queue');
+   assert.equal(await repeatingSection.locator('[data-review-candidate]').count(),0,
+    'Ordinary bank transactions are not independently replicated on Needs review');
    const suggestionKey=await suggestion.getAttribute('data-recommended-repeat'),
-    trackedRecommendation=repeatingSection.locator('[data-recommended-repeat="'+suggestionKey+'"]');
+    trackedRecommendation=page.locator('[data-recommended-repeat="'+suggestionKey+'"]');
    const rulesBeforeIgnore=await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
    await trackedRecommendation.locator('[data-ignore-recommendation]').click();
    assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'ignored',
-    'Ignored recommendations stay in the same section with an explicit label');
-   assert.equal(await repeatingSection.locator('[data-recommended-repeat]').count(),originalRecommendations,
-    'Ignoring does not remove or hide a candidate');
+    'Ignored recommendations keep their saved decision');
+   assert.equal(await repeatingSection.locator('[data-recommended-repeat]').count(),originalRecommendations-1,
+    'Ignoring removes the row from the active queue');
+   assert.equal(await page.locator('[data-ignored-repeating] [data-recommended-repeat="'+suggestionKey+'"]').count(),1,
+    'Ignored recommendation moves to the separate collapsed section');
+   assert.equal(await page.locator('[data-ignored-repeating]').getAttribute('open'),null,
+    'Ignored section is collapsed by default');
    assert.equal(await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0),
     rulesBeforeIgnore,'No only records a review decision, never deletes a saved plan');
@@ -337,9 +347,10 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.evaluate(()=>Object.keys(JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').repeatingRecommendations||{}).length>0),
     'A durable recommendation inventory is retained in planning settings');
+   await page.locator('[data-ignored-repeating] > summary').click();
    await trackedRecommendation.locator('[data-unignore-recommendation]').click();
    assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'pending',
-    'Undo ignore restores the pending state without removing the record');
+    'Undo ignore moves the suggestion back into the active queue');
    await trackedRecommendation.locator('[data-review-recommendation]').click();
    const recommendedDraft=page.locator('.history-schedule-form');
    assert.equal(await recommendedDraft.count(),1,'Yes opens prefilled editable schedule fields');
@@ -358,6 +369,24 @@ const {chromium,webkit}=require('playwright');
     'Every bank-history row has one explicit accessible primary button');
    assert.equal(await page.locator('.history-actual-row button button').count(),0,
     'History rows contain no nested interactive elements');
+   const safewayHistory=page.locator('.history-actual-row').filter({hasText:'Safeway'}).first();
+   const safewayCategory=safewayHistory.locator('[data-history-category]');
+   assert.equal(await safewayCategory.inputValue(),'Groceries');
+   const safewayId=await safewayCategory.getAttribute('data-history-category');
+   const bankCategoryBefore=await page.evaluate(id=>window.HouseholdLedgerData&&
+    window.HouseholdLedgerData.migrate(window.createHouseholdLedgerDemo())
+     .transactions.find(t=>String(t.id)===id)?.category,safewayId);
+   await safewayCategory.selectOption('Shopping');
+   assert.equal(await safewayHistory.locator('[data-history-category]').inputValue(),'Shopping',
+    'Bank history lets the user categorize a single posted row in place');
+   assert.equal(await page.evaluate(id=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}').categoryOverrides?.[id],safewayId),'Shopping');
+   await page.reload({waitUntil:'load'});await go('history');
+   assert.equal(await page.locator('[data-history-category="'+safewayId+'"]').inputValue(),'Shopping',
+    'Manual category override survives reload');
+   assert.equal(await page.evaluate(id=>window.HouseholdLedgerData.migrate(
+    window.createHouseholdLedgerDemo()).transactions.find(t=>String(t.id)===id)?.category,safewayId),
+    bankCategoryBefore,'Classification overlay does not rewrite the underlying transaction');
    const demoHistoricalMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
    await demoHistoricalMortgage.click();
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
