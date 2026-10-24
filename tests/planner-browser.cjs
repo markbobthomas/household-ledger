@@ -185,6 +185,16 @@ const {chromium,webkit}=require('playwright');
     'Empty day still shows one closing balance at its bottom');
    assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
     'The native monthly disclosure does not repeat Expand');
+   // Without approved schedules an initial month is intentionally empty.
+   // Add one explicit one-off example so the inline Calendar editor is tested
+   // without requiring auto-detected bills to enter the forecast.
+   await page.locator('[data-calendar-day="2026-10-26"]').click();
+   await page.locator('[data-calendar-add]').click();
+   const openingQuick=page.locator('[data-calendar-quick-form]');
+   await openingQuick.locator('[name=merchant]').fill('Approved one-time fixture');
+   await openingQuick.locator('[name=amount]').fill('15');
+   await openingQuick.locator('button[type=submit]').click();
+   await page.locator('.calendar-day-transactions').getByText('Approved one-time fixture').waitFor();
    await page.locator('.calendar-monthly-list > summary').click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),1,
     'Optional month list expands on demand');
