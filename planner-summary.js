@@ -534,12 +534,14 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
   '<strong class="summary-low" data-summary-next-statement-value>'+
    (hasFollowing?money(Number(following.statementBalance)):'Not available')+'</strong>'+
   (hasFollowing?(
-   (hasCounts?'<small class="summary-card-estimate-sources">'+postedCount+
-    ' posted · '+predictedCount+' predicted</small>':'')+
    (closingDate?(closeNavigable?
     '<button type="button" class="summary-low-date" data-calendar-card-statement-date="'+
      esc(closingDate)+'">':'<small class="summary-low-date">')+
-     'Closes '+esc(dateLabel(closingDate))+(closeNavigable?' →</button>':'</small>'):'')
+     'Closes '+esc(dateLabel(closingDate))+
+     (hasCounts?' · '+postedCount+' posted, '+predictedCount+' predicted':'')+
+     (closeNavigable?' →</button>':'</small>'):
+    hasCounts?'<small class="summary-low-date">'+postedCount+' posted, '+
+     predictedCount+' predicted</small>':'')
   ):'<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
   '</div>';
 }
