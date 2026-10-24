@@ -12,6 +12,24 @@ const plus=(iso,months)=>{const [y,m,d]=iso.split('-').map(Number),first=new Dat
 const shift=(d,n)=>{const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10)};
 const closeFor=(month,day)=>{const max=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).getUTCDate();
  return month+'-'+String(Math.min(Number(day),max)).padStart(2,'0')};
+// Shared DISPLAY grouping for statement-period activity. Uses the same
+// anchored issuer closing dates as build(); never treats a payment or an
+// account's outstanding debt as new statement spending.
+function statementPeriodFor(rule,when){
+ if(!rule||!date(when))return null;
+ const anchor=String(rule.billingEndDate||rule.lastStatementClose||'');
+ if(!date(anchor))return null; // No guessed cycles for unconfigured cards.
+ const closingDay=Number(rule.closingDay||anchor.slice(8,10));
+ if(!Number.isInteger(closingDay)||closingDay<1||closingDay>31)return null;
+ const monthNumber=d=>Number(d.slice(0,4))*12+Number(d.slice(5,7))-1;
+ let n=monthNumber(when)-monthNumber(anchor);
+ const closeAt=offset=>offset===0?anchor:
+  closeFor(plus(anchor,offset).slice(0,7),closingDay);
+ if(when>closeAt(n))n++;
+ const end=closeAt(n),
+  start=n===0&&date(rule.billingStartDate)?rule.billingStartDate:shift(closeAt(n-1),1);
+ return when>=start&&when<=end?{start,end}:null;
+}
 const cash=a=>['checking','savings','depository'].includes(String(a.accountType||a.type||'').toLowerCase());
 const credit=a=>String(a.accountType||a.type||'').toLowerCase()==='credit';
 const validAmount=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0;
@@ -370,7 +388,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  return {plans,billEvents,suppressedExpectedIds,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
   cardEstimates,paymentDetails,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
-const api={build,plus,closeFor,ready,inferPayment};
+const api={build,plus,closeFor,ready,inferPayment,statementPeriodFor};
 root.HouseholdPaymentObligations=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
