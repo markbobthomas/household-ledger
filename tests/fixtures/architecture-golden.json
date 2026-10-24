@@ -1,0 +1,337 @@
+{
+  "schema": 1,
+  "fixtures": "fictional-v1",
+  "reconciliation": {
+    "actualsCount": 20,
+    "sourceHash": "fd7ede3cb57833c828a83a6b20c6783bf4c9d1c4d802178e40fe2c3c43868f24",
+    "derivedHash": "cc01f39248990758e5ab444347746da2ed5e3ede3879db21076379c497b5d612",
+    "immutable": true
+  },
+  "base": {
+    "asOf": "2026-10-20",
+    "days": 1095,
+    "approvedOnly": true,
+    "ledgerCount": 152,
+    "ledgerHash": "5bf67cf26db1b30d9580bec9049f00208e67f024e67f295a49827d0c70ee0556",
+    "accountDigest": [
+      {
+        "id": "checking",
+        "valid": true,
+        "status": "simulated",
+        "opening": 12500,
+        "close": 158160,
+        "available": 158060,
+        "points": 1096,
+        "min": 12400,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "60ada7b49898675e70dbed72b008155f32029eaf2016cc1b28670fe0bac8e809"
+      },
+      {
+        "id": "savings",
+        "valid": true,
+        "status": "simulated",
+        "opening": 3000,
+        "close": 3300,
+        "available": 3300,
+        "points": 1096,
+        "min": 3000,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "4f6c0974a5580eab2c15cdaeb2f2eeb4771e23bfe9a01cf1556e2d5e4471abfc"
+      },
+      {
+        "id": "visa",
+        "valid": true,
+        "status": "simulated",
+        "opening": 850,
+        "close": 872,
+        "available": null,
+        "points": 1096,
+        "min": 850,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "65c52519c77b4daedb9296239a42a99979e2eee5e4fdf8a424141b90df619290"
+      },
+      {
+        "id": "other-card",
+        "valid": true,
+        "status": "simulated",
+        "opening": 300,
+        "close": 300,
+        "available": null,
+        "points": 1096,
+        "min": 300,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "5385fc606dc0ebd593121bd5529a138adc7700a5e70be40b43cbc92395c98ec9"
+      }
+    ],
+    "sourceRecords": 20,
+    "recurrence": {
+      "legacy": 0,
+      "suggestions": 114,
+      "review": 0,
+      "conflicts": 0,
+      "postedReview": 0
+    },
+    "card": {
+      "statement": null,
+      "configuredMetric": "Not available",
+      "cardLowMetric": "$850.00",
+      "unconfiguredMetric": "Not available"
+    },
+    "checking": {
+      "monthLow": "$12,400.00",
+      "threeYearLow": "$12,400.00"
+    },
+    "warningsHash": "1ef57a0235e84f0142525e7c1f9a8dbc378be2f5ccca490c0cc81d60f4a899d1",
+    "diagnosticsHash": "9c75ee533ef9e5156394db435d1b6aafdec1a44f90560af04156c9a944ffe647"
+  },
+  "estimate": {
+    "asOf": "2026-10-20",
+    "days": 1095,
+    "approvedOnly": true,
+    "ledgerCount": 154,
+    "ledgerHash": "85786adedf388de62d01a4fc22a974f4a468070feb7d94e4321de33988d20bcb",
+    "accountDigest": [
+      {
+        "id": "checking",
+        "valid": true,
+        "status": "simulated",
+        "opening": 12500,
+        "close": 158073,
+        "available": 157973,
+        "points": 1096,
+        "min": 12400,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "d2f3196b413a2b076dcfcfe5af699d20f0ca6bf5bdcf19d521980da06d7763de"
+      },
+      {
+        "id": "savings",
+        "valid": true,
+        "status": "simulated",
+        "opening": 3000,
+        "close": 3300,
+        "available": 3300,
+        "points": 1096,
+        "min": 3000,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "4f6c0974a5580eab2c15cdaeb2f2eeb4771e23bfe9a01cf1556e2d5e4471abfc"
+      },
+      {
+        "id": "visa",
+        "valid": true,
+        "status": "simulated",
+        "opening": 850,
+        "close": 785,
+        "available": null,
+        "points": 1096,
+        "min": 785,
+        "lowestDate": "2026-12-20",
+        "dailyHash": "ae367a3b1512cf3108c2c17af3b0087c0e08e5d87fe44d21d546fb33237dbbd7"
+      },
+      {
+        "id": "other-card",
+        "valid": true,
+        "status": "simulated",
+        "opening": 300,
+        "close": 300,
+        "available": null,
+        "points": 1096,
+        "min": 300,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "5385fc606dc0ebd593121bd5529a138adc7700a5e70be40b43cbc92395c98ec9"
+      }
+    ],
+    "sourceRecords": 20,
+    "recurrence": {
+      "legacy": 0,
+      "suggestions": 114,
+      "review": 0,
+      "conflicts": 0,
+      "postedReview": 0
+    },
+    "card": {
+      "statement": {
+        "dueDate": "2026-11-21",
+        "amount": 65,
+        "confirmed": false,
+        "autopay": true
+      },
+      "configuredMetric": "$65.00",
+      "cardLowMetric": "$785.00",
+      "unconfiguredMetric": "Not available"
+    },
+    "checking": {
+      "monthLow": "$12,400.00",
+      "threeYearLow": "$12,400.00"
+    },
+    "warningsHash": "a2e61e107c1bf75f0f3dacc44d757ed17731800f077aaf8fdbfc9ec822363691",
+    "diagnosticsHash": "07d989d3899f0b15ccbb6408570b25ded9f0b23903422359f193f051b63f9b42"
+  },
+  "issued": {
+    "asOf": "2026-10-20",
+    "days": 1095,
+    "approvedOnly": true,
+    "ledgerCount": 155,
+    "ledgerHash": "9e8493634b650c98e9b35361bf966ad08ef216079096148347c50c87bc03876e",
+    "accountDigest": [
+      {
+        "id": "checking",
+        "valid": true,
+        "status": "simulated",
+        "opening": 12500,
+        "close": 157333,
+        "available": 157233,
+        "points": 1096,
+        "min": 12310,
+        "lowestDate": "2026-11-12",
+        "dailyHash": "a88419a07edcde461fc496d53628813fa2474b3051f0a67b9a24f0fcc3a951e8"
+      },
+      {
+        "id": "savings",
+        "valid": true,
+        "status": "simulated",
+        "opening": 3000,
+        "close": 3300,
+        "available": 3300,
+        "points": 1096,
+        "min": 3000,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "4f6c0974a5580eab2c15cdaeb2f2eeb4771e23bfe9a01cf1556e2d5e4471abfc"
+      },
+      {
+        "id": "visa",
+        "valid": true,
+        "status": "simulated",
+        "opening": 850,
+        "close": 45,
+        "available": null,
+        "points": 1096,
+        "min": 45,
+        "lowestDate": "2027-01-12",
+        "dailyHash": "bcc24789d712a627fd17990d90cb9d8a6741b22953ae0324abb768ec747204c9"
+      },
+      {
+        "id": "other-card",
+        "valid": true,
+        "status": "simulated",
+        "opening": 300,
+        "close": 300,
+        "available": null,
+        "points": 1096,
+        "min": 300,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "5385fc606dc0ebd593121bd5529a138adc7700a5e70be40b43cbc92395c98ec9"
+      }
+    ],
+    "sourceRecords": 20,
+    "recurrence": {
+      "legacy": 0,
+      "suggestions": 114,
+      "review": 0,
+      "conflicts": 0,
+      "postedReview": 0
+    },
+    "card": {
+      "statement": {
+        "dueDate": "2026-11-13",
+        "amount": 740,
+        "confirmed": true,
+        "autopay": true
+      },
+      "configuredMetric": "$740.00",
+      "cardLowMetric": "$45.00",
+      "unconfiguredMetric": "Not available"
+    },
+    "checking": {
+      "monthLow": "$12,400.00",
+      "threeYearLow": "$12,310.00"
+    },
+    "warningsHash": "a2e61e107c1bf75f0f3dacc44d757ed17731800f077aaf8fdbfc9ec822363691",
+    "diagnosticsHash": "49c87af1394b830bb1d4fd8a6583bc388a92d5e6190994f6f521442582ae674f"
+  },
+  "legacy": {
+    "asOf": "2026-10-20",
+    "days": 1095,
+    "approvedOnly": false,
+    "ledgerCount": 190,
+    "ledgerHash": "94f0bff99d5d69cd6bdfcb91419ad87ffe46e646d91f50736ef3b4801475c4cd",
+    "accountDigest": [
+      {
+        "id": "checking",
+        "valid": true,
+        "status": "simulated",
+        "opening": 12500,
+        "close": 154761,
+        "available": 154661,
+        "points": 1096,
+        "min": 12400,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "e038d489d46f5396828c8c6da1aa1c3436a4049b71864e63e5c18130b9ce4994"
+      },
+      {
+        "id": "savings",
+        "valid": true,
+        "status": "simulated",
+        "opening": 3000,
+        "close": 3300,
+        "available": 3300,
+        "points": 1096,
+        "min": 3000,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "4f6c0974a5580eab2c15cdaeb2f2eeb4771e23bfe9a01cf1556e2d5e4471abfc"
+      },
+      {
+        "id": "visa",
+        "valid": true,
+        "status": "simulated",
+        "opening": 850,
+        "close": 785,
+        "available": null,
+        "points": 1096,
+        "min": 785,
+        "lowestDate": "2026-12-20",
+        "dailyHash": "ae367a3b1512cf3108c2c17af3b0087c0e08e5d87fe44d21d546fb33237dbbd7"
+      },
+      {
+        "id": "other-card",
+        "valid": true,
+        "status": "simulated",
+        "opening": 300,
+        "close": 300,
+        "available": null,
+        "points": 1096,
+        "min": 300,
+        "lowestDate": "2026-10-20",
+        "dailyHash": "5385fc606dc0ebd593121bd5529a138adc7700a5e70be40b43cbc92395c98ec9"
+      }
+    ],
+    "sourceRecords": 20,
+    "recurrence": {
+      "legacy": 1,
+      "suggestions": 114,
+      "review": 0,
+      "conflicts": 0,
+      "postedReview": 0
+    },
+    "card": {
+      "statement": {
+        "dueDate": "2026-11-21",
+        "amount": 65,
+        "confirmed": false,
+        "autopay": true
+      },
+      "configuredMetric": "$65.00",
+      "cardLowMetric": "$785.00",
+      "unconfiguredMetric": "Not available"
+    },
+    "checking": {
+      "monthLow": "$12,400.00",
+      "threeYearLow": "$12,400.00"
+    },
+    "warningsHash": "a2e61e107c1bf75f0f3dacc44d757ed17731800f077aaf8fdbfc9ec822363691",
+    "diagnosticsHash": "07d989d3899f0b15ccbb6408570b25ded9f0b23903422359f193f051b63f9b42"
+  },
+  "review": {
+    "count": 5,
+    "signature": "1056c1ff07973d41215d361131a647c4fc780a4094aa6d0453a495f17c310e51"
+  }
+}
