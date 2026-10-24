@@ -348,6 +348,22 @@ const {chromium,webkit}=require('playwright');
     'Historical date selections do not open full-month predictions');
       await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
+   const novemberGrid=await gridGeometry();
+   assert.equal(novemberGrid.slots,42,'November 2026 needs all six week rows');
+   assert.equal(novemberGrid.actual,30);
+   assert.ok(Math.abs(novemberGrid.height-initialGrid.height)<1,
+    'Five-week October and six-week November have exactly the same calendar height');
+   // February 2027 spans only four weeks, and should not shrink the calendar.
+   for(let month=0;month<3;month++)await page.locator('[data-calendar-nav="1"]').click();
+   assert.match(await page.locator('.calendar-navigation h2').innerText(),/February 2027/);
+   const februaryGrid=await gridGeometry();
+   assert.equal(februaryGrid.slots,42);
+   assert.equal(februaryGrid.actual,28);
+   assert.ok(Math.abs(februaryGrid.height-initialGrid.height)<1,
+    'Four-, five- and six-week months have identical grid height');
+   await page.locator('[data-calendar-today]').click();
+   await page.locator('[data-calendar-nav="1"]').click();
+
    const monthLowFromCells=async()=>page.evaluate(()=>{
     const rows=[...document.querySelectorAll('[data-calendar-day]')];
     const vals=rows.map(el=>({date:el.dataset.calendarDay,
