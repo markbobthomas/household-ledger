@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-compact-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'calendar-fixed-grid-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -175,21 +175,40 @@ const {chromium,webkit}=require('playwright');
      padding:getComputedStyle(el).paddingLeft
     }))),Array.from({length:3},()=>({border:'0px',padding:'0px'})),
     'All three metrics have identical zero inner borders and left padding');
-   // Calendar-specific density must hold in both desktop and phone browsers.
-   const compact=await page.evaluate(()=>{
-    const px=(s,p)=>parseFloat(getComputedStyle(document.querySelector(s))[p]);
-    const day=px('.calendar-day','minHeight');
-    return {day,blank:[...document.querySelectorAll('.calendar-blank,.calendar-outside')]
-     .map(el=>parseFloat(getComputedStyle(el).minHeight)),
-     tabs:px('.planner-nav-primary','marginBottom'),
-     nav:px('.calendar-navigation','marginBottom'),
-     detail:px('.calendar-day-detail','marginTop')};
+   // A month is always six weeks (42 day slots), with a fixed day size.
+   const gridGeometry=async()=>page.evaluate(()=>{
+    const grid=document.querySelector('.calendar-grid'),days=[...grid.children].slice(7);
+    const bounds=grid.getBoundingClientRect();
+    const style=el=>getComputedStyle(el);
+    return {height:bounds.height,slots:days.length,weekdays:grid.querySelectorAll('.calendar-weekday').length,
+     actual:days.filter(el=>el.matches('.calendar-day')).length,
+     heights:days.map(el=>el.getBoundingClientRect().height),
+     rows:style(grid).gridTemplateRows.split(' ').map(parseFloat),
+     gap:parseFloat(style(grid).rowGap),
+     tabGap:parseFloat(style(document.querySelector('.planner-nav-primary')).marginBottom),
+     maxPreviews:Math.max(0,...days.map(el=>el.querySelectorAll('.calendar-event').length))};
    });
-   assert.ok(compact.tabs<=10&&compact.nav<=6&&compact.detail<=9,
-    'Calendar vertical gaps remain compact: '+JSON.stringify(compact));
-   assert.ok(compact.day<=(mobile?64:82)&&compact.day>=60&&
-    compact.blank.every(h=>h===compact.day),
-    'Blank and dated cells use equal compact minimum heights: '+JSON.stringify(compact));
+   const initialGrid=await gridGeometry();
+   const desiredCell=mobile?106:124;
+   assert.equal(initialGrid.slots,42,'October has 42 fixed date slots, even when only five weeks are needed');
+   assert.equal(initialGrid.weekdays,7,'Weekday headings remain a separate row');
+   assert.equal(initialGrid.rows.length,7,'Calendar has one weekday row plus six fixed week rows');
+   assert.ok(initialGrid.heights.every(n=>Math.abs(n-desiredCell)<1),
+    'Empty, posted and forecast days share a fixed cell height: '+JSON.stringify(initialGrid));
+   assert.ok(initialGrid.tabGap<=5,'Calendar page top is further tightened');
+   assert.ok(initialGrid.maxPreviews<=2,'Only the first two transaction previews occupy calendar cells');
+   // Two previews plus the +more label must fit inside the fixed day area.
+   const previewFits=await page.evaluate(()=>{
+    const day=document.querySelector('[data-calendar-day]'),holder=day.querySelector('.calendar-day-events');
+    const former=holder.innerHTML;
+    holder.innerHTML=[1,2].map(i=>'<span class="calendar-event"><span class="calendar-event-name">Preview '+i+'</span><span class="calendar-event-amount">−$100</span></span>').join('')+
+     '<span class="calendar-more">+3 more</span>';
+    const rect=day.getBoundingClientRect(),parts=[...holder.querySelectorAll('.calendar-event,.calendar-more')];
+    const fit=parts.every(el=>el.getBoundingClientRect().bottom<=rect.bottom-1);
+    holder.innerHTML=former;
+    return fit;
+   });
+   assert.ok(previewFits,'Two complete payments and overflow count fit in a fixed-height day');
    assert.equal(await page.locator('.summary-bank [data-bank-current-value]').evaluate(el=>
     getComputedStyle(el).color),'rgb(35, 113, 74)',
     'Bank-reported current balance is green');
