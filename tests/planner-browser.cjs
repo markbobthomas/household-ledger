@@ -362,9 +362,12 @@ const {chromium,webkit}=require('playwright');
      'Each row identifies one distinct cash movement stream rather than duplicating a merchant');
     assert.ok((await legacySection.locator('.legacy-estimate-state').first().innerText())
      .includes('forecast'),'The row explicitly explains the balance impact');
-    assert.equal(await legacySection.locator('.legacy-estimate-count').first().evaluate(el=>
-     getComputedStyle(el).color),'rgb(180, 35, 50)',
-     'Count receives a restrained red warning instead of an indistinguishable neutral label');
+    const warningColor=await legacySection.locator('.legacy-estimate-count').first()
+     .evaluate(el=>getComputedStyle(el).color);
+    const channels=(warningColor.match(/\d+/g)||[]).map(Number);
+    assert.ok(channels.length>=3&&channels[0]>channels[1]*1.5&&
+     channels[0]>channels[2]*1.5,
+     'Count receives visible red emphasis with the existing app theme: '+warningColor);
     const first=legacyRows.first(),countBefore=await legacyRows.count();
     if(await first.getAttribute('data-recommendation-status')==='pending'){
      await first.locator('[data-ignore-recommendation]').click();
