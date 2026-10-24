@@ -75,7 +75,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
   'A detected mortgage is only a recommendation until a saved plan is approved');
  assert.equal((initial.match(/ABC Draft 984/g)||[]).length,0,
   'Unapproved merchant patterns never enter projected balance');
- assert.match(initial,/Forecast needs review|awaiting your approval/i,
+ assert.match(el('planner-notice').innerHTML,/Forecast needs review|awaiting your approval/i,
   'Missing unapproved recurring obligations warn before relying on balances');
  await click('[data-view]',{view:'reviews'});
  assert.match(future(),/Recommended repeating/);
