@@ -25,7 +25,7 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
-- **Calendar metrics simplified (pending verification):** Heading becomes Actual Current Balance for connected bank (Sample Current Balance for Demo), Estimated Monthly Low, and original **3-year low** for checking. Credit cards retain current balance, statement balance, and next statement estimate as third tile. Redundant explanatory caption removed; no change to 3-year forecasting or card statement logic. See latest entry.
+- **Latest Calendar metrics:** [PR #164](https://github.com/markbobthomas/household-ledger/pull/164) merged/verified: actual current bank balance (sample in Demo), Estimated Monthly Low, and unchanged full 3-year checking low; the third credit-card figure remains Next statement estimate. Redundant top caption removed. Private Render remains unverified.
 
 - **Latest fixed-height Calendar:** [PR #162](https://github.com/markbobthomas/household-ledger/pull/162) merges six-row 42-slot months, consistent two-preview day heights and tighter top spacing. Desktop Chromium/iPhone WebKit and financial safety checks green. Private Render remains unverified.
 
@@ -989,3 +989,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Implementation:** `planner-summary.js` changes only the labels and removes the redundant one-line caption; full canonical three-year low/date/threshold logic is preserved. Real bank current balance remains read-only and unchanged; Demo never claims sample dollars are actual bank data. `index.html` updates the cache revision. `tests/planner-browser.cjs` validates the full three-year trough (including a lower value beyond day 90), original linked low date/warning, absence of caption, the three metric titles, and the third credit-card statement tile on desktop Chromium and iPhone WebKit.
 - **Safety:** No changes to forecast computations, bank source records, Plaid, card statement calculations, saved predictions/settings, infrastructure, or frozen three-year reference fixture. Financial/banking and desktop/mobile browser CI required prior to merge. Final PR / checks / merged SHA to be recorded separately.
 - **Deployment:** Private authenticated Render service running SHA and successful live deployment remain independently **unverified**.
+
+
+### 2026-10-24 — Verified Calendar labels and preserved three-year/card metrics
+
+- **GitHub merged and checked:** [PR #164](https://github.com/markbobthomas/household-ledger/pull/164) squash `38330209519704eb81f6be18840fc8ae3306e7db`, independently matched to GitHub `main`. Display-only Calendar cleanup: **Actual Current Balance** for linked real bank data (**Sample Current Balance** for fictional Demo), **Estimated Monthly Low**, and **3-year low** on checking. Removed introductory forecast explanation above grid. Credit-card third slot still shows the **Next statement estimate**, not a low-balance figure; statement engine and dates untouched.
+- **Final passing feature head `3608c35bee2a74ec289035810be30c2d2f949be5`:** [Real-account pilot safety run 40135431432](https://github.com/markbobthomas/household-ledger/actions/runs/40135431432) **success** (all 45 banking/forecast regressions and frozen exact three-year signatures); [Browser interaction run 40135431436](https://github.com/markbobthomas/household-ledger/actions/runs/40135431436) **success** on desktop Chromium and iPhone WebKit (labels, removed top note, preserved full three-year trough and card third estimate).
+- **Test maintenance:** Adjusted stale old-label expectations in `tests/architecture-baseline.cjs` and `tests/planner-summary-smoke.cjs`; no financial golden fixtures, formulas or credentials changed. Two failed *earlier* PR head runs reflected outdated display-label assertions and were superseded by the passing final head.
+- **Deployment:** GitHub `main` merge is verified; existing private Render service deployed SHA and successful live deployment are independently **unverified**.
