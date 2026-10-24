@@ -1600,7 +1600,7 @@ function render(){
     bundle.rows,activeAccounts(s),s.asOf,p,[]);
   bundle.bankRecommendationCandidates=bankRecommendations;
   const result=rec.reconcile(p.recurringRecommendations||{},bundle,
-   p.futureRecurringRules||[],bundle.rows,activeAccounts(s));
+   p.futureRecurringRules||[],bundle.rows,activeAccounts(s),p);
   bundle.recommendedRepeating=result.items;
   lastRecommendedRepeating=result.items;
   if(result.changed){
