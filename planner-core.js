@@ -156,9 +156,12 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   const blocked=aliases.some(a=>[g.kind,t.type].some(type=>{
    const d=excluded[[type,a,norm(g.merchant)].join('|')];
    return d?.status==='excluded'&&Math.abs(cents(d.amount)-amount)<=1;
-  }))||[g.kind,t.type].some(type=>dismiss[
-   [g.accountId,type,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|')
-  ]==='dismissed')||(prefs.mortgageReviewDismissals||[]).includes(
+  }))||[g.kind,t.type].some(type=>{
+   const stable=[g.accountId,type,norm(g.merchant)].map(encodeURIComponent).join('|'),
+    legacy=[g.accountId,type,norm(g.merchant),String(amount)]
+     .map(encodeURIComponent).join('|');
+   return dismiss[stable]==='dismissed'||dismiss[legacy]==='dismissed';
+  })||(prefs.mortgageReviewDismissals||[]).includes(
    ['mortgage',g.accountId,norm(g.merchant),String(amount)].map(encodeURIComponent).join('|'));
   // Previously excluded/dismissed patterns remain visible as recommendations.
   // They never produce projected entries before a schedule is approved.
