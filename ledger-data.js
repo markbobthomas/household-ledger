@@ -70,14 +70,31 @@ const numericCategoryConfidence=t=>{
  const n=Number(t?.categoryConfidence??t?.category_confidence??t?.source?.categoryConfidence);
  return Number.isFinite(n)&&n>=0&&n<=1?n:null;
 };
-function categoryRuleSafety(state,t){
- const related=(state.transactions||[]).filter(row=>row.type==='expense'&&categoryRuleKey(row)===categoryRuleKey(t));
- const categories=new Set(related.map(x=>state.categoryOverrides?.[x.id]||x.category).filter(x=>x&&x!=='Other'));
+// Only build this derived index when resolving a full history with learned
+// rules. A one-off category lookup still calculates from current source facts.
+function categorySafetyIndex(state){
+ const grouped=new Map();
+ for(const t of state.transactions||[]){
+  if(t.type!=='expense')continue;
+  const key=categoryRuleKey(t);
+  if(!grouped.has(key))grouped.set(key,{count:0,categories:new Set()});
+  const group=grouped.get(key),category=state.categoryOverrides?.[t.id]||t.category;
+  group.count++;
+  if(category&&category!=='Other')group.categories.add(category);
+ }
+ return grouped;
+}
+function categoryRuleSafety(state,t,index){
+ const stored=index?.get(categoryRuleKey(t));
+ const related=index?null:(state.transactions||[]).filter(row=>
+  row.type==='expense'&&categoryRuleKey(row)===categoryRuleKey(t));
+ const categories=index?(stored?.categories||new Set()):
+  new Set(related.map(x=>state.categoryOverrides?.[x.id]||x.category).filter(x=>x&&x!=='Other'));
  const mixed=mixedUse.test(t.merchant)||categories.size>1;
- return {mixed,count:related.length,distinctCategories:categories.size,
+ return {mixed,count:index?(stored?.count||0):related.length,distinctCategories:categories.size,
   cause:mixedUse.test(t.merchant)?'Multi-purpose merchant':categories.size>1?'Conflicting past categories':'Consistent merchant history'};
 }
-function resolution(state,t){
+function resolution(state,t,index){
  const explicit=state.categoryOverrides?.[t.id];
  if(explicit)return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
  const original=t.category||'Other';
@@ -96,7 +113,7 @@ function resolution(state,t){
  const key=categoryRuleKey(t),rule=state.learning?.categoryRules?.[key];
  if(!rule||t.type!=='expense')return {category:inferred,method:origin,
   confidence:originLabel,ruleKey:null};
- const safety=categoryRuleSafety(state,t);
+ const safety=categoryRuleSafety(state,t,index);
  const applicable=original==='Other'||(numericCategoryConfidence(t)!==null&&numericCategoryConfidence(t)<.7);
  const safe=rule.mode==='auto'&&!safety.mixed&&applicable;
  // Never overwrite a specific provider category with high/unknown confidence.
@@ -108,7 +125,9 @@ function resolution(state,t){
   explanation:safety.mixed?safety.cause:inferred!=='Other'?'Original category preserved':'Rule awaiting review'};
 }
 function records(state){
- return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t),originalCategory:t.category||'Other'}));
+ const learned=state.learning?.categoryRules||{};
+ const index=Object.keys(learned).length?categorySafetyIndex(state):null;
+ return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t,index),originalCategory:t.category||'Other'}));
 }
 function categoryFor(state,id){
  const t=(state.transactions||[]).find(x=>x.id===id);
