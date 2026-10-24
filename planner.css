@@ -2180,3 +2180,117 @@ html{scrollbar-gutter:stable}
  }
  .reviews-page .review-candidate-actions .btn{font-size:10px;padding:4px 5px}
 }
+
+/* Unified recurrence styling: three views, one row/editor design system.
+   Page modifiers may add purpose-specific controls without overriding the
+   shared type scale, form rhythm, chevrons or expansion interaction. */
+.planner-page{
+ --recurrence-name:var(--type-body,13px);
+ --recurrence-meta:var(--type-detail,11px);
+ --recurrence-label:11px;
+ --recurrence-foreground:#233c2e;
+ --recurrence-secondary:#65776a;
+ --recurrence-soft:#f9fbf8;
+ --recurrence-rule:#edf1eb;
+ --recurrence-radius:5px;
+}
+.planner-page .recurrence-row{border-bottom:1px solid var(--recurrence-rule)}
+.planner-page .recurrence-row-trigger{
+ font-family:inherit;color:inherit;border-radius:var(--recurrence-radius);
+ cursor:pointer;
+}
+.planner-page .recurrence-row-trigger:hover,
+.planner-page .recurrence-row-trigger:focus-visible{
+ background:#f5f8f3;outline-offset:-2px;
+}
+.planner-page .recurrence-row-name strong,
+.planner-page .recurrence-row-name .schedule-row-title strong{
+ color:var(--recurrence-foreground)!important;
+ font-family:inherit;font-size:var(--recurrence-name)!important;
+ font-weight:650;line-height:1.4!important;
+}
+.planner-page .recurrence-row-name small,
+.planner-page .recurrence-row-name .schedule-row-title small{
+ color:var(--recurrence-secondary)!important;
+ font-family:inherit;font-size:var(--recurrence-meta)!important;
+ font-weight:500;line-height:1.4!important;
+}
+.planner-page .recurrence-row-trigger :is(.schedule-row-chevron,.history-row-hint,.review-row-chevron){
+ font-size:18px!important;font-weight:500;line-height:1!important;
+ color:#4c6757!important;text-decoration:none!important;
+}
+.planner-page .recurrence-inline-detail{
+ border-top:1px solid var(--recurrence-rule);
+ background:var(--recurrence-soft);
+ padding:10px 10px 14px;
+}
+.planner-page .recurrence-editor{
+ font-family:inherit;color:var(--recurrence-foreground);
+ width:100%;min-width:0;background:transparent;
+}
+.planner-page .recurrence-editor :is(.history-schedule-form,.schedule-form){
+ margin:0!important;padding:0!important;border:0!important;
+ border-radius:0!important;box-shadow:none!important;background:transparent!important;
+}
+.planner-page .recurrence-editor .future-fields{
+ display:grid;grid-template-columns:repeat(auto-fit,minmax(min(185px,100%),1fr));
+ align-items:end;gap:10px 12px;margin:10px 0 12px!important;
+}
+.planner-page .recurrence-editor .future-fields label{
+ font-family:inherit;font-size:var(--recurrence-label)!important;
+ font-weight:650;line-height:1.45;color:#587063;
+}
+.planner-page .recurrence-editor .future-fields :is(input,select){
+ min-height:36px;font-family:inherit;font-size:12px!important;
+ border-radius:var(--recurrence-radius);
+}
+.planner-page .recurrence-editor .review-inline-guide,
+.planner-page .recurrence-editor .history-type-explanation{
+ margin:0 0 12px;font-family:inherit;font-size:var(--recurrence-meta);
+ line-height:1.5;color:var(--recurrence-secondary);
+}
+.planner-page .recurrence-editor .future-form-actions{
+ display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;
+ gap:8px;margin-top:12px;
+}
+.planner-page .recurrence-editor .audit-footnote{
+ font-size:var(--recurrence-meta);line-height:1.55;color:var(--recurrence-secondary);
+}
+.schedule-page .schedule-card-detail:has(.recurrence-inline-detail){
+ padding:0!important;background:transparent!important;border-radius:0;
+}
+.schedule-page .schedule-inline-plan.recurrence-inline-detail{padding:10px 10px 14px!important}
+.schedule-page .schedule-creation.recurrence-inline-detail{
+ margin:8px 0 12px;border-radius:var(--recurrence-radius);
+ border:1px solid #e6ece3;padding:13px 14px;
+}
+.schedule-page .schedule-occurrence-disclosure{
+ margin-top:12px;padding-top:8px;border-top:1px solid var(--recurrence-rule);
+}
+.schedule-page .schedule-occurrence-disclosure>summary{
+ padding:9px 3px;cursor:pointer;font-size:var(--recurrence-meta);
+ font-weight:700;color:#516e5e;
+}
+.schedule-page .schedule-occurrence-disclosure .schedule-occurrence-section{
+ margin:6px 0;max-width:100%;
+}
+.history-page .history-entry{width:100%;min-width:0}
+.history-page .history-entry>.history-actual-row{margin:0}
+.history-page .history-entry>.history-inline-detail{
+ margin:0 0 2px;padding:10px 12px 14px;
+}
+.history-page .history-inline-choices{display:flex;flex-wrap:wrap;gap:7px}
+.history-page .history-entry:has([aria-expanded="true"])>.history-actual-row,
+.schedule-page .schedule-card:has(.recurrence-inline-detail)>.schedule-compact-row{
+ background:var(--recurrence-soft);
+}
+.history-page .history-actual-row .history-row-hint{
+ color:#4c6757!important;text-decoration:none!important;
+}
+@media(max-width:850px){
+ .planner-page .recurrence-editor .future-fields{grid-template-columns:repeat(auto-fit,minmax(min(145px,100%),1fr));gap:9px}
+ .planner-page .recurrence-row-name strong,
+ .planner-page .recurrence-row-name .schedule-row-title strong{font-size:12px!important}
+ .history-page .history-entry>.history-inline-detail,
+ .schedule-page .schedule-inline-plan.recurrence-inline-detail{padding:10px 5px 12px!important}
+}
