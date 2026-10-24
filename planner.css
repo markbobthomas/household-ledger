@@ -2493,3 +2493,13 @@ html{scrollbar-gutter:stable}
  color:var(--muted);font-family:inherit;font-size:11px;font-weight:400;
  line-height:1.4;text-align:left;
 }
+
+/* Bank's longer count can wrap to two lines on an iPhone while Repeating's
+   shorter count remains one line. Reserve the same compact two-line space
+   for both, so the first data row never jumps vertically between tabs. */
+@media(max-width:850px){
+ .schedule-page .schedule-list-count,
+ .history-page .history-count.ledger-list-count{
+  min-height:50px;
+ }
+}
