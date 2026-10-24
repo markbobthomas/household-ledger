@@ -1041,6 +1041,12 @@ function applyScheduleSearch(root=document){
    }
   }
  }
+ const count=root.querySelector('[data-schedule-visible-count]');
+ if(count){
+  const total=Number(count.dataset.scheduleTotalCount)||0;
+  count.textContent='Showing '+shown+' of '+total+' repeating transaction'+
+   (total===1?'':'s');
+ }
  const empty=root.querySelector('[data-schedule-search-empty]');
  if(empty)empty.hidden=shown!==0||!q;
 }
@@ -1230,6 +1236,9 @@ function schedulesPage(bundle,s){
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+'<div class="schedule-grid">'+
+   '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
+    'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
+    ' of '+rules.length+' repeating transaction'+(rules.length===1?'':'s')+'</p>'+
    (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching schedules. Try a different search.</p>'+
@@ -1447,7 +1456,7 @@ function historyPage(bundle,s){
       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
-  '<div class="history-list-surface"><p class="history-count">Showing '+visible.length+' of '+filtered.length+
+  '<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
     ' matching transaction'+(filtered.length===1?'':'s')+
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+

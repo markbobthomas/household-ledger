@@ -2483,3 +2483,23 @@ html{scrollbar-gutter:stable}
  .history-page .ledger-toolbar>.ledger-history-clear-button{grid-column:2;grid-row:3}
  .schedule-page .ledger-money,.history-page .ledger-money{font-size:12px}
 }
+
+/* Both ledger tabs use the same count strip, immediately after the search
+   toolbar and inside the bordered list. A single rhythm rule keeps the first
+   payment row at the same vertical offset when switching tabs. */
+.schedule-page .schedule-list-count,.history-page .history-count.ledger-list-count{
+ display:block;width:100%;min-height:35px;box-sizing:border-box;
+ flex:0 0 auto;margin:0;padding:10px 9px 9px;
+ color:var(--muted);font-family:inherit;font-size:11px;font-weight:400;
+ line-height:1.4;text-align:left;
+}
+
+/* Bank's longer count can wrap to two lines on an iPhone while Repeating's
+   shorter count remains one line. Reserve the same compact two-line space
+   for both, so the first data row never jumps vertically between tabs. */
+@media(max-width:850px){
+ .schedule-page .schedule-list-count,
+ .history-page .history-count.ledger-list-count{
+  min-height:50px;
+ }
+}

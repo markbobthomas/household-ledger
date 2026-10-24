@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'money-toolbar-alignment-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'repeating-count-strip-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -537,6 +537,19 @@ const {chromium,webkit}=require('playwright');
     'Sort selection preserves active bank transaction search');
    await page.locator('[data-clear-history-search]').click();
    await page.locator('[data-history-sort]').selectOption('newest');
+   const countStripGeometry=async(surface,row,count)=>page.evaluate(
+    ({surface,row,count})=>{
+     const panel=document.querySelector(surface),item=document.querySelector(row),
+      strip=document.querySelector(count);
+     if(!panel||!item||!strip)throw Error('Missing shared ledger count geometry');
+     const box=panel.getBoundingClientRect(),r=item.getBoundingClientRect(),
+      c=strip.getBoundingClientRect();
+     return {stripY:c.top-box.top,stripX:c.left-box.left,
+      stripHeight:c.height,firstRowY:r.top-box.top};
+    },{surface,row,count});
+   const bankListCount=await countStripGeometry(
+    '.history-page .history-list-surface','.history-page .ledger-list-row',
+    '.history-page .history-count.ledger-list-count');
    const bankListRow=await rowLayout(page,'.history-page .ledger-list-row');
    const fieldGeometry=async(selector)=>page.locator(selector).first().evaluate(el=>{
     const r=el.getBoundingClientRect();
@@ -967,6 +980,21 @@ const {chromium,webkit}=require('playwright');
     'The Repeating screen explains how to edit one occurrence or the whole schedule');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
    const repeatingListRow=await rowLayout(page,'.schedule-page .ledger-list-row');
+   const repeatingCount=page.locator('[data-schedule-visible-count]');
+   assert.equal(await repeatingCount.count(),1,
+    'Repeating has one count strip in the same list position as Bank activity');
+   assert.equal(await repeatingCount.getAttribute('data-schedule-total-count'),
+    String(previousSchedules));
+   assert.equal((await repeatingCount.innerText()).trim(),
+    'Showing '+previousSchedules+' of '+previousSchedules+' repeating transactions');
+   const repeatingListCount=await countStripGeometry(
+    '.schedule-page .schedule-grid','.schedule-page .ledger-list-row',
+    '.schedule-page .schedule-list-count');
+   for(const metric of ['stripY','stripX','stripHeight','firstRowY']){
+    assert.ok(Math.abs(repeatingListCount[metric]-bankListCount[metric])<=2,
+     'Repeating count and first payment row match Bank activity vertical spacing: '+metric+
+      JSON.stringify({bank:bankListCount,repeating:repeatingListCount,mobile}));
+   }
    const repeatingToolbar=await fieldGeometry('.schedule-page .ledger-toolbar');
    const repeatingSearch=await fieldGeometry('.schedule-page .schedule-search-wrap input');
    const repeatingDollar=await fieldGeometry('.schedule-page .ledger-money-dollar');
@@ -1131,6 +1159,9 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-schedule-category-filter]').selectOption('Water bills');
    assert.equal(await page.locator('[data-schedule-card]').count(),2,
     'Category filter shows only the two assigned schedules');
+   assert.equal((await page.locator('[data-schedule-visible-count]').innerText()).trim(),
+    'Showing 2 of '+(previousSchedules+2)+' repeating transactions',
+    'Repeating count reflects selected categories without losing total schedules');
    const group=page.locator('[data-schedule-category-group="Water bills"]');
    assert.equal(await group.count(),1);
    assert.match(await group.locator('.schedule-category-heading').innerText(),/[A-Z][a-z]{2} \d{4}: Out /,
@@ -1143,6 +1174,9 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-schedule-search]').fill('Garden');
    assert.equal(await page.locator('[data-schedule-card]:visible').count(),1,
     'Search filters instantly without navigating or reopening editors');
+   assert.equal((await page.locator('[data-schedule-visible-count]').innerText()).trim(),
+    'Showing 1 of '+(previousSchedules+2)+' repeating transactions',
+    'Live searching updates the visible recurring count without rerendering');
    assert.match(await group.locator('[data-schedule-group-total]').innerText(),/220/,
     'Visible category totals reflect only matching scheduled predictions');
    await page.locator('[data-schedule-search]').fill('');
@@ -1153,6 +1187,9 @@ const {chromium,webkit}=require('playwright');
     'Search does not reintroduce annual totals or averages');
    await page.locator('[data-schedule-search]').fill('Nothing matches');
    assert.equal(await page.locator('[data-schedule-card]:visible').count(),0);
+   assert.match(await page.locator('[data-schedule-visible-count]').innerText(),
+    /^Showing 0 of \d+ repeating transactions$/,
+    'Zero-result search keeps the count visible and explicit');
    assert.equal(await page.locator('[data-schedule-search-empty]:visible').count(),1);
    await page.locator('[data-schedule-search]').fill('');
    await page.locator('[data-schedule-category-filter]').selectOption('');
