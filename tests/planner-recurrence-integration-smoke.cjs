@@ -1,11 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),
  vm=require('node:vm');
+// Load only the canonical planner dependencies. Legacy inference modules must
+// not affect this browser-logic integration test or mask a missing import.
 const files=[
  'demo-data.js','bank-feed.js','accounting.js','categorization.js',
- 'ledger-data.js','forecast.js','forecast-ledger.js','account-forecast.js',
- 'payment-obligations.js','planner-intelligence.js','planner-backtest.js',
- 'planner-transactions.js','planner-history.js','planner-recurrence.js','planner-core.js','planner.js'
+ 'ledger-data.js','payment-obligations.js',
+ 'planner-transactions.js','planner-history.js','planner-core.js','planner.js'
 ];
 const FixedDate=class extends Date{
  constructor(...args){super(...(args.length?args:['2026-10-20T12:00:00Z']))}
