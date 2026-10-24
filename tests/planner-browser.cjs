@@ -1050,6 +1050,28 @@ const {chromium,webkit}=require('playwright');
   assert.match(await page.locator('.summary-trust').innerText(),/everyday unplanned spending is excluded/);
   assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
   await go('overview');
+  assert.match(await page.locator('.income-status').innerText(),/NOT DETECTED/,
+   'Unapproved detected payroll cannot enter forecast balances');
+  await go('reviews');
+  const recommendedReal=page.locator('[aria-label="Recommended repeating"]');
+  assert.match(await recommendedReal.innerText(),/Home Mortgage ACH/);
+  assert.match(await recommendedReal.innerText(),/Storage Unit Monthly/);
+  assert.match(await recommendedReal.innerText(),/ACME Employer Payroll/);
+  // Approve three independent bank-derived schedules through the same
+  // confirmation flow used by actual users. None was auto-forecast before Yes.
+  for(const merchant of ['Home Mortgage ACH','Storage Unit Monthly','ACME Employer Payroll']){
+   const candidate=page.locator('[aria-label="Recommended repeating"]')
+    .locator('[data-repeat-recommendation]').filter({hasText:merchant}).first();
+   await candidate.locator('[data-recommended-yes]').click();
+   const form=page.locator('.history-schedule-form');
+   assert.ok(await form.count()>0);
+   await form.locator('button[type=submit]').click();
+   await go('reviews');
+   assert.equal(await page.locator('[aria-label="Recommended repeating"]')
+    .locator('[data-repeat-recommendation]').filter({hasText:merchant}).first()
+    .getAttribute('data-recommendation-status'),'repeating');
+  }
+  await go('overview');
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
    'Real checking starts at bank-reported available cash, not credit card debt');
