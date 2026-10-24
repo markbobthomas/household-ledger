@@ -1385,7 +1385,10 @@ function reviewsPage(bundle,s){
   postedAmbiguities=bundle?.postedMatchReview||[];
  const rawRecommendations=[
   ...(bundle?.recommendedRepeating||[]),
-  ...(bundle?.historyCandidates||[]).map(c=>({...c,source:'needs-confirmation'}))
+  ...(bundle?.historyCandidates||[]).map(c=>({...c,source:'needs-confirmation'})),
+  ...Object.values(state().predictions?.historyPatternDecisions||{})
+   .filter(d=>d&&typeof d==='object'&&d.status==='dismissed'&&d.recommendation)
+   .map(d=>({...d.recommendation,ignored:true,source:'archived'}))
  ];
  const recommendations=new Map();
  for(const item of rawRecommendations){
@@ -1408,9 +1411,10 @@ function reviewsPage(bundle,s){
    actual,accounts,state().predictions?.futureRecurringRules||[]):[];
   const ignoreKey=[item.accountId,item.type,
     String(item.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),
-    String(Math.round(Number(item.amount||0)*100)/100)].map(encodeURIComponent).join('|');
+    String(Math.round(Number(item.amount||0)*100))].map(encodeURIComponent).join('|');
   const ignored=Boolean(item.ignored||
-   state().predictions?.historyPatternDecisions?.[ignoreKey]==='dismissed');
+   (state().predictions?.historyPatternDecisions?.[ignoreKey]?.status||
+    state().predictions?.historyPatternDecisions?.[ignoreKey])==='dismissed');
   return {...item,actual,matched,ignored,ignoreKey};
  });
  lastRepeatRecommendations=reviewRows;
@@ -2067,7 +2071,14 @@ document.addEventListener('click',async e=>{
   if(repeatNo){
    await commitForecastChange(()=>{
     state().predictions.historyPatternDecisions??={};
-    state().predictions.historyPatternDecisions[candidate.ignoreKey]='dismissed';
+    state().predictions.historyPatternDecisions[candidate.ignoreKey]={
+     status:'dismissed',recommendation:{
+      accountId:candidate.accountId,type:candidate.type,merchant:candidate.merchant,
+      amount:candidate.amount,frequency:candidate.frequency,
+      nextDate:candidate.nextDate,historicalIds:candidate.historicalIds||[],
+      examples:candidate.examples||[],source:'archived'
+     }
+    };
    });
    reviewNotice='Marked '+candidate.merchant+' Ignored. It remains in Recommended repeating and is not forecast.';
    render();return;
