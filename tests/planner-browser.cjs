@@ -689,11 +689,11 @@ const {chromium,webkit}=require('playwright');
     return {label:doc.querySelector('[data-summary-card-statement] .summary-overline')?.textContent,
      statement:doc.querySelector('[data-summary-statement-value]')?.textContent,
      next:doc.querySelector('[data-summary-next-statement-value]')?.textContent,
-     sources:doc.querySelector('.summary-card-estimate-sources')?.textContent,
+     details:doc.querySelector('[data-summary-card-next-statement] [data-calendar-card-statement-date]')?.textContent,
      close:doc.querySelector('[data-summary-card-next-statement] [data-calendar-card-statement-date]')?.dataset.calendarCardStatementDate};
    });
    assert.deepEqual(computedCard,{label:'Estimated statement',statement:'$345.00',
-    next:'$999.00',sources:'2 posted · 1 predicted',close:'2026-11-18'},
+    next:'$999.00',details:'Closes Nov 18, 2026 · 2 posted, 1 predicted →',close:'2026-11-18'},
     'Following period uses its own statement estimate, not current card debt or a future minimum');
    await page.locator('#summary-account').selectOption('demo-checking');
    assert.equal(await page.locator('[data-summary-month-low]').count(),1);
