@@ -185,6 +185,20 @@ const {chromium,webkit}=require('playwright');
     'Empty day still shows one closing balance at its bottom');
    assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
     'The native monthly disclosure does not repeat Expand');
+   // The new model intentionally begins with no approved repeating bill.
+   // Add one explicit fictional one-time forecast to exercise inline calendar
+   // editing without relying on the removed auto-prediction path.
+   await page.evaluate(()=>{
+    const key='household-planner-sample-settings-v1',
+     prefs=JSON.parse(localStorage.getItem(key)||'{}');
+    prefs.futureTransactionAdds=[...(prefs.futureTransactionAdds||[]),{
+     id:'test-calendar-expense',date:'2026-10-25',merchant:'Calendar test payment',
+     amount:25,accountId:'demo-checking',type:'expense',category:'Other'
+    }];
+    localStorage.setItem(key,JSON.stringify(prefs));
+   });
+   await page.reload({waitUntil:'load'});
+   await go('summary');
    await page.locator('.calendar-monthly-list > summary').click();
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),1,
     'Optional month list expands on demand');
