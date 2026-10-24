@@ -13,6 +13,36 @@ const {chromium,webkit}=require('playwright');
   static now(){return new Base('2026-10-19T12:00:00Z').getTime()}
  }window.Date=FixedDate;};
  const startup=async(url)=>{for(let n=0;n<80;n++){try{const r=await fetch(url);if(r.status<500)return}catch{}await new Promise(r=>setTimeout(r,80))}throw Error('Server not available: '+url)};
+ // Compare the same four data columns and category controls across both
+ // ledger tabs, rather than just their outer border/panel dimensions.
+ const rowLayout=async(page,selector)=>page.locator(selector).first().evaluate(row=>{
+  const root=row.getBoundingClientRect(),rect=selector=>{
+   const el=row.querySelector(selector);
+   if(!el)throw Error('Missing unified ledger element '+selector);
+   const b=el.getBoundingClientRect();
+   return {x:Math.round((b.left-root.left)*10)/10,y:Math.round((b.top-root.top)*10)/10,
+    width:b.width,height:b.height};
+  };
+  const select=row.querySelector('.ledger-row-category'),
+   name=row.querySelector('.ledger-row-description strong');
+  const ancestors=[];for(let p=row.parentElement,i=0;p&&i<4;p=p.parentElement,i++){
+   const cs=getComputedStyle(p),r=p.getBoundingClientRect();
+   ancestors.push({className:String(p.className),width:r.width,
+    paddingLeft:cs.paddingLeft,paddingRight:cs.paddingRight});
+  }
+  return {height:root.height,width:root.width,ancestors,button:rect('.ledger-row-open'),
+   date:rect('.ledger-row-date'),description:rect('.ledger-row-description'),
+   amount:rect('.ledger-row-amount'),hint:rect('.ledger-row-hint'),
+   category:rect('.ledger-row-category'),
+   categoryStyle:{fontSize:getComputedStyle(select).fontSize,
+    height:getComputedStyle(select).height,
+    borderRadius:getComputedStyle(select).borderRadius,
+    background:getComputedStyle(select).backgroundColor,
+    color:getComputedStyle(select).color},
+   titleStyle:{fontSize:getComputedStyle(name).fontSize,
+    color:getComputedStyle(name).color}};
+ });
+
  try{
   children.push(spawn('python3',['-m','http.server',String(demoPort),'--bind','127.0.0.1'],
    {cwd:path.resolve(__dirname,'..'),stdio:'ignore'}));
@@ -369,6 +399,13 @@ const {chromium,webkit}=require('playwright');
     'Every bank-history row has one explicit accessible primary button');
    assert.equal(await page.locator('.history-actual-row button button').count(),0,
     'History rows contain no nested interactive elements');
+   const bankListRow=await rowLayout(page,'.history-page .ledger-list-row');
+   assert.equal(await page.locator('.history-page .ledger-row-category').count(),
+    await page.locator('.history-actual-row').count(),
+    'Every bank transaction has the same inline category selection affordance as Repeating');
+   assert.equal(await page.locator('.history-page .history-row-category').count(),0,
+    'Bank category no longer adds a separate stacked label or taller field');
+
    const safewayHistory=page.locator('.history-actual-row').filter({hasText:'Safeway'}).first();
    const safewayCategory=safewayHistory.locator('[data-history-category]');
    assert.equal(await safewayCategory.inputValue(),'Groceries');
@@ -758,6 +795,27 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.schedule-page .page-task-hint').innerText(),/upcoming date/,
     'The Repeating screen explains how to edit one occurrence or the whole schedule');
    const previousSchedules=await page.locator('[data-schedule-card]').count();
+   const repeatingListRow=await rowLayout(page,'.schedule-page .ledger-list-row');
+   assert.equal(await page.locator('.schedule-page .ledger-row-category').count(),
+    await page.locator('[data-schedule-card]').count(),
+    'Every Repeating row uses the same visible inline category control');
+   assert.deepEqual(repeatingListRow.categoryStyle,bankListRow.categoryStyle,
+    'Category dropdowns have identical visual styles across Bank activity and Repeating');
+   assert.deepEqual(repeatingListRow.titleStyle,bankListRow.titleStyle,
+    'Payment names have identical typography across Bank activity and Repeating');
+   for(const field of ['date','description','amount','category']){
+    assert.ok(Math.abs(repeatingListRow[field].x-bankListRow[field].x)<=2,
+     field+' aligns horizontally across Repeating and Bank activity: '+
+      JSON.stringify({bank:bankListRow,repeating:repeatingListRow}));
+   }
+   assert.ok(Math.abs(
+    repeatingListRow.hint.x+repeatingListRow.hint.width-
+    bankListRow.hint.x-bankListRow.hint.width)<=2,
+    'Both variable-length action hints align at their right edge');
+   assert.ok(Math.abs(repeatingListRow.height-bankListRow.height)<=3,
+    'Both tabs use the same compact row height, including on iPhone: '+
+     JSON.stringify({mobile,bank:bankListRow,repeating:repeatingListRow}));
+
    assert.equal(await page.locator('[data-schedule-sort]').count(),1);
    assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
    const values=async()=>page.locator('.schedule-row-amount strong').evaluateAll(nodes=>
@@ -783,8 +841,8 @@ const {chromium,webkit}=require('playwright');
     const rows=await page.locator('.schedule-compact-row').evaluateAll(els=>els.map(e=>{
      const rect=e.getBoundingClientRect();return {height:rect.height,left:rect.left};
     }));
-    assert.ok(rows.every(row=>row.height<=70),
-     'Each schedule header fits in one compact row, including on iPhone');
+    assert.ok(rows.every(row=>row.height<=(mobile?106:70)),
+     'Schedule rows match the responsive Bank activity height without creating tall cards');
     assert.ok(rows.every(row=>Math.abs(row.left-rows[0].left)<2),
      'Schedules are presented as one scannable list instead of side-by-side cards');
     assert.equal(await page.locator('.schedule-row-main[aria-expanded="false"]').count(),previousSchedules,
