@@ -2084,3 +2084,29 @@ html{scrollbar-gutter:stable}
   overflow:hidden;white-space:nowrap;font-size:0;
  }
 }
+
+/* Separate the cash movements ALREADY in the forecast from optional
+   new recurring recommendations. One visible row equals one active stream. */
+.reviews-page .legacy-repeating-panel{padding:14px 16px 12px}
+.legacy-repeating-panel .section-title{margin-bottom:5px}
+.legacy-repeating-panel .section-title h2{font-size:14px;font-weight:740}
+.legacy-repeating-panel .legacy-estimate-count{
+ font-size:12px;font-weight:780;color:var(--red);
+ font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.legacy-repeating-panel>.lead{max-width:none;line-height:1.5;margin:4px 0 10px}
+.legacy-estimate-list{border-top:1px solid #e7eae8}
+.legacy-estimate-row{min-height:60px;gap:9px 13px}
+.legacy-estimate-row .legacy-estimate-state{
+ font-size:11px;font-weight:700;color:var(--red);
+}
+.legacy-estimate-row[data-recommendation-status="ignored"] .legacy-estimate-state{
+ color:#6d7671;
+}
+.legacy-estimate-row .review-candidate-amount{font-variant-numeric:tabular-nums}
+.legacy-repeating-panel .recurrence-transition{margin-top:6px}
+.review-legacy-missing{font-size:11px;color:var(--red)}
+@media(max-width:780px){
+ .reviews-page .legacy-repeating-panel{padding:12px 10px}
+ .legacy-estimate-row .review-candidate-actions{width:100%}
+}
