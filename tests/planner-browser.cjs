@@ -1306,6 +1306,14 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await item.getAttribute('data-recommendation-status'),'repeating',
     'An approved archived pattern remains visibly linked to its saved plan: '+merchant);
   }
+  const archivedSubscription=permanent.locator('[data-repeat-recommendation]')
+   .filter({hasText:'Netflix subscription'}).first();
+  assert.equal(await archivedSubscription.count(),1,
+   'An unapproved recurring purchase remains available after bank history expires');
+  await archivedSubscription.locator('[data-recommended-yes]').click();
+  assert.equal(await page.locator('.history-schedule-form [name=merchant]').inputValue(),'Netflix subscription',
+   'Archived evidence still prefills a schedule when the bank can no longer return the original transaction');
+  await page.locator('.history-schedule-form [data-cancel-review-form]').click();
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: fixed three-year minimum, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
