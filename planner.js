@@ -1385,6 +1385,25 @@ function historyPage(bundle,s){
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '</div></div>';
 }
+// Plaid's broad bank categories differ from the compact repeating-schedule
+// category choices. A single Yes click must select a valid editable category.
+function recommendationScheduleCategory(candidate){
+ const choices=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+  raw=String(candidate.category||'').trim(),
+  merchant=String(candidate.merchant||''),
+  direct=choices.find(c=>c.toLowerCase()===raw.toLowerCase());
+ if(direct)return direct;
+ const hint=raw+' '+merchant;
+ const preferred=/mortgage|home loan|\bmtg\b/i.test(hint)?'Mortgage':
+  /\brent\b/i.test(hint)?'Rent':
+  /utility|electric|water|power|gas bill|sewer/i.test(hint)?'Utility':
+  /insurance|premium/i.test(hint)?'Insurance':
+  /subscription|membership|netflix|spotify/i.test(hint)?'Subscription':
+  /grocery|groceries|supermarket|safeway|costco/i.test(hint)?'Groceries':
+  /payroll|salary|income|wages|paycheck|direct deposit/i.test(hint)?'Income':
+  /vehicle|transportation|parking|fuel/i.test(hint)?'Transportation':'Other';
+ return choices.find(c=>c===preferred)||'Other';
+}
 // A recommendation survives after its oldest supporting bank record ages out.
 // Match a saved schedule conservatively, including the four-week payday phase.
 function savedPlansForRecommendation(p,bankRows,accounts,rules){
@@ -2068,7 +2087,7 @@ document.addEventListener('click',async e=>{
    source=lastHistoryRows.find(t=>(candidate.examples||[]).some(ex=>String(ex.id)===String(t.id))),
    fields={accountId:candidate.accountId,merchant:candidate.merchant,
     type:candidate.type,amount:candidate.amount,frequency:candidate.frequency,
-    date:candidate.nextDate,category:candidate.category||'Other'},
+    date:candidate.nextDate,category:recommendationScheduleCategory(candidate)},
    reference={kind:'event',accountId:candidate.accountId,
     type:source?.type||candidate.type,amount:candidate.amount,
     merchant:candidate.merchant,date:source?.date||candidate.lastDate,
@@ -2098,7 +2117,7 @@ document.addEventListener('click',async e=>{
   }
   recurringDraft={accountId:candidate.accountId,merchant:candidate.merchant,
    type:candidate.type,amount:candidate.amount,frequency:candidate.frequency,
-   category:candidate.category||'Other',nextDate:candidate.nextDate,
+   category:recommendationScheduleCategory(candidate),nextDate:candidate.nextDate,
    sourceRow:source,examples:(candidate.examples||[]).map(x=>x.id)};
   reviewNotice='Review the suggested values and save this repeating schedule.';
   render();
