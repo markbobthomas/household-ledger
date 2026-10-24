@@ -649,7 +649,9 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Projected balance curve"] .section-title').innerText(),/3 years|1095 days/);
    // Card-only calendar metrics are intentionally different from checking lows.
    await go('summary');
-   await page.locator('#summary-account').selectOption('demo-credit');
+   const demoCardId=await page.locator('#summary-account option').filter({hasText:'Rewards Visa'}).getAttribute('value');
+   assert.ok(demoCardId,'Demo has a selectable credit-card forecast');
+   await page.locator('#summary-account').selectOption(demoCardId);
    assert.equal(await page.locator('[data-summary-month-low]').count(),0,
     'A selected credit card does not show the checking-account monthly low');
    assert.equal(await page.locator('[data-summary-card-statement]').count(),1);
