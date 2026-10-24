@@ -1143,27 +1143,27 @@ function schedulesPage(bundle,s){
    '" data-schedule-monthly-transfers="'+monthly.transfers+
    '" data-schedule-yearly-out="'+yearly.out+'" data-schedule-yearly-in="'+yearly.in+
    '" data-schedule-yearly-transfers="'+yearly.transfers+'">'+
-   '<div class="schedule-compact-row">'+
-   '<button class="schedule-row-main" type="button" data-schedule-edit="'+id+
+   '<div class="schedule-compact-row ledger-list-row">'+
+   '<button class="schedule-row-main ledger-row-open" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' schedule '+number+': '+title+'">'+
-    '<span class="schedule-row-identity"><span class="schedule-number" aria-hidden="true">'+number+
+    '<span class="schedule-row-next ledger-row-date"><span>'+
+     (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
+    '<span class="schedule-row-identity ledger-row-description"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-      ' · '+escapeHTML(r.frequency)+'</small></span></span>'+
-    '<span class="schedule-row-next"><small>Next</small><span>'+
-     (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
-    '<span class="schedule-row-amount"><strong>'+cash(estimate.amount)+'</strong>'+
-     '<small>'+(estimate.estimated?'Estimated':'Fixed')+'</small></span>'+
-    '<span class="schedule-row-chevron" aria-hidden="true"><span class="schedule-edit-label">'+
-     (isEditing?'Close':'Edit')+'</span> '+(isEditing?'⌃':'⌄')+'</span>'+
+      ' · '+escapeHTML(r.frequency)+' · '+(estimate.estimated?'Estimated':'Fixed')+
+      '</small></span></span>'+
+    '<span class="schedule-row-amount ledger-row-amount"><strong>'+cash(estimate.amount)+'</strong></span>'+
+    '<span class="schedule-row-chevron ledger-row-hint" aria-hidden="true"><span class="schedule-edit-label">'+
+     (isEditing?'Close':'Edit')+'</span> '+(isEditing?'⌃':'›')+'</span>'+
    '</button>'+
-   '<select class="schedule-row-category" data-schedule-quick-category="'+id+'" '+
+   '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-schedule-quick-category="'+id+'" '+
     'aria-label="Category for schedule '+number+': '+title+'">'+
     categories.map(category=>'<option value="'+escapeHTML(category)+'"'+
      (category===categoryOf(r)?' selected':'')+'>'+escapeHTML(category)+'</option>').join('')+
-   '</select>'+
+   '</select></div>'+
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for schedule '+number+'" title="More actions">⋯</summary>'+
     '<div class="schedule-more-menu">'+
@@ -1321,26 +1321,26 @@ function historyPage(bundle,s){
     status==='automatic'?'Unconfirmed estimate — review in Needs review':'Not scheduled',
    primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
     canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record';
-  return '<div class="history-actual-row" data-history-kind="'+escapeHTML(kind||'unknown')+
+  return '<div class="history-actual-row ledger-list-row" data-history-kind="'+escapeHTML(kind||'unknown')+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
-   '<button type="button" class="history-row-open" data-historical-transaction="'+
+   '<button type="button" class="history-row-open ledger-row-open" data-historical-transaction="'+
    escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
    '" aria-label="'+escapeHTML(primary+': '+(t.merchant||'Bank transaction'))+'">'+
-   '<span class="history-actual-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
-   '<span class="history-actual-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
+   '<span class="history-actual-date ledger-row-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
+   '<span class="history-actual-description ledger-row-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
     escapeHTML(caption)+'</span></small></span>'+
-   '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+
+   '<strong class="history-actual-amount ledger-row-amount '+(incoming?'incoming':'outgoing')+'">'+
     (incoming?'+':'−')+cash(t.amount)+'</strong>'+
-   '<span class="history-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
-   '<label class="history-row-category"><span>Category</span><select data-history-category="'+
+   '<span class="history-row-hint ledger-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
+   '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-history-category="'+
     escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
     ' on '+escapeHTML(t.date)+'">'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
-   '</select></label></div>';
+   '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>';
  }).join('');
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
