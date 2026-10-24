@@ -104,11 +104,21 @@ function reconcile(existing={},bundle={},rules=[],records=[],accounts=[],prefs={
  const recordsById=new Map(bank.map(t=>[String(t.id),t]));
  const items=Object.values(next).filter(valid).map(r=>{
   const example=(r.examples||[]).map(x=>recordsById.get(String(x.id))).find(Boolean);
-  const matched=example&&root.HouseholdPlannerTransactions?.historicalScheduleMatches(
-   example,accounts,rules)||[];
+  const phaseIndex=r.phase&&r.phase.startsWith('28-day-phase-')?
+   Number(r.phase.slice('28-day-phase-'.length)):null,
+   phaseMatches=rule=>{
+    if(phaseIndex===null)return true;
+    if(rule.frequency!=='every-4-weeks'||!/^\d{4}-\d{2}-\d{2}$/.test(String(rule.anchorDate||'')))
+     return false;
+    const actual=Math.floor(Date.parse(rule.anchorDate+'T12:00:00Z')/86400000)%28,
+     delta=Math.abs(actual-phaseIndex);
+    return Math.min(delta,28-delta)<=3;
+   },
+   matched=(example&&root.HouseholdPlannerTransactions?.historicalScheduleMatches(
+    example,accounts,rules)||[]).filter(phaseMatches);
   const exact=rules.filter(rule=>
    String(rule.originalAccountId||rule.accountId)===String(r.accountId)&&
-   rule.type===r.type&&
+   rule.type===r.type&&phaseMatches(rule)&&
    [rule.originalMerchant,rule.merchant,...(rule.matchNames||[])]
     .some(name=>norm(name)===norm(r.merchant))&&
    (!r.phase||rule.frequency==='every-4-weeks'&&
