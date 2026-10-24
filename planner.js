@@ -1611,7 +1611,7 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
    '<p class="chart-caption">'+(state().predictions?.recurringForecastMode==='approved-only'?
      'Only saved schedules, planned payments and governed card obligations affect future balances. Unapproved repeating patterns are suggestions only.':
-     'Older detected estimates remain included until reviewed. Save recurring plans and finish the switch in Needs review.')+
+     'This balance projection includes older detected estimates until reviewed. Save recurring plans and finish the switch in Needs review.')+
    '</p></section>'+
   '<section class="panel"><div class="section-title"><h2>Next five expected movements</h2>'+
    '<button type="button" class="btn" data-view="transactions">View all and edit</button></div>'+
