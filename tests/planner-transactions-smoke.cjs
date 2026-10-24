@@ -79,11 +79,20 @@ const protectedHistory={predictions:{futureRecurringRules:[
   type:'income',merchant:'Separate paycheck',originalMerchant:'Other Payroll',
   matchNames:['employer monthly']}
 ]}};
-const protectedBefore=JSON.stringify(protectedHistory);
-assert.throws(()=>T.excludeHistorySuggestions(protectedHistory,{
- accountId:'checking',type:'income',merchant:'Employer Monthly'}),/saved repeating plan/i,
- 'Do not apply a broad history exclusion across independently confirmed income streams');
-assert.equal(JSON.stringify(protectedHistory),protectedBefore,
- 'Rejected broad history exclusions cannot alter financial schedules or preferences');
+const protectedBefore=JSON.stringify(protectedHistory.predictions.futureRecurringRules);
+T.setHistoryAutoPrediction(protectedHistory,{
+ accountId:'checking',type:'income',merchant:'Employer Monthly'},false);
+assert.equal(T.historyAutoPredictionEnabled(protectedHistory.predictions,
+ 'checking','income','Employer Monthly'),false,
+ 'An established payee can also turn OFF automatic guessing');
+assert.equal(JSON.stringify(protectedHistory.predictions.futureRecurringRules),protectedBefore,
+ 'Turning Auto-predict off cannot remove either independent confirmed paycheck');
+T.setHistoryAutoPrediction(protectedHistory,{
+ accountId:'checking',type:'income',merchant:'Employer Monthly'},true);
+assert.equal(JSON.stringify(protectedHistory.predictions.futureRecurringRules),protectedBefore,
+ 'Turning Auto-predict on cannot add, merge or delete saved plans');
+assert.equal(T.historyAutoPredictionEnabled(protectedHistory.predictions,
+ 'checking','income','Employer Monthly'),true,
+ 'Previously excluded history payee can explicitly turn Auto-predict on');
 assert.deepEqual(state.transactions,undefined,'No edits to any source bank transaction property');
 console.log('PASS editable mortgage, added income, linked transfer, edited card autopay, skipped/restored payment, deleted manual transfer, validations and immutable inputs');
