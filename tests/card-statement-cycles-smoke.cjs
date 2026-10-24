@@ -111,6 +111,34 @@ Model.setCardPaymentRule(issued,'visa',{
 const statement=Payments.build(snapshot,posted,forecast,issued.predictions,{days:90});
 assert.equal(statement.statements[0].statementBalance,700);
 assert.equal(statement.statements[0].confirmed,true);
+// After the prior statement closes but before it is paid, the FOLLOWING cycle
+// can contain real posted activity and still-future confirmed predictions.
+// The Calendar's third figure must reuse this independently calculated cycle.
+const midCycleSnapshot={...snapshot,asOf:'2026-11-03'};
+const secondCycle=Payments.build(midCycleSnapshot,[
+ {id:'current-cycle-actual',date:'2026-10-25',accountId:'visa',type:'expense',amount:40,merchant:'Already posted'},
+ {id:'current-cycle-refund',date:'2026-11-02',accountId:'visa',type:'refund',amount:5,merchant:'Refund'},
+ {id:'current-cycle-pending',date:'2026-11-02',accountId:'visa',type:'expense',amount:200,merchant:'Pending',pending:true},
+ {id:'prior-cycle-posted',date:'2026-10-18',accountId:'visa',type:'expense',amount:500,merchant:'Prior statement'}
+],[
+ {id:'current-cycle-scheduled',date:'2026-11-09',accountId:'visa',type:'expense',amount:30,merchant:'Planned subscription'},
+ {id:'after-statement-close',date:'2026-11-19',accountId:'visa',type:'expense',amount:99,merchant:'Later period'}
+],issued.predictions,{days:90});
+const followingStatement=secondCycle.statements.filter(x=>x.cardId==='visa')[1];
+assert.ok(followingStatement,'The following cycle is available to the Calendar');
+assert.equal(followingStatement.periodStart,'2026-10-19');
+assert.equal(followingStatement.periodEnd,'2026-11-18');
+assert.equal(followingStatement.bankPurchases,35,'Actual spending in this cycle nets out refunds');
+assert.equal(followingStatement.estimatedCharges,30,'Future approved card charges belong in the same cycle');
+assert.equal(followingStatement.statementBalance,65,
+ 'Next statement estimate combines real posted 40 minus refund 5 plus scheduled 30');
+assert.equal(followingStatement.observedCount,2);
+assert.equal(followingStatement.scheduledCount,1);
+assert.equal(followingStatement.pendingExcluded,1);
+assert.equal(followingStatement.confirmed,false,
+ 'Only the already-issued prior statement may be labeled confirmed');
+assert.equal(secondCycle.statements[0].statementBalance,700,
+ 'Following cycle never replaces or double-counts the issued first statement');
 const unissued=Model.migrate({});
 Model.setCardPaymentRule(unissued,'visa',{
  billingStartDate:'2026-10-19',billingEndDate:'2026-11-18',
