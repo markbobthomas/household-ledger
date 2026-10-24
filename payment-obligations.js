@@ -104,6 +104,7 @@ function inferPayment(card,accounts,records,asOf){
 }
 function build(snapshot,records=[],expected=[],predictions={},options={}){
  const asOf=String(snapshot.asOf||''),days=options.days||90,through=shift(asOf,days);
+ const postingDate=typeof options.effectiveDate==='function'?options.effectiveDate:d=>d;
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
@@ -147,7 +148,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
       origin:'card-history-estimate',status:'estimated',
       amountEstimate:'transaction-based'});
      paymentDetails.push({id,cardId:String(card.id),cardName:card.name,
-      fromAccountId:candidate.fromAccountId,withdrawalDate:when,
+      fromAccountId:candidate.fromAccountId,withdrawalDate:postingDate(when),
       periodStart:from,periodEnd:when,periodSource:'inferred-payment-window',
       method:'statement',amount,calculated:round(Math.max(0,raw)),
       postedTransactions:actual,predictedTransactions:scheduled,
@@ -317,7 +318,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const recentPostedPayment=postedPayments[0]||null;
    const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
-    dueDate:actualDue,withdrawalDate:due,closingDate:cycleClose,amount,
+    dueDate:actualDue,withdrawalDate:postingDate(due),closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
     actualPeriodNet,periodComplete,postedTransactions,predictedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
@@ -336,7 +337,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      merchant:card.name+' Credit-card payment (autopay)',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
     paymentDetails.push({id:plan.id,cardId:id,cardName:card.name,
-     fromAccountId:from.id,withdrawalDate:due,
+     fromAccountId:from.id,withdrawalDate:postingDate(due),
      periodStart:cycleStart,periodEnd:cycleClose,periodSource:'configured-statement',
      method,amount,calculated,postedTransactions,predictedTransactions,
      confirmed:confirmedFirst,issuedAmount:confirmedFirst?Number(rule.lastStatementBalance):null,
@@ -344,7 +345,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      caveat:method==='statement'?'This statement estimate uses identified posted and scheduled card activity only.':
       'The selected payment method changes the transfer amount; identified card activity remains separately visible.'});
     plannedCardPayments=round(plannedCardPayments+amount);
-    obligations.push({id:plan.id,date:due,amount,fromAccountId:from.id,
+    obligations.push({id:plan.id,date:postingDate(due),amount,fromAccountId:from.id,
      merchant:card.name+' autopay',kind:'card_payment',confidence,cardId:id});
    }
   }
@@ -381,7 +382,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     type:'expense',amount,date:due,merchant:label,category:b.category||'Housing',source:'owner-bill',
     frequency:b.frequency,billId:b.id,cadence:b.frequency==='monthly'?'monthly':null};
    billEvents.push(e);
-   obligations.push({id:e.id,date:due,amount,fromAccountId:account.id,merchant:label,
+   obligations.push({id:e.id,date:postingDate(due),amount,fromAccountId:account.id,merchant:label,
     kind:'automatic_bill',confidence:'entered schedule / amount estimate'});
   }
  }
