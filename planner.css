@@ -2615,3 +2615,12 @@ html{scrollbar-gutter:stable}
   font-size:12px;line-height:1.35;
  }
 }
+
+/* When the date is already in the selected-day heading, its hidden date cell
+   must not reserve a fourth grid track on small screens. */
+@media(max-width:620px){
+ .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row.calendar-detail-item{
+  grid-template-columns:minmax(0,1fr) minmax(74px,auto) 38px!important;
+  gap:6px;
+ }
+}
