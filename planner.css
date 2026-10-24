@@ -2575,3 +2575,14 @@ html{scrollbar-gutter:stable}
  .ledger-statement-divider .ledger-statement-total{font-size:10px}
  .ledger-statement-occurrence>button{grid-template-columns:58px minmax(0,1fr) 70px 12px;gap:5px;padding:10px 6px}
 }
+
+/* On small screens both ledger toolbars have three identical-height rows.
+   The category value explains itself; suppress only its tiny visible caption. */
+@media(max-width:850px){
+ .schedule-page .schedule-category-controls>label{
+  gap:0;font-size:0;line-height:0;
+ }
+ .schedule-page .schedule-category-controls>label select{
+  font-size:12px;line-height:1.35;
+ }
+}
