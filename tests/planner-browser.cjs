@@ -740,6 +740,10 @@ const {chromium,webkit}=require('playwright');
     /^(Statement balance|Estimated statement)$/);
    assert.equal(await page.locator('[data-summary-card-next-statement] .summary-overline').innerText(),
     'Next statement estimate');
+   assert.equal(await page.locator('.summary-numbers > div:nth-child(3)[data-summary-card-next-statement]').count(),1,
+    'A credit card uses the third summary tile for the next statement estimate, never a checking 3-year low');
+   assert.equal(await page.locator('.summary-numbers .summary-overline').filter({hasText:'3-year low'}).count(),0,
+    'A selected credit card does not show a checking account long-range minimum');
    assert.equal(await page.locator('[data-summary-next-statement-value]').count(),1);
    assert.equal(await page.locator('[data-summary-card-90day-low]').count(),0,
     'Credit cards no longer show the unrelated 3-month debt minimum');
