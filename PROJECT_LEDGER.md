@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-10-23 (Pacific)  
+**Updated:** 2026-10-24 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -24,6 +24,9 @@ Product priorities:
 **Banking safety:** Preserve the current GitHub, Plaid and private Render architecture. Actual source transactions/balances remain authoritative and unchanged by editable predictions. Do not use public fictional Demo data as if it were real bank data. This repository is public: do not put actual financial records, private amounts, authentication details, or private user messages in this ledger.
 
 ## Current state (as verified October 22, 2026)
+
+- **2026-10-24 merged UI release:** [PR #119](https://github.com/markbobthomas/household-ledger/pull/119), verified squash merge `6fc5df7133e2432c4171c0137429016a23f91996`. **Needs review** now contains only still-unconfirmed recurring suggestions and a collapsed, reversible **Ignored** section; saved schedules remain on Repeating/Bank activity. Scanner filters routine shopping, recognizes credible repeating bills, variable-amount utilities, and separate payroll phases. Bank activity provides a direct per-row category dropdown using a protected private override. Final pilot safety and desktop Chromium/iPhone WebKit checks passed. **Private Render deployment unverified.**
+
 
 - **2026-10-23 Step 2 merged:** [PR #117](https://github.com/markbobthomas/household-ledger/pull/117) squash-merged to `main` as `90afd4affff6ed5d609e59236438f2255e452d1b`. Saved-schedules-only cutover is guarded: older inferred payments remain until the user explicitly reviews them in **Needs review**; the final switch activates `recurringForecastMode='approved-only'`. Afterwards, recurring bank-history patterns only create recommendations; confirmed schedules generate recurring payments, while explicit one-offs and card/transfer obligations remain. Both final required PR checks passed; private Render running SHA is **not verified**.
 
@@ -646,3 +649,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Private persistence safety:** New authenticated `/api/ledger/category` applies one ID-scoped category override only, requiring a connected source and an approved category. It never accepts source bank records, balances or forecast snapshots. Real client serializes this save with forecast writes; Demo saves overlay overrides in sample settings. Failed saves revert the UI overlay. Existing private Plaid architecture and server secrets unchanged.
 - **Required validation:** New `tests/planner-focused-review-smoke.cjs` in mandatory banking and browser suites, plus desktop Chromium/iPhone WebKit Needs review and Demo History tests and private mocked category/save/reload tests. Merge only if CI passes. Private Render running revision remains **unverified**.
 - **Next:** Validate GitHub PR; if checks pass merge to main and record commit/check results. Verify private Render deployment separately before claiming it is live.
+
+### 2026-10-24 — Verified focused Needs review and Bank category release
+
+- **Merged GitHub code:** PR [#119](https://github.com/markbobthomas/household-ledger/pull/119), squash commit `6fc5df7133e2432c4171c0137429016a23f91996`, verified on `main`.
+- **Root cause fixed:** The former broad candidate inventory promoted too many ordinary and isolated purchases into Needs review. Dedicated recommendation discovery now uses recurring evidence and excludes routine discretionary-shopping patterns unless expressly bill-like. The Needs review UI displays actionable unscheduled/unignored proposals at the top, moves ignored ones to an initially collapsed reversible section, omits already approved schedules and removes duplicate generic review lists; the underlying historical candidate inventory is preserved securely without forcing irrelevant old one-offs into the UI.
+- **History categorization:** Per-row dropdown uses existing category names and saves only a scoped category override. Demo changes persist in sample preferences. Private encrypted Real saves use authenticated `/api/ledger/category`; no original Plaid transaction, account balance, or unrelated future schedule is modified. Possible ambiguous posted-to-schedule reconciliation remains accessible in Bank activity rather than the dedicated recurring queue.
+- **CI evidence:** Final feature head `275ae80d6b40e8faf5c198a0552aeba68f3ee3e3` passed Real-account pilot safety checks (run `40075090175`) and desktop Chromium / iPhone WebKit browser interaction checks (run `40075090192`). Coverage includes fake bank records, variable bills, independent payroll, ignore/undo, Demo and Real category save/reload, and scoped endpoint protecting forecast and original bank data. A private Render live deployment has **not** been independently checked.
+- **Next action:** Independently compare private Render `/healthz` SHA against the current GitHub `main`, and confirm the refreshed UI on the authenticated live service. Do not assume GitHub merge deploys Render.
