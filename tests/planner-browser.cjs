@@ -1393,7 +1393,8 @@ const {chromium,webkit}=require('playwright');
      configurable:true,set(fn){original=fn},
      get(){return original&&function(){
       const data=original(),row=(id,date,merchant,type,amount,pending=false)=>({
-       id,date,merchant,type,amount,pending,category:'Other',account:'Visa',demo:true
+       id,date,merchant,type,amount,pending,category:'Other',account:'Visa',
+       cashDirection:type==='refund'?'in':type==='transfer'?'in':'out',demo:true
       });
       data.transactions.push(
        row('statement-previous','2026-09-29','Prior Statement Purchase','expense',20),
