@@ -2110,3 +2110,73 @@ html{scrollbar-gutter:stable}
  .reviews-page .legacy-repeating-panel{padding:12px 10px}
  .legacy-estimate-row .review-candidate-actions{width:100%}
 }
+
+/* One-tap inline review editor. The row is a single accessible button;
+   Ignore/Undo stays outside it, avoiding nested interactive elements. */
+.reviews-page .review-inline-row{display:block;padding:0 2px;min-height:0}
+.reviews-page .review-row-top{
+ display:grid;grid-template-columns:minmax(0,1fr) auto;
+ align-items:center;column-gap:8px;min-height:55px;
+}
+.reviews-page .review-row-open,.reviews-page .review-row-unavailable{
+ display:grid;grid-template-columns:minmax(0,1fr) 100px 20px;
+ align-items:center;column-gap:12px;min-width:0;width:100%;
+ min-height:54px;padding:8px 7px;border:0;border-radius:5px;
+ background:transparent;text-align:left;color:inherit;
+ font-family:inherit;font-size:inherit;cursor:pointer;
+}
+.reviews-page .review-row-unavailable{cursor:default}
+.reviews-page .review-row-open:hover,.reviews-page .review-row-open:focus-visible{
+ background:#f5f8f3;outline-offset:-2px;
+}
+.reviews-page .review-row-open .review-candidate-main{
+ display:flex;flex-direction:column;min-width:0;gap:3px;
+}
+.reviews-page .review-row-open .review-candidate-main>strong{
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+}
+.reviews-page .review-row-open .review-candidate-main small{
+ line-height:1.4;overflow-wrap:anywhere;
+}
+.reviews-page .review-row-chevron{
+ font-size:17px;font-weight:500;color:#4c6757;text-align:center;line-height:1;
+}
+.reviews-page .review-candidate-actions{flex:0 0 auto;justify-content:end}
+.reviews-page .review-candidate-actions .btn{
+ min-height:32px;padding:5px 9px;font-size:11px;
+ background:transparent;border-color:#e3e9e1;color:#5e7465;
+}
+.reviews-page .review-row-expanded{background:#f9fbf8}
+.reviews-page .review-inline-detail{border-top:1px solid #edf1eb;padding:10px 10px 14px}
+.reviews-page .review-inline-detail .history-schedule-form{
+ margin:0;padding:0;background:transparent;border:0!important;box-shadow:none!important;
+}
+.reviews-page .review-inline-detail .review-inline-guide{
+ margin:0 0 12px;font-size:12px;color:#647769;
+}
+.reviews-page .review-inline-detail .future-fields{align-items:end}
+.reviews-page .review-inline-detail .future-form-actions{justify-content:flex-start}
+.reviews-page .ignored-repeating .review-inline-row{padding:0}
+.reviews-page .legacy-estimate-row .review-row-open{min-height:62px}
+.schedule-page .schedule-row-main .schedule-row-chevron{
+ font-size:18px;font-weight:500;color:#4c6757;
+ text-decoration:none;
+}
+@media(max-width:780px){
+ .reviews-page .review-row-top{grid-template-columns:minmax(0,1fr) auto;gap:4px}
+ .reviews-page .review-row-open,.reviews-page .review-row-unavailable{
+  grid-template-columns:minmax(0,1fr) minmax(75px,95px) 17px;
+  gap:6px;padding:9px 3px;min-height:54px;
+ }
+ .reviews-page .review-row-open .review-candidate-main>strong{font-size:12px!important}
+ .reviews-page .review-candidate-actions{width:auto;justify-content:flex-end}
+ .reviews-page .review-candidate-actions .btn{padding:5px 7px;min-height:36px}
+ .reviews-page .review-inline-detail{padding:10px 4px 12px}
+}
+@media(max-width:385px){
+ .reviews-page .review-row-open,.reviews-page .review-row-unavailable{
+  grid-template-columns:minmax(0,1fr) 70px 15px;
+  gap:4px;
+ }
+ .reviews-page .review-candidate-actions .btn{font-size:10px;padding:4px 5px}
+}
