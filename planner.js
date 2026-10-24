@@ -1417,9 +1417,14 @@ function historyPage(bundle,s){
    textOf(a).localeCompare(textOf(b))||dateDesc(a,b):
   dateDesc(a,b));
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
+ const selectedHistoryCard=historyAccount==='all'?null:
+  accounts.find(a=>String(a.id)===historyAccount&&accountType(a)==='credit');
+ const groupHistoryCard=Boolean(selectedHistoryCard&&
+  (state().predictions?.paymentRules?.[historyAccount]?.billingEndDate||
+   state().predictions?.paymentRules?.[historyAccount]?.lastStatementClose));
  const savedRules=state().predictions?.futureRecurringRules||[];
  const projections=futureRows(bundle,s);
- const rows=visible.map(t=>{
+ const rowMarkup=visible.map(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
    t.type==='transfer'&&t.cashDirection==='in';
@@ -1482,7 +1487,26 @@ function historyPage(bundle,s){
      (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
    '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
    detail+'</div>';
- }).join('');
+ });
+ // Preserve each user's chosen sort order inside each statement, and present
+ // statement boundaries in chronological order. Never count pending activity,
+ // transfers, or card settlements as card purchases.
+ const rows=!groupHistoryCard?rowMarkup.join(''):(()=>{
+  const groups=new Map(),ungrouped=[];
+  visible.forEach((t,i)=>{
+   const period=cardStatementPeriod(historyAccount,t.date);
+   if(!period){ungrouped.push(rowMarkup[i]);return}
+   if(!groups.has(period.end))groups.set(period.end,{period,entries:[]});
+   groups.get(period.end).entries.push({row:t,html:rowMarkup[i]});
+  });
+  return [...groups.values()].sort((a,b)=>historySort==='oldest'?
+   a.period.end.localeCompare(b.period.end):
+   b.period.end.localeCompare(a.period.end)).map(({period,entries})=>
+   '<section class="ledger-statement-group" data-history-statement-group="'+escapeHTML(period.end)+'">'+
+   statementHeading(period,entries.reduce((sum,e)=>sum+cardActivityCents(e.row),0),
+    entries.length,'history')+entries.map(e=>e.html).join('')+'</section>').join('')+
+   ungrouped.join('');
+ })();
  return '<div class="planner-page history-page">'+
   '<form class="history-filters ledger-toolbar" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
