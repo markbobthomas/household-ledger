@@ -1322,42 +1322,32 @@ function historyPage(bundle,s){
  });
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
  const savedRules=state().predictions?.futureRecurringRules||[];
- const projections=futureRows(bundle,s);
+ const currentCandidates=Object.values({...(state().predictions?.repeatingRecommendations||{}),
+  ...Object.fromEntries((bundle?.historyCandidates||[]).map(p=>[p.key,p]))});
+ const decisions=state().predictions?.historyPatternDecisions||{};
  const rows=visible.map(t=>{
-  const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
-  const incoming=['income','refund'].includes(t.type)||
-   t.type==='transfer'&&t.cashDirection==='in';
-  const tools=window.HouseholdPlannerTransactions,
+  const aid=window.HouseholdPlannerHistory.accountOf(t,accounts),
+   incoming=['income','refund'].includes(t.type)||
+    t.type==='transfer'&&t.cashDirection==='in',
+   tools=window.HouseholdPlannerTransactions,
    matches=tools.historicalScheduleMatches(t,accounts,savedRules),
-   ambiguous=matches.length>1;
-  const kind=tools.bankDirection(t),
-   rejectedKey=tools.recurrenceKey(aid,kind,t.merchant||t.name),
-   predicted=projections.some(r=>r.kind==='event'&&
-    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
-    tools.recurrenceKey(aid,kind,r.sourceMerchant)===rejectedKey&&r.seriesKey),
+   ambiguous=matches.length>1,kind=tools.bankDirection(t),
+   candidate=currentCandidates.find(p=>p.accountId===aid&&p.type===kind&&
+    (p.examples||[]).some(e=>String(e.id)===String(t.id)))||
+    currentCandidates.find(p=>p.accountId===aid&&p.type===kind&&
+     tools.recurrenceKey(aid,kind,p.merchant)===
+      tools.recurrenceKey(aid,kind,t.merchant||t.name)),
+   ignored=Boolean(candidate&&decisions['recommendation|'+candidate.key]==='ignored'),
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
-   auto=tools.historyAutoPredictionEnabled(state().predictions||{},aid,kind,t.merchant||t.name),
-   canAuto=auto!==null&&['expense','income','refund','transfer'].includes(kind),
-   // Saved plans take priority over estimates. Exclusions describe an opted-out
-   // source, not a missing bank record. Only show actionable controls.
-   status=matches.length?'confirmed':canAuto&&!auto?'excluded':predicted?'automatic':'unplanned',
+   status=matches.length?'confirmed':candidate?(ignored?'ignored':'suggested'):'unplanned',
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
-    status==='automatic'?'Automatically predicted':
-    status==='excluded'?'Auto prediction excluded':'Not predicted',
-   primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
-    canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record';
-  // This is deliberately not an On/Off switch. Only inferred payments have an
-  // Exclude action; opted-out sources have a Restore action. A confirmed plan
-  // is edited in one place, without an unrelated competing toggle.
-  let secondary='';
-  if(canAuto&&!matches.length&&status==='automatic')
-   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="off" '+
-    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" title="Stop automatic future estimates for this payee on this account; bank records stay visible">Exclude</button>';
-  else if(canAuto&&!matches.length&&status==='excluded')
-   secondary='<button type="button" class="btn history-secondary-action" data-history-auto-prediction="on" '+
-    'data-history-bank="'+escapeHTML(String(t.id))+'" data-history-account="'+escapeHTML(aid)+
-    '" title="Allow automatic future estimates again; this does not create a saved plan">Restore auto</button>';
+    status==='suggested'?'Suggested repeat · not forecast':
+    status==='ignored'?'Ignored suggestion · not forecast':'Not forecast',
+   primary=matches.length?(ambiguous?'Choose plan':'Edit plan'):
+    canPlan?(candidate?'Review repeating':'Add repeating'):'View bank record';
+  const secondary=candidate&&!matches.length?
+   '<button type="button" class="btn history-secondary-action" data-dismiss-candidate="'+
+   escapeHTML(candidate.key)+'">'+(ignored?'Undo ignore':'Ignore')+'</button>':'';
   return '<div class="history-actual-row" data-history-kind="'+escapeHTML(kind||'unknown')+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
@@ -1377,9 +1367,7 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
-  '<p class="page-task-hint history-explanation">Bank activity stays here. Automatically predicted payments are estimates; '+
-  'saved repeating plans take priority. Exclude stops future automatic estimates for a payee on this account, '+
-  'and Restore auto allows them again. To guarantee a repeating payment, save a plan.</p>'+
+  '<p class="page-task-hint history-explanation">Bank activity suggests repeating payments; only saved schedules affect predicted balances. Review a suggestion to confirm its frequency, amount and next date. Ignored suggestions remain visible in Needs review.</p>'+
   '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
