@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-10-22 (Pacific)  
+**Updated:** 2026-10-23 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -25,7 +25,7 @@ Product priorities:
 
 ## Current state (as verified October 22, 2026)
 
-- **2026-10-23 Step 2 candidate (pending CI/merge):** Branch `feature/schedule-only-forecast-migration-20261023` introduces a guarded `recurringForecastMode='approved-only'`. Legacy automatic estimates continue until the user reviews every active stream in **Needs review** and deliberately activates the saved-schedules-only cutover. After activation, only confirmed schedules generate recurring history-derived future events; one-offs and card/transfer obligations remain. Ignore does not delete permanent recommendations. All claims of tests/merge/deployment require independent verification.
+- **2026-10-23 Step 2 merged:** [PR #117](https://github.com/markbobthomas/household-ledger/pull/117) squash-merged to `main` as `90afd4affff6ed5d609e59236438f2255e452d1b`. Saved-schedules-only cutover is guarded: older inferred payments remain until the user explicitly reviews them in **Needs review**; the final switch activates `recurringForecastMode='approved-only'`. Afterwards, recurring bank-history patterns only create recommendations; confirmed schedules generate recurring payments, while explicit one-offs and card/transfer obligations remain. Both final required PR checks passed; private Render running SHA is **not verified**.
 
 
 - GitHub repo: `markbobthomas/household-ledger`; default branch `main`. Development-resumption review baseline: `b9fc75928227c1661542ea8a4c8b91a14c0b9edb` (merged documentation PR #50).
@@ -630,3 +630,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Guardrails:** A saved repeating schedule always supersedes inferred same-stream estimates; independent same-merchant streams are retained. No automatic promotion of unsaved suggestions. Explicit one-time payments, transfers and card-payment processing still use existing canonical rules. The initial state is legacy **only until the guarded opt-in cutover**, to avoid secretly changing a live user's cash forecast.
 - **Validation requested:** mandatory new `tests/planner-schedule-only-smoke.cjs` in pilot safety CI, plus updated desktop Chromium/iPhone WebKit History and migration controls test. Tests and merge still require verification; private Render revision remains unverified.
 - **Next:** Check PR safety + browser suites, fix regressions, merge if passing, independently verify private Render only if accessible. Consider a post-cutover warning when newly detected recommendations lack saved plans, without automatically deducting them.
+
+### 2026-10-23 — Verified Step 2 merge and handoff
+
+- **GitHub main:** PR [#117](https://github.com/markbobthomas/household-ledger/pull/117), squash merge `90afd4affff6ed5d609e59236438f2255e452d1b`, confirmed on `main`. Included guarded recurring source cutover, permanent review inventory of all active old auto-only series, obsolete History Auto-predict control removal and clear coverage disclosures.
+- **Verified final checks:** Final code head `d75b990e62b73b6590df434c30c51dc89d878b00` passed Real-account pilot safety checks (workflow run `40072954826`) and browser interaction tests for desktop Chromium and iPhone WebKit (run `40072954828`). New mandatory `tests/planner-schedule-only-smoke.cjs` covers older inferred mortgages/bills, independent four-week paycheck streams, saved schedules, one-offs, linked transfers and immutable bank history. These are fictional/test fixtures, not live bank forecast validation.
+- **User action / migration:** An existing account initially retains its historical inferred forecasts; in **Needs review → Recommended repeating**, review all active inferred series with **Yes — review schedule** or **No — ignore**. When the remaining unreviewed auto-only count reaches zero, **Use saved schedules only** deliberately switches to approved-only recurrence. Merely ignoring a suggestion does not immediately change the older forecast before cutover; ignored/scheduled suggestions remain in inventory. Do not claim the cutover has happened in a private account without verifying its saved preference.
+- **Deployment:** GitHub merge verified. Public Pages publish and private authenticated Render deployed SHA are separate; Render remains **unverified**, not claimed live. Do not alter live Plaid credentials, persistent disk or Render infrastructure for this feature.
+- **Next:** Verify private Render `/healthz` commit against GitHub `main` with authorized access. Validate migrated live forecast completeness in the private app without placing bank data in GitHub. Future reviews of new bank patterns remain user-approved and never auto-debit balances after cutover.
