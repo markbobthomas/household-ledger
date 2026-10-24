@@ -341,6 +341,7 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 3 years/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
+   await go('history'); // Unlike Calendar, history displays the global forecast caution.
    const migrationBanner=page.locator('#planner-notice');
    const countMatch=(await migrationBanner.innerText()).match(/(\d+) unsaved automatic repeating estimate/);
    if(countMatch)await migrationBanner.locator('[data-view="reviews"]').click();
