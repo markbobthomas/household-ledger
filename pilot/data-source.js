@@ -6,7 +6,11 @@ const MODE='household-ledger-view-mode';
 let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
 const today=()=>new Date().toLocaleDateString('en-CA');
-const statusText=()=>lastError?'<p role="alert">'+esc(lastError)+'</p>':'';
+const statusText=()=>lastError?'<p role="alert">'+esc(lastError)+'</p>':''; 
+const reconnectMessage='Your bank connection needs attention. Plaid requires you to sign in again or renew permission. Previously imported transactions and saved predictions are preserved; refresh results may be out of date.';
+const warningBanner=()=>live&&lastError?
+ '<div class="notice danger" role="alert"><div><strong>Bank connection needs attention.</strong> '+
+ esc(lastError)+'</div><a class="btn" href="/bank-connect">Reconnect bank</a></div>':'';
 const selection=()=>live?'real':'demo';
 async function request(path,body){
  const url='/api/ledger'+path,options={cache:'no-store',credentials:'same-origin',
@@ -87,7 +91,8 @@ function prepare(payload){
    type:a.type,subtype:a.subtype,transactionAccount:a.name,current:a.current??null,
    available:a.available??null,balanceAsOf:a.balanceObservedAt||null,
    currency:a.currency||'USD',simulated:false}))};
- return {state,snapshot,account:banks[0],accounts:banks};
+ return {state,snapshot,account:banks[0],accounts:banks,
+  reconnectAccounts:Array.isArray(payload.reconnectAccounts)?payload.reconnectAccounts:[]};
 }
 async function enter(){
  if(loading)return;loading=true;lastError='';localStorage.setItem(MODE,'real');
@@ -98,6 +103,7 @@ async function enter(){
   const data=prepare(await request(''));
   host.enterReal(data.state,data.snapshot);
   loadedAccount=data.account;live=true;
+  if(data.reconnectAccounts.length)lastError=reconnectMessage;
   localStorage.setItem(MODE,'real');
  }catch(e){
   // Never silently show fictional balances after an explicit Real choice.
@@ -120,11 +126,18 @@ async function refresh(){
   const response=await fetch('/api/sync',{method:'POST',cache:'no-store',
    headers:{'X-Pilot-Action':'1','Content-Type':'application/json'},body:'{}'});
   const result=await response.json();
-  if(!response.ok)throw Error(result?.error||'The bank could not complete this sync');
+  if(!response.ok){
+   const error=new Error(result?.error||'The bank could not complete this sync');
+   error.code=result?.code||'';throw error;
+  }
   const updated=prepare(await request(''));
   host.enterReal(updated.state,updated.snapshot);
   loadedAccount=updated.account;
- }catch(e){lastError='Bank refresh failed: '+e.message}
+  lastError=updated.reconnectAccounts.length?reconnectMessage:'';
+ }catch(e){
+  lastError=e.code==='ITEM_LOGIN_REQUIRED'?reconnectMessage:
+   'Bank refresh failed: '+e.message+'. Check Bank connections and try again.';
+ }
  finally{loading=false;host.render()}
 }
 function demo(){
@@ -194,6 +207,6 @@ function bind(callbacks){
  if(localStorage.getItem(MODE)==='real')enter();
 }
 if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
-root.HouseholdLiveSource={bind,panel,persist,persistForecast,persistCategory,enterReal:enter,refresh,mode:selection,
+root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCategory,enterReal:enter,refresh,mode:selection,
  get loading(){return loading},get error(){return lastError}};
 })(typeof window!=='undefined'?window:globalThis);

@@ -69,13 +69,18 @@ async function saveForecast(predictions){
 async function plaid(endpoint,body){
  const resp=await fetch(HOST+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,client_id:env.PLAID_CLIENT_ID,secret:env.PLAID_SECRET}),signal:AbortSignal.timeout(25000)});
  const data=await resp.json();
- if(!resp.ok||data.error_code)throw Error('Plaid request failed: '+String(data.error_code||resp.status).slice(0,60));
+ if(!resp.ok||data.error_code){
+  const code=String(data.error_code||resp.status).slice(0,60),
+   error=new Error('Plaid request failed: '+code);
+  error.plaidCode=code;throw error;
+ }
  return data;
 }
 async function sync(){
  if(!state.items.length)throw Error('No connected accounts');
  const stages=[],observedAt=stamp(),allIds=new Set();
  for(const item of state.items){
+  try{
   if(!item.token||!item.accountIds?.length)throw Error('Incomplete connected institution');
   let cursor=item.cursor||undefined,pages=[],complete=false;
   for(let attempt=0;attempt<3;attempt++){
@@ -105,6 +110,15 @@ async function sync(){
     balanceObservedAt:observedAt,currency:a.balances?.iso_currency_code||'USD'});
   }
   stages.push({item,cursor,pages,accounts:selected});
+  }catch(error){
+   if(error.plaidCode==='ITEM_LOGIN_REQUIRED'){
+    // Preserve bank history, IDs and forecast preferences on expired consent.
+    item.reconnectRequired=true;
+    error.reconnectAccountId=item.accountIds[0]||null;
+    await save();
+   }
+   throw error;
+  }
  }
  const next={...state.transactions},overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
  for(const stage of stages){
@@ -137,7 +151,7 @@ async function sync(){
  const selectedIds=new Set(stages.flatMap(s=>s.accounts.map(a=>a.id)));
  for(const [id,t] of Object.entries(next))if(t.accountId&&!selectedIds.has(t.accountId)){delete next[id];delete overrides[id]}
  state.transactions=next;state.accounts=stages.flatMap(s=>s.accounts);
- state.items=state.items.map(i=>({...i,cursor:stages.find(s=>s.item.id===i.id).cursor}));
+ state.items=state.items.map(i=>({...i,cursor:stages.find(s=>s.item.id===i.id).cursor,reconnectRequired:false}));
  state.ledgerAdjustments.categoryOverrides=overrides;
  state.lastSync=observedAt;state.error=null;await save();
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
@@ -183,12 +197,14 @@ async function start(port=Number(env.PORT||8788)){
    // No truncation: all imported records for the selected accounts.
    return respond(200,{connected:true,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,
     transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object').sort((a,b)=>String(b.date).localeCompare(String(a.date))),
-    adjustments:state.ledgerAdjustments||{}});
+    reconnectAccounts:state.items.filter(i=>i.reconnectRequired).flatMap(i=>i.accountIds).map(String),
+     adjustments:state.ledgerAdjustments||{}});
   }
   if(req.method==='GET'&&requestPath==='/api/status'){
    const refs=new Map(accountForecastLinks(state).map(x=>[x.id,x]));
    return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,
-    accounts:state.accounts.map(a=>({...a,forecastUsage:refs.get(String(a.id))})),
+    accounts:state.accounts.map(a=>({...a,forecastUsage:refs.get(String(a.id)),
+      needsReconnect:state.items.some(i=>i.reconnectRequired&&i.accountIds.includes(String(a.id)))})),
     lastSync:state.lastSync,
     transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   }
@@ -264,9 +280,21 @@ async function start(port=Number(env.PORT||8788)){
     return respond(200,{saved:true});
    }
    if(requestPath==='/api/link-token'){
+    const id=body?.reconnectAccountId;
+    if(id!==undefined){
+     if(typeof id!=='string'||!id||Object.keys(body).length!==1)return respond(400,{error:'Choose one connected account to reconnect'});
+     const item=state.items.find(i=>i.accountIds.includes(id));
+     if(!item)return respond(404,{error:'That bank account is no longer connected. Refresh the list.'});
+     // Use the existing Item token in Link update mode. No new Item and no
+     // exchange, disconnect or account ID changes.
+     const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-private-household'},
+      client_name:'Household Ledger',country_codes:['US'],language:'en',access_token:item.token});
+     return respond(200,{link_token:t.link_token,mode:'update'});
+    }
+    if(!body||Object.keys(body).length!==0)return respond(400,{error:'Unexpected bank connection options'});
     const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-private-household'},
      client_name:'Household Ledger',products:['transactions'],country_codes:['US'],language:'en'});
-    return respond(200,{link_token:t.link_token});
+    return respond(200,{link_token:t.link_token,mode:'create'});
    }
    if(requestPath==='/api/exchange'){
     if(!body.publicToken||!Array.isArray(body.accountIds)&&!body.accountId)throw Error('Choose at least one account');
@@ -335,7 +363,12 @@ async function start(port=Number(env.PORT||8788)){
     return respond(200,{ok:true});
    }
    return respond(404,{error:'Unknown action'});
-  }catch(e){return respond(400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140)})}
+  }catch(e){
+   if(e.plaidCode==='ITEM_LOGIN_REQUIRED')
+    return respond(409,{error:'Your bank needs you to sign in again before new transactions can be fetched.',
+     code:'ITEM_LOGIN_REQUIRED',reconnectAccountId:e.reconnectAccountId||null});
+   return respond(400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140)})
+  }
  });
  return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>resolve(server))});
 }

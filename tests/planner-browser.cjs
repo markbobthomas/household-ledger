@@ -1553,8 +1553,13 @@ const {chromium,webkit}=require('playwright');
    return r.fulfill({status:200,contentType:'application/json',
     body:'{"saved":true,"scope":"predictions"}'});
   });
-  let refreshed=0;
-  await page.route('**/api/sync',r=>{refreshed++;return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'})});
+  let refreshed=0,loginRequired=false;
+  await page.route('**/api/sync',r=>{
+   refreshed++;
+   return loginRequired?r.fulfill({status:409,contentType:'application/json',
+    body:'{"error":"Your bank needs you to sign in again","code":"ITEM_LOGIN_REQUIRED","reconnectAccountId":"checking-real"}'}):
+    r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'});
+  });
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
@@ -1831,6 +1836,53 @@ const {chromium,webkit}=require('playwright');
   const storage=await page.evaluate(()=>({...localStorage}));
   assert.equal(Object.keys(storage).some(k=>JSON.stringify(storage[k]).includes('mort-4')),false,
    'Raw Real bank transactions are not written to localStorage');
+  // Re-authentication is actionable on the Ledger after a failed refresh.
+  // Previously imported balances must remain readable and never become Demo.
+  loginRequired=true;
+  await go('summary');
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await page.locator('#planner-notice').getByText('Bank connection needs attention.').waitFor();
+  assert.match(await page.locator('#planner-notice').innerText(),/sign in again|renew permission/i);
+  assert.equal(await page.locator('#planner-notice a[href="/bank-connect"]').innerText(),'Reconnect bank');
+  assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
+   'Bank authorization failure never clears the previously imported starting balance');
+  loginRequired=false;
+  await page.locator('#refresh-bank').click();
+  await page.waitForFunction(()=>!document.querySelector('#planner-notice')?.textContent
+   .includes('Bank connection needs attention.'));
+  // Reconnect control launches Link update mode, not a new public-token flow.
+  const connectionPage=await real.newPage(),connectErrors=[];
+  connectionPage.on('pageerror',e=>connectErrors.push(e.message));
+  await connectionPage.route('https://cdn.plaid.com/link/v2/stable/link-initialize.js',r=>
+   r.fulfill({status:200,contentType:'text/javascript',body:
+    'window.Plaid={create:function(opts){window.__linkOptions=opts;return {open:function(){window.__linkOpened=true}}}};'}));
+  let needsReconnect=true,requestedAccount='';
+  await connectionPage.route('**/api/status',r=>r.fulfill({status:200,
+   contentType:'application/json',body:JSON.stringify({
+    connected:true,lastSync:'2026-10-19T09:00:00Z',
+    accounts:[{...account,forecastUsage:{protected:true,counts:{}},needsReconnect}],transactions:[]})}));
+  await connectionPage.route('**/api/link-token',r=>{
+   requestedAccount=r.request().postDataJSON().reconnectAccountId;
+   return r.fulfill({status:200,contentType:'application/json',
+    body:'{"link_token":"fixture-update-token","mode":"update"}'});
+  });
+  await connectionPage.route('**/api/sync',r=>{
+   needsReconnect=false;
+   return r.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'});
+  });
+  await connectionPage.goto(privateUrl+'/bank-connect',{waitUntil:'load'});
+  await connectionPage.locator('#repair-alert').waitFor({state:'visible'});
+  assert.match(await connectionPage.locator('#repair-alert').innerText(),/preserved/);
+  await connectionPage.locator('[data-reconnect-account]').click();
+  await connectionPage.waitForFunction(()=>window.__linkOpened===true);
+  assert.equal(requestedAccount,'checking-real','Repair targets the original connected Item');
+  assert.equal(await connectionPage.evaluate(()=>window.__linkOptions.token),'fixture-update-token');
+  await connectionPage.evaluate(()=>window.__linkOptions.onSuccess('unused-update-mode-public-token',{}));
+  await connectionPage.locator('#repair-alert').waitFor({state:'hidden'});
+  assert.deepEqual(connectErrors,[]);
+  await connectionPage.close();
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: fixed three-year minimum, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');

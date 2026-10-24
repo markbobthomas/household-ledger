@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=requ
 const {spawn}=require('node:child_process');
 (async()=>{
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'hl-plaid-flow-')),port=19849,pass=crypto.randomBytes(24).toString('hex'),store=path.join(folder,'pilot.enc');
- const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass};
+ const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1'};
  const child=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','sandbox/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});
  const request=(route,body)=>{
   return new Promise((resolve,reject)=>{
@@ -90,8 +90,43 @@ const {spawn}=require('node:child_process');
   assert.equal(household.data.adjustments.categoryOverrides['posted-1'],'Pet supplies','Manual adjustments retained');
   assert.equal(JSON.stringify(household.data).includes('secret-second-access-token'),false,'No token in response');
   assert.equal(fs.readFileSync(store,'utf8').includes('secret-second-access-token'),false,'Second token encrypted');
-  assert.equal((await request('/api/sync',{})).code,200,'Refresh all connected Items');
-  assert.equal((await request('/api/status')).data.accounts.length,2,'Both accounts persist after refresh');
+  // The banking token remains encrypted and unchanged when Plaid requires
+  // bank sign-in; no bank records, source balances or forecasts are cleared.
+  const savedBeforeRepair=await request('/api/ledger');
+  const loginFailed=await request('/api/sync',{});
+  assert.equal(loginFailed.code,409,'Expired bank login returns a recoverable conflict');
+  assert.equal(loginFailed.data.code,'ITEM_LOGIN_REQUIRED');
+  assert.equal(loginFailed.data.reconnectAccountId,'acct-1');
+  const needsRepair=await request('/api/status');
+  assert.equal(needsRepair.data.accounts.find(a=>a.id==='acct-1').needsReconnect,true);
+  assert.equal(needsRepair.data.accounts.find(a=>a.id==='acct-2').needsReconnect,false);
+  const stale=await request('/api/ledger');
+  assert.deepEqual(stale.data.transactions,savedBeforeRepair.data.transactions,
+   'Failed refresh retains the original immutable bank transaction snapshot');
+  assert.deepEqual(stale.data.adjustments,savedBeforeRepair.data.adjustments,
+   'Failed refresh does not erase category edits or saved predictions');
+  assert.deepEqual(stale.data.reconnectAccounts,['acct-1']);
+  assert.equal(fs.readFileSync(store,'utf8').includes('secret-test-access-token'),false);
+  const invalid=await request('/api/link-token',{reconnectAccountId:'some-other-bank'});
+  assert.equal(invalid.code,404,'Cannot request update mode for an unconnected bank');
+  const invalidShape=await request('/api/link-token',{reconnectAccountId:'acct-1',unknown:'value'});
+  assert.equal(invalidShape.code,400,'Update-mode token requests accept only the selected account');
+  const repaired=await request('/api/link-token',{reconnectAccountId:'acct-1'});
+  assert.equal(repaired.code,200);
+  assert.deepEqual(repaired.data,{link_token:'link-update-test',mode:'update'});
+  // Plaid update mode does NOT exchange a new public token. A fresh sync after
+  // reauthorization retains the same selected IDs and account-specific edits.
+  assert.equal((await request('/api/sync',{})).code,200,
+   'Successful reauthorization restores the original Items without new connection IDs');
+  const finalStatus=await request('/api/status');
+  assert.equal(finalStatus.data.accounts.length,2);
+  assert.equal(finalStatus.data.accounts.every(a=>!a.needsReconnect),true);
+  const restored=await request('/api/ledger');
+  assert.equal(restored.data.reconnectAccounts.length,0);
+  assert.equal(restored.data.adjustments.categoryOverrides['posted-1'],'Pet supplies');
+  assert.equal(restored.data.accounts.find(a=>a.id==='acct-1').current,321.45);
+  assert.equal(restored.data.accounts.find(a=>a.id==='acct-2').current,900);
+  assert.equal(JSON.stringify(restored.data).includes('secret-test-access-token'),false);
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');
