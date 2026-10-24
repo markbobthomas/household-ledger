@@ -1609,7 +1609,10 @@ function overviewPage(bundle,s,chosen,derived,fresh){
   '<section class="panel overview-chart" aria-label="Projected balance curve">'+
    '<div class="section-title"><h2>Balance trajectory</h2><p>Next '+horizon+' days</p></div>'+
    (derived&&fresh?miniChart(series,s.asOf):'<div class="empty-visual">A current account balance is required for a projection.</div>')+
-   '<p class="chart-caption">This balance projection includes evidenced recurring payments and confirmed schedules. One-off purchases are not projected automatically.</p></section>'+
+   '<p class="chart-caption">'+(state().predictions?.recurringForecastMode==='approved-only'?
+     'Only saved schedules, planned payments and governed card obligations affect future balances. Unapproved repeating patterns are suggestions only.':
+     'Older detected estimates remain included until reviewed. Save recurring plans and finish the switch in Needs review.')+
+   '</p></section>'+
   '<section class="panel"><div class="section-title"><h2>Next five expected movements</h2>'+
    '<button type="button" class="btn" data-view="transactions">View all and edit</button></div>'+
    (notes||'<p class="lead">No upcoming dated transactions identified.</p>')+
@@ -1638,18 +1641,19 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="lowAlertThreshold" min="0" max="999999999" step="1" value="'+
     escapeHTML(Number.isFinite(Number(state().predictions?.lowAlertThreshold))&&state().predictions?.lowAlertThreshold!=null?state().predictions.lowAlertThreshold:6000)+'" required></label>'+
     '<button class="btn primary" type="submit">Save highlight</button></form></section>'+
-  (Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
+  (state().predictions?.recurringForecastMode!=='approved-only'&&
+   Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
   '<section class="panel mini-panel" aria-label="Automatic prediction exclusions">'+
    '<div class="section-title"><h2>Auto-predict: Off</h2><span class="status-tag">'+
     Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length+' EXCLUDED</span></div>'+
-   '<p>These are automatic prediction exclusions. Turn one back on in Bank activity or here. Posted bank transactions are never hidden or changed. A previously deleted repeating plan is not recreated automatically.</p>'+
+   '<p>These are previous inferred-estimate exclusions. Restore one here if needed before completing the schedule-only migration. Posted bank activity is unchanged.</p>'+
    Object.entries(state().predictions?.futureRecurrenceExclusions||{}).map(([key,item])=>
     '<div class="future-skip-line"><strong>'+escapeHTML(item.merchant)+'</strong> · '+
      escapeHTML(activeAccounts(s).find(a=>String(a.id)===String(item.accountId))?.name||item.accountId)+
      ' · '+escapeHTML(item.type)+(item.seriesKey?' · inferred series only':
       item.manualRuleId?' · one saved schedule':item.phaseDate?' · one payday phase':'')+
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
-     '">Turn auto-predict on</button></div>').join('')+
+     '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
   auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
