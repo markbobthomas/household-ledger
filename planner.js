@@ -22,7 +22,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','recurringRecommendations','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
  }
 }catch{}
@@ -37,7 +37,7 @@ function scheduleListNumber(id){
 
 let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSuggestions=[];
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
-let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[];
+let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
@@ -51,7 +51,7 @@ function savePlanning(){
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
-   futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
+   futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,recurringRecommendations:p.recurringRecommendations,
    scheduleCategories:p.scheduleCategories,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments}));
@@ -1598,6 +1598,27 @@ function render(){
   }catch(_error){/* The visible forecast error remains available above. */}
  }
  if(!bundle&&error)bundle={forecastError:error};
+ // Retain every detected recommendation in the existing encrypted forecast
+ // preferences (Demo keeps the same decisions locally). Ignoring a candidate
+ // changes only its review status; it is never removed from this register.
+ if(bundle?.rows&&window.HouseholdRepeatingRecommendations){
+  const p=state().predictions||{},rec=window.HouseholdRepeatingRecommendations,
+   bankRecommendations=window.HouseholdPlannerHistory.candidates(
+    bundle.rows,activeAccounts(s),s.asOf,p,[]);
+  bundle.bankRecommendationCandidates=bankRecommendations;
+  const result=rec.reconcile(p.recurringRecommendations||{},bundle,
+   p.futureRecurringRules||[],bundle.rows,activeAccounts(s));
+  bundle.recommendedRepeating=result.items;
+  lastRecommendedRepeating=result.items;
+  if(result.changed){
+   p.recurringRecommendations=result.stored;
+   // Saving is serialized by the existing private forecast store. A failed
+   // persistence must not be mistaken for a completed user decision.
+   Promise.resolve(savePlanning()).catch(error=>{
+    latestError='Recommended repeating payments could not be saved: '+String(error.message||error);
+   });
+  }
+ }else lastRecommendedRepeating=[];
  const projection=bundle?.projection||null,selectedSource=selected(s);
  lastSuggestions=bundle?.routines?.review||[];
  lastMissingMortgages=bundle?.missingMortgages||[];
@@ -1608,7 +1629,15 @@ function render(){
  const statuses=projection?.diagnostics||{};
  const missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
   !window.HouseholdPaymentObligations.ready(state().predictions?.paymentRules?.[a.id],a,activeAccounts(s)));
+ const recommendationGaps=(bundle?.recommendedRepeating||[]).filter(x=>x.decision==='pending');
+ const highPriorityGaps=recommendationGaps.filter(x=>
+  x.source==='strong'||/mortgage|insurance|utility|electric|water|rent|payroll|salary/i.test(x.merchant));
  const caution=[
+  ...(recommendationGaps.length?[
+   recommendationGaps.length+' possible repeating payments need your Yes/No decision in Recommended repeating. '+
+   'They are NOT included in the balance forecast until saved as a schedule.'+
+   (highPriorityGaps.length?' '+highPriorityGaps.length+' may involve major bills or income.':'')
+  ]:[]),
   ...(missingCards.length?['Credit-card payment schedule not set for '+missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.']:[]),
   ...((bundle?.payments?.warnings||[]).slice(0,3)),
   ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>
