@@ -1957,13 +1957,13 @@ html{scrollbar-gutter:stable}
 }
 .schedule-page .ledger-row-date,.history-page .ledger-row-date{
  display:block;min-width:0;white-space:nowrap;
- font:600 11px/1.4 inherit;color:#718293;
+ font-family:inherit;font-size:11px;font-weight:600;line-height:1.4;color:#718293;
 }
 .schedule-page .ledger-row-date>span{font-size:11px;color:#718293}
 .schedule-page .ledger-row-description,.history-page .ledger-row-description{min-width:0}
 .schedule-page .ledger-row-description strong,.history-page .ledger-row-description strong{
  display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
- font:650 13px/1.4 inherit;color:#233c2e;
+ font-family:inherit;font-size:13px;font-weight:650;line-height:1.4;color:#233c2e;
 }
 .schedule-page .ledger-row-description small,.history-page .ledger-row-description small{
  display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -1974,10 +1974,10 @@ html{scrollbar-gutter:stable}
  text-align:right;white-space:nowrap;font-family:inherit;font-weight:700;
  font-size:13px;line-height:1.4;letter-spacing:0;font-variant-numeric:tabular-nums;
 }
-.schedule-page .ledger-row-amount strong{font:700 13px/1.4 inherit!important;color:#233c2e}
+.schedule-page .ledger-row-amount strong{font-family:inherit!important;font-size:13px!important;font-weight:700!important;line-height:1.4!important;color:#233c2e}
 .schedule-page .ledger-row-hint,.history-page .ledger-row-hint{
  min-width:0;justify-self:end;text-align:right;
- color:#506e5b;font:650 11px/1.4 inherit;
+ color:#506e5b;font-family:inherit;font-size:11px;font-weight:650;line-height:1.4;
  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
  text-decoration:none;
 }
@@ -1986,7 +1986,7 @@ html{scrollbar-gutter:stable}
 }
 .schedule-page .schedule-number{
  width:20px;min-width:20px;height:auto;padding:0;
- font:600 10px/1.4 inherit;color:#819286;
+ font-family:inherit;font-size:10px;font-weight:600;line-height:1.4;color:#819286;
  background:transparent;border:0;border-radius:0;
 }
 .schedule-page .schedule-row-title{gap:1px}
