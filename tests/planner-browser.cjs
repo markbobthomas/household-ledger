@@ -813,7 +813,8 @@ const {chromium,webkit}=require('playwright');
     bankListRow.hint.x-bankListRow.hint.width)<=2,
     'Both variable-length action hints align at their right edge');
    assert.ok(Math.abs(repeatingListRow.height-bankListRow.height)<=3,
-    'Both tabs use the same compact row height, including on iPhone');
+    'Both tabs use the same compact row height, including on iPhone: '+
+     JSON.stringify({mobile,bank:bankListRow,repeating:repeatingListRow}));
 
    assert.equal(await page.locator('[data-schedule-sort]').count(),1);
    assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
