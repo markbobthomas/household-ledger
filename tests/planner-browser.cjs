@@ -944,6 +944,36 @@ const {chromium,webkit}=require('playwright');
 
       assert.equal(await page.locator('button[data-page=budgets]').count(),0,'No old spending tabs');
    assert.equal(await page.locator('main .budget-entry').count(),0,'No category budget UI');
+   // The existing forecast is preserved until all active unsaved streams
+   // are reviewed. Ignored recommendations remain visible after migration.
+   await go('reviews');
+   const switchMode=page.locator('[data-activate-saved-schedules]');
+   assert.equal(await switchMode.count(),1);
+   const activePending=page.locator(
+    '[data-recommended-repeat][data-legacy-active="true"][data-recommendation-status="pending"]');
+   let reviewed=0;
+   while(await activePending.count()){
+    if(reviewed++>90)throw Error('Migration inventory kept changing during review');
+    const row=activePending.first(),key=await row.getAttribute('data-recommended-repeat');
+    await row.locator('[data-ignore-recommendation]').click();
+    await page.waitForFunction(k=>Array.from(document.querySelectorAll('[data-recommended-repeat]'))
+     .some(e=>e.dataset.recommendedRepeat===k&&e.dataset.recommendationStatus==='ignored'),key);
+   }
+   assert.equal(await switchMode.isDisabled(),false,
+    'Cutover becomes available only after every unsaved legacy stream has a decision');
+   await switchMode.click();
+   assert.equal(await page.locator('[data-activate-saved-schedules]').count(),0);
+   assert.match(await page.locator('[data-recommended-repeating]').innerText(),/Only approved saved schedules/);
+   const storedMode=()=>page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').recurringForecastMode);
+   assert.equal(await storedMode(),'approved-only',
+    'Cutover is explicitly persisted with forecast preferences');
+   await page.reload({waitUntil:'load'});
+   assert.equal(await storedMode(),'approved-only',
+    'Saved-schedules-only mode survives reload');
+   await go('reviews');
+   assert.ok(await page.locator('[data-recommended-repeating] [data-recommended-repeat]').count()>0,
+    'Cutover does not erase permanent recommendations');
    assert.deepEqual(errors,[],'No JavaScript exceptions on public Demo');
    if(mobile){
     const sizes=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,window:innerWidth}));
