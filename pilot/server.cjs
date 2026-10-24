@@ -280,9 +280,21 @@ async function start(port=Number(env.PORT||8788)){
     return respond(200,{saved:true});
    }
    if(requestPath==='/api/link-token'){
+    const id=body?.reconnectAccountId;
+    if(id!==undefined){
+     if(typeof id!=='string'||!id||Object.keys(body).length!==1)return respond(400,{error:'Choose one connected account to reconnect'});
+     const item=state.items.find(i=>i.accountIds.includes(id));
+     if(!item)return respond(404,{error:'That bank account is no longer connected. Refresh the list.'});
+     // Use the existing Item token in Link update mode. No new Item and no
+     // exchange, disconnect or account ID changes.
+     const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-private-household'},
+      client_name:'Household Ledger',country_codes:['US'],language:'en',access_token:item.token});
+     return respond(200,{link_token:t.link_token,mode:'update'});
+    }
+    if(!body||Object.keys(body).length!==0)return respond(400,{error:'Unexpected bank connection options'});
     const t=await plaid('/link/token/create',{user:{client_user_id:'household-ledger-private-household'},
      client_name:'Household Ledger',products:['transactions'],country_codes:['US'],language:'en'});
-    return respond(200,{link_token:t.link_token});
+    return respond(200,{link_token:t.link_token,mode:'create'});
    }
    if(requestPath==='/api/exchange'){
     if(!body.publicToken||!Array.isArray(body.accountIds)&&!body.accountId)throw Error('Choose at least one account');
@@ -351,7 +363,12 @@ async function start(port=Number(env.PORT||8788)){
     return respond(200,{ok:true});
    }
    return respond(404,{error:'Unknown action'});
-  }catch(e){return respond(400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140)})}
+  }catch(e){
+   if(e.plaidCode==='ITEM_LOGIN_REQUIRED')
+    return respond(409,{error:'Your bank needs you to sign in again before new transactions can be fetched.',
+     code:'ITEM_LOGIN_REQUIRED',reconnectAccountId:e.reconnectAccountId||null});
+   return respond(400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140)})
+  }
  });
  return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>resolve(server))});
 }
