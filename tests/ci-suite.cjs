@@ -17,3 +17,27 @@ function resolve(group) {
   return tests;
 }
 module.exports={suites,coreGroups,resolve};
+if(require.main===module){
+ const fs=require('node:fs'),path=require('node:path');
+ const {spawnSync}=require('node:child_process');
+ const group=process.argv[2]||'core',tests=resolve(group);
+ for(const name of tests){
+  const file=path.join(__dirname,name+'.cjs');
+  if(!fs.existsSync(file))throw Error('Missing test: '+file);
+ }
+ if(process.argv.includes('--list')){
+  console.log(tests.join('\n'));
+  process.exit(0);
+ }
+ console.log('Running '+group+' regression suite: '+tests.length+' distinct scripts');
+ for(const name of tests){
+  const result=spawnSync(process.execPath,[path.join(__dirname,name+'.cjs')],{stdio:'inherit',cwd:path.join(__dirname,'..')});
+  if(result.error||result.status!==0){
+   console.error('FAILED regression: '+name);
+   if(result.error)console.error(result.error);
+   process.exit(result.status||1);
+  }
+ }
+ console.log('PASS '+group+' regression suite ('+tests.length+' tests)');
+}
+
