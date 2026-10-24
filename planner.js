@@ -1031,6 +1031,21 @@ function applyScheduleSearch(root=document){
   count.textContent='Showing '+shown+' of '+total+' repeating transaction'+
    (total===1?'':'s');
  }
+ for(const row of root.querySelectorAll('[data-statement-occurrence]')){
+  row.hidden=!!q&&!String(row.dataset.scheduleSearchText||'').includes(q);
+ }
+ for(const group of root.querySelectorAll('[data-repeating-statement-group]')){
+  const rows=[...group.querySelectorAll('[data-statement-occurrence]')].filter(r=>!r.hidden);
+  group.hidden=rows.length===0;
+  const divider=group.querySelector('[data-statement-divider]');
+  if(divider){
+   const total=rows.reduce((n,row)=>n+Number(row.dataset.statementCents||0),0);
+   divider.querySelector('.ledger-statement-total').textContent='Net charges '+cash(total/100);
+   const summary=divider.querySelector('small');
+   if(summary)summary.textContent=summary.textContent.replace(/ · \d+ repeating charges?$/,
+     ' · '+rows.length+' repeating charge'+(rows.length===1?'':'s'));
+  }
+ }
  const empty=root.querySelector('[data-schedule-search-empty]');
  if(empty)empty.hidden=shown!==0||!q;
 }
@@ -1263,7 +1278,7 @@ function schedulesPage(bundle,s){
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
      '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
    '</select></label>'+
-   '<label>Show <select data-schedule-category-filter><option value="">All categories</option>'+
+   '<div class="schedule-category-controls"><label>Show <select data-schedule-category-filter><option value="">All categories</option>'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
    '</select></label>'+
@@ -1272,13 +1287,15 @@ function schedulesPage(bundle,s){
     '<form data-schedule-category-add><label>New category<input name="categoryName" maxlength="40" '+
     'placeholder="e.g. Pet care" required></label>'+
     '<button type="submit" class="btn">Add</button></form>'+
-    '<p data-schedule-category-notice role="status"></p></details>'+
+    '<p data-schedule-category-notice role="status"></p></details></div>'+
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+'<div class="schedule-grid">'+
    '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
     'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
     ' of '+rules.length+' repeating transaction'+(rules.length===1?'':'s')+'</p>'+
+   (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
+      repeatingStatementPeriods(bundle,s,scheduleAccount,visible):'')+
    (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching schedules. Try a different search.</p>'+
@@ -2987,10 +3004,12 @@ document.addEventListener('change',async e=>{
   return;
  }
  const sorter=e.target.closest?.('[data-schedule-sort]'),
-  filter=e.target.closest?.('[data-schedule-category-filter]');
- if(sorter||filter){
+  filter=e.target.closest?.('[data-schedule-category-filter]'),
+  schedulePicker=e.target.name==='scheduleAccount'?e.target:null;
+ if(sorter||filter||schedulePicker){
   const nextSort=sorter?sorter.value:scheduleSort,
    nextFilter=filter?filter.value:scheduleCategoryFilter,
+   nextAccount=schedulePicker?schedulePicker.value:scheduleAccount,
    edit=document.querySelector('[data-schedule-edit-form],[data-schedule-new-form]');
   const dirty=edit&&[...edit.querySelectorAll('input,select,textarea')].some(field=>{
    if(field.type==='hidden')return false;
@@ -2999,9 +3018,9 @@ document.addEventListener('change',async e=>{
    return field.value!==field.defaultValue;
   });
   if(dirty&&!window.confirm('Discard unsaved schedule edits to reorganize the list?')){
-   e.target.value=sorter?scheduleSort:scheduleCategoryFilter;return;
+   e.target.value=sorter?scheduleSort:schedulePicker?scheduleAccount:scheduleCategoryFilter;return;
   }
-  scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;
+  scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;scheduleAccount=nextAccount;
   scheduleMode='';scheduleTarget='';transactionDetail=null;render();return;
  }
  if(e.target.name==='separateSchedule'&&e.target.checked){
