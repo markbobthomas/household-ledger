@@ -362,6 +362,16 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await recommendedMortgage.count()>0,'Mortgage remains prominently recommended for approval');
    assert.match(await recommendedMortgage.innerText(),/Not included in predicted balances/);
    await recommendedMortgage.locator('[data-review-candidate]').click();
+   try{
+    await page.waitForFunction(()=>JSON.parse(
+     localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+     .futureRecurringRules?.some(r=>r.merchant==='Mortgage'),null,{timeout:4000});
+   }catch(error){
+    const notices=await page.locator('.future-notice,.notice,.future-form-error').allInnerTexts();
+    const formState=await page.locator('.history-schedule-form').count();
+    throw Error('Yes failed to save the proposed mortgage rule; notices='+
+     JSON.stringify(notices)+' editorOpened='+formState+' '+String(error.message));
+   }
    await page.locator('[data-repeating-recommendation][data-recommendation-state="saved"]')
     .filter({hasText:'Mortgage'}).first().waitFor();
    await go('transactions');
