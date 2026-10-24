@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
+- **Latest Calendar density pass:** [PR #160](https://github.com/markbobthomas/household-ledger/pull/160) merged with desktop/mobile spacing tightened, full bank/forecast invariants retained; private Render still unverified.
+
 - **Selected-day Calendar subtotal restoration:** [PR #157](https://github.com/markbobthomas/household-ledger/pull/157) adds one bottom-of-transaction Total change line before the unchanged ending balance, without duplicating each category. Final verification/merge details in latest dated entry.
 
 - **Latest selected-day Calendar simplification:** [PR #155](https://github.com/markbobthomas/household-ledger/pull/155) combines the previous balance, editable signed transactions, and closing balance into one trail instead of duplicating deposit/withdrawal totals. See dated entry for final merge/check status; private Render deployment remains unverified.
@@ -955,3 +957,9 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Files:** `planner.css`, `index.html` (stylesheet cache version), `tests/planner-browser.cjs` (desktop Chromium and iPhone WebKit spacing assertions), and this ledger. Financial/Plaid/source records, forecast math, saved preferences, and Render configuration untouched.
 - **Validation:** Required financial/banking and browser CI to be checked on final PR head before merging; record exact results and merge SHA in a later entry.
 - **Deployment:** Existing private authenticated Render service remains independently unverified.
+
+### 2026-10-24 — Verified compact Calendar UI merged
+
+- **Merge:** [PR #160](https://github.com/markbobthomas/household-ledger/pull/160) squash merged as `669f58e8b3c55263ff0cbdd9c3f14ac591d0a7f2`, independently confirmed on GitHub `main`. Layout-only tightening of Calendar navigation, metrics, grid placeholders and selected-day calculation; all financial controls and business logic preserved.
+- **Checks:** Final PR head `4f3228a2d098e789c71179c54ed256a08325c83d`: [Real-account pilot safety 40133061856](https://github.com/markbobthomas/household-ledger/actions/runs/40133061856) **success**; [Browser interaction 40133061844](https://github.com/markbobthomas/household-ledger/actions/runs/40133061844) **success** including Chromium and iPhone WebKit density regression. Those are PR-head checks, not new runs for this docs-only record.
+- **Deployment:** Private password-protected Render running SHA and successful live deployment remain **unverified**. No banking infrastructure or source facts were touched.
