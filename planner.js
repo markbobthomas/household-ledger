@@ -573,13 +573,11 @@ function editorFor(row,s,records,opts={}){
  const scope=opts.oneOnly?
   '<fieldset class="future-scope plan-single-scope"><legend>Change affects</legend>'+
    '<label><input type="radio" name="scope" value="one" checked> Only this payment</label>'+
-   '<p>Changing or skipping this payment does not change the schedule or any other date. '+
-   'To change every future payment, edit Schedule settings above.</p></fieldset>':
+   '</fieldset>':
   '<fieldset class="future-scope"><legend>Apply changes to</legend>'+
   '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
   '<label><input type="radio" name="scope" value="all"> This and future payments</label>'+
-  '<p>For a repeating payment, choose all future to create or change its schedule. '+
-   'Only this payment keeps all other dates unchanged.</p></fieldset>'+
+  '</fieldset>'+
   '<div class="future-repeat-fields" hidden>'+
    '<div class="future-fields"><label>Repeat frequency'+frequencyChoices(cadence)+'</label>'+
    '<label class="future-second-day"'+(cadence==='twice-monthly'?'':' hidden')+'>Second day of month (1–31)'+
@@ -589,11 +587,8 @@ function editorFor(row,s,records,opts={}){
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
   scope+
   '<div class="future-fields">'+fields+'</div>'+
-  '<p class="audit-footnote">'+(opts.oneOnly?
-    'You are editing one date within this payment plan. The repeating rule stays unchanged. ':
-    'You are editing a forecast, not a posted bank transaction. ')+
-   (isMovement?'Both linked accounts update together. ':'')+
-   'Actual bank transactions are never changed.</p>'+
+  '<p class="audit-footnote">Forecast only · Bank records unchanged.'+
+   (isMovement?' Both linked accounts update.':'')+'</p>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Save changes</button>'+
    '<button class="btn" type="button" data-cancel-future>Cancel</button>'+
    (row.addedId?'<button class="btn" type="button" data-remove-added="'+escapeHTML(row.addedId)+'">Remove</button>':
@@ -831,10 +826,7 @@ function openInlineTransaction(button){
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
  const nearby=rule?futureRows(bundle,s).filter(r=>r.recurringRuleId===rule.id&&r.date>=row.date).length:0;
  const helper='<p class="inline-editor-explanation" data-edit-impact>'+
-  (rule?'Change this date only, or choose all future to update the repeating plan ('+nearby+
-   ' upcoming payments in your forecast).':
-   row.seriesKey?'Update one payment, or confirm changes for later recurring payments.':
-   'Edit these values here. Actual posted bank records remain read-only.')+'</p>';
+  (rule||row.seriesKey?'Choose one payment or all future.':'This payment only.')+'</p>';
  const settings=rule?'<details class="inline-plan-settings">'+
   '<summary>More schedule settings <small>label, category, repeat rule</small></summary>'+
   '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
@@ -968,7 +960,7 @@ function newTransactionForm(s){
   preset=mortgageDraft;
  return '<form class="future-new-form panel" id="future-new-form" data-future-new-form>'+
   '<div class="section-title"><h2>Add predicted transaction</h2><span class="status-tag">FORECAST ONLY</span></div>'+
-  '<p class="lead">Add a dated future expense, deposit, refund or a transfer between your accounts. No money moves.</p>'+
+  
   '<div class="future-fields">'+
   '<label>Transaction type<select name="type" id="new-future-type">'+
    '<option value="expense">Withdrawal / purchase</option><option value="income">Deposit</option>'+
@@ -982,43 +974,45 @@ function newTransactionForm(s){
   '<label>Amount ($)<input name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="0.00" value="'+escapeHTML(preset?.amount??'')+'"></label>'+
   '<label>Repeat'+frequencyChoices(preset?'monthly':'once',true)+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input type="number" name="secondDay" min="1" max="31" value="15"></label>'+
-  '</div><label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> This is an additional independent bill or paycheck, even from the same merchant</label><p class="audit-footnote">'+(preset?'Verify the proposed next due date against your mortgage documents. ': '')+
-   'For alternating biweekly paychecks, make two independent Every 4 weeks deposits, with their start dates 14 days apart. Link each to its own past paychecks below.</p>'+
+  '</div><label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> Additional independent bill or paycheck from this merchant</label>'+
+  (preset?'<p class="audit-footnote">Check the proposed due date against your mortgage documents.</p>':'')+
   '<div class="future-history-container" data-new-history-link hidden>'+historyLinkField()+'</div>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Add to forecast</button>'+
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
 
 function scheduleFields(r,isNew,s){
-  const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1);
-  const type=r.kind==='movement'?'transfer':r.type||'expense',transfer=isNew&&type==='transfer'||r.kind==='movement',
-   accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id;
-  return '<div class="future-fields">'+
-   '<label>Bill label (distinguishes same-payee bills)<input name="scheduleLabel" maxlength="110" placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||'')+'"></label>'+
-   '<label>Bank merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(r.merchant||'')+'"></label>'+
-   '<label>Category<select name="category">'+
-    window.HouseholdPlannerTransactions.scheduleCategories(state()).map(c=>
-     '<option value="'+escapeHTML(c)+'"'+(c===(r.category||'Uncategorized')?' selected':'')+'>'+
-      escapeHTML(c)+'</option>').join('')+'</select></label>'+
-   '<label>Expected amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
-   '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
-   '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
-   '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
+ const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1),
+  type=r.kind==='movement'?'transfer':r.type||'expense',
+  transfer=(isNew&&type==='transfer')||r.kind==='movement',
+  accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id,
+  categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+  category=categories.includes(r.category)?r.category:'Uncategorized';
+ // Friendly name is not the source bank merchant's matching identity.
+ return '<div class="future-fields schedule-primary-fields">'+
+  '<label>Name<input name="scheduleLabel" maxlength="110" required placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||r.merchant||'')+'"></label>'+
+  '<label>Amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
+  '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
+  '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
+  '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+accountSelect(accounts,accountId,'accountId')+'</label>'+
+  '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From account'+accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
+  '</div><details class="schedule-advanced" data-schedule-advanced'+(transfer||r.frequency==='twice-monthly'?' open':'')+'>'+
+  '<summary>More options</summary><div class="future-fields">'+
+  (isNew?'<label>Type<select name="type" data-schedule-type>'+
+   [['expense','Withdrawal'],['income','Deposit'],['refund','Refund'],['transfer','Linked transfer']].map(([v,name])=>
+    '<option value="'+v+'"'+(type===v?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':
+   '<input type="hidden" name="type" value="'+escapeHTML(type)+'">')+
+  '<label>Bank merchant<input name="merchant" maxlength="160"'+(isNew?'':' required')+' value="'+escapeHTML(r.merchant||'')+'"></label>'+
+  '<label>Category<select name="category">'+categories.map(c=>
+   '<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+'</select></label>'+
+  '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
    '<option value="fixed"'+(r.amountBasis!=='estimate'?' selected':'')+'>Fixed</option></select></label>'+
-   (isNew?'<label>Type<select name="type" data-schedule-type>'+
-    [['expense','Withdrawal'],['income','Deposit'],['refund','Refund'],['transfer','Linked transfer']].map(([v,name])=>
-     '<option value="'+v+'"'+(type===v?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':
-    '<input type="hidden" name="type" value="'+escapeHTML(type)+'">')+
-   '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+
-    accountSelect(accounts,accountId,'accountId')+'</label>'+
-   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From'+
-    accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
-   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>To'+
-    accountSelect(accounts,r.toAccountId||accounts.find(a=>String(a.id)!==accountId)?.id||accountId,'toAccountId')+'</label>'+
-   '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
-    '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
-   '</div>';
- }
+  '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>To account'+
+   accountSelect(accounts,r.toAccountId||accounts.find(a=>String(a.id)!==accountId)?.id||accountId,'toAccountId')+'</label>'+
+  '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
+   '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
+  '</div></details>';
+}
 function applyScheduleSearch(root=document){
  // Some non-browser integrations expose a partial DOM. Search is optional:
  // never let its absence interrupt scheduled payment editing or forecasts.
@@ -1223,7 +1217,7 @@ function schedulesPage(bundle,s){
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
  const create=scheduleMode==='new'?'<section class="schedule-creation recurrence-inline-detail" data-schedule-create-inline>'+
   recurringEditor('<form class="schedule-form" data-schedule-new-form>'+
-   '<p class="review-inline-guide">New repeating payment · choose the future dates, account and amount.</p>'+
+   
   '<input name="separateSchedule" type="hidden" value="on">'+
   (schedulePreset?.historyExampleId?'<input type="hidden" name="historyExampleId" value="'+escapeHTML(schedulePreset.historyExampleId)+'">':'')+
   fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
@@ -1298,8 +1292,7 @@ function schedulesPage(bundle,s){
     'Changing the repeating amount for all future payments will replace these older rules.</p>'+
     windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan recurrence-inline-detail" data-schedule-inline-plan="'+id+'">'+
-     recurringEditor('<p class="review-inline-guide">Changes to this schedule affect future repeating payments. To change one date, use Upcoming payments below.</p>'+
-      edit,'schedule')+
+     recurringEditor(edit,'schedule')+
      '<details class="schedule-occurrence-disclosure"><summary>Upcoming payments</summary>'+
       scheduleOccurrencesHtml(bundle,s,r)+'</details></div>':'')+'</div></article>';
  };
@@ -1345,7 +1338,7 @@ function schedulesPage(bundle,s){
    (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching schedules. Try a different search.</p>'+
-   '<p class="page-task-hint ledger-footer-hint">Repeating payments appear automatically on your Calendar. Select a payment to change the schedule or an upcoming date to edit just that payment.</p></div>';
+   '</div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -1403,9 +1396,9 @@ function repeatingReviewForm(s,{inline=false}={}){
  const from=d.fromAccountId||d.accountId,to=d.toAccountId&&d.toAccountId!==from?
   d.toAccountId:otherAccount;
  return '<form class="panel history-schedule-form" data-history-recurring-form>'+
-  (inline?'<p class="review-inline-guide">Confirm the details for this repeating payment. Saving changes future forecasts only.</p>':
+  (inline?'':
    '<div class="section-title"><h2>Confirm recurring transaction</h2><span class="status-tag">FORECAST ONLY</span></div>'+
-   '<p class="lead">Every bank transaction can become a repeating forecast, even if the bank assigned the wrong transaction type. Choose how it should affect future account balances.</p>')+
+   '<p class="lead">Review the suggested schedule. Bank records stay unchanged.</p>')+
   (d.sourceRow?.type==='transfer'&&!transfer?
    '<p class="history-type-explanation">The bank labeled this as a transfer without a confirmed matching household account. An outgoing ACH debit, such as a mortgage, is proposed as an expense. Change the future type if needed.</p>':'')+
   (d.sourcePending?'<p class="history-type-explanation">This bank transaction is pending; its date or amount may change. Review both before scheduling.</p>':'')+
@@ -1786,7 +1779,7 @@ function reviewsPage(bundle,s){
    '<div class="section-title"><h2>Other recommended repeating</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
    (pending.length?pending.map(normalCard).join(''):
-    '<p class="lead">No other recurring suggestions need review. You can create or edit repeating schedules from Bank activity or Repeating.</p>')+
+    '<p class="lead">Nothing else to review.</p>')+
    '</section>'+
   (ignored.length?
    '<details class="ignored-repeating" data-ignored-repeating'+
@@ -1844,7 +1837,7 @@ function upcomingCardBills(bundle,s){
     (p.estimated?' · Estimated':' · Entered statement')+'</small></div>'+
     '<strong>'+(p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>').join('')||
     '<p class="lead">No card statement forecasts are configured yet. Set up each card in Settings.</p>')+
-  '<p class="audit-footnote">The figure shown is the predicted withdrawal from checking, not a new purchase. Statement reconstruction may differ from issuer totals due to carried balances, fees, interest or missing activity.</p></section>';
+  '<p class="audit-footnote">Estimates may differ from issuer statements due to balances, fees or incomplete activity.</p></section>';
 }
 function overviewPage(bundle,s,chosen,derived,fresh){
  const series=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
@@ -2719,6 +2712,8 @@ document.addEventListener('submit',async e=>{
   const fields=Object.fromEntries(new FormData(form)),
    T=window.HouseholdPlannerTransactions,s=snapshot(),accounts=activeAccounts(s),
    originatingKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||'';
+  if(form.hasAttribute('data-schedule-new-form')&&!String(fields.merchant||'').trim())
+   fields.merchant=String(fields.scheduleLabel||'').trim();
   let savedPlanId='';
   if(form.hasAttribute('data-schedule-new-form')){
    const saved=await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
@@ -3112,6 +3107,7 @@ document.addEventListener('change',async e=>{
   const form=e.target.closest('form'),transfer=e.target.value==='transfer';
   form?.querySelectorAll('.schedule-transfer-account').forEach(el=>el.hidden=!transfer);
   const single=form?.querySelector('.schedule-single-account');if(single)single.hidden=transfer;
+  if(transfer)form?.querySelector('[data-schedule-advanced]')?.setAttribute('open','');
   return;
  }
  if(e.target.matches?.('[data-card-rule] [name=method],[data-card-rule] [name=autopayEnabled]')){
@@ -3158,8 +3154,8 @@ document.addEventListener('change',async e=>{
   const impact=form?.closest('[data-inline-transaction-editor]')?.querySelector('[data-edit-impact]')||
    document.querySelector('[data-edit-impact]');
   if(impact)impact.textContent=e.target.value==='all'?
-   'All future payments beginning with this date will change. Posted bank transactions are never changed.':
-   'Only this dated payment will change. Other scheduled payments stay as they are.';
+   'All future payments will change. Bank records stay unchanged.':
+   'Only this payment will change.';
   const section=form?.querySelector('.future-repeat-fields');
   if(section)section.hidden=e.target.value!=='all';
   if(e.target.value==='all')updateHistoryLinks(form);
@@ -3169,6 +3165,8 @@ document.addEventListener('change',async e=>{
   const form=e.target.closest('form');
   const second=form?.querySelector('.future-second-day');
   if(second)second.hidden=e.target.value!=='twice-monthly';
+  if(e.target.value==='twice-monthly'&&form?.matches?.('[data-schedule-new-form],[data-schedule-edit-form]'))
+   form.querySelector('[data-schedule-advanced]')?.setAttribute('open','');
   const holder=form?.querySelector('[data-new-history-link]');
   if(holder){holder.hidden=e.target.value==='once';updateHistoryLinks(form)}
   return;
