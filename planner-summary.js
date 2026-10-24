@@ -501,12 +501,21 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
   hasStatement=next&&next.statementBalance!==null&&next.statementBalance!==undefined&&
    Number.isFinite(Number(next.statementBalance))&&Number(next.statementBalance)>=0,
   issued=Boolean(hasStatement&&next.confirmed);
- const end=new Date(asOf+'T12:00:00Z');
- end.setUTCDate(end.getUTCDate()+90);
- const through=end.toISOString().slice(0,10),
-  eligible=(points||[]).filter(p=>p.date>=asOf&&p.date<=through&&
-   Number.isFinite(p.balance)),
-  low=eligible.length?eligible.reduce((a,b)=>b.balance<a.balance?b:a):null;
+ // The next cycle is computed by the SAME bank-posted + future-scheduled
+ // statement engine as the Calendar's itemized card bill. Do not use card
+ // debt, inferred spending averages or independently re-sum transactions.
+ const following=statements[1]||null,
+  hasFollowing=following&&following.statementBalance!==null&&
+   following.statementBalance!==undefined&&
+   Number.isFinite(Number(following.statementBalance))&&
+   Number(following.statementBalance)>=0;
+ const closingDate=following?.periodEnd||following?.closingDate||'',
+  closeNavigable=Boolean(closingDate&&(points||[]).some(p=>p.date===closingDate)),
+  postedCount=Array.isArray(following?.postedTransactions)?
+   following.postedTransactions.length:following?.observedCount,
+  predictedCount=Array.isArray(following?.predictedTransactions)?
+   following.predictedTransactions.length:following?.scheduledCount,
+  hasCounts=Number.isInteger(postedCount)&&Number.isInteger(predictedCount);
  const statementDate=next?.dueDate||'',
   navigable=Boolean(statementDate&&(points||[]).some(p=>p.date===statementDate));
  return '<div class="summary-monthly" data-summary-card-statement>'+
@@ -520,13 +529,18 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
     (navigable?' →</button>':'</small>'):
    '<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
   '</div>'+
-  '<div class="summary-minimum" data-summary-card-90day-low>'+
-  '<div class="summary-overline">3-month estimated low</div>'+
-  '<strong class="summary-low" data-summary-card-low-value>'+
-   (low?money(low.balance):'Unverified')+'</strong>'+
-  (low?'<button type="button" class="summary-low-date" data-summary-low-date="'+
-    esc(low.date)+'">'+esc(dateLabel(low.date))+' →</button>':
-    '<small class="summary-low-date">No projected date</small>')+
+  '<div class="summary-minimum" data-summary-card-next-statement>'+
+  '<div class="summary-overline">Next statement estimate</div>'+
+  '<strong class="summary-low" data-summary-next-statement-value>'+
+   (hasFollowing?money(Number(following.statementBalance)):'Not available')+'</strong>'+
+  (hasFollowing?(
+   (hasCounts?'<small class="summary-card-estimate-sources">'+postedCount+
+    ' posted · '+predictedCount+' predicted</small>':'')+
+   (closingDate?(closeNavigable?
+    '<button type="button" class="summary-low-date" data-calendar-card-statement-date="'+
+     esc(closingDate)+'">':'<small class="summary-low-date">')+
+     'Closes '+esc(dateLabel(closingDate))+(closeNavigable?' →</button>':'</small>'):'')
+  ):'<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
   '</div>';
 }
 function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false}){
