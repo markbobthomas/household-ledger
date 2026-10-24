@@ -341,13 +341,26 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await transferDraft.locator('[name=toAccountId]').isVisible(),true,
     'Linked transfers require an explicit receiving account');
    await page.locator('[data-cancel-review-form]').click();
+   await go('reviews');
+   const permanent=page.locator('[aria-label="Recommended repeating"]');
+   assert.ok(await permanent.count()>0,'Recommended repeating has a permanent home in Needs review');
+   const mortgageRecommendation=permanent.locator('[data-repeating-recommendation]').filter({hasText:'Mortgage'}).first();
+   assert.equal(await mortgageRecommendation.getAttribute('data-recommendation-status'),'pending');
+   await go('transactions');
+   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
+    'Unapproved mortgage is excluded from projected cash balances');
+   await go('reviews');
+   await page.locator('[aria-label="Recommended repeating"] [data-repeating-recommendation]')
+    .filter({hasText:'Mortgage'}).first().locator('[data-repeating-yes]').click();
+   await page.locator('[aria-label="Recommended repeating"] [data-repeating-recommendation]')
+    .filter({hasText:'Mortgage'}).first().locator('[data-recommendation-status]').count().catch(()=>0);
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'One authoritative auto-detected mortgage appears in the future ledger');
+    'One explicitly approved mortgage schedule now drives future balances');
    await page.reload({waitUntil:'load'});
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'Refreshing does not erase bank-derived future predictions');
+    'Refreshing does not erase the explicitly approved mortgage schedule');
    await go('settings');
    const auditDetails=page.locator('#accuracy-audit');
    await page.locator('#planner-menu > summary').click();
@@ -422,7 +435,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-reset-series]').click();
    assert.equal(await page.evaluate(()=>Object.keys(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).length),0,'Reset all future restores automatic recurring forecasts');
+   ).length),0,'Reset all future restores the saved repeating schedule');
    await page.locator('[data-show-new]').click();
    await page.locator('#future-new-form [name=merchant]').fill('One-time home repair');
    await page.locator('#future-new-form [name=amount]').fill('125');
