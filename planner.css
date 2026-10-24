@@ -497,15 +497,44 @@ body:has(.summary-page) .top-actions #horizon{display:none}
 
 /* Calendar-first planning: one balance explanation, one compact transaction editor. */
 .calendar-day-detail{background:#fff;border-color:#e5ecf4}
-.calendar-math{margin-top:16px;display:grid;gap:8px;border:1px solid #e9eff5;border-radius:9px;padding:13px 15px;background:#fafcfe}
-.calendar-math>div{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
-.calendar-math>div span{color:#6e7e8e}
-.calendar-math>div strong{font:700 13px var(--mono);color:#304153;white-space:nowrap}
-.calendar-math>div strong.in{color:#31815b}
-.calendar-math>div strong.out{color:#ad5157}
-.calendar-math .calendar-math-total{margin-top:4px;padding-top:10px;border-top:1px solid #dce6ef;font-weight:750}
-.calendar-math .calendar-math-total span{color:#1b3349}
-.calendar-math .calendar-math-total strong{font-size:17px;color:#172c42}
+/* Selected-day equation is now one continuous, editable transaction trail:
+   starting balance, each signed movement once, then the ending balance. */
+.calendar-day-reconciliation{
+ margin-top:13px;min-width:0;border:1px solid var(--line);
+ border-radius:9px;background:#fff;overflow:hidden;
+}
+.calendar-day-reconciliation .calendar-day-opening{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;
+ padding:11px 13px;border-bottom:1px solid var(--line);
+ background:var(--soft);font-size:12px;
+}
+.calendar-day-reconciliation .calendar-day-opening span{color:var(--muted)}
+.calendar-day-reconciliation .calendar-day-opening strong{
+ white-space:nowrap;font-weight:750;font-variant-numeric:tabular-nums;
+}
+.calendar-day-reconciliation .calendar-day-transactions{
+ margin:0;border:0;min-width:0;
+}
+.calendar-day-reconciliation .calendar-day-transactions-head{
+ padding:10px 13px 3px;margin:0;
+}
+.calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry{
+ border:0;border-bottom:1px solid var(--line);
+ border-radius:0;margin:0;background:transparent;overflow:visible;
+}
+.calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry:last-child{
+ border-bottom:0;
+}
+.calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{
+ padding:11px 13px;
+}
+@media(max-width:600px){
+ .calendar-day-reconciliation .calendar-day-opening{padding:10px 9px}
+ .calendar-day-reconciliation .calendar-day-transactions-head{padding:9px 9px 2px}
+ .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry .calendar-monthly-row{
+  padding:11px 9px;
+ }
+}
 .calendar-detail-item .calendar-item-edit{border:0;border-radius:6px;background:#eff3f9;color:#345e90;min-height:31px;padding:5px 9px;cursor:pointer;font-size:11px;font-weight:700}
 .calendar-detail-item .calendar-item-edit:hover{background:#e0eafa}
 .calendar-day-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px}
