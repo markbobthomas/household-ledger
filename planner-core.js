@@ -304,17 +304,21 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   }
   seen({...e,source:'manual',_forecastExtra:true});
  }
- // Apply individual overrides exactly once before calculating card statements.
+ // Preserve recurrence anchors and durable event identities: only the
+ // effective dated occurrence moves. Card statements read these same dates.
+ const effective=when=>tools.forecastBusinessDate(when,asOf);
  function adjust(list){
   return list.flatMap(e=>{
    const edit=edits[eventKey(tools,e)];
    if(edit?.skipped)return [];
    const result=edit?{...e,...edit}:e;
-   return result.date>asOf&&result.date<=end?[result]:[];
+   if(result.date<=asOf||result.date>end)return [];
+   const date=effective(result.date);
+   return date>asOf&&date<=end?[date===result.date?result:{...result,date}]:[];
   });
  }
  const adjusted=adjust(entries);
- const payment=paymentEngine?.build?paymentEngine.build(snapshot,rows,adjusted,prefs,{days}):
+ const payment=paymentEngine?.build?paymentEngine.build(snapshot,rows,adjusted,prefs,{days,effectiveDate:effective}):
   {plans:[],billEvents:[],warnings:[],statements:[],suppressedExpectedIds:[]};
  const suppressed=new Set((payment.suppressedExpectedIds||[]).map(String));
  const finalEvents=adjust(adjusted.filter(e=>!suppressed.has(String(e.id)))
@@ -353,7 +357,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
   const edit=edits[tools.keyMovement(moved.id)];
   if(edit?.skipped)continue;
   const v=edit?{...moved,...edit}:moved;
-  if(v.date>asOf&&v.date<=end)finalPlans.push(v);
+  if(v.date>asOf&&v.date<=end){
+   const date=effective(v.date);
+   if(date>asOf&&date<=end)finalPlans.push(date===v.date?v:{...v,date});
+  }
  }
  const bySignature=new Map();
  const ledger=[];
