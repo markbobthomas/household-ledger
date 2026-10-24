@@ -175,6 +175,21 @@ const {chromium,webkit}=require('playwright');
      padding:getComputedStyle(el).paddingLeft
     }))),Array.from({length:3},()=>({border:'0px',padding:'0px'})),
     'All three metrics have identical zero inner borders and left padding');
+   // Calendar-specific density must hold in both desktop and phone browsers.
+   const compact=await page.evaluate(()=>{
+    const px=(s,p)=>parseFloat(getComputedStyle(document.querySelector(s))[p]);
+    const day=px('.calendar-day','minHeight');
+    return {day,blank:[...document.querySelectorAll('.calendar-blank,.calendar-outside')]
+     .map(el=>parseFloat(getComputedStyle(el).minHeight)),
+     tabs:px('.planner-nav-primary','marginBottom'),
+     nav:px('.calendar-navigation','marginBottom'),
+     detail:px('.calendar-day-detail','marginTop')};
+   });
+   assert.ok(compact.tabs<=10&&compact.nav<=6&&compact.detail<=9,
+    'Calendar vertical gaps remain compact: '+JSON.stringify(compact));
+   assert.ok(compact.day<=(mobile?64:82)&&compact.day>=60&&
+    compact.blank.every(h=>h===compact.day),
+    'Blank and dated cells use equal compact minimum heights: '+JSON.stringify(compact));
    assert.equal(await page.locator('.summary-bank [data-bank-current-value]').evaluate(el=>
     getComputedStyle(el).color),'rgb(35, 113, 74)',
     'Bank-reported current balance is green');
