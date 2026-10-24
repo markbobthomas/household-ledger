@@ -1171,14 +1171,23 @@ function schedulesPage(bundle,s){
   totalPeriod=scheduleTotalPeriod(s.asOf),tomorrow=shiftDay(s.asOf,1),
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
+ // Canonical prediction rows already include weekend-to-Friday posting,
+ // individual date overrides and skipped occurrences. Show their actual dates
+ // here; keep raw recurrence dates solely in the schedule-default editor.
+ const upcomingByRule=new Map();
+ for(const row of futureRows(bundle,s)){
+  if(row.recurringRuleId&&!upcomingByRule.has(String(row.recurringRuleId)))
+   upcomingByRule.set(String(row.recurringRuleId),row);
+ }
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>
   (scheduleAccount==='all'||[rule.accountId,rule.fromAccountId,rule.toAccountId]
    .some(id=>String(id||'')===scheduleAccount))&&
   (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter));
  const nextAmount=rule=>{
-  const first=T.recurrenceDates(rule,s.asOf,end)[0];
-  return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
+  const forecast=upcomingByRule.get(String(rule.id));
+  return forecast?Number(forecast.amount):
+   Number(rule.amount)||0;
  };
  visible.sort((a,b)=>scheduleSort==='value-desc'?
   nextAmount(b.rule)-nextAmount(a.rule)||a.index-b.index:
@@ -1202,7 +1211,10 @@ function schedulesPage(bundle,s){
    transactionDetail.id===r.id,
    isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
+   occurrence=upcomingByRule.get(String(r.id)),
+   effectiveNext=occurrence?.date||null,
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
+   shownAmount=occurrence?occurrence.amount:estimate.amount,
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
    wins=Array.isArray(r.amountWindows)?r.amountWindows:[];
   const edit=isEditing?'<form class="schedule-form" data-schedule-edit-form="'+id+'">'+
@@ -1229,7 +1241,7 @@ function schedulesPage(bundle,s){
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' schedule '+number+': '+title+'">'+
     '<span class="schedule-row-next ledger-row-date"><span>'+
-     (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
+     (effectiveNext?escapeHTML(dayLabel(effectiveNext)):'Not forecast')+'</span></span>'+
     '<span class="schedule-row-identity ledger-row-description recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
@@ -1237,7 +1249,7 @@ function schedulesPage(bundle,s){
       ' · '+escapeHTML(r.frequency)+' · '+(estimate.estimated?'Estimated':'Fixed')+
       '</small></span></span>'+
     '<span class="schedule-row-amount ledger-row-amount"><strong>'+
-     ledgerMoney(estimate.amount)+'</strong></span>'+
+     ledgerMoney(shownAmount)+'</strong></span>'+
     '<span class="schedule-row-chevron ledger-row-hint" aria-hidden="true">'+
      (isEditing?'⌃':'›')+'</span>'+
    '</button>'+
