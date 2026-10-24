@@ -2019,8 +2019,11 @@ document.addEventListener('click',async e=>{
    exampleIds=(rec.examples||[]).map(x=>String(x.id)),
    sourceRow=exampleIds.map(id=>rows.find(t=>String(t.id)===id)).find(Boolean),
    selected=exampleIds.filter(id=>rows.some(t=>String(t.id)===id)),
-   data={accountId:rec.accountId,type:rec.type,merchant:rec.merchant,amount:rec.amount,
-    frequency:rec.frequency||'monthly',date:rec.nextDate,category:rec.category||'Other'},
+   proposedDate=rec.nextDate||window.HouseholdPlannerHistory.nextDate(
+    sourceRow?.date||rec.lastDate,rec.frequency||'monthly',s.asOf)||shiftDay(s.asOf,30),
+   proposedAmount=Number(rec.amount)>0?rec.amount:Number(sourceRow?.amount||0),
+   data={accountId:rec.accountId,type:rec.type,merchant:rec.merchant,amount:proposedAmount,
+    frequency:rec.frequency||'monthly',date:proposedDate,category:rec.category||'Other'},
    reference={kind:'event',accountId:rec.accountId,type:sourceRow?.type||rec.type,
     merchant:rec.merchant,originalMerchant:rec.merchant,
     amount:rec.amount,date:sourceRow?.date||rec.nextDate,
@@ -2034,7 +2037,7 @@ document.addEventListener('click',async e=>{
   }catch(err){
    // If this source has multiple independent schedules or a date needs
    // attention, keep every recommendation and show editable defaults.
-   recurringDraft={...data,nextDate:rec.nextDate,sourceRow,
+   recurringDraft={...data,nextDate:proposedDate,sourceRow,
     originalType:sourceRow?.type||rec.type,examples:selected};
    reviewNotice='Please check the suggested schedule before saving: '+
     String(err.message||err);
