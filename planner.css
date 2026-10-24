@@ -1858,39 +1858,27 @@ html{scrollbar-gutter:stable}
  .history-page .history-decision{min-height:36px}
 }
 
-/* Bank activity: a single predictable two-state permission on every eligible
-   source row, separate from the saved repeating-plan editor. */
+/* Bank activity: one meaningful action for each forecast state.
+   Secondary exclusion/reversal is intentionally small, never another switch. */
 .history-page .history-explanation{
- margin:2px 0 12px;padding:11px 14px;background:#f5f7f4;border-radius:9px;
- font-size:12px;line-height:1.55;color:#4e6155;
+ margin:3px 0 12px;padding:0;background:transparent;border:0;
+ font-size:12px;line-height:1.5;color:var(--muted);
 }
-.history-page .history-explanation strong{color:#294c37}
-.history-page .history-auto-control{
- display:flex;align-items:center;gap:7px;justify-content:flex-end;
- white-space:nowrap;min-height:38px;
+.history-page .history-row-actions:empty{display:none}
+.history-page .history-secondary-action{
+ background:transparent;border:0;box-shadow:none;
+ color:#506d5b;font:inherit;font-size:11px;font-weight:650;
+ min-height:38px;min-width:74px;padding:6px 8px;
+ text-decoration:underline;text-underline-offset:3px;
 }
-.history-page .history-auto-label{font-size:11px;font-weight:700;color:#556c5e}
-.history-page .history-auto-options{
- display:inline-flex;gap:2px;border:1px solid #dce6dd;border-radius:7px;
- padding:2px;background:#f5f7f4;
+.history-page .history-secondary-action:hover,
+.history-page .history-secondary-action:focus-visible{
+ color:#1e593d;background:#eef4ee;outline-offset:1px;
 }
-.history-page .history-auto-options button{
- font-size:11px;line-height:1.2;font-weight:700;
- font-family:inherit;min-height:34px;min-width:39px;padding:6px 7px;
- border:0;border-radius:5px;background:transparent;
- color:#5e7365;cursor:pointer;
-}
-.history-page .history-auto-options button.selected{
- background:#234f3b;color:#fff;
-}
-.history-page .history-auto-options button:focus-visible{
- outline:2px solid #315e46;outline-offset:2px;
-}
-.history-page .history-auto-unavailable{font-size:11px;color:var(--muted)}
 @media(max-width:850px){
- .history-page .history-row-actions{
-  justify-content:flex-start;padding:0 4px 8px 60px;
+ .history-page .history-explanation{font-size:11px}
+ .history-page .history-row-actions:not(:empty){
+  grid-column:1 / -1;justify-content:flex-start;padding:0 4px 7px 60px;
  }
- .history-page .history-auto-control{justify-content:flex-start}
- .history-page .history-explanation{font-size:11px;padding:10px 12px}
+ .history-page .history-secondary-action{min-height:40px}
 }
