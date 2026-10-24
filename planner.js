@@ -1682,7 +1682,7 @@ function render(){
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
  const informational=!error&&!latestError&&!caution.length;
- $('planner-notice').innerHTML=informational||activeTab==='summary'&&!error&&!latestError?'':note;
+ $('planner-notice').innerHTML=informational?'':note;
  const finePrint=$('planner-fine-print');
  if(finePrint){
   finePrint.hidden=!informational;
