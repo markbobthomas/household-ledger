@@ -33,8 +33,8 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'history-forecast-actions-20261023-v1','The loaded HTML identifies the task-based UI release');
-   assert.match(await page.locator('#deployment-version').textContent(),/History Actions v1/,
+    'review-approved-repeats-20261023-v1','The loaded HTML identifies the task-based UI release');
+   assert.match(await page.locator('#deployment-version').textContent(),/Approved repeats v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
