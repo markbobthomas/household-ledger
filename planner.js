@@ -587,11 +587,8 @@ function editorFor(row,s,records,opts={}){
  return '<form class="future-edit-form" data-future-edit-form="'+escapeHTML(row.key)+'">'+keys+
   scope+
   '<div class="future-fields">'+fields+'</div>'+
-  '<p class="audit-footnote">'+(opts.oneOnly?
-    'You are editing one date within this payment plan. The repeating rule stays unchanged. ':
-    'You are editing a forecast, not a posted bank transaction. ')+
-   (isMovement?'Both linked accounts update together. ':'')+
-   'Actual bank transactions are never changed.</p>'+
+  '<p class="audit-footnote">Forecast only · Bank records unchanged.'+
+   (isMovement?' Both linked accounts update.':'')+'</p>'+
   '<div class="future-form-actions"><button class="btn primary" type="submit">Save changes</button>'+
    '<button class="btn" type="button" data-cancel-future>Cancel</button>'+
    (row.addedId?'<button class="btn" type="button" data-remove-added="'+escapeHTML(row.addedId)+'">Remove</button>':
@@ -999,7 +996,7 @@ function scheduleFields(r,isNew,s){
   '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
   '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+accountSelect(accounts,accountId,'accountId')+'</label>'+
   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From account'+accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
-  '</div><details class="schedule-advanced" data-schedule-advanced'+(transfer?' open':'')+'>'+
+  '</div><details class="schedule-advanced" data-schedule-advanced'+(transfer||r.frequency==='twice-monthly'?' open':'')+'>'+
   '<summary>More options</summary><div class="future-fields">'+
   (isNew?'<label>Type<select name="type" data-schedule-type>'+
    [['expense','Withdrawal'],['income','Deposit'],['refund','Refund'],['transfer','Linked transfer']].map(([v,name])=>
@@ -1295,8 +1292,7 @@ function schedulesPage(bundle,s){
     'Changing the repeating amount for all future payments will replace these older rules.</p>'+
     windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan recurrence-inline-detail" data-schedule-inline-plan="'+id+'">'+
-     recurringEditor('<p class="review-inline-guide">Changes to this schedule affect future repeating payments. To change one date, use Upcoming payments below.</p>'+
-      edit,'schedule')+
+     recurringEditor(edit,'schedule')+
      '<details class="schedule-occurrence-disclosure"><summary>Upcoming payments</summary>'+
       scheduleOccurrencesHtml(bundle,s,r)+'</details></div>':'')+'</div></article>';
  };
@@ -1841,7 +1837,7 @@ function upcomingCardBills(bundle,s){
     (p.estimated?' · Estimated':' · Entered statement')+'</small></div>'+
     '<strong>'+(p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>').join('')||
     '<p class="lead">No card statement forecasts are configured yet. Set up each card in Settings.</p>')+
-  '<p class="audit-footnote">The figure shown is the predicted withdrawal from checking, not a new purchase. Statement reconstruction may differ from issuer totals due to carried balances, fees, interest or missing activity.</p></section>';
+  '<p class="audit-footnote">Estimates may differ from issuer statements due to balances, fees or incomplete activity.</p></section>';
 }
 function overviewPage(bundle,s,chosen,derived,fresh){
  const series=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
