@@ -486,26 +486,48 @@ const recurringType=row=>row.kind==='movement'?'transfer':row.sourceType==='tran
 function isNotRecurring(preferences,accountId,type,merchant){
  return Boolean((preferences?.futureRecurrenceExclusions||{})[recurrenceKey(accountId,type,merchant)]);
 }
-/* Opt out of future automatic suggestions for a bank-history payee even when
- * the engine has not yet recognized any repeating payments. This must never
- * delete a confirmed independent schedule or mutate source bank history.
- * It is distinct from stopRecurrence, which removes an existing prediction. */
-function excludeHistorySuggestions(state,{accountId,type,merchant}={}){
+/* One consistent bank-history setting for account + cash direction + payee.
+ * ON means automatic discovery is permitted, not that a future payment is
+ * guaranteed. OFF blocks automatically inferred future payments, never
+ * existing saved plans or immutable posted records. A named historical
+ * transaction is not itself a predicted future transaction. */
+function historyAutoPredictionEnabled(preferences,accountId,type,merchant){
+ const aid=String(accountId||''),kind=String(type||''),name=sourceMerchant(merchant);
+ if(!aid||!kind||!name)return null;
+ const exclusions=preferences?.futureRecurrenceExclusions||{},
+  exact=recurrenceKey(aid,kind,merchant);
+ return !Object.entries(exclusions).some(([key,item])=>
+  key===exact||Boolean(item&&!item.manualRuleId&&
+   String(item.accountId)===aid&&String(item.type)===kind&&
+   sourceMerchant(item.merchant)===name));
+}
+function setHistoryAutoPrediction(state,{accountId,type,merchant}={},enabled=true){
  const aid=String(accountId||''),kind=String(type||''),name=String(merchant||'');
  if(!aid||!sourceMerchant(name)||!['expense','income','refund','transfer'].includes(kind))
-  throw Error('Choose a valid bank transaction to exclude');
- const prefs=state?.predictions||{};
- const related=(prefs.futureRecurringRules||[]).some(r=>
-  String(r.originalAccountId||r.accountId||r.fromAccountId||'')===aid&&
-  (r.kind==='movement'?'transfer':r.type)===kind&&
-  [r.originalMerchant,r.merchant,...(r.matchNames||[])].some(alias=>
-   sourceMerchant(alias)===sourceMerchant(name)));
- if(related)throw Error('This payee has a saved repeating plan. Open the plan to change it instead.');
- const key=recurrenceKey(aid,kind,name);
- const p=ensure(state);
- p.futureRecurrenceExclusions??={};
- p.futureRecurrenceExclusions[key]={accountId:aid,type:kind,merchant:name,historyOptOut:true};
- return {key,accountId:aid,type:kind,merchant:name};
+  throw Error('This bank payment has no usable payee, account, or direction');
+ const p=ensure(state),exclusions=p.futureRecurrenceExclusions??={},
+  exact=recurrenceKey(aid,kind,name);
+ if(enabled){
+  // Clear account/payee-wide, phase-specific, and automatically inferred
+  // exclusions together, including legacy variants. Never resurrect or
+  // remove any saved repeating rule; explicit plans are handled separately.
+  const keys=Object.entries(exclusions).filter(([key,item])=>
+   key===exact||Boolean(item&&!item.manualRuleId&&
+    String(item.accountId)===aid&&String(item.type)===kind&&
+    sourceMerchant(item.merchant)===sourceMerchant(name))).map(([key])=>key);
+  for(const key of keys)restoreRecurrence(state,key);
+  // A previous legacy decision may exist even without an exclusion entry.
+  // Its cleanup belongs to the same policy change, not to bank transaction data.
+  return {key:exact,enabled:true,cleared:keys.length};
+ }
+ // The single history policy is not a "delete schedule" action. In particular
+ // never touch two independent confirmed paychecks sharing this merchant.
+ exclusions[exact]={accountId:aid,type:kind,merchant:name,historyOptOut:true};
+ return {key:exact,enabled:false};
+}
+// Backward compatibility for existing calls/tests.
+function excludeHistorySuggestions(state,reference){
+ return setHistoryAutoPrediction(state,reference,false);
 }
 function restoreRecurrence(state,key){
  const p=ensure(state),entry=p.futureRecurrenceExclusions?.[key];
@@ -798,7 +820,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
  frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
- recurrenceKey,isNotRecurring,stopRecurrence,excludeHistorySuggestions,restoreRecurrence};
+ recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

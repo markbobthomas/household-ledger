@@ -98,7 +98,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  // A bank transaction already attached to the recurring plan is identified
  // as confirmed, without offering a duplicate-creation action.
  await click('[data-view]',{view:'history'});
- assert.match(future(),/Recurring confirmed/, 'Known bank payment remains identified as recurring');
+ assert.match(future(),/Repeating plan saved/, 'Known bank payment remains identified as recurring');
  assert.match(future(),/Edit plan/, 'Linked payment clearly opens its existing repeating plan');
  await click('[data-history-plan]',{
   historyPlan:'solo-bank-mortgage',historyAccount:'demo-checking'});
