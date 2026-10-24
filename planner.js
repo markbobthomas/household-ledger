@@ -12,7 +12,6 @@ const cash=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable'
 const dateToday=()=>new Date().toLocaleDateString('en-CA');
 const dayLabel=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
-const dayDelta=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
 const model=window.HouseholdLedgerData;
 const available=()=>Boolean(window.HouseholdLiveSource);
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
@@ -80,38 +79,6 @@ function isChecking(a){return accountType(a)==='cash'&&
 function freshness(a){const status=a.balanceStatus;return status==='fresh'||status==='simulated'}
 function sourceTag(){if(requestedReal()&&!live())return window.HouseholdLiveSource?.error?'REAL · UNAVAILABLE':'CONNECTING';return live()?'REAL BANK':'DEMO DATA'}
 function activeAccounts(s){return Array.isArray(s?.accounts)?s.accounts:[]}
-function recurringEvents(events,s){
- const accounts=activeAccounts(s),tools=window.HouseholdPlannerTransactions,
-  series=state().predictions?.futureSeriesEdits||{};
- const findAccount=raw=>{
-  const value=String(raw||'');
-  const options=accounts.filter(a=>[a.id,a.transactionAccount,a.name]
-   .some(alias=>String(alias||'')===value));
-  return options.length===1?String(options[0].id):value;
- };
- return (events||[]).map(e=>{
-  const originalAccount=findAccount(e.accountId||e.account),key=tools.seriesEvent(e,originalAccount);
-  return {...tools.applySeries(e,e.date,key,series),
-   _seriesKey:key,_seriesDate:e.date,_forecastOriginalAccountId:originalAccount,
-   _forecastOriginalMerchant:e.merchant,_forecastOriginalAmount:e.amount};
- });
-}
-function forecastForPayments(events,s,additions){
- const accounts=activeAccounts(s),edits=state().predictions?.futureTransactionEdits||{};
- const extras=additions||state().predictions?.futureTransactionAdds||[];
- const resolve=value=>{
-  const raw=String(value||'');
-  const match=accounts.filter(a=>String(a.id)===raw||String(a.name)===raw||
-   String(a.transactionAccount||'')===raw);
-  return match.length===1?String(match[0].id):raw;
- };
- const keyFor=e=>window.HouseholdPlannerTransactions.keyEvent(e.id,resolve(e.accountId||e.account));
- const amended=(events||[]).flatMap(e=>{
-  const edit=edits[keyFor(e)];
-  return edit?.skipped?[]:[edit?{...e,...edit}:e];
- });
- return [...amended,...extras.filter(e=>e.type!=='transfer')];
-}
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  const source=state(),prefs=source.predictions||{};
@@ -135,7 +102,7 @@ function forecastFor(s){
  forecastCache={source,transactions:source.transactions,signature,bundle};
  return bundle;
 }
-function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
+const shiftDay=window.HouseholdPlannerTransactions.shift;
 function selected(s){
  const all=activeAccounts(s),cashAccounts=all.filter(a=>accountType(a)==='cash');
  const chosen=all.find(a=>String(a.id)===String(selectedAccount));
