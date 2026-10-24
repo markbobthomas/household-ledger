@@ -41,7 +41,7 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
-let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
+let historyAccount='all',historySearch='',historySort='newest',historyLimit=90,recurringDraft=null,reviewNotice='';
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
@@ -1202,7 +1202,7 @@ function schedulesPage(bundle,s){
   '<button class="btn primary" type="button" data-schedule-new>+ Repeating payment</button></div>'+
   '<p class="page-task-hint">Repeating payments appear automatically on your Calendar. Select a payment to change the schedule or an upcoming date to edit just that payment.</p>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  '<div class="schedule-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
+  '<div class="schedule-toolbar ledger-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
    '" aria-label="Schedule organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
@@ -1328,6 +1328,19 @@ function historyPage(bundle,s){
   return [t.merchant,t.description,t.date,t.category,t.account,t.amount]
    .some(v=>String(v||'').toLowerCase().includes(historySearch.toLowerCase()));
  });
+ // Sort only the visible bank-history presentation after account/search filtering.
+ // No bank record, forecast, category override or scheduled cash flow changes.
+ const textOf=t=>String(t.merchant||t.description||'').toLocaleLowerCase(),
+  amountOf=t=>Math.abs(Number(t.amount)||0),
+  dateDesc=(a,b)=>String(b.date||'').localeCompare(String(a.date||''))||
+   String(b.id||'').localeCompare(String(a.id||''));
+ filtered.sort((a,b)=>historySort==='oldest'?-dateDesc(a,b):
+  historySort==='amount-desc'?amountOf(b)-amountOf(a)||dateDesc(a,b):
+  historySort==='amount-asc'?amountOf(a)-amountOf(b)||dateDesc(a,b):
+  historySort==='merchant'?textOf(a).localeCompare(textOf(b))||dateDesc(a,b):
+  historySort==='category'?String(a.category||'').localeCompare(String(b.category||''))||
+   textOf(a).localeCompare(textOf(b))||dateDesc(a,b):
+  dateDesc(a,b));
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
  const savedRules=state().predictions?.futureRecurringRules||[];
  const projections=futureRows(bundle,s);
@@ -1371,6 +1384,8 @@ function historyPage(bundle,s){
     editor+'</div>':'';
   return '<div class="history-entry" data-history-entry="'+escapeHTML(String(t.id))+'">'+
    '<div class="history-actual-row ledger-list-row recurrence-row" data-history-kind="'+escapeHTML(kind||'unknown')+
+   '" data-history-sort-date="'+escapeHTML(t.date)+
+   '" data-history-sort-amount="'+escapeHTML(String(Math.abs(Number(t.amount)||0)))+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
    '<button type="button" class="history-row-open ledger-row-open recurrence-row-trigger" data-historical-transaction="'+
@@ -1413,10 +1428,16 @@ function historyPage(bundle,s){
       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
-  '<form class="history-filters" data-history-filter>'+
+  '<form class="history-filters ledger-toolbar" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
-   '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
+   '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
+   '<label>Sort by<select name="historySort" data-history-sort>'+
+    [['newest','Newest first'],['oldest','Oldest first'],
+     ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
+     ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
+     '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
+      label+'</option>').join('')+'</select></label>'+
    '<button class="btn" type="submit">Search</button>'+
    (historySearch?'<button type="button" class="btn" data-clear-history-search>Clear</button>':'')+
    '</form><div class="history-list-surface"><p class="history-count">Showing '+visible.length+' of '+filtered.length+
@@ -2605,6 +2626,8 @@ document.addEventListener('submit',async e=>{
  const fields=Object.fromEntries(new FormData(form));
  historySearch=String(fields.search||'').trim().slice(0,100);
  historyAccount=String(fields.historyAccount||'all');
+ historySort=['newest','oldest','amount-desc','amount-asc','merchant','category']
+  .includes(fields.historySort)?fields.historySort:historySort;
  historyLimit=90;
  render();
 });
@@ -2964,6 +2987,17 @@ document.addEventListener('change',async e=>{
   if(single)single.hidden=transfer;
   updateHistoryLinks(form);
   return;
+ }
+ if(e.target.matches?.('[data-history-sort]')){
+  const next=e.target.value;
+  if(!['newest','oldest','amount-desc','amount-asc','merchant','category'].includes(next))return;
+  if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+   !window.confirm('Discard unsaved schedule changes to sort bank activity?')){
+   e.target.value=historySort;return;
+  }
+  historySort=next;historyLimit=90;
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
+  render();return;
  }
  if(e.target.name==='historyAccount'){
   historyAccount=e.target.value;historyLimit=90;render();return;
