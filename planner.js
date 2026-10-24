@@ -1664,7 +1664,14 @@ function render(){
  const statuses=projection?.diagnostics||{};
  const missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
   !window.HouseholdPaymentObligations.ready(state().predictions?.paymentRules?.[a.id],a,activeAccounts(s)));
+ const unsavedRepeats=(bundle?.recommendedRepeating||[]).filter(r=>
+  !(bundle?.rows||[]).some(t=>String(t.id)===(r.historicalIds||[])[0]&&
+   window.HouseholdPlannerTransactions.historicalScheduleMatches(
+    t,activeAccounts(s),state().predictions?.futureRecurringRules||[]).length));
  const caution=[
+  ...(unsavedRepeats.length?[
+   unsavedRepeats.length+' recurring payment pattern'+(unsavedRepeats.length===1?' is':'s are')+
+   ' awaiting your approval in Needs review. These estimated bills or deposits are NOT included in future balances until saved as repeating plans. Review before trusting the lowest balance.']:[]),
   ...(missingCards.length?['Credit-card payment schedule not set for '+missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.']:[]),
   ...((bundle?.payments?.warnings||[]).slice(0,3)),
   ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>
