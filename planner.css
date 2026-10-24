@@ -1932,3 +1932,133 @@ html{scrollbar-gutter:stable}
 @media(max-width:380px){
  .history-page .history-row-category{padding-left:4px}
 }
+
+/* Unified two-tab ledger rows: Bank activity is the compact visual baseline.
+   Identical date / identity / amount / action and category columns in both lists.
+   Details and remove controls remain separate from the clickable row. */
+.schedule-page .ledger-list-row,.history-page .ledger-list-row{
+ display:grid;grid-template-columns:minmax(0,1fr) 132px 36px;
+ align-items:center;column-gap:8px;row-gap:0;
+ min-height:54px;padding:0 5px;margin:0;
+ border-bottom:1px solid #edf1eb;background:transparent;
+}
+.schedule-page .ledger-list-row:last-child,.history-page .ledger-list-row:last-child{border-bottom:0}
+.schedule-page .ledger-row-open,.history-page .ledger-row-open{
+ display:grid;grid-template-columns:72px minmax(0,1fr) 105px 100px;
+ align-items:center;gap:12px;width:100%;min-width:0;
+ min-height:54px;padding:7px 4px;box-sizing:border-box;
+ border:0;background:transparent;border-radius:3px;
+ color:inherit;text-align:left;font-family:inherit;font-size:inherit;line-height:1.4;
+ cursor:pointer;
+}
+.schedule-page .ledger-row-open:hover,.history-page .ledger-row-open:hover,
+.schedule-page .ledger-row-open:focus-visible,.history-page .ledger-row-open:focus-visible{
+ background:#f5f8f3;
+}
+.schedule-page .ledger-row-date,.history-page .ledger-row-date{
+ display:block;min-width:0;white-space:nowrap;
+ font:600 11px/1.4 inherit;color:#718293;
+}
+.schedule-page .ledger-row-date>span{font-size:11px;color:#718293}
+.schedule-page .ledger-row-description,.history-page .ledger-row-description{min-width:0}
+.schedule-page .ledger-row-description strong,.history-page .ledger-row-description strong{
+ display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ font:650 13px/1.4 inherit;color:#233c2e;
+}
+.schedule-page .ledger-row-description small,.history-page .ledger-row-description small{
+ display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ color:#859588;font-size:11px;line-height:1.4;
+}
+.schedule-page .ledger-row-amount,.history-page .ledger-row-amount{
+ display:flex;align-items:center;justify-content:flex-end;min-width:0;
+ text-align:right;white-space:nowrap;font-family:inherit;font-weight:700;
+ font-size:13px;line-height:1.4;letter-spacing:0;font-variant-numeric:tabular-nums;
+}
+.schedule-page .ledger-row-amount strong{font:700 13px/1.4 inherit!important;color:#233c2e}
+.schedule-page .ledger-row-hint,.history-page .ledger-row-hint{
+ min-width:0;justify-self:end;text-align:right;
+ color:#506e5b;font:650 11px/1.4 inherit;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+ text-decoration:none;
+}
+.schedule-page .ledger-row-hint .schedule-edit-label{
+ display:inline;font-size:11px;font-weight:650;
+}
+.schedule-page .schedule-number{
+ width:20px;min-width:20px;height:auto;padding:0;
+ font:600 10px/1.4 inherit;color:#819286;
+ background:transparent;border:0;border-radius:0;
+}
+.schedule-page .schedule-row-title{gap:1px}
+.schedule-page .ledger-row-category-wrap,.history-page .ledger-row-category-wrap{
+ display:flex;align-items:center;min-width:0;min-height:40px;
+}
+.schedule-page .ledger-row-category,.history-page .ledger-row-category{
+ display:block;width:100%;max-width:none;min-width:0;
+ height:31px;min-height:31px;margin:0;padding:4px 7px;
+ border:1px solid transparent;border-radius:4px;
+ background:transparent;color:#4b6854;
+ font:650 11px/1.3 inherit;cursor:pointer;
+}
+.schedule-page .ledger-row-category:hover,.history-page .ledger-row-category:hover,
+.schedule-page .ledger-row-category:focus-visible,.history-page .ledger-row-category:focus-visible{
+ border-color:#d7e2d7;background:#fff;outline-offset:1px;
+}
+.history-page .ledger-row-menu-space{
+ display:block;width:36px;height:36px;pointer-events:none;
+}
+.schedule-page .schedule-more{width:36px;min-width:0}
+.schedule-page .schedule-more>summary{
+ min-height:36px;border:0;border-radius:4px;
+ color:#60776a;font-size:17px;
+}
+.schedule-page .schedule-more>summary:hover{background:#f1f6f1}
+.schedule-page .ledger-list-row .schedule-card-detail{grid-column:1/-1}
+@media(max-width:850px){
+ .schedule-page .ledger-list-row,.history-page .ledger-list-row{
+  grid-template-columns:minmax(0,1fr) 36px;column-gap:3px;
+  padding:0 3px 4px;min-height:76px;
+ }
+ .schedule-page .ledger-row-open,.history-page .ledger-row-open{
+  grid-column:1/-1;grid-row:1;
+  grid-template-columns:54px minmax(0,1fr) 82px 40px;
+  gap:7px;padding:7px 3px 2px;min-height:44px;
+ }
+ .schedule-page .ledger-row-date,.history-page .ledger-row-date{font-size:10px}
+ .schedule-page .ledger-row-date>span{font-size:10px}
+ .schedule-page .ledger-row-category-wrap,.history-page .ledger-row-category-wrap{
+  grid-column:1;grid-row:2;width:100%;min-height:32px;
+  padding-left:57px;box-sizing:border-box;
+ }
+ .schedule-page .ledger-row-category,.history-page .ledger-row-category{
+  width:min(205px,100%);height:29px;min-height:29px;
+  font-size:11px;padding:3px 6px;border:1px solid #e5ebe3;
+  border-radius:5px;
+ }
+ .schedule-page .schedule-more,.history-page .ledger-row-menu-space{
+  grid-column:2;grid-row:2;justify-self:end;
+  width:36px;height:32px;
+ }
+ .schedule-page .schedule-more>summary{min-height:32px}
+ .schedule-page .ledger-row-hint{font-size:0}
+ .schedule-page .ledger-row-hint .schedule-edit-label{font-size:10px}
+ .history-page .ledger-row-hint{font-size:0}
+ .history-page .ledger-row-hint::after{content:"›";font-size:16px}
+ .schedule-page .schedule-row-next{display:block!important}
+}
+@media(max-width:390px){
+ .schedule-page .ledger-row-open,.history-page .ledger-row-open{
+  grid-template-columns:48px minmax(0,1fr) 75px 33px;
+  gap:5px;
+ }
+ .schedule-page .ledger-row-category-wrap,.history-page .ledger-row-category-wrap{
+  padding-left:51px;
+ }
+ .schedule-page .ledger-row-amount,.history-page .ledger-row-amount{
+  font-size:12px;
+ }
+ .schedule-page .ledger-row-amount strong{font-size:12px!important}
+ .schedule-page .ledger-row-description strong,.history-page .ledger-row-description strong{
+  font-size:12px!important;
+ }
+}
