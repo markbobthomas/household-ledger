@@ -25,10 +25,14 @@ const history=[
 ];
 const find=(bundle,merchant)=>bundle.ledger.filter(e=>e.merchant===merchant);
 let b=C.materialize(snapshot,history,{},T,P,90);
-assert.deepEqual(find(b,'Mortgage ACH').map(x=>x.date),
- ['2026-11-15','2026-12-15','2027-01-15']);
-assert.deepEqual(find(b,'ABC Draft 984').map(x=>x.date),
- ['2026-11-09','2026-12-09','2027-01-09']);
+assert.equal(find(b,'Mortgage ACH').length,0,
+ 'Detected mortgages remain recommendations until the owner saves a schedule');
+assert.equal(find(b,'ABC Draft 984').length,0,
+ 'No inferred expense may enter the future ledger without approval');
+assert.ok(b.historyCandidates.some(p=>p.merchant==='Mortgage ACH'),
+ 'Potential mortgage stays in Recommended repeating for approval');
+assert.ok(b.historyCandidates.some(p=>p.merchant==='ABC Draft 984'),
+ 'Strong observed recurrence stays in Recommended repeating');
 assert.equal(find(b,'Safeway').length,0,
  'Shopping with just two monthly repeats must not automatically debit checking');
 assert.equal(find(b,'Transfer to Savings').length,0,
@@ -41,20 +45,14 @@ assert.equal(b.projection.accounts.find(a=>a.id==='visa').closing,600,
  'Unconfigured credit card keeps its bank-reported debt, but future charges are gated until setup');
 assert.ok(b.historyCandidates.some(x=>x.merchant==='Safeway'),
  'Low-confidence patterns go to Reviews');
-// Bank-history Auto-predict is a permission, not a manual recurring plan.
-const automaticPolicy={predictions:{}},originalHistory=JSON.stringify(history);
-assert.ok(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
- 'ABC Draft 984').length>0,'Fixture contains actual automatically inferred payment');
-T.setHistoryAutoPrediction(automaticPolicy,{
- accountId:'checking',type:'expense',merchant:'ABC Draft 984'},false);
-const offForecast=C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90);
-assert.equal(find(offForecast,'ABC Draft 984').length,0,
- 'Auto-predict Off removes engine-only future payments, not source History');
-assert.equal(JSON.stringify(history),originalHistory,'Auto-predict Off leaves posted bank data untouched');
-T.setHistoryAutoPrediction(automaticPolicy,{
+const historyUnchanged=JSON.stringify(history);
+const noApproval={predictions:{}};
+T.setHistoryAutoPrediction(noApproval,{
  accountId:'checking',type:'expense',merchant:'ABC Draft 984'},true);
-assert.ok(find(C.materialize(snapshot,history,automaticPolicy.predictions,T,P,90),
- 'ABC Draft 984').length>0,'Turning On permits eligible automatic series again');
+assert.equal(find(C.materialize(snapshot,history,noApproval.predictions,T,P,90),
+ 'ABC Draft 984').length,0,
+ 'Allowing detection does not create future payments: saving a schedule is required');
+assert.equal(JSON.stringify(history),historyUnchanged,'Source bank records remain immutable');
 const source=JSON.stringify(history);
 const bankCount=history.length;
 const state={predictions:{}};
@@ -164,6 +162,14 @@ assert.equal(T.historicalScheduleMatches(duplicatePay,accounts,[
  {...secondPay,frequency:'monthly',exampleIds:[]}]).length,2,
  'Ambiguous same-merchant history must never silently select a schedule');
 
+T.defineRecurring(state,{
+ date:'2026-11-09',merchant:'ABC Draft 984',amount:82.35,
+ type:'expense',accountId:'checking',frequency:'monthly'
+},accounts,snapshot.asOf,{
+ kind:'event',accountId:'checking',type:'expense',
+ merchant:'ABC Draft 984',amount:82.35,date:'2026-10-09'
+},history,['generic1','generic2']);
+b=C.materialize(snapshot,history,state.predictions,T,P,90);
 const generic=find(b,'ABC Draft 984')[0];
 T.saveEdit(state,T.keyEvent(generic.id,generic.accountId),{
  date:'2026-11-13',merchant:'ABC Draft 984',amount:88,type:'expense',
@@ -213,9 +219,10 @@ const twiceMonthly=[
  tx('t4','2026-10-15','Employer Payroll',1400,'income')
 ];
 const twice=C.materialize(snapshot,twiceMonthly,{},T,P,90);
-assert.deepEqual(find(twice,'Employer Payroll').slice(0,4).map(x=>x.date),
- ['2026-11-01','2026-11-15','2026-12-01','2026-12-15'],
- 'Twice-monthly payroll retains two calendar dates, never drifts biweekly');
+assert.equal(find(twice,'Employer Payroll').length,0,
+ 'Even strong detected payroll must be approved before it affects balances');
+assert.ok(twice.historyCandidates.some(p=>p.merchant==='Employer Payroll'),
+ 'Detected twice-monthly salary is prominently recommended');
 const historicalCardSettlements=[
  tx('cardpaid1','2026-09-10','Credit card payment',600),
  tx('cardpaid2','2026-10-10','Credit card payment',600)
@@ -265,4 +272,4 @@ try {
 } finally {
  if(priorTZ===undefined)delete process.env.TZ;else process.env.TZ=priorTZ;
 }
-console.log('PASS unified future ledger: automatic recurrence, reviews, immutable Plaid, owner overrides, one-time edits, linked transfers, cash/card balances, and autopay');
+console.log('PASS approved-schedule-only ledger, persistent recommendations, immutable Plaid, overrides, linked transfers and autopay');
