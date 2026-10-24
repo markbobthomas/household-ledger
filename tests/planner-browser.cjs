@@ -21,7 +21,7 @@ const {chromium,webkit}=require('playwright');
    if(!el)throw Error('Missing unified ledger element '+selector);
    const b=el.getBoundingClientRect();
    return {x:Math.round((b.left-root.left)*10)/10,y:Math.round((b.top-root.top)*10)/10,
-    width:b.width,height:b.height};
+    pageX:Math.round(b.left*10)/10,width:b.width,height:b.height};
   };
   const select=row.querySelector('.ledger-row-category'),
    name=row.querySelector('.ledger-row-description strong');
@@ -30,7 +30,7 @@ const {chromium,webkit}=require('playwright');
    ancestors.push({className:String(p.className),width:r.width,
     paddingLeft:cs.paddingLeft,paddingRight:cs.paddingRight});
   }
-  return {height:root.height,width:root.width,ancestors,button:rect('.ledger-row-open'),
+  return {height:root.height,width:root.width,left:root.left,ancestors,button:rect('.ledger-row-open'),
    date:rect('.ledger-row-date'),description:rect('.ledger-row-description'),
    amount:rect('.ledger-row-amount'),hint:rect('.ledger-row-hint'),
    category:rect('.ledger-row-category'),
@@ -490,6 +490,53 @@ const {chromium,webkit}=require('playwright');
     'Every bank-history row has one explicit accessible primary button');
    assert.equal(await page.locator('.history-actual-row button button').count(),0,
     'History rows contain no nested interactive elements');
+   const sort=page.locator('[data-history-sort]');
+   assert.equal(await sort.count(),1,'Bank activity has one Sort by selector alongside Account and Find');
+   assert.equal(await sort.inputValue(),'newest','Newest bank activity is the default');
+   const bankColumns=async()=>page.locator('.history-actual-row').evaluateAll(els=>
+    els.map(e=>({date:e.dataset.historySortDate,amount:Number(e.dataset.historySortAmount),
+     merchant:e.querySelector('.history-actual-description strong')?.textContent||'',
+     category:e.querySelector('.ledger-row-category')?.value||''})));
+   let ordered=await bankColumns();
+   assert.ok(ordered.length>20);
+   assert.deepEqual(ordered.map(x=>x.date),
+    [...ordered.map(x=>x.date)].sort().reverse(),
+    'Default bank history sorts latest to earliest');
+   await sort.selectOption('oldest');
+   ordered=await bankColumns();
+   assert.deepEqual(ordered.map(x=>x.date),
+    [...ordered.map(x=>x.date)].sort(),
+    'Oldest first sorts all bank records before applying the display limit');
+   await sort.selectOption('amount-desc');
+   ordered=await bankColumns();
+   assert.deepEqual(ordered.map(x=>x.amount),
+    [...ordered.map(x=>x.amount)].sort((a,b)=>b-a),
+    'Bank amount high-to-low compares absolute transaction amounts');
+   await sort.selectOption('amount-asc');
+   ordered=await bankColumns();
+   assert.deepEqual(ordered.map(x=>x.amount),
+    [...ordered.map(x=>x.amount)].sort((a,b)=>a-b));
+   await sort.selectOption('merchant');
+   ordered=await bankColumns();
+   assert.deepEqual(ordered.map(x=>x.merchant.toLocaleLowerCase()),
+    [...ordered.map(x=>x.merchant.toLocaleLowerCase())].sort((a,b)=>a.localeCompare(b)),
+    'Bank merchant sort follows displayed payee names');
+   await sort.selectOption('category');
+   ordered=await bankColumns();
+   assert.deepEqual(ordered.map(x=>x.category),
+    [...ordered.map(x=>x.category)].sort((a,b)=>a.localeCompare(b)),
+    'Bank category sorting uses the current category overrides');
+   await sort.selectOption('newest');
+   await page.locator('[data-history-filter] [name=search]').fill('Safeway');
+   await page.locator('[data-history-filter] button[type=submit]').click();
+   assert.ok(await page.locator('.history-actual-row').count()>0,
+    'Bank search remains available with Sort by');
+   assert.ok((await bankColumns()).every(x=>x.merchant.toLowerCase().includes('safeway')));
+   await page.locator('[data-history-sort]').selectOption('oldest');
+   assert.equal(await page.locator('[data-history-filter] [name=search]').inputValue(),'Safeway',
+    'Sort selection preserves active bank transaction search');
+   await page.locator('[data-clear-history-search]').click();
+   await page.locator('[data-history-sort]').selectOption('newest');
    const bankListRow=await rowLayout(page,'.history-page .ledger-list-row');
    assert.equal(await page.locator('.history-page .ledger-row-category').count(),
     await page.locator('.history-actual-row').count(),
@@ -913,9 +960,15 @@ const {chromium,webkit}=require('playwright');
     'Category dropdowns have identical visual styles across Bank activity and Repeating');
    assert.deepEqual(repeatingListRow.titleStyle,bankListRow.titleStyle,
     'Payment names have identical typography across Bank activity and Repeating');
+   assert.ok(Math.abs(repeatingListRow.left-bankListRow.left)<=2,
+    'The Bank activity and Repeating lists start at the same horizontal position');
+   assert.ok(Math.abs(repeatingListRow.width-bankListRow.width)<=2,
+    'The Bank activity and Repeating rows occupy the same available width');
    for(const field of ['date','description','amount','category']){
     assert.ok(Math.abs(repeatingListRow[field].x-bankListRow[field].x)<=2,
-     field+' aligns horizontally across Repeating and Bank activity: '+
+     field+' aligns relative to the row across Repeating and Bank activity');
+    assert.ok(Math.abs(repeatingListRow[field].pageX-bankListRow[field].pageX)<=2,
+     field+' stays aligned at the same viewport x-coordinate when switching tabs: '+
       JSON.stringify({bank:bankListRow,repeating:repeatingListRow}));
    }
    assert.ok(Math.abs(
