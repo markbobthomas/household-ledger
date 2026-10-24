@@ -23,7 +23,9 @@ Product priorities:
 
 **Banking safety:** Preserve the current GitHub, Plaid and private Render architecture. Actual source transactions/balances remain authoritative and unchanged by editable predictions. Do not use public fictional Demo data as if it were real bank data. This repository is public: do not put actual financial records, private amounts, authentication details, or private user messages in this ledger.
 
-## Current state (as verified October 22, 2026)
+## Current state (reviewed October 24, 2026)
+
+- **Phase 2 CI consolidation:** [PR #141](https://github.com/markbobthomas/household-ledger/pull/141) uses one required frozen financial/core suite and one conditionally run browser suite; no application behavior changes. See [CI_TEST_PLAN.md](CI_TEST_PLAN.md) and the latest verification entry below. Private Render revision unverified.
 
 - **2026-10-24 merged UI release:** [PR #119](https://github.com/markbobthomas/household-ledger/pull/119), verified squash merge `6fc5df7133e2432c4171c0137429016a23f91996`. **Needs review** now contains only still-unconfirmed recurring suggestions and a collapsed, reversible **Ignored** section; saved schedules remain on Repeating/Bank activity. Scanner filters routine shopping, recognizes credible repeating bills, variable-amount utilities, and separate payroll phases. Bank activity provides a direct per-row category dropdown using a protected private override. Final pilot safety and desktop Chromium/iPhone WebKit checks passed. **Private Render deployment unverified.**
 
@@ -798,3 +800,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Baseline reference:** [ARCHITECTURE_BASELINE.md](ARCHITECTURE_BASELINE.md), `tests/architecture-baseline.cjs`, and `tests/fixtures/architecture-golden.json`. Freeze outputs before simplifying runtime code; do not silently update golden expectations when a refactor fails.
 - **Deployment:** Private authenticated Render live SHA/status **not checked**. GitHub merge and passing tests are not a production deploy confirmation.
 - **Next action:** Phase 2 consolidate duplicated test invocations/workflows without removing safety assertions, then Phase 3 profile and optimize duplicate normalizations and matching while preserving golden parity.
+
+### 2026-10-24 — Phase 2: consolidated tests and conditional browser CI
+
+- **Goal:** Remove redundant background test execution, preserve all banking and forecast correctness protections, and leave end-user website behavior **identical**.
+- **Implementation:** [PR #141](https://github.com/markbobthomas/household-ledger/pull/141), branch `refactor/phase2-ci-consolidation-20261024`. Add `tests/ci-suite.cjs` as a single inventory/runner. Required `Real-account pilot safety checks` executes **45 distinct** nonbrowser scripts once (Phase 1 frozen 1,095-day fixture, existing banking/forecasting tests, parity, and six reconciliation assertions) instead of repeated lists in independent workflows. `Browser interaction test` retains its existing `smoke-test` job, runs the existing **two** Chromium/iPhone WebKit scripts for UI-relevant changes, and skips browser installation for docs-only or server-only changes; unknown change metadata fails safely by running. Remove redundant post-merge main push runs for browser, parity, and reconciliation; parity/reconciliation remain available manually. Legacy rebuild workflow reuses the same inventory, with its extra historical test.
+- **Preserved:** No original tests or assertions deleted; no HTML/CSS/application code or golden fixture changes; existing GitHub Pages publishing, Plaid/Render, encrypted private data and forecast storage unchanged. The Phase 1 performance profiler remains manually available but is no longer repeated on every PR.
+- **Checks:** Require PR's final core and desktop Chromium/iPhone WebKit runs to pass before merging. Final workflow IDs and merge SHA are recorded separately after verification. No production-speed or live deployment claim.
+- **Deployment / next:** Private authenticated Render running SHA still unverified. After CI-only Phase 2, begin Phase 3 internal performance/index/cache work while comparing exact frozen financial behavior.

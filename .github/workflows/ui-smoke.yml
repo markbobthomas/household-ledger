@@ -1,7 +1,5 @@
 name: Browser interaction test
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -16,54 +14,37 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Decide whether the website needs browser checks
+        id: changes
+        shell: bash
+        run: |
+          run_browser=false
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            run_browser=true
+          elif ! git rev-parse --verify -q 'HEAD^1' >/dev/null; then
+            # Missing diff metadata must never silently suppress UI tests.
+            run_browser=true
+          else
+            while IFS= read -r changed; do
+              case "$changed" in
+                index.html|modern.css|planner.css|demo-data.js|bank-feed.js|accounting.js|categorization.js|ledger-data.js|payment-obligations.js|planner*.js|pilot/data-source.js|tests/*browser.cjs|.github/workflows/ui-smoke.yml|tests/ci-suite.cjs)
+                  run_browser=true ;;
+              esac
+            done < <(git diff --name-only 'HEAD^1' HEAD)
+          fi
+          echo "browser=$run_browser" >> "$GITHUB_OUTPUT"
+          echo "Browser regression required: $run_browser"
       - uses: actions/setup-node@v4
+        if: steps.changes.outputs.browser == 'true'
         with:
           node-version: '22'
       - name: Install Chromium and iPhone WebKit
+        if: steps.changes.outputs.browser == 'true'
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium webkit
-      - name: Verify balance planner, bank data integrity and mobile layout
-        run: |
-          node tests/pilot-account-forecast-links-smoke.cjs
-          node tests/pilot-remove-account-smoke.cjs
-          node --check planner.js
-          node --check planner-backtest.js
-          node --check planner-transactions.js
-          node --check planner-summary.js
-          node --check planner-coverage.js
-          node --check account-forecast.js
-          node --check planner-intelligence.js
-          node tests/planner-integrity-smoke.cjs
-          node tests/planner-browser.cjs
-          node tests/pilot-remove-account-browser.cjs
-          node tests/planner-routine-smoke.cjs
-          node tests/planner-backtest-smoke.cjs
-          node tests/planner-transactions-smoke.cjs
-          node tests/planner-series-smoke.cjs
-          node tests/planner-recurring-confirmation-smoke.cjs
-          node tests/planner-merchant-streams-smoke.cjs
-          node tests/planner-recurring-collision-smoke.cjs
-          node tests/planner-independent-schedules-smoke.cjs
-          node tests/planner-card-estimate-smoke.cjs
-          node tests/planner-alternating-pay-smoke.cjs
-          node tests/planner-payroll-safety-smoke.cjs
-          node tests/planner-missing-mortgage-smoke.cjs
-          node tests/planner-history-smoke.cjs
-          node tests/planner-focused-review-smoke.cjs
-          node tests/history-any-recurring-smoke.cjs
-          node tests/planner-early-recurrence-smoke.cjs
-          node tests/recurrence-early-dedupe-smoke.cjs
-          node tests/planner-recurrence-integration-smoke.cjs
-          node tests/forecast-only-save-smoke.cjs
-          node tests/forecast-client-save-smoke.cjs
-          node tests/planner-income-smoke.cjs
-          node tests/payment-obligations-smoke.cjs
-          node tests/card-statement-cycles-smoke.cjs
-          node tests/card-setup-gate-smoke.cjs
-          node tests/planner-summary-smoke.cjs
-          node tests/planner-three-year-smoke.cjs
-          node tests/planner-schedule-categories-smoke.cjs
-          node tests/planner-posted-matching-smoke.cjs
-          node tests/planner-coverage-smoke.cjs
-          node tests/mortgage-prediction-smoke.cjs
+      - name: Verify desktop Chromium and iPhone WebKit interactions
+        if: steps.changes.outputs.browser == 'true'
+        run: node tests/ci-suite.cjs browser

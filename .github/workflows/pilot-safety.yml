@@ -10,12 +10,13 @@ permissions:
 jobs:
   pilot:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check active server and planner syntax
+      - name: Check active bank and planner syntax
         run: |
           node --check pilot/server.cjs
           node --check pilot/data-source.js
@@ -24,26 +25,17 @@ jobs:
           node --check payment-obligations.js
           node --check planner.js
           node --check planner-summary.js
+          node --check planner-backtest.js
+          node --check planner-coverage.js
+          node --check account-forecast.js
+          node --check planner-intelligence.js
+          node --check accounting.js
+          node --check ledger-data.js
+          node --check reviews.js
+          node --check categorization.js
+          node --check sandbox/server.cjs
+          node --check sandbox/sandbox-ui.js
+          node --check tests/ci-suite.cjs
           node --check tests/architecture-baseline.cjs
-      - name: Verify frozen fictional output and profile current pipeline
-        run: |
-          node tests/architecture-baseline.cjs
-          node tests/architecture-baseline.cjs --profile
-      - name: Test essential banking and forecasting behavior
-        run: |
-          node tests/pilot-security-smoke.cjs
-          node tests/pilot-plaid-flow.cjs
-          node tests/pilot-remove-account-smoke.cjs
-          node tests/planner-core-smoke.cjs
-          node tests/planner-schedule-only-smoke.cjs
-          node tests/planner-focused-review-smoke.cjs
-          node tests/planner-integrity-smoke.cjs
-          node tests/planner-recurrence-integration-smoke.cjs
-          node tests/planner-independent-schedules-smoke.cjs
-          node tests/planner-posted-matching-smoke.cjs
-          node tests/card-statement-cycles-smoke.cjs
-          node tests/card-setup-gate-smoke.cjs
-          node tests/planner-transactions-smoke.cjs
-          node tests/planner-summary-smoke.cjs
-          node tests/forecast-only-save-smoke.cjs
-          node tests/forecast-client-save-smoke.cjs
+      - name: Verify frozen output, banking safety, parity and reconciliation once
+        run: node tests/ci-suite.cjs core

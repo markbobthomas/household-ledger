@@ -1,11 +1,7 @@
 name: Demo versus Real capability audit
+# Manual deep check. The same parity assertion runs once in the required PR core suite.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-concurrency:
-  group: planner-parity-${{ github.ref }}
-  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -17,25 +13,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify same planner and forecast engine for Demo and Real
-        run: |
-          node --check planner.js
-          node --check planner-backtest.js
-          node --check planner-transactions.js
-          node --check account-forecast.js
-          node tests/planner-parity.cjs
-          node tests/card-statement-cycles-smoke.cjs
-          node tests/planner-routine-smoke.cjs
-          node tests/planner-backtest-smoke.cjs
-          node tests/planner-transactions-smoke.cjs
-          node tests/planner-series-smoke.cjs
-          node tests/planner-recurring-confirmation-smoke.cjs
-          node tests/planner-missing-mortgage-smoke.cjs
-          node tests/planner-history-smoke.cjs
-          node tests/history-any-recurring-smoke.cjs
-          node tests/planner-early-recurrence-smoke.cjs
-          node tests/recurrence-early-dedupe-smoke.cjs
-          node tests/planner-recurrence-integration-smoke.cjs
-          node tests/forecast-only-save-smoke.cjs
-          node tests/forecast-client-save-smoke.cjs
-          node tests/planner-income-smoke.cjs
+      - name: Check Demo/Real forecast parity
+        run: node tests/ci-suite.cjs parity
