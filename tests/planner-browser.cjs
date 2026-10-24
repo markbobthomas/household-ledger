@@ -209,8 +209,8 @@ const {chromium,webkit}=require('playwright');
     'No selected-day payments are invented on an empty starting day');
    assert.equal((await page.locator('.calendar-day-detail').innerText()).match(/No transactions predicted for this day/g)?.length,1,
     'Empty days show one plain-language status');
-   assert.equal(await page.locator('.calendar-day-detail .calendar-math').count(),0,
-    'No zero-only deposits and withdrawals on an empty day');
+   assert.equal(await page.locator('.calendar-day-detail [data-calendar-reconciliation]').count(),0,
+    'Empty days contain no invented opening-plus-transactions calculation');
    assert.equal(await page.locator('.calendar-day-detail .calendar-day-ending').count(),1,
     'Empty day still shows one closing balance at its bottom');
    assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
@@ -278,8 +278,24 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.calendar-day-detail > :last-child').getAttribute('class'),
     'calendar-math-total calendar-day-ending',
     'Ending balance is the LAST part of the day panel, after edit and add controls');
-   assert.equal(await page.locator('.calendar-day-detail .calendar-math').count(),1,
-    'Only days with transactions show a deposit and withdrawal reconciliation');
+   const recon=page.locator('.calendar-day-detail [data-calendar-reconciliation]');
+   assert.equal(await recon.count(),1,'Selected day uses one arithmetic trail');
+   assert.equal(await recon.locator('.calendar-day-opening').count(),1);
+   assert.equal(await recon.locator('.calendar-day-transactions .calendar-monthly-row').count(),
+    await selectedPayments.count(),'Every canonical movement has one signed editable row');
+   assert.equal(await page.locator('.calendar-day-detail .calendar-math').count(),0,
+    'No duplicated deposit/withdrawal aggregates appear above the transactions');
+   const equation=await recon.evaluate((element)=>{
+    const value=text=>Number(text.trim().replace(/[$,\\s]/g,'').replace('−','-'));
+    const start=value(element.querySelector('.calendar-day-opening strong').textContent),
+     movements=[...element.querySelectorAll('.calendar-day-transactions .calendar-monthly-row > strong')]
+      .map(el=>value(el.textContent)),
+     end=value(document.querySelector('.calendar-day-ending strong').textContent);
+    return {start,movements,end};
+   });
+   assert.equal(Math.round((equation.start+equation.movements.reduce((a,b)=>a+b,0))*100),
+    Math.round(equation.end*100),
+    'The single signed transaction list explains the exact same projected ending balance');
    await page.locator('[data-calendar-actual-day]').last().click();
    assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
@@ -962,8 +978,8 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#summary-account').selectOption(await checkingOption.getAttribute('value'));
    await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-day="2026-11-09"]').click();
-   assert.equal(await page.locator('.calendar-math').count(),0,
-    'No zero-only arithmetic before a forecast payment is added');
+   assert.equal(await page.locator('[data-calendar-reconciliation]').count(),0,
+    'No opening-balance equation is needed before a forecast payment is added');
    assert.equal(await page.locator('.calendar-day-ending').count(),1);
    await page.locator('[data-calendar-add]').click();
    const quick=page.locator('[data-calendar-quick-form]');
@@ -972,10 +988,14 @@ const {chromium,webkit}=require('playwright');
    await quick.locator('[name=amount]').fill('25');
    await quick.locator('button[type=submit]').click();
    await page.locator('.calendar-day-transactions .calendar-detail-item').filter({hasText:'Playground one-time expense'}).waitFor();
-   assert.match(await page.locator('.calendar-math').innerText(),/Yesterday/);
-   assert.match(await page.locator('.calendar-math').innerText(),/Withdrawals/);
-   assert.equal(await page.locator('.calendar-math').getByText('Deposits').count(),0,
-    'There is no empty deposit row for an expense-only day');
+   assert.match(await page.locator('.calendar-day-opening').innerText(),/Yesterday/);
+   assert.equal(await page.locator('.calendar-day-opening strong').count(),1);
+   assert.equal(await page.locator('.calendar-day-transactions .calendar-monthly-row > strong').count(),1,
+    'The expense is shown once, with its name and editable amount in one row');
+   assert.match(await page.locator('.calendar-day-transactions .calendar-monthly-row > strong').innerText(),
+    /−\\$25\\.00/,'The transaction list itself supplies the debit needed to explain the daily total');
+   assert.equal(await page.locator('.calendar-math').count(),0,
+    'No additional withdrawals/deposits subtotal repeats the selected transaction amount');
    assert.equal(await page.locator('.calendar-day-detail > :last-child').getAttribute('class'),
     'calendar-math-total calendar-day-ending',
     'Single ending balance remains at bottom after adding a transaction');
