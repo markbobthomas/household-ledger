@@ -5,7 +5,15 @@
 let series=[],trendSeries=[],selected=0,trendDays=1095,trendContext=null;
 const range=(n,a,b)=>Math.max(a,Math.min(b,n));
 const plotWidth=920,plotLeft=20,plotRight=900,top=18,bottom=274;
-const alertThreshold=prefs=>{const value=Number(prefs?.lowAlertThreshold);return prefs?.lowAlertThreshold!=null&&Number.isFinite(value)&&value>=0?value:6000};
+// One warning limit for low-balance styling, cushion flags and settings.
+ // New canonical setting wins; honor an older custom red limit on migration.
+ const alertThreshold=prefs=>{
+  for(const value of [prefs?.warnBelow,prefs?.lowAlertThreshold,prefs?.cashCushion]){
+   if(value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))&&Number(value)>=0)
+    return Number(value);
+  }
+  return 500;
+ };
 const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unverified';
 const dateLabel=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 const shortDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
@@ -594,7 +602,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],
   paymentDetails:bundle?.payments?.paymentDetails||[],
-  cushion:Number(prefs?.cashCushion??500),accounts,
+  cushion:alertThreshold(prefs),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
    series.at(-1).date,chosen.id,series):new Map()};
@@ -638,7 +646,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   locate=i=>[x(i).toFixed(2),y(vals[i]).toFixed(2)];
  const path=series.map((p,i)=>{const [a,b]=locate(i);return (i?'L':'M')+a+' '+b}).join(' ');
  const lowIndex=vals.indexOf(low),first=series[0],last=series.at(-1),lowDay=series[lowIndex],
-  cushion=Number(prefs?.cashCushion??500),below=!credit&&low<cushion,
+  cushion=alertThreshold(prefs),below=!credit&&low<cushion,
   negative=!credit&&low<0;
  selected=lowIndex;
  const pin=locate(lowIndex),
@@ -664,7 +672,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
     '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
     '">'+esc(dateLabel(lowDay.date))+' →</button>'+
     (negative?'<small class="summary-low-warning">Below $0</small>':
-     below?'<small class="summary-low-warning">Below your cash cushion</small>':'')+
+     below?'<small class="summary-low-warning">Below warning threshold</small>':'')+
     '</div>')+'</div>'+
     calendarGrid()+'</section>'+
   '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
