@@ -925,8 +925,8 @@ const {chromium,webkit}=require('playwright');
    const fourWeekRows=page.locator('.future-item').filter({hasText:'Every 4 weeks test payment'});
    assert.ok(await fourWeekRows.count()>=35,'Four-week plan reaches well into the third year');
    assert.deepEqual((await fourWeekRows.locator('.future-date').allInnerTexts()).slice(0,3),
-    ['Nov 1','Nov 29','Dec 27'],
-    'The actual future ledger moves forward 28 days per occurrence, rather than on calendar months');
+    ['Oct 30','Nov 27','Dec 25'],
+    'Each four-week Sunday anchor independently settles on the preceding Friday, 28 days apart');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
     .futureRecurringRules?.some(x=>x.merchant==='Every 4 weeks test payment'&&x.frequency==='every-4-weeks')),
     'Every-four-weeks schedules persist as one confirmed recurrence');
