@@ -1239,11 +1239,14 @@ const {chromium,webkit}=require('playwright');
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
   await go('transactions');
-  const predictedMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
-  assert.ok(await predictedMortgage.count()>=1,
-   'One strongly identified actual $2,000 mortgage is forecast automatically without three months');
-  const predictedDatesBefore=await predictedMortgage.count();
-  assert.equal(predictedDatesBefore,36,'Automatic mortgage estimate repeats throughout the three-year modeled period');
+  const pendingMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
+  assert.equal(await pendingMortgage.count(),0,
+   'A single recognized mortgage is recommended, never forecast without owner Yes');
+  await go('reviews');
+  const unapprovedMortgage=page.locator('[aria-label="Recommended repeating"]')
+   .locator('[data-repeat-recommendation]').filter({hasText:'Mortgage Servicer X'}).first();
+  assert.equal(await unapprovedMortgage.getAttribute('data-recommendation-status'),'recommended');
+  assert.equal(await unapprovedMortgage.locator('[data-recommended-yes]').count(),1);
   await go('history');
   const actualMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage Servicer X'}).first();
   await actualMortgage.click();
@@ -1273,18 +1276,15 @@ const {chromium,webkit}=require('playwright');
   assert.match(await singleMortgage.first().innerText(),/Nov 25/,
    'Owner-selected mortgage date takes priority over the historical posting day');
   await go('history');
-  await page.locator('.history-actual-row').filter({hasText:'Storage Unit Monthly'})
-   .first().click();
-  const storageForm=page.locator('.history-schedule-form');
-  assert.equal(await storageForm.locator('[name=amount]').inputValue(),'79');
-  assert.equal(await storageForm.locator('[name=accountId]').inputValue(),'checking-real');
-  assert.equal(await storageForm.locator('[name=frequency]').inputValue(),'monthly');
-  await storageForm.locator('button[type=submit]').click();
-  await page.locator('.history-actual-row').filter({hasText:'Storage Unit Monthly'})
-   .first().locator('.history-actual-description').getByText('Repeating plan saved',{exact:false}).waitFor();
+  const savedStorage=page.locator('.history-actual-row').filter({hasText:'Storage Unit Monthly'}).first();
+  assert.match(await savedStorage.innerText(),/Repeating plan saved/);
+  assert.match(await savedStorage.locator('.history-row-open').innerText(),/Edit plan/,
+   'Already-approved storage candidate does not create a second schedule');
+  assert.equal(await page.locator('[data-history-auto-prediction]').count(),0,
+   'No automatic recurrence editor remains beside the saved plan');
   assert.ok(writes.some(x=>x.predictions?.futureRecurringRules?.some(r=>
    r.merchant==='Storage Unit Monthly'&&r.amount===79&&r.accountId==='checking-real')),
-   'Low-confidence candidate becomes a saved private rule only after approval');
+   'Review approval previously created one saved private storage rule');
   const storage=await page.evaluate(()=>({...localStorage}));
   assert.equal(Object.keys(storage).some(k=>JSON.stringify(storage[k]).includes('mort-4')),false,
    'Raw Real bank transactions are not written to localStorage');
