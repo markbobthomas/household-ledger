@@ -341,11 +341,54 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 3 years/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
-   await go('reviews');
+   await go('history'); // Unlike Calendar, history displays the global forecast caution.
+   const migrationBanner=page.locator('#planner-notice');
+   const countMatch=(await migrationBanner.innerText()).match(/(\d+) unsaved automatic repeating estimate/);
+   if(countMatch)await migrationBanner.locator('[data-view="reviews"]').click();
+   else await go('reviews');
+   const legacySection=page.locator('[data-active-legacy-estimates]');
+   const legacyRows=legacySection.locator('[data-legacy-estimate]');
+   const expectedLegacy=Number(countMatch?.[1]||0);
+   assert.equal(await legacyRows.count(),expectedLegacy,
+    'Every unsaved automatic estimate named in the global warning gets its own visible review row');
+   if(expectedLegacy){
+    assert.equal(await legacySection.locator('[data-legacy-estimate-count]').innerText(),
+     expectedLegacy+' UNSAVED','Highlighted section count is the active forecast count');
+    assert.equal(await page.locator('.reviews-page > section.panel').first().getAttribute(
+     'data-active-legacy-estimates'),'',
+     'Active automatic forecasts are the first section in Needs review');
+    const ids=await legacyRows.evaluateAll(nodes=>nodes.map(el=>el.dataset.legacyEstimate));
+    assert.equal(new Set(ids).size,expectedLegacy,
+     'Each row identifies one distinct cash movement stream rather than duplicating a merchant');
+    assert.ok((await legacySection.locator('.legacy-estimate-state').first().innerText())
+     .includes('forecast'),'The row explicitly explains the balance impact');
+    const warningColor=await legacySection.locator('.legacy-estimate-count').first()
+     .evaluate(el=>getComputedStyle(el).color);
+    const channels=(warningColor.match(/\d+/g)||[]).map(Number);
+    assert.ok(channels.length>=3&&channels[0]>channels[1]*1.5&&
+     channels[0]>channels[2]*1.5,
+     'Count receives visible red emphasis with the existing app theme: '+warningColor);
+    const first=legacyRows.first(),countBefore=await legacyRows.count();
+    if(await first.getAttribute('data-recommendation-status')==='pending'){
+     await first.locator('[data-ignore-recommendation]').click();
+     assert.equal(await legacyRows.count(),countBefore,
+      'Ignoring an already forecasted item never hides it from the active-cash inventory');
+     assert.equal(await page.locator('[data-legacy-estimate="'+ids[0]+'"]').getAttribute(
+      'data-recommendation-status'),'ignored',
+      'Ignored legacy forecast still carries an explicit visible status');
+     await page.locator('[data-legacy-estimate="'+ids[0]+'"] [data-unignore-recommendation]').click();
+    }
+   }
    const repeatingSection=page.locator('[data-recommended-repeating]');
+   assert.equal(await repeatingSection.locator('[data-legacy-active="true"]').count(),0,
+    'Existing automatic estimates are never mixed with speculative recurring suggestions');
    assert.equal(await repeatingSection.count(),1,'Recommended repeating is always a dedicated Review section');
    const originalRecommendations=await repeatingSection.locator('[data-recommended-repeat]').count();
-   assert.ok(originalRecommendations>0,'Existing bank history produces recurring candidates');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="ignored"]').count(),0,
+    'Only unreviewed non-legacy suggestions belong in the general queue');
+   assert.equal(await repeatingSection.locator('[data-recommendation-status="scheduled"]').count(),0,
+    'Already saved schedules do not appear as new suggestions');
+   if(originalRecommendations){
    const suggestion=repeatingSection.locator('[data-recommendation-status="pending"]').first();
    assert.ok(await suggestion.count()>0,'An unconfirmed recommendation can be reviewed');
    assert.equal(await repeatingSection.locator('[data-recommendation-status="ignored"]').count(),0,
@@ -388,6 +431,18 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await recommendedDraft.locator('[name=frequency]').inputValue());
    assert.ok(Number(await recommendedDraft.locator('[name=amount]').inputValue())>0);
    await page.locator('[data-cancel-review-form]').click();
+
+   }else{
+    // Every recurring candidate in this fixture may already be an automatic
+    // forecast; absence of optional extras is NOT a failure.
+    assert.ok(expectedLegacy>0,'Active legacy streams are shown even if there are no other suggestions');
+    await legacyRows.first().locator('[data-review-recommendation]').click();
+    const draft=page.locator('.history-schedule-form');
+    assert.equal(await draft.count(),1,'Specific automatic estimate opens an editable schedule proposal');
+    assert.ok(await draft.locator('[name=merchant]').inputValue());
+    assert.ok(Number(await draft.locator('[name=amount]').inputValue())>0);
+    await page.locator('[data-cancel-review-form]').click();
+   }
    await go('history');
    await go('history');
    assert.equal(await page.locator('.history-page > .page-heading').count(),0,
