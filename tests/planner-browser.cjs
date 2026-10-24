@@ -211,6 +211,8 @@ const {chromium,webkit}=require('playwright');
     'Empty days show one plain-language status');
    assert.equal(await page.locator('.calendar-day-detail [data-calendar-reconciliation]').count(),0,
     'Empty days contain no invented opening-plus-transactions calculation');
+   assert.equal(await page.locator('[data-calendar-net-change]').count(),0,
+    'Days without transactions do not show a misleading zero subtotal');
    assert.equal(await page.locator('.calendar-day-detail .calendar-day-ending').count(),1,
     'Empty day still shows one closing balance at its bottom');
    assert.ok(!(await page.locator('.calendar-monthly-list > summary').innerText()).includes('Expand'),
@@ -293,9 +295,20 @@ const {chromium,webkit}=require('playwright');
      end=value(document.querySelector('.calendar-day-ending strong').textContent);
     return {start,movements,end};
    });
-   assert.equal(Math.round((equation.start+equation.movements.reduce((a,b)=>a+b,0))*100),
+   const expectedCents=Math.round(equation.movements.reduce((a,b)=>a+b,0)*100),
+    netCents=Number(await recon.locator('[data-calendar-net-change]').getAttribute('data-net-cents'));
+   assert.equal(await recon.locator('[data-calendar-net-change]').count(),1,
+    'There is exactly one net-change subtotal below all editable transactions');
+   assert.equal(await recon.locator('[data-calendar-net-change]').innerText().then(x=>x.split('\n')[0]),
+    'Total change');
+   assert.equal(netCents,expectedCents,'Subtotal equals the exact signed line-item sum');
+   assert.equal(Math.round(equation.start*100)+netCents,
     Math.round(equation.end*100),
-    'The single signed transaction list explains the exact same projected ending balance');
+    'Previous balance plus net change explains the canonical closing balance');
+   assert.equal(await recon.locator('[data-calendar-net-change]').evaluate(el=>
+    el.compareDocumentPosition(el.parentElement.querySelector('.calendar-day-transactions'))&
+     Node.DOCUMENT_POSITION_PRECEDING),Node.DOCUMENT_POSITION_PRECEDING,
+    'Subtotal appears below the transaction rows, not before them');
    await page.locator('[data-calendar-actual-day]').last().click();
    assert.match(await page.locator('.calendar-day-detail').innerText(),/BANK HISTORY · NOT A PREDICTION/);
    assert.equal(await page.locator('.calendar-monthly-list[open]').count(),0,
@@ -980,6 +993,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-calendar-day="2026-11-09"]').click();
    assert.equal(await page.locator('[data-calendar-reconciliation]').count(),0,
     'No opening-balance equation is needed before a forecast payment is added');
+   assert.equal(await page.locator('[data-calendar-net-change]').count(),0);
    assert.equal(await page.locator('.calendar-day-ending').count(),1);
    await page.locator('[data-calendar-add]').click();
    const quick=page.locator('[data-calendar-quick-form]');
@@ -996,6 +1010,10 @@ const {chromium,webkit}=require('playwright');
     /−\$25\.00/,'The transaction list itself supplies the debit needed to explain the daily total');
    assert.equal(await page.locator('.calendar-math').count(),0,
     'No additional withdrawals/deposits subtotal repeats the selected transaction amount');
+   assert.equal(await page.locator('[data-calendar-net-change]').getAttribute('data-net-cents'),'-2500',
+    'An expense produces one net transaction subtotal of negative $25');
+   assert.equal((await page.locator('[data-calendar-net-change] strong').innerText()).trim(),
+    '−$25.00');
    assert.equal(await page.locator('.calendar-day-detail > :last-child').getAttribute('class'),
     'calendar-math-total calendar-day-ending',
     'Single ending balance remains at bottom after adding a transaction');
@@ -1011,6 +1029,8 @@ const {chromium,webkit}=require('playwright');
    await universal.locator('button[type=submit]').click();
    assert.match(await page.locator('.calendar-day-transactions .calendar-detail-item')
     .filter({hasText:'Playground one-time expense'}).innerText(),/\$40\.00/);
+   assert.equal(await page.locator('[data-calendar-net-change]').getAttribute('data-net-cents'),'-4000',
+    'Editing the occurrence immediately updates the net-change sum');
    await page.reload({waitUntil:'load'});
    assert.equal(await page.locator('[data-calendar-first-tip]').count(),0,
     'Dismissed first-use guidance stays dismissed after a reload');
