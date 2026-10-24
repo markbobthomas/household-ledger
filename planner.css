@@ -2451,7 +2451,7 @@ html{scrollbar-gutter:stable}
  grid-template-columns:12px 10px minmax(0,1fr);
  align-items:center;
  white-space:nowrap;
- font:700 13px/1.4 inherit;
+ font-family:inherit;font-size:13px;font-weight:700;line-height:1.4;
  font-variant-numeric:tabular-nums;
 }
 .schedule-page .ledger-money-sign,.history-page .ledger-money-sign{
