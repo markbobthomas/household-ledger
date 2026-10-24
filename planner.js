@@ -1947,7 +1947,11 @@ function render(){
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
  const informational=!error&&!latestError&&!caution.length;
- $('planner-notice').innerHTML=informational||activeTab==='summary'&&!error&&!latestError?'':note;
+ // Bank-auth errors take priority over prediction warnings and remain visible
+ // on Calendar, Repeating and Bank activity until a successful bank refresh.
+ const bankWarning=window.HouseholdLiveSource?.warningBanner?.()||'';
+ $('planner-notice').innerHTML=bankWarning||
+  (informational||activeTab==='summary'&&!error&&!latestError?'':note);
  const finePrint=$('planner-fine-print');
  if(finePrint){
   finePrint.hidden=!informational;
