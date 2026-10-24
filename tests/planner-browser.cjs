@@ -1189,10 +1189,11 @@ const {chromium,webkit}=require('playwright');
   assert.ok(writes.some(x=>Object.values(x.predictions?.futureSeriesEdits||{})
    .some(v=>v.amount===1275)),'Recurring card payments persist only as private adjustments; recent forecast save: '+JSON.stringify(writes.at(-1)?.predictions?.futureRecurringRules?.slice(-1)||writes.at(-1)?.predictions?.futureSeriesEdits||{}).slice(0,750));
   const recurringCardRows=page.locator('.future-item').filter({hasText:'Credit-card payment'});
-  assert.ok(await recurringCardRows.count()>=2,'Two future card cycles are visible');
+  assert.ok(await recurringCardRows.count()>=1,
+   'Known credit-card payment remains visible, without inventing future unapproved card charges');
   const matchingAmounts=await recurringCardRows.locator('.future-amount').allInnerTexts();
   assert.ok(matchingAmounts.every(t=>t.includes('$1,275')),
-   'Both checking-to-card transfers use the new recurring payment amount');
+   'Every currently projected checking-to-card settlement uses the confirmed edited amount');
   await page.locator('[data-show-new]').click();
   await page.locator('#future-new-form [name=merchant]').fill('One-time plumbing');
   await page.locator('#future-new-form [name=amount]').fill('175');
