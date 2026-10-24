@@ -29,6 +29,11 @@ const signature=(accountId,type,merchant)=>[accountId,type,norm(merchant)].map(e
 const isExcludedPattern=(prefs,accountId,type,merchant)=>Boolean(
  prefs?.futureRecurrenceExclusions?.[signature(accountId,type,merchant)]);
 const suppressedRecurrence=(prefs,e)=>{
+ // History Auto-predict OFF never suppresses a separately confirmed schedule.
+ // Old manual "not recurring" exclusions continue to govern deleted plans,
+ // but a historyOptOut applies only to engine-inferred future payments.
+ if(e.source==='user-recurring'||e.ruleId||
+  String(e._seriesKey||'').startsWith('user-series|'))return false;
  // Removing a mistaken inferred income series must not hide owner-confirmed
  // schedules with the same employer, account and cash direction.
  if(e.source==='historical'&&e._seriesKey&&
@@ -237,9 +242,14 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90){
    (prefs.paymentRules||{})[String(id)],account,accounts));
  };
  const detected=analyze(rows,accounts,asOf,prefs,days),
-  rules=(prefs.futureRecurringRules||[]).filter(r=>!isExcludedPattern(prefs,
-   r.originalAccountId||r.accountId||r.fromAccountId,
-   r.kind==='movement'?'transfer':r.type,r.originalMerchant||r.merchant)),
+  rules=(prefs.futureRecurringRules||[]).filter(r=>{
+   const account=r.originalAccountId||r.accountId||r.fromAccountId,
+    kind=r.kind==='movement'?'transfer':r.type,merchant=r.originalMerchant||r.merchant,
+    block=prefs.futureRecurrenceExclusions?.[signature(account,kind,merchant)];
+   // An opt-out from *automatic* forecasting must not discard an explicitly
+   // confirmed plan, even with the same payee/account/direction.
+   return !block||Boolean(block.historyOptOut);
+  }),
   series=prefs.futureSeriesEdits||{},edits=prefs.futureTransactionEdits||{},
   extras=prefs.futureTransactionAdds||[],entries=[],ids=new Set(),checks=[],warnings=[];
  const seen=(e)=>{if(ids.has(e.id)){checks.push({id:e.id,reason:'Duplicate future ledger ID'});return}
