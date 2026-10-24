@@ -24,6 +24,8 @@ try{
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold',
     'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
+  if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
+   demoState.categoryOverrides=saved.categoryOverrides;
  }
 }catch{}
 const horizon=1095; // Three-year modeled floor. No user-selectable time windows.
@@ -57,7 +59,8 @@ function savePlanning(){
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
-    recurringForecastMode:p.recurringForecastMode}));
+    recurringForecastMode:p.recurringForecastMode,
+    categoryOverrides:demoState.categoryOverrides||{}}));
   return true;
  }
 }
@@ -1288,7 +1291,8 @@ function repeatingReviewForm(s){
   '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
 }
 function historyPage(bundle,s){
- const accounts=activeAccounts(s),records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
+ const accounts=activeAccounts(s),categories=model.categories(state()),
+  records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
   .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
  const filtered=records.filter(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
@@ -1331,7 +1335,12 @@ function historyPage(bundle,s){
    '<strong class="history-actual-amount '+(incoming?'incoming':'outgoing')+'">'+
     (incoming?'+':'−')+cash(t.amount)+'</strong>'+
    '<span class="history-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
-   '</div>';
+   '<label class="history-row-category"><span>Category</span><select data-history-category="'+
+    escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
+    ' on '+escapeHTML(t.date)+'">'+
+    categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
+     (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+   '</select></label></div>';
  }).join('');
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
@@ -1339,6 +1348,17 @@ function historyPage(bundle,s){
   '<p class="page-task-hint history-explanation">Bank activity stays here. Saved repeating plans take priority. '+
   'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
   'older patterns in Needs review. New repeating payments require a saved schedule.</p>'+
+  ((bundle?.postedMatchReview||[]).length?
+   '<section class="panel" data-posted-match-review><strong>Confirm which schedule was paid</strong>'+
+   '<p class="lead">These actual bank payments could match more than one planned bill. Choose the matching plan once to prevent double counting.</p>'+
+   bundle.postedMatchReview.map(row=>'<div class="review-candidate">'+
+    '<div class="review-candidate-main"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+    '<small>'+escapeHTML(dayLabel(row.date))+' · '+cash(row.amount)+'</small></div>'+
+    '<div class="review-candidate-actions">'+row.candidates.map(c=>
+     '<button type="button" class="btn" data-posted-match-bank="'+escapeHTML(row.bankId)+
+      '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
+      '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
+    '</div></div>').join('')+'</section>':'')+
   '<form class="history-filters" data-history-filter>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    '<label>Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -2651,6 +2671,36 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',async e=>{
+ const historyCategory=e.target.closest?.('[data-history-category]');
+ if(historyCategory){
+  const id=historyCategory.dataset.historyCategory,
+   current=(state().transactions||[]).find(t=>String(t.id)===String(id)),
+   originalCategory=current?model.categoryFor(state(),id):null,
+   previous=JSON.stringify(state().categoryOverrides||{});
+  if(!current||!originalCategory){historyCategory.value=originalCategory||'Other';return}
+  if(historyCategory.value===originalCategory)return;
+  historyCategory.disabled=true;
+  try{
+   // Only the local classification overlay changes; immutable Plaid history
+   // and forecast rules are neither edited nor uploaded.
+   model.setCategory(state(),id,historyCategory.value);
+   const saved=live()?
+    await window.HouseholdLiveSource.persistCategory(id,state().categoryOverrides?.[id]??null):
+    savePlanning();
+   if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
+   reviewNotice='';latestError='';render();
+   document.querySelectorAll('[data-history-category]').forEach(select=>{
+    if(select.dataset.historyCategory===id)select.focus({preventScroll:true});
+   });
+  }catch(err){
+   state().categoryOverrides=JSON.parse(previous);
+   historyCategory.disabled=false;historyCategory.value=originalCategory;
+   const alert=document.createElement('span');alert.className='history-category-error';
+   alert.setAttribute('role','alert');alert.textContent='Could not save category: '+String(err.message||err);
+   historyCategory.parentElement.appendChild(alert);
+  }
+  return;
+ }
  const quick=e.target.closest?.('[data-schedule-quick-category]');
  if(quick){
   const id=quick.dataset.scheduleQuickCategory,
