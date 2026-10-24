@@ -1455,7 +1455,7 @@ function reviewsPage(bundle,s){
   unresolved=recommendations.filter(r=>r.activeLegacyStreams?.length&&r.status==='pending').length;
  const recommendedCards=recommendations.map(r=>
   '<article class="review-candidate" data-recommended-repeat="'+escapeHTML(r.key)+
-   '" data-recommendation-status="'+r.status+'">'+
+   '" data-recommendation-status="'+r.status+'" data-legacy-active="'+(r.activeLegacyStreams?.length?'true':'false')+'">'+
    '<div class="review-candidate-main"><strong>'+escapeHTML(r.merchant)+'</strong>'+
    '<small>'+escapeHTML(r.accountName)+' · Suggested '+escapeHTML(r.frequency)+
     ' · '+r.occurrences+' posted payment'+(r.occurrences===1?'':'s')+
