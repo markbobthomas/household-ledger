@@ -4,27 +4,24 @@
 (function(root){
 'use strict';
 const DAY=86400000;
-const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+// History recommendations share identities and dates with confirmed schedules,
+// but remain recommendation-only; their detection policy is independent.
+const shared=root.HouseholdPlannerTransactions||
+ (typeof require==='function'?require('./planner-transactions.js'):null);
+if(!shared)throw Error('Planner scheduling helpers are required');
+const norm=shared.merchantKey;
 const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&Number.isFinite(Date.parse(s+'T12:00:00Z'));
 const amount=n=>Math.round(Number(n)*100);
-const diff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/DAY);
+const diff=shared.daysBetween;
 const lastDay=m=>new Date(Date.UTC(Number(m.slice(0,4)),Number(m.slice(5,7)),0)).getUTCDate();
-const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
-const monthAt=(iso,n)=>{
- const [y,m,d]=iso.split('-').map(Number);
- const first=new Date(Date.UTC(y,m-1+n,1,12)),target=first.toISOString().slice(0,7);
- return target+'-'+String(Math.min(d,lastDay(target))).padStart(2,'0');
-};
+const addDays=shared.shift;
+const monthAt=(iso,n)=>shared.monthAt(iso,n,+iso.slice(8,10));
 const namesBill=/\b(?:mortgage|rent|loan|insurance|premium|subscription|membership|internet|electric|utilities|water|sewer|daycare|tuition|payroll|salary|paycheck|wireless|cellular|phone plan|autopay|gym|netflix|hulu|spotify)\b/i;
 const pfcRecurring=t=>{
  const p=t.personal_finance_category||t.source?.personalFinanceCategory||{};
  return /MORTGAGE|INSURANCE|SUBSCRIPTION|RECURRING|UTILITIES|RENT|LOAN_PAYMENT|INCOME_WAGES/.test(String(p.detailed||'').toUpperCase());
 };
-const accountOf=(t,accounts)=>{
- const raw=String(t.accountId||t.account||'');
- const found=(accounts||[]).filter(a=>[a.id,a.name,a.transactionAccount].some(k=>String(k||'')===raw));
- return found.length===1?String(found[0].id):raw;
-};
+const accountOf=(t,accounts)=>shared.accountRef(t.accountId||t.account,accounts);
 // Every real bank record is eligible to become a *proposal*, even when it
 // was classified as a transfer/refund or is still pending. Actual posting
 // evidence for automatic discovery remains stricter (settled, positive value).

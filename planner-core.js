@@ -4,17 +4,20 @@
  */
 (function(root){
 'use strict';
-const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+// Shared account, merchant and calendar primitives; no change to forecasting policy.
+const shared=root.HouseholdPlannerTransactions||
+ (typeof require==='function'?require('./planner-transactions.js'):null);
+if(!shared)throw Error('Planner scheduling helpers are required');
+const norm=shared.merchantKey;
 const cents=n=>Math.round(Number(n)*100);
 const money=n=>cents(n)/100;
 const valid=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&
  new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;
-const add=(s,n)=>{const d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
-const diff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
+const add=shared.shift;
+const diff=shared.daysBetween;
 const index=s=>Number(s.slice(0,4))*12+Number(s.slice(5,7));
 const month=(s,n)=>new Date(Date.UTC(+s.slice(0,4),+s.slice(5,7)-1+n,1,12)).toISOString().slice(0,7);
-const monthDate=(s,n,day=+s.slice(8,10))=>{const m=month(s,n);
- return m+'-'+String(Math.min(day,new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate())).padStart(2,'0')};
+const monthDate=(s,n,day=+s.slice(8,10))=>shared.monthAt(s,n,day);
 const twiceDates=(from,slots,end)=>{const dates=[];
  for(let m=0;m<8;m++)for(const day of slots){
   const d=monthDate(from,m,day);if(d>from&&d<=end)dates.push(d);
@@ -63,11 +66,8 @@ const cadence=(a,b)=>{
  return null;
 };
 const horizon=(s,days)=>add(s,days);
-const accountId=(row,accounts)=>{
- const raw=String(row.accountId||row.account||row.fromAccountId||'');
- const matches=accounts.filter(a=>[a.id,a.name,a.transactionAccount].some(n=>String(n||'')===raw));
- return matches.length===1?String(matches[0].id):raw;
-};
+const accountId=(row,accounts)=>
+ shared.accountRef(row.accountId||row.account||row.fromAccountId,accounts);
 const direction=t=>t.type==='expense'||t.type==='income'?t.type:
  t.type==='transfer'&&!t.pairedTransactionId&&t.cashDirection==='out'?'expense':null;
 function analyze(rows,accounts,asOf,prefs={},days=90){
