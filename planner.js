@@ -1250,6 +1250,16 @@ function transactionsPage(bundle,s){
   '</section></div>';
 }
 
+function reviewFormDirty(){
+ const form=document.querySelector('.reviews-page [data-review-inline-detail] [data-history-recurring-form]');
+ if(!form)return false;
+ return [...form.querySelectorAll('input,select,textarea')].some(input=>{
+  if(input.type==='hidden')return false;
+  if(input.type==='checkbox'||input.type==='radio')return input.checked!==input.defaultChecked;
+  if(input.tagName==='SELECT')return [...input.options].some(o=>o.selected!==o.defaultSelected);
+  return input.value!==input.defaultValue;
+ });
+}
 function repeatingReviewForm(s,{inline=false}={}){
  if(!recurringDraft)return '';
  const d=recurringDraft,accounts=activeAccounts(s),
@@ -2134,9 +2144,16 @@ document.addEventListener('click',async e=>{
  if(newRecommendation){
   const candidate=lastRecommendedRepeating.find(r=>r.key===newRecommendation.dataset.reviewRecommendation);
   if(!candidate){setNotice('That recommendation changed. Open Needs review again.');return}
-  const legacyKey=newRecommendation.dataset.legacySeries,
-   legacy=legacyKey?(forecastFor(snapshot())?.recurrenceMigration?.legacySeries||[])
-    .find(auto=>auto.seriesKey===legacyKey):null;
+  const legacyKey=newRecommendation.dataset.legacySeries||'';
+  if(recurringDraft?.reviewRowKey===candidate.key&&
+    String(recurringDraft.reviewLegacyKey||'')===legacyKey){
+   if(reviewFormDirty()&&!window.confirm('Discard unsaved schedule changes?'))return;
+   recurringDraft=null;reviewNotice='';render();return;
+  }
+  if(reviewFormDirty()&&!window.confirm('Discard unsaved schedule changes?'))return;
+  const legacyMatch=legacyKey||null,
+   legacy=legacyMatch?(forecastFor(snapshot())?.recurrenceMigration?.legacySeries||[])
+    .find(auto=>auto.seriesKey===legacyMatch):null;
   if(legacyKey&&!legacy){setNotice('This automatic estimate changed. Reopen Needs review.');return}
   // Keep same-payee independent income streams distinct.
   const source=legacy?(legacy.historicalIds||[]).map(id=>
@@ -2148,10 +2165,21 @@ document.addEventListener('click',async e=>{
    const draft=source?window.HouseholdPlannerHistory.draftFor(source,lastHistoryRows,
     activeAccounts(snapshot()),snapshot().asOf):null;
    if(!draft)throw Error('Bank evidence is no longer available. Keep this recommendation for review.');
-   recurringDraft={...draft,merchant:candidate.merchant,examples:draft.examples||[]};
-   reviewNotice='Suggested values are prefilled. Confirm or edit before saving a repeating schedule.';
+   const categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+    proposedCategory=candidate.category||source.category,
+    category=categories.find(c=>c.toLowerCase()===String(proposedCategory||'').toLowerCase())||
+     'Uncategorized';
+   recurringDraft={...draft,merchant:candidate.merchant,
+    amount:legacy?.amount??draft.amount,
+    frequency:legacy?.cadence||draft.frequency,
+    nextDate:legacy?.date||draft.nextDate,
+    category,
+    // For alternating payroll phases only link rows from the chosen stream.
+    examples:legacy?(legacy.historicalIds||[]).map(String):draft.examples||[],
+    reviewRowKey:candidate.key,reviewLegacyKey:legacyKey};
+   reviewNotice='';
    render();
-   document.querySelector('[data-history-recurring-form]')?.scrollIntoView({behavior:'smooth',block:'start'});
+   document.querySelector('.reviews-page [data-review-inline-detail] [name=merchant]')?.focus();
   }catch(error){setNotice(String(error.message||error))}
   return;
  }
@@ -2160,6 +2188,8 @@ document.addEventListener('click',async e=>{
   const key=ignoreRecommendation.dataset.ignoreRecommendation||ignoreRecommendation.dataset.unignoreRecommendation,
    ignored=Boolean(ignoreRecommendation.dataset.ignoreRecommendation);
   if(!lastRecommendedRepeating.some(r=>r.key===key)){setNotice('That suggestion has changed.');return}
+  if(recurringDraft?.reviewRowKey===key&&reviewFormDirty()&&
+    !window.confirm('Discard unsaved schedule changes?'))return;
   try{
    await commitForecastChange(()=>{
     const p=state().predictions;
@@ -2167,6 +2197,7 @@ document.addEventListener('click',async e=>{
     if(ignored)p.repeatingRecommendationDecisions[key]='ignored';
     else delete p.repeatingRecommendationDecisions[key];
    });
+   if(recurringDraft?.reviewRowKey===key)recurringDraft=null;
    reviewNotice=ignored?'Marked ignored. This recommendation remains visible. Any older estimate stays in the forecast until you activate saved-schedules-only mode.':
     'Recommendation is available for approval again.';
    render();
