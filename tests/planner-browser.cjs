@@ -325,7 +325,15 @@ const {chromium,webkit}=require('playwright');
    await demoHistoricalMortgage.click();
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
     'History can propose future recurrence based on an actual bank record');
-   await page.locator('[data-cancel-review-form]').click();
+   // In the single-schedule model, detection creates a proposal only.
+   // Approve the bank-derived mortgage once to exercise the existing
+   // schedule and all-future editing flows downstream.
+   await page.locator('.history-schedule-form [name=frequency]').selectOption('monthly');
+   await page.locator('.history-schedule-form button[type=submit]').click();
+   assert.ok(await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules?.some(r=>String(r.merchant).includes('Mortgage'))),
+    'A repeating mortgage counts only after user approval');
    const historyTransfer=page.locator('.history-actual-row').filter({hasText:'Transfer to Savings'}).first();
    assert.equal(await historyTransfer.locator('[data-history-plan]').count(),0,
     'History opens from the row without redundant schedule buttons');
@@ -343,11 +351,11 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-cancel-review-form]').click();
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'One authoritative auto-detected mortgage appears in the future ledger');
+    'An approved mortgage schedule appears in the future ledger');
    await page.reload({waitUntil:'load'});
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'Refreshing does not erase bank-derived future predictions');
+    'Refreshing preserves an approved recurring mortgage plan');
    await go('settings');
    const auditDetails=page.locator('#accuracy-audit');
    await page.locator('#planner-menu > summary').click();
@@ -407,22 +415,21 @@ const {chromium,webkit}=require('playwright');
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
    await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
-   assert.equal(await page.evaluate(amount=>Object.values(
-    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).some(x=>x.amount===amount),newAmount),true,
-    'Series edit is persisted and survives generation of next-month forecasts');
+   assert.equal(await page.evaluate(amount=>(
+    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules||[]).some(x=>String(x.merchant).includes('Mortgage')&&
+     Number(x.amount)===amount),newAmount),true,
+    'All-future edit updates the one saved schedule rather than generating a second recurrence');
    const futureMortgageRows=page.locator('.future-item').filter({hasText:'Mortgage'});
    if(await futureMortgageRows.count()>1){
     const repeated=await futureMortgageRows.locator('.future-amount').allInnerTexts();
     assert.ok(repeated.every(t=>t.includes(newAmount.toLocaleString('en-US'))),
      'Visible mortgage months adopt the same new series amount');
    }
-   await futureMortgageRows.first().locator('[data-edit-future]').click();
-   assert.ok(await page.locator('[data-reset-series]').count(),'Entire repeating rule can be reset');
-   await page.locator('[data-reset-series]').click();
-   assert.equal(await page.evaluate(()=>Object.keys(
-    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).length),0,'Reset all future restores automatic recurring forecasts');
+   assert.equal(await page.evaluate(()=>(
+    JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
+    .futureRecurringRules||[]).filter(x=>String(x.merchant).includes('Mortgage')).length),1,
+    'All-future update leaves a single authoritative mortgage schedule');
    await page.locator('[data-show-new]').click();
    await page.locator('#future-new-form [name=merchant]').fill('One-time home repair');
    await page.locator('#future-new-form [name=amount]').fill('125');
