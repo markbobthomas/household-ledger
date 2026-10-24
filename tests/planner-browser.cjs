@@ -1634,9 +1634,12 @@ const {chromium,webkit}=require('playwright');
    assert.ok(simpleRule,'The short form saves a new recurring schedule');
    assert.equal(simpleRule.merchant,'Simple forecast bill',
     'A default bank merchant is generated without opening advanced options');
-   await statementPage.locator('[data-schedule-card]').filter({hasText:'Simple forecast bill'}).first()
-    .locator('[data-schedule-edit]').click();
-   const simpleEdit=statementPage.locator('[data-schedule-edit-form]').first();
+   const savedSimpleCard=statementPage.locator('[data-schedule-card]').filter({hasText:'Simple forecast bill'}).first();
+   // Saving a new plan intentionally opens that plan for immediate edits.
+   // Clicking its title a second time would collapse it.
+   if(!await savedSimpleCard.locator('[data-schedule-edit-form]').count())
+    await savedSimpleCard.locator('[data-schedule-edit]').click();
+   const simpleEdit=savedSimpleCard.locator('[data-schedule-edit-form]');
    assert.equal(await simpleEdit.locator('[name=merchant]').inputValue(),'Simple forecast bill');
    await simpleEdit.locator('[name=scheduleLabel]').fill('Friendlier forecast bill');
    await simpleEdit.locator('[type=submit]').click();
