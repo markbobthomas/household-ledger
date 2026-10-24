@@ -2062,3 +2062,15 @@ html{scrollbar-gutter:stable}
   font-size:12px!important;
  }
 }
+
+/* The old generic .panel padding and an !important compact gap were
+   narrowing Repeating by 38px; both lists must use identical real widths. */
+.schedule-page .schedule-card{padding:0!important}
+.schedule-page .ledger-list-row,.history-page .ledger-list-row{
+ column-gap:8px!important;row-gap:0!important;
+}
+@media(max-width:850px){
+ .schedule-page .ledger-list-row,.history-page .ledger-list-row{
+  column-gap:3px!important;
+ }
+}
