@@ -311,6 +311,43 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 3 years/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
+   await go('reviews');
+   const repeatingSection=page.locator('[data-recommended-repeating]');
+   assert.equal(await repeatingSection.count(),1,'Recommended repeating is always a dedicated Review section');
+   const originalRecommendations=await repeatingSection.locator('[data-recommended-repeat]').count();
+   assert.ok(originalRecommendations>0,'Existing bank history produces recurring candidates');
+   const suggestion=repeatingSection.locator('[data-recommendation-status="pending"]').first();
+   assert.ok(await suggestion.count()>0,'An unconfirmed recommendation can be reviewed');
+   const suggestionKey=await suggestion.getAttribute('data-recommended-repeat'),
+    trackedRecommendation=repeatingSection.locator('[data-recommended-repeat="'+suggestionKey+'"]');
+   const rulesBeforeIgnore=await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
+   await trackedRecommendation.locator('[data-ignore-recommendation]').click();
+   assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'ignored',
+    'Ignored recommendations stay in the same section with an explicit label');
+   assert.equal(await repeatingSection.locator('[data-recommended-repeat]').count(),originalRecommendations,
+    'Ignoring does not remove or hide a candidate');
+   assert.equal(await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0),
+    rulesBeforeIgnore,'No only records a review decision, never deletes a saved plan');
+   await page.reload({waitUntil:'load'});
+   await go('reviews');
+   assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'ignored',
+    'Ignored recommendations persist and remain visible after reload');
+   assert.ok(await page.evaluate(()=>Object.keys(JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').repeatingRecommendations||{}).length>0),
+    'A durable recommendation inventory is retained in planning settings');
+   await trackedRecommendation.locator('[data-unignore-recommendation]').click();
+   assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'pending',
+    'Undo ignore restores the pending state without removing the record');
+   await trackedRecommendation.locator('[data-review-recommendation]').click();
+   const recommendedDraft=page.locator('.history-schedule-form');
+   assert.equal(await recommendedDraft.count(),1,'Yes opens prefilled editable schedule fields');
+   assert.ok(await recommendedDraft.locator('[name=merchant]').inputValue());
+   assert.ok(await recommendedDraft.locator('[name=frequency]').inputValue());
+   assert.ok(Number(await recommendedDraft.locator('[name=amount]').inputValue())>0);
+   await page.locator('[data-cancel-review-form]').click();
+   await go('history');
    await go('history');
    assert.equal(await page.locator('.history-page > .page-heading').count(),0,
     'History uses selected tab as title without repeating it');
