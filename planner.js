@@ -1353,6 +1353,34 @@ function historyPage(bundle,s){
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '</div></div>';
 }
+// Keep a durable copy of every candidate that has reached the Review page.
+ // Raw source history can later be shortened by the bank or refined by Plaid,
+ // but neither a recommendation nor a user's No should be silently forgotten.
+async function archiveRecommendedRepeats(){
+ const modelBundle=forecastFor(snapshot());
+ const discovered=[...(modelBundle?.recommendedRepeating||[]),
+  ...(modelBundle?.historyCandidates||[])];
+ const prefs=state().predictions||{},saved=prefs.historyPatternDecisions||{},
+  additions={};
+ for(const item of discovered){
+  const identity=String(item.key||[
+   item.accountId,item.type,item.merchant,item.frequency,item.amount
+  ].join('|'));
+  const key='review-archive|'+encodeURIComponent(identity);
+  if(saved[key])continue;
+  additions[key]={status:'recommended',recommendation:{
+   accountId:item.accountId,type:item.type,merchant:item.merchant,
+   amount:item.amount,frequency:item.frequency,nextDate:item.nextDate,
+   category:item.category||'',historicalIds:item.historicalIds||[],
+   examples:item.examples||[],key:item.key||identity,source:'archived'
+  }};
+ }
+ if(Object.keys(additions).length)
+  await commitForecastChange(()=>{
+   state().predictions.historyPatternDecisions??={};
+   Object.assign(state().predictions.historyPatternDecisions,additions);
+  });
+}
 function reviewsPage(bundle,s){
  const regular=bundle?.routines?.review||[],mortgages=bundle?.missingMortgages||[],
   accounts=activeAccounts(s),normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1373,8 +1401,9 @@ function reviewsPage(bundle,s){
   ...(bundle?.recommendedRepeating||[]),
   ...(bundle?.historyCandidates||[]).map(c=>({...c,source:'needs-confirmation'})),
   ...Object.values(state().predictions?.historyPatternDecisions||{})
-   .filter(d=>d&&typeof d==='object'&&d.status==='dismissed'&&d.recommendation)
-   .map(d=>({...d.recommendation,ignored:true,source:'archived'}))
+   .filter(d=>d&&typeof d==='object'&&
+    ['recommended','dismissed'].includes(d.status)&&d.recommendation)
+   .map(d=>({...d.recommendation,ignored:d.status==='dismissed',source:'archived'}))
  ];
  const recommendations=new Map();
  for(const item of rawRecommendations){
@@ -1948,6 +1977,11 @@ document.addEventListener('click',async e=>{
  }
  const view=e.target.closest('[data-view]');
  if(view){
+  if(view.dataset.view==='reviews'&&!requestedReal()||view.dataset.view==='reviews'&&live()){
+   try{await archiveRecommendedRepeats()}catch(err){
+    setNotice('Some recommended repeating payments could not be saved for long-term review: '+String(err.message||err));
+   }
+  }
   activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
