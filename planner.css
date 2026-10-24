@@ -1882,3 +1882,14 @@ html{scrollbar-gutter:stable}
  }
  .history-page .history-secondary-action{min-height:40px}
 }
+
+/* Recommendations are an audit trail: ignored and approved records remain visible. */
+.recommended-repeating .review-candidate{border-bottom:1px solid var(--border,#e6ebe6)}
+.recommended-repeating .recommendation-state{font-weight:650;color:#486451}
+.recommended-repeating [data-recommendation-status="ignored"] .recommendation-state{color:#846f46}
+.recommended-repeating [data-recommendation-status="scheduled"] .recommendation-state{color:#286248}
+.recommended-repeating .review-candidate-actions{flex-wrap:wrap}
+@media(max-width:780px){
+ .recommended-repeating .review-candidate-actions{width:100%;justify-content:flex-start}
+ .recommended-repeating .review-candidate-actions .btn{min-height:40px}
+}
