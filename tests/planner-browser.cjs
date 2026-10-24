@@ -1687,11 +1687,17 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('[data-summary-next-statement-value]').count(),1,
    'Connected card shows the following statement estimate next to its issued statement');
   assert.equal(await page.locator('[data-summary-month-low]').count(),0);
-  const dueButton=page.locator('[data-calendar-card-statement-date]');
-  assert.equal(await dueButton.count(),1,'Issued card statement provides a due-date drilldown');
+  const dueButton=page.locator('[data-summary-card-statement] [data-calendar-card-statement-date]');
+  assert.equal(await dueButton.count(),1,'Current issued statement provides its own due-date drilldown');
   await dueButton.click();
   assert.equal(await page.locator('.calendar-day.selected').getAttribute('data-calendar-day'),
-   '2026-11-12','Statement date opens the matching day inside the selected card calendar');
+   '2026-11-12','Current statement date opens its due date inside the card Calendar');
+  const nextClosing=page.locator('[data-summary-card-next-statement] [data-calendar-card-statement-date]');
+  assert.equal(await nextClosing.count(),1,
+   'Following estimated statement has a separate closing-date drilldown');
+  await nextClosing.click();
+  assert.equal(await page.locator('.calendar-day.selected').getAttribute('data-calendar-day'),
+   '2026-11-18','Following estimate opens its actual closing date without changing the prior due date');
   await page.locator('#summary-account').selectOption('checking-real');
   assert.equal(await page.locator('[data-summary-month-low]').count(),1,
    'Checking metrics are unaffected by selecting a credit card');
