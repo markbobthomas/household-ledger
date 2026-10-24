@@ -1137,7 +1137,10 @@ const {chromium,webkit}=require('playwright');
   await go('overview');
   await go('history');
   const immutableProviderCategory=JSON.stringify(realPayload.transactions.find(t=>t.id==='card-purchase').category);
-  await page.locator('[data-history-category="card-purchase"]').selectOption('Shopping');
+  await Promise.all([
+   page.waitForResponse(response=>response.url().endsWith('/api/ledger/category')),
+   page.locator('[data-history-category="card-purchase"]').selectOption('Shopping')
+  ]);
   assert.equal(categoryWrites.length,1,'One category selection makes one scoped write');
   assert.equal(categoryWrites[0].category,'Shopping');
   assert.equal(await page.locator('[data-history-category="card-purchase"]').inputValue(),'Shopping');
