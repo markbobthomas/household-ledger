@@ -341,8 +341,43 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Lowest balance · next 3 years/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/Available after this month's dated payments/);
    assert.match(await page.locator('[aria-label="Selected account projection"]').innerText(),/First projected shortfall/);
-   await go('reviews');
+   const migrationBanner=page.locator('#planner-notice');
+   const countMatch=(await migrationBanner.innerText()).match(/(\d+) unsaved automatic repeating estimate/);
+   if(countMatch)await migrationBanner.locator('[data-view="reviews"]').click();
+   else await go('reviews');
+   const legacySection=page.locator('[data-active-legacy-estimates]');
+   const legacyRows=legacySection.locator('[data-legacy-estimate]');
+   const expectedLegacy=Number(countMatch?.[1]||0);
+   assert.equal(await legacyRows.count(),expectedLegacy,
+    'Every unsaved automatic estimate named in the global warning gets its own visible review row');
+   if(expectedLegacy){
+    assert.equal(await legacySection.locator('[data-legacy-estimate-count]').innerText(),
+     expectedLegacy+' UNSAVED','Highlighted section count is the active forecast count');
+    assert.equal(await page.locator('.reviews-page > section.panel').first().getAttribute(
+     'data-active-legacy-estimates'),'',
+     'Active automatic forecasts are the first section in Needs review');
+    const ids=await legacyRows.evaluateAll(nodes=>nodes.map(el=>el.dataset.legacyEstimate));
+    assert.equal(new Set(ids).size,expectedLegacy,
+     'Each row identifies one distinct cash movement stream rather than duplicating a merchant');
+    assert.ok((await legacySection.locator('.legacy-estimate-state').first().innerText())
+     .includes('forecast'),'The row explicitly explains the balance impact');
+    assert.equal(await legacySection.locator('.legacy-estimate-count').first().evaluate(el=>
+     getComputedStyle(el).color),'rgb(180, 35, 50)',
+     'Count receives a restrained red warning instead of an indistinguishable neutral label');
+    const first=legacyRows.first(),countBefore=await legacyRows.count();
+    if(await first.getAttribute('data-recommendation-status')==='pending'){
+     await first.locator('[data-ignore-recommendation]').click();
+     assert.equal(await legacyRows.count(),countBefore,
+      'Ignoring an already forecasted item never hides it from the active-cash inventory');
+     assert.equal(await page.locator('[data-legacy-estimate="'+ids[0]+'"]').getAttribute(
+      'data-recommendation-status'),'ignored',
+      'Ignored legacy forecast still carries an explicit visible status');
+     await page.locator('[data-legacy-estimate="'+ids[0]+'"] [data-unignore-recommendation]').click();
+    }
+   }
    const repeatingSection=page.locator('[data-recommended-repeating]');
+   assert.equal(await repeatingSection.locator('[data-legacy-active="true"]').count(),0,
+    'Existing automatic estimates are never mixed with speculative recurring suggestions');
    assert.equal(await repeatingSection.count(),1,'Recommended repeating is always a dedicated Review section');
    const originalRecommendations=await repeatingSection.locator('[data-recommended-repeat]').count();
    assert.ok(originalRecommendations>0,'Existing bank history produces recurring candidates');
