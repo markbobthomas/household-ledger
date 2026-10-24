@@ -25,7 +25,12 @@ const {chromium,webkit}=require('playwright');
   };
   const select=row.querySelector('.ledger-row-category'),
    name=row.querySelector('.ledger-row-description strong');
-  return {height:root.height,width:root.width,button:rect('.ledger-row-open'),
+  const ancestors=[];for(let p=row.parentElement,i=0;p&&i<4;p=p.parentElement,i++){
+   const cs=getComputedStyle(p),r=p.getBoundingClientRect();
+   ancestors.push({className:String(p.className),width:r.width,
+    paddingLeft:cs.paddingLeft,paddingRight:cs.paddingRight});
+  }
+  return {height:root.height,width:root.width,ancestors,button:rect('.ledger-row-open'),
    date:rect('.ledger-row-date'),description:rect('.ledger-row-description'),
    amount:rect('.ledger-row-amount'),hint:rect('.ledger-row-hint'),
    category:rect('.ledger-row-category'),
