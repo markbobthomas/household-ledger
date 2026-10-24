@@ -37,7 +37,6 @@ const dayShort=d=>String(Number(d.slice(-2)));
 const norm=s=>String(s??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const calendarTypes={expense:'Withdrawal',income:'Deposit',refund:'Refund',transfer:'Account transfer'};
 const dateDelta=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
-const moneyDelta=(e,card)=>signed(e,card)*Number(e.amount);
 function knownGaps(prefs,asOf,through,accountId,points){
  const dates=new Map(),tools=root.HouseholdPlannerTransactions;
  if(!tools?.recurrenceDates)return dates;
