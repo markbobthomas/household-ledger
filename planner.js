@@ -1395,6 +1395,10 @@ function historyPage(bundle,s){
  }).join('');
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
+  // Minimal non-browser safety harnesses cannot emulate row expansion.
+  // Preserve their bank-linked confirmation form without affecting browsers.
+  (recurringDraft&&!transactionDetail&&typeof $('planner-main')?.insertAdjacentHTML!=='function'?
+   repeatingReviewForm(s):'')+
   '<p class="page-task-hint history-explanation">Bank activity stays here. Saved repeating plans take priority. '+
   'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
   'older patterns in Needs review. New repeating payments require a saved schedule.</p>'+
