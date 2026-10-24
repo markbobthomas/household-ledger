@@ -18,4 +18,21 @@ M.applyPlaidSync(s,{itemId:'bank',added:[],modified:[],removed:[],nextCursor:'y'
 assert.ok(!R.build(s,null,'2026-10-19').tasks.some(t=>t.id===amazon.id),'Replay preserves confirmation');
 M.applyPlaidSync(s,{itemId:'bank',added:[],modified:[{...row('market','Amazon','Shopping'),amount:29}],removed:[],nextCursor:'z'});
 assert.ok(R.build(s,null,'2026-10-19').tasks.some(t=>t.id===amazon.id),'Changed amount reopens confirmation');
-console.log('PASS conservative merchant categorization and revalidation');
+// The optimized full-history learned-category index must produce the exact
+// same classification as isolated, source-backed category lookups.
+const learned=M.migrate({accounts:[{id:'checking',name:'Fictional Checking',type:'checking'}],
+ transactions:[
+  {id:'a',date:'2026-10-05',merchant:'Fictional Coffee',amount:5,accountId:'checking',type:'expense',category:'Other'},
+  {id:'b',date:'2026-10-12',merchant:'Fictional Coffee',amount:7,accountId:'checking',type:'expense',category:'Other'},
+  {id:'c',date:'2026-10-15',merchant:'Fictional Coffee',amount:9,accountId:'checking',type:'expense',category:'Other'},
+  {id:'d',date:'2026-10-16',merchant:'Amazon',amount:21,accountId:'checking',type:'expense',category:'Other'}]});
+M.learnCategory(learned,'a','Dining');
+let grouped=M.records(learned);
+for(const entry of grouped)assert.equal(entry.category,M.categoryFor(learned,entry.id),
+ 'Indexed merchant safety must match per-record category resolution');
+M.setCategory(learned,'b','Groceries');
+grouped=M.records(learned);
+for(const entry of grouped)assert.equal(entry.category,M.categoryFor(learned,entry.id),
+ 'Manual changes and mixed merchant history must invalidate safety conclusions');
+assert.equal(grouped.find(x=>x.id==='b').category,'Groceries');
+console.log('PASS conservative merchant categorization and indexed learning parity');
