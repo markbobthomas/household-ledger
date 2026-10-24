@@ -105,7 +105,6 @@ function forecastForPayments(events,s,additions){
 // Keep an append-only bank-history recommendation record. A recommendation is
 // never erased by Ignoring, by an improved classification, or when a bank feed
 // no longer sends an older transaction. All values are forecast-only metadata.
-let recommendationArchiveSave=false;
 function archiveRepeatingRecommendations(candidates){
  const p=state().predictions||{},existing=p.repeatingRecommendations||{};
  let changed=false;
@@ -119,12 +118,12 @@ function archiveRepeatingRecommendations(candidates){
  }
  if(!changed)return;
  p.repeatingRecommendations=existing;
- if(!recommendationArchiveSave){
-  recommendationArchiveSave=true;
-  Promise.resolve().then(()=>savePlanning()).catch(error=>{
-   latestError='Recommended repeating items could not be saved: '+String(error.message||error);
-  }).finally(()=>{recommendationArchiveSave=false});
- }
+ // Existing private forecast writes are serialized by the live source. Each
+ // archive addition is persisted, including if another bank refresh lands while
+ // an earlier write is pending. Never delete previously stored candidates.
+ Promise.resolve().then(()=>savePlanning()).catch(error=>{
+  latestError='Recommended repeating items could not be saved: '+String(error.message||error);
+ });
 }
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
