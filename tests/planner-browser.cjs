@@ -196,7 +196,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(initialGrid.slots,30,'October reserves six rows of five weekdays');
    assert.equal(initialGrid.weekdays,5,'Only Monday through Friday have visible headings');
    assert.deepEqual(await page.locator('.calendar-weekday').allInnerTexts(),
-    ['Mon','Tue','Wed','Thu','Fri']);
+    ['MON','TUE','WED','THU','FRI']);
    assert.equal(await page.locator('[data-calendar-day], [data-calendar-actual-day]').evaluateAll(els=>
     els.filter(el=>[0,6].includes(new Date((el.dataset.calendarDay||el.dataset.calendarActualDay)+'T12:00:00Z').getUTCDay())).length),
     0,'Neither predicted nor actual weekend cells appear on the five-column calendar');
