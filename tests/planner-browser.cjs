@@ -1083,7 +1083,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
   };
   await page.route('**/api/ledger',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(realPayload)}));
-  const writes=[];
+  const writes=[],categoryWrites=[];
   let failNextForecast=false,legacyAdjustmentCalls=0;
   // Simulate a stale/invalid historical category override: it must NOT block
   // saving a user-confirmed future bill.
@@ -1091,6 +1091,17 @@ const {chromium,webkit}=require('playwright');
    legacyAdjustmentCalls++;
    return r.fulfill({status:400,contentType:'application/json',
     body:'{"error":"Invalid category override"}'});
+  });
+  await page.route('**/api/ledger/category',r=>{
+   const data=r.request().postDataJSON();
+   assert.deepEqual(Object.keys(data).sort(),['category','transactionId'],
+    'Category changes send only a bank record ID and category');
+   categoryWrites.push(data);
+   realPayload.adjustments.categoryOverrides??={};
+   if(data.category===null)delete realPayload.adjustments.categoryOverrides[data.transactionId];
+   else realPayload.adjustments.categoryOverrides[data.transactionId]=data.category;
+   return r.fulfill({status:200,contentType:'application/json',
+    body:'{"saved":true,"scope":"category"}'});
   });
   await page.route('**/api/ledger/forecasts',r=>{
    const data=r.request().postDataJSON();
@@ -1121,6 +1132,21 @@ const {chromium,webkit}=require('playwright');
    'Missing card setup remains clearly visible without the removed checklist');
   assert.match(await page.locator('.summary-trust').innerText(),/everyday unplanned spending is excluded/);
   assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
+  await go('overview');
+  await go('history');
+  const immutableProviderCategory=JSON.stringify(realPayload.transactions.find(t=>t.id==='card-purchase').category);
+  await page.locator('[data-history-category="card-purchase"]').selectOption('Shopping');
+  assert.equal(categoryWrites.length,1,'One category selection makes one scoped write');
+  assert.equal(categoryWrites[0].category,'Shopping');
+  assert.equal(await page.locator('[data-history-category="card-purchase"]').inputValue(),'Shopping');
+  assert.equal(JSON.stringify(realPayload.transactions.find(t=>t.id==='card-purchase').category),
+   immutableProviderCategory,'Bank category overrides do not rewrite Plaid facts');
+  assert.equal(legacyAdjustmentCalls,0,'No whole-account legacy adjustments write was attempted');
+  await page.reload({waitUntil:'load'});
+  await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
+  await go('history');
+  assert.equal(await page.locator('[data-history-category="card-purchase"]').inputValue(),'Shopping',
+   'Category override survives private bank refresh');
   await go('overview');
   assert.equal(await page.locator('.account-tile').count(),2);
   assert.equal(await page.locator('.balance-main').innerText(),'$4,800.00',
