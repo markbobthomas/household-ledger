@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
+- **Latest fixed-height Calendar:** [PR #162](https://github.com/markbobthomas/household-ledger/pull/162) merges six-row 42-slot months, consistent two-preview day heights and tighter top spacing. Desktop Chromium/iPhone WebKit and financial safety checks green. Private Render remains unverified.
+
 - **Latest Calendar density pass:** [PR #160](https://github.com/markbobthomas/household-ledger/pull/160) merged with desktop/mobile spacing tightened, full bank/forecast invariants retained; private Render still unverified.
 
 - **Selected-day Calendar subtotal restoration:** [PR #157](https://github.com/markbobthomas/household-ledger/pull/157) adds one bottom-of-transaction Total change line before the unchanged ending balance, without duplicating each category. Final verification/merge details in latest dated entry.
@@ -971,3 +973,9 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Implementation:** `planner-summary.js` reserves six full Monday-first weeks (42 date slots) for each rendered month, rather than switching between four/five/six week rows. Daily transaction previews still show the first two and a **+N more** indicator; selecting the day retains every editable transaction. `planner.css` fixes all date/blank/outside cell heights to 124px desktop and 106px mobile, clips preview overflow, and further tightens the page's header, tabs and three-metric summary without shrinking navigation targets. `index.html` refreshes script and stylesheet caches.
 - **Regression:** `tests/planner-browser.cjs` checks identical grid height across four-, five-, and six-week months on desktop Chromium and iPhone WebKit, consistent cell heights, room for two complete previews and overflow notice, and retained calendar controls. The 45-test financial/banking suite and browser CI must pass before merge. The layout uses only fictional testing; forecast equations, credit-card calculations, accounts, linked transfers, bank source history, private settings and Plaid/Render infrastructure are unchanged.
 - **PR/status:** Implementation branch `ui/calendar-fixed-six-weeks-20261024`; confirm final PR, CI and merged SHA in a separate verified note. Private authenticated Render live deployment remains **unverified**.
+
+### 2026-10-24 — Verified fixed-height six-week Calendar release
+
+- **Merged:** [PR #162](https://github.com/markbobthomas/household-ledger/pull/162) squash merged as `9b0f55cf0ddc872d37805b050c110d41c652b76e`, independently checked on `main`. Calendar's date grid is consistently 42 slots / six Monday-first rows for four-, five-, and six-week months. Fixed 124px desktop and 106px iPhone day cells fit two transaction previews plus a **+N more** count; dates remain selectable for all transactions and the canonical selected-day calculation. Calendar page top margins reduced further.
+- **Final required checks on PR head `e39e2032f143d6f7c83aeb61b77401ecd5d61025`:** [Real-account pilot safety 40133756396](https://github.com/markbobthomas/household-ledger/actions/runs/40133756396) **success**, [Browser interaction 40133756415](https://github.com/markbobthomas/household-ledger/actions/runs/40133756415) **success**, including desktop Chromium/iPhone WebKit 4/5/6-week grid geometry, clipped-content safety and mobile interactions.
+- **Safety:** No forecast formulas, statements, banking source history, saved data, security settings, Plaid/Render service architecture or secrets changed. No bank records used in public tests. **Private Render live deployment SHA and successful Deploys status remain independently unverified**.
