@@ -42,6 +42,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
+let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
@@ -1109,13 +1110,15 @@ function schedulesPage(bundle,s){
    categoryOf(a.rule).localeCompare(categoryOf(b.rule))||a.index-b.index:
   a.index-b.index);
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
- const create=scheduleMode==='new'?'<form class="panel schedule-form" data-schedule-new-form>'+
-  '<h3>New schedule</h3>'+
+ const create=scheduleMode==='new'?'<section class="schedule-creation recurrence-inline-detail" data-schedule-create-inline>'+
+  recurringEditor('<form class="schedule-form" data-schedule-new-form>'+
+   '<p class="review-inline-guide">New repeating payment · choose the future dates, account and amount.</p>'+
   '<input name="separateSchedule" type="hidden" value="on">'+
   (schedulePreset?.historyExampleId?'<input type="hidden" name="historyExampleId" value="'+escapeHTML(schedulePreset.historyExampleId)+'">':'')+
   fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
-  '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
-  '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
+  '<div class="future-form-actions"><button class="btn primary" type="submit">Save recurring forecast</button>'+
+  '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>','schedule')+
+  '</section>':'';
  const cardHtml=({rule:r,index})=>{
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
@@ -1143,13 +1146,13 @@ function schedulesPage(bundle,s){
    '" data-schedule-monthly-transfers="'+monthly.transfers+
    '" data-schedule-yearly-out="'+yearly.out+'" data-schedule-yearly-in="'+yearly.in+
    '" data-schedule-yearly-transfers="'+yearly.transfers+'">'+
-   '<div class="schedule-compact-row ledger-list-row">'+
-   '<button class="schedule-row-main ledger-row-open" type="button" data-schedule-edit="'+id+
+   '<div class="schedule-compact-row ledger-list-row recurrence-row">'+
+   '<button class="schedule-row-main ledger-row-open recurrence-row-trigger" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' schedule '+number+': '+title+'">'+
     '<span class="schedule-row-next ledger-row-date"><span>'+
      (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
-    '<span class="schedule-row-identity ledger-row-description"><span class="schedule-number" aria-hidden="true">'+number+
+    '<span class="schedule-row-identity ledger-row-description recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
@@ -1179,10 +1182,11 @@ function schedulesPage(bundle,s){
     'You can clear an old rule or change a specific payment below. '+
     'Changing the repeating amount for all future payments will replace these older rules.</p>'+
     windows+'</details>':'')+
-   (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
-     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span></summary>'+
-      '<div class="plan-settings-body">'+edit+'</div></details>'+
-     scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</div></article>';
+   (isEditing?'<div class="schedule-inline-plan recurrence-inline-detail" data-schedule-inline-plan="'+id+'">'+
+     recurringEditor('<p class="review-inline-guide">Changes to this schedule affect future repeating payments. To change one date, use Upcoming payments below.</p>'+
+      edit,'schedule')+
+     '<details class="schedule-occurrence-disclosure"><summary>Upcoming payments</summary>'+
+      scheduleOccurrencesHtml(bundle,s,r)+'</details></div>':'')+'</div></article>';
  };
  const cards=scheduleSort==='category'?
   [...new Set(visible.map(({rule})=>categoryOf(rule)))].map(category=>{
@@ -1250,8 +1254,8 @@ function transactionsPage(bundle,s){
   '</section></div>';
 }
 
-function reviewFormDirty(){
- const form=document.querySelector('.reviews-page [data-review-inline-detail] [data-history-recurring-form]');
+function recurrenceFormDirty(selector){
+ const form=document.querySelector(selector);
  if(!form)return false;
  return [...form.querySelectorAll('input,select,textarea')].some(input=>{
   if(input.type==='hidden')return false;
@@ -1259,6 +1263,13 @@ function reviewFormDirty(){
   if(input.tagName==='SELECT')return [...input.options].some(o=>o.selected!==o.defaultSelected);
   return input.value!==input.defaultValue;
  });
+}
+function reviewFormDirty(){
+ return recurrenceFormDirty('.reviews-page [data-review-inline-detail] [data-history-recurring-form]');
+}
+// Shared inline form shell; page-specific fields and actions remain independent.
+function recurringEditor(html,variant='review'){
+ return '<div class="recurrence-editor recurrence-editor--'+variant+'">'+html+'</div>';
 }
 function repeatingReviewForm(s,{inline=false}={}){
  if(!recurringDraft)return '';
@@ -1336,31 +1347,58 @@ function historyPage(bundle,s){
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
     status==='automatic'?'Unconfirmed estimate — review in Needs review':'Not scheduled',
    primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
-    canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record';
-  return '<div class="history-actual-row ledger-list-row" data-history-kind="'+escapeHTML(kind||'unknown')+
+    canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record',
+   isExpanded=historyExpandedId===String(t.id)&&historyExpandedAccount===aid,
+   editRule=isExpanded?matches.find(rule=>rule.id===historyExpandedRuleId)||
+    (matches.length===1?matches[0]:null):null,
+   editor=isExpanded?(editRule?
+    recurringEditor('<p class="review-inline-guide">Update the saved repeating payment. The bank record remains unchanged.</p>'+
+     '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(editRule.id)+'">'+
+       scheduleFields({...editRule,date:tools.recurrenceDates(editRule,s.asOf,shiftDay(s.asOf,horizon))[0]||
+        shiftDay(s.asOf,1)},false,s)+
+       '<div class="future-form-actions"><button class="btn primary" type="submit">Save recurring forecast</button>'+
+        '<button class="btn" type="button" data-history-inline-close>Cancel</button></div></form>','history'):
+    matches.length>1?recurringEditor('<p class="review-inline-guide">Choose which saved schedule belongs to this bank payment.</p>'+
+     '<div class="history-inline-choices">'+matches.map(rule=>
+      '<button type="button" class="btn" data-history-inline-rule="'+escapeHTML(rule.id)+'">'+
+       escapeHTML(rule.scheduleLabel||rule.merchant)+' · '+escapeHTML(rule.frequency)+
+       ' · '+cash(rule.amount)+'</button>').join('')+'</div>','history'):
+    recurringDraft?.historyRowId===String(t.id)?
+     recurringEditor(repeatingReviewForm(s,{inline:true}),'history'):
+    recurringEditor('<p class="review-inline-guide">This bank transaction is read-only. Repeating forecasts can only be created from eligible payments.</p>','history')
+   ):'',
+   detail=isExpanded?'<div class="history-inline-detail recurrence-inline-detail" data-history-inline-detail>'+
+    editor+'</div>':'';
+  return '<div class="history-entry" data-history-entry="'+escapeHTML(String(t.id))+'">'+
+   '<div class="history-actual-row ledger-list-row recurrence-row" data-history-kind="'+escapeHTML(kind||'unknown')+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
-   '<button type="button" class="history-row-open ledger-row-open" data-historical-transaction="'+
+   '<button type="button" class="history-row-open ledger-row-open recurrence-row-trigger" data-historical-transaction="'+
    escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
-   '" aria-label="'+escapeHTML(primary+': '+(t.merchant||'Bank transaction'))+'">'+
+   '" aria-expanded="'+isExpanded+'" aria-label="'+escapeHTML((isExpanded?'Close':'Open')+
+    ' repeating payment details: '+(t.merchant||'Bank transaction'))+'">'+
    '<span class="history-actual-date ledger-row-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
-   '<span class="history-actual-description ledger-row-description"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
+   '<span class="history-actual-description ledger-row-description recurrence-row-name"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
     escapeHTML(caption)+'</span></small></span>'+
    '<strong class="history-actual-amount ledger-row-amount '+(incoming?'incoming':'outgoing')+'">'+
     (incoming?'+':'−')+cash(t.amount)+'</strong>'+
-   '<span class="history-row-hint ledger-row-hint" aria-hidden="true">'+escapeHTML(primary)+' ›</span></button>'+
+   '<span class="history-row-hint ledger-row-hint" aria-hidden="true">'+(isExpanded?'⌃':'›')+'</span></button>'+
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-history-category="'+
     escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
     ' on '+escapeHTML(t.date)+'">'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
-   '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>';
+   '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
+   detail+'</div>';
  }).join('');
  return '<div class="planner-page history-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
-  (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
+  // Minimal non-browser safety harnesses cannot emulate row expansion.
+  // Preserve their bank-linked confirmation form without affecting browsers.
+  (recurringDraft&&!transactionDetail&&typeof $('planner-main')?.insertAdjacentHTML!=='function'?
+   repeatingReviewForm(s):'')+
   '<p class="page-task-hint history-explanation">Bank activity stays here. Saved repeating plans take priority. '+
   'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
   'older patterns in Needs review. New repeating payments require a saved schedule.</p>'+
@@ -1521,13 +1559,13 @@ function reviewsPage(bundle,s){
    (r?' data-recommended-repeat="'+escapeHTML(r.key)+'"':'')+
    ' data-legacy-active="'+isLegacy+'" data-recommendation-status="'+
      (isIgnored?'ignored':'pending')+'">'+
-   '<div class="review-row-top">'+
-    (r?'<button class="review-row-open" type="button" data-review-recommendation="'+escapeHTML(r.key)+'"'+
+   '<div class="review-row-top recurrence-row">'+
+    (r?'<button class="review-row-open recurrence-row-trigger" type="button" data-review-recommendation="'+escapeHTML(r.key)+'"'+
      (isLegacy?' data-legacy-series="'+escapeHTML(key)+'"':'')+
      ' aria-expanded="'+isOpen+'" aria-label="'+(isOpen?'Close':'Open')+
      ' repeating payment details: '+escapeHTML(title)+'">':
      '<div class="review-row-unavailable">')+
-    '<span class="review-candidate-main"><strong>'+escapeHTML(title)+'</strong>'+
+    '<span class="review-candidate-main recurrence-row-name"><strong>'+escapeHTML(title)+'</strong>'+
      '<small>'+escapeHTML(account)+' · '+escapeHTML(cadence)+
       ' · Next '+escapeHTML(dayLabel(date))+
       (kind?' · '+escapeHTML(kind):
@@ -1539,8 +1577,8 @@ function reviewsPage(bundle,s){
      '</div>')+
     '<div class="review-candidate-actions">'+controls(r,key)+'</div>'+
    '</div>'+
-   (isOpen?'<div class="review-inline-detail" data-review-inline-detail>'+
-    repeatingReviewForm(s,{inline:true})+'</div>':'')+
+   (isOpen?'<div class="review-inline-detail recurrence-inline-detail" data-review-inline-detail>'+
+    recurringEditor(repeatingReviewForm(s,{inline:true}),'review')+'</div>':'')+
    '</article>';
  };
  const normalCard=r=>row(r);
@@ -1894,12 +1932,19 @@ document.addEventListener('click',async e=>{
   return;
  }
  const newSchedule=e.target.closest?.('[data-schedule-new]');
- if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
+ if(newSchedule){
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+   recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+   !window.confirm('Discard unsaved schedule changes?'))return;
+  scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
   transactionDetail=null;render();
   document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
   return}
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
  if(scheduleEdit){
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+   recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+   !window.confirm('Discard unsaved schedule changes?'))return;
   const id=scheduleEdit.dataset.scheduleEdit;
   const same=scheduleMode==='edit'&&scheduleTarget===id;
   scheduleRemoveTarget='';scheduleNotice='';
@@ -2052,9 +2097,27 @@ document.addEventListener('click',async e=>{
   activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   render();
   window.scrollTo({top:0,behavior:'auto'});
   return;
+ }
+ const selectBankPlan=e.target.closest?.('[data-history-inline-rule]');
+ if(selectBankPlan){
+  const ruleId=selectBankPlan.dataset.historyInlineRule,
+   origin=selectBankPlan.closest('[data-history-entry]')?.dataset.historyEntry,
+   bank=lastHistoryRows.find(t=>String(t.id)===origin);
+  const options=bank?window.HouseholdPlannerTransactions.historicalScheduleMatches(
+   bank,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]):[];
+  if(!options.some(r=>r.id===ruleId)){setNotice('That saved schedule changed. Reopen the bank payment.');return}
+  historyExpandedRuleId=ruleId;recurringDraft=null;render();
+  document.querySelector('.history-page [data-history-inline-detail] [name=merchant]')?.focus();
+  return;
+ }
+ const closeBankInline=e.target.closest?.('[data-history-inline-close]');
+ if(closeBankInline){
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
+  render();return;
  }
  const scheduleChoice=e.target.closest?.('[data-choose-history-schedule]');
  if(scheduleChoice){
@@ -2063,6 +2126,41 @@ document.addEventListener('click',async e=>{
   return;
  }
  const actualRow=e.target.closest?.('[data-historical-transaction]');
+ if(actualRow&&activeTab==='history'){
+  const id=actualRow.dataset.historicalTransaction,account=actualRow.dataset.historicalAccount,
+   same=historyExpandedId===id&&historyExpandedAccount===account;
+  if(same){
+   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+    !window.confirm('Discard unsaved schedule changes?'))return;
+   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
+   render();return;
+  }
+  if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+   !window.confirm('Discard unsaved schedule changes?'))return;
+  const row=lastHistoryRows.find(t=>String(t.id)===id&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
+  if(!row){setNotice('This bank record changed. Refresh Bank activity.');return}
+  const matches=window.HouseholdPlannerTransactions.historicalScheduleMatches(
+   row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
+  historyExpandedId=id;historyExpandedAccount=account;
+  historyExpandedRuleId=matches.length===1?matches[0].id:'';
+  transactionDetail=null;recurringDraft=null;
+  if(!matches.length&&window.HouseholdPlannerHistory.canPlan(row)){
+   try{
+    const draft=window.HouseholdPlannerHistory.draftFor(
+     row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+    const options=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+     category=options.find(c=>c.toLowerCase()===String(row.category||'').toLowerCase())||
+      'Uncategorized';
+    recurringDraft={...draft,category,historyRowId:id};
+   }catch(error){
+    historyExpandedId='';setNotice(String(error.message||error));return;
+   }
+  }
+  reviewNotice='';render();
+  document.querySelector('.history-page [data-history-inline-detail] [name=merchant]')?.focus();
+  return;
+ }
  const fromHistory=e.target.closest('[data-history-plan]')||
   e.target.closest('[data-calendar-history-plan]')||actualRow;
  if(fromHistory){
@@ -2232,6 +2330,7 @@ document.addEventListener('click',async e=>{
  }
  if(e.target.closest('[data-cancel-review-form]')){
   recurringDraft=null;
+  if(activeTab==='history'){historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId=''}
   if(transactionDetail) dismissTransaction();
   else render();
   return;
@@ -2475,6 +2574,10 @@ document.addEventListener('submit',async e=>{
    scheduleMode='edit';scheduleTarget=savedPlanId;render();
    const card=[...document.querySelectorAll('[data-schedule-card]')].find(x=>x.dataset.scheduleCard===savedPlanId);
    card?.insertAdjacentHTML('afterbegin','<p class="inline-save-result" role="status">'+escapeHTML(scheduleNotice)+'</p>');
+  }else if(activeTab==='history'&&savedPlanId&&!transactionDetail){
+   historyExpandedRuleId=savedPlanId;recurringDraft=null;
+   reviewNotice='Saved — repeating schedule updated. Bank records remain unchanged.';
+   render();
   }else if(originatingKey&&savedPlanId){
    render();
    confirmInlineSave(originatingKey,'Saved — repeating plan defaults updated.');
@@ -2536,6 +2639,9 @@ document.addEventListener('submit',async e=>{
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
    model.records(state()),linked?[]:linkedHistoryIds(form)));
   const origin=draft.merchant;
+  if(activeTab==='history'){
+   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
+  }
   recurringDraft=null;transactionDetail=null;reviewNotice='Saved recurring forecast for '+origin+'.';
   transactionNotice=reviewNotice;
   const inlineKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||

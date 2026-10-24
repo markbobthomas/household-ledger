@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'inline-review-category-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'unified-recurrence-editor-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -516,10 +516,20 @@ const {chromium,webkit}=require('playwright');
     window.createHouseholdLedgerDemo()).transactions.find(t=>String(t.id)===id)?.category,safewayId),
     bankCategoryBefore,'Classification overlay does not rewrite the underlying transaction');
    const demoHistoricalMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage'}).first();
-   await demoHistoricalMortgage.click();
+   await demoHistoricalMortgage.locator('.history-row-open').click();
+   const mortgageEntry=demoHistoricalMortgage.locator('xpath=..');
+   assert.equal(await mortgageEntry.locator('.history-inline-detail .history-schedule-form').count(),1,
+    'Bank activity opens its recurring editor directly under the selected bank row');
+   assert.equal(await page.locator('.history-page .transaction-overlay').count(),0,
+    'A repeating schedule from Bank activity does not open an extra dialog');
+   assert.equal(await mortgageEntry.locator('.history-row-open').getAttribute('aria-expanded'),'true');
+   assert.equal(await mortgageEntry.locator('.recurrence-editor [name=category]').count(),1,
+    'Bank activity uses the same schedule editor category field as Needs review');
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
     'History can propose future recurrence based on an actual bank record');
    await page.locator('[data-cancel-review-form]').click();
+   assert.equal(await mortgageEntry.locator('.history-inline-detail').count(),0,
+    'Cancel collapses Bank activity editor without changing the bank transaction');
    const historyTransfer=page.locator('.history-actual-row').filter({hasText:'Transfer to Savings'}).first();
    assert.equal(await historyTransfer.locator('[data-history-plan]').count(),0,
     'History opens from the row without redundant schedule buttons');
@@ -766,11 +776,13 @@ const {chromium,webkit}=require('playwright');
    const unscheduledHistory=page.locator('.history-actual-row[data-history-forecast-state="unplanned"]').first();
    assert.ok(await unscheduledHistory.count()>0,'Unplanned bank rows remain visible');
    assert.match(await unscheduledHistory.innerText(),/Not scheduled/);
-   assert.match(await unscheduledHistory.locator('.history-row-open').innerText(),/Add repeating/);
+   assert.equal(await unscheduledHistory.locator('.history-row-open .history-row-hint').innerText(),'›',
+    'Bank activity uses the shared chevron-only review affordance');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
    assert.equal(await insuranceHistory.getAttribute('data-history-forecast-state'),'automatic');
-   assert.match(await insuranceHistory.locator('.history-row-open').innerText(),/Confirm repeating/);
+   assert.equal(await insuranceHistory.locator('.history-row-open .history-row-hint').innerText(),'›');
    await insuranceHistory.locator('.history-row-open').click();
+   assert.equal(await insuranceHistory.locator('xpath=..').locator('.history-inline-detail').count(),1);
    await page.locator('.history-schedule-form [name=frequency]').selectOption('monthly');
    await page.locator('.history-schedule-form button[type=submit]').click();
    assert.ok(await page.evaluate(()=>JSON.parse(
@@ -780,10 +792,17 @@ const {chromium,webkit}=require('playwright');
    await go('history');
    const savedInsurance=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
    assert.equal(await savedInsurance.getAttribute('data-history-forecast-state'),'confirmed');
-   assert.match(await savedInsurance.locator('.history-row-open').innerText(),/Edit plan/,
-    'After confirmation only Edit plan remains');
+   assert.equal(await savedInsurance.locator('.history-row-open .history-row-hint').innerText(),'›',
+    'Confirmed bank payment opens in place with the same chevron');
    assert.equal(await savedInsurance.locator('[data-history-auto-prediction]').count(),0,
     'Saved repeating plans no longer have the misleading exclusion toggle');
+   await savedInsurance.locator('.history-row-open').click();
+   const inlineConfirmed=savedInsurance.locator('xpath=..').locator('[data-schedule-edit-form]');
+   assert.equal(await inlineConfirmed.count(),1,
+    'Confirmed payments edit their existing saved schedule directly under the bank row');
+   assert.equal(await inlineConfirmed.locator('[name=category]').count(),1);
+   assert.equal(await page.locator('.history-page .transaction-overlay').count(),0);
+   await savedInsurance.locator('xpath=..').locator('[data-history-inline-close]').click();
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'State Farm Insurance'}).count()>=1,
     'Confirmed recurring insurance remains in the canonical future ledger');
@@ -959,6 +978,8 @@ const {chromium,webkit}=require('playwright');
     'Every existing schedule is labeled 1 through N in saved list order');
    await page.locator('[data-schedule-new]').click();
    let schedule=page.locator('[data-schedule-new-form]');
+   assert.equal(await page.locator('.schedule-creation .recurrence-editor .schedule-form').count(),1,
+    'Repeating creates forecasts using the same shared inline editor as Needs review');
    assert.equal(await page.locator('.transaction-detail').count(),0,
     'Schedule creation does not open a separate popup editor');
    await schedule.locator('[name=scheduleLabel]').fill('Water - House');
@@ -1057,6 +1078,9 @@ const {chromium,webkit}=require('playwright');
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
    if(!await water.locator('[data-schedule-inline-plan]').count())
     await water.locator('[data-schedule-edit]').click();
+   assert.equal(await water.locator('.schedule-inline-plan .recurrence-editor [name=category]').count(),1,
+    'Repeating edits have the identical shared Category field and form hierarchy');
+   await water.locator('.schedule-occurrence-disclosure > summary').click();
    assert.equal(await water.locator('[data-plan-estimates]').count(),0,
     'There is no separate option to batch-edit an arbitrary set of dates');
    assert.equal(await water.locator('[data-schedule-estimate-form]').count(),0,
@@ -1068,6 +1092,7 @@ const {chromium,webkit}=require('playwright');
    await decemberEdit.locator('[name=amount]').fill('175');
    await decemberEdit.locator('button[type=submit]').click();
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   await water.locator('.schedule-occurrence-disclosure > summary').click();
    assert.match(await water.locator('[data-schedule-occurrence-key]').filter({hasText:'Dec 10'}).first().innerText(),/175/,
     'An individual December estimate is set directly on December, without a date range');
    assert.ok(await water.locator('[data-schedule-inline-plan]').count(),
@@ -1083,6 +1108,7 @@ const {chromium,webkit}=require('playwright');
    await onePayment.locator('[name=amount]').fill('147');
    await onePayment.locator('button[type=submit]').click();
    water=page.locator('[data-schedule-card]').filter({hasText:'Water - House'}).first();
+   await water.locator('.schedule-occurrence-disclosure > summary').click();
    assert.match(await water.locator('[data-schedule-occurrence-key]')
     .filter({hasText:'Nov 10'}).first().innerText(),/147/);
    assert.match(await water.locator('[data-schedule-occurrence-key]')
