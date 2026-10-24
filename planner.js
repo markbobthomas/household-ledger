@@ -1928,12 +1928,19 @@ document.addEventListener('click',async e=>{
   return;
  }
  const newSchedule=e.target.closest?.('[data-schedule-new]');
- if(newSchedule){scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
+ if(newSchedule){
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+   recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+   !window.confirm('Discard unsaved schedule changes?'))return;
+  scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
   transactionDetail=null;render();
   document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
   return}
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
  if(scheduleEdit){
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+   recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+   !window.confirm('Discard unsaved schedule changes?'))return;
   const id=scheduleEdit.dataset.scheduleEdit;
   const same=scheduleMode==='edit'&&scheduleTarget===id;
   scheduleRemoveTarget='';scheduleNotice='';
@@ -2086,9 +2093,27 @@ document.addEventListener('click',async e=>{
   activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   render();
   window.scrollTo({top:0,behavior:'auto'});
   return;
+ }
+ const selectBankPlan=e.target.closest?.('[data-history-inline-rule]');
+ if(selectBankPlan){
+  const ruleId=selectBankPlan.dataset.historyInlineRule,
+   origin=selectBankPlan.closest('[data-history-entry]')?.dataset.historyEntry,
+   bank=lastHistoryRows.find(t=>String(t.id)===origin);
+  const options=bank?window.HouseholdPlannerTransactions.historicalScheduleMatches(
+   bank,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]):[];
+  if(!options.some(r=>r.id===ruleId)){setNotice('That saved schedule changed. Reopen the bank payment.');return}
+  historyExpandedRuleId=ruleId;recurringDraft=null;render();
+  document.querySelector('.history-page [data-history-inline-detail] [name=merchant]')?.focus();
+  return;
+ }
+ const closeBankInline=e.target.closest?.('[data-history-inline-close]');
+ if(closeBankInline){
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
+  render();return;
  }
  const scheduleChoice=e.target.closest?.('[data-choose-history-schedule]');
  if(scheduleChoice){
@@ -2097,6 +2122,41 @@ document.addEventListener('click',async e=>{
   return;
  }
  const actualRow=e.target.closest?.('[data-historical-transaction]');
+ if(actualRow&&activeTab==='history'){
+  const id=actualRow.dataset.historicalTransaction,account=actualRow.dataset.historicalAccount,
+   same=historyExpandedId===id&&historyExpandedAccount===account;
+  if(same){
+   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+    !window.confirm('Discard unsaved schedule changes?'))return;
+   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
+   render();return;
+  }
+  if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+   !window.confirm('Discard unsaved schedule changes?'))return;
+  const row=lastHistoryRows.find(t=>String(t.id)===id&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
+  if(!row){setNotice('This bank record changed. Refresh Bank activity.');return}
+  const matches=window.HouseholdPlannerTransactions.historicalScheduleMatches(
+   row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
+  historyExpandedId=id;historyExpandedAccount=account;
+  historyExpandedRuleId=matches.length===1?matches[0].id:'';
+  transactionDetail=null;recurringDraft=null;
+  if(!matches.length&&window.HouseholdPlannerHistory.canPlan(row)){
+   try{
+    const draft=window.HouseholdPlannerHistory.draftFor(
+     row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+    const options=window.HouseholdPlannerTransactions.scheduleCategories(state()),
+     category=options.find(c=>c.toLowerCase()===String(row.category||'').toLowerCase())||
+      'Uncategorized';
+    recurringDraft={...draft,category,historyRowId:id};
+   }catch(error){
+    historyExpandedId='';setNotice(String(error.message||error));return;
+   }
+  }
+  reviewNotice='';render();
+  document.querySelector('.history-page [data-history-inline-detail] [name=merchant]')?.focus();
+  return;
+ }
  const fromHistory=e.target.closest('[data-history-plan]')||
   e.target.closest('[data-calendar-history-plan]')||actualRow;
  if(fromHistory){
@@ -2266,6 +2326,7 @@ document.addEventListener('click',async e=>{
  }
  if(e.target.closest('[data-cancel-review-form]')){
   recurringDraft=null;
+  if(activeTab==='history'){historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId=''}
   if(transactionDetail) dismissTransaction();
   else render();
   return;
@@ -2509,6 +2570,10 @@ document.addEventListener('submit',async e=>{
    scheduleMode='edit';scheduleTarget=savedPlanId;render();
    const card=[...document.querySelectorAll('[data-schedule-card]')].find(x=>x.dataset.scheduleCard===savedPlanId);
    card?.insertAdjacentHTML('afterbegin','<p class="inline-save-result" role="status">'+escapeHTML(scheduleNotice)+'</p>');
+  }else if(activeTab==='history'&&savedPlanId&&!transactionDetail){
+   historyExpandedRuleId=savedPlanId;recurringDraft=null;
+   reviewNotice='Saved — repeating schedule updated. Bank records remain unchanged.';
+   render();
   }else if(originatingKey&&savedPlanId){
    render();
    confirmInlineSave(originatingKey,'Saved — repeating plan defaults updated.');
@@ -2570,6 +2635,9 @@ document.addEventListener('submit',async e=>{
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
    model.records(state()),linked?[]:linkedHistoryIds(form)));
   const origin=draft.merchant;
+  if(activeTab==='history'){
+   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
+  }
   recurringDraft=null;transactionDetail=null;reviewNotice='Saved recurring forecast for '+origin+'.';
   transactionNotice=reviewNotice;
   const inlineKey=form.closest('[data-inline-row-wrapper]')?.dataset.paymentKey||
