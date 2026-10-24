@@ -38,6 +38,9 @@ function scheduleListNumber(id){
 }
 
 let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSuggestions=[];
+// Derived data only. Source bank records and persisted predictions remain the
+// authorities; this cache cannot be written to the bank or planning store.
+let forecastCache=null;
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
@@ -111,12 +114,26 @@ function forecastForPayments(events,s,additions){
 }
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
+ const source=state(),prefs=source.predictions||{};
+ // The live bank adapter replaces the source state on every refresh. Saved
+ // user choices edit the predictions object in place, so compare its CONTENT,
+ // not just its identity. A new as-of day, balance, account, override or
+ // category-learning decision must also recompute all projected balances.
+ const signature=JSON.stringify({
+  snapshot:s,predictions:prefs,categoryOverrides:source.categoryOverrides,
+  learning:source.learning,accounts:source.accounts
+ });
+ if(forecastCache&&forecastCache.source===source&&
+    forecastCache.transactions===source.transactions&&
+    forecastCache.signature===signature)return forecastCache.bundle;
  // The only planning entry point: normalize Plaid history, materialize one
  // editable future ledger, then calculate all balances from those entries.
  // Older inference and category forecast engines do not feed balances.
- return window.HouseholdFutureLedger.materialize(
-  s,model.records(state()),state().predictions||{},
+ const bundle=window.HouseholdFutureLedger.materialize(
+  s,model.records(source),prefs,
   window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon);
+ forecastCache={source,transactions:source.transactions,signature,bundle};
+ return bundle;
 }
 function shiftDay(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function selected(s){
@@ -3057,9 +3074,9 @@ document.addEventListener('change',async e=>{
 if(available()){
  window.HouseholdLiveSource.bind({
   render,
-  enterReal(newState,newSnapshot){liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;latestError='';clearAudit()},
-  enterDemo(){liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()},
-  enterUnavailable(){liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()}
+  enterReal(newState,newSnapshot){forecastCache=null;liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;latestError='';clearAudit()},
+  enterDemo(){forecastCache=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()},
+  enterUnavailable(){forecastCache=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()}
  });
 }else{
  $('ledger-mode-switch').querySelector('option[value="real"]').disabled=true;
