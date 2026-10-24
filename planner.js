@@ -1471,48 +1471,78 @@ function repeatedRecommendations(bundle,s){
   b.occurrences-a.occurrences||String(b.lastDate).localeCompare(String(a.lastDate)));
 }
 function reviewsPage(bundle,s){
- // The only purpose of this page is deciding whether likely repeating
- // historical activity should become a confirmed schedule. The full bank
- // transaction list and its category editor live in Bank activity.
+ // One row per forecasted legacy stream. General recurrence suggestions
+ // cannot obscure or change the count of unsaved estimated cash movements.
  const recommendations=repeatedRecommendations(bundle,s);
  lastRecommendedRepeating=recommendations;
- const pending=recommendations.filter(r=>r.status==='pending'),
-  ignored=recommendations.filter(r=>r.status==='ignored'),
-  migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
-  unresolved=pending.filter(r=>r.activeLegacyStreams?.length).length;
+ const migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
+  legacySeries=migration.approvedOnly?[]:migration.legacySeries||[],
+  findOwner=auto=>recommendations.find(r=>(r.activeLegacyStreams||[]).includes(auto.seriesKey)),
+  legacyItems=legacySeries.map(auto=>({auto,owner:findOwner(auto)})),
+  decisionsNeeded=legacyItems.filter(({owner})=>!owner||owner.status==='pending').length,
+  pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
+  ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
+ const actions=(r,legacyKey='')=>!r?
+  '<span class="review-legacy-missing">Identify this payment in Bank activity</span>':
+  r.status==='ignored'?
+   '<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':
+   '<button type="button" class="btn primary" data-review-recommendation="'+escapeHTML(r.key)+
+    '"'+(legacyKey?' data-legacy-series="'+escapeHTML(legacyKey)+'"':'')+'>Review schedule</button>'+
+   '<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">Ignore</button>';
  const card=r=>'<article class="review-candidate" data-recommended-repeat="'+escapeHTML(r.key)+
-  '" data-recommendation-status="'+r.status+
-  '" data-legacy-active="'+(r.activeLegacyStreams?.length?'true':'false')+'">'+
+  '" data-recommendation-status="'+r.status+'" data-legacy-active="false">'+
   '<div class="review-candidate-main"><strong>'+escapeHTML(r.merchant)+'</strong>'+
   '<small>'+escapeHTML(r.accountName)+' · '+escapeHTML(r.frequency)+
   ' · '+r.occurrences+' previous payment'+(r.occurrences===1?'':'s')+
-  ' · Next '+escapeHTML(dayLabel(r.nextDate))+'</small>'+
-  (r.activeLegacyStreams?.length?
-   '<small class="recommendation-state">Existing automatic estimate still affects the forecast until cutover</small>':'')+
-  '</div><strong class="review-candidate-amount">'+cash(r.amount)+'</strong>'+
-  '<div class="review-candidate-actions">'+
-  (r.status==='ignored'?
-   '<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':
-   '<button type="button" class="btn primary" data-review-recommendation="'+escapeHTML(r.key)+'">Review schedule</button>'+
-   '<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">Ignore</button>')+
-  '</div></article>';
+  ' · Next '+escapeHTML(dayLabel(r.nextDate))+'</small></div>'+
+  '<strong class="review-candidate-amount">'+cash(r.amount)+'</strong>'+
+  '<div class="review-candidate-actions">'+actions(r)+'</div></article>';
+ const legacyCard=({auto,owner})=>{
+  const account=activeAccounts(s).find(a=>String(a.id)===String(auto.accountId)),
+   ignoredByUser=owner?.status==='ignored';
+  return '<article class="review-candidate legacy-estimate-row" data-legacy-estimate="'+
+   escapeHTML(auto.seriesKey)+'"'+
+   (owner?' data-recommended-repeat="'+escapeHTML(owner.key)+'"':'')+
+   ' data-legacy-active="true" data-recommendation-status="'+
+    (ignoredByUser?'ignored':'pending')+'">'+
+   '<div class="review-candidate-main"><strong>'+escapeHTML(auto.merchant||'Unidentified payment')+'</strong>'+
+   '<small>'+escapeHTML(account?.name||owner?.accountName||'Account')+' · '+
+    escapeHTML(auto.cadence||owner?.frequency||'Repeating')+
+    ' · Next '+escapeHTML(dayLabel(auto.date))+' · '+
+    escapeHTML(auto.type==='income'?'Deposit':'Withdrawal')+'</small>'+
+   '<small class="legacy-estimate-state">'+
+    (ignoredByUser?'Ignored, but still included in your forecast':
+     'Needs a decision — currently included in your forecast')+
+   '</small></div><strong class="review-candidate-amount">'+cash(auto.amount)+'</strong>'+
+   '<div class="review-candidate-actions">'+actions(owner,auto.seriesKey)+'</div></article>';
+ };
  return '<div class="planner-page reviews-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
+  (legacyItems.length?
+   '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
+    '<div class="section-title"><h2>Automatic estimates still in forecast</h2>'+
+     '<strong class="legacy-estimate-count" data-legacy-estimate-count="'+legacyItems.length+'">'+
+      legacyItems.length+' UNSAVED</strong></div>'+
+    '<p class="lead">These '+legacyItems.length+' repeating payment'+
+      (legacyItems.length===1?' is':'s are')+
+      ' already affecting your projected balance without an approved schedule. '+
+      (decisionsNeeded?decisionsNeeded+' still need'+(decisionsNeeded===1?'s':'')+' a decision. ':
+       'All have review decisions. ')+
+      'Ignoring one does not remove it from the forecast until the final switch below.</p>'+
+    '<div class="legacy-estimate-list">'+legacyItems.map(legacyCard).join('')+'</div>'+
+    '<div class="recurrence-transition"><p class="lead">'+
+      (decisionsNeeded?'Review or ignore the highlighted payment'+(decisionsNeeded===1?'':'s')+
+       ' before switching.':'You can now turn off the older automatic estimates.')+
+     '</p><button type="button" class="btn" data-activate-saved-schedules '+
+      (decisionsNeeded?'disabled title="Review remaining automatic estimates first"':'')+
+      '>Use saved schedules only</button></div>'+
+   '</section>':'')+
   (recurringDraft&&!transactionDetail?repeatingReviewForm(s):'')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
-   '<div class="section-title"><h2>Recommended repeating</h2>'+
+   '<div class="section-title"><h2>Other recommended repeating</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
    (pending.length?pending.map(card).join(''):
-    '<p class="lead">Nothing to review. You can create or edit repeating schedules from Bank activity or Repeating.</p>')+
-   (!migration.approvedOnly?
-    '<div class="recurrence-transition"><p class="lead">'+
-     migration.legacySeries.length+' older unsaved repeating estimate'+
-     (migration.legacySeries.length===1?' is':'s are')+' still included in forecast balances. '+
-     (unresolved?unresolved+' need'+(unresolved===1?'s':'')+' a decision before switching.':
-      'All current estimates have been reviewed.')+
-     '</p><button type="button" class="btn" data-activate-saved-schedules '+
-      (unresolved?'disabled title="Review remaining automatic estimates first"':'')+
-      '>Use saved schedules only</button></div>':'')+
+    '<p class="lead">No other recurring suggestions need review. You can create or edit repeating schedules from Bank activity or Repeating.</p>')+
    '</section>'+
    (ignored.length?
     '<details class="ignored-repeating" data-ignored-repeating><summary>Ignored ('+
@@ -1689,7 +1719,7 @@ function render(){
   ...((bundle?.payments?.warnings||[]).slice(0,3)),
   ...(bundle?.recurrenceMigration&&!bundle.recurrenceMigration.approvedOnly&&
    bundle.recurrenceMigration.legacySeries.length?
-   [bundle.recurrenceMigration.legacySeries.length+' unsaved automatic repeating estimate stream(s) still affect future balances. Review them in Needs review before switching to saved schedules only.']:[]),
+   [bundle.recurrenceMigration.legacySeries.length+' unsaved automatic repeating estimate stream(s) still affect future balances. See the highlighted payments at the top of Needs review.']:[]),
   ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>
    'An actual '+cash(m.amount)+' mortgage payment from '+m.account+' is not in the forecast. Review its proposed recurring schedule below.')),
   ...((bundle?.routines?.warnings||[]).slice(0,2).map(w=>
@@ -1705,7 +1735,9 @@ function render(){
  else if(latestError)note='<div class="notice danger">'+escapeHTML(latestError)+'</div>';
  else if(caution.length)note='<div class="notice danger"><div><strong>Forecast needs review.</strong> '+
   escapeHTML(caution.join(' '))+'</div>'+
-  ((bundle?.postedMatchReview||[]).length?
+  ((bundle?.recurrenceMigration?.legacySeries||[]).length&&!bundle.recurrenceMigration.approvedOnly?
+   '<button type="button" class="btn" data-view="reviews">See automatic estimates</button>':
+   (bundle?.postedMatchReview||[]).length?
    '<button type="button" class="btn" data-view="history">Choose matching schedule</button>':'')+
   '</div>';
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
@@ -2056,7 +2088,9 @@ document.addEventListener('click',async e=>{
    // Re-evaluate bank history at click time. A stale Review page cannot drop
    // an unsaved automatic cash movement that arrived after its last render.
    const fresh=forecastFor(snapshot()),current=repeatedRecommendations(fresh,snapshot());
-   const missing=current.filter(r=>r.activeLegacyStreams?.length&&r.status==='pending');
+   const active=fresh?.recurrenceMigration?.legacySeries||[],
+    missing=active.filter(auto=>!current.some(r=>
+     r.activeLegacyStreams?.includes(auto.seriesKey)&&r.status==='ignored'));
    if(missing.length)throw Error('Review the '+missing.length+
     ' remaining unconfirmed automatic payments before switching.');
    await commitForecastChange(()=>{state().predictions.recurringForecastMode='approved-only'});
@@ -2071,7 +2105,14 @@ document.addEventListener('click',async e=>{
  if(newRecommendation){
   const candidate=lastRecommendedRepeating.find(r=>r.key===newRecommendation.dataset.reviewRecommendation);
   if(!candidate){setNotice('That recommendation changed. Open Needs review again.');return}
-  const source=(candidate.examples||[]).map(e=>lastHistoryRows.find(t=>String(t.id)===String(e.id))).find(Boolean);
+  const legacyKey=newRecommendation.dataset.legacySeries,
+   legacy=legacyKey?(forecastFor(snapshot())?.recurrenceMigration?.legacySeries||[])
+    .find(auto=>auto.seriesKey===legacyKey):null;
+  if(legacyKey&&!legacy){setNotice('This automatic estimate changed. Reopen Needs review.');return}
+  // Keep same-payee independent income streams distinct.
+  const source=legacy?(legacy.historicalIds||[]).map(id=>
+     lastHistoryRows.find(t=>String(t.id)===String(id))).filter(Boolean).at(-1):
+    (candidate.examples||[]).map(e=>lastHistoryRows.find(t=>String(t.id)===String(e.id))).find(Boolean);
   try{
    // Reuse the same bank-aware form as History so alternating paychecks,
    // transfers and posted examples are linked safely to ONE approved plan.
