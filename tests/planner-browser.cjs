@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-compact-labels-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'calendar-weekdays-friday-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -180,7 +180,7 @@ const {chromium,webkit}=require('playwright');
     'All three metrics have identical zero inner borders and left padding');
    // A month is always six weeks (42 day slots), with a fixed day size.
    const gridGeometry=async()=>page.evaluate(()=>{
-    const grid=document.querySelector('.calendar-grid'),days=[...grid.children].slice(7);
+    const grid=document.querySelector('.calendar-grid'),days=[...grid.children].slice(5);
     const bounds=grid.getBoundingClientRect();
     const style=el=>getComputedStyle(el);
     return {height:bounds.height,slots:days.length,weekdays:grid.querySelectorAll('.calendar-weekday').length,
@@ -193,8 +193,13 @@ const {chromium,webkit}=require('playwright');
    });
    const initialGrid=await gridGeometry();
    const desiredCell=mobile?106:124;
-   assert.equal(initialGrid.slots,42,'October has 42 fixed date slots, even when only five weeks are needed');
-   assert.equal(initialGrid.weekdays,7,'Weekday headings remain a separate row');
+   assert.equal(initialGrid.slots,30,'October reserves six rows of five weekdays');
+   assert.equal(initialGrid.weekdays,5,'Only Monday through Friday have visible headings');
+   assert.deepEqual(await page.locator('.calendar-weekday').allInnerTexts(),
+    ['MON','TUE','WED','THU','FRI']);
+   assert.equal(await page.locator('[data-calendar-day], [data-calendar-actual-day]').evaluateAll(els=>
+    els.filter(el=>[0,6].includes(new Date((el.dataset.calendarDay||el.dataset.calendarActualDay)+'T12:00:00Z').getUTCDay())).length),
+    0,'Neither predicted nor actual weekend cells appear on the five-column calendar');
    assert.equal(initialGrid.rows.length,7,'Calendar has one weekday row plus six fixed week rows');
    assert.ok(initialGrid.heights.every(n=>Math.abs(n-desiredCell)<1),
     'Empty, posted and forecast days share a fixed cell height: '+JSON.stringify(initialGrid));
@@ -352,18 +357,18 @@ const {chromium,webkit}=require('playwright');
       await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
    const novemberGrid=await gridGeometry();
-   assert.equal(novemberGrid.slots,42,'November 2026 needs all six week rows');
-   assert.equal(novemberGrid.actual,30);
+   assert.equal(novemberGrid.slots,30,'November uses the same 30 weekday slots');
+   assert.equal(novemberGrid.actual,21);
    assert.ok(Math.abs(novemberGrid.height-initialGrid.height)<1,
     'Five-week October and six-week November have exactly the same calendar height');
    // February 2027 spans only four weeks, and should not shrink the calendar.
    for(let month=0;month<3;month++)await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/February 2027/);
    const februaryGrid=await gridGeometry();
-   assert.equal(februaryGrid.slots,42);
-   assert.equal(februaryGrid.actual,28);
+   assert.equal(februaryGrid.slots,30);
+   assert.equal(februaryGrid.actual,20);
    assert.ok(Math.abs(februaryGrid.height-initialGrid.height)<1,
-    'Four-, five- and six-week months have identical grid height');
+    'Four-, five- and six-week months keep identical six-row business-week grid height');
    await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
 
@@ -382,8 +387,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(novemberLow.shown,novemberLow.expected.value,'Monthly low matches the lowest displayed November day');
    assert.equal(novemberLow.date,novemberLow.expected.date,'Monthly low date matches November minimum');
    assert.equal(novemberLow.marked,novemberLow.date,'The actual minimum day is highlighted');
-   assert.ok(await page.locator('[data-calendar-day="2026-11-01"]').count()>0,
-    'Next month contains projected balances starting on its first day');
+   assert.ok(await page.locator('[data-calendar-day="2026-11-02"]').count()>0,
+    'Next month contains projected balances starting on its first business day');
    await page.locator('[data-calendar-today]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
    assert.equal(await page.locator('[data-calendar-day="2026-10-19"].selected').count(),1,
@@ -920,8 +925,8 @@ const {chromium,webkit}=require('playwright');
    const fourWeekRows=page.locator('.future-item').filter({hasText:'Every 4 weeks test payment'});
    assert.ok(await fourWeekRows.count()>=35,'Four-week plan reaches well into the third year');
    assert.deepEqual((await fourWeekRows.locator('.future-date').allInnerTexts()).slice(0,3),
-    ['Nov 1','Nov 29','Dec 27'],
-    'The actual future ledger moves forward 28 days per occurrence, rather than on calendar months');
+    ['Oct 30','Nov 27','Dec 25'],
+    'Each four-week Sunday anchor independently settles on the preceding Friday, 28 days apart');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
     .futureRecurringRules?.some(x=>x.merchant==='Every 4 weeks test payment'&&x.frequency==='every-4-weeks')),
     'Every-four-weeks schedules persist as one confirmed recurrence');

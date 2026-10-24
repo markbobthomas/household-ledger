@@ -2727,3 +2727,7 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
     height:106px;max-height:106px;
   }
 }
+
+/* Five-day forecasting calendar: six invariant Monday-Friday rows per month.
+   Day height is unchanged, including room for two prediction previews. */
+.summary-page .calendar-grid{grid-template-columns:repeat(5,minmax(0,1fr))}

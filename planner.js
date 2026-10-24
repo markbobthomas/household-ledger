@@ -98,7 +98,8 @@ function forecastFor(s){
  // Older inference and category forecast engines do not feed balances.
  const bundle=window.HouseholdFutureLedger.materialize(
   s,model.records(source),prefs,
-  window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon);
+  window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon,
+  {weekendPolicy:'friday'});
  forecastCache={source,transactions:source.transactions,signature,bundle};
  return bundle;
 }

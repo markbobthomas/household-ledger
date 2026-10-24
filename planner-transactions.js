@@ -86,6 +86,17 @@ const seriesPlan=p=>{
  return null;
 };
 const shift=(date,offset)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10)};
+/* A future occurrence is modeled on the Friday before a weekend, without
+ * mutating its stable recurrence anchor or bank-posted historical source date.
+ * If Friday is already inside the authoritative bank snapshot (<= asOf), it
+ * cannot be inserted retroactively: use Monday instead of losing the charge. */
+const forecastBusinessDate=(iso,asOf='')=>{
+ if(!validDate(iso))return iso;
+ const day=new Date(iso+'T12:00:00Z').getUTCDay();
+ if(day!==0&&day!==6)return iso;
+ const prior=shift(iso,day===6?-1:-2);
+ return prior>asOf?prior:shift(iso,day===6?2:1);
+};
 const monthEnd=m=>new Date(Date.UTC(Number(m.slice(0,4)),Number(m.slice(5,7)),0)).getUTCDate();
 function applySeries(source,baseDate,seriesKey,rules){
  const change=seriesKey?(rules||{})[seriesKey]:null;
@@ -832,7 +843,7 @@ const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
  // Shared primitives only; scheduling, recommendation and payment policies stay
  // separate. Preserve unknown/ambiguous account references unchanged.
- merchantKey,accountRef,daysBetween,shift,monthAt};
+ merchantKey,accountRef,daysBetween,shift,monthAt,forecastBusinessDate};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
