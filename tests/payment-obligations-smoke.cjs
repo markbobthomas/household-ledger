@@ -48,4 +48,19 @@ assert.ok(missing.warnings.length,'Missing payment source must show a warning');
 assert.throws(()=>Model.setCardPaymentRule(state,'visa',{fromAccountId:'checking-1',closingDay:18,lastStatementClose:'2026-11-13',nextPaymentDate:'2026-11-12',lastStatementBalance:1000}),/valid billing period/);
 const direct=payments.build(snapshot,[],[],{paymentBills:[{id:'mort',name:'Mortgage',fromAccountId:'checking-1',date:'2026-11-01',amount:2800,frequency:'monthly',category:'Housing'}]});
 assert.equal(direct.billEvents.length,3,'Explicit monthly mortgage is projected on each date within 90 days');
+// UI statement dividers use exact saved closing dates; never infer an
+// issuer cycle without them or mistakenly label a payment as a purchase.
+const cycle={billingStartDate:'2026-10-01',billingEndDate:'2026-10-31',closingDay:31};
+const period=date=>payments.statementPeriodFor(cycle,date);
+assert.deepEqual(period('2026-10-01'),{start:'2026-10-01',end:'2026-10-31'});
+assert.deepEqual(period('2026-10-31'),{start:'2026-10-01',end:'2026-10-31'});
+assert.deepEqual(period('2026-11-01'),{start:'2026-11-01',end:'2026-11-30'});
+assert.deepEqual(period('2027-02-28'),{start:'2027-02-01',end:'2027-02-28'});
+assert.deepEqual(period('2026-09-30'),{start:'2026-09-01',end:'2026-09-30'});
+assert.deepEqual(payments.statementPeriodFor(
+ {billingStartDate:'2024-01-31',billingEndDate:'2024-01-31',closingDay:31},'2024-02-29'),
+ {start:'2024-02-01',end:'2024-02-29'});
+assert.equal(payments.statementPeriodFor({},'2026-10-01'),null,
+ 'No guessed statement period on an unconfigured card');
+assert.equal(payments.statementPeriodFor(cycle,'not-a-date'),null);
 console.log('PASS card purchases never debit checking; statement autopay debits checking and debt once; mortgage dedupe; future estimated statements; missing funding warnings; model validation');

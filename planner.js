@@ -46,7 +46,7 @@ let reviewCatalogSave=Promise.resolve();
 let historyAccount='all',historySearch='',historySort='newest',historyLimit=90,recurringDraft=null,reviewNotice='';
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
+let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1031,6 +1031,21 @@ function applyScheduleSearch(root=document){
   count.textContent='Showing '+shown+' of '+total+' repeating transaction'+
    (total===1?'':'s');
  }
+ for(const row of root.querySelectorAll('[data-statement-occurrence]')){
+  row.hidden=!!q&&!String(row.dataset.scheduleSearchText||'').includes(q);
+ }
+ for(const group of root.querySelectorAll('[data-repeating-statement-group]')){
+  const rows=[...group.querySelectorAll('[data-statement-occurrence]')].filter(r=>!r.hidden);
+  group.hidden=rows.length===0;
+  const divider=group.querySelector('[data-statement-divider]');
+  if(divider){
+   const total=rows.reduce((n,row)=>n+Number(row.dataset.statementCents||0),0);
+   divider.querySelector('.ledger-statement-total').textContent='Net charges '+cash(total/100);
+   const summary=divider.querySelector('small');
+   if(summary)summary.textContent=summary.textContent.replace(/ · \d+ repeating charges?$/,
+     ' · '+rows.length+' repeating charge'+(rows.length===1?'':'s'));
+  }
+ }
  const empty=root.querySelector('[data-schedule-search-empty]');
  if(empty)empty.hidden=shown!==0||!q;
 }
@@ -1088,6 +1103,62 @@ function ledgerMoney(amount,sign=''){
   '<span class="ledger-money-digits">'+escapeHTML(cash(amount).replace('$',''))+'</span>'+
   '</span>';
 }
+// Statement cycles are display-only. Never count linked card payments as
+// purchases or equate a net-activity subtotal with an issued statement.
+function cardStatementPeriod(accountId,when){
+ return window.HouseholdPaymentObligations.statementPeriodFor(
+  state().predictions?.paymentRules?.[accountId],when);
+}
+function cardActivityCents(row){
+ if(row.pending||!['expense','refund'].includes(row.type))return 0;
+ const cents=Math.round(Math.abs(Number(row.amount))*100);
+ if(!Number.isFinite(cents))return 0;
+ return row.type==='refund'?-cents:cents;
+}
+function statementHeading(period,total,count,kind){
+ return '<div class="ledger-statement-divider" data-statement-divider="'+escapeHTML(period.end)+
+  '" data-statement-kind="'+escapeHTML(kind)+'">'+
+  '<strong>Statement closes '+escapeHTML(dateLong(period.end))+'</strong>'+
+  '<small>'+escapeHTML(dayLabel(period.start))+' – '+escapeHTML(dayLabel(period.end))+
+  ' · '+count+' '+(kind==='repeating'?'repeating charge':'shown bank transaction')+
+  (count===1?'':'s')+'</small>'+
+  '<span class="ledger-statement-total">Net charges '+cash(total/100)+'</span></div>';
+}
+function repeatingStatementPeriods(bundle,s,accountId,shownRules){
+ const rule=state().predictions?.paymentRules?.[accountId];
+ if(!rule?.billingEndDate&&!rule?.lastStatementClose)
+  return '<p class="ledger-statement-help">Set this card’s billing period in Settings to see statement totals.</p>';
+ const ids=new Set(shownRules.map(({rule})=>String(rule.id)));
+ const searchOf=row=>{
+  const saved=shownRules.find(x=>String(x.rule.id)===String(row.recurringRuleId))?.rule;
+  return [row.merchant,saved?.scheduleLabel,saved?.category].filter(Boolean).join(' ').toLowerCase();
+ };
+ const end=shiftDay(s.asOf,90),groups=new Map();
+ const rows=futureRows(bundle,s).filter(row=>row.kind==='event'&&
+  String(row.accountId)===String(accountId)&&ids.has(String(row.recurringRuleId||''))&&
+  row.date>s.asOf&&row.date<=end&&['expense','refund'].includes(row.type));
+ for(const row of rows){
+  const period=cardStatementPeriod(accountId,row.date);if(!period)continue;
+  if(!groups.has(period.end))groups.set(period.end,{period,rows:[]});
+  groups.get(period.end).rows.push(row);
+ }
+ const content=[...groups.values()].sort((a,b)=>a.period.end.localeCompare(b.period.end))
+  .map(({period,rows})=>{
+   const total=rows.reduce((sum,row)=>sum+cardActivityCents(row),0);
+   return '<section class="ledger-statement-group" data-repeating-statement-group="'+escapeHTML(period.end)+'">'+
+    statementHeading(period,total,rows.length,'repeating')+
+    rows.map(row=>'<div class="ledger-statement-occurrence" data-statement-occurrence '+
+     'data-statement-cents="'+cardActivityCents(row)+'" data-schedule-search-text="'+
+     escapeHTML(searchOf(row))+'">'+
+     '<button type="button" data-open-transaction="'+escapeHTML(row.key)+'">'+
+     '<span>'+escapeHTML(dayLabel(row.date))+'</span><strong>'+escapeHTML(row.merchant)+'</strong>'+
+     '<span>'+cash(row.amount)+'</span><span aria-hidden="true">›</span></button></div>').join('')+'</section>';
+  }).join('');
+ return '<section class="ledger-statement-periods schedule-statement-periods" data-repeating-statement-periods>'+
+  '<p class="ledger-statement-intro">Next 90 days · repeating card charges only · estimates, not issued statements</p>'+
+  (content||'<p class="ledger-statement-help">No repeating charges are forecast for this card in the next 90 days.</p>')+
+  '</section>';
+}
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
@@ -1095,7 +1166,10 @@ function schedulesPage(bundle,s){
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
  const indexed=rules.map((rule,index)=>({rule,index}));
- const visible=indexed.filter(({rule})=>!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter);
+ const visible=indexed.filter(({rule})=>
+  (scheduleAccount==='all'||[rule.accountId,rule.fromAccountId,rule.toAccountId]
+   .some(id=>String(id||'')===scheduleAccount))&&
+  (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter));
  const nextAmount=rule=>{
   const first=T.recurrenceDates(rule,s.asOf,end)[0];
   return first?T.scheduleAmount(rule,first).amount:Number(rule.amount)||0;
@@ -1202,27 +1276,30 @@ function schedulesPage(bundle,s){
    '" aria-label="Schedule organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
-   '<label>Sort <select data-schedule-sort>'+
+   '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
+    '<label>Sort <select data-schedule-sort>'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
      '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
    '</select></label>'+
-   '<label>Show <select data-schedule-category-filter><option value="">All categories</option>'+
+   '<div class="schedule-category-controls"><label>Show <select data-schedule-category-filter><option value="">All categories</option>'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
    '</select></label>'+
    '<details class="schedule-category-manager" data-schedule-category-manager>'+
-    '<summary>+ Category</summary>'+
+    '<summary title="Add category" aria-label="Add category">+</summary>'+
     '<form data-schedule-category-add><label>New category<input name="categoryName" maxlength="40" '+
     'placeholder="e.g. Pet care" required></label>'+
     '<button type="submit" class="btn">Add</button></form>'+
-    '<p data-schedule-category-notice role="status"></p></details>'+
+    '<p data-schedule-category-notice role="status"></p></details></div>'+
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+'<div class="schedule-grid">'+
    '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
     'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
     ' of '+rules.length+' repeating transaction'+(rules.length===1?'':'s')+'</p>'+
+   (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
+      repeatingStatementPeriods(bundle,s,scheduleAccount,visible):'')+
    (cards||'<section class="panel">No schedules match. Change the filter or create a schedule.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching schedules. Try a different search.</p>'+
@@ -1344,9 +1421,14 @@ function historyPage(bundle,s){
    textOf(a).localeCompare(textOf(b))||dateDesc(a,b):
   dateDesc(a,b));
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
+ const selectedHistoryCard=historyAccount==='all'?null:
+  accounts.find(a=>String(a.id)===historyAccount&&accountType(a)==='credit');
+ const groupHistoryCard=Boolean(selectedHistoryCard&&
+  (state().predictions?.paymentRules?.[historyAccount]?.billingEndDate||
+   state().predictions?.paymentRules?.[historyAccount]?.lastStatementClose));
  const savedRules=state().predictions?.futureRecurringRules||[];
  const projections=futureRows(bundle,s);
- const rows=visible.map(t=>{
+ const rowMarkup=visible.map(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
    t.type==='transfer'&&t.cashDirection==='in';
@@ -1409,7 +1491,26 @@ function historyPage(bundle,s){
      (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
    '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
    detail+'</div>';
- }).join('');
+ });
+ // Preserve each user's chosen sort order inside each statement, and present
+ // statement boundaries in chronological order. Never count pending activity,
+ // transfers, or card settlements as card purchases.
+ const rows=!groupHistoryCard?rowMarkup.join(''):(()=>{
+  const groups=new Map(),ungrouped=[];
+  visible.forEach((t,i)=>{
+   const period=cardStatementPeriod(historyAccount,t.date);
+   if(!period){ungrouped.push(rowMarkup[i]);return}
+   if(!groups.has(period.end))groups.set(period.end,{period,entries:[]});
+   groups.get(period.end).entries.push({row:t,html:rowMarkup[i]});
+  });
+  return [...groups.values()].sort((a,b)=>historySort==='oldest'?
+   a.period.end.localeCompare(b.period.end):
+   b.period.end.localeCompare(a.period.end)).map(({period,entries})=>
+   '<section class="ledger-statement-group" data-history-statement-group="'+escapeHTML(period.end)+'">'+
+   statementHeading(period,entries.reduce((sum,e)=>sum+cardActivityCents(e.row),0),
+    entries.length,'history')+entries.map(e=>e.html).join('')+'</section>').join('')+
+   ungrouped.join('');
+ })();
  return '<div class="planner-page history-page">'+
   '<form class="history-filters ledger-toolbar" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -1424,6 +1525,8 @@ function historyPage(bundle,s){
    '<button class="btn ledger-history-search-button" type="submit">Search</button>'+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
+  (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':
+   selectedHistoryCard?'<p class="ledger-statement-help">Set this card’s billing period in Settings to group transactions by statement.</p>':'')+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   // Minimal non-browser safety harnesses cannot emulate row expansion.
   // Preserve their bank-linked confirmation form without affecting browsers.
@@ -2931,10 +3034,12 @@ document.addEventListener('change',async e=>{
   return;
  }
  const sorter=e.target.closest?.('[data-schedule-sort]'),
-  filter=e.target.closest?.('[data-schedule-category-filter]');
- if(sorter||filter){
+  filter=e.target.closest?.('[data-schedule-category-filter]'),
+  schedulePicker=e.target.name==='scheduleAccount'?e.target:null;
+ if(sorter||filter||schedulePicker){
   const nextSort=sorter?sorter.value:scheduleSort,
    nextFilter=filter?filter.value:scheduleCategoryFilter,
+   nextAccount=schedulePicker?schedulePicker.value:scheduleAccount,
    edit=document.querySelector('[data-schedule-edit-form],[data-schedule-new-form]');
   const dirty=edit&&[...edit.querySelectorAll('input,select,textarea')].some(field=>{
    if(field.type==='hidden')return false;
@@ -2943,9 +3048,9 @@ document.addEventListener('change',async e=>{
    return field.value!==field.defaultValue;
   });
   if(dirty&&!window.confirm('Discard unsaved schedule edits to reorganize the list?')){
-   e.target.value=sorter?scheduleSort:scheduleCategoryFilter;return;
+   e.target.value=sorter?scheduleSort:schedulePicker?scheduleAccount:scheduleCategoryFilter;return;
   }
-  scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;
+  scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;scheduleAccount=nextAccount;
   scheduleMode='';scheduleTarget='';transactionDetail=null;render();return;
  }
  if(e.target.name==='separateSchedule'&&e.target.checked){

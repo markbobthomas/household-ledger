@@ -2503,3 +2503,86 @@ html{scrollbar-gutter:stable}
   min-height:50px;
  }
 }
+
+/* One account-aware toolbar grid for Repeating and Bank activity. Keep search,
+   Account and Sort aligned in the first three columns on both pages. */
+.schedule-page .ledger-toolbar,.history-page .ledger-toolbar{
+ grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(145px,.9fr) 132px;
+}
+.schedule-page .ledger-toolbar>.schedule-category-controls{
+ grid-column:4;min-width:0;width:100%;display:flex;align-items:end;gap:5px;
+}
+.schedule-page .schedule-category-controls>label{
+ display:flex;flex:1 1 auto;flex-direction:column;gap:4px;min-width:0;
+ font-size:var(--ui-label-size,11px);font-weight:600;color:var(--muted);
+}
+.schedule-page .schedule-category-controls>label select{min-width:0;width:100%}
+.schedule-page .schedule-category-controls>.schedule-category-manager{
+ flex:0 0 30px;width:30px;min-width:0;position:relative;align-self:end;
+}
+.schedule-page .schedule-category-controls>.schedule-category-manager>summary{
+ width:30px;min-height:36px;height:36px;
+ display:flex;align-items:center;justify-content:center;
+ background:var(--soft);border:1px solid var(--line);
+ border-radius:7px;list-style:none;font-size:16px;cursor:pointer;
+}
+.schedule-page .schedule-category-controls>.schedule-category-manager>summary::-webkit-details-marker{display:none}
+.schedule-page .schedule-category-controls>.schedule-category-manager>form{
+ position:absolute;right:0;top:calc(100% + 4px);z-index:10;
+ width:min(210px,75vw);padding:10px;border:1px solid var(--line);
+ background:#fff;border-radius:8px;box-shadow:0 4px 18px #16232a18;
+}
+@media(max-width:850px){
+ .schedule-page .ledger-toolbar,.history-page .ledger-toolbar{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+ }
+ .schedule-page .ledger-toolbar>.schedule-category-controls{grid-column:1;grid-row:3}
+ .schedule-page .ledger-toolbar>.ledger-add-repeating{grid-column:2;grid-row:3}
+}
+.ledger-statement-periods{margin:6px 0 13px}
+.ledger-statement-intro,.ledger-statement-help{
+ margin:7px 9px 11px;font-size:11px;color:var(--muted);line-height:1.5;
+}
+.ledger-statement-group{min-width:0;border-top:1px solid var(--line)}
+.ledger-statement-divider{
+ display:grid;grid-template-columns:minmax(0,1fr) auto;
+ align-items:center;gap:0 12px;min-width:0;
+ padding:10px 9px 9px;border-bottom:1px solid var(--line);
+ background:var(--soft);
+}
+.ledger-statement-divider strong{font-weight:700;font-size:11px}
+.ledger-statement-divider small{grid-column:1;grid-row:2;font-size:10px;color:var(--muted)}
+.ledger-statement-divider .ledger-statement-total{
+ grid-column:2;grid-row:1/3;white-space:nowrap;
+ font-size:11px;font-weight:750;font-variant-numeric:tabular-nums;
+}
+.ledger-statement-occurrence>button{
+ display:grid;grid-template-columns:72px minmax(0,1fr) 86px 14px;
+ width:100%;align-items:center;gap:9px;text-align:left;
+ padding:11px 10px;border:0;border-bottom:1px solid var(--line);
+ background:transparent;color:var(--ink);cursor:pointer;
+}
+.ledger-statement-occurrence>button:hover{background:var(--soft)}
+.ledger-statement-occurrence>button strong{font-size:12px;font-weight:650;overflow-wrap:anywhere}
+.ledger-statement-occurrence>button span:first-child{font-size:11px;color:var(--muted)}
+.ledger-statement-occurrence>button span:nth-last-child(2){
+ font-size:12px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;
+}
+.schedule-statement-periods{border-bottom:1px solid var(--line)}
+.history-page .ledger-statement-group>.history-entry{width:100%;min-width:0}
+@media(max-width:480px){
+ .ledger-statement-divider{gap:3px 8px}
+ .ledger-statement-divider .ledger-statement-total{font-size:10px}
+ .ledger-statement-occurrence>button{grid-template-columns:58px minmax(0,1fr) 70px 12px;gap:5px;padding:10px 6px}
+}
+
+/* On small screens both ledger toolbars have three identical-height rows.
+   The category value explains itself; suppress only its tiny visible caption. */
+@media(max-width:850px){
+ .schedule-page .schedule-category-controls>label{
+  gap:0;font-size:0;line-height:0;
+ }
+ .schedule-page .schedule-category-controls>label select{
+  font-size:12px;line-height:1.35;
+ }
+}
