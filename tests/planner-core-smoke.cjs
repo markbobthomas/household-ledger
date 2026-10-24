@@ -219,9 +219,11 @@ const twiceMonthly=[
  tx('t4','2026-10-15','Employer Payroll',1400,'income')
 ];
 const twice=C.materialize(snapshot,twiceMonthly,{},T,P,90);
-assert.deepEqual(find(twice,'Employer Payroll').slice(0,4).map(x=>x.date),
- ['2026-11-01','2026-11-15','2026-12-01','2026-12-15'],
- 'Twice-monthly payroll retains two calendar dates, never drifts biweekly');
+assert.equal(find(twice,'Employer Payroll').length,0,
+ 'Unapproved twice-monthly payroll cannot silently inflate future balances');
+assert.deepEqual(twice.automaticRecurrence.events.filter(x=>x.merchant==='Employer Payroll')
+ .slice(0,4).map(x=>x.date),['2026-11-01','2026-11-15','2026-12-01','2026-12-15'],
+ 'The review recommendation still detects both paydays on their calendar dates');
 const historicalCardSettlements=[
  tx('cardpaid1','2026-09-10','Credit card payment',600),
  tx('cardpaid2','2026-10-10','Credit card payment',600)
