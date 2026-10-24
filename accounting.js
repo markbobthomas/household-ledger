@@ -119,9 +119,28 @@ function reconcile(state){
  // within 5 days, at least one side has unmistakable transfer/payment semantics.
  // If multiple equally plausible counterparts exist, leave them unmatched for review.
  const candidateRows=output.filter(t=>!t.pending&&Number(t.amount)>0&&iso(t.date));
+ // Limit cross-account pairing to the same five-day window and opposite
+ // direction BEFORE comparing amounts. Keep the original (i,j) visit order:
+ // stable equal-score matches must retain the existing ambiguity policy.
+ const indexedDays=new Map(),dayNumber=t=>Date.parse(t.date+'T12:00:00Z')/86400000;
+ for(let j=0;j<candidateRows.length;j++){
+  const t=candidateRows[j];
+  if(!['in','out'].includes(t.cashDirection))continue;
+  const id=dayNumber(t)+'|'+t.cashDirection;
+  if(!indexedDays.has(id))indexedDays.set(id,[]);
+  indexedDays.get(id).push(j);
+ }
  const candidates=[];
- for(let i=0;i<candidateRows.length;i++)for(let j=i+1;j<candidateRows.length;j++){
-  const a=candidateRows[i],b=candidateRows[j];
+ for(let i=0;i<candidateRows.length;i++){
+  const a=candidateRows[i];
+  if(!['in','out'].includes(a.cashDirection))continue;
+  const other=a.cashDirection==='in'?'out':'in',day=dayNumber(a),near=[];
+  for(let offset=-5;offset<=5;offset++)
+   for(const j of indexedDays.get((day+offset)+'|'+other)||[])
+    if(j>i)near.push(j);
+  near.sort((x,y)=>x-y);
+  for(const j of near){
+  const b=candidateRows[j];
   if(a.accountId===b.accountId||a.cashDirection===b.cashDirection||
      !['in','out'].includes(a.cashDirection)||!['in','out'].includes(b.cashDirection)||
      Math.abs(Number(a.amount)-Number(b.amount))>.011||days(a.date,b.date)>5)continue;
@@ -132,6 +151,7 @@ function reconcile(state){
   const card=a.accountingKind==='card_payment'||b.accountingKind==='card_payment'||aCard!==bCard&&(aCard||bCard);
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
   candidates.push({a,b,card,priority,delta:days(a.date,b.date)});
+  }
  }
  const assigned=new Set();
  const byRow=new Map();
