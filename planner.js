@@ -42,6 +42,7 @@ let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transa
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
 let historyAccount='all',historySearch='',historyLimit=90,recurringDraft=null,reviewNotice='';
+let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
@@ -1109,13 +1110,15 @@ function schedulesPage(bundle,s){
    categoryOf(a.rule).localeCompare(categoryOf(b.rule))||a.index-b.index:
   a.index-b.index);
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
- const create=scheduleMode==='new'?'<form class="panel schedule-form" data-schedule-new-form>'+
-  '<h3>New schedule</h3>'+
+ const create=scheduleMode==='new'?'<section class="schedule-creation recurrence-inline-detail" data-schedule-create-inline>'+
+  recurringEditor('<form class="schedule-form" data-schedule-new-form>'+
+   '<p class="review-inline-guide">New repeating payment · choose the future dates, account and amount.</p>'+
   '<input name="separateSchedule" type="hidden" value="on">'+
   (schedulePreset?.historyExampleId?'<input type="hidden" name="historyExampleId" value="'+escapeHTML(schedulePreset.historyExampleId)+'">':'')+
   fields({...schedulePreset,amountBasis:schedulePreset?.amountBasis||'estimate'},true)+
-  '<div class="future-form-actions"><button class="btn primary" type="submit">Create schedule</button>'+
-  '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>':'';
+  '<div class="future-form-actions"><button class="btn primary" type="submit">Save recurring forecast</button>'+
+  '<button class="btn" type="button" data-schedule-close>Cancel</button></div></form>','schedule')+
+  '</section>':'';
  const cardHtml=({rule:r,index})=>{
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
@@ -1143,13 +1146,13 @@ function schedulesPage(bundle,s){
    '" data-schedule-monthly-transfers="'+monthly.transfers+
    '" data-schedule-yearly-out="'+yearly.out+'" data-schedule-yearly-in="'+yearly.in+
    '" data-schedule-yearly-transfers="'+yearly.transfers+'">'+
-   '<div class="schedule-compact-row ledger-list-row">'+
-   '<button class="schedule-row-main ledger-row-open" type="button" data-schedule-edit="'+id+
+   '<div class="schedule-compact-row ledger-list-row recurrence-row">'+
+   '<button class="schedule-row-main ledger-row-open recurrence-row-trigger" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' schedule '+number+': '+title+'">'+
     '<span class="schedule-row-next ledger-row-date"><span>'+
      (next?escapeHTML(dayLabel(next)):'Not due')+'</span></span>'+
-    '<span class="schedule-row-identity ledger-row-description"><span class="schedule-number" aria-hidden="true">'+number+
+    '<span class="schedule-row-identity ledger-row-description recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
@@ -1179,10 +1182,11 @@ function schedulesPage(bundle,s){
     'You can clear an old rule or change a specific payment below. '+
     'Changing the repeating amount for all future payments will replace these older rules.</p>'+
     windows+'</details>':'')+
-   (isEditing?'<div class="schedule-inline-plan" data-schedule-inline-plan="'+id+'">'+
-     '<details class="plan-settings" data-plan-settings open><summary><span>Repeating payment defaults</span></summary>'+
-      '<div class="plan-settings-body">'+edit+'</div></details>'+
-     scheduleOccurrencesHtml(bundle,s,r)+'</div>':'')+'</div></article>';
+   (isEditing?'<div class="schedule-inline-plan recurrence-inline-detail" data-schedule-inline-plan="'+id+'">'+
+     recurringEditor('<p class="review-inline-guide">Changes to this schedule affect future repeating payments. To change one date, use Upcoming payments below.</p>'+
+      edit,'schedule')+
+     '<details class="schedule-occurrence-disclosure"><summary>Upcoming payments</summary>'+
+      scheduleOccurrencesHtml(bundle,s,r)+'</details></div>':'')+'</div></article>';
  };
  const cards=scheduleSort==='category'?
   [...new Set(visible.map(({rule})=>categoryOf(rule)))].map(category=>{
@@ -1250,8 +1254,8 @@ function transactionsPage(bundle,s){
   '</section></div>';
 }
 
-function reviewFormDirty(){
- const form=document.querySelector('.reviews-page [data-review-inline-detail] [data-history-recurring-form]');
+function recurrenceFormDirty(selector){
+ const form=document.querySelector(selector);
  if(!form)return false;
  return [...form.querySelectorAll('input,select,textarea')].some(input=>{
   if(input.type==='hidden')return false;
@@ -1259,6 +1263,13 @@ function reviewFormDirty(){
   if(input.tagName==='SELECT')return [...input.options].some(o=>o.selected!==o.defaultSelected);
   return input.value!==input.defaultValue;
  });
+}
+function reviewFormDirty(){
+ return recurrenceFormDirty('.reviews-page [data-review-inline-detail] [data-history-recurring-form]');
+}
+// Shared inline form shell; page-specific fields and actions remain independent.
+function recurringEditor(html,variant='review'){
+ return '<div class="recurrence-editor recurrence-editor--'+variant+'">'+html+'</div>';
 }
 function repeatingReviewForm(s,{inline=false}={}){
  if(!recurringDraft)return '';
@@ -1521,13 +1532,13 @@ function reviewsPage(bundle,s){
    (r?' data-recommended-repeat="'+escapeHTML(r.key)+'"':'')+
    ' data-legacy-active="'+isLegacy+'" data-recommendation-status="'+
      (isIgnored?'ignored':'pending')+'">'+
-   '<div class="review-row-top">'+
-    (r?'<button class="review-row-open" type="button" data-review-recommendation="'+escapeHTML(r.key)+'"'+
+   '<div class="review-row-top recurrence-row">'+
+    (r?'<button class="review-row-open recurrence-row-trigger" type="button" data-review-recommendation="'+escapeHTML(r.key)+'"'+
      (isLegacy?' data-legacy-series="'+escapeHTML(key)+'"':'')+
      ' aria-expanded="'+isOpen+'" aria-label="'+(isOpen?'Close':'Open')+
      ' repeating payment details: '+escapeHTML(title)+'">':
      '<div class="review-row-unavailable">')+
-    '<span class="review-candidate-main"><strong>'+escapeHTML(title)+'</strong>'+
+    '<span class="review-candidate-main recurrence-row-name"><strong>'+escapeHTML(title)+'</strong>'+
      '<small>'+escapeHTML(account)+' · '+escapeHTML(cadence)+
       ' · Next '+escapeHTML(dayLabel(date))+
       (kind?' · '+escapeHTML(kind):
@@ -1539,8 +1550,8 @@ function reviewsPage(bundle,s){
      '</div>')+
     '<div class="review-candidate-actions">'+controls(r,key)+'</div>'+
    '</div>'+
-   (isOpen?'<div class="review-inline-detail" data-review-inline-detail>'+
-    repeatingReviewForm(s,{inline:true})+'</div>':'')+
+   (isOpen?'<div class="review-inline-detail recurrence-inline-detail" data-review-inline-detail>'+
+    recurringEditor(repeatingReviewForm(s,{inline:true}),'review')+'</div>':'')+
    '</article>';
  };
  const normalCard=r=>row(r);
