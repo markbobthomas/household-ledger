@@ -1431,7 +1431,13 @@ function reviewsPage(bundle,s){
   const ignoreKey=[item.accountId,item.type,
     String(item.merchant||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),
     String(Math.round(Number(item.amount||0)*100))].map(encodeURIComponent).join('|');
-  const ignored=Boolean(item.ignored||
+  const oldIgnored=Object.values(state().predictions?.historyPatternDecisions||{}).some(d=>
+   d&&typeof d==='object'&&d.status==='dismissed'&&d.recommendation&&
+   String(d.recommendation.accountId)===String(item.accountId)&&
+   String(d.recommendation.type)===String(item.type)&&
+   normalize(d.recommendation.merchant)===normalize(item.merchant)&&
+   (item.frequency!=='every-4-weeks'||String(d.recommendation.key)===String(item.key)));
+  const ignored=Boolean(item.ignored||oldIgnored||
    (state().predictions?.historyPatternDecisions?.[ignoreKey]?.status||
     state().predictions?.historyPatternDecisions?.[ignoreKey])==='dismissed');
   return {...item,actual,matched,ignored,ignoreKey};
