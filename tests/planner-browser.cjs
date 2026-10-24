@@ -33,8 +33,8 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'history-forecast-actions-20261023-v1','The loaded HTML identifies the task-based UI release');
-   assert.match(await page.locator('#deployment-version').textContent(),/History Actions v1/,
+    'schedule-approval-20261023-v1','The loaded HTML identifies the task-based UI release');
+   assert.match(await page.locator('#deployment-version').textContent(),/Schedule Approval v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
@@ -342,12 +342,22 @@ const {chromium,webkit}=require('playwright');
     'Linked transfers require an explicit receiving account');
    await page.locator('[data-cancel-review-form]').click();
    await go('transactions');
+   assert.equal(await page.locator('.future-item').filter({hasText:'Mortgage'}).count(),0,
+    'An identified mortgage does not affect balances without approval');
+   await go('reviews');
+   const recommendedMortgage=page.locator('[data-repeating-recommendation]').filter({hasText:'Mortgage'}).first();
+   assert.ok(await recommendedMortgage.count()>0,'Mortgage remains prominently recommended for approval');
+   assert.match(await recommendedMortgage.innerText(),/Not included in predicted balances/);
+   await recommendedMortgage.locator('[data-review-candidate]').click();
+   await page.locator('[data-repeating-recommendation][data-recommendation-state="saved"]')
+    .filter({hasText:'Mortgage'}).first().waitFor();
+   await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'One authoritative auto-detected mortgage appears in the future ledger');
+    'Approving the recommended mortgage creates the only recurring future payments');
    await page.reload({waitUntil:'load'});
    await go('transactions');
    assert.ok(await page.locator('.future-item').filter({hasText:'Mortgage'}).count()>0,
-    'Refreshing does not erase bank-derived future predictions');
+    'The explicitly saved mortgage survives refresh');
    await go('settings');
    const auditDetails=page.locator('#accuracy-audit');
    await page.locator('#planner-menu > summary').click();
@@ -422,7 +432,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-reset-series]').click();
    assert.equal(await page.evaluate(()=>Object.keys(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
-   ).length),0,'Reset all future restores automatic recurring forecasts');
+   ).length),0,'Reset all future restores the confirmed recurring schedule defaults');
    await page.locator('[data-show-new]').click();
    await page.locator('#future-new-form [name=merchant]').fill('One-time home repair');
    await page.locator('#future-new-form [name=amount]').fill('125');
@@ -1230,10 +1240,14 @@ const {chromium,webkit}=require('playwright');
   assert.equal(refreshed,1,'Private Plaid refresh remains reachable');
   await go('transactions');
   const predictedMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
-  assert.ok(await predictedMortgage.count()>=1,
-   'One strongly identified actual $2,000 mortgage is forecast automatically without three months');
-  const predictedDatesBefore=await predictedMortgage.count();
-  assert.equal(predictedDatesBefore,36,'Automatic mortgage estimate repeats throughout the three-year modeled period');
+  assert.equal(await predictedMortgage.count(),0,
+   'A high-confidence real mortgage is not debited until the user approves a schedule');
+  await go('reviews');
+  const realRecommendation=page.locator('[data-repeating-recommendation]')
+   .filter({hasText:'Mortgage Servicer X'}).first();
+  assert.ok(await realRecommendation.count()>0,
+   'A strongly identified real mortgage appears in permanent Recommended repeating');
+  assert.match(await realRecommendation.innerText(),/Not included in predicted balances/);
   await go('history');
   const actualMortgage=page.locator('.history-actual-row').filter({hasText:'Mortgage Servicer X'}).first();
   await actualMortgage.click();
@@ -1242,8 +1256,8 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await mortgageForm.locator('[name=accountId]').inputValue(),'checking-real');
   assert.equal(await mortgageForm.locator('[name=date]').inputValue(),'2026-11-15');
   assert.equal(await mortgageForm.locator('[name=frequency]').inputValue(),'monthly');
-  // The manual due date must supersede inferred November 15, not create
-  // a second monthly $2,000 checking withdrawal.
+  // The manually approved date becomes the ONLY repeating prediction;
+  // there was no unapproved automatic November 15 debit to duplicate.
   await mortgageForm.locator('[name=date]').fill('2026-11-25');
   failNextForecast=true;
   await mortgageForm.locator('button[type=submit]').click();
@@ -1259,7 +1273,7 @@ const {chromium,webkit}=require('playwright');
   await go('transactions');
   const singleMortgage=page.locator('.future-item').filter({hasText:'Mortgage Servicer X'});
   assert.equal(await singleMortgage.count(),35,
-   'One owner-confirmed mortgage per remaining billing month, without the inferred duplicate');
+   'Only one owner-confirmed mortgage per remaining billing month');
   assert.match(await singleMortgage.first().innerText(),/Nov 25/,
    'Owner-selected mortgage date takes priority over the historical posting day');
   await go('history');
