@@ -1373,37 +1373,75 @@ function historyPage(bundle,s){
 // are snapshotted so later dismissals, bank refreshes and approved schedules
 // never erase the review trail. It is stored with encrypted Real preferences.
 function repeatedRecommendations(bundle,s){
- const prefs=state().predictions||{},history=window.HouseholdPlannerHistory;
+ const prefs=state().predictions||{},history=window.HouseholdPlannerHistory,
+  accounts=activeAccounts(s),actual=bundle?.rows||[],rules=prefs.futureRecurringRules||[],
+  normalize=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  const saved=prefs.repeatingRecommendations||{},discovered=history.recommendedRepeating(
-  bundle?.rows||[],activeAccounts(s),s.asOf,prefs);
+  actual,accounts,s.asOf,prefs);
  const next={...saved};let modified=false;
  for(const r of discovered){
   const before=next[r.key];
-  // Update current evidence, preserving earlier recommendations even when
-  // subsequent bank data changes a proposed amount or merchant descriptor.
   if(!before||JSON.stringify(before)!==JSON.stringify(r)){
    next[r.key]=r;modified=true;
   }
  }
+ // A past automatically forecasted stream is NEVER dropped from the migration
+ // inventory merely because the regular recommendation scanner groups variable
+ // amounts differently. Match bank example IDs before amounts; each distinct
+ // four-week payroll phase gets its own review decision.
+ const attached=new Map();
+ for(const auto of bundle?.recurrenceMigration?.legacySeries||[]){
+  const eligible=Object.values(next).filter(r=>r&&
+   String(r.accountId)===String(auto.accountId)&&r.type===auto.type&&
+   normalize(r.merchant)===normalize(auto.merchant));
+  const scored=eligible.map(r=>({
+   r,overlap:(r.examples||[]).filter(e=>(auto.historicalIds||[])
+    .some(id=>String(id)===String(e.id))).length,
+   amountGap:Math.abs(Number(r.amount)-Number(auto.amount))
+  })).sort((a,b)=>b.overlap-a.overlap||a.amountGap-b.amountGap);
+  const best=scored[0];
+  let target=best&&(best.overlap>0||scored.length===1||best.amountGap<=.01&&
+   (scored.length===1||scored[1].amountGap>best.amountGap))?best.r:null;
+  if(!target){
+   const key='legacy-estimate|'+encodeURIComponent(auto.seriesKey);
+   const bank=actual.find(t=>(auto.historicalIds||[]).some(id=>String(id)===String(t.id)));
+   if(!next[key]){
+    next[key]={key,accountId:auto.accountId,
+     accountName:accounts.find(a=>String(a.id)===String(auto.accountId))?.name||auto.accountId,
+     merchant:auto.merchant,amount:auto.amount,type:auto.type,
+     frequency:auto.cadence||'monthly',nextDate:auto.date,lastDate:bank?.date||s.asOf,
+     occurrences:Math.max(1,(auto.historicalIds||[]).length),
+     examples:bank?[{id:String(bank.id),date:bank.date,
+      amount:Number(bank.amount),merchant:String(bank.merchant||'')}]:[],
+     reason:'Existing automatic forecast requires an explicit approval decision'};
+    modified=true;
+   }
+   target=next[key];
+  }
+  const keys=attached.get(target.key)||[];
+  if(!keys.includes(auto.seriesKey))keys.push(auto.seriesKey);
+  attached.set(target.key,keys);
+ }
  if(modified){
   prefs.repeatingRecommendations=next;
-  // Background writes only run after a completed read/render. Forecast edits
-  // await this queued persistence to avoid overtaking discovery on Real.
   reviewCatalogSave=reviewCatalogSave.catch(()=>{}).then(()=>savePlanning()).catch(error=>{
    latestError='Could not save the repeating recommendations: '+String(error.message||error);
   });
  }
- const actual=bundle?.rows||[],accounts=activeAccounts(s),
-  rules=prefs.futureRecurringRules||{},decisions=prefs.repeatingRecommendationDecisions||{};
+ const decisions=prefs.repeatingRecommendationDecisions||{};
  return Object.values(next).filter(r=>r&&r.key&&r.accountId&&r.merchant).map(r=>{
   const actualRow=(r.examples||[]).map(e=>actual.find(t=>String(t.id)===String(e.id)))
    .find(Boolean);
-  const matches=actualRow?window.HouseholdPlannerTransactions.historicalScheduleMatches(actualRow,accounts,
-   Array.isArray(rules)?rules:[]):(Array.isArray(rules)?rules:[]).filter(rule=>
-    String(rule.originalAccountId||rule.accountId||rule.fromAccountId)===String(r.accountId)&&
-    (rule.matchNames||[]).includes(String(r.merchant).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()));
-  const status=matches.length?'scheduled':decisions[r.key]==='ignored'?'ignored':'pending';
-  return {...r,status,ruleId:matches.length===1?matches[0].id:null};
+  const matches=actualRow?window.HouseholdPlannerTransactions.historicalScheduleMatches(actualRow,accounts,rules):
+   rules.filter(rule=>String(rule.originalAccountId||rule.accountId||rule.fromAccountId)===
+    String(r.accountId)&&(rule.matchNames||[]).includes(normalize(r.merchant)));
+  const activeLegacyStreams=attached.get(r.key)||[];
+  // An estimate that is STILL active cannot be deemed covered simply because
+  // a same-merchant schedule exists. Require an explicit review decision.
+  const status=activeLegacyStreams.length?
+   (decisions[r.key]==='ignored'?'ignored':'pending'):
+   matches.length?'scheduled':decisions[r.key]==='ignored'?'ignored':'pending';
+  return {...r,status,activeLegacyStreams,ruleId:matches.length===1?matches[0].id:null};
  }).sort((a,b)=>({pending:0,ignored:1,scheduled:2}[a.status]??3)-
   ({pending:0,ignored:1,scheduled:2}[b.status]??3)||
   b.occurrences-a.occurrences||String(b.lastDate).localeCompare(String(a.lastDate)));
