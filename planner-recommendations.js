@@ -53,10 +53,40 @@ function discover(bundle={}){
  for(const e of bundle.bankRecommendationCandidates||[])add(e,'history');
  return [...found.values()];
 }
-function reconcile(existing={},bundle={},rules=[],records=[],accounts=[]){
+function reconcile(existing={},bundle={},rules=[],records=[],accounts=[],prefs={}){
  const stored=existing&&typeof existing==='object'&&!Array.isArray(existing)?existing:{};
  const next={...stored},bank=records||[],all=discover(bundle);
  let changed=false;
+ // Migrate previous "not recurring" decisions as visible Ignored entries,
+ // even when the detector now excludes them. Legacy exclusions must never
+ // turn into invisible missing bills after upgrading.
+ const legacy=[];
+ for(const [key,item] of Object.entries(prefs.futureRecurrenceExclusions||{})){
+  if(!item?.accountId||!item?.merchant||!['income','expense'].includes(item.type))continue;
+  const day=String(item.phaseDate||'');
+  const phase=day&&/^\\d{4}-\\d{2}-\\d{2}$/.test(day)?
+   '28-day-phase-'+Math.floor(Date.parse(day+'T12:00:00Z')/86400000)%28:'';
+  legacy.push({accountId:item.accountId,type:item.type,merchant:item.merchant,phase});
+ }
+ for(const [key,value] of Object.entries(prefs.historyPatternDecisions||{})){
+  if(value!=='dismissed')continue;
+  const parts=key.split('|').map(x=>{try{return decodeURIComponent(x)}catch{return x}});
+  if(parts.length>=3&&['income','expense'].includes(parts[1]))
+   legacy.push({accountId:parts[0],type:parts[1],merchant:parts[2],phase:''});
+ }
+ for(const item of legacy){
+  const key=idFor(item.accountId,item.type,item.merchant,item.phase);
+  if(next[key])continue;
+  const latest=bank.filter(t=>String(t.accountId||t.account)===String(item.accountId)&&
+   norm(t.merchant||t.name)===norm(item.merchant)).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
+  const accountName=accounts.find(a=>String(a.id)===String(item.accountId))?.name||item.accountId;
+  next[key]={key,accountId:String(item.accountId),accountName,merchant:String(item.merchant),
+   type:item.type,category:latest?.category||'Other',frequency:'monthly',
+   amount:Number(latest?.amount||0),nextDate:'',lastDate:String(latest?.date||''),
+   phase:item.phase,examples:latest?[{id:String(latest.id)}]:[],
+   occurrences:1,source:'legacy',confidence:'Previously excluded',decision:'ignored'};
+  changed=true;
+ }
  for(const candidate of all){
   const old=next[candidate.key];
   if(!old){
