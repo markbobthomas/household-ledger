@@ -64,7 +64,7 @@ function reconcile(existing={},bundle={},rules=[],records=[],accounts=[],prefs={
  for(const [key,item] of Object.entries(prefs.futureRecurrenceExclusions||{})){
   if(!item?.accountId||!item?.merchant||!['income','expense'].includes(item.type))continue;
   const day=String(item.phaseDate||'');
-  const phase=day&&/^\\d{4}-\\d{2}-\\d{2}$/.test(day)?
+  const phase=day&&/^\d{4}-\d{2}-\d{2}$/.test(day)?
    '28-day-phase-'+Math.floor(Date.parse(day+'T12:00:00Z')/86400000)%28:'';
   legacy.push({accountId:item.accountId,type:item.type,merchant:item.merchant,phase});
  }
