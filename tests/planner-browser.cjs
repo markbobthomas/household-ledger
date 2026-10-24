@@ -1348,10 +1348,13 @@ const {chromium,webkit}=require('playwright');
   await homeForm.locator('[name=category]').selectOption('Mortgage');
   await homeForm.locator('button[type=submit]').click();
   await page.locator('.history-page .future-notice').getByText(/Saved recurring forecast/).waitFor();
-  assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem(
-   'household-planner-sample-settings-v1')||'{}').futureRecurringRules?.some(r=>
-    r.merchant==='Home Mortgage ACH'&&r.category==='Mortgage')),
-   'Selected category is saved on the future schedule and not as a bank-record mutation');
+  await go('schedules');
+  const savedMortgagePlan=page.locator('[data-schedule-card]').filter({hasText:'Home Mortgage ACH'}).first();
+  assert.equal(await savedMortgagePlan.locator('[data-schedule-quick-category]').inputValue(),'Mortgage',
+   'Real-account schedule confirmation persists selected Category on the forecast plan');
+  await go('history');
+  assert.ok(await page.locator('.history-actual-row').filter({hasText:'Home Mortgage ACH'}).count()>0,
+   'Bank source history remains visible after category assignment');
   await go('settings');
   const cardSettings=page.locator('#card-autopay');
   if(await cardSettings.getAttribute('open')===null)
