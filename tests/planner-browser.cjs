@@ -286,7 +286,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.calendar-day-detail .calendar-math').count(),0,
     'No duplicated deposit/withdrawal aggregates appear above the transactions');
    const equation=await recon.evaluate((element)=>{
-    const value=text=>Number(text.trim().replace(/[$,\\s]/g,'').replace('−','-'));
+    const value=text=>Number(text.trim().replace(/[$,\s]/g,'').replace('−','-'));
     const start=value(element.querySelector('.calendar-day-opening strong').textContent),
      movements=[...element.querySelectorAll('.calendar-day-transactions .calendar-monthly-row > strong')]
       .map(el=>value(el.textContent)),
@@ -993,7 +993,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.calendar-day-transactions .calendar-monthly-row > strong').count(),1,
     'The expense is shown once, with its name and editable amount in one row');
    assert.match(await page.locator('.calendar-day-transactions .calendar-monthly-row > strong').innerText(),
-    /−\\$25\\.00/,'The transaction list itself supplies the debit needed to explain the daily total');
+    /−\$25\.00/,'The transaction list itself supplies the debit needed to explain the daily total');
    assert.equal(await page.locator('.calendar-math').count(),0,
     'No additional withdrawals/deposits subtotal repeats the selected transaction amount');
    assert.equal(await page.locator('.calendar-day-detail > :last-child').getAttribute('class'),
