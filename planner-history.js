@@ -198,9 +198,10 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[],optio
    // Rank coherent patterns before the many single, unproven purchases.
    _priority:(frequency?3:bill?2:1)});
  }
- return (options.unlimited?result:result.slice(0,100)).sort((a,b)=>b._priority-a._priority||
+ const sorted=result.sort((a,b)=>b._priority-a._priority||
   b.occurrences-a.occurrences||b.lastDate.localeCompare(a.lastDate)||
-  b.amount-a.amount).map(({_priority,...item})=>item);
+  b.amount-a.amount);
+ return (options.unlimited?sorted:sorted.slice(0,100)).map(({_priority,...item})=>item);
 }
 // Review inventory is independent of the automatic forecast permission and
 // dismissed/saved states. Those decisions affect the *label*, never visibility.
