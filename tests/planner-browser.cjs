@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-header-alignment-20261024-v1','The loaded HTML identifies the header alignment release');
+    'calendar-month-toolbar-20261024-v1','The loaded HTML identifies the Calendar month toolbar release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -119,6 +119,16 @@ const {chromium,webkit}=require('playwright');
     assert.ok(mobileTabs.every(t=>t.whiteSpace==='normal'&&t.height>=44&&
      t.scrollWidth<=t.clientWidth+1),
      'Renamed tabs fit within a narrow phone without clipping: '+JSON.stringify(mobileTabs));
+    const compact=await page.locator('.summary-heading.calendar-toolbar').evaluate(el=>{
+     const heading=el.getBoundingClientRect(),month=el.querySelector('h2').getBoundingClientRect(),
+      account=el.querySelector('.summary-account-picker').getBoundingClientRect(),
+      nav=el.querySelector('.calendar-nav-actions').getBoundingClientRect();
+     return {center:(month.left+month.right)/2-(heading.left+heading.right)/2,
+      within:account.left>=heading.left-1&&nav.right<=heading.right+1,
+      monthBefore:month.bottom<=Math.min(account.top,nav.top)+2};
+    });
+    assert.ok(Math.abs(compact.center)<2&&compact.within&&compact.monthBefore,
+     'At 320px the centered month and both toolbar controls remain in the viewport');
     await page.setViewportSize({width:390,height:844});
    }
 
@@ -139,6 +149,36 @@ const {chromium,webkit}=require('playwright');
    const calendarFrame=await page.locator('.summary-heading').boundingBox();
    const calendarAccount=await page.locator('.summary-account-picker').boundingBox();
    const calendarGridWidth=await page.locator('.calendar-grid').evaluate(el=>el.getBoundingClientRect().width);
+   // Month and its three navigation buttons share the Account header.
+   // At wider widths all three parts occupy one row, with month centered
+   // against the entire toolbar rather than between unequal side controls.
+   const toolbarGeometry=await page.evaluate(()=>{
+    const box=sel=>{const b=document.querySelector(sel).getBoundingClientRect();
+     return {left:b.left,right:b.right,top:b.top,bottom:b.bottom,
+      centerX:(b.left+b.right)/2,centerY:(b.top+b.bottom)/2};};
+    return {toolbar:box('.summary-heading.calendar-toolbar'),
+     account:box('.calendar-toolbar .summary-account-picker'),
+     month:box('.calendar-toolbar .calendar-navigation h2'),
+     actions:box('.calendar-toolbar .calendar-nav-actions')};
+   });
+   assert.equal(await page.locator('.summary-heading [data-calendar-header]').count(),1,
+    'Exactly one month navigator is contained within the Calendar Account header');
+   assert.equal(await page.locator('[data-calendar-stage] .calendar-navigation').count(),0,
+    'No redundant month and navigation row remains below Calendar balances');
+   assert.equal(await page.locator('.summary-heading [data-calendar-nav]').count(),2);
+   assert.equal(await page.locator('.summary-heading [data-calendar-today]').count(),1);
+   assert.ok(Math.abs(toolbarGeometry.month.centerX-toolbarGeometry.toolbar.centerX)<2,
+    'October 2026 is centered in the whole Calendar toolbar');
+   if(!mobile){
+    assert.ok(Math.abs(toolbarGeometry.account.centerY-toolbarGeometry.month.centerY)<4&&
+     Math.abs(toolbarGeometry.actions.centerY-toolbarGeometry.month.centerY)<4,
+     'Desktop Account, month and navigation controls share a single row');
+   }else{
+    assert.ok(toolbarGeometry.month.bottom<=toolbarGeometry.account.top+2&&
+     Math.abs(toolbarGeometry.account.centerY-toolbarGeometry.actions.centerY)<4,
+     'Small screens keep the centered month above the Account and controls');
+   }
+
    let sharedNavBottomGap=NaN;
    for(const [tab,frameSelector,controlSelector] of [
     ['schedules','.schedule-page','.schedule-search-wrap'],
@@ -420,6 +460,8 @@ const {chromium,webkit}=require('playwright');
     'Historical date selections do not open full-month predictions');
       await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/November 2026/);
+   assert.equal(await page.locator('.summary-heading [data-calendar-nav]').count(),2,
+    'Month changes keep the one-row header and its navigation controls');
    const novemberGrid=await gridGeometry();
    assert.equal(novemberGrid.slots,30,'November uses the same 30 weekday slots');
    assert.equal(novemberGrid.actual,21);
