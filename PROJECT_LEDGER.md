@@ -25,7 +25,7 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
-- **2026-10-24 Scheduled Sort by label (verification pending):** Change only the Scheduled sort picker label from `Sort` to `Sort by`, matching Transaction History, without changing options, sorting, toolbar geometry or bank forecasts. Updated `planner.js`, script cache version/revision in `index.html`, desktop/iPhone browser assertion, and this durable ledger. Feature PR/test/merge pending; private Render status unverified.
+- **2026-10-24 Scheduled filter label consistency (verification pending):** Rename Scheduled `Sort` → `Sort by` and `Show` → `Category`, matching Transaction History without modifying their dropdown options, filtering/sorting, layouts or banking forecasts. Updated `planner.js`, JS version/revision in `index.html`, desktop/iPhone browser assertions, and this ledger. PR/test/merge pending; private Render status unverified.
 
 - **2026-10-24 — Transaction History Category filter and Enter search merged:** [PR #190](https://github.com/markbobthomas/household-ledger/pull/190) squash-merged as `58d654e107bffd7f73919297e3c8867c764f1301` and verified on `main`. History now has a Category dropdown in Scheduled's matching toolbar slot, filters posted transactions by actual/effective category, and combines Account/Sort/Find. Search button removed; Enter submits; optional Clear remains. Mobile Category caption matches Scheduled to preserve the same toolbar geometry. Final head `3ed63325405b3b01b0686f789d61e9b978d5ecbe` passed [safety 40170170212](https://github.com/markbobthomas/household-ledger/actions/runs/40170170212) and [Chromium/iPhone browser 40170170241](https://github.com/markbobthomas/household-ledger/actions/runs/40170170241). Private Render release remains unverified.
 
@@ -1233,8 +1233,8 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Behavior:** Fourth-column Category dropdown on Transaction History uses effective actual transaction categories, immediate selection filtering, and optional combinations with Account, Sort, and text query. Search button absent; Enter submits the existing Find form; Clear resets only the query. On mobile the Category caption is visually suppressed like Scheduled to preserve exact three-row toolbar height, retaining accessible label text. Statement grouping, per-row category editing, bank source data, recurring plans, forecast calculations and active filters unaffected beyond chosen display filter.
 - **Deployment:** Verified GitHub merge/tests only. Private Render live deployed SHA remains unverified; no Plaid settings, bank records, private credentials or Render infrastructure changed.
 
-### 2026-10-24 — Scheduled picker label consistency (pending validation)
+### 2026-10-24 — Scheduled dropdown label consistency (pending validation)
 
-- **Request:** In Scheduled, rename the Sort dropdown label to `Sort by`, matching the existing Transaction History wording.
-- **Implementation:** Exact label-only change in `planner.js`, asset cache-bust and revision marker in `index.html`, regression assertion in `tests/planner-browser.cjs`. Existing sort options and selected state, other inputs, page layout, and sorting behavior unchanged.
-- **Checks/status:** Final-head real-account/banking safety and desktop Chromium/iPhone WebKit browser CI pending. No banking, Plaid, backend, forecast or payment data changes. GitHub merge and private Render deployment are not yet verified.
+- **Request, including follow-up:** Match Transaction History dropdown captions on Scheduled: rename Sort to `Sort by` and Show to `Category`.
+- **Implementation:** Two label-only changes in `planner.js`, updated JS cache version and page revision in `index.html`, regression assertions for Scheduled and Transaction History captions in `tests/planner-browser.cjs`. Options and selected values, page layout, filtering/sorting and save behavior unchanged.
+- **Checks/status:** Final-head real-account/banking safety and desktop Chromium/iPhone WebKit CI pending. No banking, Plaid, backend, forecast or payment data changes. GitHub merge and private Render deployment not yet verified.
