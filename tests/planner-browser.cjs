@@ -126,8 +126,9 @@ const {chromium,webkit}=require('playwright');
    // Calendar's account header also aligns to the same content column as
    // Scheduled, Transaction History and Needs review, without shrinking the grid.
    const layout=async()=>page.evaluate(()=>{
-    const rect=selector=>{const b=document.querySelector(selector).getBoundingClientRect();
-     return {x:b.left+window.scrollX,y:b.top+window.scrollY,width:b.width,height:b.height};};
+    const rect=selector=>{const el=document.querySelector(selector),b=el.getBoundingClientRect();
+     // offsetTop tests CSS layout independent of ongoing viewport scrolling.
+     return {x:b.left+window.scrollX,y:el.offsetTop,width:el.offsetWidth,height:el.offsetHeight};};
     return {header:rect('.topbar'),title:rect('.topbar h1'),
      menu:rect('#planner-menu > summary'),nav:rect('.planner-nav-primary')};
    });
