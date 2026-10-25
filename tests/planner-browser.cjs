@@ -810,8 +810,16 @@ const {chromium,webkit}=require('playwright');
     'Every bank-history row has one explicit accessible primary button');
    assert.equal(await page.locator('.history-actual-row button button').count(),0,
     'History rows contain no nested interactive elements');
-   const sort=page.locator('[data-history-sort]');
+   const sort=page.locator('[data-history-sort]'),
+    bankCategoryFilter=page.locator('[data-history-category-filter]');
    assert.equal(await sort.count(),1,'Bank activity has one Sort by selector alongside Account and Find');
+   assert.equal(await bankCategoryFilter.count(),1,'History adds one Category dropdown, just like Scheduled');
+   assert.equal(await bankCategoryFilter.inputValue(),'','History defaults to all categories');
+   assert.equal(await bankCategoryFilter.locator('option[value="Groceries"]').count(),1,
+    'History Category choices come from the posted transactions and saved categories');
+   assert.equal(await page.locator('.history-page .ledger-history-search-button, '+
+    '.history-page [data-history-filter] button[type=submit]').count(),0,
+    'History has no redundant Search button; pressing Enter submits the form');
    assert.equal(await sort.inputValue(),'newest','Newest bank activity is the default');
    const bankColumns=async()=>page.locator('.history-actual-row').evaluateAll(els=>
     els.map(e=>({date:e.dataset.historySortDate,amount:Number(e.dataset.historySortAmount),
@@ -847,15 +855,34 @@ const {chromium,webkit}=require('playwright');
     [...ordered.map(x=>x.category)].sort((a,b)=>a.localeCompare(b)),
     'Bank category sorting uses the current category overrides');
    await sort.selectOption('newest');
-   await page.locator('[data-history-filter] [name=search]').fill('Safeway');
-   await page.locator('[data-history-filter] button[type=submit]').click();
+   const allHistoryCount=(await bankColumns()).length;
+   await bankCategoryFilter.selectOption('Groceries');
+   assert.equal(await bankCategoryFilter.inputValue(),'Groceries');
+   assert.ok((await bankColumns()).length>0,'Category filter shows matching posted transactions');
+   assert.ok((await bankColumns()).every(x=>x.category==='Groceries'),
+    'Category filter applies to all posted rows before sorting and display limits');
+   assert.equal(await page.locator('.history-page [data-history-filter] button[type=submit]').count(),0);
+   const historyFind=page.locator('[data-history-filter] [name=search]');
+   await historyFind.fill('Safeway');
+   await historyFind.press('Enter');
    assert.ok(await page.locator('.history-actual-row').count()>0,
-    'Bank search remains available with Sort by');
-   assert.ok((await bankColumns()).every(x=>x.merchant.toLowerCase().includes('safeway')));
+    'Enter submits the History search with the active Category filter');
+   assert.ok((await bankColumns()).every(x=>x.merchant.toLowerCase().includes('safeway')&&
+    x.category==='Groceries'),'Search and Category combine rather than overriding one another');
+   assert.equal(await bankCategoryFilter.inputValue(),'Groceries',
+    'Enter-to-search preserves the Category selection');
    await page.locator('[data-history-sort]').selectOption('oldest');
-   assert.equal(await page.locator('[data-history-filter] [name=search]').inputValue(),'Safeway',
+   assert.equal(await historyFind.inputValue(),'Safeway',
     'Sort selection preserves active bank transaction search');
+   assert.equal(await bankCategoryFilter.inputValue(),'Groceries',
+    'Sort selection preserves History category filtering');
    await page.locator('[data-clear-history-search]').click();
+   assert.equal(await bankCategoryFilter.inputValue(),'Groceries',
+    'Clear removes only the text query, not Category');
+   await bankCategoryFilter.selectOption('');
+   assert.equal(await bankCategoryFilter.inputValue(),'');
+   assert.ok((await bankColumns()).length>=allHistoryCount,
+    'All categories restores every matching bank transaction');
    await page.locator('[data-history-sort]').selectOption('newest');
    const countStripGeometry=async(surface,row,count)=>page.evaluate(
     ({surface,row,count})=>{
@@ -877,6 +904,7 @@ const {chromium,webkit}=require('playwright');
    });
    const bankToolbar=await fieldGeometry('.history-page .ledger-toolbar');
    const bankSearch=await fieldGeometry('.history-page .history-search-wrap input');
+   const bankCategoryField=await fieldGeometry('.history-page [data-history-category-filter]');
    const bankDollar=await fieldGeometry('.history-page .ledger-money-dollar');
    assert.equal(await page.locator('.history-page .ledger-money-dollar').count(),
     await page.locator('.history-page .history-actual-row').count(),
@@ -1416,6 +1444,7 @@ const {chromium,webkit}=require('playwright');
    }
    const repeatingToolbar=await fieldGeometry('.schedule-page .ledger-toolbar');
    const repeatingSearch=await fieldGeometry('.schedule-page .schedule-search-wrap input');
+   const repeatingCategoryField=await fieldGeometry('.schedule-page [data-schedule-category-filter]');
    const repeatingDollar=await fieldGeometry('.schedule-page .ledger-money-dollar');
    assert.equal(await page.locator('.schedule-page .ledger-money-dollar').count(),
     await page.locator('.schedule-page .schedule-card').count(),
@@ -1428,6 +1457,10 @@ const {chromium,webkit}=require('playwright');
      'Search boxes match exact document '+metric+' between both pages: '+
       JSON.stringify({bank:bankSearch,repeating:repeatingSearch,mobile}));
    }
+   assert.ok(Math.abs(repeatingCategoryField.y-bankCategoryField.y)<=2,
+    'Category selectors align vertically between Scheduled and Transaction History');
+   assert.ok(Math.abs(bankCategoryField.x-repeatingCategoryField.x)<=2,
+    'Category selectors share the same toolbar column on desktop and iPhone');
    assert.ok(Math.abs(repeatingDollar.x-bankDollar.x)<=1,
     'The literal $ glyph (not merely the amount column) aligns between pages: '+
      JSON.stringify({bank:bankDollar,repeating:repeatingDollar,mobile}));
