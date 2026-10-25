@@ -1548,6 +1548,14 @@ const {chromium,webkit}=require('playwright');
       frequency:'monthly',anchorDate:'2026-10-22',sourceAnchorDate:'2026-10-22',
       sourceFrequency:'monthly',amountBasis:'fixed',
       matchNames:['fictional card membership'],exampleIds:[]
+     },{
+      id:'fixture-legacy-external',kind:'event',type:'transfer',originalType:'transfer',
+      anchorDate:'2026-11-01',sourceAnchorDate:'2026-11-01',
+      frequency:'monthly',sourceFrequency:'monthly',amount:38,matchAmount:38,
+      accountId:'demo-checking',originalAccountId:'demo-checking',
+      merchant:'Fictional legacy Zelle',originalMerchant:'Fictional legacy Zelle',
+      scheduleLabel:'Fictional legacy Zelle',amountBasis:'fixed',
+      matchNames:['fictional legacy zelle'],exampleIds:[]
      }]
     }));
     let original;
@@ -1683,20 +1691,6 @@ const {chromium,webkit}=require('playwright');
 
    // Legacy external transfer without a known direction must be flagged and
    // fixable from More options; no silent debit or guessed destination.
-   await statementPage.evaluate(()=>{
-    const key='household-planner-sample-settings-v1',prefs=JSON.parse(localStorage.getItem(key)||'{}');
-    prefs.futureRecurringRules.push({
-     id:'fixture-legacy-external',kind:'event',type:'transfer',originalType:'transfer',
-     anchorDate:'2026-11-01',sourceAnchorDate:'2026-11-01',
-     frequency:'monthly',sourceFrequency:'monthly',amount:38,matchAmount:38,
-     accountId:'demo-checking',originalAccountId:'demo-checking',
-     merchant:'Fictional legacy Zelle',originalMerchant:'Fictional legacy Zelle',
-     scheduleLabel:'Fictional legacy Zelle',amountBasis:'fixed',
-     matchNames:['fictional legacy zelle'],exampleIds:[]
-    });
-    localStorage.setItem(key,JSON.stringify(prefs));
-   });
-   await statementPage.reload({waitUntil:'load'});
    await statementPage.locator('.planner-nav-primary [data-view="schedules"]').click();
    const unresolved=statementPage.locator('[data-schedule-card]').filter({hasText:'Fictional legacy Zelle'}).first();
    assert.match(await unresolved.locator('.schedule-row-next').innerText(),/Not forecast/,
