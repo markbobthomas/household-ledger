@@ -1883,11 +1883,11 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    (notes||'<p class="lead">No upcoming dated transactions identified.</p>')+
    '</section></div>';
 }
-function summaryPage(bundle,s,chosen,derived,fresh){
+function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
  const calendar=window.HouseholdPlannerSummary.render({
   snapshot:s,chosen,derived,bundle,days:horizon,
   prefs:state().predictions||{},accounts:activeAccounts(s),
-  fresh,ready:window.HouseholdPaymentObligations.ready
+  fresh,ready:window.HouseholdPaymentObligations.ready,view
  });
  // Calendar is the entry point for forecast details and unresolved decisions.
  // Retain the full Predictions editor and skipped-payment restore functionality
@@ -2015,6 +2015,8 @@ function render(){
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s):
   activeTab==='transactions'?transactionsPage(bundle,s):
+  activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
+   summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
    (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('form:has([data-history-link])'):[])){
