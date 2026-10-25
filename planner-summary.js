@@ -738,7 +738,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Trend account">'+
    options+'</select></label></div>'+
   trendChart+trendTrust+'</div>';
- return calendarHtml+'</div>';
+ return calendarHtml+(emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a schedule →</button>':'')+'</div>';
 }
 function setDay(index){
  const svg=document.querySelector('[data-summary-plot]');
