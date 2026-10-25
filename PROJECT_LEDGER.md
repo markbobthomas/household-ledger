@@ -25,7 +25,7 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
-- **Calendar month toolbar (2026-10-24):** One top toolbar places Account on the left, centered current month (e.g. October 2026), and previous/Today/next controls on the right; a compact two-row fallback fits narrow phones. Month controls no longer repeat below balance metrics. UI branch/PR checks pending, private Render unverified.
+- **Calendar month toolbar merged (2026-10-24):** [PR #180](https://github.com/markbobthomas/household-ledger/pull/180) merged as `f415b5a0a7ed6f05de1d97f655022e9759b88ee2` (verified `main`). Account on left, centered month and previous/Today/next on right on desktop; compact two-row iPhone fallback; no redundant navigation beneath balances. Financial/bank and desktop/iPhone browser CI passed on final code head `09ce634e656ee086dc9a5451abd68bad6687c1eb`. Private Render deployment unverified.
 
 
 - **2026-10-24 Calendar header consistency merged:** [PR #178](https://github.com/markbobthomas/household-ledger/pull/178) squash-merged as `c8a6680a1da39720aae63bcaf1f52e88e024f713`, verified on `main`. Removed 12 Calendar-only global padding/margin overrides, centered Calendar account heading to the 1050px label frame, and made tab-scroll immediate. Final branch head `8ea09787bf842aa2b5bedf8eaf1b0f3eb7f02761` passed [safety 40164645261](https://github.com/markbobthomas/household-ledger/actions/runs/40164645261) and [desktop/iPhone browser 40164645348](https://github.com/markbobthomas/household-ledger/actions/runs/40164645348). Private Render remains independently unverified.
@@ -1146,3 +1146,9 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Safety:** No changes to financial forecasting, recurrent dates, prediction editing, Plaid, actual bank records, account identities, private data or Render configuration. UI-only release.
 - **Verification/deployment:** PR and required banking/forecast plus desktop Chromium/iPhone WebKit checks pending. GitHub merge and private Render runtime not claimed; Render commit unverified.
 - **Next:** Check PR head's required financial and browser suites, merge only after green results, independently confirm merged `main` and report private Render separately.
+
+### 2026-10-24 — Confirmed centered Calendar month toolbar merge
+
+- **Release:** [PR #180](https://github.com/markbobthomas/household-ledger/pull/180) squash-merged at `f415b5a0a7ed6f05de1d97f655022e9759b88ee2`, verified identical to GitHub `main`. Final tested head `09ce634e656ee086dc9a5451abd68bad6687c1eb`; [bank/forecast safety 40165313696](https://github.com/markbobthomas/household-ledger/actions/runs/40165313696) successful and [desktop Chromium/iPhone WebKit 40165313731](https://github.com/markbobthomas/household-ledger/actions/runs/40165313731) successful. One obsolete legacy smoke assertion requiring the now-removed month caption was replaced by checks for the new accessible grid label and single navigator; final checks passed.
+- **UI:** Account, centered month, and `‹ Today ›` share the header on desktop. On narrow screens the month remains centered above the Account and controls; no second month toolbar appears beneath balances. Month changes and account changes keep the correct single date-state and forecast metrics. Full calendar width and banking/forecast math unchanged.
+- **Deployment:** Verified on GitHub only; private Render runtime and its deployed commit remain unverified. No backend, live transactions, Plaid credentials or Render service configuration edited.
