@@ -17,13 +17,14 @@ const categorySet=new Set(['Uncategorized','Groceries','Shopping','Housing','Mor
  'Utilities','Transportation','Dining','Health','Healthcare','Entertainment','Kids & Family',
  'Childcare','Insurance','Subscriptions','Loan','Tax','Income','Savings','Transfer','Other']);
 const aliases=Object.freeze({utility:'Utilities',subscription:'Subscriptions'});
+const builtinsByName=new Map([...categorySet].map(name=>[name.toLocaleLowerCase(),name]));
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 const validCustomName=s=>typeof s==='string'&&s===s.trim()&&s.length>=2&&s.length<=40&&
  /^[\p{L}\p{N}][\p{L}\p{N} &\/().,+'-]*$/u.test(s);
 const normalizeCategory=name=>{
  const value=String(name||'').trim().replace(/\s+/g,' ');
  if(!value)return '';
- return aliases[value.toLocaleLowerCase()]||value;
+ return aliases[value.toLocaleLowerCase()]||builtinsByName.get(value.toLocaleLowerCase())||value;
 };
 function dedupeCategoryNames(names){
  const all=[],seen=new Set();
