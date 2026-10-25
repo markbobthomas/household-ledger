@@ -902,6 +902,16 @@ const {chromium,webkit}=require('playwright');
     const r=el.getBoundingClientRect();
     return {x:r.x,y:r.y+window.scrollY,width:r.width,height:r.height};
    });
+   const toolbarRows=async(selector)=>page.locator(selector).evaluate(el=>{
+    const b=el.getBoundingClientRect(),style=getComputedStyle(el);
+    return {height:b.height,rows:style.gridTemplateRows,gap:style.rowGap,
+     children:[...el.children].map(child=>{
+      const r=child.getBoundingClientRect(),cs=getComputedStyle(child);
+      return {className:child.className||'',text:(child.textContent||'').trim().slice(0,35),
+       x:r.x,y:r.y,height:r.height,gridRow:cs.gridRow,gridColumn:cs.gridColumn};
+     })};
+   });
+   const bankGridLayout=mobile?await toolbarRows('.history-page .ledger-toolbar'):null;
    const bankToolbar=await fieldGeometry('.history-page .ledger-toolbar');
    const bankSearch=await fieldGeometry('.history-page .history-search-wrap input');
    const bankCategoryField=await fieldGeometry('.history-page [data-history-category-filter]');
@@ -1449,18 +1459,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.schedule-page .ledger-money-dollar').count(),
     await page.locator('.schedule-page .schedule-card').count(),
     'All Repeating rows use the same anchored dollar symbol slot');
-   const toolbarDiagnostics=mobile?await page.evaluate(()=>{
-    const read=sel=>{
-     const el=document.querySelector(sel),b=el.getBoundingClientRect(),style=getComputedStyle(el);
-     return {height:b.height,rows:style.gridTemplateRows,columns:style.gridTemplateColumns,gap:style.rowGap,
-      children:[...el.children].map(child=>{
-       const r=child.getBoundingClientRect(),cs=getComputedStyle(child);
-       return {tag:child.tagName,className:child.className||'',text:(child.textContent||'').trim().slice(0,35),
-        x:r.x,y:r.y,height:r.height,gridRow:cs.gridRow,gridColumn:cs.gridColumn,marginTop:cs.marginTop,marginBottom:cs.marginBottom};
-      })};
-    };
-    return {history:read('.history-page .ledger-toolbar'),scheduled:read('.schedule-page .ledger-toolbar')};
-   }):null;
+   const toolbarDiagnostics=mobile?{history:bankGridLayout,
+    scheduled:await toolbarRows('.schedule-page .ledger-toolbar')}:null;
    for(const metric of ['x','y','width','height']){
     assert.ok(Math.abs(repeatingToolbar[metric]-bankToolbar[metric])<=2,
      'Both search toolbars match exact document '+metric+' with no extra Repeating button row: '+
