@@ -1689,6 +1689,7 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(await group.locator('[data-schedule-quick-category]').evaluateAll(rows=>
     rows.map(row=>row.value)),['Water bills','Water bills'],
     'Every grouped row carries its saved category as directly editable data');
+   await page.locator('[data-schedule-category-filter]').selectOption('');
    // Move a row out and back: both affected totals must respond immediately.
    await group.locator('[data-schedule-card]').filter({hasText:'Water - Garden'})
     .locator('[data-schedule-quick-category]').selectOption('Other');
@@ -1708,6 +1709,7 @@ const {chromium,webkit}=require('playwright');
     .locator('[data-schedule-quick-category]').selectOption('Water bills');
    assert.equal(await group.locator('[data-schedule-group-total]').innerText(),
     'Total shown: Out $355.00','Moving a row back restores the original category sum');
+   await page.locator('[data-schedule-category-filter]').selectOption('Water bills');
    await page.locator('[data-schedule-search]').fill('Garden');
    assert.equal(await page.locator('[data-schedule-card]:visible').count(),1,
     'Search filters instantly without navigating or reopening editors');
