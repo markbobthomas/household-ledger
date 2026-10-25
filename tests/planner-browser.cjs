@@ -63,15 +63,17 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'industrial-ledger-20261024-v1','The loaded HTML identifies the industrial Ledger visual redesign');
+    'review-tab-count-20261024-v1','The loaded HTML identifies the live Needs review count release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
     'One primary navigation row: calendar, schedules, history');
-   assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Scheduled','Transaction History','Needs review']);
+   const tabLabels=await page.locator('.planner-nav-primary .tab-link').allTextContents();
+   assert.deepEqual(tabLabels.slice(0,3),['Calendar','Scheduled','Transaction History']);
+   assert.match(tabLabels[3],/^Needs review(?: \\[\\d+\\])?$/,
+    'Needs review keeps its accessible button label, with an optional inline count');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
     'Predictions is available through More instead of the main row');
    const go=async tab=>{
@@ -114,8 +116,10 @@ const {chromium,webkit}=require('playwright');
     const mobileTabs=await page.locator('.planner-nav-primary .tab-link').evaluateAll(els=>
      els.map(el=>({text:el.textContent.trim(),whiteSpace:getComputedStyle(el).whiteSpace,
       height:el.getBoundingClientRect().height,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth})));
-    assert.deepEqual(mobileTabs.map(t=>t.text),
-     ['Calendar','Scheduled','Transaction History','Needs review']);
+    assert.deepEqual(mobileTabs.slice(0,3).map(t=>t.text),
+     ['Calendar','Scheduled','Transaction History']);
+    assert.match(mobileTabs[3].text,/^Needs review(?: \\[\\d+\\])?$/,
+     'Review count is part of its button on a narrow iPhone');
     assert.ok(mobileTabs.every(t=>t.whiteSpace==='normal'&&t.height>=44&&
      t.scrollWidth<=t.clientWidth+1),
      'Renamed tabs fit within a narrow phone without clipping: '+JSON.stringify(mobileTabs));
@@ -625,6 +629,28 @@ const {chromium,webkit}=require('playwright');
    const countMatch=(await migrationBanner.innerText()).match(/(\d+) unsaved automatic repeating estimate/);
    if(countMatch)await migrationBanner.locator('[data-view="reviews"]').click();
    else await go('reviews');
+   const reviewBadge=page.locator('.planner-nav-primary [data-review-tab-count]');
+   const badgeCount=async()=>Number((await reviewBadge.textContent()||'').match(/\\[(\\d+)\\]/)?.[1]||0);
+   const unresolvedRows=async()=>page.locator(
+    '.reviews-page [data-legacy-estimate][data-recommendation-status="pending"],'+
+    '.reviews-page [data-recommended-repeating] [data-recommendation-status="pending"]').count();
+   const checkReviewNav=async(label)=>{
+    const n=await unresolvedRows();
+    assert.equal(await badgeCount(),n,label+': nav counts every undecided review item exactly once');
+    assert.equal(await reviewBadge.isVisible(),n>0,
+     label+': no red bracket or empty badge when there is nothing to review');
+    const btn=page.locator('.planner-nav-primary [data-view="reviews"]');
+    assert.equal((await btn.innerText()).replace(/\\s+/g,' ').trim(),
+     n?'Needs review ['+n+']':'Needs review',
+     label+': bracketed count is inside the existing button name');
+    if(n>0){
+     const color=await reviewBadge.evaluate(el=>getComputedStyle(el).color);
+     const [red,green,blue]=(color.match(/\\d+/g)||[]).map(Number);
+     assert.ok(red>green*1.45&&red>blue*1.18,
+      label+': bracketed review number stays visibly red ('+color+')');
+    }
+   };
+   await checkReviewNav('Unresolved review queue');
    const legacySection=page.locator('[data-active-legacy-estimates]');
    const legacyRows=legacySection.locator('[data-legacy-estimate]');
    const expectedLegacy=Number(countMatch?.[1]||0);
@@ -675,13 +701,20 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await first.locator('[data-review-inline-detail]').count(),0,
      'Cancel collapses the exact row without saving a schedule');
     if(await first.getAttribute('data-recommendation-status')==='pending'){
+     const beforeIgnore=await badgeCount();
      await first.locator('[data-ignore-recommendation]').click();
+     await checkReviewNav('Ignoring an automatic estimate');
+     assert.ok(await badgeCount()<beforeIgnore,
+      'Explicitly ignored legacy decisions stop appearing in the pending count');
      assert.equal(await legacyRows.count(),countBefore,
       'Ignoring an already forecasted item never hides it from the active-cash inventory');
      assert.equal(await page.locator('[data-legacy-estimate="'+ids[0]+'"]').getAttribute(
       'data-recommendation-status'),'ignored',
       'Ignored legacy forecast still carries an explicit visible status');
      await page.locator('[data-legacy-estimate="'+ids[0]+'"] [data-unignore-recommendation]').click();
+     await checkReviewNav('Restoring automatic estimate for review');
+     assert.equal(await badgeCount(),beforeIgnore,
+      'Undo ignore restores all pending decisions associated with the legacy stream');
     }
    }
    const repeatingSection=page.locator('[data-recommended-repeating]');
@@ -706,7 +739,11 @@ const {chromium,webkit}=require('playwright');
     trackedRecommendation=page.locator('[data-recommended-repeat="'+suggestionKey+'"]');
    const rulesBeforeIgnore=await page.evaluate(()=>JSON.parse(
     localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureRecurringRules?.length||0);
+   const countBeforeIgnore=await badgeCount();
    await trackedRecommendation.locator('[data-ignore-recommendation]').click();
+   await checkReviewNav('Ignoring a new repeating suggestion');
+   assert.equal(await badgeCount(),countBeforeIgnore-1,
+    'Ignoring one new repeating suggestion immediately decrements the button count');
    assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'ignored',
     'Ignored recommendations keep their saved decision');
    assert.equal(await repeatingSection.locator('[data-recommended-repeat]').count(),originalRecommendations-1,
@@ -720,6 +757,7 @@ const {chromium,webkit}=require('playwright');
     rulesBeforeIgnore,'No only records a review decision, never deletes a saved plan');
    await page.reload({waitUntil:'load'});
    await go('reviews');
+   await checkReviewNav('Persisted review decision after reload');
    assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'ignored',
     'Ignored recommendations persist and remain visible after reload');
    assert.ok(await page.evaluate(()=>Object.keys(JSON.parse(
@@ -727,6 +765,9 @@ const {chromium,webkit}=require('playwright');
     'A durable recommendation inventory is retained in planning settings');
    await page.locator('[data-ignored-repeating] > summary').click();
    await trackedRecommendation.locator('[data-unignore-recommendation]').click();
+   await checkReviewNav('Restoring a repeating suggestion');
+   assert.equal(await badgeCount(),countBeforeIgnore,
+    'Restoring a suggestion immediately restores its button count');
    assert.equal(await trackedRecommendation.getAttribute('data-recommendation-status'),'pending',
     'Undo ignore moves the suggestion back into the active queue');
    await trackedRecommendation.locator('[data-review-recommendation]').click();
