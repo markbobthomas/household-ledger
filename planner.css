@@ -3037,3 +3037,10 @@ body{background:#edf0f2;color:var(--ink)}
  .planner-tabs.planner-nav-primary{gap:3px;padding-bottom:6px}
  .panel{border-radius:3px}
 }
+
+/* Payment titles are one component across Scheduled and Transaction History.
+   Specific recurrence styles must not tint one screen differently. */
+.planner-page .recurrence-row-name strong,
+.planner-page .recurrence-row-name .schedule-row-title strong,
+.schedule-page .ledger-row-description strong,
+.history-page .ledger-row-description strong{color:#172a37!important}
