@@ -880,6 +880,7 @@ document.addEventListener('keydown',e=>{
 });
 
 root.HouseholdPlannerSummary={render,getPoints,
+ navigate:date=>showCalendar(date),
  currentDay:()=>calendarDate,
  currentEvent:index=>{
   const point=calendarContext?.points.find(p=>p.date===calendarDate);
