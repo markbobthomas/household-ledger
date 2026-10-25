@@ -1879,7 +1879,7 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(await historicalGroups.locator('.ledger-statement-total').allInnerTexts(),
     ['Net charges $40.00','Net charges $20.00']);
    await statementPage.locator('[data-history-filter] [name=search]').fill('Current Statement Purchase');
-   await statementPage.locator('[data-history-filter] button[type=submit]').click();
+   await statementPage.locator('[data-history-filter] [name=search]').press('Enter');
    assert.deepEqual(await historicalGroups.locator('.ledger-statement-total').allInnerTexts(),
     ['Net charges $50.00']);
    // Five-field creation uses the friendly name as the default merchant;
