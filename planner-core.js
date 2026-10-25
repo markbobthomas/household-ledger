@@ -323,9 +323,27 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  const payment=paymentEngine?.build?paymentEngine.build(snapshot,rows,adjusted,prefs,{days,effectiveDate:effective}):
   {plans:[],billEvents:[],warnings:[],statements:[],suppressedExpectedIds:[]};
  const suppressed=new Set((payment.suppressedExpectedIds||[]).map(String));
- const finalEvents=adjust(adjusted.filter(e=>!suppressed.has(String(e.id)))
+ // Direction-confirmed, single-account Zelle/ACH transfers to an external
+ // payee are money out/in, not paired internal transfers. Earlier versions
+ // dropped every transfer-type event, including user-confirmed repeat rules.
+ // Normalize only one-account cash transactions with explicit direction;
+ // linked transfers are separate movement plans later in materialization.
+ const finalized=adjust(adjusted.filter(e=>!suppressed.has(String(e.id)))
   .concat((payment.billEvents||[]).filter(e=>!ownerFor(e))))
-  .filter(e=>e.type!=='transfer'&&(e.source==='manual'||!suppressedRecurrence(prefs,e)));
+  .filter(e=>e.source==='manual'||!suppressedRecurrence(prefs,e));
+ const finalEvents=[];
+ for(const e of finalized){
+  if(e.type!=='transfer'){finalEvents.push(e);continue}
+  const account=accounts.find(a=>String(a.id)===String(e.accountId));
+  const cashAccount=account&&String(account.accountType||account.type||'').toLowerCase()!=='credit';
+  if(cashAccount&&!e.fromAccountId&&!e.toAccountId&&['out','in'].includes(e.cashDirection)){
+   finalEvents.push({...e,type:e.cashDirection==='out'?'expense':'income',
+    _forecastOriginalType:e._forecastOriginalType||'transfer'});
+  }else if(e.source==='user-recurring'||e.ruleId){
+   warnings.push('Confirmed payment '+(e.merchant||'Transfer')+
+    ' cannot post: specify money in/out on one cash account, or both accounts of a linked transfer.');
+  }
+ }
  // All account-to-account movements use ONE linked record.
  const movementRules=covered.plans.map(m=>({...m,date:m.anchorDate,
   fromAccountId:m.fromAccountId,toAccountId:m.toAccountId,
