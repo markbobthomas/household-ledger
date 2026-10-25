@@ -214,7 +214,7 @@ const defaultScheduleCategories=Object.freeze(CategoryLibrary.categories({predic
 const scheduleCategories=state=>CategoryLibrary.categories(state);
 function scheduleCategory(name,state){
  const value=CategoryLibrary.canonicalCategory(state,name||'Uncategorized');
- if(!value)throw Error('Choose an existing category or add it first');
+ if(!value)throw Error('Choose an existing schedule category or add it first');
  return value;
 }
 function setScheduleCategory(state,id,category){
