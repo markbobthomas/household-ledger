@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'ux-compact-repeating-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'zelle-calendar-date-fix-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -1650,6 +1650,36 @@ const {chromium,webkit}=require('playwright');
    assert.equal(renamedRule?.id,simpleRule.id,'Renaming retains the schedule identity');
    assert.equal(renamedRule?.merchant,'Simple forecast bill',
     'Renaming the friendly label never mutates the original matching merchant');
+
+   // A Nov 1 Sunday Zelle-like bill is effective Friday Oct 30. The
+   // schedule anchor stays Nov 1 for later monthly payments. A direct
+   // Repeating -> Calendar path must select October AND the paying account.
+   await statementPage.locator('[data-schedule-new]').click();
+   const zelleForm=statementPage.locator('[data-schedule-new-form]');
+   await zelleForm.locator('[name=scheduleLabel]').fill('Fictional Zelle payment');
+   await zelleForm.locator('[name=amount]').fill('48');
+   await zelleForm.locator('[name=date]').fill('2026-11-01');
+   await zelleForm.locator('[name=accountId]').selectOption('demo-checking');
+   assert.match(await zelleForm.locator('[data-schedule-posting-date]').innerText(),/Oct 30, 2026/,
+    'A Sunday scheduled date explicitly previews the prior Friday posting');
+   await zelleForm.locator('[type=submit]').click();
+   const zelleCard=statementPage.locator('[data-schedule-card]').filter({hasText:'Fictional Zelle payment'}).first();
+   assert.match(await zelleCard.locator('.schedule-row-next').innerText(),/Oct 30/,
+    'Repeating shows the canonical Friday posting rather than the Sunday anchor');
+   assert.equal(await zelleCard.locator('[data-schedule-edit-form] [name=date]').inputValue(),'2026-11-01',
+    'The saved monthly recurrence anchor remains November 1');
+   await zelleCard.locator('[data-schedule-view-calendar]').click();
+   assert.equal(await statementPage.locator('.summary-page').count(),1,
+    'View on Calendar switches tabs directly');
+   assert.equal(await statementPage.locator('#summary-account').inputValue(),'demo-checking',
+    'View on Calendar selects the payment source account');
+   assert.equal(await statementPage.locator('[data-calendar-day="2026-10-30"].selected').count(),1,
+    'Calendar opens the October date containing the shifted November 1 payment');
+   assert.ok(await statementPage.locator('.calendar-day-transactions .calendar-detail-item')
+     .filter({hasText:'Fictional Zelle payment'}).count()>0,
+    'The predicted debit is visible in the Friday daily transaction breakdown');
+   assert.equal(await statementPage.locator('[data-calendar-day="2026-11-01"]').count(),0,
+    'The weekday Calendar never displays the original Sunday as another occurrence');
    assert.deepEqual(statementErrors,[]);
    await statementCtx.close();
    assert.deepEqual(statementErrors,[]);
