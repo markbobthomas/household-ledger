@@ -1877,7 +1877,7 @@ const {chromium,webkit}=require('playwright');
       frequency:'monthly',sourceFrequency:'monthly',amount:38,matchAmount:38,
       accountId:'demo-checking',originalAccountId:'demo-checking',
       merchant:'Fictional legacy Zelle',originalMerchant:'Fictional legacy Zelle',
-      scheduleLabel:'Fictional legacy Zelle',amountBasis:'fixed',
+      scheduleLabel:'Fictional legacy Zelle',amountBasis:'fixed',category:'Other',
       matchNames:['fictional legacy zelle'],exampleIds:[]
      }]
     }));
@@ -1904,6 +1904,26 @@ const {chromium,webkit}=require('playwright');
    statementPage.on('pageerror',e=>statementErrors.push(e.message));
    await statementPage.goto(staticUrl,{waitUntil:'load'});
    await statementPage.locator('.planner-nav-primary [data-view="schedules"]').click();
+   // Regression: a saved Other schedule with an unresolved transfer
+   // direction has a positive displayed amount but no cashflow prediction.
+   // Do not turn its face amount into a falsely confirmed bank withdrawal.
+   await statementPage.locator('[data-schedule-sort]').selectOption('category');
+   const unresolvedOther=statementPage.locator('[data-schedule-category-group="Other"]');
+   const unresolvedOtherRow=unresolvedOther.locator('[data-schedule-card]')
+    .filter({hasText:'Fictional legacy Zelle'});
+   assert.equal(await unresolvedOtherRow.count(),1);
+   assert.equal(await unresolvedOtherRow.locator('.schedule-row-amount').innerText(),'$38.00');
+   assert.match(await unresolvedOtherRow.locator('.schedule-row-next').innerText(),/Not forecast/);
+   assert.equal(await unresolvedOtherRow.getAttribute('data-schedule-listed-kind'),'unforecasted');
+   assert.equal(await unresolvedOther.locator('[data-schedule-group-total]').innerText(),
+    'Total shown: Not forecast $38.00 (1)',
+    'Other must show the face amount of a missing-direction payment instead of $0');
+   await statementPage.locator('[data-schedule-search]').fill('legacy Zelle');
+   assert.equal(await unresolvedOther.locator('[data-schedule-group-total]').innerText(),
+    'Total shown: Not forecast $38.00 (1)',
+    'Searching in Other must keep amounts of excluded-but-visible schedules');
+   await statementPage.locator('[data-schedule-search]').fill('');
+   await statementPage.locator('[data-schedule-sort]').selectOption('order');
    const statementAccount=statementPage.locator('[name="scheduleAccount"]');
    assert.equal(await statementAccount.count(),1,'Repeating has an account selector');
    assert.equal(await statementAccount.inputValue(),'all');
@@ -2042,6 +2062,13 @@ const {chromium,webkit}=require('playwright');
    const repaired=statementPage.locator('[data-schedule-card]').filter({hasText:'Fictional legacy Zelle'}).first();
    assert.match(await repaired.locator('.schedule-row-next').innerText(),/Oct 30/,
     'Saving a confirmed outgoing direction repairs the missing Friday forecast');
+   await statementPage.locator('[data-schedule-sort]').selectOption('category');
+   const verifiedOther=statementPage.locator('[data-schedule-category-group="Other"]');
+   assert.equal(await verifiedOther.locator('[data-schedule-group-total]').innerText(),
+    'Total shown: Out $86.00',
+    'After direction confirmation Other moves the $38 from Not forecast into actual outgoing schedules');
+   assert.equal(await verifiedOther.locator('[data-schedule-card]')
+    .filter({hasText:'Fictional legacy Zelle'}).getAttribute('data-schedule-listed-kind'),'out');
    assert.equal(await statementPage.evaluate(()=>{
     const p=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
     return p.futureRecurringRules.find(x=>x.id==='fixture-legacy-external')?.cashDirection;
