@@ -111,6 +111,14 @@ const {chromium,webkit}=require('playwright');
     assert.equal(tabs.length,4);
     assert.ok(tabs.every(r=>r.visible&&r.left>=-1&&r.right<=321),
      'All four task-based tabs are reachable without sideways navigation at 320px: '+JSON.stringify(tabs));
+    const mobileTabs=await page.locator('.planner-nav-primary .tab-link').evaluateAll(els=>
+     els.map(el=>({text:el.textContent.trim(),whiteSpace:getComputedStyle(el).whiteSpace,
+      height:el.getBoundingClientRect().height,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth})));
+    assert.deepEqual(mobileTabs.map(t=>t.text),
+     ['Calendar','Scheduled','Transaction History','Needs review']);
+    assert.ok(mobileTabs.every(t=>t.whiteSpace==='normal'&&t.height>=44&&
+     t.scrollWidth<=t.clientWidth+1),
+     'Renamed tabs fit within a narrow phone without clipping: '+JSON.stringify(mobileTabs));
     await page.setViewportSize({width:390,height:844});
    }
 
