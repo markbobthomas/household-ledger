@@ -25,6 +25,9 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
+- **Calendar month toolbar (2026-10-24):** One top toolbar places Account on the left, centered current month (e.g. October 2026), and previous/Today/next controls on the right; a compact two-row fallback fits narrow phones. Month controls no longer repeat below balance metrics. UI branch/PR checks pending, private Render unverified.
+
+
 - **2026-10-24 Calendar header consistency merged:** [PR #178](https://github.com/markbobthomas/household-ledger/pull/178) squash-merged as `c8a6680a1da39720aae63bcaf1f52e88e024f713`, verified on `main`. Removed 12 Calendar-only global padding/margin overrides, centered Calendar account heading to the 1050px label frame, and made tab-scroll immediate. Final branch head `8ea09787bf842aa2b5bedf8eaf1b0f3eb7f02761` passed [safety 40164645261](https://github.com/markbobthomas/household-ledger/actions/runs/40164645261) and [desktop/iPhone browser 40164645348](https://github.com/markbobthomas/household-ledger/actions/runs/40164645348). Private Render remains independently unverified.
 
 - **Navigation labels completed:** [PR #175](https://github.com/markbobthomas/household-ledger/pull/175) merged and verified. Primary tabs now read **Calendar, Scheduled, Transaction History, Needs review**; routing keys, saved plans, forecast math and bank data are unchanged. All four remain visible and tappable at 320px, using a slightly wider Transaction History grid column. Financial/banking and desktop/iPhone browser CI passed. Private Render deployment remains independently unverified.
@@ -1135,3 +1138,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Verified merge:** [PR #178](https://github.com/markbobthomas/household-ledger/pull/178) merged as `c8a6680a1da39720aae63bcaf1f52e88e024f713`; matching GitHub `main` verified. The final PR branch head `8ea09787bf842aa2b5bedf8eaf1b0f3eb7f02761` passed [banking/forecast safety 40164645261](https://github.com/markbobthomas/household-ledger/actions/runs/40164645261) and [Chromium/iPhone WebKit 40164645348](https://github.com/markbobthomas/household-ledger/actions/runs/40164645348). Earlier `Calendar page top is further tightened` test expectation was updated to require shared nav spacing.
 - **Effect:** Calendar and other views use identical global top padding/header/nav margins. Its account header horizontally matches the three other views; the wider calendar remains unchanged. No bank data, financial forecasts, connection settings or Render infrastructure changed.
 - **Deployment:** Code merged on GitHub; private Render deployed commit and live status remain **unverified**. This documentation-only handoff makes no runtime edits.
+
+### 2026-10-24 — One compact Calendar month toolbar (checks pending)
+
+- **Goal:** Save vertical space by moving the displayed month and `‹ Today ›` navigation into the Account selector row, with the month horizontally centered.
+- **Design/implementation:** `planner-summary.js` emits the month title and original controls once inside `summary-heading calendar-toolbar`; month and navigation remain linked to the same canonical Calendar month/date state and update when changing date/month (including Today). Removed the old row inside `calendar-wrapper`, leaving balance metrics and five-day calendar untouched. `planner.css` centers the month in a 3-column grid on larger displays; at phone widths it uses two compact toolbar rows to avoid clipped account names or buttons. `index.html` cache-busts changed assets. Browser regression verifies one toolbar, centered month, controls, responsive 320px viewport and correct changing-month behavior.
+- **Safety:** No changes to financial forecasting, recurrent dates, prediction editing, Plaid, actual bank records, account identities, private data or Render configuration. UI-only release.
+- **Verification/deployment:** PR and required banking/forecast plus desktop Chromium/iPhone WebKit checks pending. GitHub merge and private Render runtime not claimed; Render commit unverified.
+- **Next:** Check PR head's required financial and browser suites, merge only after green results, independently confirm merged `main` and report private Render separately.
