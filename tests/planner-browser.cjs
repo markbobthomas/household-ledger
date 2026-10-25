@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-month-toolbar-20261024-v1','The loaded HTML identifies the Calendar month toolbar release');
+    'calendar-trend-page-20261024-v1','The loaded HTML identifies the separate Balance Trend release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -280,7 +280,7 @@ const {chromium,webkit}=require('playwright');
      padding:getComputedStyle(el).paddingLeft
     }))),Array.from({length:3},()=>({border:'0px',padding:'0px'})),
     'All three metrics have identical zero inner borders and left padding');
-   // A month is always six weeks (42 day slots), with a fixed day size.
+   // A month uses only its visible business weeks, at a fixed day size.
    const gridGeometry=async()=>page.evaluate(()=>{
     const grid=document.querySelector('.calendar-grid'),days=[...grid.children].slice(5);
     const bounds=grid.getBoundingClientRect();
@@ -295,20 +295,30 @@ const {chromium,webkit}=require('playwright');
    });
    const initialGrid=await gridGeometry();
    const desiredCell=mobile?106:124;
-   assert.equal(initialGrid.slots,30,'October reserves six rows of five weekdays');
+   assert.equal(initialGrid.slots,25,'October displays only its five visible business weeks');
    assert.equal(initialGrid.weekdays,5,'Only Monday through Friday have visible headings');
    assert.deepEqual(await page.locator('.calendar-weekday').allInnerTexts(),
     ['MON','TUE','WED','THU','FRI']);
    assert.equal(await page.locator('[data-calendar-day], [data-calendar-actual-day]').evaluateAll(els=>
     els.filter(el=>[0,6].includes(new Date((el.dataset.calendarDay||el.dataset.calendarActualDay)+'T12:00:00Z').getUTCDay())).length),
     0,'Neither predicted nor actual weekend cells appear on the five-column calendar');
-   assert.equal(initialGrid.rows.length,7,'Calendar has one weekday row plus six fixed week rows');
+   assert.equal(initialGrid.rows.length,6,'October has a weekday header plus five populated weeks');
    assert.ok(initialGrid.heights.every(n=>Math.abs(n-desiredCell)<1),
     'Empty, posted and forecast days share a fixed cell height: '+JSON.stringify(initialGrid));
    assert.ok(Number.isFinite(sharedNavBottomGap)&&
     Math.abs(initialGrid.tabGap-sharedNavBottomGap)<1.1,
     'Calendar navigation bottom spacing matches the other tabs');
    assert.ok(initialGrid.maxPreviews<=2,'Only the first two transaction previews occupy calendar cells');
+
+   const bottomGap=async()=>page.evaluate(()=>{
+    const grid=document.querySelector('.calendar-grid').getBoundingClientRect(),
+     detail=document.querySelector('.calendar-day-detail').getBoundingClientRect();
+    return detail.top-grid.bottom;
+   });
+   assert.ok(await bottomGap()<=7,
+    'Selected Day sits immediately after the final visible calendar week');
+   assert.equal(await page.locator('.calendar-grid > .calendar-blank').last().count(),1,
+    'Unused day placeholders may exist inside weeks without reserving full blank weeks');
    // Two previews plus the +more label must fit inside the fixed day area.
    const previewFits=await page.evaluate(()=>{
     const day=document.querySelector('[data-calendar-day]'),holder=day.querySelector('.calendar-day-events');
@@ -463,18 +473,20 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.summary-heading [data-calendar-nav]').count(),2,
     'Month changes keep the one-row header and its navigation controls');
    const novemberGrid=await gridGeometry();
-   assert.equal(novemberGrid.slots,30,'November uses the same 30 weekday slots');
+   assert.equal(novemberGrid.slots,25,'November occupies five visible business weeks');
    assert.equal(novemberGrid.actual,21);
    assert.ok(Math.abs(novemberGrid.height-initialGrid.height)<1,
-    'Five-week October and six-week November have exactly the same calendar height');
-   // February 2027 spans only four weeks, and should not shrink the calendar.
+    'October and November each occupy five actual business weeks');
+   assert.ok(await bottomGap()<=7,'Selected Day stays adjacent in November');
+   // February 2027 needs only four business weeks; omit the fifth blank row.
    for(let month=0;month<3;month++)await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/February 2027/);
    const februaryGrid=await gridGeometry();
-   assert.equal(februaryGrid.slots,30);
+   assert.equal(februaryGrid.slots,20,'February has four business weeks');
    assert.equal(februaryGrid.actual,20);
-   assert.ok(Math.abs(februaryGrid.height-initialGrid.height)<1,
-    'Four-, five- and six-week months keep identical six-row business-week grid height');
+   assert.ok(februaryGrid.height<initialGrid.height-(mobile?90:105),
+    'February does not reserve a phantom fifth business week');
+   assert.ok(await bottomGap()<=7,'Selected Day stays adjacent in shorter months');
    await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
 
@@ -499,18 +511,23 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/October 2026/);
    assert.equal(await page.locator('[data-calendar-day="2026-10-19"].selected').count(),1,
     'Start returns to the bank as-of date');
-   assert.equal(await page.locator('[data-summary-plot]').count(),1,
-    'Previous trend is still available in optional details');
-   await page.locator('.summary-extras > summary').click();
-   assert.equal(await page.locator('[data-trend-days]').count(),6);
+   assert.equal(await page.locator('[data-summary-plot],.summary-extras').count(),0,
+    'Calendar has no chart or Balance Trend disclosure');
    const fullMinimum=await page.locator('.summary-minimum .summary-low').innerText();
+   const selectedDayBeforeTrend=await page.locator('.calendar-day.selected').getAttribute('data-calendar-day');
+   await go('trend');
+   assert.equal(await page.locator('.trend-page').count(),1,
+    'Balance Trend opens as a dedicated view from More');
+   assert.match(await page.locator('.trend-page-heading').innerText(),/Balance Trend/);
+   assert.equal(await page.locator('[data-summary-plot]').count(),1);
+   assert.equal(await page.locator('.calendar-grid,.calendar-day-detail').count(),0,
+    'Trend view does not recreate the calendar or selected-day detail');
+   assert.equal(await page.locator('[data-trend-days]').count(),6);
    for(const n of [10,30,90,180,360,1095]){
     await page.locator('[data-trend-days="'+n+'"]').click();
     assert.equal(await page.locator('[data-trend-days][aria-pressed="true"]').count(),1);
-    assert.equal(await page.locator('.summary-minimum .summary-low').innerText(),fullMinimum,
-     'Optional trend windows must not change the full three-year headline low');
-    assert.equal(await page.locator('.calendar-day.selected').count(),1,
-     'Trend windows do not change the selected calendar date');
+    assert.equal(await page.locator('.calendar-grid').count(),0,
+     'Range controls never open a second calendar or change selected dates');
    }
    assert.equal(await page.locator('.coverage-table,.calendar-checklist').count(),0);
    assert.match(await page.locator('.summary-trust').innerText(),/not a guaranteed minimum/i);
@@ -523,6 +540,13 @@ const {chromium,webkit}=require('playwright');
     'Keyboard navigation inspects future days without editing the forecast');
    await page.keyboard.press('Home');
    assert.equal(await page.locator('[data-summary-peek-date]').innerText(),'Oct 19, 2026');
+   await go('summary');
+   assert.equal(await page.locator('.summary-minimum .summary-low').innerText(),fullMinimum,
+    'Trend window changes leave the Calendar three-year minimum unchanged');
+   assert.equal(await page.locator('.calendar-day.selected').getAttribute('data-calendar-day'),
+    selectedDayBeforeTrend,'Returning from Balance Trend preserves the selected calendar date');
+   assert.equal(await page.locator('[data-summary-plot]').count(),0,
+    'The chart is exclusive to the Balance Trend page after returning to Calendar');
    await go('overview');
    assert.ok((await page.locator('.account-tile').count())>=2,'Sample account selection works');
    const checking=page.locator('.account-tile').filter({hasText:'Everyday Checking'});
@@ -1935,7 +1959,11 @@ const {chromium,webkit}=require('playwright');
    'Long-range calculation does not resurrect old major-payment coverage checks');
   assert.match(await page.locator('.calendar-monthly-unplanned').innerText(),/Household Visa/,
    'Missing card setup remains clearly visible without the removed checklist');
+  assert.equal(await page.locator('.summary-trust').count(),0,
+   'Forecast caveats live with the chart on Balance Trend, not under the Calendar');
+  await go('trend');
   assert.match(await page.locator('.summary-trust').innerText(),/everyday unplanned spending is excluded/);
+  await go('summary');
   assert.equal(await page.locator('[data-summary-days],#horizon').count(),0);
   await go('overview');
   await go('history');
@@ -2082,7 +2110,9 @@ const {chromium,webkit}=require('playwright');
   await itemized.locator('[data-cancel-future]').click();
   assert.equal(await page.locator('.calendar-checklist,.coverage-table').count(),0,
    'Card setup is inspectable directly from payments without a separate assurance matrix');
+  await go('trend');
   assert.match(await page.locator('.summary-trust').innerText(),/not a guaranteed minimum/i);
+  await go('summary');
   await go('overview');
   assert.match(await page.locator('.upcoming-card-bills').innerText(),/Household Visa/,
    'Overview shows the next card statement and due date');

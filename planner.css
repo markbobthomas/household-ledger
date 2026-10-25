@@ -2826,3 +2826,29 @@ html{scrollbar-gutter:stable}
  .summary-page .calendar-toolbar .calendar-nav-actions button{width:32px;height:34px}
  .summary-page .calendar-toolbar .calendar-nav-actions .calendar-today{width:auto;padding:0 7px}
 }
+
+/* Only visible business-week rows should occupy the calendar; never reserve
+   a phantom sixth row between the final week and Selected Day. */
+.summary-page .calendar-grid{grid-template-rows:23px repeat(var(--calendar-weeks,5),124px)}
+@media(max-width:780px){
+ .summary-page .calendar-grid{grid-template-rows:23px repeat(var(--calendar-weeks,5),106px)}
+}
+.summary-page .calendar-day-detail{margin-top:5px!important}
+
+/* Balance Trend moved from the Calendar disclosure to its own lightweight
+   More-menu view. Use the existing chart/keyboard controls without cloning
+   balance calculations or introducing another editable state. */
+.trend-page{max-width:1050px;margin-inline:auto}
+.trend-page-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;
+ flex-wrap:wrap;margin:4px 0 14px}
+.trend-page-heading h2{margin:0;font-size:19px;line-height:1.3;font-weight:720;color:#203a2f}
+.trend-page-heading .summary-account-picker{margin:0}
+.trend-page .summary-stage.summary-legacy{padding:0!important;border:0!important;
+ background:transparent!important}
+.trend-page .summary-trend-ranges{padding-top:2px}
+.trend-page .summary-plot{margin-top:14px}
+.trend-page .summary-trust{margin-top:14px}
+@media(max-width:600px){
+ .trend-page-heading h2{font-size:17px}
+ .trend-page-heading .summary-account-picker select{max-width:min(60vw,205px)}
+}

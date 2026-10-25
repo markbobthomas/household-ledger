@@ -27,7 +27,7 @@ function getPoints(derived,asOf,days){
 /* Daily calendar uses ONLY the same per-account daily projection and its
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
-let extrasOpen=false,calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false,cardBreakdownId='';
+let calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false,cardBreakdownId='';
 let calendarMonthExpanded=false;
 let calendarTipHidden=false;
 try{calendarTipHidden=typeof localStorage!=='undefined'&&
@@ -364,15 +364,19 @@ function calendarGrid(){
   firstWeek=(new Date(start+'T12:00:00Z').getUTCDay()+6)%7,
   monthDays=new Date(Number(calendarMonth.slice(0,4)),
    Number(calendarMonth.slice(5,7)),0).getDate(),
-  // All months reserve six weeks so date-grid height never varies.
-  count=42,
+  // Use only weeks with a visible weekday; empty trailing/leading weeks waste space.
+  lastDayOfWeek=(new Date(calendarMonth+'-'+String(monthDays).padStart(2,'0')+'T12:00:00Z').getUTCDay()+6)%7,
+  lastBusinessDay=monthDays-(lastDayOfWeek===6?2:lastDayOfWeek===5?1:0),
+  weekdayOffset=firstWeek>=5?firstWeek-7:firstWeek,
+  weekCount=Math.ceil((weekdayOffset+lastBusinessDay)/7),
+  count=weekCount*7,
   points=new Map(currentPoints.map(p=>[p.date,p]));
  const header=['Mon','Tue','Wed','Thu','Fri'].map(d=>
   '<div class="calendar-weekday" aria-hidden="true">'+d+'</div>').join('');
  const cells=Array.from({length:count},(_,i)=>{
-  // Six fixed Monday-Friday rows, keeping the actual date numbers unchanged.
+  // Weekday-only rows, retaining the true day numbers.
   if(i%7>=5)return '';
-  const dom=i-firstWeek+1;
+  const dom=i-weekdayOffset+1;
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
   if(!p&&state.actual.has(iso)){
@@ -422,7 +426,7 @@ function calendarGrid(){
   (!calendarTipHidden?'<div class="calendar-first-tip" data-calendar-first-tip>'+
    '<span>Choose a future date to see its payments. Tap <strong>Edit</strong> beside a payment to change it.</span>'+
    '<button type="button" data-calendar-tip-dismiss aria-label="Dismiss calendar tip">Got it</button></div>':'')+
-  '<div class="calendar-grid" role="group" aria-label="'+
+  '<div class="calendar-grid" style="--calendar-weeks:'+weekCount+'" role="group" aria-label="'+
    esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
@@ -585,7 +589,7 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
   ):'<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
   '</div>';
 }
-function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false}){
+function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false,view='calendar'}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
  trendDays=1095; // Chart reset after switching account or bank refresh.
  const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
@@ -643,6 +647,12 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
    '<a class="btn" href="/bank-connect">Bank connections</a>'+
    '<button type="button" class="btn" data-repair-close>Close</button></div>'+
    '</section></div>';
+  if(view==='trend')return '<div class="planner-page summary-page trend-page">'+
+   '<div class="trend-page-heading"><h2>Balance Trend</h2>'+
+   '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Trend account">'+
+   options+'</select></label></div>'+
+   '<div class="summary-empty">A verified starting balance is needed for the trend. '+esc(reason)+
+   ' <button type="button" class="btn" data-view="summary">Back to Calendar</button></div></div>';
   return '<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
    '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
    (credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,[]):
@@ -672,7 +682,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const listed=lowDay.events||[];
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
- return '<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
+ const calendarHtml='<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
    '<div class="summary-monthly" data-summary-month-low>'+
     '<div class="summary-overline">Estimated Monthly Low</div>'+
@@ -688,9 +698,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
     (negative?'<small class="summary-low-warning">Below $0</small>':
      below?'<small class="summary-low-warning">Below warning threshold</small>':'')+
     '</div>')+'</div>'+
-    calendarGrid()+'</section>'+
-  '<details class="summary-extras"'+(extrasOpen?' open':'')+'><summary>Balance trend</summary>'+
-  '<section class="summary-stage summary-legacy">'+
+    calendarGrid()+'</section>';
+ const trendChart='<section class="summary-stage summary-legacy">'+
+
   '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+
   [10,30,90,180,360,1095].map(n=>'<button type="button" data-trend-days="'+n+
    '" aria-pressed="'+(n===trendDays)+'" class="summary-trend-range'+(n===trendDays?' active':'')+
@@ -715,15 +725,20 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '<small data-summary-peek-events>'+causes+'</small></div>'+
   '<div class="summary-caption">'+(credit?'Card debt':'Checking forecast')+' · '+
   '<span data-trend-count>'+moves+' dated movement'+(moves===1?'':'s')+'</span>'+
-  '</div></section>'+
-  '</details>'+
-  '<section class="summary-trust" aria-label="Forecast assumptions">'+
+  '</div></section>';
+ const trendTrust=  '<section class="summary-trust" aria-label="Forecast assumptions">'+
   '<strong>Illustration, not a guaranteed minimum.</strong>'+
   '<p>Based on current balances and dated predicted payments repeated for up to 3 years. '+
   'Future pay, bills and card payments may change; everyday unplanned spending is excluded. '+
   'A low estimate far in the future is especially uncertain.</p>'+
   (emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a schedule →</button>':'')+
-  '</section></div>';
+  '</section>';
+ if(view==='trend')return '<div class="planner-page summary-page trend-page">'+
+  '<div class="trend-page-heading"><h2>Balance Trend</h2>'+
+  '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Trend account">'+
+   options+'</select></label></div>'+
+  trendChart+trendTrust+'</div>';
+ return calendarHtml+(emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a schedule →</button>':'')+'</div>';
 }
 function setDay(index){
  const svg=document.querySelector('[data-summary-plot]');
@@ -839,8 +854,6 @@ document.addEventListener('click',e=>{
   document.querySelector('[data-calendar-detail]')?.scrollIntoView({block:'nearest',behavior:'smooth'});
   return;
  }
- const legacy=e.target.closest?.('.summary-extras > summary');
- if(legacy){extrasOpen=!legacy.parentElement.open;return;}
  const coverageButton=e.target.closest?.('[data-coverage-focus]');
  if(coverageButton){
   const [ri,mi]=coverageButton.dataset.coverageFocus.split('|').map(Number),
@@ -851,7 +864,6 @@ document.addEventListener('click',e=>{
   if(selectedDate)showCalendar(selectedDate);
   else{const stage=document.querySelector('[data-calendar-stage]');if(stage)stage.outerHTML=calendarGrid();}
   if(!selectedDate||['missing','review','setup','unknown'].includes(cell?.status)){
-   const extra=document.querySelector('.summary-extras');if(extra){extra.open=true;extrasOpen=true;}
    const target=document.querySelector('[data-coverage-cell="'+(ri*calendarContext.coverage.months.length+mi)+'"]');
    target?.click();target?.scrollIntoView({block:'nearest',behavior:'smooth'});
   }
