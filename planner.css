@@ -3060,3 +3060,34 @@ body{background:#edf0f2;color:var(--ink)}
   font-size:10.5px!important;letter-spacing:-.15px;
  }
 }
+
+/* Match Scheduled's nested Category control rather than a top-level
+   form label, so the third toolbar row has identical mobile height. */
+.history-page .ledger-toolbar>.history-category-controls{
+ grid-column:4;min-width:0;width:100%;display:flex;align-items:end;gap:5px;
+}
+.history-page .history-category-controls>label{
+ display:flex;flex:1 1 auto;flex-direction:column;gap:4px;min-width:0;
+ font-size:var(--ui-label-size,11px);font-weight:600;color:var(--muted);
+}
+.history-page .history-category-controls>label select{
+ width:100%;min-width:0;height:36px;min-height:36px;
+}
+.history-page .ledger-toolbar>.ledger-history-clear-button{
+ grid-column:5;min-height:36px;align-self:end;
+}
+@media(max-width:850px){
+ .history-page .ledger-toolbar>.history-category-controls{
+  grid-column:1;grid-row:3;
+ }
+ /* Match Scheduled: the category value identifies the compact dropdown. */
+ .history-page .history-category-controls>label{
+  gap:0;font-size:0;line-height:0;
+ }
+ .history-page .history-category-controls>label select{
+  font-size:12px;line-height:1.35;
+ }
+ .history-page .ledger-toolbar>.ledger-history-clear-button{
+  grid-column:2;grid-row:3;
+ }
+}

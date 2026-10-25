@@ -48,7 +48,7 @@ let forecastCache=null;
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
-let historyAccount='all',historySearch='',historySort='newest',historyLimit=90,recurringDraft=null,reviewNotice='';
+let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='';
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
@@ -1447,10 +1447,14 @@ function repeatingReviewForm(s,{inline=false}={}){
 function historyPage(bundle,s){
  const accounts=activeAccounts(s),categories=model.categories(state()),
   records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
-  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),
+  // Include source categories as well as user-created ones. Use the same
+  // effective category shown by each history row, including local overrides.
+  filterCategories=[...new Set([...categories,...records.map(t=>t.category||'Other')])];
  const filtered=records.filter(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
+  if(historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
   if(!historySearch)return true;
   return [t.merchant,t.description,t.date,t.category,t.account,t.amount]
    .some(v=>String(v||'').toLowerCase().includes(historySearch.toLowerCase()));
@@ -1570,7 +1574,11 @@ function historyPage(bundle,s){
      ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
      '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
       label+'</option>').join('')+'</select></label>'+
-   '<button class="btn ledger-history-search-button" type="submit">Search</button>'+
+   '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
+    '<option value="">All categories</option>'+
+    filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
+     (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+   '</select></label></div>'+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':
@@ -2823,6 +2831,7 @@ document.addEventListener('submit',async e=>{
  const fields=Object.fromEntries(new FormData(form));
  historySearch=String(fields.search||'').trim().slice(0,100);
  historyAccount=String(fields.historyAccount||'all');
+ historyCategoryFilter=String(fields.historyCategory||'');
  historySort=['newest','oldest','amount-desc','amount-asc','merchant','category']
   .includes(fields.historySort)?fields.historySort:historySort;
  historyLimit=90;
@@ -3189,6 +3198,16 @@ document.addEventListener('change',async e=>{
   if(single)single.hidden=transfer;
   updateHistoryLinks(form);
   return;
+ }
+ if(e.target.matches?.('[data-history-category-filter]')){
+  const next=e.target.value;
+  if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+   !window.confirm('Discard unsaved schedule changes to filter bank history?')){
+   e.target.value=historyCategoryFilter;return;
+  }
+  historyCategoryFilter=next;historyLimit=90;
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
+  render();return;
  }
  if(e.target.matches?.('[data-history-sort]')){
   const next=e.target.value;
