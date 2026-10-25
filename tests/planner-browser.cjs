@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'nav-scheduled-history-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'calendar-header-alignment-20261024-v1','The loaded HTML identifies the header alignment release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -122,6 +122,45 @@ const {chromium,webkit}=require('playwright');
     await page.setViewportSize({width:390,height:844});
    }
 
+   // All four views must share the exact same global header/nav geometry.
+   // Calendar's account header also aligns to the same content column as
+   // Scheduled, Transaction History and Needs review, without shrinking the grid.
+   const layout=async()=>page.evaluate(()=>{
+    const rect=selector=>{const b=document.querySelector(selector).getBoundingClientRect();
+     return {x:b.left,y:b.top,width:b.width,height:b.height};};
+    return {header:rect('.topbar'),title:rect('.topbar h1'),
+     menu:rect('#planner-menu > summary'),nav:rect('.planner-nav-primary')};
+   });
+   const initialHeader=await layout();
+   const calendarFrame=await page.locator('.summary-heading').boundingBox();
+   const calendarAccount=await page.locator('.summary-account-picker').boundingBox();
+   const calendarGridWidth=await page.locator('.calendar-grid').evaluate(el=>el.getBoundingClientRect().width);
+   for(const [tab,frameSelector,controlSelector] of [
+    ['schedules','.schedule-page','.schedule-search-wrap'],
+    ['history','.history-page','.history-search-wrap'],
+    ['reviews','.reviews-page',null],['summary','.summary-heading',null]]){
+    await go(tab);
+    const current=await layout();
+    for(const key of Object.keys(initialHeader)){
+     for(const dim of ['x','y','width','height']){
+      assert.ok(Math.abs(current[key][dim]-initialHeader[key][dim])<1.1,
+       'Global '+key+' '+dim+' does not shift between Calendar and '+tab+': '+
+       JSON.stringify({initial:initialHeader[key],now:current[key]}));
+     }
+    }
+    const frame=await page.locator(frameSelector).boundingBox();
+    assert.ok(Math.abs(frame.x-calendarFrame.x)<1.1&&
+     Math.abs(frame.width-calendarFrame.width)<1.1,
+     'Calendar account heading and '+tab+' share one centered content frame');
+    if(controlSelector){
+     const control=await page.locator(controlSelector).boundingBox();
+     assert.ok(Math.abs(control.x-calendarAccount.x)<2.1,
+      'Calendar Account and '+tab+' first filter labels align horizontally');
+    }
+   }
+   assert.ok(Math.abs(await page.locator('.calendar-grid').evaluate(el=>
+    el.getBoundingClientRect().width)-calendarGridWidth)<1.1,
+    'Aligning the Calendar header never narrows the five-day calendar grid');
    assert.equal(await page.locator('#ledger-mode-switch option[value=real]').isDisabled(),true,
     'Public Demo cannot pretend it is authenticated Real');
    await page.locator('#planner-menu > summary').click();
