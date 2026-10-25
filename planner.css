@@ -2833,7 +2833,14 @@ html{scrollbar-gutter:stable}
 @media(max-width:780px){
  .summary-page .calendar-grid{grid-template-rows:23px repeat(var(--calendar-weeks,5),106px)}
 }
-.summary-page .calendar-day-detail{margin-top:5px!important}
+/* Gentle section rhythm: grid → Selected Day → all-month predictions.
+   Keep weeks compact; add spacing only between these separate sections. */
+.summary-page .calendar-day-detail{margin-top:14px!important}
+.summary-page .calendar-monthly-list{margin-top:18px!important}
+@media(max-width:780px){
+ .summary-page .calendar-day-detail{margin-top:12px!important}
+ .summary-page .calendar-monthly-list{margin-top:16px!important}
+}
 
 /* Balance Trend moved from the Calendar disclosure to its own lightweight
    More-menu view. Use the existing chart/keyboard controls without cloning
