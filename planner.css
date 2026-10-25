@@ -3080,6 +3080,13 @@ body{background:#edf0f2;color:var(--ink)}
  .history-page .ledger-toolbar>.history-category-controls{
   grid-column:1;grid-row:3;
  }
+ /* Match Scheduled: the category value identifies the compact dropdown. */
+ .history-page .history-category-controls>label{
+  gap:0;font-size:0;line-height:0;
+ }
+ .history-page .history-category-controls>label select{
+  font-size:12px;line-height:1.35;
+ }
  .history-page .ledger-toolbar>.ledger-history-clear-button{
   grid-column:2;grid-row:3;
  }
