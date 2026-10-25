@@ -43,7 +43,15 @@ function saveEdit(state,key,data,accounts,asOf){
   throw Error('Unknown future transaction');
  const fields=key.startsWith('movement|')?transferFields(data,accounts,asOf):
   normalFields(data,accounts,asOf);
- ensure(state).futureTransactionEdits[key]=fields;return fields;
+ const p=ensure(state),previous=p.futureTransactionEdits[key];
+ p.futureTransactionEdits[key]=fields;
+ try{assertDistinctOneOffs(p,asOf)}
+ catch(error){
+  if(previous===undefined)delete p.futureTransactionEdits[key];
+  else p.futureTransactionEdits[key]=previous;
+  throw error;
+ }
+ return fields;
 }
 function skip(state,key,details={}){
  if(typeof key!=='string'||key.length>600||!(/^(event|movement)\|/.test(key)))
@@ -69,11 +77,37 @@ function oneOffKey(row,asOf=''){
 function assertDistinctOneOffs(predictions,asOf=''){
  const found=new Set(),ids=new Set();
  for(const row of predictions?.futureTransactionAdds||[]){
-  const key=oneOffKey(row,asOf);
+  // Editing/skipping a single occurrence must not create an accidental
+  // duplicate of a different saved one-off. Preserve the saved record ID.
+  const edit=predictions?.futureTransactionEdits?.[row.type==='transfer'?
+   keyMovement('future|'+row.id):keyEvent(row.id,row.accountId)];
+  if(edit?.skipped)continue;
+  const effective=edit?{...row,...edit}:row,key=oneOffKey(effective,asOf);
   if(ids.has(String(row.id))||found.has(key))
    throw Error('This future transaction is already saved. Edit the existing prediction instead of adding it twice.');
   ids.add(String(row.id));found.add(key);
  }
+}
+function assertDistinctSchedules(predictions){
+ const ids=new Set(),saved=new Set();
+ for(const rule of predictions?.futureRecurringRules||[]){
+  if(!rule||typeof rule!=='object')throw Error('Invalid recurring schedule');
+  const identity=[
+   String(rule.kind||''),String(rule.accountId||rule.fromAccountId||''),
+   String(rule.toAccountId||''),String(rule.type||'transfer'),
+   String(rule.cashDirection||''),String(rule.anchorDate||''),
+   String(rule.frequency||''),Math.round(Number(rule.amount)*100),
+   cleanMerchant(rule.originalMerchant||rule.merchant),
+   cleanMerchant(rule.scheduleLabel||rule.merchant)
+  ].join('|');
+  if(ids.has(String(rule.id))||saved.has(identity))
+   throw Error('This recurring transaction already has an identical schedule. Edit the existing schedule instead.');
+  ids.add(String(rule.id));saved.add(identity);
+ }
+}
+function assertUniqueForecastTransactions(predictions){
+ assertDistinctOneOffs(predictions);
+ assertDistinctSchedules(predictions);
 }
 function add(state,data,accounts,asOf){
  const transfer=data.type==='transfer',
@@ -870,7 +904,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
  return r.id;
 }
 
-const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,
+const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
  frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
