@@ -36,7 +36,7 @@ function dedupeCategoryNames(names){
  }
  return all;
 }
-function categories(state){
+function categories(state,observed=[]){
  const saved=state?.predictions?.scheduleCategories||[];
  // Assigned categories are references, not a second stored registry.
  const assigned=[
@@ -46,7 +46,8 @@ function categories(state){
   ...Object.values(state?.learning?.categoryRules||{}).map(r=>r?.category)
  ];
  return dedupeCategoryNames([...categorySet,...(Array.isArray(saved)?saved:[]),
-  ...(Array.isArray(state?.customCategories)?state.customCategories:[]),...assigned]);
+  ...(Array.isArray(state?.customCategories)?state.customCategories:[]),
+  ...(Array.isArray(observed)?observed:[]),...assigned]);
 }
 function canonicalCategory(state,name){
  const requested=normalizeCategory(name);
