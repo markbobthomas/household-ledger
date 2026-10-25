@@ -698,7 +698,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
     (negative?'<small class="summary-low-warning">Below $0</small>':
      below?'<small class="summary-low-warning">Below warning threshold</small>':'')+
     '</div>')+'</div>'+
-    calendarGrid()+'</section>'+
+    calendarGrid()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
 
   '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+
