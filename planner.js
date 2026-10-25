@@ -987,12 +987,16 @@ function scheduleFields(r,isNew,s){
   transfer=(isNew&&type==='transfer')||r.kind==='movement',
   accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id,
   categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
-  category=categories.includes(r.category)?r.category:'Uncategorized';
+  category=categories.includes(r.category)?r.category:'Uncategorized',
+  scheduledDate=r.date||tomorrow,
+  postedDate=window.HouseholdPlannerTransactions.forecastBusinessDate(scheduledDate,s.asOf);
  // Friendly name is not the source bank merchant's matching identity.
  return '<div class="future-fields schedule-primary-fields">'+
   '<label>Name<input name="scheduleLabel" maxlength="110" required placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||r.merchant||'')+'"></label>'+
   '<label>Amount ($)<input name="amount" type="number" min=".01" max="999999999" step=".01" required value="'+escapeHTML(r.amount??'')+'"></label>'+
-  '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(r.date||tomorrow)+'"></label>'+
+  '<label>Next date<input name="date" type="date" min="'+tomorrow+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" required value="'+escapeHTML(scheduledDate)+'">'+
+  '<small class="schedule-posting-date" data-schedule-posting-date'+(postedDate===scheduledDate?' hidden':'')+'>'+
+   (postedDate===scheduledDate?'':'On Calendar: '+escapeHTML(dateLong(postedDate)))+'</small></label>'+
   '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
   '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+accountSelect(accounts,accountId,'accountId')+'</label>'+
   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From account'+accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
@@ -1293,6 +1297,9 @@ function schedulesPage(bundle,s){
     windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan recurrence-inline-detail" data-schedule-inline-plan="'+id+'">'+
      recurringEditor(edit,'schedule')+
+     (occurrence?'<button class="btn schedule-calendar-jump" type="button" data-schedule-view-calendar="'+id+
+       '">View '+escapeHTML(dayLabel(occurrence.date))+' in Calendar</button>':
+      '<p class="schedule-no-forecast" role="status">This payment is not in the forecast. Check the account, transfer direction, or skipped payments.</p>')+
      '<details class="schedule-occurrence-disclosure"><summary>Upcoming payments</summary>'+
       scheduleOccurrencesHtml(bundle,s,r)+'</details></div>':'')+'</div></article>';
  };
@@ -2101,6 +2108,24 @@ document.addEventListener('click',async e=>{
   transactionDetail=null;render();
   document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
   return}
+ const jump=e.target.closest?.('[data-schedule-view-calendar]');
+ if(jump){
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+   recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+   !window.confirm('Discard unsaved schedule changes to open Calendar?'))return;
+  const s=snapshot(),b=forecastFor(s),ruleId=jump.dataset.scheduleViewCalendar,
+   row=futureRows(b,s).find(r=>String(r.recurringRuleId||'')===String(ruleId));
+  if(!row){setNotice('No upcoming payment is forecast for this schedule. Check its settings.');return}
+  const accountId=String(row.kind==='movement'?row.fromAccountId:row.accountId);
+  if(!activeAccounts(s).some(a=>String(a.id)===accountId)){
+   setNotice('This payment needs a valid connected account.');return;
+  }
+  selectedAccount=accountId;activeTab='summary';scheduleMode='';scheduleTarget='';
+  transactionDetail=null;render();
+  window.HouseholdPlannerSummary?.navigate?.(row.date);
+  document.querySelector('[data-calendar-day="'+row.date+'"]')?.scrollIntoView?.({block:'center'});
+  return;
+ }
  const scheduleEdit=e.target.closest?.('[data-schedule-edit]');
  if(scheduleEdit){
   if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
@@ -3159,6 +3184,12 @@ document.addEventListener('change',async e=>{
   const section=form?.querySelector('.future-repeat-fields');
   if(section)section.hidden=e.target.value!=='all';
   if(e.target.value==='all')updateHistoryLinks(form);
+  return;
+ }
+ if(e.target.matches?.('[data-schedule-new-form] [name=date],[data-schedule-edit-form] [name=date]')){
+  const holder=e.target.closest('form')?.querySelector('[data-schedule-posting-date]'),
+   posted=window.HouseholdPlannerTransactions.forecastBusinessDate(e.target.value,snapshot().asOf);
+  if(holder){holder.hidden=posted===e.target.value;holder.textContent=holder.hidden?'':'On Calendar: '+dateLong(posted)}
   return;
  }
  if(e.target.matches?.('[data-frequency]')){
