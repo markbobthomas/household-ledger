@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'scheduled-sort-by-20261024-v1','The loaded HTML identifies the Scheduled Sort by label release');
+    'calendar-toolbar-width-20261025-v1','The loaded HTML identifies the full-width Calendar toolbar release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -136,9 +136,9 @@ const {chromium,webkit}=require('playwright');
     await page.setViewportSize({width:390,height:844});
    }
 
-   // All four views must share the exact same global header/nav geometry.
-   // Calendar's account header also aligns to the same content column as
-   // Scheduled, Transaction History and Needs review, without shrinking the grid.
+   // Every tab shares the top navigation. The Calendar's Account / Month /
+   // month controls now span its full five-day calendar, which can be wider
+   // than the 1050px list/review content frames.
    const layout=async()=>page.evaluate(()=>{
     const rect=selector=>{const el=document.querySelector(selector),b=el.getBoundingClientRect();
      // offsetTop tests CSS layout independent of ongoing viewport scrolling.
@@ -150,9 +150,18 @@ const {chromium,webkit}=require('playwright');
    // before comparing the tab layouts rather than sampling an animation.
    await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
    const initialHeader=await layout();
-   const calendarFrame=await page.locator('.summary-heading').boundingBox();
+   const calendarFrame=await page.locator('.summary-heading.calendar-toolbar').boundingBox();
    const calendarAccount=await page.locator('.summary-account-picker').boundingBox();
-   const calendarGridWidth=await page.locator('.calendar-grid').evaluate(el=>el.getBoundingClientRect().width);
+   const calendarGridFrame=await page.locator('.calendar-grid').boundingBox();
+   const calendarGridWidth=calendarGridFrame.width;
+   assert.ok(Math.abs(calendarFrame.x-calendarGridFrame.x)<2&&
+    Math.abs(calendarFrame.width-calendarGridFrame.width)<2,
+    'Calendar Account / Month / month controls span the entire five-day grid: '+
+     JSON.stringify({toolbar:calendarFrame,grid:calendarGridFrame,mobile}));
+   assert.ok(Math.abs(calendarAccount.x-calendarGridFrame.x)<2,
+    'Calendar Account is left-aligned with the first calendar column');
+   if(!mobile)assert.ok(calendarFrame.width>1100,
+    'Wide desktop Calendar toolbar is not constrained to the old 1050px list width');
    // Industrial styling must be readable and bounded, not decoratively dark:
    // sharply defined cards/controls, clear contrast, and unchanged safety colors.
    const industrialLook=await page.evaluate(()=>{
@@ -218,7 +227,7 @@ const {chromium,webkit}=require('playwright');
      'Small screens keep the centered month above the Account and controls');
    }
 
-   let sharedNavBottomGap=NaN;
+   let sharedNavBottomGap=NaN,sharedListFrame=null,sharedListFilterX=null;
    for(const [tab,frameSelector,controlSelector] of [
     ['schedules','.schedule-page','.schedule-search-wrap'],
     ['history','.history-page','.history-search-wrap'],
@@ -252,13 +261,21 @@ const {chromium,webkit}=require('playwright');
       tab+' uses the same squared, high-contrast container system: '+JSON.stringify(boundary));
     }
     const frame=await page.locator(frameSelector).boundingBox();
-    assert.ok(Math.abs(frame.x-calendarFrame.x)<1.1&&
-     Math.abs(frame.width-calendarFrame.width)<1.1,
-     'Calendar account heading and '+tab+' share one centered content frame');
+    if(tab==='summary'){
+     assert.ok(Math.abs(frame.x-calendarGridFrame.x)<2&&
+      Math.abs(frame.width-calendarGridFrame.width)<2,
+      'Returning to Calendar restores the full-width toolbar above the grid');
+    }else{
+     if(!sharedListFrame)sharedListFrame=frame;
+     assert.ok(Math.abs(frame.x-sharedListFrame.x)<1.1&&
+      Math.abs(frame.width-sharedListFrame.width)<1.1,
+      'Scheduled, Transaction History and Needs review share the centered list frame: '+tab);
+    }
     if(controlSelector){
      const control=await page.locator(controlSelector).boundingBox();
-     assert.ok(Math.abs(control.x-calendarAccount.x)<2.1,
-      'Calendar Account and '+tab+' first filter labels align horizontally');
+     if(sharedListFilterX===null)sharedListFilterX=control.x;
+     assert.ok(Math.abs(control.x-sharedListFilterX)<2.1,
+      'Scheduled and Transaction History search controls align horizontally');
     }
    }
    assert.ok(Math.abs(await page.locator('.calendar-grid').evaluate(el=>
