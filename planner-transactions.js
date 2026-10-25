@@ -4,6 +4,8 @@
 const validDate=s=>{const text=String(s||''),parsed=new Date(text+'T12:00:00Z');
  return /^\d{4}-\d{2}-\d{2}$/.test(text)&&Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===text;};
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
+const CategoryLibrary=root.HouseholdLedgerData||
+ (typeof require==='function'?require('./ledger-data.js'):null);
 const allowedTypes=new Set(['expense','income','refund','transfer']);
 const ensure=state=>{state.predictions??={};state.predictions.futureTransactionEdits??={};
  state.predictions.futureTransactionAdds??=[];state.predictions.futureSeriesEdits??={};state.predictions.futureRecurringRules??=[];return state.predictions};
@@ -52,14 +54,47 @@ function skip(state,key,details={}){
   toAccountId:String(details.toAccountId||'')};
 }
 function restore(state,key){delete ensure(state).futureTransactionEdits[key]}
+// Only the canonical future-add array stores user-created one-offs. Reject
+// an exact duplicate before allocating another durable record ID. Linked
+// transfers are compared once as a single money movement, not two account legs.
+const cleanMerchant=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+function oneOffKey(row,asOf=''){
+ const day=forecastBusinessDate(String(row.date||''),asOf);
+ const movement=row.type==='transfer'&&row.fromAccountId&&row.toAccountId;
+ const identity=movement?['movement',row.fromAccountId,row.toAccountId]:
+  ['event',row.accountId,row.type,row.cashDirection||''];
+ return JSON.stringify([...identity,day,cleanMerchant(row.merchant),
+  Math.round(Number(row.amount)*100)]);
+}
+function assertDistinctOneOffs(predictions,asOf=''){
+ const found=new Set(),ids=new Set();
+ for(const row of predictions?.futureTransactionAdds||[]){
+  const key=oneOffKey(row,asOf);
+  if(ids.has(String(row.id))||found.has(key))
+   throw Error('This future transaction is already saved. Edit the existing prediction instead of adding it twice.');
+  ids.add(String(row.id));found.add(key);
+ }
+}
 function add(state,data,accounts,asOf){
- const transfer=data.type==='transfer';
- const fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf);
+ const transfer=data.type==='transfer',
+  fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf),
+  recordData={...fields,...(transfer?{type:'transfer'}:{})},p=ensure(state);
+ assertDistinctOneOffs(p,asOf);
+ if(p.futureTransactionAdds.some(saved=>oneOffKey(saved,asOf)===oneOffKey(recordData,asOf)))
+  throw Error('This future transaction is already saved. Edit the existing prediction instead of adding it twice.');
+ // An identical one-off should edit the dated occurrence of a saved schedule,
+ // rather than create a second payment on the same account and date.
+ const generated=generatedRecurring(p.futureRecurringRules||[],shift(fields.date,-8),shift(fields.date,8));
+ if([...generated.events,...generated.plans].some(e=>{
+  const candidate={...e,...(e.seriesRuleId?{type:'transfer'}:{})};
+  return oneOffKey(candidate,asOf)===oneOffKey(recordData,asOf);
+ }))throw Error('This transaction is already covered by a recurring schedule. Edit that occurrence instead.');
  const record={id:'future-add|'+Date.now().toString(36)+'|'+Math.random().toString(36).slice(2,10),
-  ...fields,...(transfer?{type:'transfer'}:{})};
- ensure(state).futureTransactionAdds.push(record);
+  ...recordData};
+ p.futureTransactionAdds.push(record);
  return record;
 }
+
 function removeAdded(state,id){
  const p=ensure(state),index=p.futureTransactionAdds.findIndex(t=>t.id===id);
  if(index<0)throw Error('Added transaction not found');
@@ -140,42 +175,25 @@ function resetSeries(state,seriesKey){
  * find a reliable series. Rule identity includes account/type/source merchant;
  * individual bank transactions and their categories are never modified. */
 const frequencies=new Set(['weekly','biweekly','every-4-weeks','twice-monthly','monthly','quarterly','semiannual','annual']);
-const defaultScheduleCategories=Object.freeze(['Uncategorized','Mortgage','Rent','Utility','Insurance',
- 'Subscription','Loan','Transportation','Healthcare','Childcare','Groceries','Tax','Income',
- 'Savings','Transfer','Other']);
-function scheduleCategories(state){
- const custom=state?.predictions?.scheduleCategories;
- return [...defaultScheduleCategories,...(Array.isArray(custom)?custom:[]).filter(n=>
-  typeof n==='string'&&n.trim()&&!defaultScheduleCategories.some(d=>d.toLowerCase()===n.toLowerCase()))];
-}
+// Schedule menus are views of the canonical Ledger category library.
+const defaultScheduleCategories=Object.freeze(CategoryLibrary.categories({predictions:{}}));
+const scheduleCategories=state=>CategoryLibrary.categories(state);
 function scheduleCategory(name,state){
- const match=scheduleCategories(state).find(c=>c.toLowerCase()===String(name||'Uncategorized').trim().toLowerCase());
- if(!match)throw Error('Choose an existing schedule category or add it first');
- return match;
+ const value=CategoryLibrary.canonicalCategory(state,name||'Uncategorized');
+ if(!value)throw Error('Choose an existing category or add it first');
+ return value;
 }
 function setScheduleCategory(state,id,category){
  const list=state?.predictions?.futureRecurringRules||[];
  const rule=list.find(r=>String(r.id)===String(id));
  if(!rule)throw Error('This schedule changed. Open the list again.');
  const value=scheduleCategory(category,state);
- const p=ensure(state);
- const current=p.futureRecurringRules.find(r=>String(r.id)===String(id));
+ const p=ensure(state),current=p.futureRecurringRules.find(r=>String(r.id)===String(id));
  if(!current)throw Error('This schedule changed. Open the list again.');
  current.category=value;
  return {id:current.id,category:value};
 }
-function addScheduleCategory(state,name){
- const value=String(name||'').trim().replace(/\s+/g,' ');
- if(value.length<2||value.length>40||
-  !/^[\p{L}\p{N}][\p{L}\p{N} &\/().,+'-]*$/u.test(value))
-  throw Error('Category must be 2–40 letters/numbers with ordinary punctuation');
- const existing=scheduleCategories(state);
- if(existing.some(n=>n.toLowerCase()===value.toLowerCase()))throw Error('Category already exists');
- const p=ensure(state);p.scheduleCategories??=[];
- if(!Array.isArray(p.scheduleCategories)||p.scheduleCategories.length>=40)throw Error('Category limit reached');
- p.scheduleCategories.push(value);
- return value;
-}
+const addScheduleCategory=(state,name)=>CategoryLibrary.addCategory(state,name);
 
 const merchantKey=value=>clean(value).replace(/[^a-z0-9]+/g,' ').trim();
 const phaseOf=date=>Math.floor(Date.parse(date+'T12:00:00Z')/86400000)%28;
@@ -334,6 +352,21 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   baseAccount,reference?.toAccountId||'',originalType,merchantKey(originalMerchant),
   frequency==='every-4-weeks'?'phase'+phaseOf(fields.date):round(originalAmount)]
   .map(encodeURIComponent).join('|');
+ // Explicit separate streams stay possible, but never create an
+ // indistinguishable copy of the very same schedule on a repeated Save.
+ if(separate&&!reference?.recurringRuleId){
+  const label=String(data.scheduleLabel||fields.merchant||'').trim().toLowerCase(),
+   duplicate=p.futureRecurringRules.find(r=>
+    r.kind===(transfer?'movement':'event')&&
+    String(r.accountId||r.fromAccountId)===String(fields.accountId||fields.fromAccountId)&&
+    String(r.toAccountId||'')===String(fields.toAccountId||'')&&
+    String(r.type||'transfer')===String(fields.type||'transfer')&&
+    String(r.cashDirection||'')===String(fields.cashDirection||'')&&
+    String(r.anchorDate)===String(fields.date)&&
+    String(r.frequency)===frequency&&Number(r.amount)===Number(fields.amount)&&
+    String(r.scheduleLabel||r.merchant||'').trim().toLowerCase()===label);
+  if(duplicate)throw Error('This repeating payment is already scheduled. Edit the existing schedule instead.');
+ }
  // A separately named obligation has a durable payment-stream ID, not a
  // merchant/date/amount identity. Both bills may post on the same day.
  if(separate){
@@ -837,7 +870,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
  return r.id;
 }
 
-const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,
+const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
  frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
