@@ -3053,5 +3053,10 @@ body{background:#edf0f2;color:var(--ink)}
 }
 .planner-nav-primary .tab-link.active .review-tab-count{color:#ff858e}
 @media(max-width:420px){
- .planner-nav-primary .review-tab-count{font-size:10px}
+ .planner-nav-primary .review-tab-count{font-size:9px;letter-spacing:-.15px}
+}
+@media(max-width:390px){
+ .planner-nav-primary .tab-link[data-view="reviews"]{
+  font-size:10.5px!important;letter-spacing:-.15px;
+ }
 }
