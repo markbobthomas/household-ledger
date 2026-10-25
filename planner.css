@@ -2779,4 +2779,6 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
   padding:8px 3px;
   text-align:center;
  }
+ /* The two-word history label needs a few more pixels than its neighbors. */
+ .planner-nav-primary .tab-link[data-view="history"]{flex-grow:1.22}
 }
