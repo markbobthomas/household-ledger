@@ -72,7 +72,7 @@ const {chromium,webkit}=require('playwright');
     'One primary navigation row: calendar, schedules, history');
    const tabLabels=await page.locator('.planner-nav-primary .tab-link').allTextContents();
    assert.deepEqual(tabLabels.slice(0,3),['Calendar','Scheduled','Transaction History']);
-   assert.match(tabLabels[3],/^Needs review(?: \\[\\d+\\])?$/,
+   assert.match(tabLabels[3],/^Needs review(?: \[\d+\])?$/,
     'Needs review keeps its accessible button label, with an optional inline count');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
     'Predictions is available through More instead of the main row');
@@ -118,7 +118,7 @@ const {chromium,webkit}=require('playwright');
       height:el.getBoundingClientRect().height,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth})));
     assert.deepEqual(mobileTabs.slice(0,3).map(t=>t.text),
      ['Calendar','Scheduled','Transaction History']);
-    assert.match(mobileTabs[3].text,/^Needs review(?: \\[\\d+\\])?$/,
+    assert.match(mobileTabs[3].text,/^Needs review(?: \[\d+\])?$/,
      'Review count is part of its button on a narrow iPhone');
     assert.ok(mobileTabs.every(t=>t.whiteSpace==='normal'&&t.height>=44&&
      t.scrollWidth<=t.clientWidth+1),
@@ -630,7 +630,7 @@ const {chromium,webkit}=require('playwright');
    if(countMatch)await migrationBanner.locator('[data-view="reviews"]').click();
    else await go('reviews');
    const reviewBadge=page.locator('.planner-nav-primary [data-review-tab-count]');
-   const badgeCount=async()=>Number((await reviewBadge.textContent()||'').match(/\\[(\\d+)\\]/)?.[1]||0);
+   const badgeCount=async()=>Number((await reviewBadge.textContent()||'').match(/\[(\d+)\]/)?.[1]||0);
    const unresolvedRows=async()=>page.locator(
     '.reviews-page [data-legacy-estimate][data-recommendation-status="pending"],'+
     '.reviews-page [data-recommended-repeating] [data-recommendation-status="pending"]').count();
@@ -640,12 +640,12 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await reviewBadge.isVisible(),n>0,
      label+': no red bracket or empty badge when there is nothing to review');
     const btn=page.locator('.planner-nav-primary [data-view="reviews"]');
-    assert.equal((await btn.innerText()).replace(/\\s+/g,' ').trim(),
+    assert.equal((await btn.innerText()).replace(/\s+/g,' ').trim(),
      n?'Needs review ['+n+']':'Needs review',
      label+': bracketed count is inside the existing button name');
     if(n>0){
      const color=await reviewBadge.evaluate(el=>getComputedStyle(el).color);
-     const [red,green,blue]=(color.match(/\\d+/g)||[]).map(Number);
+     const [red,green,blue]=(color.match(/\d+/g)||[]).map(Number);
      assert.ok(red>green*1.45&&red>blue*1.18,
       label+': bracketed review number stays visibly red ('+color+')');
     }
