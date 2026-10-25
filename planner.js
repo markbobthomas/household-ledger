@@ -1042,13 +1042,15 @@ function applyScheduleSearch(root=document){
   group.hidden=rows.length===0;
   const count=group.querySelector('[data-schedule-group-count]'),
    total=group.querySelector('[data-schedule-group-total]'),
-   shown={out:0,in:0,transfers:0,unforecasted:0};
+   shown={out:0,in:0,transfers:0,unforecasted:0,unforecastedCents:0};
   if(count)count.textContent='('+rows.length+')';
   for(const row of rows){
    const kind=row.dataset.scheduleListedKind,
     cents=Number(row.dataset.scheduleListedCents);
-   if(kind==='unforecasted')shown.unforecasted++;
-   else if(['out','in','transfers'].includes(kind)&&Number.isSafeInteger(cents)&&cents>0)
+   if(kind==='unforecasted'){
+    shown.unforecasted++;
+    if(Number.isSafeInteger(cents)&&cents>0)shown.unforecastedCents+=cents;
+   }else if(['out','in','transfers'].includes(kind)&&Number.isSafeInteger(cents)&&cents>0)
     shown[kind]+=cents;
   }
   if(total)total.textContent='Total shown: '+formatScheduleTotals(shown);
@@ -1080,19 +1082,24 @@ function applyScheduleSearch(root=document){
 // The category total adds one displayed amount per scheduled row, not the
 // payments in a single calendar month. Weekend-adjusted November 1 bills can
 // land in October; this heading should never imply they have a $0 value.
-function scheduleListedKind(rule){
+function scheduleListedKind(rule,forecast){
+ // If the app cannot forecast a listed schedule, still total its displayed
+ // face amount, but DO NOT claim it will withdraw/deposit on the calendar.
+ if(!forecast)return 'unforecasted';
  if(rule.kind==='movement')return 'transfers';
  if(rule.type==='transfer')return ['in','out'].includes(rule.cashDirection)?
   rule.cashDirection:'unforecasted';
  return ['income','refund'].includes(rule.type)?'in':'out';
 }
-function scheduleListedTotals(items,amountForRule){
- const total={out:0,in:0,transfers:0,unforecasted:0};
+function scheduleListedTotals(items,amountForRule,forecastForRule){
+ const total={out:0,in:0,transfers:0,unforecasted:0,unforecastedCents:0};
  for(const {rule} of items){
-  const kind=scheduleListedKind(rule),
+  const kind=scheduleListedKind(rule,forecastForRule(rule)),
    cents=Math.round(Number(amountForRule(rule))*100);
-  if(kind==='unforecasted'){total.unforecasted++;continue}
-  if(Number.isSafeInteger(cents)&&cents>0)total[kind]+=cents;
+  if(kind==='unforecasted'){
+   total.unforecasted++;
+   if(Number.isSafeInteger(cents)&&cents>0)total.unforecastedCents+=cents;
+  }else if(Number.isSafeInteger(cents)&&cents>0)total[kind]+=cents;
  }
  return total;
 }
@@ -1100,11 +1107,14 @@ function formatScheduleTotals(total){
  const parts=[];
  for(const [kind,label] of [['out','Out'],['in','In'],['transfers','Transfers']])
   if(total[kind])parts.push(label+' '+cash(total[kind]/100));
- if(total.unforecasted)parts.push(total.unforecasted+' not forecast');
+ if(total.unforecasted)parts.push('Not forecast '+
+  (total.unforecastedCents?cash(total.unforecastedCents/100)+' ':'')+
+  '('+total.unforecasted+')');
  return parts.join(' · ')||'$0';
 }
-function scheduleCategorySummary(items,amountForRule){
- return 'Total shown: '+formatScheduleTotals(scheduleListedTotals(items,amountForRule));
+function scheduleCategorySummary(items,amountForRule,forecastForRule){
+ return 'Total shown: '+
+  formatScheduleTotals(scheduleListedTotals(items,amountForRule,forecastForRule));
 }
 // Shared three-part amount grid: sign, fixed-position dollar glyph, digits.
 function ledgerMoney(amount,sign=''){
@@ -1233,7 +1243,7 @@ function schedulesPage(bundle,s){
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
   const number=index+1,title=escapeHTML(r.scheduleLabel||r.merchant),
    pendingRemove=scheduleRemoveTarget===r.id,
-   listedKind=scheduleListedKind(r),
+   listedKind=scheduleListedKind(r,occurrence),
    listedCents=Math.round(Number(shownAmount)*100),
    searchText=[r.scheduleLabel,r.merchant,categoryOf(r)].filter(Boolean).join(' ').toLowerCase();
   return '<article class="panel schedule-card" data-schedule-card="'+id+
@@ -1291,7 +1301,7 @@ function schedulesPage(bundle,s){
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
     '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
     ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
-    scheduleCategorySummary(items,nextAmount)+'</span></div>'+
+    scheduleCategorySummary(items,nextAmount,rule=>upcomingByRule.get(String(rule.id)))+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
