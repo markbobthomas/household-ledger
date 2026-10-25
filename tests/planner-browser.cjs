@@ -1912,7 +1912,7 @@ const {chromium,webkit}=require('playwright');
    const unresolvedOtherRow=unresolvedOther.locator('[data-schedule-card]')
     .filter({hasText:'Fictional legacy Zelle'});
    assert.equal(await unresolvedOtherRow.count(),1);
-   assert.equal(await unresolvedOtherRow.locator('.schedule-row-amount').innerText(),'$38.00');
+   assert.equal(await unresolvedOtherRow.locator('.schedule-row-amount').textContent(),'$38.00');
    assert.match(await unresolvedOtherRow.locator('.schedule-row-next').innerText(),/Not forecast/);
    assert.equal(await unresolvedOtherRow.getAttribute('data-schedule-listed-kind'),'unforecasted');
    assert.equal(await unresolvedOther.locator('[data-schedule-group-total]').innerText(),
