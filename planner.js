@@ -1698,18 +1698,33 @@ function repeatedRecommendations(bundle,s){
   ({pending:0,ignored:1,scheduled:2}[b.status]??3)||
   b.occurrences-a.occurrences||String(b.lastDate).localeCompare(String(a.lastDate)));
 }
-function reviewsPage(bundle,s){
- // Recurrence proposals edit in-place beneath the tapped row, just like the
- // Repeating list. Each active legacy series remains a distinct review row.
+// One source for the red tab count and the actual Needs review queue.
+ // A legacy estimate may remain visible after Ignore but is no longer an
+ // undecided action; count its decision only while still pending.
+function reviewQueue(bundle,s){
  const recommendations=repeatedRecommendations(bundle,s);
- lastRecommendedRepeating=recommendations;
  const migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
   legacySeries=migration.approvedOnly?[]:migration.legacySeries||[],
   findOwner=auto=>recommendations.find(r=>(r.activeLegacyStreams||[]).includes(auto.seriesKey)),
   legacyItems=legacySeries.map(auto=>({auto,owner:findOwner(auto)})),
   decisionsNeeded=legacyItems.filter(({owner})=>!owner||owner.status==='pending').length,
   pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
-  ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length),
+  ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
+ return {recommendations,legacyItems,decisionsNeeded,pending,ignored,
+  outstanding:decisionsNeeded+pending.length};
+}
+function updateReviewTabCount(queue){
+ const badge=document.querySelector('.planner-nav-primary [data-review-tab-count]');
+ if(!badge)return;
+ const count=Number(queue?.outstanding||0);
+ badge.hidden=!(count>0);
+ badge.textContent=count>0?' ['+count+']':'';
+}
+function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
+ // Reuse the count's exact queue, including distinct unsaved legacy streams.
+ const {recommendations,legacyItems,decisionsNeeded,pending,ignored}=queue;
+ lastRecommendedRepeating=recommendations;
+ const
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
    String(recurringDraft?.reviewLegacyKey||'')===String(legacyKey);
  const controls=(r,legacyKey='')=>!r?
@@ -1932,7 +1947,8 @@ function render(){
   if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
  });
  $('bank-connect').hidden=!available();
- if(busy){$('planner-notice').innerHTML='<div class="notice'+(window.HouseholdLiveSource?.error?' danger':'')+'"><div><strong>Real bank information is not available yet.</strong> '+
+ if(busy){updateReviewTabCount(null);
+  $('planner-notice').innerHTML='<div class="notice'+(window.HouseholdLiveSource?.error?' danger':'')+'"><div><strong>Real bank information is not available yet.</strong> '+
   escapeHTML(window.HouseholdLiveSource?.error||'Loading your private bank connection…')+
   ' You can manage connections without switching to fictional balances.</div><a class="btn" href="/bank-connect">Bank connections</a></div>';
   root.innerHTML='<section class="panel"><div class="empty-visual">No bank balance forecast is being displayed until the Real connection is verified.</div></section>';return}
@@ -1957,6 +1973,10 @@ function render(){
  lastHistoryRows=bundle?.rows||[];
  lastReviewCandidates=bundle?.historyCandidates||[];
  if(selectedSource)selectedAccount=selectedSource.id;
+ // Derive the navigation count on every page, using the same unresolved
+ // recommendations and legacy decisions shown inside Needs review.
+ const reviewData=selectedSource&&Array.isArray(bundle?.rows)?reviewQueue(bundle,s):null;
+ updateReviewTabCount(reviewData);
  const derived=projection?.accounts.find(x=>x.id===String(selectedAccount));
  const statuses=projection?.diagnostics||{};
  const missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
@@ -2013,7 +2033,7 @@ function render(){
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
   activeTab==='history'?historyPage(bundle,s):
   activeTab==='schedules'?schedulesPage(bundle,s):
-  activeTab==='reviews'?reviewsPage(bundle,s):
+  activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
   activeTab==='transactions'?transactionsPage(bundle,s):
   activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
    summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
