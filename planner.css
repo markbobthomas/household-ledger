@@ -2760,3 +2760,23 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
 .schedule-form .schedule-posting-date[hidden]{display:none}
 .schedule-calendar-jump{margin:8px 0 2px}
 .schedule-no-forecast{margin:8px 0;color:#9a5345;font-size:12px;font-weight:600}
+
+/* Fit all four task tabs on narrow phones without hiding Transaction History
+   behind a sideways-scroll navigation. Long names wrap within their own tab. */
+@media(max-width:420px){
+ .planner-tabs.planner-nav-primary{
+  gap:2px;
+  flex-wrap:nowrap;
+  overflow-x:visible;
+ }
+ .planner-nav-primary .tab-link{
+  flex:1 1 0;
+  min-width:0;
+  min-height:44px;
+  white-space:normal;
+  font-size:11px;
+  line-height:1.2;
+  padding:8px 3px;
+  text-align:center;
+ }
+}
