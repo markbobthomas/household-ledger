@@ -22,7 +22,16 @@ const prefs={
   {id:'payroll',kind:'event',anchorDate:'2026-10-24',accountId:'checking',
    type:'income',frequency:'weekly',amount:150,merchant:'Weekly payroll',scheduleLabel:'Weekly payroll'},
   {id:'utility',kind:'event',anchorDate:'2026-11-01',accountId:'checking',
-   type:'expense',frequency:'monthly',amount:50,merchant:'Monthly utility',scheduleLabel:'Monthly utility'}
+   type:'expense',frequency:'monthly',amount:50,merchant:'Monthly utility',scheduleLabel:'Monthly utility'},
+  {id:'zelle-out',kind:'event',anchorDate:'2026-11-01',accountId:'checking',
+   type:'transfer',cashDirection:'out',frequency:'monthly',amount:75,
+   merchant:'Fictional Zelle outgoing',scheduleLabel:'Fictional Zelle outgoing'},
+  {id:'zelle-in',kind:'event',anchorDate:'2026-11-01',accountId:'checking',
+   type:'transfer',cashDirection:'in',frequency:'monthly',amount:25,
+   merchant:'Fictional Zelle incoming',scheduleLabel:'Fictional Zelle incoming'},
+  {id:'unresolved-transfer',kind:'event',anchorDate:'2026-11-01',accountId:'checking',
+   type:'transfer',frequency:'monthly',amount:55,
+   merchant:'Fictional ambiguous transfer',scheduleLabel:'Fictional ambiguous transfer'}
  ],
  paymentRules:{visa:{
   billingStartDate:'2026-10-01',billingEndDate:'2026-10-31',closingDay:31,
@@ -43,6 +52,20 @@ assert.deepEqual(where(business,'Weekly payroll').slice(0,4),
 assert.deepEqual(where(business,'Monthly utility').slice(0,2),
  ['2026-10-30','2026-12-01'],
  'A monthly first-of-month Sunday moves into prior Friday, but December stays December 1');
+assert.deepEqual(where(business,'Fictional Zelle outgoing').slice(0,2),
+ ['2026-10-30','2026-12-01'],
+ 'Outgoing Zelle repeats debit checking on Friday but do not drift subsequent months');
+assert.deepEqual(where(business,'Fictional Zelle incoming').slice(0,2),
+ ['2026-10-30','2026-12-01'],
+ 'Single-account incoming transfers also post on the correct business day');
+assert.deepEqual(where(business,'Fictional ambiguous transfer'),[],
+ 'A bank transfer with no cash direction is not silently guessed as a debit');
+assert.ok(business.payments.warnings.some(w=>w.includes('Fictional ambiguous transfer')&&
+ w.includes('cannot post')),'Unpostable confirmed transfers surface a warning');
+const zelleFriday=business.projection.accounts.find(a=>a.id==='checking').series
+ .find(p=>p.date==='2026-10-30');
+assert.ok(zelleFriday.events.some(e=>e.merchant==='Fictional Zelle outgoing'&&e.kind==='expense'));
+assert.ok(zelleFriday.events.some(e=>e.merchant==='Fictional Zelle incoming'&&e.kind==='income'));
 assert.deepEqual(where(business,'Card Saturday'),['2026-10-30']);
 assert.deepEqual(where(business,'Card Sunday'),['2026-10-30']);
 assert.equal(business.ledger.filter(e=>[0,6].includes(new Date(e.date+'T12:00:00Z').getUTCDay())).length,0,
