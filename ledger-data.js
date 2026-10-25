@@ -14,9 +14,9 @@ const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date
 // Each assignment stores only a name; custom definitions are saved exactly once
 // under predictions.scheduleCategories with the other planning preferences.
 const categorySet=new Set(['Uncategorized','Groceries','Shopping','Housing','Mortgage','Rent',
- 'Utilities','Transportation','Dining','Health','Healthcare','Entertainment','Kids & Family',
+ 'Utility','Transportation','Dining','Health','Healthcare','Entertainment','Kids & Family',
  'Childcare','Insurance','Subscriptions','Loan','Tax','Income','Savings','Transfer','Other']);
-const aliases=Object.freeze({utility:'Utilities',subscription:'Subscriptions'});
+const aliases=Object.freeze({utility:'Utility',utilities:'Utility',subscription:'Subscriptions'});
 const builtinsByName=new Map([...categorySet].map(name=>[name.toLocaleLowerCase(),name]));
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 const validCustomName=s=>typeof s==='string'&&s===s.trim()&&s.length>=2&&s.length<=40&&
