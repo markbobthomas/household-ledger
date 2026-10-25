@@ -814,6 +814,12 @@ const {chromium,webkit}=require('playwright');
     bankCategoryFilter=page.locator('[data-history-category-filter]');
    assert.equal(await sort.count(),1,'Bank activity has one Sort by selector alongside Account and Find');
    assert.equal(await bankCategoryFilter.count(),1,'History adds one Category dropdown, just like Scheduled');
+   assert.equal(await page.locator('.history-page label:has([data-history-sort])')
+    .evaluate(el=>el.firstChild.textContent.trim()),'Sort by',
+    'History sets the shared Sort by label');
+   assert.equal(await page.locator('.history-page label:has([data-history-category-filter])')
+    .evaluate(el=>el.firstChild.textContent.trim()),'Category',
+    'History sets the shared Category label');
    assert.equal(await bankCategoryFilter.inputValue(),'','History defaults to all categories');
    assert.equal(await bankCategoryFilter.locator('option[value="Groceries"]').count(),1,
     'History Category choices come from the posted transactions and saved categories');
@@ -1507,11 +1513,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-schedule-sort]').count(),1);
    const scheduleSortTitle=await page.locator('.schedule-page label:has([data-schedule-sort])')
     .evaluate(el=>el.firstChild.textContent.trim());
-   const historySortTitle=await page.locator('.history-page label:has([data-history-sort])').count();
+   const scheduleCategoryTitle=await page.locator('.schedule-page label:has([data-schedule-category-filter])')
+    .evaluate(el=>el.firstChild.textContent.trim());
    assert.equal(scheduleSortTitle,'Sort by',
     'Scheduled sort is labeled Sort by, consistent with Transaction History');
-   assert.equal(historySortTitle,0,
-    'Only the active tab is rendered; label tests are scoped to Scheduled');
+   assert.equal(scheduleCategoryTitle,'Category',
+    'Scheduled category dropdown is labeled Category, consistent with Transaction History');
    assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
    const values=async()=>page.locator('.schedule-row-amount strong').evaluateAll(nodes=>
     nodes.map(node=>Number((node.textContent||'').replace(/[^0-9.]/g,''))));
