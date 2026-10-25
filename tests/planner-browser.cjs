@@ -139,11 +139,14 @@ const {chromium,webkit}=require('playwright');
    const calendarFrame=await page.locator('.summary-heading').boundingBox();
    const calendarAccount=await page.locator('.summary-account-picker').boundingBox();
    const calendarGridWidth=await page.locator('.calendar-grid').evaluate(el=>el.getBoundingClientRect().width);
+   let sharedNavBottomGap=NaN;
    for(const [tab,frameSelector,controlSelector] of [
     ['schedules','.schedule-page','.schedule-search-wrap'],
     ['history','.history-page','.history-search-wrap'],
     ['reviews','.reviews-page',null],['summary','.summary-heading',null]]){
     await go(tab);
+    if(tab==='schedules')sharedNavBottomGap=await page.locator('.planner-nav-primary').evaluate(el=>
+     parseFloat(getComputedStyle(el).marginBottom));
     const current=await layout();
     for(const key of Object.keys(initialHeader)){
      for(const dim of ['x','y','width','height']){
@@ -262,7 +265,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(initialGrid.rows.length,7,'Calendar has one weekday row plus six fixed week rows');
    assert.ok(initialGrid.heights.every(n=>Math.abs(n-desiredCell)<1),
     'Empty, posted and forecast days share a fixed cell height: '+JSON.stringify(initialGrid));
-   assert.ok(initialGrid.tabGap<=5,'Calendar page top is further tightened');
+   assert.ok(Number.isFinite(sharedNavBottomGap)&&
+    Math.abs(initialGrid.tabGap-sharedNavBottomGap)<1.1,
+    'Calendar navigation bottom spacing matches the other tabs');
    assert.ok(initialGrid.maxPreviews<=2,'Only the first two transaction previews occupy calendar cells');
    // Two previews plus the +more label must fit inside the fixed day area.
    const previewFits=await page.evaluate(()=>{
