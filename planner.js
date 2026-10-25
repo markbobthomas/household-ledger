@@ -1527,8 +1527,11 @@ function historyPage(bundle,s){
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-history-category="'+
     escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
     ' on '+escapeHTML(t.date)+'">'+
-    categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
-     (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+    // Keep the full catalog available without injecting every option's
+    // text into every bank row (which can make a merchant text search match
+    // an unrelated row merely because e.g. "Mortgage" is an option).
+    categories.map(c=>'<option value="'+escapeHTML(c)+'" label="'+escapeHTML(c)+'"'+
+     (c===t.category?' selected':'')+'></option>').join('')+
    '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
    detail+'</div>';
  });
