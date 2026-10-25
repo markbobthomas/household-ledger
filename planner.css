@@ -2786,10 +2786,11 @@ html{scrollbar-gutter:stable}
 @media(max-width:850px){.summary-page .summary-heading{padding-inline:8px}}
 
 /* Calendar: Account | centered month | previous / Today / next.
-   Only this compact toolbar is in the 1050px header frame; forecast
-   balances and the five-column calendar continue using the wider canvas. */
+   Match the full five-day grid width instead of the older 1050px list
+   header cap. Keep the month centered across equal left/right tracks. */
 .summary-page .summary-heading.calendar-toolbar{
  display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+ width:100%;max-width:none;padding-inline:0;
  align-items:center;column-gap:12px;row-gap:4px;min-height:40px;
 }
 .summary-page .calendar-toolbar .summary-account-picker{
