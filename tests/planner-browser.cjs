@@ -1680,6 +1680,39 @@ const {chromium,webkit}=require('playwright');
     'The predicted debit is visible in the Friday daily transaction breakdown');
    assert.equal(await statementPage.locator('[data-calendar-day="2026-11-01"]').count(),0,
     'The weekday Calendar never displays the original Sunday as another occurrence');
+
+   // Legacy external transfer without a known direction must be flagged and
+   // fixable from More options; no silent debit or guessed destination.
+   await statementPage.evaluate(()=>{
+    const key='household-planner-sample-settings-v1',prefs=JSON.parse(localStorage.getItem(key)||'{}');
+    prefs.futureRecurringRules.push({
+     id:'fixture-legacy-external',kind:'event',type:'transfer',originalType:'transfer',
+     anchorDate:'2026-11-01',sourceAnchorDate:'2026-11-01',
+     frequency:'monthly',sourceFrequency:'monthly',amount:38,matchAmount:38,
+     accountId:'demo-checking',originalAccountId:'demo-checking',
+     merchant:'Fictional legacy Zelle',originalMerchant:'Fictional legacy Zelle',
+     scheduleLabel:'Fictional legacy Zelle',amountBasis:'fixed',
+     matchNames:['fictional legacy zelle'],exampleIds:[]
+    });
+    localStorage.setItem(key,JSON.stringify(prefs));
+   });
+   await statementPage.reload({waitUntil:'load'});
+   await statementPage.locator('.planner-nav-primary [data-view="schedules"]').click();
+   const unresolved=statementPage.locator('[data-schedule-card]').filter({hasText:'Fictional legacy Zelle'}).first();
+   assert.match(await unresolved.locator('.schedule-row-next').innerText(),/Not forecast/,
+    'Ambiguous external transfers are visibly excluded, not silently counted');
+   await unresolved.locator('[data-schedule-edit]').click();
+   assert.ok(await unresolved.locator('[data-schedule-advanced]').evaluate(el=>el.open),
+    'Direction repair opens the relevant advanced fields automatically');
+   await unresolved.locator('[name=cashDirection]').selectOption('out');
+   await unresolved.locator('[data-schedule-edit-form] [type=submit]').click();
+   const repaired=statementPage.locator('[data-schedule-card]').filter({hasText:'Fictional legacy Zelle'}).first();
+   assert.match(await repaired.locator('.schedule-row-next').innerText(),/Oct 30/,
+    'Saving a confirmed outgoing direction repairs the missing Friday forecast');
+   assert.equal(await statementPage.evaluate(()=>{
+    const p=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return p.futureRecurringRules.find(x=>x.id==='fixture-legacy-external')?.cashDirection;
+   }),'out','Only forecast preferences receive the outgoing direction');
    assert.deepEqual(statementErrors,[]);
    await statementCtx.close();
    assert.deepEqual(statementErrors,[]);
