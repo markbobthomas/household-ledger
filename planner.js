@@ -989,7 +989,8 @@ function scheduleFields(r,isNew,s){
   categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
   category=categories.includes(r.category)?r.category:'Uncategorized',
   scheduledDate=r.date||tomorrow,
-  postedDate=window.HouseholdPlannerTransactions.forecastBusinessDate(scheduledDate,s.asOf);
+  postedDate=window.HouseholdPlannerTransactions.forecastBusinessDate(scheduledDate,s.asOf),
+  unresolvedDirection=!transfer&&type==='transfer'&&!['in','out'].includes(r.cashDirection);
  // Friendly name is not the source bank merchant's matching identity.
  return '<div class="future-fields schedule-primary-fields">'+
   '<label>Name<input name="scheduleLabel" maxlength="110" required placeholder="e.g. Water — House" value="'+escapeHTML(r.scheduleLabel||r.merchant||'')+'"></label>'+
@@ -1000,12 +1001,17 @@ function scheduleFields(r,isNew,s){
   '<label>Repeat'+frequencyChoices(r.frequency||'monthly')+'</label>'+
   '<label class="schedule-single-account"'+(transfer?' hidden':'')+'>Account'+accountSelect(accounts,accountId,'accountId')+'</label>'+
   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>From account'+accountSelect(accounts,accountId,'fromAccountId')+'</label>'+
-  '</div><details class="schedule-advanced" data-schedule-advanced'+(transfer||r.frequency==='twice-monthly'?' open':'')+'>'+
+  '</div><details class="schedule-advanced" data-schedule-advanced'+(transfer||r.frequency==='twice-monthly'||unresolvedDirection?' open':'')+'>'+
   '<summary>More options</summary><div class="future-fields">'+
   (isNew?'<label>Type<select name="type" data-schedule-type>'+
    [['expense','Withdrawal'],['income','Deposit'],['refund','Refund'],['transfer','Linked transfer']].map(([v,name])=>
     '<option value="'+v+'"'+(type===v?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':
    '<input type="hidden" name="type" value="'+escapeHTML(type)+'">')+
+  (!transfer&&type==='transfer'?'<label>External payment direction<select name="cashDirection" required>'+
+   '<option value=""'+(!r.cashDirection?' selected':'')+'>Choose direction</option>'+
+   '<option value="out"'+(r.cashDirection==='out'?' selected':'')+'>Money out</option>'+
+   '<option value="in"'+(r.cashDirection==='in'?' selected':'')+'>Money in</option>'+
+   '</select></label>':'')+
   '<label>Bank merchant<input name="merchant" maxlength="160"'+(isNew?'':' required')+' value="'+escapeHTML(r.merchant||'')+'"></label>'+
   '<label>Category<select name="category">'+categories.map(c=>
    '<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+'</select></label>'+
