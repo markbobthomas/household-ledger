@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
+- **2026-10-24 compact Calendar and Balance Trend page:** Pending [PR](https://github.com/markbobthomas/household-ledger/pulls) replaces fixed six-week blank padding with only populated Monday–Friday week rows (Selected Day follows last visible row) and relocates the unchanged interactive Balance Trend to **More → Balance Trend**, with its own account selector, range choices and caveat. Checks/merge pending; private Render deployment unverified.
+
 - **Calendar month toolbar merged (2026-10-24):** [PR #180](https://github.com/markbobthomas/household-ledger/pull/180) merged as `f415b5a0a7ed6f05de1d97f655022e9759b88ee2` (verified `main`). Account on left, centered month and previous/Today/next on right on desktop; compact two-row iPhone fallback; no redundant navigation beneath balances. Financial/bank and desktop/iPhone browser CI passed on final code head `09ce634e656ee086dc9a5451abd68bad6687c1eb`. Private Render deployment unverified.
 
 
@@ -1152,3 +1154,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Release:** [PR #180](https://github.com/markbobthomas/household-ledger/pull/180) squash-merged at `f415b5a0a7ed6f05de1d97f655022e9759b88ee2`, verified identical to GitHub `main`. Final tested head `09ce634e656ee086dc9a5451abd68bad6687c1eb`; [bank/forecast safety 40165313696](https://github.com/markbobthomas/household-ledger/actions/runs/40165313696) successful and [desktop Chromium/iPhone WebKit 40165313731](https://github.com/markbobthomas/household-ledger/actions/runs/40165313731) successful. One obsolete legacy smoke assertion requiring the now-removed month caption was replaced by checks for the new accessible grid label and single navigator; final checks passed.
 - **UI:** Account, centered month, and `‹ Today ›` share the header on desktop. On narrow screens the month remains centered above the Account and controls; no second month toolbar appears beneath balances. Month changes and account changes keep the correct single date-state and forecast metrics. Full calendar width and banking/forecast math unchanged.
 - **Deployment:** Verified on GitHub only; private Render runtime and its deployed commit remain unverified. No backend, live transactions, Plaid credentials or Render service configuration edited.
+
+### 2026-10-24 — Remove blank calendar weeks; put Balance Trend in More (verification pending)
+
+- **User goal:** Eliminate the large blank space between Calendar and Selected Day and relocate the Balance Trend section to its own page accessible through the More menu.
+- **Implementation:** Five-day Calendar now computes the number of actual visible business-week rows each month, skipping leading/trailing all-weekend weeks and unused trailing rows. CSS grid uses the computed week count, fixed cell heights and a tight Selected Day gap. Original dates, balances, events and single forecast source remain unchanged. Balance Trend uses the existing chart computation, time-range buttons, keyboard/pointer inspection, uncertainty copy and account picker in a dedicated menu view; it no longer appears as a collapsed Calendar section. Empty-calendar Add a schedule remains reachable on Calendar. Files: `planner-summary.js`, `planner.js`, `planner.css`, `index.html`, `tests/planner-browser.cjs`, `tests/planner-summary-smoke.cjs`.
+- **Safety/validation:** UI and read-only chart routing only; Plaid records, payment dates, recurrence schedules, balance calculations and private bank infrastructure unchanged. Browser desktop Chromium/iPhone WebKit and banking/forecast safety regression checks pending final PR head.
+- **Deployment:** GitHub branch change only at time of entry; do not infer that private Render is deployed. Exact private Render commit unverified.
+- **Next:** Confirm required tests on final PR head and merge only after green checks; verify `main` and preserve separate deployment status.
