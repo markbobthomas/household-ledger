@@ -1273,16 +1273,16 @@ const {chromium,webkit}=require('playwright');
    const incomeGroup=page.locator('[data-schedule-category-group="Income"]');
    assert.equal(await incomeGroup.locator('[data-schedule-card]').count(),2);
    let total=await incomeGroup.locator('[data-schedule-group-total]').innerText();
-   assert.ok(total.includes('Nov 2026: In $6,115.00'),
-    'November income must be the two actual dated deposits, not a prorated annual average');
-   assert.doesNotMatch(total,/12-month|avg\/month|\/mo/,
-    'Category header must not show an annual total or monthly average');
+   assert.equal(total,'Total shown: In $6,115.00',
+    'Grouped income adds one displayed amount from each independent paycheck schedule');
+   assert.doesNotMatch(total,/Nov 2026|12-month|avg\/month|\/mo/,
+    'Schedule row totals are not presented as dated bank balance forecasts');
    await page.locator('[data-schedule-search]').fill('Nonexistent schedule');
    assert.equal(await incomeGroup.locator('[data-schedule-card]:visible').count(),0);
    await page.locator('[data-schedule-search]').fill('Alternating Employer Paycheck');
    total=await incomeGroup.locator('[data-schedule-group-total]').innerText();
-   assert.equal(total,'Nov 2026: In $6,115.00',
-    'Search restores the same exact next-month income without extra totals');
+   assert.equal(total,'Total shown: In $6,115.00',
+    'Search restores the sum of the visible income schedule rows');
    await page.locator('[data-schedule-sort]').selectOption('order');
    await page.reload({waitUntil:'load'});
    await go('transactions');
@@ -1682,13 +1682,34 @@ const {chromium,webkit}=require('playwright');
     'Repeating count reflects selected categories without losing total schedules');
    const group=page.locator('[data-schedule-category-group="Water bills"]');
    assert.equal(await group.count(),1);
-   assert.match(await group.locator('.schedule-category-heading').innerText(),/[A-Z][a-z]{2} \d{4}: Out /,
-    'Category grouping shows exact next-calendar-month withdrawals');
+   assert.match(await group.locator('.schedule-category-heading').innerText(),/Total shown: Out /,
+    'Category grouping explicitly totals listed schedules, not a particular month');
    assert.match(await group.locator('.schedule-category-heading').innerText(),/355/,
     'Category total includes both independently forecast monthly bills');
    assert.deepEqual(await group.locator('[data-schedule-quick-category]').evaluateAll(rows=>
     rows.map(row=>row.value)),['Water bills','Water bills'],
     'Every grouped row carries its saved category as directly editable data');
+   await page.locator('[data-schedule-category-filter]').selectOption('');
+   // Move a row out and back: both affected totals must respond immediately.
+   await group.locator('[data-schedule-card]').filter({hasText:'Water - Garden'})
+    .locator('[data-schedule-quick-category]').selectOption('Other');
+   assert.equal(await group.locator('[data-schedule-group-total]').innerText(),
+    'Total shown: Out $135.00',
+    'Moving an expense out of its category subtracts its displayed amount immediately');
+   const otherGroup=page.locator('[data-schedule-category-group="Other"]');
+   assert.equal(await otherGroup.locator('[data-schedule-card]').filter({hasText:'Water - Garden'}).count(),1);
+   const otherSum=await otherGroup.locator('[data-schedule-card]').evaluateAll(rows=>
+    rows.filter(r=>r.dataset.scheduleListedKind==='out')
+     .reduce((n,r)=>n+Number(r.dataset.scheduleListedCents||0),0));
+   assert.ok(otherSum>=22000,'Other includes the moved expense amount');
+   assert.ok((await otherGroup.locator('[data-schedule-group-total]').innerText())
+    .includes('Out $'+(otherSum/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})),
+    'Other total increases to match all listed expense rows');
+   await otherGroup.locator('[data-schedule-card]').filter({hasText:'Water - Garden'})
+    .locator('[data-schedule-quick-category]').selectOption('Water bills');
+   assert.equal(await group.locator('[data-schedule-group-total]').innerText(),
+    'Total shown: Out $355.00','Moving a row back restores the original category sum');
+   await page.locator('[data-schedule-category-filter]').selectOption('Water bills');
    await page.locator('[data-schedule-search]').fill('Garden');
    assert.equal(await page.locator('[data-schedule-card]:visible').count(),1,
     'Search filters instantly without navigating or reopening editors');
@@ -1978,6 +1999,22 @@ const {chromium,webkit}=require('playwright');
     'Repeating shows the canonical Friday posting rather than the Sunday anchor');
    assert.equal(await zelleCard.locator('[data-schedule-edit-form] [name=date]').inputValue(),'2026-11-01',
     'The saved monthly recurrence anchor remains November 1');
+   await statementPage.locator('[data-schedule-sort]').selectOption('category');
+   await zelleCard.locator('[data-schedule-quick-category]').selectOption('Other');
+   const fridayOther=statementPage.locator('[data-schedule-category-group="Other"]');
+   assert.equal(await fridayOther.locator('[data-schedule-card]')
+    .filter({hasText:'Fictional Zelle payment'}).count(),1);
+   const fridayOut=await fridayOther.locator('[data-schedule-card]').evaluateAll(rows=>
+    rows.filter(r=>r.dataset.scheduleListedKind==='out')
+     .reduce((cents,row)=>cents+Number(row.dataset.scheduleListedCents||0),0));
+   assert.ok(fridayOut>=4800,'A Sunday November 1 schedule remains visible even after Friday October 30 adjustment');
+   assert.ok((await fridayOther.locator('[data-schedule-group-total]').innerText()).includes(
+    'Out $'+(fridayOut/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})),
+    'Other never shows an artificial $0 for a November 1 payment posted in October');
+   await statementPage.locator('[data-schedule-sort]').selectOption('order');
+   // Changing the sort deliberately closes the inline editor; reopen it.
+   if(!await zelleCard.locator('[data-schedule-view-calendar]').count())
+    await zelleCard.locator('[data-schedule-edit]').click();
    await zelleCard.locator('[data-schedule-view-calendar]').click();
    assert.equal(await statementPage.locator('.summary-page').count(),1,
     'View on Calendar switches tabs directly');

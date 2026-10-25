@@ -1042,22 +1042,16 @@ function applyScheduleSearch(root=document){
   group.hidden=rows.length===0;
   const count=group.querySelector('[data-schedule-group-count]'),
    total=group.querySelector('[data-schedule-group-total]'),
-   month={out:0,in:0,transfers:0},
-   year={out:0,in:0,transfers:0};
+   shown={out:0,in:0,transfers:0,unforecasted:0};
   if(count)count.textContent='('+rows.length+')';
-  for(const row of rows)
-   for(const key of ['out','in','transfers']){
-    const suffix=key[0].toUpperCase()+key.slice(1);
-    month[key]+=Number(row.dataset['scheduleMonthly'+suffix]||0);
-    year[key]+=Number(row.dataset['scheduleYearly'+suffix]||0);
-   }
-  if(total){
-   const asOf=root.querySelector('[data-schedule-as-of]')?.dataset.scheduleAsOf;
-   if(asOf){
-    const period=scheduleTotalPeriod(asOf);
-    total.textContent=period.label+': '+formatScheduleTotals(month);
-   }
+  for(const row of rows){
+   const kind=row.dataset.scheduleListedKind,
+    cents=Number(row.dataset.scheduleListedCents);
+   if(kind==='unforecasted')shown.unforecasted++;
+   else if(['out','in','transfers'].includes(kind)&&Number.isSafeInteger(cents)&&cents>0)
+    shown[kind]+=cents;
   }
+  if(total)total.textContent='Total shown: '+formatScheduleTotals(shown);
  }
  const count=root.querySelector('[data-schedule-visible-count]');
  if(count){
@@ -1083,51 +1077,34 @@ function applyScheduleSearch(root=document){
  const empty=root.querySelector('[data-schedule-search-empty]');
  if(empty)empty.hidden=shown!==0||!q;
 }
-function scheduleTotalPeriod(asOf){
- const y=Number(asOf.slice(0,4)),m=Number(asOf.slice(5,7));
- const iso=(month,day)=>new Date(Date.UTC(y,month,day)).toISOString().slice(0,10);
- const start=iso(m,1),monthEnd=iso(m+1,0),yearEnd=iso(m+12,0),
-  label=new Date(Date.UTC(y,m,1)).toLocaleDateString('en-US',
-   {month:'short',year:'numeric',timeZone:'UTC'});
- return {start,monthEnd,yearEnd,label};
+// The category total adds one displayed amount per scheduled row, not the
+// payments in a single calendar month. Weekend-adjusted November 1 bills can
+// land in October; this heading should never imply they have a $0 value.
+function scheduleListedKind(rule){
+ if(rule.kind==='movement')return 'transfers';
+ if(rule.type==='transfer')return ['in','out'].includes(rule.cashDirection)?
+  rule.cashDirection:'unforecasted';
+ return ['income','refund'].includes(rule.type)?'in':'out';
 }
-function schedulePeriodAmounts(rule,bundle,from,to){
- const total={out:0,in:0,transfers:0};
- for(const row of bundle?.ledger||[]){
-  if(!(row.date>=from&&row.date<=to)||
-   String(row.ruleId||row.recurringRuleId||row.seriesRuleId||'')!==String(rule.id))continue;
-  const amount=Math.round(Number(row.amount)*100);
-  if(!Number.isFinite(amount)||amount<=0)continue;
-  const kind=row.kind==='movement'?'transfers':
-   ['income','refund'].includes(row.type)?'in':'out';
-  total[kind]+=amount;
- }
- // Sum in cents to avoid floating rounding errors across many deposits.
- return total;
-}
-function sumScheduleAmounts(items,bundle,from,to){
- const total={out:0,in:0,transfers:0};
+function scheduleListedTotals(items,amountForRule){
+ const total={out:0,in:0,transfers:0,unforecasted:0};
  for(const {rule} of items){
-  const value=schedulePeriodAmounts(rule,bundle,from,to);
-  for(const key of ['out','in','transfers'])total[key]+=value[key];
+  const kind=scheduleListedKind(rule),
+   cents=Math.round(Number(amountForRule(rule))*100);
+  if(kind==='unforecasted'){total.unforecasted++;continue}
+  if(Number.isSafeInteger(cents)&&cents>0)total[kind]+=cents;
  }
  return total;
 }
-function scheduleAmountText(cents,{average=false}={}){
- const amount=cents/(average?1200:100);
- return cash(amount);
-}
-function formatScheduleTotals(total,{average=false}={}){
+function formatScheduleTotals(total){
  const parts=[];
- if(total.out)parts.push('Out '+scheduleAmountText(total.out,{average}));
- if(total.in)parts.push('In '+scheduleAmountText(total.in,{average}));
- if(total.transfers)parts.push('Transfers '+scheduleAmountText(total.transfers,{average}));
- return parts.join(' · ')||(average?'$0/mo':'$0');
+ for(const [kind,label] of [['out','Out'],['in','In'],['transfers','Transfers']])
+  if(total[kind])parts.push(label+' '+cash(total[kind]/100));
+ if(total.unforecasted)parts.push(total.unforecasted+' not forecast');
+ return parts.join(' · ')||'$0';
 }
-function scheduleCategorySummary(items,bundle,period){
- const month=sumScheduleAmounts(items,bundle,period.start,period.monthEnd),
-  year=sumScheduleAmounts(items,bundle,period.start,period.yearEnd);
- return period.label+': '+formatScheduleTotals(month);
+function scheduleCategorySummary(items,amountForRule){
+ return 'Total shown: '+formatScheduleTotals(scheduleListedTotals(items,amountForRule));
 }
 // Shared three-part amount grid: sign, fixed-position dollar glyph, digits.
 function ledgerMoney(amount,sign=''){
@@ -1196,7 +1173,7 @@ function repeatingStatementPeriods(bundle,s,accountId,shownRules){
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
-  totalPeriod=scheduleTotalPeriod(s.asOf),tomorrow=shiftDay(s.asOf,1),
+  tomorrow=shiftDay(s.asOf,1),
   categories=T.scheduleCategories(state()),
   categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
  // Canonical prediction rows already include weekend-to-Friday posting,
@@ -1214,8 +1191,9 @@ function schedulesPage(bundle,s){
   (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter));
  const nextAmount=rule=>{
   const forecast=upcomingByRule.get(String(rule.id));
-  return forecast?Number(forecast.amount):
-   Number(rule.amount)||0;
+  if(forecast)return Number(forecast.amount);
+  const next=T.recurrenceDates(rule,s.asOf,end)[0];
+  return next?Number(T.scheduleAmount(rule,next).amount):Number(rule.amount)||0;
  };
  visible.sort((a,b)=>scheduleSort==='value-desc'?
   nextAmount(b.rule)-nextAmount(a.rule)||a.index-b.index:
@@ -1242,7 +1220,7 @@ function schedulesPage(bundle,s){
    occurrence=upcomingByRule.get(String(r.id)),
    effectiveNext=occurrence?.date||null,
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
-   shownAmount=occurrence?occurrence.amount:estimate.amount,
+   shownAmount=nextAmount(r),
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
    wins=Array.isArray(r.amountWindows)?r.amountWindows:[];
   const edit=isEditing?'<form class="schedule-form" data-schedule-edit-form="'+id+'">'+
@@ -1255,15 +1233,13 @@ function schedulesPage(bundle,s){
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
   const number=index+1,title=escapeHTML(r.scheduleLabel||r.merchant),
    pendingRemove=scheduleRemoveTarget===r.id,
-   monthly=schedulePeriodAmounts(r,bundle,totalPeriod.start,totalPeriod.monthEnd),
-   yearly=schedulePeriodAmounts(r,bundle,totalPeriod.start,totalPeriod.yearEnd),
+   listedKind=scheduleListedKind(r),
+   listedCents=Math.round(Number(shownAmount)*100),
    searchText=[r.scheduleLabel,r.merchant,categoryOf(r)].filter(Boolean).join(' ').toLowerCase();
   return '<article class="panel schedule-card" data-schedule-card="'+id+
    '" data-schedule-number="'+number+'" data-schedule-search-text="'+escapeHTML(searchText)+
-   '" data-schedule-monthly-out="'+monthly.out+'" data-schedule-monthly-in="'+monthly.in+
-   '" data-schedule-monthly-transfers="'+monthly.transfers+
-   '" data-schedule-yearly-out="'+yearly.out+'" data-schedule-yearly-in="'+yearly.in+
-   '" data-schedule-yearly-transfers="'+yearly.transfers+'">'+
+   '" data-schedule-listed-kind="'+listedKind+
+   '" data-schedule-listed-cents="'+(Number.isSafeInteger(listedCents)?listedCents:0)+'">'+
    '<div class="schedule-compact-row ledger-list-row recurrence-row">'+
    '<button class="schedule-row-main ledger-row-open recurrence-row-trigger" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
@@ -1315,13 +1291,12 @@ function schedulesPage(bundle,s){
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
     '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
     ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
-    scheduleCategorySummary(items,bundle,totalPeriod)+'</span></div>'+
+    scheduleCategorySummary(items,nextAmount)+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
  return '<div class="planner-page schedule-page">'+
-  '<div class="schedule-toolbar ledger-toolbar" data-schedule-as-of="'+escapeHTML(s.asOf)+
-   '" aria-label="Schedule organization">'+
+  '<div class="schedule-toolbar ledger-toolbar" aria-label="Schedule organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
