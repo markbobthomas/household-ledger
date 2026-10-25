@@ -131,6 +131,9 @@ const {chromium,webkit}=require('playwright');
     return {header:rect('.topbar'),title:rect('.topbar h1'),
      menu:rect('#planner-menu > summary'),nav:rect('.planner-nav-primary')};
    });
+   // A prior menu click may have initiated smooth scrolling; normalize it
+   // before comparing the tab layouts rather than sampling an animation.
+   await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
    const initialHeader=await layout();
    const calendarFrame=await page.locator('.summary-heading').boundingBox();
    const calendarAccount=await page.locator('.summary-account-picker').boundingBox();
