@@ -2784,3 +2784,45 @@ html{scrollbar-gutter:stable}
  padding-inline:10px;box-sizing:border-box;
 }
 @media(max-width:850px){.summary-page .summary-heading{padding-inline:8px}}
+
+/* Calendar: Account | centered month | previous / Today / next.
+   Only this compact toolbar is in the 1050px header frame; forecast
+   balances and the five-column calendar continue using the wider canvas. */
+.summary-page .summary-heading.calendar-toolbar{
+ display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+ align-items:center;column-gap:12px;row-gap:4px;min-height:40px;
+}
+.summary-page .calendar-toolbar .summary-account-picker{
+ justify-self:start;min-width:0;margin:0;
+}
+.summary-page .calendar-toolbar .calendar-navigation{display:contents}
+.summary-page .calendar-toolbar .calendar-month-title{
+ min-width:0;justify-self:center;text-align:center;
+}
+.summary-page .calendar-toolbar .calendar-navigation h2{
+ font-size:19px!important;line-height:1.2;white-space:nowrap;margin:0;
+}
+.summary-page .calendar-toolbar .calendar-nav-actions{
+ justify-self:end;margin:0;white-space:nowrap;
+}
+/* Two compact toolbar rows only where three usable columns cannot fit.
+   Month remains centered, and controls no longer take up a row below metrics. */
+@media(max-width:620px){
+ .summary-page .summary-heading.calendar-toolbar{
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:'month month' 'account controls';
+  column-gap:6px;row-gap:5px;
+ }
+ .summary-page .calendar-toolbar .summary-account-picker{grid-area:account}
+ .summary-page .calendar-toolbar .calendar-month-title{grid-area:month}
+ .summary-page .calendar-toolbar .calendar-nav-actions{grid-area:controls}
+ .summary-page .calendar-toolbar .summary-account-picker select{
+  max-width:clamp(90px,28vw,140px);min-width:0;
+ }
+ .summary-page .calendar-toolbar .calendar-navigation h2{font-size:17px!important}
+}
+@media(max-width:360px){
+ .summary-page .calendar-toolbar .calendar-nav-actions{gap:3px!important}
+ .summary-page .calendar-toolbar .calendar-nav-actions button{width:32px;height:34px}
+ .summary-page .calendar-toolbar .calendar-nav-actions .calendar-today{width:auto;padding:0 7px}
+}
