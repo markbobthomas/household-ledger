@@ -127,7 +127,7 @@ const {chromium,webkit}=require('playwright');
    // Scheduled, Transaction History and Needs review, without shrinking the grid.
    const layout=async()=>page.evaluate(()=>{
     const rect=selector=>{const b=document.querySelector(selector).getBoundingClientRect();
-     return {x:b.left,y:b.top,width:b.width,height:b.height};};
+     return {x:b.left+window.scrollX,y:b.top+window.scrollY,width:b.width,height:b.height};};
     return {header:rect('.topbar'),title:rect('.topbar h1'),
      menu:rect('#planner-menu > summary'),nav:rect('.planner-nav-primary')};
    });
