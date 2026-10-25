@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'history-category-enter-20261024-v1','The loaded HTML identifies the History Category and Enter search release');
+    'scheduled-sort-by-20261024-v1','The loaded HTML identifies the Scheduled Sort by label release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -1505,6 +1505,13 @@ const {chromium,webkit}=require('playwright');
      JSON.stringify({mobile,bank:bankListRow,repeating:repeatingListRow}));
 
    assert.equal(await page.locator('[data-schedule-sort]').count(),1);
+   const scheduleSortTitle=await page.locator('.schedule-page label:has([data-schedule-sort])')
+    .evaluate(el=>el.firstChild.textContent.trim());
+   const historySortTitle=await page.locator('.history-page label:has([data-history-sort])').count();
+   assert.equal(scheduleSortTitle,'Sort by',
+    'Scheduled sort is labeled Sort by, consistent with Transaction History');
+   assert.equal(historySortTitle,0,
+    'Only the active tab is rendered; label tests are scoped to Scheduled');
    assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
    const values=async()=>page.locator('.schedule-row-amount strong').evaluateAll(nodes=>
     nodes.map(node=>Number((node.textContent||'').replace(/[^0-9.]/g,''))));
