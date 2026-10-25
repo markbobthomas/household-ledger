@@ -3,11 +3,10 @@
 const http=require('node:http'),crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path');
 const env=process.env;
 const {inspect:accountForecastLinks}=require('./account-forecast-links.cjs');
-const Categories=require('../ledger-data.js');
-const ForecastTools=require('../planner-transactions.js');
-const savedCategoryChoices=(predictions,customCategories=[])=>Categories.categories({
- predictions,customCategories
-});
+// Load optional UI modules only inside their relevant edit endpoints.
+// A deliberately partial static deployment must still start and serve /healthz.
+const savedCategoryChoices=(predictions,customCategories=[])=>
+ require('../ledger-data.js').categories({predictions,customCategories});
 if(!env.PILOT_PASSWORD||env.PILOT_PASSWORD.length<20||!env.PILOT_ENCRYPTION_KEY||!env.PLAID_CLIENT_ID||!env.PLAID_SECRET)
  throw Error('Missing pilot password (20+ characters), encryption key, or Plaid credentials');
 const key=crypto.createHash('sha256').update(env.PILOT_ENCRYPTION_KEY).digest();
@@ -69,7 +68,7 @@ async function saveForecast(predictions){
  // The encrypted forecast store is the authoritative write boundary. Reject
  // duplicate one-offs/schedules even when a client retries or bypasses UI.
  // Bank source records remain read-only; do not silently delete old plans.
- ForecastTools.assertUniqueForecastTransactions(predictions);
+ require('../planner-transactions.js').assertUniqueForecastTransactions(predictions);
  const write=forecastWrites.catch(()=>{}).then(()=>atomicEncryptedWrite(forecastFile,predictions));
  forecastWrites=write.catch(()=>{});
  await write;
