@@ -153,7 +153,7 @@ const {chromium,webkit}=require('playwright');
    // sharply defined cards/controls, clear contrast, and unchanged safety colors.
    const industrialLook=await page.evaluate(()=>{
     const style=selector=>getComputedStyle(document.querySelector(selector));
-    const nums=color=>(color.match(/[\\d.]+/g)||[]).map(Number).slice(0,3);
+    const nums=color=>(color.match(/\d+/g)||[]).map(Number).slice(0,3);
     const brightness=color=>{
      const rgb=nums(color).map(n=>{const x=n/255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4;});
      return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;
@@ -240,7 +240,7 @@ const {chromium,webkit}=require('playwright');
      const boundary=await page.locator(surfaceSelector).first().evaluate(el=>{
       const cs=getComputedStyle(el);
       return {width:cs.borderTopWidth,radius:parseFloat(cs.borderTopLeftRadius),
-       rgb:(cs.borderTopColor.match(/[\\d.]+/g)||[]).map(Number).slice(0,3)};
+       rgb:(cs.borderTopColor.match(/\d+/g)||[]).map(Number).slice(0,3)};
      });
      assert.equal(boundary.width,'1px',
       tab+' contains a clearly defined, one-pixel surface');
