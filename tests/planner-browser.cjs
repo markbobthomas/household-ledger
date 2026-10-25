@@ -149,6 +149,41 @@ const {chromium,webkit}=require('playwright');
    const calendarFrame=await page.locator('.summary-heading').boundingBox();
    const calendarAccount=await page.locator('.summary-account-picker').boundingBox();
    const calendarGridWidth=await page.locator('.calendar-grid').evaluate(el=>el.getBoundingClientRect().width);
+   // Industrial styling must be readable and bounded, not decoratively dark:
+   // sharply defined cards/controls, clear contrast, and unchanged safety colors.
+   const industrialLook=await page.evaluate(()=>{
+    const style=selector=>getComputedStyle(document.querySelector(selector));
+    const nums=color=>(color.match(/[\\d.]+/g)||[]).map(Number).slice(0,3);
+    const brightness=color=>{
+     const rgb=nums(color).map(n=>{const x=n/255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4;});
+     return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;
+    };
+    const head=style('.topbar'),brand=style('.topbar h1'),
+     active=style('.planner-nav-primary .tab-link.active'),
+     day=style('.calendar-day:not(.selected):not(.month-minimum)'),
+     detail=style('.calendar-day-detail'),
+     month=style('.calendar-monthly-list');
+    return {headerContrast:(brightness('rgb(255,255,255)')+.05)/(brightness(head.backgroundColor)+.05),
+      titleContrast:(brightness(brand.color)+.05)/(brightness(head.backgroundColor)+.05),
+      headerRadius:parseFloat(head.borderTopLeftRadius),
+      activeBackground:nums(active.backgroundColor),
+      dayBorder:nums(day.borderTopColor),
+      dayRadius:parseFloat(day.borderTopLeftRadius),
+      detailBorder:nums(detail.borderTopColor),
+      detailRadius:parseFloat(detail.borderTopLeftRadius),
+      monthlyBorder:nums(month.borderTopColor),
+      monthlyRadius:parseFloat(month.borderTopLeftRadius)};
+   });
+   assert.ok(industrialLook.headerContrast>12&&industrialLook.titleContrast>8,
+    'Dark graphite header has high-contrast, legible title: '+JSON.stringify(industrialLook));
+   assert.ok(industrialLook.headerRadius<=4&&industrialLook.dayRadius<=4&&
+    industrialLook.detailRadius<=4&&industrialLook.monthlyRadius<=4,
+    'Containers have tight, deliberate squared corners');
+   assert.ok(industrialLook.activeBackground.every(c=>c<95),
+    'Active tab has a clear dark state, without bright decorative accents');
+   assert.ok([industrialLook.dayBorder,industrialLook.detailBorder,industrialLook.monthlyBorder]
+    .every(rgb=>rgb.length===3&&rgb.every(c=>c<195)),
+    'Calendar day, selected detail and monthly panel edges are high-contrast steel');
    // Month and its three navigation buttons share the Account header.
    // At wider widths all three parts occupy one row, with month centered
    // against the entire toolbar rather than between unequal side controls.
@@ -194,6 +229,23 @@ const {chromium,webkit}=require('playwright');
        'Global '+key+' '+dim+' does not shift between Calendar and '+tab+': '+
        JSON.stringify({initial:initialHeader[key],now:current[key]}));
      }
+    }
+    // Consistent section boundaries across all list/review pages, not just Calendar.
+    if(tab!=='summary'){
+     const surfaceSelector={
+      schedules:'.schedule-page .schedule-grid',
+      history:'.history-page .history-list-surface',
+      reviews:'.reviews-page > .panel'
+     }[tab];
+     const boundary=await page.locator(surfaceSelector).first().evaluate(el=>{
+      const cs=getComputedStyle(el);
+      return {width:cs.borderTopWidth,radius:parseFloat(cs.borderTopLeftRadius),
+       rgb:(cs.borderTopColor.match(/[\\d.]+/g)||[]).map(Number).slice(0,3)};
+     });
+     assert.equal(boundary.width,'1px',
+      tab+' contains a clearly defined, one-pixel surface');
+     assert.ok(boundary.rgb.length===3&&boundary.rgb.every(c=>c<195)&&boundary.radius<=5,
+      tab+' uses the same squared, high-contrast container system: '+JSON.stringify(boundary));
     }
     const frame=await page.locator(frameSelector).boundingBox();
     assert.ok(Math.abs(frame.x-calendarFrame.x)<1.1&&
