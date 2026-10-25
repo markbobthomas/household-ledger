@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-trend-page-20261024-v1','The loaded HTML identifies the separate Balance Trend release');
+    'calendar-section-spacing-20261024-v1','The loaded HTML identifies the revised Calendar section spacing release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -310,13 +310,24 @@ const {chromium,webkit}=require('playwright');
     'Calendar navigation bottom spacing matches the other tabs');
    assert.ok(initialGrid.maxPreviews<=2,'Only the first two transaction previews occupy calendar cells');
 
-   const bottomGap=async()=>page.evaluate(()=>{
+   // The three forecast sections need consistent, restrained whitespace;
+   // never compensate by bringing back unoccupied calendar-week rows.
+   const sectionGaps=async()=>page.evaluate(()=>{
     const grid=document.querySelector('.calendar-grid').getBoundingClientRect(),
-     detail=document.querySelector('.calendar-day-detail').getBoundingClientRect();
-    return detail.top-grid.bottom;
+     selected=document.querySelector('.calendar-day-detail').getBoundingClientRect(),
+     month=document.querySelector('.calendar-monthly-list').getBoundingClientRect();
+    return {selected:selected.top-grid.bottom,monthly:month.top-selected.bottom};
    });
-   assert.ok(await bottomGap()<=7,
-    'Selected Day sits immediately after the final visible calendar week');
+   const checkSectionGaps=async label=>{
+    const gaps=await sectionGaps(),target=mobile?{selected:12,monthly:16}:{selected:14,monthly:18};
+    assert.ok(Math.abs(gaps.selected-target.selected)<1.1,
+     label+': compact Calendar-to-Selected Day whitespace is intentional: '+JSON.stringify(gaps));
+    assert.ok(Math.abs(gaps.monthly-target.monthly)<1.1,
+     label+': Selected Day and all-month predictions have a gentle visual separation: '+JSON.stringify(gaps));
+    assert.ok(gaps.monthly>gaps.selected,
+     label+': progressively separate detailed and month-level forecast sections');
+   };
+   await checkSectionGaps('October');
    assert.equal(await page.locator('.calendar-grid > .calendar-blank').last().count(),1,
     'Unused day placeholders may exist inside weeks without reserving full blank weeks');
    // Two previews plus the +more label must fit inside the fixed day area.
@@ -477,7 +488,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(novemberGrid.actual,21);
    assert.ok(Math.abs(novemberGrid.height-initialGrid.height)<1,
     'October and November each occupy five actual business weeks');
-   assert.ok(await bottomGap()<=7,'Selected Day stays adjacent in November');
+   await checkSectionGaps('November');
    // February 2027 needs only four business weeks; omit the fifth blank row.
    for(let month=0;month<3;month++)await page.locator('[data-calendar-nav="1"]').click();
    assert.match(await page.locator('.calendar-navigation h2').innerText(),/February 2027/);
@@ -486,7 +497,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(februaryGrid.actual,20);
    assert.ok(februaryGrid.height<initialGrid.height-(mobile?90:105),
     'February does not reserve a phantom fifth business week');
-   assert.ok(await bottomGap()<=7,'Selected Day stays adjacent in shorter months');
+   await checkSectionGaps('February');
    await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
 
