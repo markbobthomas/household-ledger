@@ -9,17 +9,59 @@ const Accounting=root.HouseholdAccounting||(typeof require==='function'?require(
 const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('./categorization.js'):null);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(String(d)+'T12:00:00Z'));
-const categorySet=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
+// The ONE category registry for History, Scheduled, Calendar editors and Review.
+// Legacy singular spellings are aliases, not separate selectable categories.
+// Each assignment stores only a name; custom definitions are saved exactly once
+// under predictions.scheduleCategories with the other planning preferences.
+const categorySet=new Set(['Uncategorized','Groceries','Shopping','Housing','Mortgage','Rent',
+ 'Utility','Transportation','Dining','Health','Healthcare','Entertainment','Kids & Family',
+ 'Childcare','Insurance','Subscriptions','Loan','Tax','Income','Savings','Transfer','Other']);
+const aliases=Object.freeze({utility:'Utility',utilities:'Utility',subscription:'Subscriptions'});
+const builtinsByName=new Map([...categorySet].map(name=>[name.toLocaleLowerCase(),name]));
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
-const validCustomName=s=>typeof s==='string'&&s===s.trim()&&s.length>=2&&s.length<=40&&/^[A-Za-z0-9][A-Za-z0-9 &'().-]*$/.test(s);
-const categories=state=>[...categorySet,...(Array.isArray(state?.customCategories)?state.customCategories:[])];
-const isCategory=(state,name)=>categories(state).includes(name);
+const validCustomName=s=>typeof s==='string'&&s===s.trim()&&s.length>=2&&s.length<=40&&
+ /^[\p{L}\p{N}][\p{L}\p{N} &\/().,+'-]*$/u.test(s);
+const normalizeCategory=name=>{
+ const value=String(name||'').trim().replace(/\s+/g,' ');
+ if(!value)return '';
+ return aliases[value.toLocaleLowerCase()]||builtinsByName.get(value.toLocaleLowerCase())||value;
+};
+function dedupeCategoryNames(names){
+ const all=[],seen=new Set();
+ for(const name of names){
+  if(typeof name!=='string')continue;
+  const value=normalizeCategory(name),key=value.toLocaleLowerCase();
+  if(!validCustomName(value)||seen.has(key))continue;
+  seen.add(key);all.push(value);
+ }
+ return all;
+}
+function categories(state,observed=[]){
+ const saved=state?.predictions?.scheduleCategories||[];
+ // Assigned categories are references, not a second stored registry.
+ const assigned=[
+  ...(state?.predictions?.futureRecurringRules||[]).map(r=>r?.category),
+  ...(state?.transactions||[]).map(t=>t?.category),
+  ...Object.values(state?.categoryOverrides||{}),
+  ...Object.values(state?.learning?.categoryRules||{}).map(r=>r?.category)
+ ];
+ return dedupeCategoryNames([...categorySet,...(Array.isArray(saved)?saved:[]),
+  ...(Array.isArray(state?.customCategories)?state.customCategories:[]),
+  ...(Array.isArray(observed)?observed:[]),...assigned]);
+}
+function canonicalCategory(state,name){
+ const requested=normalizeCategory(name);
+ return categories(state).find(c=>c.toLocaleLowerCase()===requested.toLocaleLowerCase())||'';
+}
+const isCategory=(state,name)=>Boolean(canonicalCategory(state,name));
 function addCategory(state,name){
- const value=String(name||'').trim();
+ const value=normalizeCategory(name);
  if(!validCustomName(value))throw Error('Category must be 2–40 letters/numbers and ordinary punctuation');
- if(categories(state).some(n=>n.toLowerCase()===value.toLowerCase()))throw Error('Category already exists');
- if((state.customCategories||[]).length>=50)throw Error('Too many custom categories');
- state.customCategories??=[];state.customCategories.push(value);
+ if(isCategory(state,value))throw Error('Category already exists');
+ state.predictions??={};
+ const saved=state.predictions.scheduleCategories??=[];
+ if(!Array.isArray(saved)||saved.length>=100)throw Error('Category limit reached');
+ saved.push(value);
  return value;
 }
 
@@ -33,6 +75,13 @@ function migrate(input){
  learning.categoryRules=learning.categoryRules&&typeof learning.categoryRules==='object'&&!Array.isArray(learning.categoryRules)?learning.categoryRules:{};
  learning.ruleHistory=Array.isArray(learning.ruleHistory)?learning.ruleHistory:[];
  const predictions=old.predictions&&typeof old.predictions==='object'?copy(old.predictions):{};
+ // Read both historical category stores once, deduplicate and retain their
+ // definitions solely in the existing encrypted forecast-preferences store.
+ // This is an in-memory migration; importing never alters actual bank facts.
+ predictions.scheduleCategories=dedupeCategoryNames([
+  ...(Array.isArray(predictions.scheduleCategories)?predictions.scheduleCategories:[]),
+  ...(Array.isArray(old.customCategories)?old.customCategories:[])
+ ]).filter(name=>!categorySet.has(name));
  predictions.monthlyBudgets=predictions.monthlyBudgets&&typeof predictions.monthlyBudgets==='object'?predictions.monthlyBudgets:copy(old.budgets||{});
  predictions.categoryForecasts=predictions.categoryForecasts&&typeof predictions.categoryForecasts==='object'?predictions.categoryForecasts:{};
  // Kept for migration only: former undated aggregate overrides never alter dated transaction predictions.
@@ -57,7 +106,7 @@ function migrate(input){
   }
   return record;
  });
- return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,sync,customCategories:Array.isArray(old.customCategories)?old.customCategories.filter(validCustomName).slice(0,50):[]};
+ return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,sync,customCategories:[]};
 }
 // Category learning never edits authoritative ledger rows. A learned rule can
 // automatically resolve an unclassified/low-confidence transaction only when
@@ -161,10 +210,11 @@ function removeCategoryRule(state,key){
 }
 function setCategory(state,id,category){
  if(!(state.transactions||[]).some(t=>t.id===id))throw Error('Unknown transaction');
- if(!isCategory(state,category))throw Error('Invalid category');
+ const value=canonicalCategory(state,category);
+ if(!value)throw Error('Invalid category');
  state.categoryOverrides??={};
- const original=state.transactions.find(t=>t.id===id).category||'Other';
- if(category===original)delete state.categoryOverrides[id];else state.categoryOverrides[id]=category;
+ const original=canonicalCategory(state,state.transactions.find(t=>t.id===id).category||'Other');
+ if(value===original)delete state.categoryOverrides[id];else state.categoryOverrides[id]=value;
 }
 function setMonthlyBudget(state,category,amount){
  if(!isCategory(state,category)||!Number.isFinite(Number(amount))||Number(amount)<0)throw Error('Invalid budget');
@@ -509,7 +559,7 @@ function setCashCushion(state,amount){
  if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
  state.predictions.cashCushion=round(amount);
 }
-const api={VERSION,migrate,records,categories,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
+const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

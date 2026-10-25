@@ -987,7 +987,7 @@ function scheduleFields(r,isNew,s){
   transfer=(isNew&&type==='transfer')||r.kind==='movement',
   accountId=r.accountId||r.fromAccountId||selected(s)?.id||accounts[0]?.id,
   categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
-  category=categories.includes(r.category)?r.category:'Uncategorized',
+  category=model.canonicalCategory(state(),r.category)||'Uncategorized',
   scheduledDate=r.date||tomorrow,
   postedDate=window.HouseholdPlannerTransactions.forecastBusinessDate(scheduledDate,s.asOf),
   unresolvedDirection=!transfer&&type==='transfer'&&!['in','out'].includes(r.cashDirection);
@@ -1185,7 +1185,7 @@ function schedulesPage(bundle,s){
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
   tomorrow=shiftDay(s.asOf,1),
   categories=T.scheduleCategories(state()),
-  categoryOf=r=>categories.includes(r.category)?r.category:'Uncategorized';
+  categoryOf=r=>model.canonicalCategory(state(),r.category)||'Uncategorized';
  // Canonical prediction rows already include weekend-to-Friday posting,
  // individual date overrides and skipped occurrences. Show their actual dates
  // here; keep raw recurrence dates solely in the schedule-default editor.
@@ -1387,7 +1387,7 @@ function repeatingReviewForm(s,{inline=false}={}){
  if(!recurringDraft)return '';
  const d=recurringDraft,accounts=activeAccounts(s),
   categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
-  category=categories.find(c=>c.toLowerCase()===String(d.category||'').toLowerCase())||'Uncategorized',
+  category=model.canonicalCategory(state(),d.category)||'Uncategorized',
   date=d.nextDate&&d.nextDate>s.asOf?d.nextDate:shiftDay(s.asOf,1),
   transfer=d.type==='transfer',
   otherAccount=accounts.find(a=>String(a.id)!==String(d.accountId))?.id||d.accountId;
@@ -1430,12 +1430,15 @@ function repeatingReviewForm(s,{inline=false}={}){
   '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
 }
 function historyPage(bundle,s){
- const accounts=activeAccounts(s),categories=model.categories(state()),
+ const accounts=activeAccounts(s),
   records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
+  .map(t=>({...t,category:model.canonicalCategory(state(),t.category)||t.category||'Other'}))
   .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),
-  // Include source categories as well as user-created ones. Use the same
-  // effective category shown by each history row, including local overrides.
-  filterCategories=[...new Set([...categories,...records.map(t=>t.category||'Other')])];
+  // Both filters and row editors consult the same canonical category registry.
+  // Effective provider labels are included as read-only observed names; they
+  // are not saved as duplicate registry entries.
+  categories=model.categories(state(),records.map(t=>t.category)),
+  filterCategories=categories;
  const filtered=records.filter(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
@@ -1524,8 +1527,11 @@ function historyPage(bundle,s){
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-history-category="'+
     escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
     ' on '+escapeHTML(t.date)+'">'+
-    categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
-     (c===t.category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+    // Keep the full catalog available without injecting every option's
+    // text into every bank row (which can make a merchant text search match
+    // an unrelated row merely because e.g. "Mortgage" is an option).
+    categories.map(c=>'<option value="'+escapeHTML(c)+'" label="'+escapeHTML(c)+'"'+
+     (c===t.category?' selected':'')+'></option>').join('')+
    '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
    detail+'</div>';
  });
@@ -2358,9 +2364,7 @@ document.addEventListener('click',async e=>{
    try{
     const draft=window.HouseholdPlannerHistory.draftFor(
      row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
-    const options=window.HouseholdPlannerTransactions.scheduleCategories(state()),
-     category=options.find(c=>c.toLowerCase()===String(row.category||'').toLowerCase())||
-      'Uncategorized';
+    const category=model.canonicalCategory(state(),row.category)||'Uncategorized';
     recurringDraft={...draft,category,historyRowId:id};
    }catch(error){
     historyExpandedId='';setNotice(String(error.message||error));return;
@@ -2472,10 +2476,8 @@ document.addEventListener('click',async e=>{
    const draft=source?window.HouseholdPlannerHistory.draftFor(source,lastHistoryRows,
     activeAccounts(snapshot()),snapshot().asOf):null;
    if(!draft)throw Error('Bank evidence is no longer available. Keep this recommendation for review.');
-   const categories=window.HouseholdPlannerTransactions.scheduleCategories(state()),
-    proposedCategory=candidate.category||source.category,
-    category=categories.find(c=>c.toLowerCase()===String(proposedCategory||'').toLowerCase())||
-     'Uncategorized';
+   const proposedCategory=candidate.category||source.category,
+    category=model.canonicalCategory(state(),proposedCategory)||'Uncategorized';
    recurringDraft={...draft,merchant:candidate.merchant,
     amount:legacy?.amount??draft.amount,
     frequency:legacy?.cadence||draft.frequency,
@@ -2740,11 +2742,18 @@ document.addEventListener('submit',async e=>{
   notice=form.parentElement.querySelector('[data-schedule-category-notice]');
  if(submit)submit.disabled=true;
  try{
-  const label=await commitForecastChange(()=>window.HouseholdPlannerTransactions.addScheduleCategory(state(),field.value));
-  document.querySelectorAll('select[name=category],[data-schedule-category-filter]').forEach(select=>{
-   const option=document.createElement('option');option.value=label;option.textContent=label;
-   select.appendChild(option);
-   if(select.name==='category')select.value=label;
+  const label=await commitForecastChange(()=>model.addCategory(state(),field.value));
+  // The custom name is stored ONCE, in the canonical forecast category
+  // registry. Refresh every currently open category selector from that list
+  // without rebuilding an unsaved schedule or adding duplicate <option>s.
+  document.querySelectorAll('select[name=category],[data-schedule-category-filter],'+
+   '[data-schedule-quick-category],[data-history-category],'+
+   '[data-history-category-filter]').forEach(select=>{
+    if(![...select.options].some(option=>option.value.toLowerCase()===label.toLowerCase())){
+     const option=document.createElement('option');option.value=label;option.textContent=label;
+     select.appendChild(option);
+    }
+    if(select.name==='category')select.value=label;
   });
   field.value='';
   if(notice)notice.textContent='Added '+label+'. Choose it for any schedule.';
