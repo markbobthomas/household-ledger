@@ -69,13 +69,16 @@ for(const days of [1095]){
  assert.match(html,/End-of-day balance/);
 }
 const long=tool.render({...opts,days:1095});
-assert.match(long,/Property tax|Insurance|No dated transactions that day/);
+assert.doesNotMatch(long,/data-summary-plot|data-trend-days/,
+ 'Calendar excludes detailed trend inspection');
 assert.match(long,/calendar-grid/);
 assert.match(long,/aria-label="Next forecast month"/);
 const trend=tool.render({...opts,days:1095,view:'trend'});
 assert.match(trend,/class="planner-page summary-page trend-page"/);
 assert.match(trend,/<h2>Balance Trend<\/h2>/);
 assert.match(trend,/data-summary-plot/);
+assert.match(trend,/Property tax|Insurance|No dated transactions that day/,
+ 'Trend page continues to expose future movement details');
 assert.match(trend,/Illustration, not a guaranteed minimum/);
 assert.match(trend,/everyday unplanned spending is excluded/);
 assert.match(trend,/low estimate far in the future is especially uncertain/i);
