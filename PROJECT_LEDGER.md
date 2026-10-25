@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
+- **2026-10-24 Calendar header consistency:** Calendar account selector aligned to the same centered 1050px label frame as Scheduled / Transaction History / Needs review while retaining the full-width calendar; see latest dated handoff entry. Tests/merge pending; private Render unverified.
+
 - **Navigation labels completed:** [PR #175](https://github.com/markbobthomas/household-ledger/pull/175) merged and verified. Primary tabs now read **Calendar, Scheduled, Transaction History, Needs review**; routing keys, saved plans, forecast math and bank data are unchanged. All four remain visible and tappable at 320px, using a slightly wider Transaction History grid column. Financial/banking and desktop/iPhone browser CI passed. Private Render deployment remains independently unverified.
 
 - **Zelle recurring forecast/date discovery fixed:** [PR #173](https://github.com/markbobthomas/household-ledger/pull/173) merged/verified. A Sunday Nov 1 schedule posts Friday Oct 30 in October; the original monthly recurrence remains unchanged. Repeating explicitly previews the adjusted date and provides a canonical **View in Calendar** link choosing the paying account. A legacy direction-confirmed single-account external transfer now posts in the projected ledger rather than being dropped. Missing directions show **Not forecast** and can be resolved in More options. Banking and desktop/iPhone CI passed; private Render SHA still unverified.
@@ -1111,3 +1113,11 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Independently verified:** PR #175 was merged at `87cfb423c08ae52fe67c072434cacb7eb73230d1`; PR #176 was merged at `28fd731a52cf3e5a7c4fdba0ac6ba56134614be5` (GitHub `main` at handoff). Existing required final-head banking/forecast safety and Chromium/iPhone WebKit browser runs for #175 concluded success; the GitHub publish workflow for #176 also concluded success. These are checks of prior commits; no tests were rerun for this docs-only handoff.
 - **Deployment:** The private authenticated Render deployed commit and live banking UI are not verified; successful public GitHub publish does not establish private Render deployment.
 - **Next:** Continue only upon a concrete follow-up change; preserve the current canonical forecasting/banking safeguards and verify deployment independently.
+
+### 2026-10-24 — Calendar account header consistent with the other tabs (verification pending)
+
+- **Goal:** Match Calendar header spacing to other tabs to prevent a visible left/right shift when switching.
+- **Finding:** The three list/review pages already have one centered `max-width:1050px` frame and `html{scrollbar-gutter:stable}` was already present; Calendar's `.summary-heading` instead stretched across its wider content area.
+- **Change:** Narrow and center only Calendar's account header, with the same inner toolbar-label padding. Preserve the full-width monthly forecast metrics and five-day grid, existing navigation, financial calculations and bank data. Cache-bust the CSS in `index.html`; add Playwright regressions for heading/frame/label alignment, invariant global header and nav coordinates across all four tabs, and unchanged calendar grid width (desktop Chromium / iPhone WebKit).
+- **Validation:** Required bank/forecast safety and browser regression suites pending on the PR branch. No claim of deployment. Live private Render commit unverified.
+- **Next:** Wait for passing final branch-head CI, mark test outcomes, merge the PR, then independently check Render deployed SHA if authorized.
