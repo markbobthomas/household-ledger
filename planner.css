@@ -2859,3 +2859,181 @@ html{scrollbar-gutter:stable}
  .trend-page-heading h2{font-size:17px}
  .trend-page-heading .summary-account-picker select{max-width:min(60vw,205px)}
 }
+
+
+/* Industrial ledger / high-contrast minimal. One design system across the
+   four primary views and More pages; preserve green balances/red warnings.
+   No extra panels, illustrations, effects, or layout/forecast changes. */
+:root{
+ --ink:#17232d;--muted:#50616f;--line:#9eabb5;--soft:#e8edf0;
+ --nav:#18242e;--blue:#2b5872;--ui-radius:3px;
+ --recurrence-rule:#c4cdd4;
+}
+body{background:#edf0f2;color:var(--ink)}
+.topbar{
+ background:#18242e;border:1px solid #101b24;border-radius:3px;
+ padding:9px 13px;margin-bottom:10px;box-shadow:none;color:#f5f7f8;
+}
+.topbar h1{
+ font-family:var(--mono);font-weight:780;font-size:19px;
+ letter-spacing:-.65px;color:#f5f7f8!important;
+}
+.topbar .planner-menu>summary{
+ background:#293944!important;border:1px solid #71818d!important;
+ color:#f8fafb!important;border-radius:3px!important;
+ font-family:var(--mono);font-weight:700;
+}
+.topbar .planner-menu>summary:hover{background:#3a4b59!important}
+.planner-tabs.planner-nav-primary{
+ border:0;border-bottom:1px solid #9aa9b4;
+ gap:5px;padding:0 0 7px;margin-bottom:12px;
+}
+.planner-nav-primary .tab-link{
+ background:#f9fafb;color:#344753;font-weight:740;
+ border:1px solid #abb7c0!important;border-radius:3px!important;
+ box-shadow:none!important;
+}
+.planner-nav-primary .tab-link.active{
+ background:#213542!important;border-color:#213542!important;
+ color:#fff!important;box-shadow:none!important;
+}
+.planner-nav-primary .tab-link:not(.active):hover{
+ background:#e1e9ee!important;color:#142b39!important;
+}
+.panel,.planner-page .ledger-toolbar,
+.schedule-page .schedule-grid,.history-page .history-list-surface,
+.reviews-page .legacy-repeating-panel{
+ background:#fff;border:1px solid #9daab4;border-radius:4px;
+ box-shadow:none;
+}
+.panel,.schedule-page .schedule-grid,.history-page .history-list-surface,
+.planner-page .ledger-toolbar{
+ border-color:#9daab4!important;border-radius:4px!important;
+ box-shadow:none!important;
+}
+.planner-page .ledger-toolbar{
+ background:#f7f9fa!important;border-color:#9daab4!important;
+}
+.schedule-page .schedule-grid,.history-page .history-list-surface{background:#fff}
+.schedule-page .schedule-compact-row,.history-page .history-actual-row{
+ border-bottom-color:#c5cdd3!important;
+}
+.planner-page{
+ --recurrence-foreground:#182a36;
+ --recurrence-secondary:#536471;
+ --recurrence-soft:#f0f4f6;
+ --recurrence-rule:#c6d0d6;
+ --recurrence-radius:3px;
+}
+.planner-page .recurrence-row-trigger:hover,
+.planner-page .recurrence-row-trigger:focus-visible,
+.schedule-page .ledger-row-open:hover,.history-page .ledger-row-open:hover,
+.reviews-page .review-row-open:hover,
+.history-page .history-row-open:hover{
+ background:#e8eff3;
+}
+.schedule-page .ledger-row-description strong,
+.history-page .ledger-row-description strong,
+.reviews-page .review-candidate-main>strong{
+ color:#172a37!important;
+}
+.schedule-page .ledger-row-description small,.history-page .ledger-row-description small{
+ color:#526573!important;
+}
+.schedule-page .ledger-row-category,.history-page .ledger-row-category{
+ border-color:#c6d0d6;color:#334e60;background:#f7f9fa;
+}
+.planner-page .section-title h2,
+.planner-page .schedule-category-heading h3{
+ color:#1c303e;font-weight:780;letter-spacing:.15px;
+}
+.planner-page .page-heading h2{color:#182b37!important;font-weight:780}
+.planner-page .ledger-toolbar>label,.summary-account-picker,
+.summary-overline,.summary-bank small{
+ color:#4c5e6a!important;
+}
+.planner-page :is(input[type="text"],input[type="search"],input[type="number"],
+ input[type="date"],select,textarea),.mode-box{
+ border-color:#9dabB5!important;border-radius:3px!important;
+ background-color:#fff;color:#1b2c36;
+}
+.planner-page :is(input,select,textarea):focus-visible,
+.mode-box:focus-visible,:where(button,a,summary):focus-visible{
+ outline:2px solid #2c6a90;outline-offset:2px;
+}
+.btn,.top-actions .btn,.schedule-page .page-heading .btn,
+.calendar-nav-actions button,.calendar-today{
+ border-radius:3px!important;
+}
+.btn{background:#fff;border-color:#98a7b2;color:#243e50}
+.btn.primary,.schedule-page .page-heading .btn{
+ background:#213844;border-color:#213844;color:#fff;
+}
+.btn.primary:hover,.schedule-page .page-heading .btn:hover{
+ background:#344f60;border-color:#344f60;
+}
+.planner-menu-content,.schedule-more-menu{
+ border-color:#81919d!important;border-radius:4px!important;
+ box-shadow:0 9px 26px rgba(18,30,40,.16)!important;
+}
+.status-tag{border:1px solid #c2cdd3;border-radius:3px}
+.notice{border-radius:3px;border-color:#a4b3be}
+.summary-page .calendar-toolbar .calendar-navigation h2{
+ color:#1b2d38!important;font-family:var(--mono);
+ font-weight:780;letter-spacing:-.65px;
+}
+.summary-page .calendar-nav-actions button{
+ background:#fff;border-color:#8e9eaa;
+ color:#213b4d;
+}
+.summary-page .calendar-nav-actions button:hover:not(:disabled){background:#e5edf1}
+.summary-page .calendar-day{
+ border:1px solid #abb8c1!important;border-radius:3px!important;
+ background:#fff;
+}
+.summary-page .calendar-day:hover:not(.selected){
+ background:#eef3f6!important;border-color:#54788f!important;
+}
+.summary-page .calendar-day.selected,
+.summary-page .calendar-day[aria-pressed="true"]{
+ border-color:#2b5066!important;
+ background:#eaf1f5;box-shadow:inset 0 0 0 1px #2b5066;
+}
+.summary-page .calendar-day.month-minimum{background:#fff7e7!important}
+.summary-page .calendar-day-number{color:#45596b;font-family:var(--mono);font-weight:760}
+.summary-page .calendar-weekday{
+ color:#334c5e;font-family:var(--mono);font-weight:760;
+}
+.summary-page .calendar-day-balance{color:#172b39}
+.summary-page .calendar-day-detail{
+ border:1px solid #8799a7;border-radius:4px;
+ background:#fff;
+}
+.summary-page .calendar-monthly-list{
+ border:1px solid #95a6b2;border-radius:4px!important;
+ background:#fff;
+}
+.summary-page .calendar-monthly-list>summary{
+ color:#223847;background:#f0f4f6;
+ font-family:inherit;font-weight:750;
+}
+.summary-page .calendar-first-tip{
+ background:#e7eef2;border:1px solid #b7c5ce;
+ border-radius:3px;color:#334a5b;
+}
+.summary-page .calendar-first-tip button{color:#204f6d}
+.calendar-day-reconciliation{border-color:#b0bec9;border-radius:3px}
+.calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-entry{
+ border-color:#bdc9d2;
+}
+.trend-page-heading h2{color:#1b2c38;font-family:var(--mono)}
+.calendar-repair-dialog,.transaction-detail,.calendar-quick-form{
+ border:1px solid #91a1ac;border-radius:4px;
+}
+@media(max-width:780px){
+ body{background:#f2f4f5}
+ .topbar{padding:8px 10px;margin-bottom:10px}
+ .topbar h1{font-size:16px}
+ .planner-tabs.planner-nav-primary{gap:3px;padding-bottom:6px}
+ .panel{border-radius:3px}
+}
