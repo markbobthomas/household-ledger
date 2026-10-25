@@ -23,7 +23,8 @@ for(const days of [1095]){
   'Redundant explanation does not consume space above calendar');
  assert.doesNotMatch(html,/data-summary-days|Major payments|Payment checklist/);
  assert.match(html,/data-summary-low-date/);
- assert.match(html,new RegExp(days+'-day forecast'));
+ assert.doesNotMatch(html,/data-summary-plot|summary-extras/,
+  'Calendar no longer embeds the Balance Trend chart or disclosure');
  assert.match(html,/data-calendar-stage/);
  assert.match(html,/data-summary-month-low/);
  assert.match(html,/data-summary-month-value/);
@@ -60,9 +61,8 @@ for(const days of [1095]){
  assert.doesNotMatch(html,/Expand ↓/,
   'Native monthly disclosure should not also print a redundant expand prompt');
  assert.match(html,/data-calendar-add/,'Add an existing-day transaction without a tab change');
- assert.match(html,/Balance trend<\/summary>/);
- assert.match(html,/Illustration, not a guaranteed minimum/);
- assert.match(html,/everyday unplanned spending is excluded/);
+ assert.doesNotMatch(html,/Balance trend<\/summary>|summary-trend-ranges/,
+  'The trend belongs exclusively on the More-menu page');
  assert.equal(tool.getPoints(derived,iso(0),days).length,days+1);
  assert.match(html,/calendar-day-balance/);
  assert.match(html,/data-calendar-nav="1"/);
@@ -72,7 +72,17 @@ const long=tool.render({...opts,days:1095});
 assert.match(long,/Property tax|Insurance|No dated transactions that day/);
 assert.match(long,/calendar-grid/);
 assert.match(long,/aria-label="Next forecast month"/);
-assert.match(long,/low estimate far in the future is especially uncertain/i);
+const trend=tool.render({...opts,days:1095,view:'trend'});
+assert.match(trend,/class="planner-page summary-page trend-page"/);
+assert.match(trend,/<h2>Balance Trend<\/h2>/);
+assert.match(trend,/data-summary-plot/);
+assert.match(trend,/Illustration, not a guaranteed minimum/);
+assert.match(trend,/everyday unplanned spending is excluded/);
+assert.match(trend,/low estimate far in the future is especially uncertain/i);
+assert.doesNotMatch(trend,/data-calendar-stage|class="calendar-grid"/);
+assert.match(trend,/id="summary-account"/);
+assert.equal((trend.match(/data-summary-plot/g)||[]).length,1,
+ 'Only one interactive forecast chart is rendered on the trend page');
 const short=tool.render({...opts,days:30});
 assert.match(short,/Add a schedule →/);
 assert.match(short,/data-view="schedules"/,
@@ -99,7 +109,11 @@ assert.ok(liveView.includes('data-bank-current-value>$5,650.25<'));
 assert.match(liveView,/Actual Current Balance/);
 assert.ok(!liveView.includes('data-bank-current-value>$5,400.25<'));
 for(const n of [10,30,90,180,360,1095])
- assert.ok(liveView.includes('data-trend-days="'+n+'"'));
+ assert.ok(trend.includes('data-trend-days="'+n+'"'));
+assert.doesNotMatch(liveView,/data-trend-days|data-summary-plot/);
+const unavailableTrend=tool.render({...opts,days:90,fresh:false,view:'trend'});
+assert.match(unavailableTrend,/A verified starting balance is needed for the trend/);
+assert.doesNotMatch(unavailableTrend,/data-summary-plot|data-calendar-stage/);
 const noCurrent=tool.render({...opts,days:1095,chosen:{...opts.chosen,current:null,available:5000}});
 assert.ok(noCurrent.includes('data-bank-current-value>Not reported<'));
 console.log('PASS three-year lowest-balance Summary: single minimum, no major-payments checklist, warnings and unverified suppression');
