@@ -3,6 +3,11 @@
 const http=require('node:http'),crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path');
 const env=process.env;
 const {inspect:accountForecastLinks}=require('./account-forecast-links.cjs');
+const Categories=require('../ledger-data.js');
+const ForecastTools=require('../planner-transactions.js');
+const savedCategoryChoices=(predictions,customCategories=[])=>Categories.categories({
+ predictions,customCategories
+});
 if(!env.PILOT_PASSWORD||env.PILOT_PASSWORD.length<20||!env.PILOT_ENCRYPTION_KEY||!env.PLAID_CLIENT_ID||!env.PLAID_SECRET)
  throw Error('Missing pilot password (20+ characters), encryption key, or Plaid credentials');
 const key=crypto.createHash('sha256').update(env.PILOT_ENCRYPTION_KEY).digest();
@@ -61,6 +66,10 @@ async function save(){
 // One small encrypted write per forecast edit. The full encrypted bank ledger
 // is neither touched nor read, and concurrent browser saves are serialized.
 async function saveForecast(predictions){
+ // The encrypted forecast store is the authoritative write boundary. Reject
+ // duplicate one-offs/schedules even when a client retries or bypasses UI.
+ // Bank source records remain read-only; do not silently delete old plans.
+ ForecastTools.assertUniqueForecastTransactions(predictions);
  const write=forecastWrites.catch(()=>{}).then(()=>atomicEncryptedWrite(forecastFile,predictions));
  forecastWrites=write.catch(()=>{});
  await write;
@@ -228,14 +237,14 @@ async function start(port=Number(env.PORT||8788)){
     const id=String(body.transactionId||'');
     if(!Object.prototype.hasOwnProperty.call(state.transactions,id))
      return respond(400,{error:'Unknown bank transaction'});
-    const allowedCats=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health',
-     'Entertainment','Kids & Family','Insurance','Subscriptions','Other',
-     ...((state.ledgerAdjustments?.customCategories||[]).filter(c=>typeof c==='string'))]);
-    if(body.category!==null&&!allowedCats.has(body.category))
-     return respond(400,{error:'Invalid category'});
+    const allowedCats=savedCategoryChoices(state.ledgerAdjustments?.predictions,
+     state.ledgerAdjustments?.customCategories);
+    const selected=body.category===null?null:
+     allowedCats.find(c=>c.toLowerCase()===String(body.category).toLowerCase());
+    if(body.category!==null&&!selected)return respond(400,{error:'Invalid category'});
     const before={...(state.ledgerAdjustments?.categoryOverrides||{})};
     const overrides={...before};
-    if(body.category===null)delete overrides[id];else overrides[id]=body.category;
+    if(body.category===null)delete overrides[id];else overrides[id]=selected;
     state.ledgerAdjustments={...state.ledgerAdjustments,categoryOverrides:overrides};
     try{await save()}catch(error){
      state.ledgerAdjustments.categoryOverrides=before;
@@ -264,9 +273,10 @@ async function start(port=Number(env.PORT||8788)){
     const allowed=['categoryOverrides','predictions','reviews','learning','customCategories'];
     if(Object.keys(body).some(k=>!allowed.includes(k)))return respond(400,{error:'Bank source fields may not be changed'});
     for(const keyName of allowed){if(body[keyName]!==undefined&&(body[keyName]===null||typeof body[keyName]!=='object'||Array.isArray(body[keyName])&&keyName!=='customCategories'))return respond(400,{error:'Invalid '+keyName})}
-    const allowedCats=new Set(['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health','Entertainment','Kids & Family','Insurance','Subscriptions','Other']);
+    const allowedCats=new Set(savedCategoryChoices(body.predictions||
+     state.ledgerAdjustments?.predictions,body.customCategories||
+     state.ledgerAdjustments?.customCategories));
     if(body.customCategories&&(body.customCategories.length>50||body.customCategories.some(c=>typeof c!=='string'||c.length<2||c.length>40||!/^[A-Za-z0-9][A-Za-z0-9 &'().-]*$/.test(c))))return respond(400,{error:'Invalid custom categories'});
-    for(const name of body.customCategories||[])allowedCats.add(name);
     if(body.categoryOverrides){
      const ids=new Set(Object.keys(state.transactions).map(String));
      if(Object.entries(body.categoryOverrides).some(([id,category])=>!ids.has(id)||!allowedCats.has(category)))return respond(400,{error:'Invalid category override'});
