@@ -3060,3 +3060,25 @@ body{background:#edf0f2;color:var(--ink)}
   font-size:10.5px!important;letter-spacing:-.15px;
  }
 }
+
+/* History shares the Scheduled toolbar's fourth Category column. Search
+   submits on Enter; no dedicated Search control or extra toolbar row. */
+.history-page .ledger-toolbar>.history-category-filter-wrap{
+ grid-column:4;min-width:0;width:100%;display:flex;flex-direction:column;
+ gap:4px;margin:0;font-size:var(--ui-label-size,11px);font-weight:600;
+ line-height:1.4;color:var(--muted);
+}
+.history-page .ledger-toolbar>.history-category-filter-wrap select{
+ width:100%;min-width:0;height:36px;min-height:36px;
+}
+.history-page .ledger-toolbar>.ledger-history-clear-button{
+ grid-column:5;min-height:36px;align-self:end;
+}
+@media(max-width:850px){
+ .history-page .ledger-toolbar>.history-category-filter-wrap{
+  grid-column:1;grid-row:3;
+ }
+ .history-page .ledger-toolbar>.ledger-history-clear-button{
+  grid-column:2;grid-row:3;
+ }
+}
