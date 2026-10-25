@@ -2787,3 +2787,12 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
   grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(82px,1.12fr) minmax(0,1fr);
  }
 }
+
+/* The three ledger tabs share a centered 1050px content frame. Align the
+   Calendar's account header with their filter labels while preserving the
+   wider calendar balances and five-day grid below. */
+.summary-page .summary-heading{
+ width:100%;max-width:1050px;margin-left:auto;margin-right:auto;
+ padding-inline:10px;box-sizing:border-box;
+}
+@media(max-width:850px){.summary-page .summary-heading{padding-inline:8px}}
