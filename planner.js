@@ -1596,7 +1596,7 @@ function historyPage(bundle,s){
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
-   '</div><p class="page-task-hint history-explanation ledger-footer-hint">Bank activity stays here. Saved repeating plans take priority. '+
+   '</div><p class="page-task-hint history-explanation ledger-footer-hint">Transaction History stays here. Saved repeating plans take priority. '+
    'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
    'older patterns in Needs review. New repeating payments require a saved schedule.</p></div>';
 }
@@ -1713,7 +1713,7 @@ function reviewsPage(bundle,s){
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
    String(recurringDraft?.reviewLegacyKey||'')===String(legacyKey);
  const controls=(r,legacyKey='')=>!r?
-  '<span class="review-legacy-missing">Identify this payment in Bank activity</span>':
+  '<span class="review-legacy-missing">Identify this payment in Transaction History</span>':
   r.status==='ignored'?
    '<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':
    '<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">Ignore</button>';
@@ -2331,7 +2331,7 @@ document.addEventListener('click',async e=>{
    !window.confirm('Discard unsaved schedule changes?'))return;
   const row=lastHistoryRows.find(t=>String(t.id)===id&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
-  if(!row){setNotice('This bank record changed. Refresh Bank activity.');return}
+  if(!row){setNotice('This bank record changed. Refresh Transaction History.');return}
   const matches=window.HouseholdPlannerTransactions.historicalScheduleMatches(
    row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
   historyExpandedId=id;historyExpandedAccount=account;

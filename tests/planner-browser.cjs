@@ -63,7 +63,7 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'zelle-calendar-date-fix-20261024-v1','The loaded HTML identifies the task-based UI release');
+    'nav-scheduled-history-20261024-v1','The loaded HTML identifies the task-based UI release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
@@ -71,7 +71,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
     'One primary navigation row: calendar, schedules, history');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Repeating','Bank activity','Needs review']);
+    ['Calendar','Scheduled','Transaction History','Needs review']);
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
     'Predictions is available through More instead of the main row');
    const go=async tab=>{
@@ -111,6 +111,14 @@ const {chromium,webkit}=require('playwright');
     assert.equal(tabs.length,4);
     assert.ok(tabs.every(r=>r.visible&&r.left>=-1&&r.right<=321),
      'All four task-based tabs are reachable without sideways navigation at 320px: '+JSON.stringify(tabs));
+    const mobileTabs=await page.locator('.planner-nav-primary .tab-link').evaluateAll(els=>
+     els.map(el=>({text:el.textContent.trim(),whiteSpace:getComputedStyle(el).whiteSpace,
+      height:el.getBoundingClientRect().height,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth})));
+    assert.deepEqual(mobileTabs.map(t=>t.text),
+     ['Calendar','Scheduled','Transaction History','Needs review']);
+    assert.ok(mobileTabs.every(t=>t.whiteSpace==='normal'&&t.height>=44&&
+     t.scrollWidth<=t.clientWidth+1),
+     'Renamed tabs fit within a narrow phone without clipping: '+JSON.stringify(mobileTabs));
     await page.setViewportSize({width:390,height:844});
    }
 
@@ -1021,7 +1029,7 @@ const {chromium,webkit}=require('playwright');
    const explanation=await page.locator('.history-explanation').innerText();
    assert.match(explanation,/saved repeating plans take priority/i,
     'History explains that owner-confirmed plans supersede estimates');
-   assert.match(explanation,/Bank activity stays here/i,
+   assert.match(explanation,/Transaction History stays here/i,
     'The UI promises bank source records are never deleted');
    assert.equal(await page.locator('[data-history-auto-prediction]').count(),0,
     'History no longer offers a competing automatic prediction system');
