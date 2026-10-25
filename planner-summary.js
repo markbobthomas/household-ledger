@@ -322,6 +322,31 @@ function updateMonthLow(){
  if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
   button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
 }
+// One compact Calendar toolbar: account | centered month | month actions.
+// Build from the same date projection as the calendar itself, with no
+// independent time calculations or separate navigation state.
+function calendarNavigation(){
+ const state=calendarContext;
+ if(!state?.points?.length)return '';
+ const keys=[...new Set([...state.points.map(p=>p.date.slice(0,7)),
+  ...[...state.actual.keys()].map(d=>d.slice(0,7))])].sort();
+ if(!keys.includes(calendarMonth))calendarMonth=keys[0];
+ const index=keys.indexOf(calendarMonth);
+ return '<div class="calendar-navigation" data-calendar-header>'+
+  '<div class="calendar-month-title"><h2>'+esc(monthName(calendarMonth))+'</h2></div>'+
+  '<div class="calendar-nav-actions"><button type="button" data-calendar-nav="-1"'+
+   (index===0?' disabled':'')+' aria-label="Previous forecast month">‹</button>'+
+   '<button type="button" class="calendar-today" data-calendar-today'+
+   (calendarMonth===keys[0]&&calendarDate===state.asOf?' disabled':'')+
+   '>Today</button>'+
+   '<button type="button" data-calendar-nav="1"'+
+   (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
+  '</div>';
+}
+function updateCalendarNavigation(){
+ const header=document.querySelector('[data-calendar-header]');
+ if(header)header.outerHTML=calendarNavigation();
+}
 function calendarGrid(){
  const state=calendarContext;
  if(!state||!state.points.length)return '';
@@ -341,8 +366,7 @@ function calendarGrid(){
    Number(calendarMonth.slice(5,7)),0).getDate(),
   // All months reserve six weeks so date-grid height never varies.
   count=42,
-  points=new Map(currentPoints.map(p=>[p.date,p])),
-  caption=state.card?'Card debt after daily activity':'Account balance after daily activity';
+  points=new Map(currentPoints.map(p=>[p.date,p]));
  const header=['Mon','Tue','Wed','Thu','Fri'].map(d=>
   '<div class="calendar-weekday" aria-hidden="true">'+d+'</div>').join('');
  const cells=Array.from({length:count},(_,i)=>{
@@ -393,19 +417,8 @@ function calendarGrid(){
     (gaps.length?'<span class="calendar-unplanned">? '+esc(gaps[0].merchant)+'</span>':'')+
    '</span></button>';
  }).join('');
- const index=keys.indexOf(calendarMonth);
  const active=state.points.find(p=>p.date===calendarDate)||currentPoints[0];
  return '<div class="calendar-wrapper" data-calendar-stage>'+
-  '<div class="calendar-navigation">'+
-   '<div><h2>'+esc(monthName(calendarMonth))+'</h2><small>'+caption+'</small></div>'+
-   '<div class="calendar-nav-actions"><button type="button" data-calendar-nav="-1"'+
-    (index===0?' disabled':'')+' aria-label="Previous forecast month">‹</button>'+
-   '<button type="button" class="calendar-today" data-calendar-today'+
-    (calendarMonth===keys[0]&&calendarDate===state.asOf?' disabled':'')+
-    '>Today</button>'+
-   '<button type="button" data-calendar-nav="1"'+
-    (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
-  '</div>'+
   (!calendarTipHidden?'<div class="calendar-first-tip" data-calendar-first-tip>'+
    '<span>Choose a future date to see its payments. Tap <strong>Edit</strong> beside a payment to change it.</span>'+
    '<button type="button" data-calendar-tip-dismiss aria-label="Dismiss calendar tip">Got it</button></div>':'')+
@@ -436,6 +449,7 @@ function showCalendar(date){
  calendarDate=date;calendarMonth=date.slice(0,7);calendarEditor=null;calendarNotice='';
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
+ updateCalendarNavigation();
  updateMonthLow();
  return true;
 }
@@ -578,9 +592,9 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   (String(a.id)===String(chosen.id)?' selected':'')+'>'+
   esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
   '</option>').join('');
- const lead='<div class="summary-heading">'+
+ const lead=()=>'<div class="summary-heading calendar-toolbar">'+
   '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Summary account">'+
-  options+'</select></label></div>';
+  options+'</select></label>'+calendarNavigation()+'</div>';
  const points=getPoints(derived,snapshot.asOf,days);
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
  trendContext=series.length?{points:series,credit,prefs,derived}:null;
@@ -629,7 +643,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
    '<a class="btn" href="/bank-connect">Bank connections</a>'+
    '<button type="button" class="btn" data-repair-close>Close</button></div>'+
    '</section></div>';
-  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
+  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
    '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
    (credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,[]):
     '<div class="summary-minimum"><div class="summary-overline">3-year low</div>'+
@@ -658,7 +672,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const listed=lowDay.events||[];
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
- return '<div class="planner-page summary-page"><section class="summary-stage">'+lead+
+ return '<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
    '<div class="summary-monthly" data-summary-month-low>'+
     '<div class="summary-overline">Estimated Monthly Low</div>'+
