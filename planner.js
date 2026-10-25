@@ -1330,7 +1330,7 @@ function schedulesPage(bundle,s){
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
      '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
    '</select></label>'+
-   '<div class="schedule-category-controls"><label>Show <select data-schedule-category-filter><option value="">All categories</option>'+
+   '<div class="schedule-category-controls"><label>Category <select data-schedule-category-filter><option value="">All categories</option>'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
    '</select></label>'+
