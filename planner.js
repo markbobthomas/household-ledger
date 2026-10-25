@@ -2291,7 +2291,9 @@ document.addEventListener('click',async e=>{
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   render();
-  window.scrollTo({top:0,behavior:'auto'});
+  // Tab navigation should not animate the global header's position.
+  // 'auto' inherits html's smooth scrolling and briefly shifts the header.
+  window.scrollTo({top:0,behavior:'instant'});
   return;
  }
  const selectBankPlan=e.target.closest?.('[data-history-inline-rule]');

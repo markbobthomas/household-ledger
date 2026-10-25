@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed October 24, 2026)
 
+- **2026-10-24 Calendar header consistency:** [PR #178](https://github.com/markbobthomas/household-ledger/pull/178) aligns the global header/tab spacing across all four views by removing 12 Calendar-only chrome overrides, aligns its account picker to the shared 1050px header frame, and makes tab navigation scroll immediate. Financial and desktop/iPhone browser checks passed on feature head `32caf44e43cb60e99f4aa782812fe8c3792f7e08`; merge pending at entry; Render deployment independently unverified.
+
 - **Navigation labels completed:** [PR #175](https://github.com/markbobthomas/household-ledger/pull/175) merged and verified. Primary tabs now read **Calendar, Scheduled, Transaction History, Needs review**; routing keys, saved plans, forecast math and bank data are unchanged. All four remain visible and tappable at 320px, using a slightly wider Transaction History grid column. Financial/banking and desktop/iPhone browser CI passed. Private Render deployment remains independently unverified.
 
 - **Zelle recurring forecast/date discovery fixed:** [PR #173](https://github.com/markbobthomas/household-ledger/pull/173) merged/verified. A Sunday Nov 1 schedule posts Friday Oct 30 in October; the original monthly recurrence remains unchanged. Repeating explicitly previews the adjusted date and provides a canonical **View in Calendar** link choosing the paying account. A legacy direction-confirmed single-account external transfer now posts in the projected ledger rather than being dropped. Missing directions show **Not forecast** and can be resolved in More options. Banking and desktop/iPhone CI passed; private Render SHA still unverified.
@@ -1111,3 +1113,19 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Independently verified:** PR #175 was merged at `87cfb423c08ae52fe67c072434cacb7eb73230d1`; PR #176 was merged at `28fd731a52cf3e5a7c4fdba0ac6ba56134614be5` (GitHub `main` at handoff). Existing required final-head banking/forecast safety and Chromium/iPhone WebKit browser runs for #175 concluded success; the GitHub publish workflow for #176 also concluded success. These are checks of prior commits; no tests were rerun for this docs-only handoff.
 - **Deployment:** The private authenticated Render deployed commit and live banking UI are not verified; successful public GitHub publish does not establish private Render deployment.
 - **Next:** Continue only upon a concrete follow-up change; preserve the current canonical forecasting/banking safeguards and verify deployment independently.
+
+### 2026-10-24 — Calendar account header consistent with the other tabs (verification pending)
+
+- **Goal:** Match Calendar header spacing to other tabs to prevent a visible left/right shift when switching.
+- **Finding:** The three list/review pages already have one centered `max-width:1050px` frame and `html{scrollbar-gutter:stable}` was already present; Calendar's `.summary-heading` instead stretched across its wider content area.
+- **Change:** Narrow and center only Calendar's account header, with the same inner toolbar-label padding. Preserve the full-width monthly forecast metrics and five-day grid, existing navigation, financial calculations and bank data. Cache-bust the CSS in `index.html`; add Playwright regressions for heading/frame/label alignment, invariant global header and nav coordinates across all four tabs, and unchanged calendar grid width (desktop Chromium / iPhone WebKit).
+- **Validation:** Required bank/forecast safety and browser regression suites pending on the PR branch. No claim of deployment. Live private Render commit unverified.
+- **Next:** Wait for passing final branch-head CI, mark test outcomes, merge the PR, then independently check Render deployed SHA if authorized.
+
+### 2026-10-24 — Verified Calendar header alignment fix in PR #178
+
+- **Underlying cause:** Calendar had 12 special-case global `.content`, `.topbar`, and primary tab-bar padding/margin rules (at desktop and mobile breakpoints), causing real y-offset changes between tabs. The root already reserved a stable scrollbar gutter; this was not a scrollbar problem. Calendar's account heading was also wider than the centered 1050px frame shared by other views.
+- **Code:** Remove those 12 Calendar-only *global* spacing rules; keep all Calendar-internal density and the full five-day forecast grid intact. Center only the Calendar account heading with equivalent filter-label insets; switch tabs without inherited smooth scrolling. `planner.css`, `planner.js`, `index.html`; tests in `tests/planner-browser.cjs`. No changes to Plaid, bank records, transfers, recurrence rules, financial forecasts or secrets.
+- **Final green head:** `32caf44e43cb60e99f4aa782812fe8c3792f7e08`; [banking safety 40164477221](https://github.com/markbobthomas/household-ledger/actions/runs/40164477221) success; [browser interactions 40164477194](https://github.com/markbobthomas/household-ledger/actions/runs/40164477194) success including desktop Chromium/iPhone WebKit, same global header position/size across four tabs, consistent content label alignment and intact calendar width. Intermediate failed attempts revealed the existing Calendar-only CSS and an obsolete regression assertion; the last code head passed all required checks.
+- **Status at this entry:** [PR #178](https://github.com/markbobthomas/household-ledger/pull/178) awaiting docs-finalization merge; live private Render deployed commit remains unverified. No infrastructure changed.
+- **Next:** Merge passing PR; verify `main` SHA and public workflow separately from private Render live deployment.

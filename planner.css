@@ -2635,12 +2635,9 @@ html{scrollbar-gutter:stable}
  }
 }
 
-/* Calendar-only density pass: shrink whitespace without shrinking tappable controls.
+/* Calendar-only content density pass: shared header and navigation use the exact same spacing as all tabs.
    Equal compact minimums on real, blank and outside days prevent empty weeks
    from being stretched by old placeholder-cell defaults. */
-body:has(.summary-page) .content{padding-top:14px}
-body:has(.summary-page) .topbar{margin-bottom:9px}
-body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:10px}
 .summary-page .summary-heading{margin-bottom:6px!important}
 .summary-page .summary-numbers{
   padding:6px 0 8px!important;margin-bottom:4px!important;
@@ -2677,9 +2674,6 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:10px}
 .summary-page .calendar-monthly-list>summary{padding:11px 13px}
 .summary-page .calendar-first-tip{margin:5px 0 7px;padding:7px 10px}
 @media(max-width:780px){
-  body:has(.summary-page) .content{padding-top:10px}
-  body:has(.summary-page) .topbar{margin-bottom:7px}
-  body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:8px}
   .summary-page .summary-numbers{padding:4px 0 5px!important;gap:7px!important}
   .summary-page .summary-bank,.summary-page .summary-monthly,.summary-page .summary-minimum{
     grid-template-rows:minmax(29px,auto) minmax(32px,auto) minmax(18px,auto);gap:2px;
@@ -2697,9 +2691,6 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:10px}
 /* Calendar follow-up: compress top chrome; keep an invariant 6 x 7 month grid.
    Only two transaction previews plus an overflow count are rendered per day;
    all transactions remain editable in the selected-day panel. */
-body:has(.summary-page) .content{padding-top:8px}
-body:has(.summary-page) .topbar{margin-bottom:4px}
-body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
 .summary-page .summary-heading{margin-bottom:2px!important}
 .summary-page .summary-numbers{padding:2px 0 4px!important;margin-bottom:0!important}
 .summary-page .calendar-balance-explainer{margin:0 0 4px;line-height:1.35}
@@ -2716,9 +2707,6 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
 }
 .summary-page .calendar-day-events{min-height:0;overflow:hidden;flex:1 1 auto}
 @media(max-width:780px){
-  body:has(.summary-page) .content{padding-top:6px}
-  body:has(.summary-page) .topbar{margin-bottom:3px}
-  body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:4px}
   .summary-page .summary-numbers{padding:1px 0 3px!important}
   .summary-page .calendar-grid{grid-template-rows:23px repeat(6,106px)}
   .summary-page .calendar-grid>.calendar-day,
@@ -2787,3 +2775,12 @@ body:has(.summary-page) .planner-tabs.planner-nav-primary{margin-bottom:5px}
   grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(82px,1.12fr) minmax(0,1fr);
  }
 }
+
+/* The three ledger tabs share a centered 1050px content frame. Align the
+   Calendar's account header with their filter labels while preserving the
+   wider calendar balances and five-day grid below. */
+.summary-page .summary-heading{
+ width:100%;max-width:1050px;margin-left:auto;margin-right:auto;
+ padding-inline:10px;box-sizing:border-box;
+}
+@media(max-width:850px){.summary-page .summary-heading{padding-inline:8px}}
