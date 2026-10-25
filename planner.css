@@ -3044,3 +3044,14 @@ body{background:#edf0f2;color:var(--ink)}
 .planner-page .recurrence-row-name .schedule-row-title strong,
 .schedule-page .ledger-row-description strong,
 .history-page .ledger-row-description strong{color:#172a37!important}
+ 
+/* A red decision count lives inside the existing navigation button, never
+   as another warning banner or badge. Keep every tab tappable at 320px. */
+.planner-nav-primary .review-tab-count{
+ color:#aa2030;font-family:var(--mono);font-size:.94em;font-weight:850;
+ white-space:nowrap;
+}
+.planner-nav-primary .tab-link.active .review-tab-count{color:#ff858e}
+@media(max-width:420px){
+ .planner-nav-primary .review-tab-count{font-size:10px}
+}
