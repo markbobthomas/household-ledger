@@ -2012,6 +2012,9 @@ const {chromium,webkit}=require('playwright');
     'Out $'+(fridayOut/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})),
     'Other never shows an artificial $0 for a November 1 payment posted in October');
    await statementPage.locator('[data-schedule-sort]').selectOption('order');
+   // Changing the sort deliberately closes the inline editor; reopen it.
+   if(!await zelleCard.locator('[data-schedule-view-calendar]').count())
+    await zelleCard.locator('[data-schedule-edit]').click();
    await zelleCard.locator('[data-schedule-view-calendar]').click();
    assert.equal(await statementPage.locator('.summary-page').count(),1,
     'View on Calendar switches tabs directly');
