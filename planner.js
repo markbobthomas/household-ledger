@@ -1574,11 +1574,11 @@ function historyPage(bundle,s){
      ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
      '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
       label+'</option>').join('')+'</select></label>'+
-   '<label class="history-category-filter-wrap">Category<select name="historyCategory" data-history-category-filter>'+
+   '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
     '<option value="">All categories</option>'+
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
-   '</select></label>'+
+   '</select></label></div>'+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':
