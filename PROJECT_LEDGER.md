@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-10-24 (Pacific)  
+**Updated:** 2026-10-25 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -25,7 +25,7 @@ Product priorities:
 
 ## Current state (reviewed October 25, 2026)
 
-- **2026-10-25 Scheduled category totals correction in [PR #196](https://github.com/markbobthomas/household-ledger/pull/196) (validation pending):** Group headings now sum the positive amounts displayed in visible schedule rows once per rule, rather than silently using just next month's posted forecast. Recategorizing moves the shown amount between groups on rerender, including November 1 schedules whose canonical Friday posting is October 30; direction-unknown external transfers say not forecast. Live search recomputes these same listed-row subtotals. Bank/Plaid and canonical dated forecast logic unchanged. GitHub CI in progress; merge and private Render release unverified.
+- **2026-10-25 Scheduled category totals correction merged:** [PR #196](https://github.com/markbobthomas/household-ledger/pull/196) squash-merged as `f0d186c1475050a1597aae0ab61f68b5c191b04a`, independently verified on GitHub `main`. Group headings sum displayed scheduled-row amounts, including weekend-shifted occurrences, and immediately recalculate when categories change or searches filter rows. Unforecastable transfers are labeled rather than silently counted. Final tested head `e596ae373742d473b6771f7a13b7e336cbd1544b` passed [banking safety 40173189812](https://github.com/markbobthomas/household-ledger/actions/runs/40173189812) and [desktop Chromium/iPhone WebKit 40173189808](https://github.com/markbobthomas/household-ledger/actions/runs/40173189808). Banking/Plaid and canonical dated forecast logic unchanged; private Render deployment remains unverified. **Next action:** independently verify the running private Render commit before reporting a live deployment.
 
 - **2026-10-25 Calendar full-width Account/Month toolbar merged:** [PR #194](https://github.com/markbobthomas/household-ledger/pull/194) merged as `eefa66633fcb5a55438c686c41341045d1411589`, verified on GitHub `main`. Calendar's Account / centered Month / month-navigation toolbar now spans the full five-day grid width on desktop instead of inheriting the older 1050px list header limit. Mobile remains compact. Tested final head `3b014db13fa03a010b22ec620f1882e064aedff1` passed [banking safety 40171588405](https://github.com/markbobthomas/household-ledger/actions/runs/40171588405) and [desktop/iPhone browser 40171588404](https://github.com/markbobthomas/household-ledger/actions/runs/40171588404). Private Render runtime SHA remains unverified.
 
@@ -1266,3 +1266,9 @@ Use: **date — goal; decision; changes (or “no code change”); PR/commit; ch
 - **Problem:** Group totals previously represented only the next full forecast month. A positive repeating schedule could display $0 (notably a November 1 payment adjusted to October 30 by Friday-posting logic). Reassigning the schedule appeared not to change group sums when its next-month contribution was zero.
 - **Fix:** `planner.js` categories now show `Total shown` — the sum of one displayed amount per visible saved rule, separated as Out / In / Transfers. The row, category subtotal, sort value and instant-search subtotal use consistent amounts; group changes recompute immediately after saved category reassignment. Direction-unknown external transfers are explicitly `not forecast` rather than inventing cash direction. `index.html` cache-busts the JS. Actual forecast/calendar payment dates and amounts, account balances, source bank records, server/Plaid infrastructure are unchanged.
 - **Checks:** `tests/planner-browser.cjs` covers group count, category reassignment to Other and back, responsive live search and November 1 Sunday-to-Friday behavior on desktop Chromium and iPhone WebKit. Real-account safety and browser GitHub Actions triggered on [PR #196](https://github.com/markbobthomas/household-ledger/pull/196); final pass/merge still to be verified. Private Render deployment remains unverified.
+
+### 2026-10-25 — Verified Scheduled category subtotal release
+
+- **GitHub:** [PR #196](https://github.com/markbobthomas/household-ledger/pull/196) squash-merged as `f0d186c1475050a1597aae0ab61f68b5c191b04a` and confirmed `main` SHA. Final branch head `e596ae373742d473b6771f7a13b7e336cbd1544b` passed [banking safety 40173189812](https://github.com/markbobthomas/household-ledger/actions/runs/40173189812) and [desktop/iPhone WebKit 40173189808](https://github.com/markbobthomas/household-ledger/actions/runs/40173189808).
+- **Result:** `Total shown` now adds one displayed amount per visible schedule row. Category edits, the Other group, instant search, and Friday-shifted payments are covered by regression tests. Source bank data, Plaid, dated forecast calculations and Render infrastructure are unchanged.
+- **Deployment:** Private Render's running commit/live release remain unverified. Check existing private `/healthz` and Render Deploys against `main` before calling the change deployed.
