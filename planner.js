@@ -1325,7 +1325,7 @@ function schedulesPage(bundle,s){
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
-    '<label>Sort <select data-schedule-sort>'+
+    '<label>Sort by <select data-schedule-sort>'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
      '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
