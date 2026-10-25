@@ -37,7 +37,14 @@ for(const days of [1095]){
  assert.match(html,/data-calendar-day="2026-10-21"[^>]*month-minimum|month-minimum[^>]*data-calendar-day="2026-10-21"/,
   'Calendar must highlight the minimum day, not the maximum');
  assert.match(html,/data-calendar-day="2026-10-21"/);
- assert.match(html,/Projected account balance|Account balance after daily activity/);
+ assert.match(html,/class="summary-heading calendar-toolbar"/,
+  'Account and month controls share the same compact Calendar header');
+ assert.match(html,/class="calendar-navigation" data-calendar-header/,
+  'Month navigation lives in the account header');
+ assert.match(html,/aria-label="October 2026 forecast calendar"/,
+  'The calendar grid retains its accessible month and forecast description');
+ assert.equal((html.match(/class="calendar-navigation"/g)||[]).length,1,
+  'No duplicate month toolbar remains below the balance metrics');
  assert.match(html,/calendar-day-detail/);
  assert.doesNotMatch(html,/class="calendar-math"/,
   'An empty day must not repeat the unchanged balance via a zero-only breakdown');
