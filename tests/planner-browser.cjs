@@ -1449,10 +1449,22 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.schedule-page .ledger-money-dollar').count(),
     await page.locator('.schedule-page .schedule-card').count(),
     'All Repeating rows use the same anchored dollar symbol slot');
+   const toolbarDiagnostics=mobile?await page.evaluate(()=>{
+    const read=sel=>{
+     const el=document.querySelector(sel),b=el.getBoundingClientRect(),style=getComputedStyle(el);
+     return {height:b.height,rows:style.gridTemplateRows,columns:style.gridTemplateColumns,gap:style.rowGap,
+      children:[...el.children].map(child=>{
+       const r=child.getBoundingClientRect(),cs=getComputedStyle(child);
+       return {tag:child.tagName,className:child.className||'',text:(child.textContent||'').trim().slice(0,35),
+        x:r.x,y:r.y,height:r.height,gridRow:cs.gridRow,gridColumn:cs.gridColumn,marginTop:cs.marginTop,marginBottom:cs.marginBottom};
+      })};
+    };
+    return {history:read('.history-page .ledger-toolbar'),scheduled:read('.schedule-page .ledger-toolbar')};
+   }):null;
    for(const metric of ['x','y','width','height']){
     assert.ok(Math.abs(repeatingToolbar[metric]-bankToolbar[metric])<=2,
      'Both search toolbars match exact document '+metric+' with no extra Repeating button row: '+
-      JSON.stringify({bank:bankToolbar,repeating:repeatingToolbar,mobile}));
+      JSON.stringify({bank:bankToolbar,repeating:repeatingToolbar,mobile,toolbarDiagnostics}));
     assert.ok(Math.abs(repeatingSearch[metric]-bankSearch[metric])<=2,
      'Search boxes match exact document '+metric+' between both pages: '+
       JSON.stringify({bank:bankSearch,repeating:repeatingSearch,mobile}));
