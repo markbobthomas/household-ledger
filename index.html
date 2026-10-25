@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18242e">
-<meta name="ledger-ui-revision" content="industrial-ledger-20261024-v1">
+<meta name="ledger-ui-revision" content="review-tab-count-20261024-v1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Household Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=industrial-ledger-v1">
+<link rel="stylesheet" href="planner.css?v=review-tab-count-v1">
 </head>
 <body>
 <main class="shell"><div class="content">
@@ -38,7 +38,7 @@
     <button type="button" class="tab-link active" data-view="summary" aria-current="page">Calendar</button>
      <button type="button" class="tab-link" data-view="schedules">Scheduled</button>
     <button type="button" class="tab-link" data-view="history">Transaction History</button>
-    <button type="button" class="tab-link" data-view="reviews">Needs review</button>
+    <button type="button" class="tab-link" data-view="reviews">Needs review<span class="review-tab-count" data-review-tab-count hidden></span></button>
   </nav>
   <div id="planner-notice" aria-live="polite"></div>
   <div id="planner-main" aria-live="polite"><div class="panel">Preparing your balance plan…</div></div>
@@ -55,7 +55,7 @@
 <script src="planner-core.js?v=zelle-calendar-date-fix-v1"></script>
 <script src="planner-coverage.js?v=category-learning1"></script>
 <script src="planner-summary.js?v=calendar-trend-page-v1"></script>
-<script src="planner.js?v=calendar-trend-page-v1"></script>
+<script src="planner.js?v=review-tab-count-v1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>
