@@ -44,8 +44,11 @@ function saveEdit(state,key,data,accounts,asOf){
  const fields=key.startsWith('movement|')?transferFields(data,accounts,asOf):
   normalFields(data,accounts,asOf);
  const p=ensure(state),previous=p.futureTransactionEdits[key];
+ // An older duplicate must not block editing an unrelated occurrence.
+ // Compare the existing saved record identities with the proposed change.
+ const before={...p,futureTransactionEdits:{...p.futureTransactionEdits}};
  p.futureTransactionEdits[key]=fields;
- try{assertDistinctOneOffs(p,asOf)}
+ try{assertNoNewForecastDuplicates(before,p)}
  catch(error){
   if(previous===undefined)delete p.futureTransactionEdits[key];
   else p.futureTransactionEdits[key]=previous;
@@ -109,11 +112,63 @@ function assertUniqueForecastTransactions(predictions){
  assertDistinctOneOffs(predictions);
  assertDistinctSchedules(predictions);
 }
+// Earlier versions could save indistinguishable schedules. Their existence
+// must not lock unrelated forecast, category, or Needs review decisions.
+// Compare durable record identities to forbid NEW duplicate pairs, rather
+// than rejecting the entire saved catalog on every write.
+function duplicatePairs(predictions){
+ const groups=new Map(),pairs=new Map();
+ const add=(kind,key,id)=>{
+  const group=kind+'|'+key;
+  if(!groups.has(group))groups.set(group,[]);
+  groups.get(group).push(String(id));
+ };
+ for(const [i,row] of (predictions?.futureTransactionAdds||[]).entries()){
+  if(!row||typeof row!=='object')continue;
+  const id=String(row.id||'index:'+i),
+   edit=predictions?.futureTransactionEdits?.[row.type==='transfer'?
+    keyMovement('future|'+row.id):keyEvent(row.id,row.accountId)];
+  if(edit?.skipped)continue;
+  add('one-off',oneOffKey(edit?{...row,...edit}:row),id);
+ }
+ for(const [i,rule] of (predictions?.futureRecurringRules||[]).entries()){
+  if(!rule||typeof rule!=='object')continue;
+  const identity=[
+   String(rule.kind||''),String(rule.accountId||rule.fromAccountId||''),
+   String(rule.toAccountId||''),String(rule.type||'transfer'),
+   String(rule.cashDirection||''),String(rule.anchorDate||''),
+   String(rule.frequency||''),Math.round(Number(rule.amount)*100),
+   cleanMerchant(rule.originalMerchant||rule.merchant),
+   cleanMerchant(rule.scheduleLabel||rule.merchant)
+  ];
+  add('schedule',JSON.stringify(identity),String(rule.id||'index:'+i));
+ }
+ for(const [group,ids] of groups){
+  if(ids.length<2)continue;
+  ids.sort();
+  for(let i=0;i<ids.length;i++)
+   for(let j=i+1;j<ids.length;j++){
+    const pair=JSON.stringify([group,ids[i],ids[j]]);
+    pairs.set(pair,(pairs.get(pair)||0)+1);
+   }
+ }
+ return pairs;
+}
+function assertNoNewForecastDuplicates(previous,next){
+ const before=duplicatePairs(previous),after=duplicatePairs(next);
+ for(const [pair,count] of after){
+  if(count>(before.get(pair)||0))
+   throw Error(pair.includes('one-off')?
+    'This future transaction is already saved. Edit the existing prediction instead of adding it twice.':
+    'This recurring transaction already has an identical schedule. Edit the existing schedule instead.');
+ }
+}
 function add(state,data,accounts,asOf){
  const transfer=data.type==='transfer',
   fields=transfer?transferFields(data,accounts,asOf):normalFields(data,accounts,asOf),
   recordData={...fields,...(transfer?{type:'transfer'}:{})},p=ensure(state);
- assertDistinctOneOffs(p,asOf);
+ // Pre-existing duplicate one-offs are preserved, not silently removed.
+ // Only this newly requested record is checked against existing saves.
  if(p.futureTransactionAdds.some(saved=>oneOffKey(saved,asOf)===oneOffKey(recordData,asOf)))
   throw Error('This future transaction is already saved. Edit the existing prediction instead of adding it twice.');
  // An identical one-off should edit the dated occurrence of a saved schedule,
@@ -904,7 +959,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
  return r.id;
 }
 
-const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,
+const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,assertNoNewForecastDuplicates,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
  frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
