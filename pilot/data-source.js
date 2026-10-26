@@ -3,14 +3,17 @@
 (function(root){
 'use strict';
 const MODE='household-ledger-view-mode';
-let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='';
+let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
 const today=()=>new Date().toLocaleDateString('en-CA');
 const statusText=()=>lastError?'<p role="alert">'+esc(lastError)+'</p>':''; 
 const reconnectMessage='Your bank connection needs attention. Plaid requires you to sign in again or renew permission. Previously imported transactions and saved predictions are preserved; refresh results may be out of date.';
 const warningBanner=()=>live&&lastError?
- '<div class="notice danger" role="alert"><div><strong>Bank connection needs attention.</strong> '+
- esc(lastError)+'</div><a class="btn" href="/bank-connect">Reconnect bank</a></div>':'';
+ '<div class="notice danger" role="alert"><div><strong>'+
+ (lastErrorKind==='save'?'Could not save changes.':'Bank connection needs attention.')+
+ '</strong> '+esc(lastError)+'</div>'+
+ (lastErrorKind==='bank'?'<a class="btn" href="/bank-connect">Reconnect bank</a>':'')+
+ '</div>':'';
 const selection=()=>live?'real':'demo';
 async function request(path,body){
  const url='/api/ledger'+path,options={cache:'no-store',credentials:'same-origin',
@@ -95,7 +98,7 @@ function prepare(payload){
   reconnectAccounts:Array.isArray(payload.reconnectAccounts)?payload.reconnectAccounts:[]};
 }
 async function enter(){
- if(loading)return;loading=true;lastError='';localStorage.setItem(MODE,'real');
+ if(loading)return;loading=true;lastError='';lastErrorKind='bank';localStorage.setItem(MODE,'real');
  // The last preference is Real: do not briefly show fictional balances or
  // "bank not connected" while the authenticated bank snapshot loads.
  host.render();
@@ -118,7 +121,7 @@ async function enter(){
 }
 async function refresh(){
  if(loading||!live)return;
- loading=true;lastError='';host.render();
+ loading=true;lastError='';lastErrorKind='bank';host.render();
  try{
   // Finish the user's category and schedule writes before retrieving a new
   // server state, otherwise the screen could overwrite their latest decision.
@@ -141,7 +144,7 @@ async function refresh(){
  finally{loading=false;host.render()}
 }
 function demo(){
- live=false;loadedAccount=null;lastError='';localStorage.setItem(MODE,'demo');
+ live=false;loadedAccount=null;lastError='';lastErrorKind='bank';localStorage.setItem(MODE,'demo');
  host.enterDemo();host.render();
 }
 function panel(){
@@ -182,6 +185,8 @@ function persistForecast(predictions){
   lastError='';
   return result;
  }).catch(error=>{
+  // Forecast-validation errors are NOT Plaid login problems.
+  lastErrorKind='save';
   lastError='The predicted transaction could not be saved: '+error.message;
   throw new Error(lastError);
  });
@@ -192,6 +197,7 @@ function persist(data){
   reviews:data.reviews||{},learning:data.learning||{},customCategories:data.customCategories||[]};
  // Capture this exact snapshot; serialize writes so rapid edits cannot reverse their order.
  writeQueue=writeQueue.catch(()=>{}).then(()=>request('/adjustments',body)).catch(e=>{
+  lastErrorKind='save';
   lastError='Your latest real-data change was not saved: '+e.message;
   const flash=document.getElementById('flash');if(flash)flash.textContent=lastError;
   return null;
