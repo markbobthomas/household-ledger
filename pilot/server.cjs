@@ -65,14 +65,19 @@ async function save(){
 // One small encrypted write per forecast edit. The full encrypted bank ledger
 // is neither touched nor read, and concurrent browser saves are serialized.
 async function saveForecast(predictions){
- // The encrypted forecast store is the authoritative write boundary. Reject
- // duplicate one-offs/schedules even when a client retries or bypasses UI.
- // Bank source records remain read-only; do not silently delete old plans.
- require('../planner-transactions.js').assertUniqueForecastTransactions(predictions);
- const write=forecastWrites.catch(()=>{}).then(()=>atomicEncryptedWrite(forecastFile,predictions));
+ // All writes share this serialized encrypted boundary. Compare against the
+ // last saved snapshot INSIDE the queue, so repeated client submissions are
+ // idempotent and can never create a new duplicate. Existing legacy duplicate
+ // records may remain until the user decides what to do with them; they must
+ // not block Ignore, category edits, or other unrelated review decisions.
+ const write=forecastWrites.catch(()=>{}).then(async()=>{
+  require('../planner-transactions.js').assertNoNewForecastDuplicates(
+   state.ledgerAdjustments?.predictions||{},predictions);
+  await atomicEncryptedWrite(forecastFile,predictions);
+  state.ledgerAdjustments.predictions=predictions;
+ });
  forecastWrites=write.catch(()=>{});
  await write;
- state.ledgerAdjustments.predictions=predictions;
 }
 async function plaid(endpoint,body){
  const resp=await fetch(HOST+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,client_id:env.PLAID_CLIENT_ID,secret:env.PLAID_SECRET}),signal:AbortSignal.timeout(25000)});
