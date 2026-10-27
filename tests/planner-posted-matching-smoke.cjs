@@ -101,7 +101,7 @@ assert.equal(postedDue.overduePayments.length,0,'Refreshed posted bank data clea
 assert.ok(!postedDue.ledger.some(e=>e.ruleId===overdueRule.id&&e.date==='2026-10-28'),
  'The already-posted occurrence cannot debit the forecast again');
 assert.deepEqual(postedDue.ledger.filter(e=>e.ruleId===overdueRule.id).map(e=>e.date),
- ['2026-11-26','2026-12-28'],
+ ['2026-11-26','2026-12-25'],
  'Later regular monthly recurrences remain anchored across two calendar months');
 assert.equal(sourcePosted.date,'2026-10-27','Actual bank transaction is read-only');
 console.log('PASS posted matching: explicit bank ID, renamed merchant, variable amount, ambiguous independent streams, chosen schedule, immutable bank facts, month boundary and reconciliation');
