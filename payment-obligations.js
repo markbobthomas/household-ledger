@@ -33,6 +33,12 @@ function statementPeriodFor(rule,when){
 const cash=a=>['checking','savings','depository'].includes(String(a.accountType||a.type||'').toLowerCase());
 const credit=a=>String(a.accountType||a.type||'').toLowerCase()==='credit';
 const validAmount=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0;
+ // Credit-card settlements are transfers, not new purchases or merchant
+ // refunds. Enforce this again at the statement engine boundary so an
+ // imported provisional type cannot distort the bill calculation.
+const cardActivity=t=>['expense','refund'].includes(t?.type)&&
+ !['card_payment','internal_transfer'].includes(t?.accountingKind)&&
+ !t?.pairedTransactionId;
 // A connected card's historical purchases are always read-only. Its future
 // purchases/payment obligations cannot enter the forecast until configured.
 const ready=(rule,card,accounts=[])=>Boolean(rule&&card&&credit(card)&&
@@ -80,7 +86,7 @@ function inferPayment(card,accounts,records,asOf){
  const net=(from,to)=>{
   let total=0,count=0;
   for(const t of records)if(!t.pending&&same(t,card)&&t.date>=from&&t.date<=to&&
-   (t.type==='expense'||t.type==='refund')){
+   cardActivity(t)){
     total+=(t.type==='refund'?-1:1)*Number(t.amount||0);count++;
   }
   return {amount:round(Math.max(0,total)),count};
@@ -123,7 +129,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     const own=t=>String(t.accountId||t.account||'')===String(card.id)||
      String(t.accountId||t.account||'')===String(card.name);
     const entries=(rows,start,end,postedOnly)=>rows.filter(t=>own(t)&&
-     t.date>=start&&t.date<=end&&['expense','refund'].includes(t.type)&&
+     t.date>=start&&t.date<=end&&cardActivity(t)&&
      (!postedOnly||!t.pending&&t.date<=asOf)).map(t=>({
       id:String(t.id||''),date:t.date,merchant:String(t.merchant||t.description||'Card transaction'),
       type:t.type,amount:round(Number(t.amount)),source:postedOnly?'posted':'scheduled'
@@ -228,7 +234,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const start=n===0?anchorStart:
     shift(closeFor(plus(lastClose,n-1).slice(0,7),rule.closingDay),1);
    const entries=records.filter(t=>matchesAccount(t,card)&&!t.pending&&
-    t.date>=start&&t.date<=close&&['expense','refund'].includes(t.type));
+    t.date>=start&&t.date<=close&&cardActivity(t));
    const purchases=round(entries.filter(t=>t.type==='expense').reduce((sum,t)=>sum+Number(t.amount),0));
    const refunds=round(entries.filter(t=>t.type==='refund').reduce((sum,t)=>sum+Number(t.amount),0));
    historyStatements.push({cardId:id,cardName:card.name,periodStart:start,periodEnd:close,
@@ -251,16 +257,16 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const matchesCard=t=>matchesAccount(t,card);
    const cycleRows=records.filter(t=>matchesCard(t)&&!t.pending&&
     t.date>=cycleStart&&t.date<=cycleClose&&t.date<=asOf&&
-    ['expense','refund'].includes(t.type));
+    cardActivity(t));
    const purchases=round(cycleRows.filter(t=>t.type==='expense')
     .reduce((sum,t)=>sum+Number(t.amount),0));
    const refunds=round(cycleRows.filter(t=>t.type==='refund')
     .reduce((sum,t)=>sum+Number(t.amount),0));
    const bankPurchases=round(purchases-refunds);
    const pendingRows=records.filter(t=>matchesCard(t)&&t.pending&&
-    t.date>=cycleStart&&t.date<=cycleClose&&['expense','refund'].includes(t.type));
+    t.date>=cycleStart&&t.date<=cycleClose&&cardActivity(t));
    const predictedRows=expected.filter(t=>matchesCard(t)&&t.date>=cycleStart&&
-    t.date<=cycleClose&&t.date>asOf&&['expense','refund'].includes(t.type));
+    t.date<=cycleClose&&t.date>asOf&&cardActivity(t));
    const futureCharges=round(predictedRows.reduce((sum,t)=>
     sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
    const calculated=round(Math.max(0,bankPurchases+futureCharges));
@@ -285,7 +291,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // withdrawal, including forecast charges up to that date, minus any earlier
    // planned card payments. It is not a bank-issued payoff quotation.
    const futureToDue=round(expected.filter(t=>matchesCard(t)&&t.date>asOf&&
-    t.date<=due&&['expense','refund'].includes(t.type)).reduce((sum,t)=>
+    t.date<=due&&cardActivity(t)).reduce((sum,t)=>
     sum+(t.type==='refund'?-Number(t.amount):Number(t.amount)),0));
    const currentDebt=Number(card.current);
    const fullAmount=Number.isFinite(currentDebt)&&card.current!==null&&card.current!==undefined?
