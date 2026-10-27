@@ -83,15 +83,21 @@ function initialKind(t,account){
   pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{},
   primary=String(pfc.primary||'').toUpperCase(),
   detailed=String(pfc.detailed||'').toUpperCase();
- // Strong merchant-return evidence outranks generic ACH/payment wording.
- // The source sign is still authoritative; never turn an outgoing debit
- // into a positive refund just because its description mentions one.
- if(dir==='in'&&(refundText.test(name)||t.type==='refund'||
-  /(?:^|_)REFUND(?:_|$)|(?:^|_)RETURN(?:_|$)/.test(primary+'_'+detailed)))
-  return 'refund';
+ // Card imports may initially label *every incoming card amount* a
+ // refund. That provisional type must NEVER override payment evidence:
+ // card settlements are linked transfers, excluded from card purchases and
+ // used to infer the next bill. Preserve confirmed merchant returns below.
  const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
    cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
  if(payment)return 'card_payment';
+ // Only bank-direction-confirmed returns count as statement credits. For
+ // credit cards, a generic imported type='refund' is not proof: it may be
+ // a card payment. Keep explicit refund descriptors/provider codes, and
+ // let the unique-merchant match below resolve unlabeled merchant refunds.
+ if(dir==='in'&&(refundText.test(name)||
+  (!isCard&&t.type==='refund')||
+  /(?:^|_)REFUND(?:_|$)|(?:^|_)RETURN(?:_|$)/.test(primary+'_'+detailed)))
+  return 'refund';
  // Plaid can code mortgage/loan withdrawals as LOAN_PAYMENTS. They are external
  // bills leaving checking, not transfers between connected household accounts.
  // This also reinterprets existing read-only records imported as "transfer".
