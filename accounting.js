@@ -75,11 +75,17 @@ function direction(t){
  if(Number.isFinite(Number(raw))&&raw!==null&&raw!==undefined&&raw!=='')
   return Number(raw)>0?'out':Number(raw)<0?'in':'unknown';
  if(['out','in'].includes(t.cashDirection))return t.cashDirection;
- return t.type==='expense'?'out':t.type==='income'?'in':'unknown';
+ return t.type==='expense'?'out':['income','refund'].includes(t.type)?'in':'unknown';
 }
 function initialKind(t,account){
  const name=String(t.merchant||'')+' '+String(t.description||'');
- const dir=direction(t),isCard=account?.type==='credit';
+ const dir=direction(t),isCard=account?.type==='credit',
+  primary=String(t.personal_finance_category?.primary||
+   t.source?.personalFinanceCategory?.primary||'').toUpperCase();
+ // Strong merchant-return evidence outranks generic ACH/payment wording.
+ // The source sign is still authoritative; never turn an outgoing debit
+ // into a positive refund just because its description mentions one.
+ if(dir==='in'&&(refundText.test(name)||t.type==='refund'))return 'refund';
  const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
    cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
  if(payment)return 'card_payment';
@@ -92,11 +98,11 @@ function initialKind(t,account){
   if(dir==='in')return 'refund'; // A returned loan payment is never earned income.
  }
  if(recognizedIncome(t,account))return 'income';
- // Merchant refunds remain card credits even when Plaid calls them
- // TRANSFER_IN, or the imported row was initially labeled a transfer.
- // Bank-matched card settlements were classified above as card_payment.
- if(dir==='in'&&(refundText.test(name)||t.type==='refund'))return 'refund';
- if(transferText.test(name))return 'internal_transfer';
+ // Preserve explicit internal-transfer evidence while distinguishing a
+ // generic merchant credit from a card settlement. A bank-coded TRANSFER_IN
+ // with no return evidence remains a transfer until matched/reviewed.
+ if(transferText.test(name)||isCard&&dir==='in'&&primary==='TRANSFER_IN')
+  return 'internal_transfer';
  if(t.type==='transfer'&&!isCard)return 'internal_transfer';
  if(isCard&&dir==='in')return 'unclassified_card_credit'; // Reconcile possible payment first.
  if(dir==='in')return 'income';
