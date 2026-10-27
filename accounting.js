@@ -75,7 +75,7 @@ function direction(t){
  if(Number.isFinite(Number(raw))&&raw!==null&&raw!==undefined&&raw!=='')
   return Number(raw)>0?'out':Number(raw)<0?'in':'unknown';
  if(['out','in'].includes(t.cashDirection))return t.cashDirection;
- return t.type==='expense'?'out':['income','refund'].includes(t.type)?'in':'unknown';
+ return t.type==='expense'?'out':t.type==='income'?'in':'unknown';
 }
 function initialKind(t,account){
  const name=String(t.merchant||'')+' '+String(t.description||'');
