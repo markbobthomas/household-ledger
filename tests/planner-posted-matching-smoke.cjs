@@ -76,4 +76,31 @@ const distant={predictions:{}};
 newRule(distant,'Fictional Service',175,'2026-10-30');
 assert.ok(cover(distant,[post('distant','Fictional Service',175,'2026-10-01')]).events
  .some(e=>e.date==='2026-10-30'),'A distant earlier payment in the same calendar month must not remove a later bill');
+// Regression: a due withdrawal that has not posted must not silently vanish
+// into an already-reported bank balance. Pending is not posted; refresh is.
+const overdueAsOf='2026-10-27',overdueSnapshot={mode:'demo',asOf:overdueAsOf,
+ accounts:accounts.map(a=>({...a}))},overdueRule={
+ id:'unpaid-housing',kind:'event',accountId:'checking',type:'expense',
+ anchorDate:'2026-10-26',frequency:'monthly',amount:1600,
+ merchant:'Fictional Housing',scheduleLabel:'Fictional Housing'
+},overduePrefs={futureRecurringRules:[overdueRule]},options={weekendPolicy:'friday'};
+const missed=Core.materialize(overdueSnapshot,[],overduePrefs,T,null,65,options);
+assert.equal(missed.overduePayments.length,1,'A due but unposted bill enters Review');
+assert.equal(missed.overduePayments[0].expectedDate,'2026-10-26');
+assert.deepEqual(missed.ledger.filter(e=>e.ruleId===overdueRule.id).map(e=>e.date).slice(0,2),
+ ['2026-10-28','2026-11-26'],'Carry one missed debit, not a duplicate or shifted future schedule');
+assert.equal(missed.projection.accounts.find(a=>a.id==='checking').series.find(p=>p.date==='2026-10-28').balance,6400,
+ 'Projected checking balance reserves the missed debit once');
+const unsettled=[post('unsettled','Fictional Housing',1600,'2026-10-26')];
+unsettled[0].pending=true;
+const pendingDue=Core.materialize(overdueSnapshot,unsettled,overduePrefs,T,null,65,options);
+assert.equal(pendingDue.overduePayments.length,1,'Pending bank activity does not count as a posted debit');
+const sourcePosted=post('settled','Fictional Housing',1600,'2026-10-27');
+const postedDue=Core.materialize(overdueSnapshot,[sourcePosted],overduePrefs,T,null,65,options);
+assert.equal(postedDue.overduePayments.length,0,'Refreshed posted bank data clears the alert');
+assert.ok(!postedDue.ledger.some(e=>e.ruleId===overdueRule.id&&e.date==='2026-10-28'),
+ 'The already-posted occurrence cannot debit the forecast again');
+assert.equal(postedDue.ledger.filter(e=>e.ruleId===overdueRule.id).length,1,
+ 'Later regular monthly recurrence remains anchored');
+assert.equal(sourcePosted.date,'2026-10-27','Actual bank transaction is read-only');
 console.log('PASS posted matching: explicit bank ID, renamed merchant, variable amount, ambiguous independent streams, chosen schedule, immutable bank facts, month boundary and reconciliation');
