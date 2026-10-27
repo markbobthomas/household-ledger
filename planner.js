@@ -2978,7 +2978,7 @@ document.addEventListener('submit',async e=>{
   s=snapshot(),item=forecastFor(s)?.overduePayments?.find(x=>x.key===key);
  if(!item){setNotice('This payment changed or posted. Refresh Needs review.');return}
  const target=form.querySelector('[name=date]')?.value||'';
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(target)||target<=s.asOf||
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(target)||target<=s.asOf||
   target>shiftDay(s.asOf,horizon)||
   [0,6].includes(new Date(target+'T12:00:00Z').getUTCDay())){
   setNotice('Choose a future business day for this payment.');return;
