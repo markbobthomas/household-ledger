@@ -80,12 +80,15 @@ function direction(t){
 function initialKind(t,account){
  const name=String(t.merchant||'')+' '+String(t.description||'');
  const dir=direction(t),isCard=account?.type==='credit',
-  primary=String(t.personal_finance_category?.primary||
-   t.source?.personalFinanceCategory?.primary||'').toUpperCase();
+  pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{},
+  primary=String(pfc.primary||'').toUpperCase(),
+  detailed=String(pfc.detailed||'').toUpperCase();
  // Strong merchant-return evidence outranks generic ACH/payment wording.
  // The source sign is still authoritative; never turn an outgoing debit
  // into a positive refund just because its description mentions one.
- if(dir==='in'&&(refundText.test(name)||t.type==='refund'))return 'refund';
+ if(dir==='in'&&(refundText.test(name)||t.type==='refund'||
+  /(?:^|_)REFUND(?:_|$)|(?:^|_)RETURN(?:_|$)/.test(primary+'_'+detailed)))
+  return 'refund';
  const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
    cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
  if(payment)return 'card_payment';
@@ -194,6 +197,21 @@ function reconcile(state){
   }
  }
  const purchases=output.filter(t=>t.accountingKind==='purchase');
+ // A bank credit may have no literal 'refund' in its merchant description.
+ // Identify it only against a UNIQUE same-card posted purchase by merchant
+ // within 120 days; a generic adjustment without return evidence remains
+ // unclassified and cannot silently lower the next card payment.
+ for(const t of output)if(t.accountingKind==='unclassified_card_credit'&&
+  iso(t.date)&&!t.pending){
+  const original=cleanedRefundMerchant(t.merchant);
+  const candidates=original?purchases.filter(p=>
+   p.accountId===t.accountId&&cleanedRefundMerchant(p.merchant)===original&&
+   p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending):[];
+  if(candidates.length===1){
+   t.accountingKind='refund';
+   t.classificationConfidence='Matched single merchant purchase';
+  }
+ }
  for(const t of output){
   if(['card_payment','internal_transfer'].includes(t.accountingKind)){
    if(t.reconciliationStatus!=='matched'){
@@ -214,12 +232,11 @@ function reconcile(state){
     else if(possibilities.length>1){t.reconciliationStatus='needs-review';t.classificationConfidence='Multiple possible refund purchases';}
    }
   }else if(t.accountingKind==='unclassified_card_credit'){
-   // An incoming card credit that did not match a card-settlement pair is
-   // positive card activity, never household income or a debit. Include it
-   // as a refund (lowering statement purchases and card debt) while keeping
-   // its uncertain purpose visible for review.
-   t.type='refund';t.reconciliationStatus='needs-review';
-   t.classificationConfidence='Unlabeled card credit — confirm refund versus payment';
+   // Still unproven after transfer pairing and merchant matching: surface
+   // a positive credit for review, without guessing that it is a refund or
+   // decreasing the card statement estimate for a possible payment.
+   t.type='transfer';t.reconciliationStatus='needs-review';
+   t.classificationConfidence='Card credit — confirm refund versus payment';
   }else if(t.accountingKind==='purchase'||t.accountingKind==='loan_payment')t.type='expense';
   else if(t.accountingKind==='income')t.type='income';
   else {t.type='transfer';t.reconciliationStatus='needs-review'}
