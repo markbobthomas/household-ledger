@@ -54,7 +54,7 @@ function build(state,forecast,asOf,shared){
   if(state.reviews.accountingConfirmed[issue.id]?.fingerprint===fingerprint)continue;
   tasks.push({id:'accounting|'+issue.id,kind:'accounting',targetId:issue.id,merchant:issue.merchant,
    amount:issue.amount,date:issue.date,account:issue.accountId,category:row.category||'Other',
-   reason:issue.reason,priority:0,confidence:'Needs review',fingerprint,demo:row.source?.provider==='demo'||row.source?.simulated===true});
+   reason:issue.reason,priority:0,confidence:'Review',fingerprint,demo:row.source?.provider==='demo'||row.source?.simulated===true});
  }
 
  for(const t of effective){

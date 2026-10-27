@@ -65,7 +65,7 @@ assert.throws(()=>Transactions.defineRecurring(state,{
  kind:'event',recurringRuleId:rule.id,accountId:'checking',sourceAccountId:'checking',
  originalMerchant:'Fictional Vet',originalType:'expense',sourceAmount:125,
  date:'2026-11-10'
-}),/Choose an existing schedule category/);
+}),/Choose an existing prediction category/);
 assert.equal(state.predictions.futureRecurringRules.find(r=>r.id===rule.id).category,'Pet Care',
  'Unknown category cannot corrupt the saved schedule');
 console.log('PASS schedule category preservation: encrypted-forecast preference shape, custom categories, individual edits and linked-transfer legs');

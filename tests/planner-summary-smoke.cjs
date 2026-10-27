@@ -87,7 +87,7 @@ assert.match(trend,/id="summary-account"/);
 assert.equal((trend.match(/data-summary-plot/g)||[]).length,1,
  'Only one interactive forecast chart is rendered on the trend page');
 const short=tool.render({...opts,days:30});
-assert.match(short,/Add a schedule →/);
+assert.match(short,/Add a prediction →/);
 assert.match(short,/data-view="schedules"/,
  'An empty forecast should invite schedule setup instead of claiming accuracy');
 const caution=tool.render({...opts,days:180,bundle:{

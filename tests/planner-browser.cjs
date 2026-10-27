@@ -71,9 +71,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
     'One primary navigation row: calendar, schedules, history');
    const tabLabels=await page.locator('.planner-nav-primary .tab-link').allTextContents();
-   assert.deepEqual(tabLabels.slice(0,3),['Calendar','Scheduled','Transaction History']);
-   assert.match(tabLabels[3],/^Needs review(?: \[\d+\])?$/,
-    'Needs review keeps its accessible button label, with an optional inline count');
+   assert.deepEqual(tabLabels.slice(0,3),['Calendar','Predictions','Transactions']);
+   assert.match(tabLabels[3],/^Review(?: \[\d+\])?$/,
+    'Review keeps its accessible button label, with an optional inline count');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
     'Predictions is available through More instead of the main row');
    const go=async tab=>{
@@ -117,8 +117,8 @@ const {chromium,webkit}=require('playwright');
      els.map(el=>({text:el.textContent.trim(),whiteSpace:getComputedStyle(el).whiteSpace,
       height:el.getBoundingClientRect().height,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth})));
     assert.deepEqual(mobileTabs.slice(0,3).map(t=>t.text),
-     ['Calendar','Scheduled','Transaction History']);
-    assert.match(mobileTabs[3].text,/^Needs review(?: \[\d+\])?$/,
+     ['Calendar','Predictions','Transactions']);
+    assert.match(mobileTabs[3].text,/^Review(?: \[\d+\])?$/,
      'Review count is part of its button on a narrow iPhone');
     assert.ok(mobileTabs.every(t=>t.whiteSpace==='normal'&&t.height>=44&&
      t.scrollWidth<=t.clientWidth+1),
@@ -269,13 +269,13 @@ const {chromium,webkit}=require('playwright');
      if(!sharedListFrame)sharedListFrame=frame;
      assert.ok(Math.abs(frame.x-sharedListFrame.x)<1.1&&
       Math.abs(frame.width-sharedListFrame.width)<1.1,
-      'Scheduled, Transaction History and Needs review share the centered list frame: '+tab);
+      'Predictions, Transactions and Review share the centered list frame: '+tab);
     }
     if(controlSelector){
      const control=await page.locator(controlSelector).boundingBox();
      if(sharedListFilterX===null)sharedListFilterX=control.x;
      assert.ok(Math.abs(control.x-sharedListFilterX)<2.1,
-      'Scheduled and Transaction History search controls align horizontally');
+      'Predictions and Transactions search controls align horizontally');
     }
    }
    assert.ok(Math.abs(await page.locator('.calendar-grid').evaluate(el=>
@@ -658,7 +658,7 @@ const {chromium,webkit}=require('playwright');
      label+': no red bracket or empty badge when there is nothing to review');
     const btn=page.locator('.planner-nav-primary [data-view="reviews"]');
     assert.equal((await btn.innerText()).replace(/\s+/g,' ').trim(),
-     n?'Needs review ['+n+']':'Needs review',
+     n?'Review ['+n+']':'Review',
      label+': bracketed count is inside the existing button name');
     if(n>0){
      const color=await reviewBadge.evaluate(el=>getComputedStyle(el).color);
@@ -678,7 +678,7 @@ const {chromium,webkit}=require('playwright');
      expectedLegacy+' UNSAVED','Highlighted section count is the active forecast count');
     assert.equal(await page.locator('.reviews-page > section.panel').first().getAttribute(
      'data-active-legacy-estimates'),'',
-     'Active automatic forecasts are the first section in Needs review');
+     'Active automatic forecasts are the first section in Review');
     const ids=await legacyRows.evaluateAll(nodes=>nodes.map(el=>el.dataset.legacyEstimate));
     assert.equal(new Set(ids).size,expectedLegacy,
      'Each row identifies one distinct cash movement stream rather than duplicating a merchant');
@@ -749,9 +749,9 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await repeatingSection.locator('[data-recommendation-status="ignored"]').count(),0,
     'Only unreviewed recurring suggestions belong to the main queue');
    assert.equal(await repeatingSection.locator('[data-recommendation-status="scheduled"]').count(),0,
-    'Saved schedules stay off the Needs review queue');
+    'Saved schedules stay off the Review queue');
    assert.equal(await repeatingSection.locator('[data-review-candidate]').count(),0,
-    'Ordinary bank transactions are not independently replicated on Needs review');
+    'Ordinary bank transactions are not independently replicated on Review');
    const suggestionKey=await suggestion.getAttribute('data-recommended-repeat'),
     trackedRecommendation=page.locator('[data-recommended-repeat="'+suggestionKey+'"]');
    const rulesBeforeIgnore=await page.evaluate(()=>JSON.parse(
@@ -830,7 +830,7 @@ const {chromium,webkit}=require('playwright');
    const sort=page.locator('[data-history-sort]'),
     bankCategoryFilter=page.locator('[data-history-category-filter]');
    assert.equal(await sort.count(),1,'Bank activity has one Sort by selector alongside Account and Find');
-   assert.equal(await bankCategoryFilter.count(),1,'History adds one Category dropdown, just like Scheduled');
+   assert.equal(await bankCategoryFilter.count(),1,'History adds one Category dropdown, just like Predictions');
    assert.equal(await page.locator('.history-page label:has([data-history-sort])')
     .evaluate(el=>el.firstChild.textContent.trim()),'Sort by',
     'History sets the shared Sort by label');
@@ -975,7 +975,7 @@ const {chromium,webkit}=require('playwright');
     'A repeating schedule from Bank activity does not open an extra dialog');
    assert.equal(await mortgageEntry.locator('.history-row-open').getAttribute('aria-expanded'),'true');
    assert.equal(await mortgageEntry.locator('.recurrence-editor [name=category]').count(),1,
-    'Bank activity uses the same schedule editor category field as Needs review');
+    'Bank activity uses the same schedule editor category field as Review');
    assert.equal(await page.locator('.history-schedule-form [name=amount]').inputValue(),'2650',
     'History can propose future recurrence based on an actual bank record');
    await page.locator('[data-cancel-review-form]').click();
@@ -1149,7 +1149,7 @@ const {chromium,webkit}=require('playwright');
    const newAmount=originalAmount+125;
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
+   await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
    assert.equal(await page.evaluate(amount=>Object.values(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
    ).some(x=>x.amount===amount),newAmount),true,
@@ -1187,7 +1187,7 @@ const {chromium,webkit}=require('playwright');
    await manualEditor.locator('input[name=scope][value=all]').check();
    await manualEditor.locator('[data-frequency]').selectOption('monthly');
    await manualEditor.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/Recurring schedule/i).waitFor();
+   await page.locator('.future-notice').getByText(/Recurring prediction/i).waitFor();
    assert.ok(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count()>=2,
     'The confirmed recurring schedule generates multiple future payments');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -1308,13 +1308,13 @@ const {chromium,webkit}=require('playwright');
    const explanation=await page.locator('.history-explanation').innerText();
    assert.match(explanation,/saved repeating plans take priority/i,
     'History explains that owner-confirmed plans supersede estimates');
-   assert.match(explanation,/Transaction History stays here/i,
+   assert.match(explanation,/Transactions stay here/i,
     'The UI promises bank source records are never deleted');
    assert.equal(await page.locator('[data-history-auto-prediction]').count(),0,
     'History no longer offers a competing automatic prediction system');
    const unscheduledHistory=page.locator('.history-actual-row[data-history-forecast-state="unplanned"]').first();
    assert.ok(await unscheduledHistory.count()>0,'Unplanned bank rows remain visible');
-   assert.match(await unscheduledHistory.innerText(),/Not scheduled/);
+   assert.match(await unscheduledHistory.innerText(),/Not predicted/);
    assert.equal(await unscheduledHistory.locator('.history-row-open .history-row-hint').innerText(),'›',
     'Bank activity uses the shared chevron-only review affordance');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
@@ -1493,7 +1493,7 @@ const {chromium,webkit}=require('playwright');
       JSON.stringify({bank:bankSearch,repeating:repeatingSearch,mobile}));
    }
    assert.ok(Math.abs(repeatingCategoryField.y-bankCategoryField.y)<=2,
-    'Category selectors align vertically between Scheduled and Transaction History');
+    'Category selectors align vertically between Predictions and Transactions');
    assert.ok(Math.abs(bankCategoryField.x-repeatingCategoryField.x)<=2,
     'Category selectors share the same toolbar column on desktop and iPhone');
    assert.ok(Math.abs(repeatingDollar.x-bankDollar.x)<=1,
@@ -1533,9 +1533,9 @@ const {chromium,webkit}=require('playwright');
    const scheduleCategoryTitle=await page.locator('.schedule-page label:has([data-schedule-category-filter])')
     .evaluate(el=>el.firstChild.textContent.trim());
    assert.equal(scheduleSortTitle,'Sort by',
-    'Scheduled sort is labeled Sort by, consistent with Transaction History');
+    'Predictions sort is labeled Sort by, consistent with Transactions');
    assert.equal(scheduleCategoryTitle,'Category',
-    'Scheduled category dropdown is labeled Category, consistent with Transaction History');
+    'Predictions category dropdown is labeled Category, consistent with Transactions');
    assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
    const values=async()=>page.locator('.schedule-row-amount strong').evaluateAll(nodes=>
     nodes.map(node=>Number((node.textContent||'').replace(/[^0-9.]/g,''))));
@@ -1597,7 +1597,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-schedule-new]').click();
    let schedule=page.locator('[data-schedule-new-form]');
    assert.equal(await page.locator('.schedule-creation .recurrence-editor .schedule-form').count(),1,
-    'Repeating creates forecasts using the same shared inline editor as Needs review');
+    'Repeating creates forecasts using the same shared inline editor as Review');
    assert.equal(await page.locator('.transaction-detail').count(),0,
     'Schedule creation does not open a separate popup editor');
    assert.equal(await schedule.locator('[data-schedule-advanced]').getAttribute('open'),null,
@@ -2347,7 +2347,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('.transaction-detail').count(),0);
   assert.equal(await itemized.isVisible(),true);
   assert.match(await itemized.innerText(),/Actual posted card transactions/);
-  assert.match(await itemized.innerText(),/Scheduled\/recurring card transactions/);
+  assert.match(await itemized.innerText(),/Predicted\/recurring card transactions/);
   assert.match(await itemized.innerText(),/Identifiable activity/);
   assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
   assert.equal(await itemized.locator('.future-edit-form').count(),1);
@@ -2378,7 +2378,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await cardSeriesForm.locator('input[name=scope][value=all]').isChecked(),true);
   await cardSeriesForm.locator('[name=amount]').fill('1275');
   await cardSeriesForm.locator('button[type=submit]').click();
-  await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
+  await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
   assert.ok(writes.some(x=>Object.values(x.predictions?.futureSeriesEdits||{})
    .some(v=>v.amount===1275)),'Recurring card payments persist only as private adjustments; recent forecast save: '+JSON.stringify(writes.at(-1)?.predictions?.futureRecurringRules?.slice(-1)||writes.at(-1)?.predictions?.futureSeriesEdits||{}).slice(0,750));
   const recurringCardRows=page.locator('.future-item').filter({hasText:'Credit-card payment'});

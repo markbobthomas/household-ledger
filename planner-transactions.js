@@ -94,7 +94,7 @@ function assertDistinctOneOffs(predictions,asOf=''){
 function assertDistinctSchedules(predictions){
  const ids=new Set(),saved=new Set();
  for(const rule of predictions?.futureRecurringRules||[]){
-  if(!rule||typeof rule!=='object')throw Error('Invalid recurring schedule');
+  if(!rule||typeof rule!=='object')throw Error('Invalid recurring prediction');
   const identity=[
    String(rule.kind||''),String(rule.accountId||rule.fromAccountId||''),
    String(rule.toAccountId||''),String(rule.type||'transfer'),
@@ -104,7 +104,7 @@ function assertDistinctSchedules(predictions){
    cleanMerchant(rule.scheduleLabel||rule.merchant)
   ].join('|');
   if(ids.has(String(rule.id))||saved.has(identity))
-   throw Error('This recurring transaction already has an identical schedule. Edit the existing schedule instead.');
+   throw Error('This recurring transaction already has an identical prediction. Edit the existing prediction instead.');
   ids.add(String(rule.id));saved.add(identity);
  }
 }
@@ -113,7 +113,7 @@ function assertUniqueForecastTransactions(predictions){
  assertDistinctSchedules(predictions);
 }
 // Earlier versions could save indistinguishable schedules. Their existence
-// must not lock unrelated forecast, category, or Needs review decisions.
+// must not lock unrelated forecast, category, or Review decisions.
 // Compare durable record identities to forbid NEW duplicate pairs, rather
 // than rejecting the entire saved catalog on every write.
 function duplicatePairs(predictions){
@@ -160,7 +160,7 @@ function assertNoNewForecastDuplicates(previous,next){
   if(count>(before.get(pair)||0))
    throw Error(pair.includes('one-off')?
     'This future transaction is already saved. Edit the existing prediction instead of adding it twice.':
-    'This recurring transaction already has an identical schedule. Edit the existing schedule instead.');
+    'This recurring transaction already has an identical prediction. Edit the existing prediction instead.');
  }
 }
 function add(state,data,accounts,asOf){
@@ -171,13 +171,13 @@ function add(state,data,accounts,asOf){
  // Only this newly requested record is checked against existing saves.
  if(p.futureTransactionAdds.some(saved=>oneOffKey(saved,asOf)===oneOffKey(recordData,asOf)))
   throw Error('This future transaction is already saved. Edit the existing prediction instead of adding it twice.');
- // An identical one-off should edit the dated occurrence of a saved schedule,
+ // An identical one-off should edit the dated occurrence of a saved prediction,
  // rather than create a second payment on the same account and date.
  const generated=generatedRecurring(p.futureRecurringRules||[],shift(fields.date,-8),shift(fields.date,8));
  if([...generated.events,...generated.plans].some(e=>{
   const candidate={...e,...(e.seriesRuleId?{type:'transfer'}:{})};
   return oneOffKey(candidate,asOf)===oneOffKey(recordData,asOf);
- }))throw Error('This transaction is already covered by a recurring schedule. Edit that occurrence instead.');
+ }))throw Error('This transaction is already covered by a recurring prediction. Edit that occurrence instead.');
  const record={id:'future-add|'+Date.now().toString(36)+'|'+Math.random().toString(36).slice(2,10),
   ...recordData};
  p.futureTransactionAdds.push(record);
@@ -264,21 +264,21 @@ function resetSeries(state,seriesKey){
  * find a reliable series. Rule identity includes account/type/source merchant;
  * individual bank transactions and their categories are never modified. */
 const frequencies=new Set(['weekly','biweekly','every-4-weeks','twice-monthly','monthly','quarterly','semiannual','annual']);
-// Schedule menus are views of the canonical Ledger category library.
+// Prediction menus are views of the canonical Ledger category library.
 const defaultScheduleCategories=Object.freeze(CategoryLibrary.categories({predictions:{}}));
 const scheduleCategories=state=>CategoryLibrary.categories(state);
 function scheduleCategory(name,state){
  const value=CategoryLibrary.canonicalCategory(state,name||'Uncategorized');
- if(!value)throw Error('Choose an existing schedule category or add it first');
+ if(!value)throw Error('Choose an existing prediction category or add it first');
  return value;
 }
 function setScheduleCategory(state,id,category){
  const list=state?.predictions?.futureRecurringRules||[];
  const rule=list.find(r=>String(r.id)===String(id));
- if(!rule)throw Error('This schedule changed. Open the list again.');
+ if(!rule)throw Error('This prediction changed. Open the list again.');
  const value=scheduleCategory(category,state);
  const p=ensure(state),current=p.futureRecurringRules.find(r=>String(r.id)===String(id));
- if(!current)throw Error('This schedule changed. Open the list again.');
+ if(!current)throw Error('This prediction changed. Open the list again.');
  current.category=value;
  return {id:current.id,category:value};
 }
@@ -410,7 +410,7 @@ function manualSeriesKey(ruleId){return 'user-series|'+encodeURIComponent(String
 // Ambiguity is a choice of existing forecast schedules, never permission to
 // create another debit or combine independent paycheck phases.
 function scheduleChoice(candidates){
- const e=Error('Several saved schedules match this payment. Choose the one to update.');
+ const e=Error('Several saved predictions match this payment. Choose the one to update.');
  e.code='RECURRING_SCHEDULE_CHOICE';
  e.options=candidates.map(r=>({id:r.id,merchant:r.merchant,frequency:r.frequency,
   anchorDate:r.anchorDate,amount:Number(r.amount),accountId:r.accountId||r.fromAccountId}));
@@ -473,7 +473,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  }
  const p=ensure(state),requestedId=String(data.existingRuleId||''),
   separate=data.separateSchedule===true||data.separateSchedule==='yes'||data.separateSchedule==='on';
- // A historical payment already associated with an existing schedule can
+ // A historical payment already associated with an existing prediction can
  // only update THAT schedule. A stale form or separate-bill checkbox must
  // never silently create a competing recurring obligation.
  if(reference?.bankTransactionId){
@@ -481,10 +481,10 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   if(!actual)throw Error('This bank transaction changed. Refresh bank history before saving.');
   const attached=historicalScheduleMatches(actual,accounts,p.futureRecurringRules);
   if(attached.length){
-   if(separate)throw Error('This bank transaction already belongs to a schedule. Open its existing plan; do not create a duplicate.');
+   if(separate)throw Error('This bank transaction already belongs to a prediction. Open its existing plan; do not create a duplicate.');
    if(!requestedId)throw scheduleChoice(attached);
    if(!attached.some(r=>r.id===requestedId))
-    throw Error('This bank transaction belongs to another schedule. Reopen it from History.');
+    throw Error('This bank transaction belongs to another prediction. Reopen it from History.');
   }
  }
  const baseAccount=reference?.kind==='movement'?String(reference.sourceAccountId||reference.fromAccountId):
@@ -499,7 +499,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   frequency==='every-4-weeks'?'phase'+phaseOf(fields.date):round(originalAmount)]
   .map(encodeURIComponent).join('|');
  // Explicit separate streams stay possible, but never create an
- // indistinguishable copy of the very same schedule on a repeated Save.
+ // indistinguishable copy of the very same prediction on a repeated Save.
  if(separate&&!reference?.recurringRuleId){
   const label=String(data.scheduleLabel||fields.merchant||'').trim().toLowerCase(),
    duplicate=p.futureRecurringRules.find(r=>
@@ -511,13 +511,13 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
     String(r.anchorDate)===String(fields.date)&&
     String(r.frequency)===frequency&&Number(r.amount)===Number(fields.amount)&&
     String(r.scheduleLabel||r.merchant||'').trim().toLowerCase()===label);
-  if(duplicate)throw Error('This repeating payment is already scheduled. Edit the existing schedule instead.');
+  if(duplicate)throw Error('This repeating payment is already predicted. Edit the existing prediction instead.');
  }
  // A separately named obligation has a durable payment-stream ID, not a
  // merchant/date/amount identity. Both bills may post on the same day.
  if(separate){
   if(reference?.recurringRuleId||requestedId)
-   throw Error('Create a separate schedule without selecting an existing one.');
+   throw Error('Create a separate prediction without selecting an existing one.');
   const prefix='manual|stream|'+[transfer?'movement':'event',baseAccount,
    merchantKey(originalMerchant)].map(encodeURIComponent).join('|')+'|';
   let n=1;
@@ -526,7 +526,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  }
  // Different historical rows can be labeled expense vs ACH transfer, but
  // refer to the same one mortgage payment. Reuse its existing rule instead
- // of saving two recurring schedules with distinct source type identities.
+ // of saving two recurring predictions with distinct source type identities.
  // Account and amount are required; two different paying accounts, or a
  // real internal transfer and an expense, must remain separate.
  if(!reference?.recurringRuleId&&!separate){
@@ -544,13 +544,13 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
    r.frequency==='every-4-weeks'?samePhase(r.anchorDate,fields.date):
    frequency!=='every-4-weeks');
   // Bank transaction IDs are stronger evidence than the common payee name.
-  // An exact cadence can disambiguate a pair of different saved schedules.
+  // An exact cadence can disambiguate a pair of different saved predictions.
   const linked=linkedSchedule(matching,selectedExampleIds);
   const cadenceMatches=matching.filter(r=>r.frequency===frequency);
   const candidates=linked?[linked]:(cadenceMatches.length===1?cadenceMatches:matching);
   if(requestedId){
    const chosen=candidates.find(r=>r.id===requestedId);
-   if(!chosen)throw Error('Selected recurring schedule is no longer a match. Reopen this payment.');
+   if(!chosen)throw Error('Selected recurring prediction is no longer a match. Reopen this payment.');
    id=chosen.id;
   }else if(candidates.length===1)id=candidates[0].id;
   else if(candidates.length>1)throw scheduleChoice(candidates);
@@ -559,7 +559,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  }
  let old=p.futureRecurringRules.find(r=>r.id===id);
  if(reference?.recurringRuleId&&!old)
-  throw Error('The saved recurring schedule changed. Reopen it before editing.');
+  throw Error('The saved recurring prediction changed. Reopen it before editing.');
  const candidates=(records||[]).filter(t=>!t.pending&&validDate(t.date)&&String(t.id||'')&&
   accountRef(t.accountId||t.account,accounts)===baseAccount&&
   merchantKey(t.merchant)&&Number(t.amount)>0);
@@ -584,7 +584,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   .map(merchantKey).filter(Boolean);
  // The user may label a bill "Electric" while Plaid calls it "PSE".
  // An explicitly linked bank payee must also merge with any existing rule
- // that already owns that same bank payee, not create a duplicate schedule.
+ // that already owns that same bank payee, not create a duplicate prediction.
  if(!reference?.recurringRuleId&&!separate&&evidence.length){
   const overlapping=p.futureRecurringRules.filter(r=>
    r.kind===(transfer?'movement':'event')&&
@@ -597,7 +597,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   if(requestedId){
    const picked=overlapping.find(r=>r.id===requestedId);
    if(overlapping.length&&!picked)
-    throw Error('This bank payment is also connected to another schedule. Review its links.');
+    throw Error('This bank payment is also connected to another prediction. Review its links.');
    if(picked){id=picked.id;old=picked}
   }else if(overlapping.length>1){
    const linked=linkedSchedule(overlapping,selectedExampleIds);
@@ -610,7 +610,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   }
  }
  if(requestedId&&id!==requestedId)
-  throw Error('Choose the matching saved recurring schedule before saving.');
+  throw Error('Choose the matching saved recurring prediction before saving.');
  if(!names.length)throw Error('Enter a merchant name');
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...savedMatchBounds(data,old),
@@ -651,7 +651,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   delete p.futureSeriesEdits?.[manualSeriesKey(id)];
  }
  // Explicitly transferring posted examples to a newly created independent
- // bill prevents one bank record being "owned" by both saved schedules.
+ // bill prevents one bank record being "owned" by both saved predictions.
  if(separate&&chosen.length){
   const moved=new Set(chosen);
   for(const sibling of p.futureRecurringRules)if(sibling.id!==id)
@@ -752,7 +752,7 @@ function restoreRecurrence(state,key){
 function stopRecurrence(state,row){
  if(!row||!['event','movement'].includes(row.kind))throw Error('Choose a recurring forecast');
  const p=ensure(state),rule=(p.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
- if(row.recurringRuleId&&!rule)throw Error('The original recurring schedule changed. Refresh and select it again.');
+ if(row.recurringRuleId&&!rule)throw Error('The original recurring prediction changed. Refresh and select it again.');
  const accountId=String(rule?.originalAccountId||rule?.accountId||rule?.fromAccountId||
   row.sourceAccountId||row.accountId||row.fromAccountId||'');
  const merchant=String(rule?.originalMerchant||row.sourceMerchant||row.merchant||'');
@@ -777,7 +777,7 @@ function stopRecurrence(state,row){
   String(r.originalAccountId||r.accountId)===accountId&&r.type===type&&
   (r.matchNames||[sourceMerchant(r.originalMerchant||r.merchant)])
    .includes(sourceMerchant(merchant))))
-  throw Error('This employer has confirmed schedules. Choose the exact paycheck in Future Transactions.');
+  throw Error('This employer has confirmed predictions. Choose the exact paycheck in Predictions.');
  const phaseDate=rule?.frequency==='every-4-weeks'?rule.anchorDate:
   row.cadence==='every-4-weeks'?row.baseDate||row.date:null,
   // Separate obligations can have the identical merchant, account, due
@@ -839,10 +839,10 @@ function scheduleAmount(rule,date){
 }
 function setScheduleEstimate(state,id,data,asOf){
  const p=ensure(state),r=p.futureRecurringRules.find(v=>v.id===id);
- if(!r)throw Error('That schedule no longer exists.');
+ if(!r)throw Error('That prediction no longer exists.');
  if(!validAmount(data.amount))throw Error('Enter a positive estimated amount.');
  const value=round(data.amount),scope=String(data.scope||'all');
- if(scope!=='all')throw Error('Edit one dated payment, or change the entire repeating schedule.');
+ if(scope!=='all')throw Error('Edit one dated payment, or change the entire repeating prediction.');
  r.amount=value;r.amountBasis='estimate';
  // All future means ALL future: old date-range overrides are superseded,
  // whereas individually saved transaction edits remain independent.
@@ -853,7 +853,7 @@ function setScheduleEstimate(state,id,data,asOf){
 }
 function removeScheduleEstimate(state,id,index){
  const r=ensure(state).futureRecurringRules.find(v=>v.id===id);
- if(!r)throw Error('The saved schedule no longer exists.');
+ if(!r)throw Error('The saved prediction no longer exists.');
  if(!Number.isInteger(index)||index<0||index>=r.amountWindows?.length)
   throw Error('That forecast estimate no longer exists.');
  r.amountWindows.splice(index,1);
@@ -939,7 +939,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
     !sameDirection(t,kind==='event'?r.type:'transfer')||
     accountRef(t.accountId||t.account,accounts)!==account)continue;
    const explicit=linked.some(x=>String(x.id)===String(r.id));
-   // Posted bank evidence is accepted only inside THIS schedule's date
+   // Posted bank evidence is accepted only inside THIS prediction's date
    // and amount boundaries. One bank row still covers at most one rule.
    if(!postedWithinMatchWindow(r,t,date,item.amount,explicit))continue;
    const gap=Math.abs(daysBetween(t.date,date));
@@ -972,7 +972,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
    amount:Number(t.amount),date:t.date,accountId:accountRef(t.accountId||t.account,accounts),
    candidates:distinct.map(m=>({ruleId:m.ruleId,date:m.date,
     amount:Number(items[m.index].item.amount),label:String(byId.get(m.ruleId)?.scheduleLabel||
-     byId.get(m.ruleId)?.merchant||'Scheduled payment')}))});
+     byId.get(m.ruleId)?.merchant||'Predicted payment')}))});
  }
  pairs.sort((a,b)=>a.score-b.score||a.tie.localeCompare(b.tie));
  const usedItems=new Set(),usedPosted=new Set();
@@ -992,14 +992,14 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
   target=rules.find(r=>String(r.id)===String(ruleId)),
   bank=(records||[]).find(t=>String(t.id)===String(bankId));
  if(!target||!bank||bank.pending||!validDate(bank.date)||!(Number(bank.amount)>0))
-  throw Error('This posted payment or schedule changed. Refresh and try again.');
+  throw Error('This posted payment or prediction changed. Refresh and try again.');
  const account=accountRef(bank.accountId||bank.account,accounts);
  if(String(target.originalAccountId||target.accountId||target.fromAccountId)!==account||
   !sameDirection(bank,target.kind==='movement'?'transfer':target.type))
-  throw Error('Bank account or payment direction does not match this schedule.');
+  throw Error('Bank account or payment direction does not match this prediction.');
  const p=ensure(state),r=p.futureRecurringRules.find(x=>String(x.id)===String(ruleId));
  // A deliberate decision may reassign a bank posting, but never alters
- // the bank record, creates another schedule, or rewrites future amounts.
+ // the bank record, creates another prediction, or rewrites future amounts.
  for(const other of p.futureRecurringRules){
   if(String(other.id)===String(ruleId))continue;
   if(Array.isArray(other.exampleIds))
@@ -1007,7 +1007,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
  }
  r.exampleIds=[...new Set([...(r.exampleIds||[]).map(String),String(bankId)])];
  // User-confirmed aliases help recognize future bank postings even if
- // Plaid's displayed payee differs from the schedule name. Shared aliases
+ // Plaid's displayed payee differs from the prediction name. Shared aliases
  // across two obligations remain ambiguous and require another decision.
  const alias=merchantKey(bank.merchant||bank.name);
  if(alias)r.matchNames=[...new Set([...(r.matchNames||[]),alias])];

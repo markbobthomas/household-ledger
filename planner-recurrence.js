@@ -1,5 +1,5 @@
 /* Conservative-but-early cash commitment detection and cross-source
- * deduplication. Actual bank rows are never edited. The same scheduled
+ * deduplication. Actual bank rows are never edited. The same predicted
  * cash movement is represented by one event even when it originated in
  * imported-pattern inference, new detection and an owner-confirmed rule. */
 (function(root){
@@ -61,7 +61,7 @@ const isStrongSource=t=>{
   ['Housing','Insurance','Subscriptions','Utilities','Kids & Family'].includes(t.category);
 };
 // Two equally priced, same-merchant bank transactions must demonstrate a
-// plausible cadence. A matching calendar day alone never proves a schedule.
+// plausible cadence. A matching calendar day alone never proves a prediction.
 const cadenceBetween=(a,b)=>{
  const gap=dayDiff(b,a),months=monthNumber(b)-monthNumber(a),
   spread=Math.abs(Number(b.slice(-2))-Number(a.slice(-2)));
@@ -255,7 +255,7 @@ function dedupeEvents(events,accounts=[],options={}){
    removed.push({id:item.id,keptId:keep.id,merchant:item.merchant,
     reason:'Same account, bill, and payment cycle already predicted'});
   }else if(matches.length>1){
-   conflicts.push({id:item.id,merchant:item.merchant,reason:'Several possible matching scheduled payments'});
+   conflicts.push({id:item.id,merchant:item.merchant,reason:'Several possible matching predicted payments'});
    // Do not silently delete when a pair is genuinely ambiguous.
    kept.push(item);
   }else kept.push(item);
