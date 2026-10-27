@@ -1748,6 +1748,8 @@ function updateReviewTabCount(queue){
  const count=Number(queue?.outstanding||0);
  badge.hidden=!(count>0);
  badge.textContent=count>0?' ['+count+']':'';
+ const tab=badge.closest('[data-view="reviews"]');
+ if(tab)tab.classList.toggle('has-review-items',count>0);
 }
 function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  // Reuse the count's exact queue, including distinct unsaved legacy streams.
