@@ -613,7 +613,15 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(requestedId&&id!==requestedId)
   throw Error('Choose the matching saved recurring prediction before saving.');
  if(!names.length)throw Error('Enter a merchant name');
- const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
+ // The schedule editor displays the NEXT due date, not the original anchor.
+ // A non-date edit after an unpaid occurrence must never silently rebase the
+ // cadence onto next month and erase the missed debit from reconciliation.
+ // Only an actual change of date or frequency is a recurrence-date edit.
+ const upcoming=old&&old.frequency===frequency?
+  recurrenceDates(old,asOf,shift(asOf,1095))[0]:null;
+ const unchangedNext=old&&String(fields.date)===String(upcoming);
+ const anchorDate=unchangedNext?old.anchorDate:fields.date;
+ const rule={id,kind:transfer?'movement':'event',frequency,anchorDate,
   ...savedMatchBounds(data,old),
   ...(secondDay?{secondDay}:{}),...fields,
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
