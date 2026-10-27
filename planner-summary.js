@@ -48,15 +48,21 @@ const dateDelta=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:
 function knownGaps(prefs,asOf,through,accountId,points){
  const dates=new Map(),tools=root.HouseholdPlannerTransactions;
  if(!tools?.recurrenceDates)return dates;
+ // Index all projected dates once instead of rescanning 1,095 days for every due date.
+ const eventsByDate=new Map(points.map(p=>[p.date,p.events||[]]));
  for(const r of prefs?.futureRecurringRules||[]){
   if(r.kind==='movement'||!['income','expense'].includes(r.type)||
    String(r.accountId)!==String(accountId)||!r.id)continue;
   for(const due of tools.recurrenceDates(r,asOf,through)){
    if(dateDelta(due,asOf)<=7)continue;
-   const exists=points.some(p=>Math.abs(dateDelta(p.date,due))<=6&&
-    (p.events||[]).some(e=>e.kind===r.type&&
+   let exists=false;
+   const merchant=norm(r.originalMerchant||r.merchant);
+   for(let offset=-6;offset<=6&&!exists;offset++){
+    const events=eventsByDate.get(tools.shift(due,offset))||[];
+    exists=events.some(e=>e.kind===r.type&&
      (String(e.recurringRuleId||'')===String(r.id)||
-      norm(e.sourceMerchant||e.merchant)===norm(r.originalMerchant||r.merchant))));
+      norm(e.sourceMerchant||e.merchant)===merchant));
+   }
    const skipped=Boolean(prefs?.futureTransactionEdits?.[
     tools.keyEvent('user|'+r.id+'|'+due,accountId)]?.skipped);
    if(exists||skipped)continue;
@@ -668,12 +674,13 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   x=i=>plotLeft+i*(plotRight-plotLeft)/(series.length-1),
   y=v=>bottom-(v-floor)/(ceil-floor)*(bottom-top),
   locate=i=>[x(i).toFixed(2),y(vals[i]).toFixed(2)];
- const path=series.map((p,i)=>{const [a,b]=locate(i);return (i?'L':'M')+a+' '+b}).join(' ');
+ // Build the full three-year SVG only when the user opens Balance Trend.
+ const path=view==='trend'?series.map((p,i)=>{const [a,b]=locate(i);return (i?'L':'M')+a+' '+b}).join(' '):'';
  const lowIndex=vals.indexOf(low),first=series[0],last=series.at(-1),lowDay=series[lowIndex],
   cushion=alertThreshold(prefs),below=!credit&&low<cushion,
   negative=!credit&&low<0;
  selected=lowIndex;
- const pin=locate(lowIndex),
+ const pin=view==='trend'?locate(lowIndex):null,
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
   emptySchedule=moves===0;
  const zero=!credit&&floor<0&&ceil>0?
@@ -699,7 +706,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
      below?'<small class="summary-low-warning">Below warning threshold</small>':'')+
     '</div>')+'</div>'+
     calendarGrid()+'</section>';
- const trendChart='<section class="summary-stage summary-legacy">'+
+ const trendChart=view==='trend'?'<section class="summary-stage summary-legacy">'+
 
   '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+
   [10,30,90,180,360,1095].map(n=>'<button type="button" data-trend-days="'+n+
@@ -725,7 +732,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '<small data-summary-peek-events>'+causes+'</small></div>'+
   '<div class="summary-caption">'+(credit?'Card debt':'Checking forecast')+' · '+
   '<span data-trend-count>'+moves+' dated movement'+(moves===1?'':'s')+'</span>'+
-  '</div></section>';
+  '</div></section>':'';
  const trendTrust=  '<section class="summary-trust" aria-label="Forecast assumptions">'+
   '<strong>Illustration, not a guaranteed minimum.</strong>'+
   '<p>Based on current balances and dated predicted payments repeated for up to 3 years. '+
