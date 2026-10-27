@@ -79,7 +79,16 @@ function direction(t){
 }
 function initialKind(t,account){
  const name=String(t.merchant||'')+' '+String(t.description||'');
- const dir=direction(t),isCard=account?.type==='credit';
+ const dir=direction(t),isCard=account?.type==='credit',
+  pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{},
+  primary=String(pfc.primary||'').toUpperCase(),
+  detailed=String(pfc.detailed||'').toUpperCase();
+ // Strong merchant-return evidence outranks generic ACH/payment wording.
+ // The source sign is still authoritative; never turn an outgoing debit
+ // into a positive refund just because its description mentions one.
+ if(dir==='in'&&(refundText.test(name)||t.type==='refund'||
+  /(?:^|_)REFUND(?:_|$)|(?:^|_)RETURN(?:_|$)/.test(primary+'_'+detailed)))
+  return 'refund';
  const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
    cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
  if(payment)return 'card_payment';
@@ -92,10 +101,13 @@ function initialKind(t,account){
   if(dir==='in')return 'refund'; // A returned loan payment is never earned income.
  }
  if(recognizedIncome(t,account))return 'income';
- if(transferText.test(name))return 'internal_transfer';
- if(t.type==='transfer')return 'internal_transfer';
- if(refundText.test(name)&&dir==='in')return 'refund';
- if(isCard&&dir==='in')return 'unclassified_card_credit'; // Not earned household income.
+ // Preserve explicit internal-transfer evidence while distinguishing a
+ // generic merchant credit from a card settlement. A bank-coded TRANSFER_IN
+ // with no return evidence remains a transfer until matched/reviewed.
+ if(transferText.test(name)||isCard&&dir==='in'&&primary==='TRANSFER_IN')
+  return 'internal_transfer';
+ if(t.type==='transfer'&&!isCard)return 'internal_transfer';
+ if(isCard&&dir==='in')return 'unclassified_card_credit'; // Reconcile possible payment first.
  if(dir==='in')return 'income';
  if(dir==='out')return 'purchase';
  return 'unclassified';
@@ -147,6 +159,10 @@ function reconcile(state){
   const aTransfer=['card_payment','internal_transfer'].includes(a.accountingKind);
   const bTransfer=['card_payment','internal_transfer'].includes(b.accountingKind);
   if(!aTransfer&&!bTransfer)continue;
+  // A clearly identified merchant refund is a card credit, NOT the incoming
+  // leg of a checking-to-card settlement, even if a coincidentally equal
+  // transfer posted on another account within the matching window.
+  if(a.accountingKind==='refund'||b.accountingKind==='refund')continue;
   const aCard=a.accountType==='credit',bCard=b.accountType==='credit';
   const card=a.accountingKind==='card_payment'||b.accountingKind==='card_payment'||aCard!==bCard&&(aCard||bCard);
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
@@ -181,6 +197,21 @@ function reconcile(state){
   }
  }
  const purchases=output.filter(t=>t.accountingKind==='purchase');
+ // A bank credit may have no literal 'refund' in its merchant description.
+ // Identify it only against a UNIQUE same-card posted purchase by merchant
+ // within 120 days; a generic adjustment without return evidence remains
+ // unclassified and cannot silently lower the next card payment.
+ for(const t of output)if(t.accountingKind==='unclassified_card_credit'&&
+  iso(t.date)&&!t.pending){
+  const original=cleanedRefundMerchant(t.merchant);
+  const candidates=original?purchases.filter(p=>
+   p.accountId===t.accountId&&cleanedRefundMerchant(p.merchant)===original&&
+   p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending):[];
+  if(candidates.length===1){
+   t.accountingKind='refund';
+   t.classificationConfidence='Matched single merchant purchase';
+  }
+ }
  for(const t of output){
   if(['card_payment','internal_transfer'].includes(t.accountingKind)){
    if(t.reconciliationStatus!=='matched'){
@@ -201,7 +232,11 @@ function reconcile(state){
     else if(possibilities.length>1){t.reconciliationStatus='needs-review';t.classificationConfidence='Multiple possible refund purchases';}
    }
   }else if(t.accountingKind==='unclassified_card_credit'){
+   // Still unproven after transfer pairing and merchant matching: surface
+   // a positive credit for review, without guessing that it is a refund or
+   // decreasing the card statement estimate for a possible payment.
    t.type='transfer';t.reconciliationStatus='needs-review';
+   t.classificationConfidence='Card credit — confirm refund versus payment';
   }else if(t.accountingKind==='purchase'||t.accountingKind==='loan_payment')t.type='expense';
   else if(t.accountingKind==='income')t.type='income';
   else {t.type='transfer';t.reconciliationStatus='needs-review'}
