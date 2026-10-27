@@ -4,7 +4,7 @@
 (function(root){
 'use strict';
 const DAY=86400000;
-// History recommendations share identities and dates with confirmed schedules,
+// History recommendations share identities and dates with confirmed predictions,
 // but remain recommendation-only; their detection policy is independent.
 const shared=root.HouseholdPlannerTransactions||
  (typeof require==='function'?require('./planner-transactions.js'):null);
@@ -190,7 +190,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[],optio
      g.rows.length===1?bill?
      'One identifiable bill; confirm whether and how often it repeats':
      'One bank payment; no repeating pattern established yet':
-    !frequency?'Repeated amount, but calendar timing varies; choose a schedule':
+    !frequency?'Repeated amount, but calendar timing varies; choose a prediction':
     'Matching bank account, payee and recurring timing (amounts can vary)',
    // Rank coherent patterns before the many single, unproven purchases.
    _priority:(frequency?3:bill?2:1)});
@@ -200,7 +200,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[],optio
   b.amount-a.amount);
  return (options.unlimited?sorted:sorted.slice(0,100)).map(({_priority,...item})=>item);
 }
-// The dedicated Needs review queue is NOT the entire bank ledger. Ordinary
+// The dedicated Review queue is NOT the entire bank ledger. Ordinary
 // one-off purchases can always be scheduled in History but never appear here
 // unless there is credible recurring evidence. Variable utilities are grouped
 // by account/payee/direction rather than an exact amount.

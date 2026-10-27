@@ -20,10 +20,10 @@ const money=n=>n==null?'Unavailable':new Intl.NumberFormat('en-US',{style:'curre
 const status=document.getElementById('status'),choices=document.getElementById('account-choices');
 let pendingToken=null,pendingAccounts=[],lastAccounts=[],removalBusy=false,repairBusy=false;
 const usageLabels={
- primaryAccount:'Selected main account',futureRecurringRules:'Recurring schedules',
+ primaryAccount:'Selected main account',futureRecurringRules:'Recurring predictions',
  futureTransactionEdits:'Individual prediction changes',futureSeriesEdits:'Changes to repeating predictions',
  futureTransactionAdds:'Manually added predictions',paymentRules:'Credit-card payment settings',
- paymentBills:'Scheduled payments',futureRecurrenceExclusions:'Not-recurring decisions',
+ paymentBills:'Predicted payments',futureRecurrenceExclusions:'Not-recurring decisions',
  historyPatternDecisions:'History decisions',plannerRoutineDecisions:'Recurring review decisions',
  mortgageReviewDismissals:'Mortgage review decisions'};
 function usageText(a){

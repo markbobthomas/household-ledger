@@ -81,7 +81,7 @@ function billCells({months,found,expected,reason,tooMany=false}){
   if(!due.length&&!items.length)return {month:m.key,status:'na',label:'—',
    detail:'No expected payment falls inside '+titleDate(m.start)+'–'+titleDate(m.end),items:[]};
   if(!due.length&&items.length)return {month:m.key,status:'review',label:items.length+'?',
-   detail:'This payment is predicted, but its due date is not matched to the usual schedule',items:described(items)};
+   detail:'This payment is predicted, but its due date is not matched to the usual prediction',items:described(items)};
   if(!items.length)return {month:m.key,status:'missing',label:'!',
    detail:reason||'Expected payment is not included in the balance forecast',items:[]};
   if(items.length>due.length||tooMany&&items.length>1)return {month:m.key,status:'review',label:items.length+'?',
@@ -124,7 +124,7 @@ function mortgageIdentity(e){
  return {accountId:asId(e.accountId),
   seriesKey:asId(e.seriesKey||''),ruleId:asId(e.recurringRuleId||e.ruleId||''),
   merchant:norm(e.sourceMerchant||e._forecastOriginalMerchant||e.merchant),
-  display:asId(e.merchant||'Scheduled payment').slice(0,110)};
+  display:asId(e.merchant||'Predicted payment').slice(0,110)};
 }
 function matchesMortgageIdentity(e,identity){
  if(!identity||asId(e.accountId)!==asId(identity.accountId))return false;
@@ -195,7 +195,7 @@ function categoryCandidates(row,items,accounts,chosen,excluded=[]){
   const key=identity.seriesKey?'s|'+identity.seriesKey:
    identity.ruleId?'r|'+identity.ruleId:'m|'+identity.merchant;
   if(!identity.merchant&&!identity.seriesKey&&!identity.ruleId)continue;
-  if(!grouped.has(key))grouped.set(key,{identity,merchant:e.merchant||'Scheduled item',
+  if(!grouped.has(key))grouped.set(key,{identity,merchant:e.merchant||'Predicted item',
    date:e.date,amount:Number(e.amount),months:new Set(),count:0});
   const g=grouped.get(key);g.months.add(e.date.slice(0,7));g.count++;
  }
@@ -286,7 +286,7 @@ function learnedCoverage({row,chosen,months,accounts,prefs,projection,ledger}){
      (lacksSchedule?' Another identified series has no verified cadence.':''),
     items:described(entries)};
   if(entries.length)return {month:m.key,status:'review',label:'? '+entries.length,
-   detail:'Identified transactions are included, but one or more schedules need more dated examples.',
+   detail:'Identified transactions are included, but one or more predictions need more dated examples.',
    items:described(entries)};
   if(absent)return {month:m.key,status:'unknown',label:'?',
    detail:'An identified transaction is not forecast in this period. The app cannot yet verify its recurrence; check Predictions.',
@@ -333,13 +333,13 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
      label:entries.length?'Other':'?',detail:entries.length?
       'Predicted mortgage exists in '+names.join(', ')+
       ', not in the selected '+chosen.name+' balance. Switch to that account to see its effect.':
-      'No identifiable mortgage is scheduled within this part of the forecast',
+      'No identifiable mortgage is predicted within this part of the forecast',
      items:described(entries.map(e=>({...e,
       merchant:(e.merchant||'Mortgage')+' · '+(accounts.find(a=>asId(a.id)===asId(e.accountId))?.name||'Other account')})))};
    })};
   return {id:'mortgage',title:'Mortgage',hint:'Selected account',
    cells:months.map(m=>({month:m.key,status:'unknown',label:'?',
-    detail:'The app cannot identify a recurring mortgage schedule for this account',
+    detail:'The app cannot identify a recurring mortgage prediction for this account',
     items:[]}))};
  }
  // An edited mortgage can have a new merchant label. Reconcile missing names
@@ -381,7 +381,7 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
      label:entries.length?'Other?':'!',
      detail:entries.length?
       'The mortgage is in Predictions for '+names.join(', ')+
-      ', but bank history or a saved schedule points to '+chosen.name+
+      ', but bank history or a saved prediction points to '+chosen.name+
       '. Check which account is actually paying it; this selected balance does not include the debit.':
       'The expected mortgage is not predicted in any identified paying account during these dates',
      items:described(entries.map(e=>({...e,merchant:
@@ -401,9 +401,9 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
     return {month:m.key,status:entries.length&&evidence?'covered':'unknown',
      label:entries.length?(evidence?'✓ ':'? ')+entries.length:'?',
      detail:entries.length?(evidence?
-      'Recurring mortgage predictions are included in this account balance; confirm the schedule against your lender.':
-      'Mortgage-like predictions are included, but a monthly due schedule has not been verified.'):
-      'No confirmed mortgage schedule is available to check this month',
+      'Recurring mortgage predictions are included in this account balance; confirm the prediction against your lender.':
+      'Mortgage-like predictions are included, but a monthly due prediction has not been verified.'):
+      'No confirmed mortgage prediction is available to check this month',
      items:described(entries)};
    })};
  }
@@ -414,7 +414,7 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
   if(!due.length&&!entries.length)return {month:m.key,status:'na',label:'—',
    detail:'No expected mortgage date falls inside this part of the month',items:[]};
   if(!due.length&&entries.length)return {month:m.key,status:'review',
-   label:entries.length+'?',detail:'Mortgage prediction is present but does not match the expected monthly schedule',
+   label:entries.length+'?',detail:'Mortgage prediction is present but does not match the expected monthly prediction',
    items:described(entries)};
   if(entries.length>due.length)return {month:m.key,status:'review',
    label:entries.length+'?',detail:'More than one possible mortgage withdrawal is predicted for this month. Check for duplicates.',
@@ -449,7 +449,7 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
    label:(guessed?'? ':'✓ ')+entries.length,
    detail:guessed?
     'A withdrawal matching the expected mortgage amount and date is in Predictions, but its merchant identity needs confirmation. It is not missing from the balance.':
-    'Mortgage withdrawal is included in the selected account balance and the expected monthly schedule.',
+    'Mortgage withdrawal is included in the selected account balance and the expected monthly prediction.',
    items:described(entries)};
  })};
 }
@@ -568,8 +568,8 @@ function incomeCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
   const count=expectedSlots.length||(m.full?typical:null);
   if(count===null){
    return {month:m.key,status:items.length?'review':'unknown',label:items.length?'? '+items.length:'?',
-    detail:items.length?'Deposits are forecast but their repeating pay schedule is not verified':
-     'No reliable recurring pay schedule has been established for this partial month',
+    detail:items.length?'Deposits are forecast but their repeating pay prediction is not verified':
+     'No reliable recurring pay prediction has been established for this partial month',
     items:described(items)};
   }
   if(!count)return {month:m.key,status:items.length?'review':'na',
@@ -619,7 +619,7 @@ function otherMajorCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
  }
  if(!due.length)return {id:'other-bills',title:'Other major bills',hint:'Identify recurring payments',
   cells:months.map(m=>({month:m.key,status:'unknown',label:'?',
-   detail:'No repeated major bill schedule has been identified. Select an existing prediction below to teach this category.',items:[]}))};
+   detail:'No repeated major bill prediction has been identified. Select an existing prediction below to teach this category.',items:[]}))};
  const planned=(ledger||[]).filter(e=>futureExpense(e)&&asId(e.accountId)===id&&!mortgage(e.merchant));
  return {id:'other-bills',title:'Other major bills',hint:'Repeating $150+ bills',cells:months.map(m=>{
   const expected=due.filter(x=>dayWithin(m,x.date)),mine=planned.filter(e=>
@@ -680,7 +680,7 @@ function cardCoverage({months,ledger,accounts,chosen,prefs,payments,ready}){
        ' in this account balance.':' in another paying account, not this balance.'),
      items:details};
     return {month:m.key,status:'setup',label:'Manual',
-     detail:'Autopay is off. A statement estimate is not a scheduled checking withdrawal.',
+     detail:'Autopay is off. A statement estimate is not a predicted checking withdrawal.',
      items:[]};
    }
    if(!targets.length&&!relevant.length)return {month:m.key,status:'na',label:'—',
@@ -759,7 +759,7 @@ function render(result){
   }).join('')+'</tr>').join('');
  return '<section class="coverage-section" aria-label="Major payment coverage">'+
   '<div class="coverage-heading"><h2>Major payments</h2><span>'+
-  (result.uncovered?result.uncovered+' missing or unscheduled':result.attention?
+  (result.uncovered?result.uncovered+' missing or unpredicted':result.attention?
    'Some dates need verification':'Planned items shown below')+'</span></div>'+
   '<div class="coverage-scroller" role="region" tabindex="0" aria-label="Payment coverage by calendar month">'+
   '<table class="coverage-table"><thead><tr><th scope="col">Expected</th>'+head+'</tr></thead>'+

@@ -128,7 +128,7 @@ function postedDay(date){
   const incoming=['income','refund'].includes(t.type)||t.type==='transfer'&&t.cashDirection==='in',
    matches=root.HouseholdPlannerTransactions.historicalScheduleMatches(
     t,calendarContext.accounts,calendarContext.prefs?.futureRecurringRules||[]),
-   action=matches.length===1?'View schedule':matches.length>1?'Choose schedule':'Make recurring';
+   action=matches.length===1?'View prediction':matches.length>1?'Choose prediction':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row"><span class="calendar-transaction-name">'+
    esc(t.merchant||'Bank transaction')+
    '<small>'+(t.pending?'Pending':'Posted')+'</small></span>'+
@@ -191,10 +191,10 @@ function paymentBreakdown(){
   '<div class="card-breakdown-section"><div class="card-breakdown-subhead"><strong>Posted card purchases and refunds</strong>'+
    '<strong>'+money(net(posted))+'</strong></div>'+
    (posted.length?posted.map(line).join(''):'<p>No posted card charges in this period.</p>')+'</div>'+
-  '<div class="card-breakdown-section"><div class="card-breakdown-subhead"><strong>Scheduled and recurring card transactions</strong>'+
+  '<div class="card-breakdown-section"><div class="card-breakdown-subhead"><strong>Predicted and recurring card transactions</strong>'+
    '<strong>'+money(net(scheduled))+'</strong></div>'+
    (scheduled.length?scheduled.map(line).join(''):
-    '<p>No additional scheduled card charges before this period closes.</p>')+'</div>'+
+    '<p>No additional predicted card charges before this period closes.</p>')+'</div>'+
   '<div class="card-breakdown-total"><span>Identified net card activity</span><strong>'+money(calculated)+'</strong></div>'+
   (Math.abs(displayed-calculated)>.011?'<p class="card-breakdown-adjustment">'+
    (d.confirmed?'An issued statement amount was entered and takes precedence over transaction totals. ':
@@ -267,7 +267,7 @@ function dayDetail(point,card){
   (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
    gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
     '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
-   '<small>Only confirmed schedules. These items do not change your balance.</small></div>':'')+
+   '<small>Only confirmed predictions. These items do not change your balance.</small></div>':'')+
   (calendarNotice?'<p class="calendar-notice" role="status">'+esc(calendarNotice)+'</p>':'')+
   (calendarEditor?'<button type="button" class="calendar-editor-backdrop" data-calendar-cancel aria-label="Close editor"></button>':'')+
   quickEditor()+
@@ -731,14 +731,14 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '<p>Based on current balances and dated predicted payments repeated for up to 3 years. '+
   'Future pay, bills and card payments may change; everyday unplanned spending is excluded. '+
   'A low estimate far in the future is especially uncertain.</p>'+
-  (emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a schedule →</button>':'')+
+  (emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a prediction →</button>':'')+
   '</section>';
  if(view==='trend')return '<div class="planner-page summary-page trend-page">'+
   '<div class="trend-page-heading"><h2>Balance Trend</h2>'+
   '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Trend account">'+
    options+'</select></label></div>'+
   trendChart+trendTrust+'</div>';
- return calendarHtml+(emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a schedule →</button>':'')+'</div>';
+ return calendarHtml+(emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a prediction →</button>':'')+'</div>';
 }
 function setDay(index){
  const svg=document.querySelector('[data-summary-plot]');
