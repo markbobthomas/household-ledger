@@ -92,10 +92,13 @@ function initialKind(t,account){
   if(dir==='in')return 'refund'; // A returned loan payment is never earned income.
  }
  if(recognizedIncome(t,account))return 'income';
+ // Merchant refunds remain card credits even when Plaid calls them
+ // TRANSFER_IN, or the imported row was initially labeled a transfer.
+ // Bank-matched card settlements were classified above as card_payment.
+ if(dir==='in'&&(refundText.test(name)||t.type==='refund'))return 'refund';
  if(transferText.test(name))return 'internal_transfer';
- if(t.type==='transfer')return 'internal_transfer';
- if(refundText.test(name)&&dir==='in')return 'refund';
- if(isCard&&dir==='in')return 'unclassified_card_credit'; // Not earned household income.
+ if(t.type==='transfer'&&!isCard)return 'internal_transfer';
+ if(isCard&&dir==='in')return 'unclassified_card_credit'; // Reconcile possible payment first.
  if(dir==='in')return 'income';
  if(dir==='out')return 'purchase';
  return 'unclassified';
@@ -147,6 +150,10 @@ function reconcile(state){
   const aTransfer=['card_payment','internal_transfer'].includes(a.accountingKind);
   const bTransfer=['card_payment','internal_transfer'].includes(b.accountingKind);
   if(!aTransfer&&!bTransfer)continue;
+  // A clearly identified merchant refund is a card credit, NOT the incoming
+  // leg of a checking-to-card settlement, even if a coincidentally equal
+  // transfer posted on another account within the matching window.
+  if(a.accountingKind==='refund'||b.accountingKind==='refund')continue;
   const aCard=a.accountType==='credit',bCard=b.accountType==='credit';
   const card=a.accountingKind==='card_payment'||b.accountingKind==='card_payment'||aCard!==bCard&&(aCard||bCard);
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
@@ -201,7 +208,12 @@ function reconcile(state){
     else if(possibilities.length>1){t.reconciliationStatus='needs-review';t.classificationConfidence='Multiple possible refund purchases';}
    }
   }else if(t.accountingKind==='unclassified_card_credit'){
-   t.type='transfer';t.reconciliationStatus='needs-review';
+   // An incoming card credit that did not match a card-settlement pair is
+   // positive card activity, never household income or a debit. Include it
+   // as a refund (lowering statement purchases and card debt) while keeping
+   // its uncertain purpose visible for review.
+   t.type='refund';t.reconciliationStatus='needs-review';
+   t.classificationConfidence='Unlabeled card credit — confirm refund versus payment';
   }else if(t.accountingKind==='purchase'||t.accountingKind==='loan_payment')t.type='expense';
   else if(t.accountingKind==='income')t.type='income';
   else {t.type='transfer';t.reconciliationStatus='needs-review'}
