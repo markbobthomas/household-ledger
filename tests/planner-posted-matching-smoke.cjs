@@ -166,4 +166,50 @@ assert.equal(achSettled.overduePayments.length,0,
  'Confirmed outgoing ACH bank posting resolves the matching rule');
 assert.ok(!achSettled.ledger.some(e=>e.ruleId===achRule.id&&e.date==='2026-10-28'),
  'Posted ACH cannot be debited a second time');
+
+// Historical regression (first visible in the old PR #208 rollover flow):
+// opening a saved monthly prediction after its due date shows NEXT MONTH in
+// the editor. Saving only its amount/date matching windows must NOT change
+// its original recurrence anchor or erase the unposted prior occurrence.
+const editing={predictions:{futureRecurringRules:[]}};
+const savedHousing=T.defineRecurring(editing,{date:'2026-09-26',
+ merchant:'Fictional Rent ACH',amount:1600,type:'expense',
+ accountId:'checking',frequency:'monthly',separateSchedule:'on',
+ category:'Housing'},accounts,'2026-09-01');
+const oldAnchor=savedHousing.anchorDate;
+assert.equal(T.recurrenceDates(savedHousing,overdueAsOf,'2027-01-01')[0],
+ '2026-11-26','Edit form displays the first future recurrence after the missed October debit');
+const editedHousing=T.defineRecurring(editing,{date:'2026-11-26',
+ merchant:'Fictional Rent ACH',amount:1600,type:'expense',
+ accountId:'checking',frequency:'monthly',matchDaysBefore:'4',
+ matchDaysAfter:'9',matchAmountMin:'1450',matchAmountMax:'1900',
+ category:'Housing'},accounts,overdueAsOf,{
+ kind:'event',recurringRuleId:savedHousing.id,sourceAccountId:'checking',
+ originalMerchant:'Fictional Rent ACH',originalType:'expense',
+ sourceAmount:1600,date:oldAnchor});
+assert.equal(editedHousing.anchorDate,oldAnchor,
+ 'Editing bank-match windows cannot silently reset the saved recurrence anchor');
+assert.equal(editedHousing.matchDaysBefore,4);
+assert.equal(editedHousing.matchDaysAfter,9);
+const editedMissed=Core.materialize(overdueSnapshot,[],editing.predictions,T,null,65,options);
+assert.equal(editedMissed.overduePayments.length,1,
+ 'The overdue October installment remains discoverable after editing matching windows');
+assert.equal(editedMissed.overduePayments[0].expectedDate,'2026-10-26');
+assert.deepEqual(editedMissed.ledger.filter(e=>e.ruleId===savedHousing.id)
+ .map(e=>e.date).slice(0,2),['2026-10-28','2026-11-26']);
+const editedPaid=Core.materialize(overdueSnapshot,[
+ post('fictional-rent-post','Fictional Rent ACH',1580,'2026-10-27')
+],editing.predictions,T,null,65,options);
+assert.equal(editedPaid.overduePayments.length,0,
+ 'A uniquely matched posted installment clears the overdue alert without a second debit');
+assert.ok(!editedPaid.ledger.some(e=>e.ruleId===savedHousing.id&&e.date==='2026-10-28'));
+const deliberatelyChanged=T.defineRecurring(editing,{date:'2026-11-30',
+ merchant:'Fictional Rent ACH',amount:1600,type:'expense',
+ accountId:'checking',frequency:'monthly',category:'Housing'},
+ accounts,overdueAsOf,{
+ kind:'event',recurringRuleId:savedHousing.id,sourceAccountId:'checking',
+ originalMerchant:'Fictional Rent ACH',originalType:'expense',
+ sourceAmount:1600,date:oldAnchor});
+assert.equal(deliberatelyChanged.anchorDate,'2026-11-30',
+ 'Explicitly changing the recurrence day still updates the future prediction');
 console.log('PASS posted matching: explicit bank ID, renamed merchant, variable amount, ambiguous independent streams, chosen schedule, immutable bank facts, month boundary and reconciliation');

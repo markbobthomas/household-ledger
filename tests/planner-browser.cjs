@@ -2528,6 +2528,58 @@ const {chromium,webkit}=require('playwright');
   await connectionPage.locator('#repair-alert').waitFor({state:'hidden'});
   assert.deepEqual(connectErrors,[]);
   await connectionPage.close();
+  // Browser-integrated Real-mode reproduction of the original PR #208 behavior.
+  // Opening a saved recurring bill shows NEXT month; changing only posting
+  // tolerances must not erase the missed installment due yesterday.
+  const dueRule={id:'ui-unposted-anchor',kind:'event',frequency:'monthly',
+   anchorDate:'2026-09-18',accountId:'checking-real',type:'expense',
+   amount:250,merchant:'Fictional Rent ACH',scheduleLabel:'Fictional Rent ACH',
+   originalAccountId:'checking-real',originalMerchant:'Fictional Rent ACH',
+   originalType:'expense',sourceAnchorDate:'2026-09-18',
+   matchNames:['fictional rent ach'],exampleIds:[]};
+  realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
+   futureRecurringRules:[dueRule]};
+  await go('summary');
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await go('reviews');
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Rent ACH'}).count(),1,
+   'Missed October installment appears in Real Review before editing');
+  await go('schedules');
+  const overdueCard=page.locator('[data-schedule-card="ui-unposted-anchor"]');
+  await overdueCard.locator('[data-schedule-edit]').click();
+  const overdueForm=overdueCard.locator('[data-schedule-edit-form]');
+  assert.equal(await overdueForm.locator('[name=date]').inputValue(),'2026-11-18',
+   'Editor shows the next installment, not the original recurrence anchor');
+  const advanced=overdueForm.locator('[data-schedule-advanced]');
+  if(!await advanced.evaluate(el=>el.open))await advanced.locator('summary').click();
+  await overdueForm.locator('[name=matchDaysAfter]').fill('9');
+  await overdueForm.locator('button[type=submit]').click();
+  await overdueCard.locator('.inline-save-result').getByText(/Saved/).waitFor();
+  await go('reviews');
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Rent ACH'}).count(),1,
+   'Saving matching bounds keeps the October debit in Real Review');
+  const savedWindow=[...writes].reverse().find(x=>
+   x.predictions?.futureRecurringRules?.some(rule=>rule.id==='ui-unposted-anchor'&&
+    rule.anchorDate==='2026-09-18'&&rule.matchDaysAfter===9));
+  assert.ok(savedWindow,
+   'Private saved forecast retains the original anchor when posting bounds change');
+  // Simulate an actual bank posting on the next refresh: reconcile only once.
+  realPayload.adjustments.predictions=savedWindow.predictions;
+  realPayload.transactions.push({id:'ui-fictional-rent-posted',accountId:'checking-real',
+   date:'2026-10-19',name:'Fictional Rent ACH',merchant:'Fictional Rent ACH',
+   amount:250,pending:false,category:{primary:'RENT_AND_UTILITIES',
+    detailed:'RENT_AND_UTILITIES_RENT',confidence_level:'HIGH'}});
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await go('reviews');
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Rent ACH'}).count(),0,
+   'Bank-posted October installment clears the overdue Review item after refresh');
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: three-year headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
