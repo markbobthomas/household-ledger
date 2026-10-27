@@ -1131,7 +1131,12 @@ function cardStatementPeriod(accountId,when){
   state().predictions?.paymentRules?.[accountId],when);
 }
 function cardActivityCents(row){
- if(row.pending||!['expense','refund'].includes(row.type))return 0;
+ // The History statement total is purchases minus merchant refunds only.
+ // A paired card payment is never a new purchase, even if an earlier
+ // provisional import called that card credit a refund.
+ if(row.pending||row.pairedTransactionId||
+  ['card_payment','internal_transfer'].includes(row.accountingKind)||
+  !['expense','refund'].includes(row.type))return 0;
  const cents=Math.round(Math.abs(Number(row.amount))*100);
  if(!Number.isFinite(cents))return 0;
  return row.type==='refund'?-cents:cents;
@@ -1141,7 +1146,7 @@ function statementHeading(period,total,count,kind){
   '" data-statement-kind="'+escapeHTML(kind)+'">'+
   '<strong>Statement closes '+escapeHTML(dateLong(period.end))+'</strong>'+
   '<small>'+escapeHTML(dayLabel(period.start))+' – '+escapeHTML(dayLabel(period.end))+
-  ' · '+count+' '+(kind==='repeating'?'repeating charge':'shown bank transaction')+
+  ' · '+count+' '+(kind==='repeating'?'repeating charge':'posted charge/refund')+
   (count===1?'':'s')+'</small>'+
   '<span class="ledger-statement-total">Net charges '+cash(total/100)+'</span></div>';
 }
@@ -1551,7 +1556,10 @@ function historyPage(bundle,s){
    b.period.end.localeCompare(a.period.end)).map(({period,entries})=>
    '<section class="ledger-statement-group" data-history-statement-group="'+escapeHTML(period.end)+'">'+
    statementHeading(period,entries.reduce((sum,e)=>sum+cardActivityCents(e.row),0),
-    entries.length,'history')+entries.map(e=>e.html).join('')+'</section>').join('')+
+    entries.filter(e=>!e.row.pending&&!e.row.pairedTransactionId&&
+     !['card_payment','internal_transfer'].includes(e.row.accountingKind)&&
+     ['expense','refund'].includes(e.row.type)).length,'history')+
+   entries.map(e=>e.html).join('')+'</section>').join('')+
    ungrouped.join('');
  })();
  return '<div class="planner-page history-page">'+
