@@ -1709,7 +1709,9 @@ function repeatedRecommendations(bundle,s){
  // A legacy estimate may remain visible after Ignore but is no longer an
  // undecided action; count its decision only while still pending.
 function reviewQueue(bundle,s){
- const recommendations=repeatedRecommendations(bundle,s);
+ const recommendations=repeatedRecommendations(bundle,s),
+  overdue=(bundle?.overduePayments||[]).filter(item=>
+   !state().predictions?.futureTransactionEdits?.[item.key]?.skipped);
  const migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
   legacySeries=migration.approvedOnly?[]:migration.legacySeries||[],
   findOwner=auto=>recommendations.find(r=>(r.activeLegacyStreams||[]).includes(auto.seriesKey)),
@@ -1717,8 +1719,8 @@ function reviewQueue(bundle,s){
   decisionsNeeded=legacyItems.filter(({owner})=>!owner||owner.status==='pending').length,
   pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
   ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
- return {recommendations,legacyItems,decisionsNeeded,pending,ignored,
-  outstanding:decisionsNeeded+pending.length};
+ return {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,
+  outstanding:decisionsNeeded+pending.length+overdue.length};
 }
 function updateReviewTabCount(queue){
  const badge=document.querySelector('.planner-nav-primary [data-review-tab-count]');
@@ -1729,7 +1731,7 @@ function updateReviewTabCount(queue){
 }
 function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  // Reuse the count's exact queue, including distinct unsaved legacy streams.
- const {recommendations,legacyItems,decisionsNeeded,pending,ignored}=queue;
+ const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue}=queue;
  lastRecommendedRepeating=recommendations;
  const
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
@@ -1791,6 +1793,25 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  };
  return '<div class="planner-page reviews-page">'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
+  (overdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
+   '<div class="section-title"><h2>Scheduled payments not yet posted</h2>'+
+   '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
+   '<p class="lead">These withdrawals were expected but have no confirmed matching bank payment. '+
+   'Each is still reserved once in the forecast on the next business day; '+
+   'your actual bank balance is unchanged. Bank processing can take a few days.</p>'+
+   overdue.map(item=>'<form class="overdue-review-row" data-overdue-date="'+
+    escapeHTML(item.key)+'">'+
+    '<strong>'+escapeHTML(item.merchant)+' · '+cash(item.amount)+'</strong>'+
+    '<small>Expected '+escapeHTML(dayLabel(item.expectedDate))+
+     ' · Not confirmed by bank</small>'+
+    '<label>Move this payment to <input type="date" name="date" required min="'+
+     escapeHTML(shiftDay(s.asOf,1))+'" max="'+
+     escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+
+     escapeHTML(item.proposedDate)+'"></label>'+
+    '<button type="submit" class="btn primary">Move just this payment</button>'+
+    '<small>Does not change future mortgage dates or bank transactions.</small>'+
+    '</form>').join('')+
+   '</section>':'')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
     '<div class="section-title"><h2>Automatic estimates still in forecast</h2>'+
@@ -2949,6 +2970,33 @@ document.addEventListener('change',e=>{
  if(form)form.dataset.quickKind=e.target.value;
 });
 
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest('[data-overdue-date]');
+ if(!form)return;
+ e.preventDefault();
+ const key=form.dataset.overdueDate,button=form.querySelector('button[type="submit"]'),
+  s=snapshot(),item=forecastFor(s)?.overduePayments?.find(x=>x.key===key);
+ if(!item){setNotice('This payment changed or posted. Refresh Needs review.');return}
+ const target=form.querySelector('[name=date]')?.value||'';
+ if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(target)||target<=s.asOf||
+  target>shiftDay(s.asOf,horizon)||
+  [0,6].includes(new Date(target+'T12:00:00Z').getUTCDay())){
+  setNotice('Choose a future business day for this payment.');return;
+ }
+ if(button)button.disabled=true;
+ try{
+  await commitForecastChange(()=>window.HouseholdPlannerTransactions.saveEdit(
+   state(),key,{date:target,accountId:item.accountId,
+    merchant:item.merchant,type:'expense',amount:item.amount},
+   activeAccounts(s),s.asOf));
+  reviewNotice='Moved only the outstanding payment to '+dayLabel(target)+
+   '. The repeating schedule and bank transactions were not changed.';
+  render();
+ }catch(error){
+  if(button)button.disabled=false;
+  setNotice('Could not change this payment: '+String(error.message||error));
+ }
+});
 document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-future-edit-form],[data-future-new-form],[data-warning-form]');
  if(!form)return;
