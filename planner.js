@@ -1759,7 +1759,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
    String(recurringDraft?.reviewLegacyKey||'')===String(legacyKey);
  const controls=(r,legacyKey='')=>!r?
-  '<span class="review-legacy-missing">Identify this payment in Transaction History</span>':
+  '<span class="review-legacy-missing">Identify this payment in Transactions</span>':
   r.status==='ignored'?
    '<button type="button" class="btn" data-unignore-recommendation="'+escapeHTML(r.key)+'">Undo ignore</button>':
    '<button type="button" class="btn" data-ignore-recommendation="'+escapeHTML(r.key)+'">Ignore</button>';
@@ -2405,7 +2405,7 @@ document.addEventListener('click',async e=>{
    !window.confirm('Discard unsaved prediction changes?'))return;
   const row=lastHistoryRows.find(t=>String(t.id)===id&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
-  if(!row){setNotice('This bank record changed. Refresh Transaction History.');return}
+  if(!row){setNotice('This bank record changed. Refresh Transactions.');return}
   const matches=window.HouseholdPlannerTransactions.historicalScheduleMatches(
    row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
   historyExpandedId=id;historyExpandedAccount=account;
