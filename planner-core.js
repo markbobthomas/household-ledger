@@ -322,11 +322,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    mostRecent.set(key,e);
  }
  for(const [id,e] of mostRecent){
-  const rule=ruleMap.get(id),original=expectedPosting(e),
-   tolerance=rule.frequency==='weekly'?2:7;
-  const posted=(postedByRule.get(id)||[]).some(t=>
-   t.date>=add(original,-tolerance)&&t.date<=asOf&&
-   Math.abs(diff(t.date,original))<=tolerance);
+  const rule=ruleMap.get(id),original=expectedPosting(e);
+  const posted=(postedByRule.get(id)||[]).some(t=>t.date<=asOf&&
+   tools.postedWithinMatchWindow(rule,t,original,e.amount,
+    (rule.exampleIds||[]).some(exampleId=>String(exampleId)===String(t.id))));
   if(posted)continue;
   const edit=edits[eventKey(tools,e)],
    chosen=edit&&valid(edit.date)&&edit.date>asOf?edit.date:nextPosting,
