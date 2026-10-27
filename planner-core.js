@@ -311,8 +311,11 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(e.type!=='expense'||e.source!=='user-recurring'||
    !cashIds.has(String(e.accountId))||!valid(e.date)||
    edits[eventKey(tools,e)]?.skipped)return false;
-  const expected=expectedPosting(e);
-  return expected<=asOf&&expected>=add(asOf,-7);
+  const expected=expectedPosting(e),
+   matching=tools.matchWindow(ruleMap.get(String(e.ruleId))||{});
+  // A schedule with a deliberately longer lateness allowance stays reserved
+  // throughout its user-defined matching window (maximum 14 days).
+  return expected<=asOf&&expected>=add(asOf,-Math.max(7,matching.after));
  });
  const mostRecent=new Map();
  for(const e of recent){
