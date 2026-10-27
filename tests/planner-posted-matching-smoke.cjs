@@ -104,4 +104,66 @@ assert.deepEqual(postedDue.ledger.filter(e=>e.ruleId===overdueRule.id).map(e=>e.
  ['2026-11-26','2026-12-25'],
  'Later regular monthly recurrences remain anchored across two calendar months');
 assert.equal(sourcePosted.date,'2026-10-27','Actual bank transaction is read-only');
+
+// The live app must not silently discard a payment just because TODAY is its
+// date, or because an explicitly saved one-time withdrawal became yesterday.
+const todayRule={...overdueRule,anchorDate:overdueAsOf,id:'housing-due-today'};
+const dueNow=Core.materialize(overdueSnapshot,[],
+ {futureRecurringRules:[todayRule]},T,null,65,options);
+assert.equal(dueNow.overduePayments.length,1,
+ 'A payment due today with no posted bank evidence still requires Review');
+assert.ok(dueNow.ledger.some(e=>e.ruleId===todayRule.id&&e.date==='2026-10-28'),
+ 'The unposted same-day debit remains reserved from the bank-reported opening balance');
+const oneOff={id:'future-add|fictional-due',date:'2026-10-26',type:'expense',
+ accountId:'checking',merchant:'Fictional Insurance Bill',amount:250};
+const onePrefs={futureTransactionAdds:[oneOff]};
+const oneMissed=Core.materialize(overdueSnapshot,[],onePrefs,T,null,65,options);
+assert.equal(oneMissed.overduePayments.length,1,
+ 'Unposted one-time expense enters Review after its forecast date');
+assert.equal(oneMissed.ledger.filter(e=>e.id===oneOff.id).length,1,
+ 'Missed one-time expense is carried exactly once');
+assert.equal(oneMissed.ledger.find(e=>e.id===oneOff.id).date,'2026-10-28');
+const pendingOne=Core.materialize(overdueSnapshot,[
+ {...post('pending-single','Fictional Insurance Bill',250,'2026-10-26'),pending:true}
+],onePrefs,T,null,65,options);
+assert.equal(pendingOne.overduePayments.length,1,
+ 'Pending one-time payment is not incorrectly counted as posted');
+const paidOne=Core.materialize(overdueSnapshot,[
+ post('settled-single','Fictional Insurance Bill',250,'2026-10-27')
+],onePrefs,T,null,65,options);
+assert.equal(paidOne.overduePayments.length,0);
+assert.ok(!paidOne.ledger.some(e=>e.id===oneOff.id),
+ 'A confirmed matching posted payment resolves one-time debt without a second withdrawal');
+const movedOne=Core.materialize(overdueSnapshot,[],{
+ futureTransactionAdds:[oneOff],
+ futureTransactionEdits:{[T.keyEvent(oneOff.id,'checking')]:{date:'2026-11-03'}}
+},T,null,65,options);
+assert.equal(movedOne.overduePayments.length,0,
+ 'User-confirmed future postponement does not produce an overdue alert');
+assert.deepEqual(movedOne.ledger.filter(e=>e.id===oneOff.id).map(e=>e.date),
+ ['2026-11-03'],'A rescheduled one-time debit remains in future forecast');
+const competing={futureTransactionAdds:[
+ oneOff,{...oneOff,id:'future-add|independent-due'}]};
+const ambiguousOne=Core.materialize(overdueSnapshot,[
+ post('single-settlement','Fictional Insurance Bill',250,'2026-10-27')
+],competing,T,null,65,options);
+assert.equal(ambiguousOne.overduePayments.length,2,
+ 'One matching bank debit must not silently clear two independent overdue payments');
+const achRule={id:'ach-out',kind:'event',accountId:'checking',type:'transfer',
+ cashDirection:'out',anchorDate:'2026-10-26',frequency:'monthly',amount:115,
+ merchant:'Fictional External ACH',scheduleLabel:'Fictional External ACH'};
+const achDue=Core.materialize(overdueSnapshot,[],
+ {futureRecurringRules:[achRule]},T,null,65,options);
+assert.equal(achDue.overduePayments.length,1,
+ 'A single-account outgoing ACH recurring prediction remains reviewable');
+assert.ok(achDue.ledger.some(e=>e.ruleId===achRule.id&&e.date==='2026-10-28'&&e.type==='expense'),
+ 'Outgoing ACH is a real predicted checking debit, not an omitted transfer');
+const postedAch={...post('ach-posted','Fictional External ACH',115,'2026-10-27'),
+ type:'transfer',cashDirection:'out'};
+const achSettled=Core.materialize(overdueSnapshot,[postedAch],
+ {futureRecurringRules:[achRule]},T,null,65,options);
+assert.equal(achSettled.overduePayments.length,0,
+ 'Confirmed outgoing ACH bank posting resolves the matching rule');
+assert.ok(!achSettled.ledger.some(e=>e.ruleId===achRule.id&&e.date==='2026-10-28'),
+ 'Posted ACH cannot be debited a second time');
 console.log('PASS posted matching: explicit bank ID, renamed merchant, variable amount, ambiguous independent streams, chosen schedule, immutable bank facts, month boundary and reconciliation');
