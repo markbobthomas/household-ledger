@@ -302,11 +302,15 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(!postedByRule.has(key))postedByRule.set(key,[]);
   postedByRule.get(key).push(t);
  }
- const recent=ownerEntries.filter(e=>
-  e.type==='expense'&&e.source==='user-recurring'&&
-  cashIds.has(String(e.accountId))&&valid(e.date)&&
-  e.date<=asOf&&e.date>=add(asOf,-7)&&
-  !(edits[eventKey(tools,e)]?.skipped));
+ const expectedPosting=e=>options.weekendPolicy==='friday'?
+  tools.forecastBusinessDate(e.date,add(e.date,-7)):e.date;
+ const recent=ownerEntries.filter(e=>{
+  if(e.type!=='expense'||e.source!=='user-recurring'||
+   !cashIds.has(String(e.accountId))||!valid(e.date)||
+   edits[eventKey(tools,e)]?.skipped)return false;
+  const expected=expectedPosting(e);
+  return expected<=asOf&&expected>=add(asOf,-7);
+ });
  const mostRecent=new Map();
  for(const e of recent){
   const key=String(e.ruleId||'');
@@ -315,7 +319,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    mostRecent.set(key,e);
  }
  for(const [id,e] of mostRecent){
-  const rule=ruleMap.get(id),original=e.date,
+  const rule=ruleMap.get(id),original=expectedPosting(e),
    tolerance=rule.frequency==='weekly'?2:7;
   const posted=(postedByRule.get(id)||[]).some(t=>
    t.date>=add(original,-tolerance)&&t.date<=asOf&&
@@ -328,7 +332,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   // An explicit date change affects only this occurrence, not the schedule.
   // A previously postponed date that passed without posting is carried again.
   seen(unpaid);
-  if(!edit||!valid(edit.date)||edit.date<=asOf)
+  if(original<asOf&&(!edit||!valid(edit.date)||edit.date<=asOf))
    overduePayments.push({key:eventKey(tools,e),id:e.id,ruleId:id,
     accountId:e.accountId,merchant:e.merchant,amount:Number(e.amount),
     expectedDate:original,proposedDate:nextPosting,
