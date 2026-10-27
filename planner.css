@@ -3092,3 +3092,8 @@ body{background:#edf0f2;color:var(--ink)}
   grid-column:2;grid-row:3;
  }
 }
+
+/* An actionable review count colors the entire tab label, even when selected. */
+.planner-nav-primary .tab-link.has-review-items,
+.planner-nav-primary .tab-link.has-review-items.active,
+.planner-nav-primary .tab-link.has-review-items:hover{color:#c62828!important}
