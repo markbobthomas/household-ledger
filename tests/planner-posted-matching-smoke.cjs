@@ -100,7 +100,8 @@ const postedDue=Core.materialize(overdueSnapshot,[sourcePosted],overduePrefs,T,n
 assert.equal(postedDue.overduePayments.length,0,'Refreshed posted bank data clears the alert');
 assert.ok(!postedDue.ledger.some(e=>e.ruleId===overdueRule.id&&e.date==='2026-10-28'),
  'The already-posted occurrence cannot debit the forecast again');
-assert.equal(postedDue.ledger.filter(e=>e.ruleId===overdueRule.id).length,1,
- 'Later regular monthly recurrence remains anchored');
+assert.deepEqual(postedDue.ledger.filter(e=>e.ruleId===overdueRule.id).map(e=>e.date),
+ ['2026-11-26','2026-12-28'],
+ 'Later regular monthly recurrences remain anchored across two calendar months');
 assert.equal(sourcePosted.date,'2026-10-27','Actual bank transaction is read-only');
 console.log('PASS posted matching: explicit bank ID, renamed merchant, variable amount, ambiguous independent streams, chosen schedule, immutable bank facts, month boundary and reconciliation');
