@@ -163,7 +163,8 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   if(blocked||isExcludedPattern(prefs,g.accountId,g.kind,g.merchant))continue;
   const owners=rules.filter(r=>r.kind==='event'&&
    String(r.originalAccountId||r.accountId)===g.accountId&&
-   (!r.type||r.type===g.kind)&&
+   (!r.type||r.type===g.kind||r.type==='transfer'&&
+    (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':null)===g.kind)&&
    (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(g.merchant)));
   // A confirmed recurring rule OWNS the entire historical stream. Different
   // amounts are normal for utilities and payroll and must not create another
@@ -259,7 +260,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   ids.add(e.id);entries.push(e)};
  const ownerFor=(e)=>rules.some(r=>r.kind==='event'&&
   String(r.originalAccountId||r.accountId)===String(e.accountId)&&
-  (!r.type||r.type===e.type)&&
+  (!r.type||r.type===e.type||r.type==='transfer'&&
+   (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':null)===e.type)&&
   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(
    e._forecastOriginalMerchant||e.merchant))&&
   (r.frequency!=='every-4-weeks'||!e.date||phaseMatch(r.anchorDate,e.date)));
@@ -299,8 +301,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    .map(a=>String(a.id))),
   postedByRule=new Map(),ruleMap=new Map(rules.map(r=>[String(r.id),r]));
  const recent=ownerEntries.filter(e=>{
-  if(e.type!=='expense'||e.source!=='user-recurring'||
-   !cashIds.has(String(e.accountId))||!valid(e.date)||
+  // Single-account outgoing transfers are also saved cash withdrawals.
+  if(!(e.type==='expense'||e.type==='transfer'&&e.cashDirection==='out')||
+   e.source!=='user-recurring'||!cashIds.has(String(e.accountId))||!valid(e.date)||
    edits[eventKey(tools,e)]?.skipped)return false;
   const expected=expectedPosting(e),
    matching=tools.matchWindow(ruleMap.get(String(e.ruleId))||{});
@@ -343,11 +346,55 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   // An explicit date change affects only this occurrence, not the schedule.
   // A previously postponed date that passed without posting is carried again.
   seen(unpaid);
-  if(original<asOf&&(!edit||!valid(edit.date)||edit.date<=asOf))
+  if(original<=asOf&&(!edit||!valid(edit.date)||edit.date<=asOf))
    overduePayments.push({key:eventKey(tools,e),id:e.id,ruleId:id,
     accountId:e.accountId,merchant:e.merchant,amount:Number(e.amount),
     expectedDate:original,proposedDate:nextPosting,
     dueDate:chosen});
+ }
+
+ // Saved one-time withdrawals are promises against the bank balance, too.
+ // Previously they silently vanished when the date passed. Postings confirm
+ // settlement only when the bank evidence is unambiguous; a pending bank item
+ // never confirms it. A confirmed rule's posting cannot pay an added one-off.
+ const postedUsedByRules=new Set([...postedByRule.values()].flat().map(t=>String(t.id)));
+ const overdueSingles=[],possiblePosted=new Map();
+ for(const e of extras){
+  if(e.type!=='expense'||!valid(e.date)||rules.some(r=>r.sourceAddedId===e.id))continue;
+  const key=eventKey(tools,e),edit=edits[key];
+  if(edit?.skipped)continue;
+  const accountId=String(edit?.accountId||e.accountId);
+  if(!cashIds.has(accountId))continue;
+  const due=valid(edit?.date)?edit.date:e.date;
+  if(due>asOf){
+   // The source one-off is past, but this occurrence was explicitly moved.
+   if(e.date<=asOf)seen({...e,...edit,source:'manual',_forecastExtra:true});
+   continue;
+  }
+  // Retain recent cash obligations; do not bring back years-old stale entries.
+  if(due<add(asOf,-35))continue;
+  const expected=expectedPosting({...e,date:due}),name=norm(e.merchant),
+   amount=Number(edit?.amount??e.amount);
+  const candidates=rows.filter(t=>!t.pending&&valid(t.date)&&t.date<=asOf&&
+   Number(t.amount)>0&&
+   String(tools.accountRef(t.accountId||t.account,accounts))===accountId&&
+   tools.bankDirection(t)==='expense'&&norm(t.merchant||t.name)===name&&
+   Math.abs(diff(t.date,expected))<=6&&
+   Math.abs(Number(t.amount)-amount)<=Math.max(2,amount*.05)&&
+   !postedUsedByRules.has(String(t.id)));
+  overdueSingles.push({e,edit,key,accountId,expected,amount,candidates});
+  for(const t of candidates)
+   possiblePosted.set(String(t.id),(possiblePosted.get(String(t.id))||0)+1);
+ }
+ for(const {e,edit,key,accountId,expected,amount,candidates} of overdueSingles){
+  // A bank posting can't silently settle two independently saved payments.
+  const settled=candidates.length===1&&possiblePosted.get(String(candidates[0].id))===1;
+  if(settled){postedUsedByRules.add(String(candidates[0].id));continue;}
+  seen({...e,...edit,date:nextPosting,source:'manual',_forecastExtra:true,
+   _unpostedEstimated:true,_overdueFrom:expected});
+  overduePayments.push({key,id:e.id,ruleId:null,accountId,
+   merchant:edit?.merchant||e.merchant,amount,
+   expectedDate:expected,proposedDate:nextPosting,dueDate:nextPosting});
  }
  for(const event of approvedOnly?[]:detected.automatic){
   if(!configuredCard(event.accountId)||

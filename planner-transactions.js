@@ -448,7 +448,8 @@ function historicalScheduleMatches(row,accounts,rules=[]){
    String(r.originalAccountId||r.accountId||r.fromAccountId)===account&&
    (kind==='movement'?Boolean(row.pairedTransactionId)&&
     (!row.toAccountId||String(r.toAccountId)===String(row.toAccountId)):
-    r.type===type));
+    (r.type===type||r.kind==='event'&&r.type==='transfer'&&
+     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':null)===type)));
  if(!name)return [];
  const named=eligible.filter(r=>
   [r.originalMerchant,r.merchant,...(r.matchNames||[])]
@@ -936,7 +937,9 @@ function postedCoverage(generated,rules,records,accounts,asOf){
     date=String(effective.date||effective.anchorDate||item.anchorDate||''),
     account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
    if(!validDate(date)||date<=asOf||
-    !sameDirection(t,kind==='event'?r.type:'transfer')||
+    !sameDirection(t,kind==='event'&&r.type==='transfer'?
+     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':r.type):
+     kind==='event'?r.type:'transfer')||
     accountRef(t.accountId||t.account,accounts)!==account)continue;
    const explicit=linked.some(x=>String(x.id)===String(r.id));
    // Posted bank evidence is accepted only inside THIS prediction's date
