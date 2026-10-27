@@ -298,15 +298,6 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    String(a.accountType||a.type||'').toLowerCase()!=='credit')
    .map(a=>String(a.id))),
   postedByRule=new Map(),ruleMap=new Map(rules.map(r=>[String(r.id),r]));
- for(const t of rows){
-  if(t.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0))continue;
-  const matches=tools.historicalScheduleMatches?.(t,accounts,rules)||[];
-  // Ambiguous same-payee streams cannot automatically clear one another.
-  if(matches.length!==1)continue;
-  const key=String(matches[0].id);
-  if(!postedByRule.has(key))postedByRule.set(key,[]);
-  postedByRule.get(key).push(t);
- }
  const recent=ownerEntries.filter(e=>{
   if(e.type!=='expense'||e.source!=='user-recurring'||
    !cashIds.has(String(e.accountId))||!valid(e.date)||
@@ -324,12 +315,27 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(!mostRecent.has(key)||mostRecent.get(key).date<e.date)
    mostRecent.set(key,e);
  }
+ // Resolve each actual bank posting to at most one candidate occurrence.
+ // Separate same-payee schedules can be distinguished by their own amount or
+ // date limits; overlapping windows stay unresolved rather than dropping
+ // multiple pending obligations from the projection.
+ for(const t of rows){
+  if(t.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0))continue;
+  const candidates=(tools.historicalScheduleMatches?.(t,accounts,rules)||[])
+   .filter(rule=>{
+    const occurrence=mostRecent.get(String(rule.id));
+    return occurrence&&tools.postedWithinMatchWindow(
+     rule,t,expectedPosting(occurrence),occurrence.amount,
+     (rule.exampleIds||[]).some(id=>String(id)===String(t.id)));
+   });
+  if(candidates.length!==1)continue;
+  const id=String(candidates[0].id);
+  if(!postedByRule.has(id))postedByRule.set(id,[]);
+  postedByRule.get(id).push(t);
+ }
  for(const [id,e] of mostRecent){
   const rule=ruleMap.get(id),original=expectedPosting(e);
-  const posted=(postedByRule.get(id)||[]).some(t=>t.date<=asOf&&
-   tools.postedWithinMatchWindow(rule,t,original,e.amount,
-    (rule.exampleIds||[]).some(exampleId=>String(exampleId)===String(t.id))));
-  if(posted)continue;
+  if((postedByRule.get(id)||[]).length)continue;
   const edit=edits[eventKey(tools,e)],
    chosen=edit&&valid(edit.date)&&edit.date>asOf?edit.date:nextPosting,
    unpaid={...e,date:chosen,_overdueFrom:original,
