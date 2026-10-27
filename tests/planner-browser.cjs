@@ -751,7 +751,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await repeatingSection.locator('[data-recommendation-status="scheduled"]').count(),0,
     'Saved schedules stay off the Review queue');
    assert.equal(await repeatingSection.locator('[data-review-candidate]').count(),0,
-    'Ordinary bank transactions are not independently replicated on Needs review');
+    'Ordinary bank transactions are not independently replicated on Review');
    const suggestionKey=await suggestion.getAttribute('data-recommended-repeat'),
     trackedRecommendation=page.locator('[data-recommended-repeat="'+suggestionKey+'"]');
    const rulesBeforeIgnore=await page.evaluate(()=>JSON.parse(
@@ -1493,7 +1493,7 @@ const {chromium,webkit}=require('playwright');
       JSON.stringify({bank:bankSearch,repeating:repeatingSearch,mobile}));
    }
    assert.ok(Math.abs(repeatingCategoryField.y-bankCategoryField.y)<=2,
-    'Category selectors align vertically between Scheduled and Transaction History');
+    'Category selectors align vertically between Predictions and Transactions');
    assert.ok(Math.abs(bankCategoryField.x-repeatingCategoryField.x)<=2,
     'Category selectors share the same toolbar column on desktop and iPhone');
    assert.ok(Math.abs(repeatingDollar.x-bankDollar.x)<=1,
@@ -1533,9 +1533,9 @@ const {chromium,webkit}=require('playwright');
    const scheduleCategoryTitle=await page.locator('.schedule-page label:has([data-schedule-category-filter])')
     .evaluate(el=>el.firstChild.textContent.trim());
    assert.equal(scheduleSortTitle,'Sort by',
-    'Scheduled sort is labeled Sort by, consistent with Transaction History');
+    'Predictions sort is labeled Sort by, consistent with Transactions');
    assert.equal(scheduleCategoryTitle,'Category',
-    'Scheduled category dropdown is labeled Category, consistent with Transaction History');
+    'Predictions category dropdown is labeled Category, consistent with Transactions');
    assert.equal(await page.locator('[data-schedule-category-filter]').count(),1);
    const values=async()=>page.locator('.schedule-row-amount strong').evaluateAll(nodes=>
     nodes.map(node=>Number((node.textContent||'').replace(/[^0-9.]/g,''))));
@@ -2347,7 +2347,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('.transaction-detail').count(),0);
   assert.equal(await itemized.isVisible(),true);
   assert.match(await itemized.innerText(),/Actual posted card transactions/);
-  assert.match(await itemized.innerText(),/Scheduled\/recurring card transactions/);
+  assert.match(await itemized.innerText(),/Predicted\/recurring card transactions/);
   assert.match(await itemized.innerText(),/Identifiable activity/);
   assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
   assert.equal(await itemized.locator('.future-edit-form').count(),1);
