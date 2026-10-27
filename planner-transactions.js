@@ -323,7 +323,7 @@ function matchWindow(rule){
   customDays:before!==null||after!==null,
   min:amountValue('matchAmountMin'),max:amountValue('matchAmountMax')};
 }
-function postedWithinMatchWindow(rule,bank,date,amount,explicit=false){
+function postedWithinMatchWindow(rule,bank,date,amount,explicit=false,overdue=false){
  if(!validDate(date)||!validDate(bank?.date)||!(Number(bank?.amount)>0))
   return false;
  const window=matchWindow(rule),actual=Number(bank.amount),
@@ -331,6 +331,10 @@ function postedWithinMatchWindow(rule,bank,date,amount,explicit=false){
  if(low!==null&&actual+0.005<low||high!==null&&actual-0.005>high)return false;
  if(window.customDays)
   return bank.date>=shift(date,-window.before)&&bank.date<=shift(date,window.after);
+ // Legacy overdue reconciliation used ±7 days except weekly (±2).
+ // Preserve it unless explicit user boundaries supersede that policy.
+ if(overdue)return Math.abs(daysBetween(bank.date,date))<=
+  (rule.frequency==='weekly'?2:7);
  const gap=Math.abs(daysBetween(bank.date,date)),
   cycle=['monthly','quarterly','semiannual','annual'].includes(rule.frequency)&&
    bank.date.slice(0,7)===date.slice(0,7)&&gap<=21;
