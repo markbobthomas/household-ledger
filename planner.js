@@ -729,7 +729,7 @@ function detailHtml(bundle,s){
    'This posted payment may belong to more than one confirmed prediction.',
    '<p class="transaction-detail-help">No new prediction will be created. Choose which existing plan to inspect; similar payees and alternating income are kept separate.</p>'+
    (options||'<p>Those predictions changed. Refresh the bank history.</p>'),
-   'BANK HISTORY · SCHEDULE MATCH');
+   'BANK HISTORY · PREDICTION MATCH');
  }
  if(transactionDetail.kind==='schedule'){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===transactionDetail.id);
@@ -1422,7 +1422,7 @@ function repeatingReviewForm(s,{inline=false}={}){
    '<p class="lead">Review the suggested prediction. Bank records stay unchanged.</p>')+
   (d.sourceRow?.type==='transfer'&&!transfer?
    '<p class="history-type-explanation">The bank labeled this as a transfer without a confirmed matching household account. An outgoing ACH debit, such as a mortgage, is proposed as an expense. Change the future type if needed.</p>':'')+
-  (d.sourcePending?'<p class="history-type-explanation">This bank transaction is pending; its date or amount may change. Review both before scheduling.</p>':'')+
+  (d.sourcePending?'<p class="history-type-explanation">This bank transaction is pending; its date or amount may change. Review both before saving a prediction.</p>':'')+
   '<div class="future-fields">'+
   '<label>Merchant<input name="merchant" maxlength="160" required value="'+escapeHTML(d.merchant)+'"></label>'+
   '<label>Category<select name="category">'+
@@ -1608,7 +1608,7 @@ function historyPage(bundle,s){
   (recurringDraft&&!transactionDetail&&typeof $('planner-main')?.insertAdjacentHTML!=='function'?
    repeatingReviewForm(s):'')+
   ((bundle?.postedMatchReview||[]).length?
-   '<section class="panel" data-posted-match-review><strong>Confirm which schedule was paid</strong>'+
+   '<section class="panel" data-posted-match-review><strong>Confirm which prediction was paid</strong>'+
    '<p class="lead">These actual bank payments could match more than one planned bill. Choose the matching plan once to prevent double counting.</p>'+
    bundle.postedMatchReview.map(row=>'<div class="review-candidate">'+
     '<div class="review-candidate-main"><strong>'+escapeHTML(row.merchant)+'</strong>'+
@@ -1841,7 +1841,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       legacyItems.length+' UNSAVED</strong></div>'+
     '<p class="lead">These '+legacyItems.length+' repeating payment'+
       (legacyItems.length===1?' is':'s are')+
-      ' already affecting your projected balance without an approved schedule. '+
+      ' already affecting your projected balance without an approved prediction. '+
       (decisionsNeeded?decisionsNeeded+' still need'+(decisionsNeeded===1?'s':'')+' a decision. ':
        'All have review decisions. ')+
       'Ignoring one does not remove it from the forecast until the final switch below.</p>'+
@@ -2050,7 +2050,7 @@ function render(){
  if(error)note='<div class="notice danger"><strong>Forecast calculation unavailable.</strong> '+escapeHTML(error)+
   '. Your bank balances have not been changed.</div>';
  else if(latestError)note='<div class="notice danger">'+escapeHTML(latestError)+'</div>';
- else if(caution.length)note='<div class="notice danger"><div><strong>Forecast needs review.</strong> '+
+ else if(caution.length)note='<div class="notice danger"><div><strong>Forecast requires review.</strong> '+
   escapeHTML(caution.join(' '))+'</div>'+
   ((bundle?.recurrenceMigration?.legacySeries||[]).length&&!bundle.recurrenceMigration.approvedOnly?
    '<button type="button" class="btn" data-view="reviews">See automatic estimates</button>':
@@ -2155,7 +2155,7 @@ document.addEventListener('click',async e=>{
    if(!candidate)throw Error('This bank payment has changed. Refresh Review.');
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.linkPostedToSchedule(
     state(),bankId,ruleId,model.records(state()),activeAccounts(snapshot())));
-   reviewNotice='Linked the posted payment to schedule #'+
+   reviewNotice='Linked the posted payment to prediction #'+
     (scheduleListNumber(ruleId)||'?')+'. The forecast has been recalculated.';
    render();
   }catch(err){reviewNotice=String(err.message||err);render()}
@@ -2496,7 +2496,7 @@ document.addEventListener('click',async e=>{
     ' remaining unconfirmed automatic payments before switching.');
    await commitForecastChange(()=>{state().predictions.recurringForecastMode='approved-only'});
    recurringDraft=null;
-   reviewNotice='Saved schedules are now the only source of recurring forecasts. '+
+   reviewNotice='Saved predictions are now the only source of recurring forecasts. '+
     'Previously inferred, unsaved payments are no longer included; bank history is unchanged.';
    render();
   }catch(error){setNotice(String(error.message||error))}
@@ -2807,7 +2807,7 @@ document.addEventListener('submit',async e=>{
     if(select.name==='category')select.value=label;
   });
   field.value='';
-  if(notice)notice.textContent='Added '+label+'. Choose it for any schedule.';
+  if(notice)notice.textContent='Added '+label+'. Choose it for any prediction.';
  }catch(error){if(notice)notice.textContent=String(error.message||error)}
  finally{if(submit)submit.disabled=false}
 });
