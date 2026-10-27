@@ -278,6 +278,62 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
  for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
+ // An as-of snapshot is the bank's REAL current balance. A forecast due
+ // yesterday is not necessarily in that balance: it must be carried forward
+ // if the bank has not posted it, or the future checking projection is too
+ // optimistic. Never rewrite the bank observation or the recurrence anchor.
+ // Only one recent occurrence per independently identified rule is eligible.
+ const nextBusiness=from=>{
+  let day=add(from,1);
+  while([0,6].includes(new Date(day+'T12:00:00Z').getUTCDay()))day=add(day,1);
+  return day;
+ };
+ const overduePayments=[],nextPosting=nextBusiness(asOf),
+  cashIds=new Set(accounts.filter(a=>
+   String(a.accountType||a.type||'').toLowerCase()!=='credit')
+   .map(a=>String(a.id))),
+  postedByRule=new Map(),ruleMap=new Map(rules.map(r=>[String(r.id),r]));
+ for(const t of rows){
+  if(t.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0))continue;
+  const matches=tools.historicalScheduleMatches?.(t,accounts,rules)||[];
+  // Ambiguous same-payee streams cannot automatically clear one another.
+  if(matches.length!==1)continue;
+  const key=String(matches[0].id);
+  if(!postedByRule.has(key))postedByRule.set(key,[]);
+  postedByRule.get(key).push(t);
+ }
+ const recent=ownerEntries.filter(e=>
+  e.type==='expense'&&e.source==='user-recurring'&&
+  cashIds.has(String(e.accountId))&&valid(e.date)&&
+  e.date<=asOf&&e.date>=add(asOf,-7)&&
+  !(edits[eventKey(tools,e)]?.skipped));
+ const mostRecent=new Map();
+ for(const e of recent){
+  const key=String(e.ruleId||'');
+  if(!ruleMap.has(key))continue;
+  if(!mostRecent.has(key)||mostRecent.get(key).date<e.date)
+   mostRecent.set(key,e);
+ }
+ for(const [id,e] of mostRecent){
+  const rule=ruleMap.get(id),original=e.date,
+   tolerance=rule.frequency==='weekly'?2:7;
+  const posted=(postedByRule.get(id)||[]).some(t=>
+   t.date>=add(original,-tolerance)&&t.date<=asOf&&
+   Math.abs(diff(t.date,original))<=tolerance);
+  if(posted)continue;
+  const edit=edits[eventKey(tools,e)],
+   chosen=edit&&valid(edit.date)&&edit.date>asOf?edit.date:nextPosting,
+   unpaid={...e,date:chosen,_overdueFrom:original,
+    _unpostedEstimated:true};
+  // An explicit date change affects only this occurrence, not the schedule.
+  // A previously postponed date that passed without posting is carried again.
+  seen(unpaid);
+  if(!edit||!valid(edit.date)||edit.date<=asOf)
+   overduePayments.push({key:eventKey(tools,e),id:e.id,ruleId:id,
+    accountId:e.accountId,merchant:e.merchant,amount:Number(e.amount),
+    expectedDate:original,proposedDate:nextPosting,
+    dueDate:chosen});
+ }
  for(const event of approvedOnly?[]:detected.automatic){
   if(!configuredCard(event.accountId)||
    ownerFor(event)||suppressedRecurrence(prefs,event))continue;
@@ -314,6 +370,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    const edit=edits[eventKey(tools,e)];
    if(edit?.skipped)return [];
    const result=edit?{...e,...edit}:e;
+   // Expired one-off postponements retain their original rule identity:
+   // never silently discard an unpaid mortgage after its revised day passes.
+   if(e._unpostedEstimated&&result.date<=asOf)result.date=nextPosting;
    if(result.date<=asOf||result.date>end)return [];
    const date=effective(result.date);
    return date>asOf&&date<=end?[date===result.date?result:{...result,date}]:[];
@@ -431,7 +490,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
-  postedMatchReview:covered.review||[]};
+  postedMatchReview:covered.review||[],overduePayments};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){
