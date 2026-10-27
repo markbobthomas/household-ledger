@@ -326,7 +326,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     const occurrence=mostRecent.get(String(rule.id));
     return occurrence&&tools.postedWithinMatchWindow(
      rule,t,expectedPosting(occurrence),occurrence.amount,
-     (rule.exampleIds||[]).some(id=>String(id)===String(t.id)));
+     (rule.exampleIds||[]).some(id=>String(id)===String(t.id)),true);
    });
   if(candidates.length!==1)continue;
   const id=String(candidates[0].id);
