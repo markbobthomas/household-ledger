@@ -1830,7 +1830,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   (overdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Predicted payments not yet posted</h2>'+
    '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
-   '<p class="lead">These withdrawals were expected but have no confirmed matching bank payment. '+
+   '<p class="lead">These withdrawals are due or past due without a confirmed bank posting. '+
    'Each is still reserved once in the forecast on the next business day; '+
    'your actual bank balance is unchanged. Bank processing can take a few days.</p>'+
    overdue.map(item=>'<form class="overdue-review-row" data-overdue-date="'+
