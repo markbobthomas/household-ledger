@@ -1,5 +1,5 @@
 /* Conservative-but-early cash commitment detection and cross-source
- * deduplication. Actual bank rows are never edited. The same predictiond
+ * deduplication. Actual bank rows are never edited. The same predicted
  * cash movement is represented by one event even when it originated in
  * imported-pattern inference, new detection and an owner-confirmed rule. */
 (function(root){

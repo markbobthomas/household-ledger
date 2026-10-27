@@ -121,7 +121,7 @@ assert.throws(()=>T.defineRecurring(utilityState,{
 },accounts,snapshot.asOf,{
  kind:'event',accountId:'checking',type:'expense',merchant:'Valley Electric',
  amount:167.82,date:'2026-10-14',bankTransactionId:'utility-new'
-},utilityHistory,['utility-new']),/already belongs to a schedule/i,
+},utilityHistory,['utility-new']),/already belongs to a prediction/i,
  'No historical record can be used to create a conflicting separate schedule');
 assert.equal(JSON.stringify(utilityState.predictions),beforeGuard,
  'Blocked creation must not mutate saved planning preferences');

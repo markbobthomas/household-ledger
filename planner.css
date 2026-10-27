@@ -3093,6 +3093,11 @@ body{background:#edf0f2;color:var(--ink)}
  }
 }
 
+/* Keep the full Predictions / Transactions / Review names inside each 320px tab. */
+@media(max-width:350px){
+ .planner-nav-primary .tab-link{font-size:10.5px!important;letter-spacing:-.15px}
+}
+
 /* An actionable review count colors the entire tab label, even when selected. */
 .planner-nav-primary .tab-link.has-review-items,
 .planner-nav-primary .tab-link.has-review-items.active,
