@@ -86,7 +86,7 @@ function inferPayment(card,accounts,records,asOf){
  const net=(from,to)=>{
   let total=0,count=0;
   for(const t of records)if(!t.pending&&same(t,card)&&t.date>=from&&t.date<=to&&
-   (t.type==='expense'||t.type==='refund')){
+   cardActivity(t)){
     total+=(t.type==='refund'?-1:1)*Number(t.amount||0);count++;
   }
   return {amount:round(Math.max(0,total)),count};
