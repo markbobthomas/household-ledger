@@ -7,8 +7,9 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+const cashFormatter=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
 const cash=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable':
- new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n));
+ cashFormatter.format(Number(n));
 const dateToday=()=>new Date().toLocaleDateString('en-CA');
 const dayLabel=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
@@ -45,6 +46,8 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 // Derived data only. Source bank records and persisted predictions remain the
 // authorities; this cache cannot be written to the bank or planning store.
 let forecastCache=null;
+// Memoized screen data; never persisted or used as the source of bank facts.
+let futureRowsCache=null,reviewQueueCache=null;
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
@@ -91,8 +94,11 @@ function forecastFor(s){
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
  // category-learning decision must also recompute all projected balances.
+ // Review history and Ignore flags change the queue, not bank-account balances.
+ // Preserve every financial input while excluding these UI-only fields.
+ const {repeatingRecommendations,repeatingRecommendationDecisions,...forecastPrefs}=prefs;
  const signature=JSON.stringify({
-  snapshot:s,predictions:prefs,categoryOverrides:source.categoryOverrides,
+  snapshot:s,predictions:forecastPrefs,categoryOverrides:source.categoryOverrides,
   learning:source.learning,accounts:source.accounts
  });
  if(forecastCache&&forecastCache.source===source&&
@@ -444,6 +450,8 @@ function accountSelect(accounts,value,name,allowAll=false){
    escapeHTML(a.name)+'</option>').join('')+'</select>';
 }
 function futureRows(bundle,s){
+ if(futureRowsCache?.bundle===bundle&&futureRowsCache.asOf===s.asOf)
+  return futureRowsCache.rows;
  const accounts=activeAccounts(s),labels=new Map(accounts.map(a=>[String(a.id),a.name]));
  const rows=[],projection=bundle?.projection;
  if(!projection)return rows;
@@ -482,7 +490,9 @@ function futureRows(bundle,s){
    sourceType:e.sourceType||e.type,source:e.source||null,
    addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
  }
- return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
+ rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
+ futureRowsCache={bundle,asOf:s.asOf,rows};
+ return rows;
 }
 function cadenceOption(cadence){
  return {'weekly':'weekly','every 2 weeks':'biweekly',biweekly:'biweekly',
@@ -1729,6 +1739,9 @@ function repeatedRecommendations(bundle,s){
  // A legacy estimate may remain visible after Ignore but is no longer an
  // undecided action; count its decision only while still pending.
 function reviewQueue(bundle,s){
+ const prefs=state().predictions||{},decisions=JSON.stringify(prefs.repeatingRecommendationDecisions||{});
+ if(reviewQueueCache?.bundle===bundle&&reviewQueueCache.saved===prefs.repeatingRecommendations&&
+    reviewQueueCache.decisions===decisions)return reviewQueueCache.queue;
  const recommendations=repeatedRecommendations(bundle,s),
   overdue=(bundle?.overduePayments||[]).filter(item=>
    !state().predictions?.futureTransactionEdits?.[item.key]?.skipped);
@@ -1739,8 +1752,10 @@ function reviewQueue(bundle,s){
   decisionsNeeded=legacyItems.filter(({owner})=>!owner||owner.status==='pending').length,
   pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
   ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
- return {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,
+ const queue={recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,
   outstanding:decisionsNeeded+pending.length+overdue.length};
+ reviewQueueCache={bundle,saved:prefs.repeatingRecommendations,decisions,queue};
+ return queue;
 }
 function updateReviewTabCount(queue){
  const badge=document.querySelector('.planner-nav-primary [data-review-tab-count]');
