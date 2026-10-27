@@ -277,7 +277,12 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  });
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
- for(const e of covered.events)if(e.date>asOf&&e.date<=end)seen(e);
+ // Weekend-shifted scheduled payments may have a future recurrence anchor
+ // but a past effective Friday posting. Treat those as overdue, not as a
+ // future entry which would shadow the carried-forward payment's stable ID.
+ const expectedPosting=e=>options.weekendPolicy==='friday'?
+  tools.forecastBusinessDate(e.date,add(e.date,-7)):e.date;
+ for(const e of covered.events)if(e.date>asOf&&e.date<=end&&expectedPosting(e)>asOf)seen(e);
  // An as-of snapshot is the bank's REAL current balance. A forecast due
  // yesterday is not necessarily in that balance: it must be carried forward
  // if the bank has not posted it, or the future checking projection is too
@@ -302,8 +307,6 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(!postedByRule.has(key))postedByRule.set(key,[]);
   postedByRule.get(key).push(t);
  }
- const expectedPosting=e=>options.weekendPolicy==='friday'?
-  tools.forecastBusinessDate(e.date,add(e.date,-7)):e.date;
  const recent=ownerEntries.filter(e=>{
   if(e.type!=='expense'||e.source!=='user-recurring'||
    !cashIds.has(String(e.accountId))||!valid(e.date)||
