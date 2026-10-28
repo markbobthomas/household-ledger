@@ -405,6 +405,65 @@ function recurrenceDates(rule,asOf,through){
  }
  return [...new Set(dates)].sort();
 }
+// Resolve an existing confirmed schedule's historical cadence independently
+// of the editable "next date". Never mutate saved state and never create past
+// commitments solely because a user has planned a new future payment.
+// Recover only from explicit older source evidence or independently observed,
+// phase-compatible posted bank payments. The audit is bounded for efficiency.
+function reconciliationAnchor(rule,records=[],accounts=[],asOf=''){
+ const start=String(rule?.anchorDate||''),
+  frequency=String(rule?.frequency||''),
+  interval={weekly:7,biweekly:14,'every-4-weeks':28}[frequency],
+  cashDebit=rule?.kind==='event'&&
+   (rule.type==='expense'||rule.type==='transfer'&&rule.cashDirection==='out'),
+  account=String(rule?.accountId||'');
+ if(!cashDebit||!validDate(start)||!validDate(asOf)||!frequencies.has(frequency)||
+  start<=shift(asOf,-90)||!accounts.some(a=>String(a.id)===account))return start;
+ const dateIndex=new Set();
+ // Replay at most 90 days of this same schedule, never assume a payment
+ // outside the protected history horizon or a different cycle phase.
+ const begin=shift(asOf,-90);
+ for(let d=start,n=0;n<120&&d>=begin;n++){
+  if(validDate(d))dateIndex.add(d);
+  if(interval)d=shift(d,-interval);
+  else if(frequency==='twice-monthly'){
+   const last=shift(d,-1), month=last.slice(0,7);
+   const options=[Number(start.slice(-2)),Number(rule.secondDay)].filter(x=>
+    Number.isInteger(x)&&x>=1&&x<=31).map(day=>monthAt(month+'-01',0,day));
+   d=options.filter(x=>x<d).sort().at(-1)||monthAt(d,-1,Number(start.slice(-2)));
+  }else d=monthAt(start,-(n+1)*({monthly:1,quarterly:3,
+   semiannual:6,annual:12}[frequency]||1),Number(start.slice(-2)));
+ }
+ const dates=[...dateIndex].filter(d=>d<=asOf&&d>=begin).sort();
+ if(!dates.length)return start;
+ const prior=String(rule.reconciliationAnchorDate||'');
+ // This is the durable anchor captured before changing future defaults.
+ if(validDate(prior)&&prior<start){
+  const earliest=dates.find(d=>d>=prior);
+  if(earliest)return earliest;
+ }
+ const original=String(rule.sourceAnchorDate||'');
+ if(rule.sourceFrequency===frequency&&validDate(original)&&original<start){
+  const source=dates.find(d=>Math.abs(daysBetween(d,original))<=
+   (interval?Math.min(4,Math.round(interval/4)):14));
+  if(source)return source;
+ }
+ const bank=(records||[]).filter(row=>!row.pending&&validDate(row.date)&&
+  row.date<=asOf&&Number(row.amount)>0&&
+  accountRef(row.accountId||row.account,accounts)===account&&
+  bankDirection(row)==='expense'&&
+  historicalScheduleMatches(row,accounts,[rule]).length===1);
+ const directIds=new Set((rule.exampleIds||[]).map(String));
+ const evidence=dates.filter(date=>bank.some(row=>
+  postedWithinMatchWindow(rule,row,date,rule.amount,false,true)));
+ if(!evidence.length)return start;
+ // A bank-posted example explicitly owned by this forecast is strong
+ // evidence. Otherwise require two distinct observations of the cadence;
+ // one unrelated same-payee payment must not backdate a new schedule.
+ const directlyLinked=bank.some(row=>directIds.has(String(row.id))&&
+  evidence.some(date=>postedWithinMatchWindow(rule,row,date,rule.amount,false,true)));
+ return directlyLinked||evidence.length>=2?evidence[0]:start;
+}
 function manualSeriesKey(ruleId){return 'user-series|'+encodeURIComponent(String(ruleId))}
 
 // Ambiguity is a choice of existing forecast schedules, never permission to
@@ -618,7 +677,11 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  const unchangedNext=old&&old.frequency===frequency&&
   fields.date===recurrenceDates(old,asOf,shift(asOf,1095))[0];
  const anchorDate=unchangedNext?old.anchorDate:fields.date;
+ // Immutable original due-date evidence is never overwritten by editing the
+ // future schedule. The forecast may use it to audit unpaid past occurrences.
+ const reconciliationAnchorDate=old?.reconciliationAnchorDate||old?.anchorDate||anchorDate;
  const rule={id,kind:transfer?'movement':'event',frequency,anchorDate,
+  reconciliationAnchorDate,
   ...savedMatchBounds(data,old),
   ...(secondDay?{secondDay}:{}),...fields,
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
@@ -1025,7 +1088,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
 
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,assertNoNewForecastDuplicates,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,defaultScheduleCategories,scheduleCategories,matchWindow,postedWithinMatchWindow,savedMatchBounds,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
+ frequencies,defaultScheduleCategories,scheduleCategories,reconciliationAnchor,matchWindow,postedWithinMatchWindow,savedMatchBounds,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
  // Shared primitives only; scheduling, recommendation and payment policies stay
  // separate. Preserve unknown/ambiguous account references unchanged.

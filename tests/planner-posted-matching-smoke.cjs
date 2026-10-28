@@ -197,4 +197,55 @@ assert.equal(updatedRule.anchorDate,'2026-09-15',
 assert.equal(updatedRule.matchDaysAfter,9,'Only matching bounds change on save');
 assert.equal(Core.materialize(liveSnap,[],preserve.predictions,T,null,70,policy)
  .overduePayments.length,2,'Prior due payments remain visible after non-date edits');
+// Universal reconciliation across any confirmed monthly cash-out stream:
+// a saved next-month anchor does not erase an expected prior-month payment
+// when posted bank history proves the same phase. Nothing is persisted.
+const recoveredRule={...lateRule,id:'synthetic-lost-anchor',
+ anchorDate:'2026-11-26',sourceAnchorDate:'2026-11-26',
+ merchant:'Fictional Monthly Provider',originalMerchant:'Fictional Monthly Provider',
+ matchNames:['fictional monthly provider'],exampleIds:['prior-proof']};
+const historicalEvidence=[post('prior-proof','Fictional Monthly Provider',1200,'2026-09-26')];
+assert.equal(T.reconciliationAnchor(recoveredRule,historicalEvidence,accounts,reviewDate),
+ '2026-09-26','Confirmed posted history restores the full prior monthly cycle');
+const effective=T.reconciliationAnchor(recoveredRule,historicalEvidence,accounts,reviewDate);
+assert.equal(recoveredRule.anchorDate,'2026-11-26','Historic recovery does not mutate saved rule');
+const rolled=Core.materialize(liveSnap,historicalEvidence,
+ {futureRecurringRules:[recoveredRule]},T,null,75,policy);
+assert.equal(rolled.overduePayments.length,1,
+ 'The missed recurring October debit is recognized from historical evidence');
+assert.equal(rolled.overduePayments[0].expectedDate,'2026-10-26');
+assert.deepEqual(rolled.ledger.filter(e=>e.ruleId===recoveredRule.id).map(e=>e.date).slice(0,2),
+ ['2026-10-29','2026-11-26'],
+ 'Missing cash debit reserved once, next month original date unchanged');
+const paidRecovery=Core.materialize(liveSnap,[...historicalEvidence,
+ post('paid-recovery','Fictional Monthly Provider',1210,'2026-10-27')],
+ {futureRecurringRules:[recoveredRule]},T,null,75,policy);
+assert.equal(paidRecovery.overduePayments.length,0,
+ 'A later matching posted bank transaction resolves the recovered occurrence');
+const pendingRecovery=Core.materialize(liveSnap,[...historicalEvidence,
+ {...post('pending-recovery','Fictional Monthly Provider',1200,'2026-10-27'),pending:true}],
+ {futureRecurringRules:[recoveredRule]},T,null,75,policy);
+assert.equal(pendingRecovery.overduePayments.length,1,
+ 'A pending bank record cannot clear missing cash');
+const noProof={...recoveredRule,exampleIds:[]};
+assert.equal(T.reconciliationAnchor(noProof,[],accounts,reviewDate),'2026-11-26',
+ 'A brand-new forward-only schedule is never backdated without bank evidence');
+assert.equal(T.reconciliationAnchor(noProof,historicalEvidence,accounts,reviewDate),'2026-11-26',
+ 'One unrelated same-merchant posting is insufficient to backdate a new plan');
+const sourceAnchorRule={...noProof,sourceAnchorDate:'2026-09-24',
+ sourceFrequency:'monthly'};
+assert.equal(T.reconciliationAnchor(sourceAnchorRule,[],accounts,reviewDate),
+ '2026-09-26','Old source date reconstructs missing cycle without needing an exact posting day');
+// Saving recurring amount/next date preserves its original audit anchor.
+const sourceState={predictions:{futureRecurringRules:[{...lateRule,
+ id:'persistent-original-date',anchorDate:'2026-09-26'}]}};
+const sourceRef=sourceState.predictions.futureRecurringRules[0];
+const nextForEdit=T.recurrenceDates(sourceRef,reviewDate,'2026-12-31')[0];
+T.defineRecurring(sourceState,{date:nextForEdit,merchant:sourceRef.merchant,
+ accountId:'checking',amount:1350,type:'expense',frequency:'monthly'},
+ accounts,reviewDate,{kind:'event',recurringRuleId:sourceRef.id,
+ sourceAccountId:'checking',originalMerchant:sourceRef.merchant,
+ originalType:sourceRef.type,sourceAmount:1200,date:sourceRef.anchorDate});
+assert.equal(sourceState.predictions.futureRecurringRules[0].reconciliationAnchorDate,
+ '2026-09-26','Original audit anchor survives future schedule edits');
 console.log('PASS posted matching: overdue per occurrence, one-off, pending, ACH, saved anchors, manual matching windows and immutable bank facts');
