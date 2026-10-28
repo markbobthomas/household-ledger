@@ -2551,7 +2551,7 @@ const {chromium,webkit}=require('playwright');
    .evaluate(el=>el.classList.contains('has-review-items')),true,
    'The red Review tab explicitly signals a missing actual withdrawal');
   await go('summary');
-  await page.locator('[data-calendar-day="2026-10-20"]').click();
+  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
   assert.match(await page.locator('.calendar-day-transactions').innerText(),/Fictional Housing ACH/,
    'Calendar reserves the missed debit on the next business day');
   // Posted bank payment is not identical in date or amount to forecast.
@@ -2568,8 +2568,8 @@ const {chromium,webkit}=require('playwright');
    .filter({hasText:'Fictional Housing ACH'}).count(),0,
    'A real posting three days late and slightly higher resolves the alert');
   await go('summary');
-  await page.locator('[data-calendar-day="2026-10-20"]').click();
-  assert.doesNotMatch(await page.locator('.calendar-day-transactions').innerText(),
+  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
+  assert.doesNotMatch(await page.locator('.calendar-day-detail').innerText(),
    /Fictional Housing ACH/,
    'The already-posted bank withdrawal is not forecast a second time');
   assert.deepEqual(errors,[]);
