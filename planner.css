@@ -52,6 +52,7 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .metric span{font-size:11px;color:var(--muted)}.metric strong{font:740 20px var(--mono);overflow-wrap:anywhere}
 .metric small{font-size:10px;color:var(--muted)}
 .metric strong.low{color:var(--red)}
+.metric strong.warning{color:#a55d0c}
 .chart-wrap{margin-top:3px}.chart-wrap svg{width:100%;height:auto;max-height:230px;display:block;overflow:visible}
 .chart-labels{display:flex;align-items:center;justify-content:space-between;font:11px var(--mono);color:var(--muted);padding:0 15px;margin:0 0 3px}
 .chart-caption{font-size:11px;color:var(--muted);margin-top:8px}
@@ -314,7 +315,8 @@ h1{font-size:30px;font-weight:730;letter-spacing:-1px;line-height:1.15;margin:0}
 .summary-numbers{display:flex;align-items:end;justify-content:space-between;gap:20px}
 .summary-overline,.summary-end span{font-size:12px;color:#778491;font-weight:620}
 .summary-low{font:760 clamp(36px,5vw,63px)/1.13 var(--mono);letter-spacing:-2.8px;color:#172b3a;margin:6px 0}
-.summary-low-alert{color:#aa3d47}
+.summary-low-alert{color:#a55d0c}
+.summary-low-negative{color:#b43b36}
 .summary-date{color:#667585;font-size:12px}
 .summary-end{display:flex;flex-direction:column;text-align:right;gap:3px;padding-bottom:3px}
 .summary-end strong{font:730 clamp(19px,2.35vw,27px) var(--mono);letter-spacing:-1px;overflow-wrap:anywhere}
@@ -1762,7 +1764,9 @@ html{scrollbar-gutter:stable}
  line-height:1.1!important;color:var(--ink)!important;
 }
 .summary-page .summary-monthly .summary-low.summary-low-alert,
-.summary-page .summary-minimum .summary-low.summary-low-alert{color:#b43b36!important}
+.summary-page .summary-minimum .summary-low.summary-low-alert{color:#a55d0c!important}
+.summary-page .summary-monthly .summary-low.summary-low-negative,
+.summary-page .summary-minimum .summary-low.summary-low-negative{color:#b43b36!important}
 .summary-page .summary-overline,.summary-page .summary-bank small{
  min-height:0!important;line-height:1.35!important;align-self:end;
 }
@@ -3006,6 +3010,12 @@ body{background:#edf0f2;color:var(--ink)}
  color:#334c5e;font-family:var(--mono);font-weight:760;
 }
 .summary-page .calendar-day-balance{color:#172b39}
+/* Cash balances below the configured warning limit are orange; only
+   genuinely negative projected balances use red. The high-contrast theme
+   must not override per-day severity after setting the default text color. */
+.summary-page .calendar-day.low:not(.negative) .calendar-day-balance{color:#a55d0c}
+.summary-page .calendar-day.negative .calendar-day-balance{color:#b43b36}
+.summary-page .calendar-day.negative.month-minimum{background:#fdf0f0!important}
 .summary-page .calendar-day-detail{
  border:1px solid #8799a7;border-radius:4px;
  background:#fff;
