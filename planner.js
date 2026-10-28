@@ -981,24 +981,6 @@ function newTransactionForm(s){
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
 
-function scheduleMatchWindowFields(r={}){
- const value=name=>r[name]===undefined||r[name]===null?'':String(r[name]);
- const days=window.HouseholdPlannerTransactions.matchWindow(r);
- return '<fieldset class="schedule-match-window">'+
-  '<legend>Bank matching window</legend>'+
-  '<p class="audit-footnote">Use these limits to match the bank payment to this repeating prediction. '+
-  'They do not change the planned amount or payment date. Leave blank for automatic dates or any amount.</p>'+
-  '<div class="future-fields">'+
-  '<label>Days early<input name="matchDaysBefore" type="number" min="0" max="14" step="1" '+
-   'placeholder="Auto: '+days.before+'" value="'+escapeHTML(value('matchDaysBefore'))+'"></label>'+
-  '<label>Days late<input name="matchDaysAfter" type="number" min="0" max="14" step="1" '+
-   'placeholder="Auto: '+days.after+'" value="'+escapeHTML(value('matchDaysAfter'))+'"></label>'+
-  '<label>Minimum amount ($)<input name="matchAmountMin" type="number" min="0" max="999999999" step=".01" '+
-   'placeholder="Any" value="'+escapeHTML(value('matchAmountMin'))+'"></label>'+
-  '<label>Maximum amount ($)<input name="matchAmountMax" type="number" min="0" max="999999999" step=".01" '+
-   'placeholder="Any" value="'+escapeHTML(value('matchAmountMax'))+'"></label>'+
-  '</div></fieldset>';
-}
 function scheduleFields(r,isNew,s){
  const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1),
   type=r.kind==='movement'?'transfer':r.type||'expense',
@@ -1039,7 +1021,7 @@ function scheduleFields(r,isNew,s){
    accountSelect(accounts,r.toAccountId||accounts.find(a=>String(a.id)!==accountId)?.id||accountId,'toAccountId')+'</label>'+
   '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
    '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
-  '</div>'+scheduleMatchWindowFields(r)+'</details>';
+  '</div></details>';
 }
 function applyScheduleSearch(root=document){
  // Some non-browser integrations expose a partial DOM. Search is optional:
@@ -1446,8 +1428,6 @@ function repeatingReviewForm(s,{inline=false}={}){
   '<label>Repeat'+frequencyChoices(d.frequency||'monthly')+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input name="secondDay" type="number" min="1" max="31" value="15"></label>'+
   '</div>'+
-  '<details class="schedule-advanced"><summary>Bank matching window</summary>'+
-  scheduleMatchWindowFields(d)+'</details>'+
   historyLinkField(d.examples||[])+
   '<label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> Create a separate bill even if another prediction shares this payee/date</label>'+
   '<p class="audit-footnote">For actual account-to-account transfers, select Transfer and two connected accounts. Otherwise use Expense or Deposit. Only the future forecast changes; the original bank record is never edited or duplicated.</p>'+
