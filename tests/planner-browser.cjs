@@ -341,6 +341,23 @@ const {chromium,webkit}=require('playwright');
     return [p.warnBelow,p.cashCushion,p.lowAlertThreshold];
    }),[100000,100000,100000],
     'Saving the single warning threshold synchronizes legacy forecast-only aliases');
+   await page.locator('#planner-save-feedback [data-undo-forecast]').waitFor();
+   assert.match(await page.locator('#planner-save-feedback').innerText(),/Saved/,
+    'Successful forecast edits acknowledge persistence');
+   await page.locator('[data-undo-forecast]').click();
+   await page.locator('#planner-save-feedback').getByText('Previous change restored').waitFor();
+   assert.equal(await page.locator('[data-warning-form] [name=warnBelow]').inputValue(),'500',
+    'One-step Undo restores the previous effective warning threshold');
+   assert.equal(await page.evaluate(()=>{
+    const p=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return p.warnBelow===undefined?500:p.warnBelow;
+   }),500,'Undo respects an implied default rather than fabricating a saved preference');
+   await page.locator('[data-warning-form] [name=warnBelow]').fill('100000');
+   await page.locator('[data-warning-form] button[type=submit]').click();
+   await page.locator('#planner-save-feedback [data-undo-forecast]').waitFor();
+   assert.equal(await page.evaluate(()=>JSON.parse(
+    localStorage.getItem('household-planner-sample-settings-v1')||'{}').warnBelow),100000,
+    'The same edit can be reapplied after Undo without changing forecast rules');
    assert.equal(await page.locator('[aria-label="Bank connection status"]').count(),1,
     'Connection information appears in one compact, actionable Settings section');
    assert.equal(await page.locator('h3').filter({hasText:'Planning assumptions'}).count(),0,
@@ -723,6 +740,10 @@ const {chromium,webkit}=require('playwright');
     }
    };
    await checkReviewNav('Unresolved review queue');
+   assert.equal(await page.locator('.review-priority').count(),1,
+    'Review makes payment actions and repeating suggestions visible before the lists');
+   assert.match(await page.locator('.review-priority').innerText(),/Needs action:.*Suggestions:/s,
+    'Review priority summary distinguishes action-required items from suggestions');
    const legacySection=page.locator('[data-active-legacy-estimates]');
    const legacyRows=legacySection.locator('[data-legacy-estimate]');
    const expectedLegacy=Number(countMatch?.[1]||0);
@@ -2146,10 +2167,16 @@ const {chromium,webkit}=require('playwright');
     'Out $'+(fridayOut/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})),
     'Other never shows an artificial $0 for a November 1 payment posted in October');
    await statementPage.locator('[data-schedule-sort]').selectOption('order');
-   // Changing the sort deliberately closes the inline editor; reopen it.
-   if(!await zelleCard.locator('[data-schedule-view-calendar]').count())
+   // Changing the sort closes the inline editor. Calendar is still
+   // reachable directly from the compact row's More menu.
+   const zelleShortcut=zelleCard.locator('.schedule-more [data-schedule-view-calendar]');
+   if(await zelleShortcut.count()){
+    await zelleCard.locator('.schedule-more > summary').click();
+    await zelleShortcut.click();
+   }else{
     await zelleCard.locator('[data-schedule-edit]').click();
-   await zelleCard.locator('[data-schedule-view-calendar]').click();
+    await zelleCard.locator('[data-schedule-view-calendar]').click();
+   }
    assert.equal(await statementPage.locator('.summary-page').count(),1,
     'View on Calendar switches tabs directly');
    assert.equal(await statementPage.locator('#summary-account').inputValue(),'demo-checking',
@@ -2417,10 +2444,14 @@ const {chromium,webkit}=require('playwright');
   if(await cardSettings.getAttribute('open')===null)
    await cardSettings.locator('summary').click();
   const cardForm=page.locator('[data-card-rule="credit-real"]');
+  assert.equal(await cardForm.locator('.card-setup-step').count(),3,
+   'Credit-card setup groups the same validated inputs into three understandable stages');
   assert.match(await cardForm.innerText(),/SETUP REQUIRED/,
    'Connected credit card cannot contribute forecasts until billing setup is saved');
   await cardForm.locator('[name=autopayEnabled]').selectOption('yes');
   await cardForm.locator('[name=method]').selectOption('statement');
+  assert.match(await cardForm.locator('[data-card-guidance]').innerText(),/linked checking payment/,
+   'Card wizard explains the forecast effect without adding a second withdrawal');
   assert.equal(await cardForm.locator('[name=fromAccountId]').isVisible(),true,
    'Funding account becomes required for autopay');
   assert.equal(await cardForm.locator('[name=minimumAmount]').isVisible(),false,

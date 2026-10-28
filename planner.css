@@ -3207,3 +3207,16 @@ body{background:#edf0f2;color:var(--ink)}
 .summary-page .summary-numbers > div:nth-child(3){justify-items:end;text-align:right}
 .summary-page .summary-numbers > div:nth-child(2) .summary-low-date{text-align:center}
 .summary-page .summary-numbers > div:nth-child(3) .summary-low-date{text-align:right}
+
+/* Review, editing and persistence clarity: preserve the existing responsive layout. */
+.planner-save-feedback:not([hidden]){display:flex;align-items:center;justify-content:flex-end;gap:12px;min-height:30px;margin:4px 0 8px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.planner-save-feedback .btn{padding:4px 9px;min-height:28px;font-size:11px}
+.review-priority{display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-bottom:12px;border-bottom:1px solid var(--line);font-size:12px}
+.review-priority strong{font-size:12px}.review-priority span{color:var(--muted);margin-right:auto}
+.card-setup-step{min-width:0;margin:12px 0 0;padding:12px 0;border-top:1px solid var(--line)}
+.card-setup-step h3{margin:0 0 10px;font-size:12px;font-weight:720}
+.card-setup-guidance{font-size:12px;color:var(--muted);line-height:1.5;margin:12px 0 0}
+.calendar-advanced{margin:8px 0;font-size:12px;max-width:100%}
+.calendar-advanced summary{cursor:pointer;color:var(--muted)}
+.calendar-advanced .schedule-separate-choice{display:block;padding:9px 0}
+@media(max-width:650px){.planner-save-feedback:not([hidden]){justify-content:flex-start}.review-priority span{flex-basis:100%}}
