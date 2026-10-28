@@ -2575,15 +2575,8 @@ const {chromium,webkit}=require('playwright');
   await overdueEditor.locator('[name=amount]').fill('625');
   await overdueEditor.locator('[name=date]').fill('2026-10-21');
   await overdueEditor.locator('button[type=submit]').click();
-  await page.waitForTimeout(950);
-  const savedReviewState=await page.evaluate(()=>({
-   notice:document.querySelector('.reviews-page .future-notice')?.textContent||'',
-   errors:[...document.querySelectorAll('.reviews-page [role="alert"]')].map(e=>e.textContent),
-   invalid:[...document.querySelectorAll('.reviews-page [data-overdue-date] input, .reviews-page [data-overdue-date] select')]
-    .filter(e=>!e.checkValidity()).map(e=>({name:e.name,value:e.value,message:e.validationMessage})),
-   edits:[...document.querySelectorAll('.reviews-page [data-overdue-date]')].map(e=>e.outerHTML.slice(0,550))
-  }));
-  assert.match(savedReviewState.notice,/Updated only this unpaid payment/,JSON.stringify(savedReviewState));
+  await page.locator('.reviews-page .future-notice')
+   .getByText(/Updated only this unpaid payment/).waitFor();
   assert.ok(writes.some(w=>Object.values(w.predictions?.futureTransactionEdits||{})
    .some(edit=>edit.amount===625&&edit.date==='2026-10-21'&&
     edit.merchant==='Fictional Housing ACH Revised')),
