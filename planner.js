@@ -1211,7 +1211,10 @@ function schedulePaymentCheck(rule,bundle,s){
   account=String(rule.accountId||rule.fromAccountId||''),
   future=futureRows(bundle,s).filter(row=>String(row.recurringRuleId||'')===id),
   unpaid=(bundle?.overduePayments||[]).filter(item=>String(item.ruleId||'')===id),
-  last90=T.recurrenceDates(rule,shiftDay(asOf,-91),asOf),
+  auditAnchor=T.reconciliationAnchor(rule,model.records(state()),accounts,asOf),
+  auditRule=auditAnchor&&auditAnchor<rule.anchorDate?
+   {...rule,anchorDate:auditAnchor}:rule,
+  last90=T.recurrenceDates(auditRule,shiftDay(asOf,-91),asOf),
   last=last90.at(-1)||null;
  const result=(code,message)=>({code,message});
  if(!accounts.some(a=>String(a.id)===account))

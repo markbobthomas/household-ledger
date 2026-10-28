@@ -265,7 +265,11 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    e._forecastOriginalMerchant||e.merchant))&&
   (r.frequency!=='every-4-weeks'||!e.date||phaseMatch(r.anchorDate,e.date)));
  // Explicit rules come first, and always own their original bank series.
- const generated=tools.generatedRecurring(rules,add(asOf,-93),add(end,32));
+ const auditRules=rules.map(r=>{
+  const recovered=tools.reconciliationAnchor?.(r,rows,accounts,asOf);
+  return recovered&&recovered<r.anchorDate?{...r,anchorDate:recovered}:r;
+ });
+ const generated=tools.generatedRecurring(auditRules,add(asOf,-93),add(end,32));
  // Explicitly confirmed card schedules can be included without card autopay
  // setup. Unconfirmed automatic card-spend inference remains gated below.
  const ownerEntries=generated.events.map(e=>{

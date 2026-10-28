@@ -2582,9 +2582,42 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#refresh-bank').click();
   await go('schedules');
   await page.locator('[data-schedule-card="old-schedule-shifted"] [data-schedule-edit]').click();
-  assert.match(await page.locator('[data-payment-check="missing-anchor"]').innerText(),
-   /linked history points to|saved schedule begins/i,
-   'Previously overwritten start dates are diagnosed in the real-mode schedule editor');
+  assert.match(await page.locator('[data-payment-check="unposted"]').innerText(),
+   /unpaid scheduled withdrawal/i,
+   'A legacy source anchor reconstructs the historical missed withdrawal instead of hiding it');
+  // Previously saved private forecast is next-month only, but an earlier
+  // posted bank example proves the actual monthly payment phase.
+  const historicalRule={...lateBill,id:'legacy-history-evidence',
+   anchorDate:'2026-11-19',sourceAnchorDate:'2026-11-19',
+   sourceFrequency:'monthly',merchant:'Fictional Recurring Housing',
+   originalMerchant:'Fictional Recurring Housing',
+   matchNames:['fictional recurring housing'],exampleIds:['historical-september']};
+  realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
+   futureRecurringRules:[historicalRule]};
+  realPayload.transactions.push({id:'historical-september',
+   accountId:'checking-real',date:'2026-09-19',
+   name:'Fictional Recurring Housing',merchant:'Fictional Recurring Housing',
+   amount:600,pending:false,
+   category:{primary:'LOAN_PAYMENTS',detailed:'LOAN_PAYMENTS_MORTGAGE_PAYMENT'}});
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await go('schedules');
+  await page.locator('[data-schedule-card="legacy-history-evidence"] [data-schedule-edit]').click();
+  assert.match(await page.locator('[data-payment-check="unposted"]').innerText(),
+   /unpaid scheduled withdrawal/i,
+   'The real-source Payment check uses reconstructed prior recurring dates');
+  await go('reviews');
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Recurring Housing'}).count(),1,
+   'Legacy posted history causes missing prior-month obligation to appear in Review');
+  await go('summary');
+  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
+  assert.match(await page.locator('.calendar-day-transactions').innerText(),
+   /Fictional Recurring Housing/,
+   'Private-mode forecast reserves the recovered unpaid withdrawal');
+  assert.equal(realPayload.adjustments.predictions.futureRecurringRules[0].anchorDate,
+   '2026-11-19','Recovery did not edit the saved private schedule');
   assert.deepEqual(errors,[]);
   assert.deepEqual(errors,[]);
   await real.close();
