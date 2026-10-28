@@ -1663,10 +1663,10 @@ const {chromium,webkit}=require('playwright');
    await schedule.locator('button[type=submit]').click();
    assert.equal(await page.locator('[data-schedule-card]').count(),previousSchedules+2,
     'Separate same-merchant bills never merge');
-   assert.deepEqual(await page.locator('[data-schedule-card]').evaluateAll(cards=>
-    cards.map(card=>Number(card.dataset.scheduleNumber))),
+   assert.deepEqual((await page.locator('[data-schedule-card]').evaluateAll(cards=>
+    cards.map(card=>Number(card.dataset.scheduleNumber)))).sort((a,b)=>a-b),
     Array.from({length:previousSchedules+2},(_,i)=>i+1),
-    'Distinct same-merchant schedules keep separate consecutive numbers');
+    'Distinct same-merchant schedules retain unique consecutive numbers regardless of display sort');
    assert.equal(await page.locator('.schedule-discovery').count(),0,
     'Removing merchant discovery does not remove or merge separately saved bills');
    // Rare actions remain accessible without consuming full rows.
