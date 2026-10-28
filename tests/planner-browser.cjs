@@ -90,6 +90,29 @@ const {chromium,webkit}=require('playwright');
      await page.locator('#planner-menu > summary').click();
     await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
    };
+   // iPad portrait and landscape widths must not cause document-wide sideways
+   // scrolling on any primary ledger tab. Report the widest offending nodes.
+   for(const width of [768,810,820,834,1024,1180]){
+    await page.setViewportSize({width,height:1024});
+    for(const tab of ['summary','schedules','history','reviews']){
+     await go(tab);
+     const extent=await page.evaluate(()=>{
+      const max=innerWidth+1;
+      const offenders=[...document.querySelectorAll('body *')].filter(el=>{
+       const cs=getComputedStyle(el),r=el.getBoundingClientRect();
+       return cs.position!=='fixed'&&cs.display!=='none'&&r.width&&r.right>max+1;
+      }).sort((a,b)=>b.getBoundingClientRect().right-a.getBoundingClientRect().right)
+       .slice(0,6).map(el=>({tag:el.tagName,cls:String(el.className).slice(0,120),
+        right:Math.round(el.getBoundingClientRect().right),width:Math.round(el.getBoundingClientRect().width)}));
+      return {width:innerWidth,documentWidth:document.documentElement.scrollWidth,
+       bodyWidth:document.body.scrollWidth,offenders};
+     });
+     assert.ok(extent.documentWidth<=width+2&&extent.bodyWidth<=width+2,
+      'iPad '+width+'px '+tab+' should fit viewport: '+JSON.stringify(extent));
+    }
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   await go('summary');
    // The menu must stay usable on desktop and the narrowest supported iPhones.
    const visibleMenu=async()=>{
     await page.locator('#planner-menu > summary').click();
