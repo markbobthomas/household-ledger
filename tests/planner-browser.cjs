@@ -90,6 +90,29 @@ const {chromium,webkit}=require('playwright');
      await page.locator('#planner-menu > summary').click();
     await page.locator('.planner-menu-content [data-view="'+tab+'"]').click();
    };
+   // iPad portrait and landscape widths must not cause document-wide sideways
+   // scrolling on any primary ledger tab. Report the widest offending nodes.
+   for(const width of [744,768,810,820,834,980,1024,1180]){
+    await page.setViewportSize({width,height:1024});
+    for(const tab of ['summary','schedules','history','reviews','settings','trend','transactions']){
+     await go(tab);
+     const extent=await page.evaluate(()=>{
+      const max=innerWidth+1;
+      const offenders=[...document.querySelectorAll('body *')].filter(el=>{
+       const cs=getComputedStyle(el),r=el.getBoundingClientRect();
+       return cs.position!=='fixed'&&cs.display!=='none'&&r.width&&r.right>max+1;
+      }).sort((a,b)=>b.getBoundingClientRect().right-a.getBoundingClientRect().right)
+       .slice(0,6).map(el=>({tag:el.tagName,cls:String(el.className).slice(0,120),
+        right:Math.round(el.getBoundingClientRect().right),width:Math.round(el.getBoundingClientRect().width)}));
+      return {width:innerWidth,documentWidth:document.documentElement.scrollWidth,
+       bodyWidth:document.body.scrollWidth,offenders};
+     });
+     assert.ok(extent.documentWidth<=width+2&&extent.bodyWidth<=width+2,
+      'iPad '+width+'px '+tab+' should fit viewport: '+JSON.stringify(extent));
+    }
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   await go('summary');
    // The menu must stay usable on desktop and the narrowest supported iPhones.
    const visibleMenu=async()=>{
     await page.locator('#planner-menu > summary').click();
@@ -2199,6 +2222,26 @@ const {chromium,webkit}=require('playwright');
   });
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
+  // Fictional Real-bank tablet: long-lived loaded account views, not only Demo.
+  for(const width of [744,820,834,1024,1180]){
+   await page.setViewportSize({width,height:1024});
+   for(const tab of ['summary','schedules','history','reviews','settings','trend','transactions']){
+    await go(tab);
+    const sizes=await page.evaluate(()=>({
+     screen:innerWidth,html:document.documentElement.scrollWidth,body:document.body.scrollWidth,
+     overflow:[...document.querySelectorAll('body *')].filter(el=>{
+      const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
+      return cs.display!=='none'&&cs.position!=='fixed'&&r.width&&r.right>innerWidth+2;
+     }).slice(0,5).map(el=>({cls:String(el.className).slice(0,100),
+      right:Math.round(el.getBoundingClientRect().right)}))
+    }));
+    assert.ok(sizes.html<=width+2&&sizes.body<=width+2,
+     'Real-mode fictional iPad '+width+'px '+tab+' stays onscreen: '+JSON.stringify(sizes));
+   }
+  }
+  await page.setViewportSize({width:1280,height:900});
+  await go('summary');
+
   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
    'Live bank current must be the Plaid current, not $4,800 available');
