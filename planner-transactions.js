@@ -444,8 +444,9 @@ function reconciliationAnchor(rule,records=[],accounts=[],asOf=''){
  }
  const original=String(rule.sourceAnchorDate||'');
  if(rule.sourceFrequency===frequency&&validDate(original)&&original<start){
-  const source=dates.find(d=>Math.abs(daysBetween(d,original))<=
-   (interval?Math.min(4,Math.round(interval/4)):14));
+  const window=matchWindow(rule),
+   source=dates.find(d=>original>=shift(d,-window.before)&&
+    original<=shift(d,window.after));
   if(source)return source;
  }
  const bank=(records||[]).filter(row=>!row.pending&&validDate(row.date)&&
