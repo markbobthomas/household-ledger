@@ -144,69 +144,9 @@ function postedDay(date){
   '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
   '<button type="button" class="calendar-edit" data-view="history">All bank history →</button></section>';
 }
-function coverageChecklist(){
- const coverage=calendarContext?.coverage,month=calendarMonth;
- const idx=coverage?.months?.findIndex(m=>m.key===month)??-1;
- if(idx<0)return '';
- const rows=coverage.rows.map((r,i)=>{
-  const cell=r.cells[idx];if(!cell)return '';
-  const warning=['missing','setup','review','unknown'].includes(cell.status),
-   ok=['covered','posted'].includes(cell.status),
-   label=ok?'Included':cell.status==='external'?'Other account':
-    cell.status==='na'?'Not due':warning?'Review':'Check';
-  return '<button type="button" class="calendar-check-row'+(warning?' needs-review':'')+
-   '" data-coverage-focus="'+i+'|'+idx+'" title="'+esc(cell.detail)+'" aria-label="'+
-   esc(r.title+', '+label+'. '+cell.detail)+'"><span class="calendar-check-icon">'+
-   (ok?'✓':warning?'!':'—')+'</span><span>'+esc(r.title)+'</span>'+
-   '<strong>'+label+'</strong></button>';
- }).join('');
- return '<div class="calendar-checklist" aria-label="Monthly payment checklist">'+
-  '<div class="calendar-check-heading"><strong>Major payments · '+esc(monthName(month))+
-  '</strong><small>Tap a payment to inspect</small></div>'+
-  '<div class="calendar-check-rows">'+rows+'</div></div>';
-}
 function paymentDetail(event){
  const id=String(event?.transferGroupId||'');
  return calendarContext?.paymentDetails?.find(x=>String(x.id)===id)||null;
-}
-function paymentBreakdown(){
- if(!cardBreakdownId)return '';
- const d=calendarContext?.paymentDetails?.find(x=>String(x.id)===cardBreakdownId);
- if(!d)return '';
- const line=(t)=>'<div class="card-breakdown-line"><span>'+esc(shortDate(t.date))+
-  ' · '+esc(t.merchant)+(t.type==='refund'?' (refund)':'')+'</span><strong>'+
-  (t.type==='refund'?'−':'')+money(t.amount)+'</strong></div>';
- const posted=d.postedTransactions||[],scheduled=d.predictedTransactions||[],
-  net=list=>Math.round(list.reduce((n,t)=>n+(t.type==='refund'?-1:1)*Number(t.amount),0)*100)/100,
-  calculated=net(posted)+net(scheduled),
-  displayed=calendarContext.points.flatMap(x=>x.events||[]).find(x=>
-   x.kind==='transfer_out'&&String(x.transferGroupId)===String(d.id))?.amount??d.amount;
- return '<section class="card-breakdown-panel" data-card-breakdown-panel aria-label="Credit card payment calculation">'+
-  '<div class="card-breakdown-heading"><div><small>TRANSACTION-BASED CARD PAYMENT</small><strong>'+
-   esc(d.cardName)+' · '+money(displayed)+'</strong></div>'+
-  '<button type="button" class="btn" data-card-breakdown-close>Close</button></div>'+
-  '<p class="card-breakdown-window">'+
-   (d.periodSource==='configured-statement'?'Billing statement period: ':'Activity window since last matched payment: ')+
-   esc(dateLabel(d.periodStart))+' – '+esc(dateLabel(d.periodEnd))+'</p>'+
-  '<div class="card-breakdown-section"><div class="card-breakdown-subhead"><strong>Posted card purchases and refunds</strong>'+
-   '<strong>'+money(net(posted))+'</strong></div>'+
-   (posted.length?posted.map(line).join(''):'<p>No posted card charges in this period.</p>')+'</div>'+
-  '<div class="card-breakdown-section"><div class="card-breakdown-subhead"><strong>Predicted and recurring card transactions</strong>'+
-   '<strong>'+money(net(scheduled))+'</strong></div>'+
-   (scheduled.length?scheduled.map(line).join(''):
-    '<p>No additional predicted card charges before this period closes.</p>')+'</div>'+
-  '<div class="card-breakdown-total"><span>Identified net card activity</span><strong>'+money(calculated)+'</strong></div>'+
-  (Math.abs(displayed-calculated)>.011?'<p class="card-breakdown-adjustment">'+
-   (d.confirmed?'An issued statement amount was entered and takes precedence over transaction totals. ':
-    d.method!=='statement'?'The chosen card payment method determines a different withdrawal amount. ':
-     'The predicted withdrawal differs from the identified activity due to a bank-balance limit or manual adjustment. ')+
-   'Projected transfer: <strong>'+money(displayed)+'</strong>.</p>':'')+
-  (d.pendingExcluded?'<p class="card-breakdown-note">'+d.pendingExcluded+
-   ' pending card transaction(s) are not yet counted as posted purchases.</p>':'')+
-  '<p class="card-breakdown-note">'+esc(d.caveat||'No historical spending averages or generic future charges are added.')+
-   ' History helps identify recurring transactions, but no historical-average spending allowance is added.</p>'+
-  '<button type="button" class="btn" data-view="settings">Review statement/payment dates →</button>'+
-  '</section>';
 }
 function predictionIdentity(e){
  const tools=root.HouseholdPlannerTransactions;
@@ -458,73 +398,6 @@ function showCalendar(date){
  return true;
 }
 
-function reviewDetails(bundle,accounts,chosen,prefs,ready,coverage){
- const rows=[],seen=new Set();
- const add=(label,detail,action='reviews',month=null,index=null)=>{
-  const key=[label,detail,month,index].join('|');
-  if(seen.has(key))return;seen.add(key);
-  rows.push({label:String(label),detail:String(detail),action,month,index});
- };
- for(const card of accounts.filter(a=>String(a.accountType||a.type)==='credit'&&
-  !ready(prefs?.paymentRules?.[a.id],a,accounts))){
-  const candidate=(bundle?.payments?.cardEstimates||[]).find(c=>String(c.cardId)===String(card.id));
-  add(card.name+' · card payment',candidate?.eligible?
-   'A provisional monthly checking withdrawal is included using paired Plaid transfers. The amount is an estimate, not an issued statement. Confirm its cycle and withdrawal date in Settings.':
-   'No checking withdrawal has been forecast. Settled Plaid card spending over the last 30 days: '+
-    money(Number(candidate?.observedCharges||0))+
-    '. This is not necessarily the issued statement balance. The paying account and payment date cannot be established from purchases alone. '+
-    (candidate?.reason||'Confirm card billing and payment details.'),'settings');
- }
- for(const item of (bundle?.historyCandidates||[]).filter(t=>String(t.accountId)===String(chosen.id)))
-  add(item.merchant||'Recurring suggestion','Potential repeating payment; '+(item.reason||'Review its bank history.'),'reviews');
- for(const item of (bundle?.missingMortgages||[]).filter(t=>String(t.accountId)===String(chosen.id)))
-  add(item.merchant||'Mortgage','Potential missing mortgage prediction: '+(item.reason||'Review the bank transaction.'),'reviews');
- for(const item of bundle?.duplicateConflicts||[]){
-  if(item.accountId&&String(item.accountId)!==String(chosen.id))continue;
-  add(item.merchant||'Duplicate prediction',item.reason||'This prediction needs review.','reviews');
- }
- for(const message of [...(bundle?.payments?.warnings||[]),...(bundle?.routines?.warnings||[])])
-  if(!accounts.some(c=>String(c.accountType||c.type)==='credit'&&
-   !ready(prefs?.paymentRules?.[c.id],c,accounts)&&String(message).startsWith(c.name+':')))
-   add('Forecast warning',message,'reviews');
- for(const issue of bundle?.projection?.diagnostics?.unassigned||[])
-  add('Unassigned payment',issue.merchant||issue.reason||'A payment is missing its account.','reviews');
- for(const issue of bundle?.projection?.diagnostics?.unmatchedTransfers||[])
-  add('Unmatched transfer',issue.merchant||issue.reason||'A transfer is missing its counterpart.','reviews');
- // Coverage rows describe specific future months, not generic review counts.
- (coverage?.rows||[]).forEach((row,i)=>(row.cells||[]).forEach((cell,j)=>{
-  if(!['missing','setup','review','unknown'].includes(cell.status))return;
-  add(row.title+' · '+coverage.months[j].key,cell.detail,'coverage',j,i);
- }));
- return rows;
-}
-function reviewPanel(items){
- if(!items.length)return '';
- return '<section class="summary-review-details"'+(reviewOpen?'':' hidden')+
-  ' aria-label="Payments and predictions needing review">'+
-  '<strong>What needs attention?</strong>'+
-  '<p>These are specific forecast uncertainties, not additional withdrawals. Select an item to inspect it.</p>'+
-  items.map((x,i)=>'<div class="summary-review-row"><div><strong>'+esc(x.label)+
-   '</strong><small>'+esc(x.detail)+'</small></div>'+
-   '<button class="btn" type="button" '+(x.action==='coverage'?
-    'data-coverage-focus="'+x.index+'|'+x.month+'"':
-    'data-view="'+x.action+'"')+'>'+
-    (x.action==='coverage'?'Inspect':x.action==='settings'?'Set up card':'Review')+
-   '</button></div>').join('')+'</section>';
-}
-function issues(bundle,accounts,chosen,prefs,ready){
- const match=x=>String(x.accountId||'')===String(chosen.id);
- const pending=[...(bundle?.historyCandidates||[]).filter(match),
-  ...(bundle?.missingMortgages||[]).filter(match),
-  ...(bundle?.duplicateConflicts||[]).filter(match)].length;
- const general=(bundle?.payments?.warnings||[]).length+
-  (bundle?.routines?.warnings||[]).length+
-  (bundle?.projection?.diagnostics?.unassigned||[]).length+
-  (bundle?.projection?.diagnostics?.unmatchedTransfers||[]).length;
- const missing=accounts.filter(a=>String(a.accountType||a.type)==='credit'&&
-  !ready(prefs?.paymentRules?.[a.id],a,accounts)).length;
- return pending+general+missing;
-}
 function rawBalanceMarkup(account,real){
  const raw=account?.current;
  const n=raw==null||raw===''?null:Number(raw);
