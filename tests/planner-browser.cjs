@@ -2164,10 +2164,16 @@ const {chromium,webkit}=require('playwright');
     'Out $'+(fridayOut/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})),
     'Other never shows an artificial $0 for a November 1 payment posted in October');
    await statementPage.locator('[data-schedule-sort]').selectOption('order');
-   // Changing the sort deliberately closes the inline editor; reopen it.
-   if(!await zelleCard.locator('[data-schedule-view-calendar]').count())
+   // Changing the sort closes the inline editor. Calendar is still
+   // reachable directly from the compact row's More menu.
+   const zelleShortcut=zelleCard.locator('.schedule-more [data-schedule-view-calendar]');
+   if(await zelleShortcut.count()){
+    await zelleCard.locator('.schedule-more > summary').click();
+    await zelleShortcut.click();
+   }else{
     await zelleCard.locator('[data-schedule-edit]').click();
-   await zelleCard.locator('[data-schedule-view-calendar]').click();
+    await zelleCard.locator('[data-schedule-view-calendar]').click();
+   }
    assert.equal(await statementPage.locator('.summary-page').count(),1,
     'View on Calendar switches tabs directly');
    assert.equal(await statementPage.locator('#summary-account').inputValue(),'demo-checking',
