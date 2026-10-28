@@ -670,8 +670,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   locate=i=>[x(i).toFixed(2),y(vals[i]).toFixed(2)];
  const path=series.map((p,i)=>{const [a,b]=locate(i);return (i?'L':'M')+a+' '+b}).join(' ');
  const lowIndex=vals.indexOf(low),first=series[0],last=series.at(-1),lowDay=series[lowIndex],
-  cushion=alertThreshold(prefs),below=!credit&&low<cushion,
-  negative=!credit&&low<0;
+  cushion=alertThreshold(prefs),below=!credit&&low<cushion;
  selected=lowIndex;
  const pin=locate(lowIndex),
   moves=(derived.events||[]).filter(e=>e.date>snapshot.asOf&&e.date<=last.date).length,
@@ -695,8 +694,6 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
     '<strong class="summary-low'+(low<alertThreshold(prefs)?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
     '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
     '">'+esc(dateLabel(lowDay.date))+' →</button>'+
-    (negative?'<small class="summary-low-warning">Below $0</small>':
-     below?'<small class="summary-low-warning">Below warning threshold</small>':'')+
     '</div>')+'</div>'+
     calendarGrid()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
