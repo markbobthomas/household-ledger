@@ -7,9 +7,8 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-const cashFormatter=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
 const cash=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable':
- cashFormatter.format(Number(n));
+ new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n));
 const dateToday=()=>new Date().toLocaleDateString('en-CA');
 const dayLabel=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
@@ -46,8 +45,6 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 // Derived data only. Source bank records and persisted predictions remain the
 // authorities; this cache cannot be written to the bank or planning store.
 let forecastCache=null;
-// Memoized screen data; never persisted or used as the source of bank facts.
-let futureRowsCache=null;
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
@@ -94,9 +91,6 @@ function forecastFor(s){
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
  // category-learning decision must also recompute all projected balances.
- // Keep every saved Review and prediction decision in this fingerprint:
- // an overdue-payment check must never reuse a projection across changed
- // review state when a posted payment may still be outstanding.
  const signature=JSON.stringify({
   snapshot:s,predictions:prefs,categoryOverrides:source.categoryOverrides,
   learning:source.learning,accounts:source.accounts
@@ -450,8 +444,6 @@ function accountSelect(accounts,value,name,allowAll=false){
    escapeHTML(a.name)+'</option>').join('')+'</select>';
 }
 function futureRows(bundle,s){
- if(futureRowsCache?.bundle===bundle&&futureRowsCache.asOf===s.asOf)
-  return futureRowsCache.rows;
  const accounts=activeAccounts(s),labels=new Map(accounts.map(a=>[String(a.id),a.name]));
  const rows=[],projection=bundle?.projection;
  if(!projection)return rows;
@@ -490,9 +482,7 @@ function futureRows(bundle,s){
    sourceType:e.sourceType||e.type,source:e.source||null,
    addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
  }
- rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
- futureRowsCache={bundle,asOf:s.asOf,rows};
- return rows;
+ return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
 }
 function cadenceOption(cadence){
  return {'weekly':'weekly','every 2 weeks':'biweekly',biweekly:'biweekly',
@@ -991,24 +981,6 @@ function newTransactionForm(s){
   '<button class="btn" type="button" data-cancel-new>Cancel</button></div></form>';
 }
 
-function scheduleMatchWindowFields(r={}){
- const value=name=>r[name]===undefined||r[name]===null?'':String(r[name]);
- const days=window.HouseholdPlannerTransactions.matchWindow(r);
- return '<fieldset class="schedule-match-window">'+
-  '<legend>Bank matching window</legend>'+
-  '<p class="audit-footnote">Use these limits to match the bank payment to this repeating prediction. '+
-  'They do not change the planned amount or payment date. Leave blank for automatic dates or any amount.</p>'+
-  '<div class="future-fields">'+
-  '<label>Days early<input name="matchDaysBefore" type="number" min="0" max="14" step="1" '+
-   'placeholder="Auto: '+days.before+'" value="'+escapeHTML(value('matchDaysBefore'))+'"></label>'+
-  '<label>Days late<input name="matchDaysAfter" type="number" min="0" max="14" step="1" '+
-   'placeholder="Auto: '+days.after+'" value="'+escapeHTML(value('matchDaysAfter'))+'"></label>'+
-  '<label>Minimum amount ($)<input name="matchAmountMin" type="number" min="0" max="999999999" step=".01" '+
-   'placeholder="Any" value="'+escapeHTML(value('matchAmountMin'))+'"></label>'+
-  '<label>Maximum amount ($)<input name="matchAmountMax" type="number" min="0" max="999999999" step=".01" '+
-   'placeholder="Any" value="'+escapeHTML(value('matchAmountMax'))+'"></label>'+
-  '</div></fieldset>';
-}
 function scheduleFields(r,isNew,s){
  const accounts=activeAccounts(s),tomorrow=shiftDay(s.asOf,1),
   type=r.kind==='movement'?'transfer':r.type||'expense',
@@ -1049,7 +1021,7 @@ function scheduleFields(r,isNew,s){
    accountSelect(accounts,r.toAccountId||accounts.find(a=>String(a.id)!==accountId)?.id||accountId,'toAccountId')+'</label>'+
   '<label class="future-second-day"'+(r.frequency==='twice-monthly'?'':' hidden')+
    '>Second day<input type="number" name="secondDay" min="1" max="31" value="'+escapeHTML(r.secondDay||15)+'"></label>'+
-  '</div>'+scheduleMatchWindowFields(r)+'</details>';
+  '</div></details>';
 }
 function applyScheduleSearch(root=document){
  // Some non-browser integrations expose a partial DOM. Search is optional:
@@ -1456,8 +1428,6 @@ function repeatingReviewForm(s,{inline=false}={}){
   '<label>Repeat'+frequencyChoices(d.frequency||'monthly')+'</label>'+
   '<label class="future-second-day" hidden>Second day of month (1–31)<input name="secondDay" type="number" min="1" max="31" value="15"></label>'+
   '</div>'+
-  '<details class="schedule-advanced"><summary>Bank matching window</summary>'+
-  scheduleMatchWindowFields(d)+'</details>'+
   historyLinkField(d.examples||[])+
   '<label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> Create a separate bill even if another prediction shares this payee/date</label>'+
   '<p class="audit-footnote">For actual account-to-account transfers, select Transfer and two connected accounts. Otherwise use Expense or Deposit. Only the future forecast changes; the original bank record is never edited or duplicated.</p>'+
@@ -1739,8 +1709,6 @@ function repeatedRecommendations(bundle,s){
  // A legacy estimate may remain visible after Ignore but is no longer an
  // undecided action; count its decision only while still pending.
 function reviewQueue(bundle,s){
- // Re-evaluate bank-posting and saved occurrence decisions on every render.
- // The 3-year forecast is still cached separately; Review must never be stale.
  const recommendations=repeatedRecommendations(bundle,s),
   overdue=(bundle?.overduePayments||[]).filter(item=>
    !state().predictions?.futureTransactionEdits?.[item.key]?.skipped);
@@ -1830,7 +1798,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   (overdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Predicted payments not yet posted</h2>'+
    '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
-   '<p class="lead">These withdrawals are due or past due without a confirmed bank posting. '+
+   '<p class="lead">These withdrawals were expected but have no confirmed matching bank payment. '+
    'Each is still reserved once in the forecast on the next business day; '+
    'your actual bank balance is unchanged. Bank processing can take a few days.</p>'+
    overdue.map(item=>'<form class="overdue-review-row" data-overdue-date="'+

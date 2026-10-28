@@ -1149,7 +1149,7 @@ const {chromium,webkit}=require('playwright');
    const newAmount=originalAmount+125;
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
+   await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
    assert.equal(await page.evaluate(amount=>Object.values(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
    ).some(x=>x.amount===amount),newAmount),true,
@@ -1187,7 +1187,7 @@ const {chromium,webkit}=require('playwright');
    await manualEditor.locator('input[name=scope][value=all]').check();
    await manualEditor.locator('[data-frequency]').selectOption('monthly');
    await manualEditor.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/Recurring prediction/i).waitFor();
+   await page.locator('.future-notice').getByText(/Recurring schedule/i).waitFor();
    assert.ok(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count()>=2,
     'The confirmed recurring schedule generates multiple future payments');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -1308,13 +1308,13 @@ const {chromium,webkit}=require('playwright');
    const explanation=await page.locator('.history-explanation').innerText();
    assert.match(explanation,/saved repeating plans take priority/i,
     'History explains that owner-confirmed plans supersede estimates');
-   assert.match(explanation,/Transactions stay here/i,
+   assert.match(explanation,/Transactions stays here/i,
     'The UI promises bank source records are never deleted');
    assert.equal(await page.locator('[data-history-auto-prediction]').count(),0,
     'History no longer offers a competing automatic prediction system');
    const unscheduledHistory=page.locator('.history-actual-row[data-history-forecast-state="unplanned"]').first();
    assert.ok(await unscheduledHistory.count()>0,'Unplanned bank rows remain visible');
-   assert.match(await unscheduledHistory.innerText(),/Not predicted/);
+   assert.match(await unscheduledHistory.innerText(),/Not scheduled/);
    assert.equal(await unscheduledHistory.locator('.history-row-open .history-row-hint').innerText(),'›',
     'Bank activity uses the shared chevron-only review affordance');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
@@ -2347,7 +2347,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('.transaction-detail').count(),0);
   assert.equal(await itemized.isVisible(),true);
   assert.match(await itemized.innerText(),/Actual posted card transactions/);
-  assert.match(await itemized.innerText(),/Predicted\/recurring card transactions/);
+  assert.match(await itemized.innerText(),/Scheduled\/recurring card transactions/);
   assert.match(await itemized.innerText(),/Identifiable activity/);
   assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
   assert.equal(await itemized.locator('.future-edit-form').count(),1);
@@ -2378,7 +2378,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await cardSeriesForm.locator('input[name=scope][value=all]').isChecked(),true);
   await cardSeriesForm.locator('[name=amount]').fill('1275');
   await cardSeriesForm.locator('button[type=submit]').click();
-  await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
+  await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
   assert.ok(writes.some(x=>Object.values(x.predictions?.futureSeriesEdits||{})
    .some(v=>v.amount===1275)),'Recurring card payments persist only as private adjustments; recent forecast save: '+JSON.stringify(writes.at(-1)?.predictions?.futureRecurringRules?.slice(-1)||writes.at(-1)?.predictions?.futureSeriesEdits||{}).slice(0,750));
   const recurringCardRows=page.locator('.future-item').filter({hasText:'Credit-card payment'});
@@ -2528,58 +2528,38 @@ const {chromium,webkit}=require('playwright');
   await connectionPage.locator('#repair-alert').waitFor({state:'hidden'});
   assert.deepEqual(connectErrors,[]);
   await connectionPage.close();
-  // Browser-integrated Real-mode reproduction of the original PR #208 behavior.
-  // Opening a saved recurring bill shows NEXT month; changing only posting
-  // tolerances must not erase the missed installment due yesterday.
-  const dueRule={id:'ui-unposted-anchor',kind:'event',frequency:'monthly',
-   anchorDate:'2026-09-18',accountId:'checking-real',type:'expense',
-   amount:250,merchant:'Fictional Rent ACH',scheduleLabel:'Fictional Rent ACH',
-   originalAccountId:'checking-real',originalMerchant:'Fictional Rent ACH',
-   originalType:'expense',sourceAnchorDate:'2026-09-18',
-   matchNames:['fictional rent ach'],exampleIds:[]};
+  // Pre-manual-window regression in Real source mode: a due withdrawal is
+  // reserved once until confirmed by a posted bank transaction on refresh.
+  const baselineRule={id:'pre-window-cash-test',kind:'event',frequency:'monthly',
+   anchorDate:'2026-10-18',accountId:'checking-real',type:'expense',
+   amount:160,merchant:'Fictional Monthly Housing',scheduleLabel:'Fictional Monthly Housing',
+   originalAccountId:'checking-real',originalMerchant:'Fictional Monthly Housing',
+   originalType:'expense',matchNames:['fictional monthly housing'],exampleIds:[]};
   realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
-   futureRecurringRules:[dueRule]};
+   futureRecurringRules:[baselineRule]};
   await go('summary');
   if(await page.locator('#planner-menu').getAttribute('open')===null)
    await page.locator('#planner-menu > summary').click();
   await page.locator('#refresh-bank').click();
   await go('reviews');
   assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Rent ACH'}).count(),1,
-   'Missed October installment appears in Real Review before editing');
-  await go('schedules');
-  const overdueCard=page.locator('[data-schedule-card="ui-unposted-anchor"]');
-  await overdueCard.locator('[data-schedule-edit]').click();
-  const overdueForm=overdueCard.locator('[data-schedule-edit-form]');
-  assert.equal(await overdueForm.locator('[name=date]').inputValue(),'2026-11-18',
-   'Editor shows the next installment, not the original recurrence anchor');
-  const advanced=overdueForm.locator('[data-schedule-advanced]');
-  if(!await advanced.evaluate(el=>el.open))await advanced.locator('summary').click();
-  await overdueForm.locator('[name=matchDaysAfter]').fill('9');
-  await overdueForm.locator('button[type=submit]').click();
-  await overdueCard.locator('.inline-save-result').getByText(/Saved/).waitFor();
-  await go('reviews');
-  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Rent ACH'}).count(),1,
-   'Saving matching bounds keeps the October debit in Real Review');
-  const savedWindow=[...writes].reverse().find(x=>
-   x.predictions?.futureRecurringRules?.some(rule=>rule.id==='ui-unposted-anchor'&&
-    rule.anchorDate==='2026-09-18'&&rule.matchDaysAfter===9));
-  assert.ok(savedWindow,
-   'Private saved forecast retains the original anchor when posting bounds change');
-  // Simulate an actual bank posting on the next refresh: reconcile only once.
-  realPayload.adjustments.predictions=savedWindow.predictions;
-  realPayload.transactions.push({id:'ui-fictional-rent-posted',accountId:'checking-real',
-   date:'2026-10-19',name:'Fictional Rent ACH',merchant:'Fictional Rent ACH',
-   amount:250,pending:false,category:{primary:'RENT_AND_UTILITIES',
+   .filter({hasText:'Fictional Monthly Housing'}).count(),1,
+   'The original pre-window policy flags unpaid debit in the Real Review tab');
+  assert.ok(await page.locator('.planner-nav-primary [data-view="reviews"]')
+   .evaluate(el=>el.classList.contains('has-review-items')),
+   'Review tab stays red when a withdrawal has not posted');
+  realPayload.transactions.push({id:'baseline-posted-housing',
+   accountId:'checking-real',date:'2026-10-19',
+   name:'Fictional Monthly Housing',merchant:'Fictional Monthly Housing',
+   amount:160,pending:false,category:{primary:'RENT_AND_UTILITIES',
     detailed:'RENT_AND_UTILITIES_RENT',confidence_level:'HIGH'}});
   if(await page.locator('#planner-menu').getAttribute('open')===null)
    await page.locator('#planner-menu > summary').click();
   await page.locator('#refresh-bank').click();
   await go('reviews');
   assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Rent ACH'}).count(),0,
-   'Bank-posted October installment clears the overdue Review item after refresh');
+   .filter({hasText:'Fictional Monthly Housing'}).count(),0,
+   'A newly posted debit clears exactly the previously overdue occurrence');
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: three-year headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');

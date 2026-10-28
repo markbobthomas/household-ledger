@@ -301,63 +301,6 @@ const bankDirection=t=>t.type==='transfer'&&!t.pairedTransactionId?
  (t.cashDirection==='in'?'income':t.cashDirection==='out'?'expense':null):t.type;
 const sameDirection=(t,type)=>bankDirection(t)===type||
  (type==='transfer'&&t.type==='transfer'&&Boolean(t.pairedTransactionId));
-// Saved matching boundaries describe acceptable BANK POSTING evidence only.
-// They never move or change the amount of an underlying forecast occurrence.
-// Missing bounds preserve legacy cadence/date matching and variable bills.
-const defaultMatchDays=frequency=>frequency==='weekly'?2:
- ['biweekly','every-4-weeks'].includes(frequency)?3:6;
-function matchWindow(rule){
- const dayValue=(name)=>{
-  const x=rule?.[name];
-  return x!==''&&x!==null&&x!==undefined&&Number.isInteger(Number(x))&&
-   Number(x)>=0&&Number(x)<=14?Number(x):null;
- };
- const amountValue=(name)=>{
-  const x=rule?.[name];
-  return x!==''&&x!==null&&x!==undefined&&Number.isFinite(Number(x))&&
-   Number(x)>=0?Number(x):null;
- };
- const before=dayValue('matchDaysBefore'),after=dayValue('matchDaysAfter');
- return {before:before??defaultMatchDays(rule?.frequency),
-  after:after??defaultMatchDays(rule?.frequency),
-  customDays:before!==null||after!==null,
-  min:amountValue('matchAmountMin'),max:amountValue('matchAmountMax')};
-}
-function postedWithinMatchWindow(rule,bank,date,amount,explicit=false,overdue=false){
- if(!validDate(date)||!validDate(bank?.date)||!(Number(bank?.amount)>0))
-  return false;
- const window=matchWindow(rule),actual=Number(bank.amount),
-  low=window.min,high=window.max;
- if(low!==null&&actual+0.005<low||high!==null&&actual-0.005>high)return false;
- if(window.customDays)
-  return bank.date>=shift(date,-window.before)&&bank.date<=shift(date,window.after);
- // Legacy overdue reconciliation used ±7 days except weekly (±2).
- // Preserve it unless explicit user boundaries supersede that policy.
- if(overdue)return Math.abs(daysBetween(bank.date,date))<=
-  (rule.frequency==='weekly'?2:7);
- const gap=Math.abs(daysBetween(bank.date,date)),
-  cycle=['monthly','quarterly','semiannual','annual'].includes(rule.frequency)&&
-   bank.date.slice(0,7)===date.slice(0,7)&&gap<=21;
- return gap<=(explicit?Math.max(window.before,14):window.before)||cycle;
-}
-function savedMatchBounds(data,old){
- const get=(name,integer)=>{
-  const value=data[name]===undefined?old?.[name]:data[name];
-  if(value===undefined||value===null||value==='')return null;
-  const n=Number(value);
-  if(!Number.isFinite(n)||n<0||(integer?(!Number.isInteger(n)||n>14):n>999999999))
-   throw Error(integer?'Matching date window must be 0–14 whole days':
-    'Matching amount must be a valid nonnegative dollar value');
-  return integer?n:Math.round((n+Number.EPSILON)*100)/100;
- };
- const matchDaysBefore=get('matchDaysBefore',true),
-  matchDaysAfter=get('matchDaysAfter',true),
-  matchAmountMin=get('matchAmountMin',false),
-  matchAmountMax=get('matchAmountMax',false);
- if(matchAmountMin!==null&&matchAmountMax!==null&&matchAmountMin>matchAmountMax)
-  throw Error('Minimum matching amount must not exceed maximum');
- return {matchDaysBefore,matchDaysAfter,matchAmountMin,matchAmountMax};
-}
 function findExamples(records,reference,accounts,search=''){
  const account=reference.kind==='movement'?String(reference.fromAccountId):String(reference.accountId),
   type=reference.kind==='movement'?'transfer':reference.type||'expense',
@@ -448,8 +391,7 @@ function historicalScheduleMatches(row,accounts,rules=[]){
    String(r.originalAccountId||r.accountId||r.fromAccountId)===account&&
    (kind==='movement'?Boolean(row.pairedTransactionId)&&
     (!row.toAccountId||String(r.toAccountId)===String(row.toAccountId)):
-    (r.type===type||r.kind==='event'&&r.type==='transfer'&&
-     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':null)===type)));
+    r.type===type));
  if(!name)return [];
  const named=eligible.filter(r=>
   [r.originalMerchant,r.merchant,...(r.matchNames||[])]
@@ -613,16 +555,7 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(requestedId&&id!==requestedId)
   throw Error('Choose the matching saved recurring prediction before saving.');
  if(!names.length)throw Error('Enter a merchant name');
- // The schedule editor displays the NEXT due date, not the original anchor.
- // A non-date edit after an unpaid occurrence must never silently rebase the
- // cadence onto next month and erase the missed debit from reconciliation.
- // Only an actual change of date or frequency is a recurrence-date edit.
- const upcoming=old&&old.frequency===frequency?
-  recurrenceDates(old,asOf,shift(asOf,1095))[0]:null;
- const unchangedNext=old&&String(fields.date)===String(upcoming);
- const anchorDate=unchangedNext?old.anchorDate:fields.date;
- const rule={id,kind:transfer?'movement':'event',frequency,anchorDate,
-  ...savedMatchBounds(data,old),
+ const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
   ...(secondDay?{secondDay}:{}),...fields,
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
   category:scheduleCategory(data.category===undefined?old?.category:data.category,state),
@@ -945,15 +878,16 @@ function postedCoverage(generated,rules,records,accounts,asOf){
     date=String(effective.date||effective.anchorDate||item.anchorDate||''),
     account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
    if(!validDate(date)||date<=asOf||
-    !sameDirection(t,kind==='event'&&r.type==='transfer'?
-     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':r.type):
-     kind==='event'?r.type:'transfer')||
+    !sameDirection(t,kind==='event'?r.type:'transfer')||
     accountRef(t.accountId||t.account,accounts)!==account)continue;
-   const explicit=linked.some(x=>String(x.id)===String(r.id));
-   // Posted bank evidence is accepted only inside THIS prediction's date
-   // and amount boundaries. One bank row still covers at most one rule.
-   if(!postedWithinMatchWindow(r,t,date,item.amount,explicit))continue;
-   const gap=Math.abs(daysBetween(t.date,date));
+   const gap=Math.abs(daysBetween(t.date,date)),
+    tolerance=r.frequency==='weekly'?2:
+     ['biweekly','every-4-weeks'].includes(r.frequency)?3:6,
+    explicit=linked.some(x=>String(x.id)===String(r.id)),
+    cycle=['monthly','quarterly','semiannual','annual'].includes(r.frequency)&&
+     t.date.slice(0,7)===date.slice(0,7)&&gap<=21,
+    maxGap=explicit?Math.max(tolerance,14):tolerance;
+   if(gap>maxGap&&!cycle)continue;
    const expected=Math.max(1,Number(item.amount)||1),
     deviation=Math.abs(Number(t.amount)-expected)/expected,
     candidate={index,p,ruleId:String(r.id),date,gap,deviation,explicit,
@@ -1027,7 +961,7 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
 
 const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,assertNoNewForecastDuplicates,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,defaultScheduleCategories,scheduleCategories,matchWindow,postedWithinMatchWindow,savedMatchBounds,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
+ frequencies,defaultScheduleCategories,scheduleCategories,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
  // Shared primitives only; scheduling, recommendation and payment policies stay
  // separate. Preserve unknown/ambiguous account references unchanged.

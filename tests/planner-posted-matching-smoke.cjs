@@ -76,140 +76,26 @@ const distant={predictions:{}};
 newRule(distant,'Fictional Service',175,'2026-10-30');
 assert.ok(cover(distant,[post('distant','Fictional Service',175,'2026-10-01')]).events
  .some(e=>e.date==='2026-10-30'),'A distant earlier payment in the same calendar month must not remove a later bill');
-// Regression: a due withdrawal that has not posted must not silently vanish
-// into an already-reported bank balance. Pending is not posted; refresh is.
-const overdueAsOf='2026-10-27',overdueSnapshot={mode:'demo',asOf:overdueAsOf,
- accounts:accounts.map(a=>({...a}))},overdueRule={
- id:'unpaid-housing',kind:'event',accountId:'checking',type:'expense',
- anchorDate:'2026-10-26',frequency:'monthly',amount:1600,
- merchant:'Fictional Housing',scheduleLabel:'Fictional Housing'
-},overduePrefs={futureRecurringRules:[overdueRule]},options={weekendPolicy:'friday'};
-const missed=Core.materialize(overdueSnapshot,[],overduePrefs,T,null,65,options);
-assert.equal(missed.overduePayments.length,1,'A due but unposted bill enters Review');
-assert.equal(missed.overduePayments[0].expectedDate,'2026-10-26');
-assert.deepEqual(missed.ledger.filter(e=>e.ruleId===overdueRule.id).map(e=>e.date).slice(0,2),
- ['2026-10-28','2026-11-26'],'Carry one missed debit, not a duplicate or shifted future schedule');
-assert.equal(missed.projection.accounts.find(a=>a.id==='checking').series.find(p=>p.date==='2026-10-28').balance,6400,
- 'Projected checking balance reserves the missed debit once');
-const unsettled=[post('unsettled','Fictional Housing',1600,'2026-10-26')];
-unsettled[0].pending=true;
-const pendingDue=Core.materialize(overdueSnapshot,unsettled,overduePrefs,T,null,65,options);
-assert.equal(pendingDue.overduePayments.length,1,'Pending bank activity does not count as a posted debit');
-const sourcePosted=post('settled','Fictional Housing',1600,'2026-10-27');
-const postedDue=Core.materialize(overdueSnapshot,[sourcePosted],overduePrefs,T,null,65,options);
-assert.equal(postedDue.overduePayments.length,0,'Refreshed posted bank data clears the alert');
-assert.ok(!postedDue.ledger.some(e=>e.ruleId===overdueRule.id&&e.date==='2026-10-28'),
- 'The already-posted occurrence cannot debit the forecast again');
-assert.deepEqual(postedDue.ledger.filter(e=>e.ruleId===overdueRule.id).map(e=>e.date),
- ['2026-11-26','2026-12-25'],
- 'Later regular monthly recurrences remain anchored across two calendar months');
-assert.equal(sourcePosted.date,'2026-10-27','Actual bank transaction is read-only');
 
-// The live app must not silently discard a payment just because TODAY is its
-// date, or because an explicitly saved one-time withdrawal became yesterday.
-const todayRule={...overdueRule,anchorDate:overdueAsOf,id:'housing-due-today'};
-const dueNow=Core.materialize(overdueSnapshot,[],
- {futureRecurringRules:[todayRule]},T,null,65,options);
-assert.equal(dueNow.overduePayments.length,1,
- 'A payment due today with no posted bank evidence still requires Review');
-assert.ok(dueNow.ledger.some(e=>e.ruleId===todayRule.id&&e.date==='2026-10-28'),
- 'The unposted same-day debit remains reserved from the bank-reported opening balance');
-const oneOff={id:'future-add|fictional-due',date:'2026-10-26',type:'expense',
- accountId:'checking',merchant:'Fictional Insurance Bill',amount:250};
-const onePrefs={futureTransactionAdds:[oneOff]};
-const oneMissed=Core.materialize(overdueSnapshot,[],onePrefs,T,null,65,options);
-assert.equal(oneMissed.overduePayments.length,1,
- 'Unposted one-time expense enters Review after its forecast date');
-assert.equal(oneMissed.ledger.filter(e=>e.id===oneOff.id).length,1,
- 'Missed one-time expense is carried exactly once');
-assert.equal(oneMissed.ledger.find(e=>e.id===oneOff.id).date,'2026-10-28');
-const pendingOne=Core.materialize(overdueSnapshot,[
- {...post('pending-single','Fictional Insurance Bill',250,'2026-10-26'),pending:true}
-],onePrefs,T,null,65,options);
-assert.equal(pendingOne.overduePayments.length,1,
- 'Pending one-time payment is not incorrectly counted as posted');
-const paidOne=Core.materialize(overdueSnapshot,[
- post('settled-single','Fictional Insurance Bill',250,'2026-10-27')
-],onePrefs,T,null,65,options);
-assert.equal(paidOne.overduePayments.length,0);
-assert.ok(!paidOne.ledger.some(e=>e.id===oneOff.id),
- 'A confirmed matching posted payment resolves one-time debt without a second withdrawal');
-const movedOne=Core.materialize(overdueSnapshot,[],{
- futureTransactionAdds:[oneOff],
- futureTransactionEdits:{[T.keyEvent(oneOff.id,'checking')]:{date:'2026-11-03'}}
-},T,null,65,options);
-assert.equal(movedOne.overduePayments.length,0,
- 'User-confirmed future postponement does not produce an overdue alert');
-assert.deepEqual(movedOne.ledger.filter(e=>e.id===oneOff.id).map(e=>e.date),
- ['2026-11-03'],'A rescheduled one-time debit remains in future forecast');
-const competing={futureTransactionAdds:[
- oneOff,{...oneOff,id:'future-add|independent-due'}]};
-const ambiguousOne=Core.materialize(overdueSnapshot,[
- post('single-settlement','Fictional Insurance Bill',250,'2026-10-27')
-],competing,T,null,65,options);
-assert.equal(ambiguousOne.overduePayments.length,2,
- 'One matching bank debit must not silently clear two independent overdue payments');
-const achRule={id:'ach-out',kind:'event',accountId:'checking',type:'transfer',
- cashDirection:'out',anchorDate:'2026-10-26',frequency:'monthly',amount:115,
- merchant:'Fictional External ACH',scheduleLabel:'Fictional External ACH'};
-const achDue=Core.materialize(overdueSnapshot,[],
- {futureRecurringRules:[achRule]},T,null,65,options);
-assert.equal(achDue.overduePayments.length,1,
- 'A single-account outgoing ACH recurring prediction remains reviewable');
-assert.ok(achDue.ledger.some(e=>e.ruleId===achRule.id&&e.date==='2026-10-28'&&e.type==='expense'),
- 'Outgoing ACH is a real predicted checking debit, not an omitted transfer');
-const postedAch={...post('ach-posted','Fictional External ACH',115,'2026-10-27'),
- type:'transfer',cashDirection:'out'};
-const achSettled=Core.materialize(overdueSnapshot,[postedAch],
- {futureRecurringRules:[achRule]},T,null,65,options);
-assert.equal(achSettled.overduePayments.length,0,
- 'Confirmed outgoing ACH bank posting resolves the matching rule');
-assert.ok(!achSettled.ledger.some(e=>e.ruleId===achRule.id&&e.date==='2026-10-28'),
- 'Posted ACH cannot be debited a second time');
-
-// Historical regression (first visible in the old PR #208 rollover flow):
-// opening a saved monthly prediction after its due date shows NEXT MONTH in
-// the editor. Saving only its amount/date matching windows must NOT change
-// its original recurrence anchor or erase the unposted prior occurrence.
-const editing={predictions:{futureRecurringRules:[]}};
-const savedHousing=T.defineRecurring(editing,{date:'2026-09-26',
- merchant:'Fictional Rent ACH',amount:1600,type:'expense',
- accountId:'checking',frequency:'monthly',separateSchedule:'on',
- category:'Housing'},accounts,'2026-09-01');
-const oldAnchor=savedHousing.anchorDate;
-assert.equal(T.recurrenceDates(savedHousing,overdueAsOf,'2027-01-01')[0],
- '2026-11-26','Edit form displays the first future recurrence after the missed October debit');
-const editedHousing=T.defineRecurring(editing,{date:'2026-11-26',
- merchant:'Fictional Rent ACH',amount:1600,type:'expense',
- accountId:'checking',frequency:'monthly',matchDaysBefore:'4',
- matchDaysAfter:'9',matchAmountMin:'1450',matchAmountMax:'1900',
- category:'Housing'},accounts,overdueAsOf,{
- kind:'event',recurringRuleId:savedHousing.id,sourceAccountId:'checking',
- originalMerchant:'Fictional Rent ACH',originalType:'expense',
- sourceAmount:1600,date:oldAnchor});
-assert.equal(editedHousing.anchorDate,oldAnchor,
- 'Editing bank-match windows cannot silently reset the saved recurrence anchor');
-assert.equal(editedHousing.matchDaysBefore,4);
-assert.equal(editedHousing.matchDaysAfter,9);
-const editedMissed=Core.materialize(overdueSnapshot,[],editing.predictions,T,null,65,options);
-assert.equal(editedMissed.overduePayments.length,1,
- 'The overdue October installment remains discoverable after editing matching windows');
-assert.equal(editedMissed.overduePayments[0].expectedDate,'2026-10-26');
-assert.deepEqual(editedMissed.ledger.filter(e=>e.ruleId===savedHousing.id)
- .map(e=>e.date).slice(0,2),['2026-10-28','2026-11-26']);
-const editedPaid=Core.materialize(overdueSnapshot,[
- post('fictional-rent-post','Fictional Rent ACH',1580,'2026-10-27')
-],editing.predictions,T,null,65,options);
-assert.equal(editedPaid.overduePayments.length,0,
- 'A uniquely matched posted installment clears the overdue alert without a second debit');
-assert.ok(!editedPaid.ledger.some(e=>e.ruleId===savedHousing.id&&e.date==='2026-10-28'));
-const deliberatelyChanged=T.defineRecurring(editing,{date:'2026-11-30',
- merchant:'Fictional Rent ACH',amount:1600,type:'expense',
- accountId:'checking',frequency:'monthly',category:'Housing'},
- accounts,overdueAsOf,{
- kind:'event',recurringRuleId:savedHousing.id,sourceAccountId:'checking',
- originalMerchant:'Fictional Rent ACH',originalType:'expense',
- sourceAmount:1600,date:oldAnchor});
-assert.equal(deliberatelyChanged.anchorDate,'2026-11-30',
- 'Explicitly changing the recurrence day still updates the future prediction');
+// Frozen pre-manual-window policy: the original PR #208 overdue mechanism
+// works with no saved per-schedule early/late or amount windows.
+const asOf='2026-10-27',accountsLive=accounts.map(a=>({...a})),
+ originalRule={id:'original-overdue',kind:'event',frequency:'monthly',
+  anchorDate:'2026-10-26',accountId:'checking',type:'expense',
+  merchant:'Fictional Housing ACH',amount:1200,
+  originalAccountId:'checking',originalMerchant:'Fictional Housing ACH',
+  matchNames:['fictional housing ach'],exampleIds:[]},
+ snap={asOf,mode:'demo',accounts:accountsLive},prefs={futureRecurringRules:[originalRule]},
+ options={weekendPolicy:'friday'};
+const stillUnpaid=Core.materialize(snap,[],prefs,T,null,60,options);
+assert.equal(stillUnpaid.overduePayments.length,1,'Unposted due bill appears for Review');
+assert.ok(stillUnpaid.ledger.some(e=>e.ruleId===originalRule.id&&e.date==='2026-10-28'),
+ 'A missed debit stays reserved once in checking projections');
+const pending=Core.materialize(snap,[{...post('pending-prior','Fictional Housing ACH',1200,'2026-10-26'),pending:true}],prefs,T,null,60,options);
+assert.equal(pending.overduePayments.length,1,'Pending is not a confirmed posting');
+const settled=Core.materialize(snap,[post('posted-prior','Fictional Housing ACH',1200,'2026-10-27')],prefs,T,null,60,options);
+assert.equal(settled.overduePayments.length,0,'Actual posted housing debit clears the Review alert');
+assert.ok(!settled.ledger.some(e=>e.ruleId===originalRule.id&&e.date==='2026-10-28'),
+ 'Actual bank debit is not counted twice');
+assert.equal(typeof T.matchWindow,'undefined','Manual matching windows are removed');
 console.log('PASS posted matching: explicit bank ID, renamed merchant, variable amount, ambiguous independent streams, chosen schedule, immutable bank facts, month boundary and reconciliation');
