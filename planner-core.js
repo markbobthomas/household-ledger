@@ -298,21 +298,15 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    String(a.accountType||a.type||'').toLowerCase()!=='credit')
    .map(a=>String(a.id))),
   postedByRule=new Map(),ruleMap=new Map(rules.map(r=>[String(r.id),r]));
- for(const t of rows){
-  if(t.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0))continue;
-  const matches=tools.historicalScheduleMatches?.(t,accounts,rules)||[];
-  // Ambiguous same-payee streams cannot automatically clear one another.
-  if(matches.length!==1)continue;
-  const key=String(matches[0].id);
-  if(!postedByRule.has(key))postedByRule.set(key,[]);
-  postedByRule.get(key).push(t);
- }
  const recent=ownerEntries.filter(e=>{
   if(e.type!=='expense'||e.source!=='user-recurring'||
    !cashIds.has(String(e.accountId))||!valid(e.date)||
    edits[eventKey(tools,e)]?.skipped)return false;
-  const expected=expectedPosting(e);
-  return expected<=asOf&&expected>=add(asOf,-7);
+  const expected=expectedPosting(e),
+   matching=tools.matchWindow(ruleMap.get(String(e.ruleId))||{});
+  // A schedule with a deliberately longer lateness allowance stays reserved
+  // throughout its user-defined matching window (maximum 14 days).
+  return expected<=asOf&&expected>=add(asOf,-Math.max(7,matching.after));
  });
  const mostRecent=new Map();
  for(const e of recent){
@@ -321,13 +315,27 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(!mostRecent.has(key)||mostRecent.get(key).date<e.date)
    mostRecent.set(key,e);
  }
+ // Resolve each actual bank posting to at most one candidate occurrence.
+ // Separate same-payee schedules can be distinguished by their own amount or
+ // date limits; overlapping windows stay unresolved rather than dropping
+ // multiple pending obligations from the projection.
+ for(const t of rows){
+  if(t.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0))continue;
+  const candidates=(tools.historicalScheduleMatches?.(t,accounts,rules)||[])
+   .filter(rule=>{
+    const occurrence=mostRecent.get(String(rule.id));
+    return occurrence&&tools.postedWithinMatchWindow(
+     rule,t,expectedPosting(occurrence),occurrence.amount,
+     (rule.exampleIds||[]).some(id=>String(id)===String(t.id)),true);
+   });
+  if(candidates.length!==1)continue;
+  const id=String(candidates[0].id);
+  if(!postedByRule.has(id))postedByRule.set(id,[]);
+  postedByRule.get(id).push(t);
+ }
  for(const [id,e] of mostRecent){
-  const rule=ruleMap.get(id),original=expectedPosting(e),
-   tolerance=rule.frequency==='weekly'?2:7;
-  const posted=(postedByRule.get(id)||[]).some(t=>
-   t.date>=add(original,-tolerance)&&t.date<=asOf&&
-   Math.abs(diff(t.date,original))<=tolerance);
-  if(posted)continue;
+  const rule=ruleMap.get(id),original=expectedPosting(e);
+  if((postedByRule.get(id)||[]).length)continue;
   const edit=edits[eventKey(tools,e)],
    chosen=edit&&valid(edit.date)&&edit.date>asOf?edit.date:nextPosting,
    unpaid={...e,date:chosen,_overdueFrom:original,

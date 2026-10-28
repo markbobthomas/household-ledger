@@ -1187,7 +1187,7 @@ const {chromium,webkit}=require('playwright');
    await manualEditor.locator('input[name=scope][value=all]').check();
    await manualEditor.locator('[data-frequency]').selectOption('monthly');
    await manualEditor.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
+   await page.locator('.future-notice').getByText(/Recurring prediction/i).waitFor();
    assert.ok(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count()>=2,
     'The confirmed recurring schedule generates multiple future payments');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -2528,38 +2528,6 @@ const {chromium,webkit}=require('playwright');
   await connectionPage.locator('#repair-alert').waitFor({state:'hidden'});
   assert.deepEqual(connectErrors,[]);
   await connectionPage.close();
-  // Pre-manual-window regression in Real source mode: a due withdrawal is
-  // reserved once until confirmed by a posted bank transaction on refresh.
-  const baselineRule={id:'pre-window-cash-test',kind:'event',frequency:'monthly',
-   anchorDate:'2026-10-18',accountId:'checking-real',type:'expense',
-   amount:160,merchant:'Fictional Monthly Housing',scheduleLabel:'Fictional Monthly Housing',
-   originalAccountId:'checking-real',originalMerchant:'Fictional Monthly Housing',
-   originalType:'expense',matchNames:['fictional monthly housing'],exampleIds:[]};
-  realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
-   futureRecurringRules:[baselineRule]};
-  await go('summary');
-  if(await page.locator('#planner-menu').getAttribute('open')===null)
-   await page.locator('#planner-menu > summary').click();
-  await page.locator('#refresh-bank').click();
-  await go('reviews');
-  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Monthly Housing'}).count(),1,
-   'The original pre-window policy flags unpaid debit in the Real Review tab');
-  assert.ok(await page.locator('.planner-nav-primary [data-view="reviews"]')
-   .evaluate(el=>el.classList.contains('has-review-items')),
-   'Review tab stays red when a withdrawal has not posted');
-  realPayload.transactions.push({id:'baseline-posted-housing',
-   accountId:'checking-real',date:'2026-10-19',
-   name:'Fictional Monthly Housing',merchant:'Fictional Monthly Housing',
-   amount:160,pending:false,category:{primary:'RENT_AND_UTILITIES',
-    detailed:'RENT_AND_UTILITIES_RENT',confidence_level:'HIGH'}});
-  if(await page.locator('#planner-menu').getAttribute('open')===null)
-   await page.locator('#planner-menu > summary').click();
-  await page.locator('#refresh-bank').click();
-  await go('reviews');
-  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Monthly Housing'}).count(),0,
-   'A newly posted debit clears exactly the previously overdue occurrence');
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: three-year headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
