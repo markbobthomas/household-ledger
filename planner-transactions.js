@@ -458,12 +458,19 @@ function reconciliationAnchor(rule,records=[],accounts=[],asOf=''){
  const evidence=dates.filter(date=>bank.some(row=>
   postedWithinMatchWindow(rule,row,date,rule.amount,false,true)));
  if(!evidence.length)return start;
- // A bank-posted example explicitly owned by this forecast is strong
- // evidence. Otherwise require two distinct observations of the cadence;
- // one unrelated same-payee payment must not backdate a new schedule.
- const directlyLinked=bank.some(row=>directIds.has(String(row.id))&&
-  evidence.some(date=>postedWithinMatchWindow(rule,row,date,rule.amount,false,true)));
- return directlyLinked||evidence.length>=2?evidence[0]:start;
+ // Independent bills with an identical payee can have different dollar values
+ // and even the same posting date. An explicitly owned bank transaction
+ // establishes only THAT stream's earliest proven cycle. Other same-payee
+ // bank history cannot silently extend its obligation backwards.
+ const linkedDates=dates.filter(date=>bank.some(row=>directIds.has(String(row.id))&&
+  postedWithinMatchWindow(rule,row,date,rule.amount,false,true)));
+ if(linkedDates.length)return linkedDates[0];
+ // Without an explicit bank ID, two separate payments on different dates
+ // must support the cadence; one name match is not proof of another bill.
+ const distinctDates=[...new Set(bank.filter(row=>evidence.some(date=>
+  postedWithinMatchWindow(rule,row,date,rule.amount,false,true)))
+   .map(row=>row.date))];
+ return distinctDates.length>=2?evidence[0]:start;
 }
 function manualSeriesKey(ruleId){return 'user-series|'+encodeURIComponent(String(ruleId))}
 
