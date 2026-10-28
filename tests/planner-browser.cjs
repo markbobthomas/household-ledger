@@ -346,9 +346,12 @@ const {chromium,webkit}=require('playwright');
     'Successful forecast edits acknowledge persistence');
    await page.locator('[data-undo-forecast]').click();
    await page.locator('#planner-save-feedback').getByText('Previous change restored').waitFor();
-   assert.equal(await page.evaluate(()=>JSON.parse(
-    localStorage.getItem('household-planner-sample-settings-v1')||'{}').warnBelow),500,
-    'One-step Undo restores the prior forecast preference');
+   assert.equal(await page.locator('[data-warning-form] [name=warnBelow]').inputValue(),'500',
+    'One-step Undo restores the previous effective warning threshold');
+   assert.equal(await page.evaluate(()=>{
+    const p=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return p.warnBelow===undefined?500:p.warnBelow;
+   }),500,'Undo respects an implied default rather than fabricating a saved preference');
    await page.locator('[data-warning-form] [name=warnBelow]').fill('100000');
    await page.locator('[data-warning-form] button[type=submit]').click();
    await page.locator('#planner-save-feedback [data-undo-forecast]').waitFor();
