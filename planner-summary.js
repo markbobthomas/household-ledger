@@ -216,7 +216,7 @@ function dayDetail(point,card){
   (calendarEditor?'<button type="button" class="calendar-editor-backdrop" data-calendar-cancel aria-label="Close editor"></button>':'')+
   quickEditor()+
   '<div class="calendar-math-total calendar-day-ending"><span>'+(card?'End-of-day card debt':'End-of-day balance')+
-  '</span><strong>'+money(point.balance)+'</strong></div>'+
+  '</span><strong class="'+(!card?balanceRiskClass(point.balance,calendarContext?.prefs).trim():'')+'">'+money(point.balance)+'</strong></div>'+
  '</section>';
 }
 
