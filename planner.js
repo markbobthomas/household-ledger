@@ -1203,6 +1203,73 @@ function repeatingStatementPeriods(bundle,s,accountId,shownRules){
   (content||'<p class="ledger-statement-help">No repeating charges are forecast for this card in the next 90 days.</p>')+
   '</section>';
 }
+// Diagnose a saved schedule locally against the same private snapshot used by
+// Calendar. Read-only: never re-anchor, create a payment, or upload bank facts.
+function schedulePaymentCheck(rule,bundle,s){
+ const T=window.HouseholdPlannerTransactions,asOf=s.asOf,
+  accounts=activeAccounts(s),id=String(rule.id),
+  account=String(rule.accountId||rule.fromAccountId||''),
+  future=futureRows(bundle,s).filter(row=>String(row.recurringRuleId||'')===id),
+  unpaid=(bundle?.overduePayments||[]).filter(item=>String(item.ruleId||'')===id),
+  last90=T.recurrenceDates(rule,shiftDay(asOf,-91),asOf),
+  last=last90.at(-1)||null;
+ const result=(code,message)=>({code,message});
+ if(!accounts.some(a=>String(a.id)===account))
+  return result('account','This prediction uses an account that is no longer connected. It cannot be reliably checked.');
+ if(rule.kind==='movement')
+  return result('transfer','This is a linked-account transfer. Check the funding account and its payment in Calendar; it is not checked as an external debit.');
+ if(rule.type!=='expense'&&!(rule.type==='transfer'&&rule.cashDirection==='out'))
+  return result('not-debit','This is not an outgoing checking withdrawal, so the unpaid-withdrawal check does not apply.');
+ const bankRows=model.records(state()).filter(t=>!t.pending&&
+  t.date<=asOf&&Number(t.amount)>0&&
+  String(T.accountRef(t.accountId||t.account,accounts))===account&&
+  T.bankDirection(t)==='expense');
+ const matches=date=>bankRows.some(t=>
+  T.historicalScheduleMatches(t,accounts,[rule]).length>0&&
+  T.postedWithinMatchWindow(rule,t,date,rule.amount,false,true));
+ // Historic editor saves could move an old recurrence anchor forward; source
+ // evidence can reveal an omission but must NEVER silently recreate a bill.
+ const historical=rule.sourceAnchorDate,
+  sourceFrequency=rule.sourceFrequency||rule.frequency,
+  comparable=historical&&historical<rule.anchorDate&&
+   sourceFrequency===rule.frequency&&
+   /^\\d{4}-\\d{2}-\\d{2}$/.test(String(historical));
+ if(comparable){
+  const sourceDates=T.recurrenceDates({...rule,anchorDate:historical},
+   shiftDay(asOf,-46),asOf);
+  const excluded=sourceDates.filter(date=>date<rule.anchorDate&&
+   !last90.includes(date)&&date>=shiftDay(asOf,-35)&&!matches(date));
+  if(excluded.length){
+   const missed=excluded.at(-1);
+   return result('missing-anchor','Possible missing payment: linked history points to '+
+    dateLong(missed)+', but the saved schedule begins '+dateLong(rule.anchorDate)+
+    '. That earlier date is not in the forecast or unpaid-payment check. Review the start date; nothing has been changed.');
+  }
+ }
+ if(unpaid.length){
+  const lastDue=unpaid.slice().sort((a,b)=>a.expectedDate.localeCompare(b.expectedDate)).at(-1);
+  return result('unposted',unpaid.length+' unpaid scheduled withdrawal'+
+   (unpaid.length===1?' is':'s are')+' still reserved in the checking forecast. Last due '+
+   dateLong(lastDue.expectedDate)+'; projected on '+dateLong(lastDue.proposedDate)+
+   '. The actual bank balance has not been changed.');
+ }
+ if(last){
+  if(matches(last))return result('posted-match','A posted bank payment may match the last scheduled withdrawal ('+
+    dateLong(last)+'). Check Transactions if the amount or merchant was changed.');
+  const eventId='user|'+id+'|'+last,
+   edit=state().predictions?.futureTransactionEdits?.[T.keyEvent(eventId,account)];
+  if(edit?.skipped)return result('skipped','The last scheduled withdrawal ('+
+   dateLong(last)+') was explicitly skipped. It will not appear in the forecast.');
+  if(edit?.date&&edit.date>asOf)return result('postponed','The last scheduled withdrawal ('+
+   dateLong(last)+') was moved to '+dateLong(edit.date)+'. It is not overdue yet.');
+  return result('unmatched','The saved rule shows a prior due date ('+dateLong(last)+
+   '), but the unpaid check has no matching entry. Verify its payment account, matching settings, and earlier edits.');
+ }
+ if(future.length)return result('future-only','The saved schedule has no payment due in the past 90 days. Its next forecast is '+
+  dateLong(future[0].date)+'. If a payment was due earlier, check the saved start date.');
+ return result('not-forecast','No upcoming or recent withdrawal is included for this saved schedule. Check the account, start date, direction, and individual skips.');
+}
+
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
@@ -1312,6 +1379,10 @@ function schedulesPage(bundle,s){
     windows+'</details>':'')+
    (isEditing?'<div class="schedule-inline-plan recurrence-inline-detail" data-schedule-inline-plan="'+id+'">'+
      recurringEditor(edit,'schedule')+
+     (()=>{const check=schedulePaymentCheck(r,bundle,s);
+      return '<div class="schedule-payment-check" data-payment-check="'+
+       escapeHTML(check.code)+'" role="status"><strong>Payment check</strong>'+
+       '<p>'+escapeHTML(check.message)+'</p></div>'})()+
      (occurrence?'<button class="btn schedule-calendar-jump" type="button" data-schedule-view-calendar="'+id+
        '">View '+escapeHTML(dayLabel(occurrence.date))+' in Calendar</button>':
       '<p class="schedule-no-forecast" role="status">This payment is not in the forecast. Check the account, transfer direction, or skipped payments.</p>')+

@@ -2568,6 +2568,24 @@ const {chromium,webkit}=require('playwright');
   await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
   assert.doesNotMatch(await page.locator('.calendar-day-detail').innerText(),
    /Fictional Housing ACH/,'Posted mortgage is not subtracted twice');
+  // Regression missing from earlier passing tests: saved private schedules
+  // previously edited so their original history predates a shifted anchor.
+  // Do not invent an overdue debit: explain the missing date in Predictions.
+  const driftedRule={...lateBill,id:'old-schedule-shifted',
+   anchorDate:'2026-11-05',sourceAnchorDate:'2026-09-05',
+   sourceFrequency:'monthly',merchant:'Fictional Old Utility',
+   originalMerchant:'Fictional Old Utility',matchNames:['fictional old utility']};
+  realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
+   futureRecurringRules:[driftedRule]};
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await go('schedules');
+  await page.locator('[data-schedule-card="old-schedule-shifted"] [data-schedule-edit]').click();
+  assert.match(await page.locator('[data-payment-check="missing-anchor"]').innerText(),
+   /linked history points to|saved schedule begins/i,
+   'Previously overwritten start dates are diagnosed in the real-mode schedule editor');
+  assert.deepEqual(errors,[]);
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: three-year headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
