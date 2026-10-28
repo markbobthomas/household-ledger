@@ -48,6 +48,16 @@ let forecastCache=null;
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
+// The latest successful prediction edit may be undone only while the same
+// in-memory source and exact saved snapshot are still current. No bank facts
+// or private recovery snapshots are stored in the browser's localStorage.
+let forecastSaveSequence=0,lastForecastUndo=null;
+function forecastSaveFeedback(message,allowUndo=false){
+ const el=$('planner-save-feedback');if(!el)return;
+ el.hidden=!message;
+ el.innerHTML=message?'<span>'+escapeHTML(message)+'</span>'+
+  (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
+}
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
@@ -291,6 +301,14 @@ function configureCardFields(form){
   const el=form.querySelector(selector);if(!el)continue;
   el.hidden=!show;const input=el.querySelector('input,select');if(input)input.required=show;
  }
+ const guidance=form.querySelector('[data-card-guidance]');
+ if(guidance)guidance.textContent=!auto||!method?
+  'Choose autopay and payment amount to preview what Ledger will predict.':
+  auto==='no'?'Statement preview only. No checking withdrawal is predicted.':
+  method==='statement'?'A linked checking payment will be predicted for the statement balance; unknown future purchases remain estimates.':
+  method==='full'?'A linked checking payment is estimated from outstanding card debt and known future activity.':
+  method==='minimum'?'The entered minimum is a forecast assumption; confirm it with the issuer each cycle.':
+  'The entered fixed amount will be predicted as a checking withdrawal.';
 }
 function priorCardCycles(bundle,cardId){
  const cycles=(bundle?.payments?.historyStatements||[]).filter(x=>String(x.cardId)===String(cardId)).slice(0,6);
@@ -323,10 +341,11 @@ function autopayPanel(s,bundle){
    '<div class="section-title"><h2>'+escapeHTML(a.name)+'</h2>'+
     badge({label:configured?(v.autopayEnabled===false?'STATEMENT ONLY':'PAYMENT PLANNED'):'SETUP REQUIRED',
      css:configured?'good':'warn'})+'</div>'+
-   '<p class="lead">Required before predictions: a full statement period, due date, expected payment date, autopay status and payment method. Select the paying account if autopay is enabled. Actual bank records stay read-only.</p>'+
-   '<div class="card-fields">'+
+   '<p class="lead">Set up the next card statement and payment. Only confirmed details are treated as known; estimated amounts remain estimates. No payment is sent to your bank.</p>'+
+   '<section class="card-setup-step"><h3>1. Statement dates</h3><div class="card-fields">'+
    '<label>Billing period starts<input name="billingStartDate" type="date" value="'+escapeHTML(oldStart)+'" required></label>'+
    '<label>Billing period ends / statement closes<input name="billingEndDate" type="date" value="'+escapeHTML(oldClose)+'" required></label>'+
+   '</div></section><section class="card-setup-step"><h3>2. Payment plan</h3><div class="card-fields">'+
    '<label>Statement payment due date<input name="nextDueDate" type="date" value="'+escapeHTML(v.nextDueDate||v.nextPaymentDate||'')+'" required></label>'+
    '<label>Planned autopay withdrawal date (until bank posts it)<input name="nextPaymentDate" type="date" value="'+escapeHTML(v.nextPaymentDate||'')+'" required></label>'+
    '<label>Does this card autopay?<select name="autopayEnabled" required>'+
@@ -339,11 +358,12 @@ function autopayPanel(s,bundle){
     '<option value="full"'+sel('full',method)+'>Full outstanding card balance</option>'+
     '<option value="minimum"'+sel('minimum',method)+'>Minimum payment</option>'+
     '<option value="fixed"'+sel('fixed',method)+'>Fixed dollar amount</option></select></label>'+
+   '</div></section><section class="card-setup-step"><h3>3. Paying account and amount</h3><div class="card-fields">'+
    '<label data-card-funding hidden>Paying account<select name="fromAccountId"><option value="">Choose paying account</option>'+options(v.fromAccountId||'')+'</select></label>'+
    '<label data-card-minimum hidden>Minimum payment ($)<input name="minimumAmount" type="number" min=".01" step=".01" value="'+escapeHTML(v.minimumAmount||'')+'"></label>'+
    '<label data-card-fixed hidden>Fixed payment ($)<input name="fixedAmount" type="number" min=".01" step=".01" value="'+escapeHTML(v.fixedAmount||'')+'"></label>'+
    '<label>Issued statement balance (optional, $)<input name="lastStatementBalance" type="number" min="0" step=".01" value="'+escapeHTML(v.lastStatementBalance??'')+'" placeholder="Calculated automatically"></label>'+
-   '</div>'+
+   '</div></section><p class="card-setup-guidance" data-card-guidance role="status"></p>'+
    cardStatementPreview(s,bundle,a.id)+priorCardCycles(bundle,a.id)+
    '<div class="card-form-actions"><button type="submit" class="btn primary">'+
     (configured?'Update billing cycle':'Save billing cycle')+'</button>'+
@@ -1304,6 +1324,7 @@ function schedulesPage(bundle,s){
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for prediction '+number+'" title="More actions">⋯</summary>'+
     '<div class="schedule-more-menu">'+
+     (occurrence?'<button type="button" data-schedule-view-calendar="'+id+'">Open next in Calendar</button>':'')+
      '<button type="button" data-schedule-remove="'+id+'"'+
       (pendingRemove?' class="danger"':'')+'>'+
       (pendingRemove?'Confirm remove':'Remove prediction')+'</button>'+
@@ -1830,9 +1851,13 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     'Needs a decision — currently included in your forecast'});
  };
  return '<div class="planner-page reviews-page">'+
+  '<div class="review-priority" aria-label="Review priorities">'+
+   '<strong>Needs action: '+(overdue.length+decisionsNeeded)+'</strong>'+
+   '<span>'+overdue.length+' unposted payments · '+decisionsNeeded+' earlier estimates</span>'+
+   '<strong>Suggestions: '+pending.length+'</strong></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
-   '<div class="section-title"><h2>Predicted payments not yet posted</h2>'+
+   '<div class="section-title"><h2>Needs action · payments not yet posted</h2>'+
     '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
    '<p class="lead">These withdrawals have no confirmed matching bank payment. '+
     'Each unpaid payment remains reserved once in the forecast until it posts, is moved, or is skipped. '+
@@ -1867,7 +1892,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      '</form></article>';
    }).join('')+
    (ignoredOverdue.length?
-    '<details class="overdue-ignored" data-ignored-overdue><summary>Ignored alerts ('+
+    '<details class="overdue-ignored" data-ignored-overdue><summary>Dismissed payment alerts ('+
       ignoredOverdue.length+')</summary>'+
      ignoredOverdue.map(item=>'<div class="overdue-ignored-row" data-ignored-overdue-item="'+
        escapeHTML(item.key)+'"><span><strong>'+escapeHTML(item.merchant)+' · '+cash(item.amount)+
@@ -1878,7 +1903,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '</section>':'')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
-    '<div class="section-title"><h2>Automatic estimates still in forecast</h2>'+
+    '<div class="section-title"><h2>Needs action · earlier automatic estimates</h2>'+
      '<strong class="legacy-estimate-count" data-legacy-estimate-count="'+legacyItems.length+'">'+
       legacyItems.length+' UNSAVED</strong></div>'+
     '<p class="lead">These '+legacyItems.length+' repeating payment'+
@@ -1896,14 +1921,14 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       '>Use saved predictions only</button></div>'+
    '</section>':'')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
-   '<div class="section-title"><h2>Other recommended repeating</h2>'+
+   '<div class="section-title"><h2>Suggestions · possible repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
    (pending.length?pending.map(normalCard).join(''):
     '<p class="lead">Nothing else to review.</p>')+
    '</section>'+
   (ignored.length?
    '<details class="ignored-repeating" data-ignored-repeating'+
-    (ignored.some(r=>expanded(r))?' open':'')+'><summary>Ignored ('+
+    (ignored.some(r=>expanded(r))?' open':'')+'><summary>Dismissed suggestions ('+
      ignored.length+')</summary><div class="ignored-repeating-items">'+
       ignored.map(normalCard).join('')+'</div></details>':'')+
   '</div>';
@@ -2143,6 +2168,9 @@ function render(){
  if(activeTab==='schedules')applyScheduleSearch(root);
 }
 document.addEventListener('click',async e=>{
+ if(e.target.closest?.('[data-undo-forecast]')){
+  e.preventDefault();await undoLastForecastChange();return;
+ }
  if(e.target.closest?.('[data-close-transaction-detail]')){dismissTransaction();return}
  const stopPlan=e.target.closest?.('[data-stop-plan]');
  if(stopPlan){
@@ -2855,13 +2883,50 @@ function showRecurringScheduleChoice(form,error){
 }
 async function commitForecastChange(action){
  await reviewCatalogSave.catch(()=>{});
- const current=state(),before=JSON.stringify(current.predictions||{});
+ const current=state(),before=JSON.stringify(current.predictions||{}),operation=++forecastSaveSequence;
+ lastForecastUndo=null;
+ forecastSaveFeedback('Saving changes…');
  try{
   const result=action();
   const saved=await savePlanning();
   if(live()&&(!saved||saved.saved!==true))throw Error('The predicted transaction was not saved. Please try again.');
+  const after=JSON.stringify(current.predictions||{});
+  // Do not offer to undo a previous bank snapshot, or a now-stale edit.
+  if(operation===forecastSaveSequence){
+   lastForecastUndo=current===state()&&before!==after?{source:current,before,after}:null;
+   forecastSaveFeedback('Saved',Boolean(lastForecastUndo));
+  }
   return result;
- }catch(err){current.predictions=JSON.parse(before);throw err}
+ }catch(err){
+  current.predictions=JSON.parse(before);
+  if(operation===forecastSaveSequence){lastForecastUndo=null;forecastSaveFeedback('Save failed');}
+  throw err;
+ }
+}
+async function undoLastForecastChange(){
+ const undo=lastForecastUndo,current=state();
+ if(!undo||undo.source!==current||JSON.stringify(current.predictions||{})!==undo.after){
+  lastForecastUndo=null;
+  forecastSaveFeedback('Undo unavailable because the predictions have changed.');
+  return;
+ }
+ lastForecastUndo=null;
+ const operation=++forecastSaveSequence;
+ current.predictions=JSON.parse(undo.before);
+ forecastSaveFeedback('Restoring previous predictions…');
+ try{
+  const saved=await savePlanning();
+  if(live()&&(!saved||saved.saved!==true))throw Error('Undo was not saved');
+  if(operation===forecastSaveSequence)forecastSaveFeedback('Previous change restored');
+  render();
+ }catch(error){
+  current.predictions=JSON.parse(undo.after);
+  if(operation===forecastSaveSequence){
+   lastForecastUndo=undo;
+   forecastSaveFeedback('Undo could not be saved. Try again.',true);
+  }
+  render();
+ }
 }
 // Add a category without rebuilding an unsaved editor or modifying bank data.
 document.addEventListener('submit',async e=>{
