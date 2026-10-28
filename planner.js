@@ -1324,7 +1324,7 @@ function schedulesPage(bundle,s){
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for prediction '+number+'" title="More actions">⋯</summary>'+
     '<div class="schedule-more-menu">'+
-     (occurrence?'<button type="button" data-schedule-view-calendar="'+id+'">Open next in Calendar</button>':'')+
+     (occurrence&&!isEditing?'<button type="button" data-schedule-view-calendar="'+id+'">Open next in Calendar</button>':'')+
      '<button type="button" data-schedule-remove="'+id+'"'+
       (pendingRemove?' class="danger"':'')+'>'+
       (pendingRemove?'Confirm remove':'Remove prediction')+'</button>'+
