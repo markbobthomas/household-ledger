@@ -391,7 +391,8 @@ function historicalScheduleMatches(row,accounts,rules=[]){
    String(r.originalAccountId||r.accountId||r.fromAccountId)===account&&
    (kind==='movement'?Boolean(row.pairedTransactionId)&&
     (!row.toAccountId||String(r.toAccountId)===String(row.toAccountId)):
-    r.type===type));
+    (r.type===type||r.kind==='event'&&r.type==='transfer'&&
+     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':null)===type)));
  if(!name)return [];
  const named=eligible.filter(r=>
   [r.originalMerchant,r.merchant,...(r.matchNames||[])]
@@ -555,7 +556,12 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(requestedId&&id!==requestedId)
   throw Error('Choose the matching saved recurring prediction before saving.');
  if(!names.length)throw Error('Enter a merchant name');
- const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
+ // The editor shows the NEXT due date; saving other fields must not
+ // silently reset this recurring rule's original due-day anchor.
+ const unchangedNext=old&&old.frequency===frequency&&
+  fields.date===recurrenceDates(old,asOf,shift(asOf,1095))[0];
+ const anchorDate=unchangedNext?old.anchorDate:fields.date;
+ const rule={id,kind:transfer?'movement':'event',frequency,anchorDate,
   ...(secondDay?{secondDay}:{}),...fields,
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
   category:scheduleCategory(data.category===undefined?old?.category:data.category,state),
@@ -878,7 +884,9 @@ function postedCoverage(generated,rules,records,accounts,asOf){
     date=String(effective.date||effective.anchorDate||item.anchorDate||''),
     account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
    if(!validDate(date)||date<=asOf||
-    !sameDirection(t,kind==='event'?r.type:'transfer')||
+    !sameDirection(t,kind==='event'&&r.type==='transfer'?
+     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':r.type):
+     kind==='event'?r.type:'transfer')||
     accountRef(t.accountId||t.account,accounts)!==account)continue;
    const gap=Math.abs(daysBetween(t.date,date)),
     tolerance=r.frequency==='weekly'?2:
