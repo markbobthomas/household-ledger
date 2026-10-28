@@ -2557,7 +2557,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await overdueRow.locator('[data-ignore-overdue]').count(),1,
    'Overdue Review offers an independent ignore-alert decision');
   await overdueRow.locator('[data-open-transaction]').click();
-  assert.equal(await overdueRow.locator('[data-inline-transaction-editor] [name=amount]').count(),1,
+  assert.equal(await overdueRow.locator('[data-inline-transaction-editor] [data-future-edit-form] [name=amount]').count(),1,
    'Full editor includes amount, date, account and prediction scope');
   assert.equal(await overdueRow.locator('[data-inline-transaction-editor] [name=scope][value=all]').count(),1,
    'An approved recurring obligation can edit future occurrences separately');
