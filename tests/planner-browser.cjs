@@ -1149,7 +1149,7 @@ const {chromium,webkit}=require('playwright');
    const newAmount=originalAmount+125;
    await seriesForm.locator('[name=amount]').fill(String(newAmount));
    await seriesForm.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
+   await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
    assert.equal(await page.evaluate(amount=>Object.values(
     JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}').futureSeriesEdits||{}
    ).some(x=>x.amount===amount),newAmount),true,
@@ -1187,7 +1187,7 @@ const {chromium,webkit}=require('playwright');
    await manualEditor.locator('input[name=scope][value=all]').check();
    await manualEditor.locator('[data-frequency]').selectOption('monthly');
    await manualEditor.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/Recurring schedule/i).waitFor();
+   await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
    assert.ok(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count()>=2,
     'The confirmed recurring schedule generates multiple future payments');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -1314,7 +1314,7 @@ const {chromium,webkit}=require('playwright');
     'History no longer offers a competing automatic prediction system');
    const unscheduledHistory=page.locator('.history-actual-row[data-history-forecast-state="unplanned"]').first();
    assert.ok(await unscheduledHistory.count()>0,'Unplanned bank rows remain visible');
-   assert.match(await unscheduledHistory.innerText(),/Not scheduled/);
+   assert.match(await unscheduledHistory.innerText(),/Not predicted/);
    assert.equal(await unscheduledHistory.locator('.history-row-open .history-row-hint').innerText(),'›',
     'Bank activity uses the shared chevron-only review affordance');
    const insuranceHistory=page.locator('.history-actual-row').filter({hasText:'State Farm Insurance'}).first();
@@ -2378,7 +2378,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await cardSeriesForm.locator('input[name=scope][value=all]').isChecked(),true);
   await cardSeriesForm.locator('[name=amount]').fill('1275');
   await cardSeriesForm.locator('button[type=submit]').click();
-  await page.locator('.future-notice').getByText(/recurring schedule/i).waitFor();
+  await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
   assert.ok(writes.some(x=>Object.values(x.predictions?.futureSeriesEdits||{})
    .some(v=>v.amount===1275)),'Recurring card payments persist only as private adjustments; recent forecast save: '+JSON.stringify(writes.at(-1)?.predictions?.futureRecurringRules?.slice(-1)||writes.at(-1)?.predictions?.futureSeriesEdits||{}).slice(0,750));
   const recurringCardRows=page.locator('.future-item').filter({hasText:'Credit-card payment'});
