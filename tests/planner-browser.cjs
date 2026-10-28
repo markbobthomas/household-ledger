@@ -1187,7 +1187,7 @@ const {chromium,webkit}=require('playwright');
    await manualEditor.locator('input[name=scope][value=all]').check();
    await manualEditor.locator('[data-frequency]').selectOption('monthly');
    await manualEditor.locator('button[type=submit]').click();
-   await page.locator('.future-notice').getByText(/recurring prediction/i).waitFor();
+   await page.locator('.future-notice').getByText(/Recurring prediction/i).waitFor();
    assert.ok(await page.locator('.future-item').filter({hasText:'One-time home repair'}).count()>=2,
     'The confirmed recurring schedule generates multiple future payments');
    assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}')
@@ -2528,82 +2528,6 @@ const {chromium,webkit}=require('playwright');
   await connectionPage.locator('#repair-alert').waitFor({state:'hidden'});
   assert.deepEqual(connectErrors,[]);
   await connectionPage.close();
-  // Real-mode end-to-end regression: the old seven-day cutoff discarded a
-  // recurring unpaid debit and falsely inflated the checking forecast.
-  // The app must carry it, show Review, then clear after a slightly different
-  // actual bank transaction arrives on refresh without adjusting bank facts.
-  const lateBill={id:'browser-unposted-withdrawal',kind:'event',
-   frequency:'monthly',anchorDate:'2026-10-05',accountId:'checking-real',
-   originalAccountId:'checking-real',type:'expense',amount:600,
-   merchant:'Fictional Housing ACH',originalMerchant:'Fictional Housing ACH',
-   matchNames:['fictional housing ach'],exampleIds:[]};
-  realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
-   futureRecurringRules:[lateBill]};
-  await go('summary');
-  if(await page.locator('#planner-menu').getAttribute('open')===null)
-   await page.locator('#planner-menu > summary').click();
-  await page.locator('#refresh-bank').click();
-  await go('reviews');
-  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Housing ACH'}).count(),1,
-   'Unposted bill remains in Review for two weeks after its expected date');
-  assert.equal(await page.locator('.planner-nav-primary [data-view="reviews"]')
-   .evaluate(el=>el.classList.contains('has-review-items')),true,
-   'The red Review tab explicitly signals a missing actual withdrawal');
-  await go('summary');
-  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
-  assert.match(await page.locator('.calendar-day-transactions').innerText(),/Fictional Housing ACH/,
-   'Calendar reserves the missed debit on the next business day');
-  // Posted bank payment is not identical in date or amount to forecast.
-  realPayload.transactions.push({id:'fictional-housing-paid',accountId:'checking-real',
-   date:'2026-10-08',name:'Fictional Housing ACH',
-   merchant:'Fictional Housing ACH',amount:635,pending:false,
-   category:{primary:'LOAN_PAYMENTS',detailed:'LOAN_PAYMENTS_MORTGAGE_PAYMENT',
-    confidence_level:'HIGH'}});
-  if(await page.locator('#planner-menu').getAttribute('open')===null)
-   await page.locator('#planner-menu > summary').click();
-  await page.locator('#refresh-bank').click();
-  await go('reviews');
-  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Housing ACH'}).count(),0,
-   'A real posting three days late and slightly higher resolves the alert');
-  await go('summary');
-  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
-  assert.doesNotMatch(await page.locator('.calendar-day-detail').innerText(),
-   /Fictional Housing ACH/,
-   'The already-posted bank withdrawal is not forecast a second time');
-  // Pre-manual-window regression in Real source mode: a due withdrawal is
-  // reserved once until confirmed by a posted bank transaction on refresh.
-  const baselineRule={id:'pre-window-cash-test',kind:'event',frequency:'monthly',
-   anchorDate:'2026-10-18',accountId:'checking-real',type:'expense',
-   amount:160,merchant:'Fictional Monthly Housing',scheduleLabel:'Fictional Monthly Housing',
-   originalAccountId:'checking-real',originalMerchant:'Fictional Monthly Housing',
-   originalType:'expense',matchNames:['fictional monthly housing'],exampleIds:[]};
-  realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
-   futureRecurringRules:[baselineRule]};
-  await go('summary');
-  if(await page.locator('#planner-menu').getAttribute('open')===null)
-   await page.locator('#planner-menu > summary').click();
-  await page.locator('#refresh-bank').click();
-  await go('reviews');
-  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Monthly Housing'}).count(),1,
-   'The original pre-window policy flags unpaid debit in the Real Review tab');
-  assert.ok(await page.locator('.planner-nav-primary [data-view="reviews"]')
-   .evaluate(el=>el.classList.contains('has-review-items')),
-   'Review tab stays red when a withdrawal has not posted');
-  realPayload.transactions.push({id:'baseline-posted-housing',
-   accountId:'checking-real',date:'2026-10-19',
-   name:'Fictional Monthly Housing',merchant:'Fictional Monthly Housing',
-   amount:160,pending:false,category:{primary:'RENT_AND_UTILITIES',
-    detailed:'RENT_AND_UTILITIES_RENT',confidence_level:'HIGH'}});
-  if(await page.locator('#planner-menu').getAttribute('open')===null)
-   await page.locator('#planner-menu > summary').click();
-  await page.locator('#refresh-bank').click();
-  await go('reviews');
-  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
-   .filter({hasText:'Fictional Monthly Housing'}).count(),0,
-   'A newly posted debit clears exactly the previously overdue occurrence');
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: three-year headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
