@@ -1233,7 +1233,7 @@ function schedulePaymentCheck(rule,bundle,s){
   sourceFrequency=rule.sourceFrequency||rule.frequency,
   comparable=historical&&historical<rule.anchorDate&&
    sourceFrequency===rule.frequency&&
-   /^\\d{4}-\\d{2}-\\d{2}$/.test(String(historical));
+   /^\d{4}-\d{2}-\d{2}$/.test(String(historical));
  if(comparable){
   const sourceDates=T.recurrenceDates({...rule,anchorDate:historical},
    shiftDay(asOf,-46),asOf);
