@@ -2548,6 +2548,38 @@ const {chromium,webkit}=require('playwright');
   assert.ok(await page.locator('.planner-nav-primary [data-view="reviews"]')
    .evaluate(el=>el.classList.contains('has-review-items')),
    'Missed payment turns Review red');
+  const overdueRow=page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Housing ACH'});
+  assert.equal(await overdueRow.locator('[data-overdue-date] button[type="submit"]').count(),1,
+   'One-payment move remains available');
+  assert.equal(await overdueRow.locator('[data-open-transaction]').count(),1,
+   'Overdue Review exposes shared full prediction editor');
+  assert.equal(await overdueRow.locator('[data-ignore-overdue]').count(),1,
+   'Overdue Review offers an independent ignore-alert decision');
+  await overdueRow.locator('[data-open-transaction]').click();
+  assert.equal(await overdueRow.locator('[data-inline-transaction-editor] [name=amount]').count(),1,
+   'Full editor includes amount, date, account and prediction scope');
+  assert.equal(await overdueRow.locator('[data-inline-transaction-editor] [name=scope][value=all]').count(),1,
+   'An approved recurring obligation can edit future occurrences separately');
+  await overdueRow.locator('[data-cancel-future]').click();
+  await overdueRow.locator('[data-ignore-overdue]').click();
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Housing ACH'}).count(),0,
+   'Ignore dismisses the active Review alert');
+  assert.equal(await page.locator('[data-ignored-overdue-key]').count(),1,
+   'Ignored overdue alert stays discoverable and reversible');
+  await go('summary');
+  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
+  assert.match(await page.locator('.calendar-day-transactions').innerText(),
+   /Fictional Housing ACH/,
+   'Ignoring a Review warning never silently removes the forecast debit');
+  await go('reviews');
+  await page.locator('[data-ignored-overdue] > summary').click();
+  await page.locator('[data-unignore-overdue]').click();
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Housing ACH'}).count(),1,
+   'Undo ignore restores the unpaid payment review alert');
+
   await go('summary');
   await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
   assert.match(await page.locator('.calendar-day-transactions').innerText(),
