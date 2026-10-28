@@ -259,12 +259,13 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   ids.add(e.id);entries.push(e)};
  const ownerFor=(e)=>rules.some(r=>r.kind==='event'&&
   String(r.originalAccountId||r.accountId)===String(e.accountId)&&
-  (!r.type||r.type===e.type)&&
+  (!r.type||r.type===e.type||r.type==='transfer'&&
+   (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':null)===e.type)&&
   (r.matchNames||[norm(r.originalMerchant||r.merchant)]).includes(norm(
    e._forecastOriginalMerchant||e.merchant))&&
   (r.frequency!=='every-4-weeks'||!e.date||phaseMatch(r.anchorDate,e.date)));
  // Explicit rules come first, and always own their original bank series.
- const generated=tools.generatedRecurring(rules,add(asOf,-32),add(end,32));
+ const generated=tools.generatedRecurring(rules,add(asOf,-93),add(end,32));
  // Explicitly confirmed card schedules can be included without card autopay
  // setup. Unconfirmed automatic card-spend inference remains gated below.
  const ownerEntries=generated.events.map(e=>{
@@ -287,7 +288,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // yesterday is not necessarily in that balance: it must be carried forward
  // if the bank has not posted it, or the future checking projection is too
  // optimistic. Never rewrite the bank observation or the recurrence anchor.
- // Only one recent occurrence per independently identified rule is eligible.
+ // Every independent overdue occurrence is eligible, bounded to the last 90 days.
  const nextBusiness=from=>{
   let day=add(from,1);
   while([0,6].includes(new Date(day+'T12:00:00Z').getUTCDay()))day=add(day,1);
@@ -298,56 +299,92 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    String(a.accountType||a.type||'').toLowerCase()!=='credit')
    .map(a=>String(a.id))),
   postedByRule=new Map(),ruleMap=new Map(rules.map(r=>[String(r.id),r]));
- const recent=ownerEntries.filter(e=>{
-  if(e.type!=='expense'||e.source!=='user-recurring'||
-   !cashIds.has(String(e.accountId))||!valid(e.date)||
-   edits[eventKey(tools,e)]?.skipped)return false;
-  const expected=expectedPosting(e),
-   matching=tools.matchWindow(ruleMap.get(String(e.ruleId))||{});
-  // A schedule with a deliberately longer lateness allowance stays reserved
-  // throughout its user-defined matching window (maximum 14 days).
-  return expected<=asOf&&expected>=add(asOf,-Math.max(7,matching.after));
- });
- const mostRecent=new Map();
- for(const e of recent){
-  const key=String(e.ruleId||'');
-  if(!ruleMap.has(key))continue;
-  if(!mostRecent.has(key)||mostRecent.get(key).date<e.date)
-   mostRecent.set(key,e);
+
+ // The earlier seven-day/latest-only check lost overdue debits after a week.
+ // Reconcile EACH recent due occurrence with only bank-posted evidence.
+ const dueOf=e=>{
+  const edit=edits[eventKey(tools,e)];
+  return valid(edit?.date)?edit.date:expectedPosting(e);
+ };
+ const isDebit=e=>(e.type==='expense'||e.type==='transfer'&&e.cashDirection==='out')&&
+  e.source==='user-recurring'&&cashIds.has(String(e.accountId))&&valid(e.date)&&
+  !edits[eventKey(tools,e)]?.skipped;
+ const dueEntries=ownerEntries.filter(e=>isDebit(e)&&dueOf(e)<=asOf&&
+  dueOf(e)>=add(asOf,-90)).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+ const bankRows=rows.filter(t=>!t.pending&&valid(t.date)&&t.date<=asOf&&
+  Number(t.amount)>0&&String(t.id||'')).sort((a,b)=>
+  a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+ const paid=new Set(),usedBank=new Set();
+ for(const t of bankRows){
+  const candidates=tools.historicalScheduleMatches?.(t,accounts,rules)||[],
+   explicit=candidates.filter(r=>(r.exampleIds||[]).some(id=>String(id)===String(t.id))),
+   eligible=explicit.length?explicit:candidates;
+  const matches=dueEntries.flatMap(e=>{
+   const rule=ruleMap.get(String(e.ruleId));
+   if(paid.has(e.id)||!rule||tools.bankDirection(t)!=='expense'||
+    !eligible.some(r=>String(r.id)===String(rule.id))||
+    String(tools.accountRef(t.accountId||t.account,accounts))!==String(e.accountId)||
+    !tools.postedWithinMatchWindow(rule,t,dueOf(e),e.amount,
+      explicit.some(r=>String(r.id)===String(rule.id)),true))return [];
+   const gap=Math.abs(diff(t.date,dueOf(e))),
+    variance=Math.abs(Number(t.amount)-Number(e.amount))/Math.max(1,Number(e.amount));
+   return [{e,rule,gap,variance,explicit:explicit.some(r=>String(r.id)===String(rule.id)),
+    score:gap+Math.min(variance,2)*5}];
+  }).sort((a,b)=>a.score-b.score||a.e.id.localeCompare(b.e.id));
+  if(!matches.length)continue;
+  const [best,next]=matches;
+  // Independent same-payee bills are never cleared speculatively. Distinct
+  // dates, deliberately linked bank IDs or clear amounts disambiguate.
+  if(next&&!(best.explicit&&!next.explicit||
+    best.variance<=.18&&(next.variance-best.variance>.18||
+     next.gap-best.gap>=3)))continue;
+  paid.add(best.e.id);usedBank.add(String(t.id));
  }
- // Resolve each actual bank posting to at most one candidate occurrence.
- // Separate same-payee schedules can be distinguished by their own amount or
- // date limits; overlapping windows stay unresolved rather than dropping
- // multiple pending obligations from the projection.
- for(const t of rows){
-  if(t.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0))continue;
-  const candidates=(tools.historicalScheduleMatches?.(t,accounts,rules)||[])
-   .filter(rule=>{
-    const occurrence=mostRecent.get(String(rule.id));
-    return occurrence&&tools.postedWithinMatchWindow(
-     rule,t,expectedPosting(occurrence),occurrence.amount,
-     (rule.exampleIds||[]).some(id=>String(id)===String(t.id)),true);
-   });
-  if(candidates.length!==1)continue;
-  const id=String(candidates[0].id);
-  if(!postedByRule.has(id))postedByRule.set(id,[]);
-  postedByRule.get(id).push(t);
+ for(const e of ownerEntries){
+  if(!isDebit(e))continue;
+  const due=dueOf(e);
+  if(due>asOf){
+   if(expectedPosting(e)<=asOf)
+    seen({...e,date:due,_unpostedEstimated:true});
+   continue;
+  }
+  if(due<add(asOf,-90)||paid.has(e.id))continue;
+  const key=eventKey(tools,e),edit=edits[key];
+  seen({...e,date:nextPosting,_overdueFrom:due,_unpostedEstimated:true});
+  overduePayments.push({key,id:e.id,ruleId:String(e.ruleId),accountId:e.accountId,
+   merchant:e.merchant,amount:Number(edit?.amount??e.amount),
+   expectedDate:due,proposedDate:nextPosting,dueDate:nextPosting});
  }
- for(const [id,e] of mostRecent){
-  const rule=ruleMap.get(id),original=expectedPosting(e);
-  if((postedByRule.get(id)||[]).length)continue;
-  const edit=edits[eventKey(tools,e)],
-   chosen=edit&&valid(edit.date)&&edit.date>asOf?edit.date:nextPosting,
-   unpaid={...e,date:chosen,_overdueFrom:original,
-    _unpostedEstimated:true};
-  // An explicit date change affects only this occurrence, not the schedule.
-  // A previously postponed date that passed without posting is carried again.
-  seen(unpaid);
-  if(original<asOf&&(!edit||!valid(edit.date)||edit.date<=asOf))
-   overduePayments.push({key:eventKey(tools,e),id:e.id,ruleId:id,
-    accountId:e.accountId,merchant:e.merchant,amount:Number(e.amount),
-    expectedDate:original,proposedDate:nextPosting,
-    dueDate:chosen});
+ // One-off withdrawals also require actual bank evidence. A pending item
+ // never settles the amount and one bank payment cannot cover two promises.
+ const oneOffs=extras.filter(e=>e.type==='expense'&&valid(e.date)&&
+  cashIds.has(String(e.accountId))&&!rules.some(r=>r.sourceAddedId===e.id))
+  .map(e=>({e,edit:edits[eventKey(tools,e)]||{}}))
+  .filter(x=>!x.edit.skipped)
+  .map(x=>({...x,due:valid(x.edit.date)?x.edit.date:x.e.date}))
+  .filter(x=>x.due<=asOf&&x.due>=add(asOf,-90));
+ const byOne=new Map(),bankUses=new Map();
+ for(const x of oneOffs){
+  const matches=bankRows.filter(t=>!usedBank.has(String(t.id))&&
+   String(tools.accountRef(t.accountId||t.account,accounts))===String(x.e.accountId)&&
+   tools.bankDirection(t)==='expense'&&norm(t.merchant||t.name)===norm(x.e.merchant)&&
+   Math.abs(diff(t.date,x.due))<=7&&
+   Math.abs(Number(t.amount)-Number(x.edit.amount??x.e.amount))<=
+    Math.max(15,Number(x.e.amount)*.35));
+  byOne.set(x.e.id,matches);
+  for(const t of matches)bankUses.set(String(t.id),(bankUses.get(String(t.id))||0)+1);
+ }
+ for(const {e,edit,due} of oneOffs){
+  const matches=byOne.get(e.id)||[];
+  if(matches.length===1&&bankUses.get(String(matches[0].id))===1){
+   usedBank.add(String(matches[0].id));continue;
+  }
+  const key=eventKey(tools,e);
+  seen({...e,...edit,date:nextPosting,source:'manual',_forecastExtra:true,
+   _unpostedEstimated:true,_overdueFrom:due});
+  overduePayments.push({key,id:e.id,ruleId:null,accountId:e.accountId,
+   merchant:e.merchant,amount:Number(edit.amount??e.amount),expectedDate:due,
+   proposedDate:nextPosting,dueDate:nextPosting});
  }
  for(const event of approvedOnly?[]:detected.automatic){
   if(!configuredCard(event.accountId)||
