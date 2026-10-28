@@ -332,7 +332,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-warning-form] button[type=submit]').click();
    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(
     'household-planner-sample-settings-v1')||'{}').warnBelow),100000,
-    'A single saved warning limit drives red and cash-cushion indicators');
+    'A single saved warning limit drives orange cash-cushion warnings and red shortfalls');
    assert.equal(await page.locator('[data-warning-form]').count(),1);
    assert.equal(await page.locator('[data-low-alert-form],[data-cushion-form]').count(),0,
     'Settings has exactly one low-balance control, not two competing values');
@@ -357,10 +357,16 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.summary-minimum .summary-overline').innerText(),
     '3-year low');
    assert.equal(await page.locator('.summary-low-warning').count(),0,
-    'Red metric values alone indicate a below-threshold or negative low, without warning copy');
-   assert.ok(await page.locator('.summary-minimum .summary-low').evaluate(
-    el=>el.classList.contains('summary-low-alert')),
-    'Low-balance warning continues to color the metric red');
+    'Color alone indicates low or negative projections, without duplicate warning copy');
+   const longLowSeverity=await page.locator('.summary-minimum .summary-low').evaluate(el=>({
+    value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
+    orange:el.classList.contains('summary-low-alert'),
+    red:el.classList.contains('summary-low-negative')
+   }));
+   assert.equal(longLowSeverity.red,longLowSeverity.value<0,
+    'Negative forecasts alone receive the red class');
+   assert.equal(longLowSeverity.orange,longLowSeverity.value>=0&&longLowSeverity.value<100000,
+    'Positive below-threshold forecasts receive the orange class');
    const metricAlignment=await page.evaluate(()=>{
     const row=document.querySelector('.summary-numbers').getBoundingClientRect();
     const monthly=document.querySelector('.summary-monthly .summary-low').getBoundingClientRect();
@@ -458,10 +464,18 @@ const {chromium,webkit}=require('playwright');
     getComputedStyle(el).color),'rgb(35, 113, 74)',
     'Bank-reported current balance is green');
    for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
-    assert.ok(await page.locator(selector).evaluate(el=>el.classList.contains('summary-low-alert')),
-     'Projected lows below the saved threshold must be red');
-    assert.equal(await page.locator(selector).evaluate(el=>getComputedStyle(el).color),
-     'rgb(180, 59, 54)','Saved threshold turns projected low values red');
+    const risk=await page.locator(selector).evaluate(el=>({
+     value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
+     orange:el.classList.contains('summary-low-alert'),
+     red:el.classList.contains('summary-low-negative'),
+     color:getComputedStyle(el).color
+    }));
+    assert.equal(risk.red,risk.value<0,'Negative balances must receive red severity');
+    assert.equal(risk.orange,risk.value>=0&&risk.value<100000,
+     'Nonnegative balances below the configured threshold receive orange severity');
+    assert.equal(risk.color,risk.red?'rgb(180, 59, 54)':
+     risk.orange?'rgb(165, 93, 12)':'rgb(18, 26, 34)',
+     'Computed warning color reflects projected cash severity');
    }
    await go('settings');
    await page.locator('[data-warning-form] [name=warnBelow]').fill('0');
@@ -470,10 +484,12 @@ const {chromium,webkit}=require('playwright');
    for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
     const actual=await page.locator(selector).evaluate(el=>({
      value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
-     red:el.classList.contains('summary-low-alert')
+     red:el.classList.contains('summary-low-negative'),
+     orange:el.classList.contains('summary-low-alert')
     }));
     assert.equal(actual.red,actual.value<0,
      'At a $0 warning limit, only negative projected lows remain red');
+    assert.equal(actual.orange,false,'No orange warning is possible at a $0 threshold');
    }
    await go('settings');
    await page.locator('[data-warning-form] [name=warnBelow]').fill('6000');
@@ -1143,13 +1159,66 @@ const {chromium,webkit}=require('playwright');
      label:metric?.querySelector('.summary-overline')?.textContent,
      amount:metric?.querySelector('.summary-low')?.textContent,
      lowDate:metric?.querySelector('[data-summary-low-date]')?.dataset.summaryLowDate,
-     alert:metric?.querySelector('.summary-low')?.classList.contains('summary-low-alert'),
+     orange:metric?.querySelector('.summary-low')?.classList.contains('summary-low-alert'),
+     red:metric?.querySelector('.summary-low')?.classList.contains('summary-low-negative'),
      noCaption:doc.querySelector('.calendar-balance-explainer')===null};
    });
    assert.deepEqual(fullLowFixture,{bank:'Sample Current Balance',
     month:'Estimated Monthly Low',label:'3-year low',
-    amount:'-$1,200.00',lowDate:'2027-10-19',alert:true,noCaption:true},
+    amount:'-$1,200.00',lowDate:'2027-10-19',orange:false,red:true,noCaption:true},
     'Three-year minimum reflects the later true trough and links to its date');
+   // Fictional checking balances validate the full orange / red distinction
+   // and the final high-contrast CSS applied to individual Calendar dates.
+   const severityFixture=await page.evaluate(()=>{
+    const account={id:'severity-checking',name:'Fictional checking',
+     accountType:'checking',current:10000};
+    const draw=negativeMonth=>{
+     const series=[
+      {date:'2026-10-19',balance:10000,events:[]},
+      {date:'2026-10-20',balance:3200,events:[]},
+      {date:'2026-10-21',balance:negativeMonth?-120:2500,events:[]},
+      {date:'2027-10-19',balance:-900,events:[]}];
+     const html=window.HouseholdPlannerSummary.render({
+      snapshot:{asOf:'2026-10-19'},chosen:account,
+      derived:{events:[],series},bundle:{rows:[],payments:{statements:[]}},
+      days:1095,prefs:{warnBelow:5000},accounts:[account],
+      fresh:true,ready:()=>true
+     });
+     const probe=document.createElement('div');probe.innerHTML=html;
+     document.body.appendChild(probe);
+     const details=selector=>{
+      const el=probe.querySelector(selector);
+      return el?{orange:el.classList.contains('summary-low-alert'),
+       red:el.classList.contains('summary-low-negative'),
+       color:getComputedStyle(el).color}:null;
+     };
+     const monthly=details('.summary-monthly .summary-low');
+     const threeYear=details('.summary-minimum .summary-low');
+     const day=probe.querySelector('[data-calendar-day="2026-10-21"]');
+     const dayData=day?{negative:day.classList.contains('negative'),
+      low:day.classList.contains('low'),
+      color:getComputedStyle(day.querySelector('.calendar-day-balance')).color}:null;
+     probe.remove();
+     return {monthly,threeYear,day:dayData};
+    };
+    return {positive:draw(false),negative:draw(true)};
+   });
+   assert.deepEqual(severityFixture.positive.monthly,
+    {orange:true,red:false,color:'rgb(165, 93, 12)'},
+    'Positive monthly low below threshold is orange, not red');
+   assert.deepEqual(severityFixture.positive.threeYear,
+    {orange:false,red:true,color:'rgb(180, 59, 54)'},
+    'Negative 3-year low remains red, independent of the warning threshold');
+   assert.deepEqual(severityFixture.positive.day,
+    {negative:false,low:true,color:'rgb(165, 93, 12)'},
+    'Positive low Calendar days show orange balances');
+   assert.deepEqual(severityFixture.negative.monthly,
+    {orange:false,red:true,color:'rgb(180, 59, 54)'},
+    'Negative month low overrides orange severity with red');
+   assert.deepEqual(severityFixture.negative.day,
+    {negative:true,low:false,color:'rgb(180, 59, 54)'},
+    'Negative Calendar days show red in the high-contrast theme');
+   await go('summary');
    await page.locator('#summary-account').selectOption('demo-checking');
    assert.equal(await page.locator('[data-summary-month-low]').count(),1);
    assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
