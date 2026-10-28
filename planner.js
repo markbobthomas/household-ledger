@@ -1804,8 +1804,11 @@ function repeatedRecommendations(bundle,s){
  // undecided action; count its decision only while still pending.
 function reviewQueue(bundle,s){
  const recommendations=repeatedRecommendations(bundle,s),
-  overdue=(bundle?.overduePayments||[]).filter(item=>
-   !state().predictions?.futureTransactionEdits?.[item.key]?.skipped);
+  ignoredKeys=state().predictions?.overdueReviewIgnored||{},
+  allOverdue=(bundle?.overduePayments||[]).filter(item=>
+   !state().predictions?.futureTransactionEdits?.[item.key]?.skipped),
+  overdue=allOverdue.filter(item=>!ignoredKeys[item.key]),
+  ignoredOverdue=allOverdue.filter(item=>ignoredKeys[item.key]);
  const migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
   legacySeries=migration.approvedOnly?[]:migration.legacySeries||[],
   findOwner=auto=>recommendations.find(r=>(r.activeLegacyStreams||[]).includes(auto.seriesKey)),
@@ -1813,7 +1816,7 @@ function reviewQueue(bundle,s){
   decisionsNeeded=legacyItems.filter(({owner})=>!owner||owner.status==='pending').length,
   pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
   ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
- return {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,
+ return {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,
   outstanding:decisionsNeeded+pending.length+overdue.length};
 }
 function updateReviewTabCount(queue){
@@ -1827,7 +1830,7 @@ function updateReviewTabCount(queue){
 }
 function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  // Reuse the count's exact queue, including distinct unsaved legacy streams.
- const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue}=queue;
+ const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue}=queue;
  lastRecommendedRepeating=recommendations;
  const
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
@@ -1892,22 +1895,37 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   (overdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Predicted payments not yet posted</h2>'+
    '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
-   '<p class="lead">These withdrawals were expected but have no confirmed matching bank payment. '+
-   'Each is still reserved once in the forecast on the next business day; '+
-   'your actual bank balance is unchanged. Bank processing can take a few days.</p>'+
-   overdue.map(item=>'<form class="overdue-review-row" data-overdue-date="'+
+   '<p class="lead">These expected withdrawals have no matching posted bank payment. '+
+   'Each is still reserved once in your forecast; the actual bank balance is unchanged.</p>'+
+   overdue.map(item=>'<article class="overdue-review-row" data-inline-row-wrapper data-payment-key="'+
     escapeHTML(item.key)+'">'+
     '<strong>'+escapeHTML(item.merchant)+' · '+cash(item.amount)+'</strong>'+
     '<small>Expected '+escapeHTML(dayLabel(item.expectedDate))+
      ' · Not confirmed by bank</small>'+
-    '<label>Move this payment to <input type="date" name="date" required min="'+
-     escapeHTML(shiftDay(s.asOf,1))+'" max="'+
-     escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+
-     escapeHTML(item.proposedDate)+'"></label>'+
-    '<button type="submit" class="btn primary">Move just this payment</button>'+
-    '<small>Does not change future mortgage dates or bank transactions.</small>'+
-    '</form>').join('')+
+    '<form data-overdue-date="'+escapeHTML(item.key)+'">'+
+     '<label>Move to <input type="date" name="date" required min="'+
+      escapeHTML(shiftDay(s.asOf,1))+'" max="'+
+      escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+
+      escapeHTML(item.proposedDate)+'"></label>'+
+     '<button type="submit" class="btn primary">Move just this payment</button>'+
+    '</form><div class="future-form-actions">'+
+     '<button type="button" class="btn" data-open-transaction="'+
+      escapeHTML(item.key)+'" aria-expanded="false">Edit payment</button>'+
+     '<button type="button" class="btn" data-ignore-overdue="'+
+      escapeHTML(item.key)+'">Ignore alert</button></div></article>').join('')+
+   '<p class="audit-footnote">Ignore alert keeps the withdrawal in your forecast. '+
+    'To remove that one predicted payment, select Edit payment → Skip this occurrence.</p>'+
    '</section>':'')+
+  (ignoredOverdue.length?'<details class="ignored-overdue-payments" data-ignored-overdue>'+
+   '<summary>Ignored payment alerts ('+ignoredOverdue.length+')</summary>'+
+   ignoredOverdue.map(item=>'<div class="overdue-review-row" data-ignored-overdue-key="'+
+     escapeHTML(item.key)+'"><strong>'+escapeHTML(item.merchant)+
+     ' · '+cash(item.amount)+'</strong><small>Expected '+
+     escapeHTML(dayLabel(item.expectedDate))+
+     ' · Still reserved in the forecast</small>'+
+     '<button type="button" class="btn" data-unignore-overdue="'+
+     escapeHTML(item.key)+'">Undo ignore</button></div>').join('')+
+   '</details>':'')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
     '<div class="section-title"><h2>Automatic estimates still in forecast</h2>'+
@@ -2615,6 +2633,26 @@ document.addEventListener('click',async e=>{
    render();
    document.querySelector('.reviews-page [data-review-inline-detail] [name=merchant]')?.focus();
   }catch(error){setNotice(String(error.message||error))}
+  return;
+ }
+ const overdueDecision=e.target.closest('[data-ignore-overdue],[data-unignore-overdue]');
+ if(overdueDecision){
+  const key=overdueDecision.dataset.ignoreOverdue||overdueDecision.dataset.unignoreOverdue,
+   ignore=Boolean(overdueDecision.dataset.ignoreOverdue),
+   s=snapshot(),item=forecastFor(s)?.overduePayments?.find(x=>x.key===key);
+  if(!item){setNotice('This payment changed or posted. Refresh Review.');return}
+  try{
+   await commitForecastChange(()=>{
+    const p=state().predictions;
+    p.overdueReviewIgnored??={};
+    if(ignore)p.overdueReviewIgnored[key]=true;
+    else delete p.overdueReviewIgnored[key];
+   });
+   reviewNotice=ignore?
+    'Ignored this alert. The predicted withdrawal remains in your forecast and your bank transactions are unchanged.':
+    'Payment alert restored to Review.';
+   render();
+  }catch(error){setNotice('Could not update Review: '+String(error.message||error))}
   return;
  }
  const ignoreRecommendation=e.target.closest('[data-ignore-recommendation],[data-unignore-recommendation]');
