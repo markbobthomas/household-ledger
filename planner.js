@@ -51,7 +51,7 @@ let reviewCatalogSave=Promise.resolve();
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='order',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
