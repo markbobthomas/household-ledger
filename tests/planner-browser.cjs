@@ -2582,9 +2582,9 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#refresh-bank').click();
   await go('schedules');
   await page.locator('[data-schedule-card="old-schedule-shifted"] [data-schedule-edit]').click();
-  assert.match(await page.locator('[data-payment-check="missing-anchor"]').innerText(),
-   /linked history points to|saved schedule begins/i,
-   'Previously overwritten start dates are diagnosed in the real-mode schedule editor');
+  assert.match(await page.locator('[data-payment-check="unposted"]').innerText(),
+   /unpaid scheduled withdrawal/i,
+   'A legacy source anchor reconstructs the historical missed withdrawal instead of hiding it');
   // Previously saved private forecast is next-month only, but an earlier
   // posted bank example proves the actual monthly payment phase.
   const historicalRule={...lateBill,id:'legacy-history-evidence',
