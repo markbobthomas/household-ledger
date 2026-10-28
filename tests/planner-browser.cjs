@@ -2528,6 +2528,46 @@ const {chromium,webkit}=require('playwright');
   await connectionPage.locator('#repair-alert').waitFor({state:'hidden'});
   assert.deepEqual(connectErrors,[]);
   await connectionPage.close();
+  // Real-bank integration, using only fictional data: one overdue mortgage
+  // must stay in Review and Calendar until a posted debit arrives on refresh.
+  const lateBill={id:'browser-unposted-withdrawal',kind:'event',
+   frequency:'monthly',anchorDate:'2026-10-05',accountId:'checking-real',
+   originalAccountId:'checking-real',type:'expense',amount:600,
+   merchant:'Fictional Housing ACH',originalMerchant:'Fictional Housing ACH',
+   matchNames:['fictional housing ach'],exampleIds:[]};
+  realPayload.adjustments.predictions={recurringForecastMode:'approved-only',
+   futureRecurringRules:[lateBill]};
+  await go('summary');
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await go('reviews');
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Housing ACH'}).count(),1,
+   'Unposted bill remains in Review two weeks after its due date');
+  assert.ok(await page.locator('.planner-nav-primary [data-view="reviews"]')
+   .evaluate(el=>el.classList.contains('has-review-items')),
+   'Missed payment turns Review red');
+  await go('summary');
+  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
+  assert.match(await page.locator('.calendar-day-transactions').innerText(),
+   /Fictional Housing ACH/,'Calendar holds unpaid debit once');
+  realPayload.transactions.push({id:'fictional-housing-paid',accountId:'checking-real',
+   date:'2026-10-08',name:'Fictional Housing ACH',
+   merchant:'Fictional Housing ACH',amount:635,pending:false,
+   category:{primary:'LOAN_PAYMENTS',detailed:'LOAN_PAYMENTS_MORTGAGE_PAYMENT',
+    confidence_level:'HIGH'}});
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await go('reviews');
+  assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
+   .filter({hasText:'Fictional Housing ACH'}).count(),0,
+   'Real posted loan payment clears Review on refresh');
+  await go('summary');
+  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
+  assert.doesNotMatch(await page.locator('.calendar-day-detail').innerText(),
+   /Fictional Housing ACH/,'Posted mortgage is not subtracted twice');
   assert.deepEqual(errors,[]);
   await real.close();
   console.log('PASS compact planner in desktop Chromium and iPhone WebKit: three-year headline minimum and unchanged three-year trend, no major-payment coverage, Demo/Real bank integrity, card debt, refresh, privacy and mobile layout');
