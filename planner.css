@@ -3102,3 +3102,35 @@ body{background:#edf0f2;color:var(--ink)}
 .planner-nav-primary .tab-link.has-review-items,
 .planner-nav-primary .tab-link.has-review-items.active,
 .planner-nav-primary .tab-link.has-review-items:hover{color:#c62828!important}
+
+/* Review: overdue withdrawals use the same compact edit-and-action rhythm
+   on mobile as desktop. Ignoring an alert never suppresses the withdrawal. */
+.reviews-page .overdue-review-row{
+ display:grid;grid-template-columns:minmax(0,1fr);gap:9px;
+ padding:14px 0;border-bottom:1px solid var(--line)
+}
+.reviews-page .overdue-review-heading{display:flex;flex-direction:column;gap:3px;min-width:0}
+.reviews-page .overdue-review-heading strong{font-size:13px;overflow-wrap:anywhere}
+.reviews-page .overdue-review-heading small,
+.reviews-page .overdue-review-row form>small,
+.reviews-page .overdue-ignored-row small{font-size:11px;color:var(--muted)}
+.reviews-page .overdue-review-actions,.reviews-page .overdue-edit-actions{
+ display:flex;align-items:center;flex-wrap:wrap;gap:7px
+}
+.reviews-page .overdue-review-row form{display:flex;align-items:end;flex-wrap:wrap;gap:9px}
+.reviews-page .overdue-review-row form>small{flex-basis:100%}
+.reviews-page .overdue-review-row form label{display:flex;flex-direction:column;gap:4px;font-size:11px}
+.reviews-page .overdue-review-row form input,.reviews-page .overdue-review-row form select{
+ max-width:100%;min-height:38px
+}
+.reviews-page .overdue-edit-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;flex-basis:100%}
+.reviews-page .overdue-edit-fields input,.reviews-page .overdue-edit-fields select{width:100%;box-sizing:border-box}
+.reviews-page .overdue-edit-actions{flex-basis:100%}
+.reviews-page .overdue-ignored{margin-top:12px}
+.reviews-page .overdue-ignored-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.reviews-page .overdue-ignored-row span{display:flex;flex-direction:column;gap:3px;min-width:0}
+@media(max-width:600px){
+ .reviews-page .overdue-edit-fields{grid-template-columns:minmax(0,1fr)}
+ .reviews-page .overdue-review-row form>label{flex:1 1 180px}
+ .reviews-page .overdue-review-row .btn{min-height:38px}
+}
