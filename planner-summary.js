@@ -14,6 +14,10 @@ const plotWidth=920,plotLeft=20,plotRight=900,top=18,bottom=274;
   }
   return 500;
  };
+// Cash forecast severity: red below zero, orange below the saved limit.
+const balanceRiskClass=(balance,prefs)=>
+ !Number.isFinite(balance)?'':balance<0?' summary-low-negative':
+ balance<alertThreshold(prefs)?' summary-low-alert':'';
 const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unverified';
 const dateLabel=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 const shortDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
@@ -212,7 +216,7 @@ function dayDetail(point,card){
   (calendarEditor?'<button type="button" class="calendar-editor-backdrop" data-calendar-cancel aria-label="Close editor"></button>':'')+
   quickEditor()+
   '<div class="calendar-math-total calendar-day-ending"><span>'+(card?'End-of-day card debt':'End-of-day balance')+
-  '</span><strong>'+money(point.balance)+'</strong></div>'+
+  '</span><strong class="'+(!card?balanceRiskClass(point.balance,calendarContext?.prefs).trim():'')+'">'+money(point.balance)+'</strong></div>'+
  '</section>';
 }
 
@@ -258,7 +262,9 @@ function updateMonthLow(){
  const point=monthLow(calendarMonth),value=el.querySelector('[data-summary-month-value]'),
   button=el.querySelector('[data-calendar-month-low]');
  if(value){value.textContent=point?money(point.balance):'Not projected';
-   value.classList.toggle('summary-low-alert',Boolean(point&&point.balance<alertThreshold(calendarContext?.prefs)));}
+   value.classList.toggle('summary-low-alert',Boolean(point&&point.balance>=0&&
+    point.balance<alertThreshold(calendarContext?.prefs)));
+   value.classList.toggle('summary-low-negative',Boolean(point&&point.balance<0));}
  if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
   button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
 }
@@ -558,13 +564,13 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
    '<div class="summary-monthly" data-summary-month-low>'+
     '<div class="summary-overline">Estimated Monthly Low</div>'+
-    '<strong class="summary-low'+(monthLow(calendarMonth)?.balance<alertThreshold(prefs)?' summary-low-alert':'')+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
+    '<strong class="summary-low'+balanceRiskClass(monthLow(calendarMonth)?.balance,prefs)+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
     '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
      (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
     '</div>'+
     '<div class="summary-minimum">'+
     '<div class="summary-overline">3-year low</div>'+
-    '<strong class="summary-low'+(low<alertThreshold(prefs)?' summary-low-alert':'')+'">'+money(low)+'</strong>'+
+    '<strong class="summary-low'+balanceRiskClass(low,prefs)+'">'+money(low)+'</strong>'+
     '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
     '">'+esc(dateLabel(lowDay.date))+' →</button>'+
     '</div>')+'</div>'+
@@ -583,7 +589,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   zero+'<path data-trend-area d="'+path+' L '+plotRight+' '+bottom+' L '+plotLeft+' '+bottom+
   ' Z" fill="url(#summary-blue-fill)"/>'+
   '<path data-trend-line d="'+path+'" stroke="#315ebd" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>'+
-  '<circle data-trend-pin cx="'+pin[0]+'" cy="'+pin[1]+'" r="6" fill="'+(below?'#b9444b':'#315ebd')+
+  '<circle data-trend-pin cx="'+pin[0]+'" cy="'+pin[1]+'" r="6" fill="'+(low<0?'#b43b36':below?'#a55d0c':'#315ebd')+
   '" stroke="#fff" stroke-width="3"/>'+
   '<line data-summary-cursor x1="'+pin[0]+'" x2="'+pin[0]+'" y1="'+top+'" y2="'+bottom+
   '" stroke="#8395ae" stroke-width="1" stroke-dasharray="3 7"/>'+
