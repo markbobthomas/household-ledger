@@ -79,20 +79,20 @@ assert.ok(cover(distant,[post('distant','Fictional Service',175,'2026-10-01')]).
 
 // Frozen pre-manual-window policy: the original PR #208 overdue mechanism
 // works with no saved per-schedule early/late or amount windows.
-const asOf='2026-10-27',accountsLive=accounts.map(a=>({...a})),
+const rollbackAsOf='2026-10-27',accountsLive=accounts.map(a=>({...a})),
  originalRule={id:'original-overdue',kind:'event',frequency:'monthly',
   anchorDate:'2026-10-26',accountId:'checking',type:'expense',
   merchant:'Fictional Housing ACH',amount:1200,
   originalAccountId:'checking',originalMerchant:'Fictional Housing ACH',
   matchNames:['fictional housing ach'],exampleIds:[]},
- snap={asOf,mode:'demo',accounts:accountsLive},prefs={futureRecurringRules:[originalRule]},
+ snap={asOf:rollbackAsOf,mode:'demo',accounts:accountsLive},prefs={futureRecurringRules:[originalRule]},
  options={weekendPolicy:'friday'};
 const stillUnpaid=Core.materialize(snap,[],prefs,T,null,60,options);
 assert.equal(stillUnpaid.overduePayments.length,1,'Unposted due bill appears for Review');
 assert.ok(stillUnpaid.ledger.some(e=>e.ruleId===originalRule.id&&e.date==='2026-10-28'),
  'A missed debit stays reserved once in checking projections');
-const pending=Core.materialize(snap,[{...post('pending-prior','Fictional Housing ACH',1200,'2026-10-26'),pending:true}],prefs,T,null,60,options);
-assert.equal(pending.overduePayments.length,1,'Pending is not a confirmed posting');
+const pendingOverdue=Core.materialize(snap,[{...post('pending-prior','Fictional Housing ACH',1200,'2026-10-26'),pending:true}],prefs,T,null,60,options);
+assert.equal(pendingOverdue.overduePayments.length,1,'Pending is not a confirmed posting');
 const settled=Core.materialize(snap,[post('posted-prior','Fictional Housing ACH',1200,'2026-10-27')],prefs,T,null,60,options);
 assert.equal(settled.overduePayments.length,0,'Actual posted housing debit clears the Review alert');
 assert.ok(!settled.ledger.some(e=>e.ruleId===originalRule.id&&e.date==='2026-10-28'),
