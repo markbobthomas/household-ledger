@@ -92,9 +92,9 @@ const {chromium,webkit}=require('playwright');
    };
    // iPad portrait and landscape widths must not cause document-wide sideways
    // scrolling on any primary ledger tab. Report the widest offending nodes.
-   for(const width of [768,810,820,834,1024,1180]){
+   for(const width of [744,768,810,820,834,980,1024,1180]){
     await page.setViewportSize({width,height:1024});
-    for(const tab of ['summary','schedules','history','reviews']){
+    for(const tab of ['summary','schedules','history','reviews','settings','trend','transactions']){
      await go(tab);
      const extent=await page.evaluate(()=>{
       const max=innerWidth+1;
@@ -2222,6 +2222,26 @@ const {chromium,webkit}=require('playwright');
   });
   await page.goto(privateUrl+'/?utm_source=chatgpt.com',{waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK');
+  // Fictional Real-bank tablet: long-lived loaded account views, not only Demo.
+  for(const width of [744,820,834,1024,1180]){
+   await page.setViewportSize({width,height:1024});
+   for(const tab of ['summary','schedules','history','reviews','settings','trend','transactions']){
+    await go(tab);
+    const sizes=await page.evaluate(()=>({
+     screen:innerWidth,html:document.documentElement.scrollWidth,body:document.body.scrollWidth,
+     overflow:[...document.querySelectorAll('body *')].filter(el=>{
+      const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
+      return cs.display!=='none'&&cs.position!=='fixed'&&r.width&&r.right>innerWidth+2;
+     }).slice(0,5).map(el=>({cls:String(el.className).slice(0,100),
+      right:Math.round(el.getBoundingClientRect().right)}))
+    }));
+    assert.ok(sizes.html<=width+2&&sizes.body<=width+2,
+     'Real-mode fictional iPad '+width+'px '+tab+' stays onscreen: '+JSON.stringify(sizes));
+   }
+  }
+  await page.setViewportSize({width:1280,height:900});
+  await go('summary');
+
   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
    'Live bank current must be the Plaid current, not $4,800 available');
