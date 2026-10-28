@@ -3149,7 +3149,7 @@ document.addEventListener('submit',async e=>{
   merchant:item.merchant,amount:item.amount,accountId:item.accountId
  };
  const target=String(fields.date||'');
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(target)||target<=snap.asOf||
+ if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(target)||target<=snap.asOf||
   target>shiftDay(snap.asOf,horizon)||
   [0,6].includes(new Date(target+'T12:00:00Z').getUTCDay())){
   reviewNotice='Choose a future business day for this payment.';return render();
