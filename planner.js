@@ -207,30 +207,6 @@ function eventDirection(e){
  if(e.kind==='card_purchase')return 'outgoing';
  return 'outgoing';
 }
-function movementRows(a,derived,s,routine){
- const cut=shiftDay(s.asOf,horizon);
- const tags=new Map((routine?.events||[]).map(e=>[String(e.id),e.planConfidence]));
- const records=(derived.events||[]).filter(e=>e.date>s.asOf&&e.date<=cut).sort((x,y)=>x.date.localeCompare(y.date)||x.merchant.localeCompare(y.merchant));
- if(!records.length)return '<div class="forecast-empty"><h3>No dated movements to show yet</h3>'+
-  '<p>No repeating payments currently qualify as confident dated forecasts for this account. Confirm a detected repeat below or add a card payment prediction.</p></div>';
- const first=records.slice(0,12),later=records.slice(12);
- const single=e=>{
-  const day=derived.series.find(x=>x.date===e.date),ending=day?.balance;
-  const income=eventDirection(e)==='incoming';
-  const suffix=e.kind==='card_purchase'?'Expected card purchase':e.kind==='transfer_out'?'Payment or transfer':e.kind==='transfer_in'?'Payment or transfer':e.kind==='income'?'Expected deposit':e.kind==='card_refund'?'Card credit':'Expected withdrawal';
-  return '<div class="payment-line" data-payment-date="'+escapeHTML(e.date)+'">'+
-   '<div class="payment-date">'+escapeHTML(dayLabel(e.date))+'</div>'+
-   '<div><div class="payment-name">'+escapeHTML(e.merchant||'Predicted movement')+'</div><div class="payment-meta">'+escapeHTML(suffix)+
-    (tags.get(String(e.id))==='suggested'?' · SUGGESTED · confirm below':tags.get(String(e.id))==='confirmed'?' · Confirmed':' · Planned')+'</div></div>'+
-   '<div class="payment-value '+(income?'incoming':'outgoing')+'">'+(income?'+':'−')+cash(e.amount)+'</div>'+
-   '<div class="after-value"><strong class="'+(!freshness(derived)||!Number.isFinite(ending)?'':derived.type!=='credit'&&ending<warningThreshold(state().predictions)?'risk':'')+'">'+
-    (freshness(derived)&&Number.isFinite(ending)?cash(ending):'Unverified')+'</strong><small>End of day</small></div></div>';
- };
- return '<div class="list-head"><span>Date</span><span>Expected movement</span><span style="text-align:right">Amount</span><span style="text-align:right">Balance after</span></div>'+
- first.map(single).join('')+
- (later.length?'<details class="details"><summary>Show '+later.length+' more expected movement'+(later.length===1?'':'s')+'</summary>'+
-  later.map(single).join('')+'</details>':'');
-}
 function connectionPanel(s){
  const list=activeAccounts(s),real=live(),source=available(),
   count=list.length,
@@ -246,24 +222,6 @@ function connectionPanel(s){
   '</section>';
 }
 
-function routineReviewPanel(bundle){
- const r=bundle?.routines;if(!r)return '';
- const suggestions=r.review||[],total=r.counts||{};
- if(!suggestions.length)return '<section class="panel mini-panel" aria-label="Routine payment confirmations">'+
-  '<div class="section-title"><h2>Repeating payments</h2><span class="status-tag good">NOTHING TO REVIEW</span></div>'+
-  '<p>Only stable repeating bills and deposits are predicted. Unpredicted shopping and groceries are excluded.</p>'+
-  '<p class="hero-footnote">'+Number(total.confirmed||0)+' confirmed upcoming movement(s).</p></section>';
- const lines=suggestions.map(s=>'<div class="routine-review-line" data-routine-key="'+escapeHTML(s.key)+'">'+
-  '<div><strong>'+escapeHTML(s.merchant)+'</strong><small>'+escapeHTML(s.account)+' · '+escapeHTML(s.frequency)+
-   ' · '+s.observed+' past payments · Next '+escapeHTML(dayLabel(s.next))+'</small></div>'+
-  '<strong>'+cash(s.amount)+'</strong><div class="routine-actions">'+
-  '<button type="button" class="btn primary" data-confirm-routine="'+escapeHTML(s.key)+'">Confirm once</button>'+
-  '<button type="button" class="btn" data-reject-routine="'+escapeHTML(s.key)+'">Not repeating</button></div></div>').join('');
- return '<section class="panel" aria-label="Routine payment confirmations">'+
-  '<div class="section-title"><h2>Repeating payments to confirm</h2><span class="status-tag warn">'+suggestions.length+' NEED REVIEW</span></div>'+
-  '<p class="lead">These exact amounts recur on recognizable dates. They are included as estimates while you review them. A single confirmation is saved for future months; if the amount changes, the app asks again.</p>'+
-  '<div class="routine-review-list">'+lines+'</div></section>';
-}
 function cardStatementPreview(s,bundle,cardId){
  const next=(bundle?.payments?.statements||[]).filter(x=>String(x.cardId)===String(cardId))
   .sort((a,b)=>a.withdrawalDate.localeCompare(b.withdrawalDate)).slice(0,2);
@@ -932,28 +890,6 @@ function dismissTransaction(){
  detailReturnFocus=null;
 }
 
-function missingMortgagePanel(bundle){
- const missing=bundle?.missingMortgages||[];
- if(!missing.length)return '';
- return '<section class="panel missing-mortgages" aria-label="Mortgage payments missing from forecast">'+
-  '<div class="section-title"><h2>Possible missing mortgage payment'+(missing.length>1?'s':'')+
-   '</h2><span class="status-tag warn">NOT IN FORECAST</span></div>'+
-  '<p class="lead">Bank history shows a possible mortgage missing from the plan. '+
-   'Review the next date, amount and paying account before it affects projected balances.</p>'+
-  missing.map(m=>'<div class="mortgage-review" data-mortgage-review="'+escapeHTML(m.id)+'">'+
-    '<div class="mortgage-review-info"><strong>'+escapeHTML(m.merchant)+' · '+cash(m.amount)+'</strong>'+
-     '<small>'+escapeHTML(m.account)+' · Last posted '+escapeHTML(dayLabel(m.lastDate))+
-      ' · Suggested next '+escapeHTML(dayLabel(m.nextDate))+'</small>'+
-     '<small>'+m.observed+' actual payment example'+(m.observed===1?'':'s')+' found</small>'+
-     '<details class="mortgage-examples"><summary>View posted examples</summary>'+
-      m.examples.map(t=>'<div>'+escapeHTML(dayLabel(t.date))+' · '+
-       escapeHTML(t.merchant)+' · '+cash(t.amount)+'</div>').join('')+'</details></div>'+
-    '<div class="mortgage-review-actions"><button type="button" class="btn primary" data-review-mortgage="'+
-     escapeHTML(m.id)+'">Review and predict</button>'+
-     '<button type="button" class="btn" data-dismiss-mortgage="'+escapeHTML(m.id)+
-     '">Not recurring</button></div></div>').join('')+
-  '<p class="audit-footnote">Suggested next date uses the last bank posting day, not the lender’s due date. Confirm it before saving. Bank records are never changed.</p></section>';
-}
 function newTransactionForm(s){
  const accounts=activeAccounts(s),primary=selected(s)?.id||accounts[0]?.id,
   defaultAccount=mortgageDraft?.accountId||(transactionFilter!=='all'?transactionFilter:primary),

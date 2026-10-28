@@ -65,32 +65,10 @@ function expectedMonthly(seed,months){
  }
  return out;
 }
-function historical(rows,accounts,accountId,check,asOf){
- return (rows||[]).filter(r=>accountFor(r,accounts)===accountId&&
-  r.date<=asOf&&realExpense(r)||false).filter(check).sort((a,b)=>a.date.localeCompare(b.date));
-}
 function historyFor(rows,accounts,accountId,predicate,asOf){
  return (rows||[]).filter(r=>r.date<=asOf&&
   accountFor(r,accounts)===accountId&&predicate(r))
   .sort((a,b)=>a.date.localeCompare(b.date));
-}
-function billCells({months,found,expected,reason,tooMany=false}){
- return months.map(m=>{
-  const due=expected.filter(d=>dayWithin(m,d));
-  const items=found.filter(e=>dayWithin(m,e.date));
-  if(!due.length&&!items.length)return {month:m.key,status:'na',label:'—',
-   detail:'No expected payment falls inside '+titleDate(m.start)+'–'+titleDate(m.end),items:[]};
-  if(!due.length&&items.length)return {month:m.key,status:'review',label:items.length+'?',
-   detail:'This payment is predicted, but its due date is not matched to the usual prediction',items:described(items)};
-  if(!items.length)return {month:m.key,status:'missing',label:'!',
-   detail:reason||'Expected payment is not included in the balance forecast',items:[]};
-  if(items.length>due.length||tooMany&&items.length>1)return {month:m.key,status:'review',label:items.length+'?',
-   detail:'More payments than expected are included; verify no double counting',items:described(items)};
-  if(items.length<due.length)return {month:m.key,status:'missing',label:items.length+' / '+due.length,
-   detail:'Not every expected payment is included in this period',items:described(items)};
-  return {month:m.key,status:'covered',label:'✓ '+items.length,
-   detail:'Predicted withdrawal included in the account balance',items:described(items)};
- });
 }
 /* Match the items users see under Predictions, not a second independently
  * named stream. Projection.events are the account movements actually included
