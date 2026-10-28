@@ -2347,7 +2347,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('.transaction-detail').count(),0);
   assert.equal(await itemized.isVisible(),true);
   assert.match(await itemized.innerText(),/Actual posted card transactions/);
-  assert.match(await itemized.innerText(),/Scheduled\/recurring card transactions/);
+  assert.match(await itemized.innerText(),/Predicted\/recurring card transactions/);
   assert.match(await itemized.innerText(),/Identifiable activity/);
   assert.match(await itemized.innerText(),/no historical-average spending allowance|No historical spending averages/i);
   assert.equal(await itemized.locator('.future-edit-form').count(),1);
