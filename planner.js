@@ -189,11 +189,11 @@ function hero(a,derived,asOf){
   (!fresh?'<p class="hero-footnote" style="margin-top:9px;color:var(--red)">'+escapeHTML(status.detail)+'</p>':'')+
   '</div><div class="hero-stats">'+
   '<div class="metric"><span>'+(credit?'Projected debt at month end':"Available after this month's dated payments")+'</span>'+
-   '<strong class="'+(fresh&&isCash&&monthBalance<0?'low':'')+'">'+
+   '<strong class="'+(fresh&&isCash&&Number.isFinite(monthBalance)?monthBalance<0?'low':monthBalance<safety?'warning':'':'')+'">'+
     (fresh?cash(monthBalance):'Unverified')+'</strong>'+
    '<small>'+escapeHTML(dayLabel(endOfMonth))+' · includes expected deposits</small></div>'+
   '<div class="metric"><span>'+(credit?'Lowest debt · next 3 years':'Lowest balance · next 3 years')+'</span>'+
-   '<strong class="'+(below?'low':'')+'">'+(fresh?cash(lowest):'Unverified')+'</strong>'+
+   '<strong class="'+(below?(lowest<0?'low':'warning'):'')+'">'+(fresh?cash(lowest):'Unverified')+'</strong>'+
    '<small>'+(fresh&&lowDate?escapeHTML(dayLabel(lowDate)):'Confirm bank balance first')+'</small></div>'+
   '<div class="metric metric-wide"><span>'+(isCash?'First projected shortfall':'Projected debt · 3-year horizon')+'</span>'+
    '<strong class="'+(fresh&&firstNegative?'low':'')+'">'+
