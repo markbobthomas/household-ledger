@@ -1308,7 +1308,7 @@ const {chromium,webkit}=require('playwright');
    const explanation=await page.locator('.history-explanation').innerText();
    assert.match(explanation,/saved repeating plans take priority/i,
     'History explains that owner-confirmed plans supersede estimates');
-   assert.match(explanation,/Transactions stays here/i,
+   assert.match(explanation,/Transactions stay here/i,
     'The UI promises bank source records are never deleted');
    assert.equal(await page.locator('[data-history-auto-prediction]').count(),0,
     'History no longer offers a competing automatic prediction system');
