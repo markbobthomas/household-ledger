@@ -114,7 +114,8 @@ function quickEditor(){
     ['quarterly','Every 3 months'],['annual','Every year']]
      .map(([v,name])=>'<option value="'+v+'">'+name+'</option>').join('')+
     '</select></label>':'')+'</div>'+
-  (mode==='add'?'<label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> This is an additional independent bill from a merchant I already use</label>':'')+
+  (mode==='add'?'<details class="calendar-advanced"><summary>Additional separate bill (advanced)</summary>'+
+   '<label class="schedule-separate-choice"><input type="checkbox" name="separateSchedule"> This is another independent bill from the same merchant</label></details>':'')+
   (repeatable?'<fieldset class="calendar-quick-scope"><legend>Apply to</legend>'+
    '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
    '<label><input type="radio" name="scope" value="all"> This and all future payments</label></fieldset>':'')+
