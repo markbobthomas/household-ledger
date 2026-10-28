@@ -448,7 +448,8 @@ function historicalScheduleMatches(row,accounts,rules=[]){
    String(r.originalAccountId||r.accountId||r.fromAccountId)===account&&
    (kind==='movement'?Boolean(row.pairedTransactionId)&&
     (!row.toAccountId||String(r.toAccountId)===String(row.toAccountId)):
-    r.type===type));
+    (r.type===type||r.kind==='event'&&r.type==='transfer'&&
+     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':null)===type)));
  if(!name)return [];
  const named=eligible.filter(r=>
   [r.originalMerchant,r.merchant,...(r.matchNames||[])]
@@ -612,7 +613,11 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
  if(requestedId&&id!==requestedId)
   throw Error('Choose the matching saved recurring prediction before saving.');
  if(!names.length)throw Error('Enter a merchant name');
- const rule={id,kind:transfer?'movement':'event',frequency,anchorDate:fields.date,
+ // A displayed next date must not overwrite the old recurrence anchor.
+ const unchangedNext=old&&old.frequency===frequency&&
+  fields.date===recurrenceDates(old,asOf,shift(asOf,1095))[0];
+ const anchorDate=unchangedNext?old.anchorDate:fields.date;
+ const rule={id,kind:transfer?'movement':'event',frequency,anchorDate,
   ...savedMatchBounds(data,old),
   ...(secondDay?{secondDay}:{}),...fields,
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
@@ -936,7 +941,9 @@ function postedCoverage(generated,rules,records,accounts,asOf){
     date=String(effective.date||effective.anchorDate||item.anchorDate||''),
     account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
    if(!validDate(date)||date<=asOf||
-    !sameDirection(t,kind==='event'?r.type:'transfer')||
+    !sameDirection(t,kind==='event'&&r.type==='transfer'?
+     (r.cashDirection==='out'?'expense':r.cashDirection==='in'?'income':r.type):
+     kind==='event'?r.type:'transfer')||
     accountRef(t.accountId||t.account,accounts)!==account)continue;
    const explicit=linked.some(x=>String(x.id)===String(r.id));
    // Posted bank evidence is accepted only inside THIS prediction's date
