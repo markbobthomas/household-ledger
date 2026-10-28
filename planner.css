@@ -1087,6 +1087,8 @@ body:has(.summary-page) .top-actions #horizon{display:none}
  font:760 clamp(18px,2.3vw,23px)/1.2 var(--mono);color:#172c42;
  white-space:nowrap
 }
+.summary-page .calendar-day-ending strong.summary-low-alert{color:#a55d0c}
+.summary-page .calendar-day-ending strong.summary-low-negative{color:#b43b36}
 .calendar-day-detail>.calendar-empty{margin:14px 0;color:#738799}
 .calendar-day-detail .calendar-math{margin-top:13px}
 
