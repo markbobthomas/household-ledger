@@ -1263,6 +1263,12 @@ const {chromium,webkit}=require('playwright');
     ['3040.00','3075.00','3040.00','3075.00','3040.00','3075.00'],
     'Editing one four-week schedule does not alter the alternate paycheck');
    await go('schedules');
+   assert.equal(await page.locator('[data-schedule-sort]').inputValue(),'value-desc',
+    'Predictions defaults to amount: high to low on first opening');
+   const defaultAmounts=await page.locator('.schedule-row-amount strong').evaluateAll(nodes=>
+    nodes.map(node=>Number((node.textContent||'').replace(/[^0-9.]/g,''))));
+   assert.deepEqual(defaultAmounts,[...defaultAmounts].sort((a,b)=>b-a),
+    'The initially displayed Predictions rows are ordered by value descending');
    let salarySchedules=page.locator('[data-schedule-card]').filter({hasText:'Alternating Employer Paycheck'});
    assert.equal(await salarySchedules.count(),2);
    for(let i=0;i<2;i++){
