@@ -2548,6 +2548,49 @@ const {chromium,webkit}=require('playwright');
   assert.ok(await page.locator('.planner-nav-primary [data-view="reviews"]')
    .evaluate(el=>el.classList.contains('has-review-items')),
    'Missed payment turns Review red');
+  // Ignore is a review disposition only: preserve the unpaid checking debit.
+  const unpaid=page.locator('[data-overdue-item]').filter({hasText:'Fictional Housing ACH'});
+  const unchangedBankFacts=JSON.stringify(realPayload.transactions);
+  await unpaid.locator('[data-ignore-overdue]').click();
+  await page.locator('[data-ignored-overdue]').waitFor();
+  assert.equal(await page.locator('[data-overdue-item]').filter({hasText:'Fictional Housing ACH'}).count(),0,
+   'Ignoring an overdue alert clears the actionable row, not the payment');
+  const ignoredUnpaid=page.locator('[data-ignored-overdue]');
+  assert.equal(await ignoredUnpaid.count(),1,'Ignored overdue alerts remain reversible');
+  assert.ok(writes.some(w=>Object.values(w.predictions?.overdueReviewDismissals||{})
+   .includes('2026-10-05')),'Ignored overdue decision saved with private forecast preferences');
+  await go('summary');
+  await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
+  assert.match(await page.locator('.calendar-day-transactions').innerText(),
+   /Fictional Housing ACH/,'Ignore must never remove the reserved checking withdrawal');
+  await go('reviews');
+  await page.locator('[data-ignored-overdue] > summary').click();
+  await page.locator('[data-unignore-overdue]').click();
+  await unpaid.waitFor();
+  assert.equal(await unpaid.count(),1,'Undo ignore restores the outstanding Review payment');
+  await unpaid.locator('[data-edit-overdue]').first().click();
+  const overdueEditor=unpaid.locator('form[data-overdue-mode="edit"]');
+  assert.equal(await overdueEditor.locator('[name=accountId]').inputValue(),'checking-real');
+  await overdueEditor.locator('[name=merchant]').fill('Fictional Housing ACH Revised');
+  await overdueEditor.locator('[name=amount]').fill('625');
+  await overdueEditor.locator('[name=date]').fill('2026-10-21');
+  await overdueEditor.locator('button[type=submit]').click();
+  await page.locator('.reviews-page .future-notice')
+   .getByText(/Updated only this unpaid payment/).waitFor();
+  assert.ok(writes.some(w=>Object.values(w.predictions?.futureTransactionEdits||{})
+   .some(edit=>edit.amount===625&&edit.date==='2026-10-21'&&
+    edit.merchant==='Fictional Housing ACH Revised')),
+   'Review inline edit persists only a single future occurrence');
+  assert.equal(await unpaid.count(),0,'Moving edited overdue payment out of the past clears its alert');
+  assert.equal(JSON.stringify(realPayload.transactions),unchangedBankFacts,
+   'Review actions must never mutate Plaid transaction records');
+  // The fixture server intentionally does not apply writes to incoming ledger
+  // snapshots. A fresh read restores the original due date for matching tests.
+  if(await page.locator('#planner-menu').getAttribute('open')===null)
+   await page.locator('#planner-menu > summary').click();
+  await page.locator('#refresh-bank').click();
+  await go('reviews');
+  assert.equal(await unpaid.count(),1,'Reload recomputes the due item from server-authoritative fixture data');
   await go('summary');
   await page.evaluate(()=>window.HouseholdPlannerSummary.navigate('2026-10-20'));
   assert.match(await page.locator('.calendar-day-transactions').innerText(),
@@ -2618,6 +2661,20 @@ const {chromium,webkit}=require('playwright');
    'Private-mode forecast reserves the recovered unpaid withdrawal');
   assert.equal(realPayload.adjustments.predictions.futureRecurringRules[0].anchorDate,
    '2026-11-19','Recovery did not edit the saved private schedule');
+  await go('reviews');
+  const recoveredUnpaid=page.locator('[data-overdue-item]')
+   .filter({hasText:'Fictional Recurring Housing'});
+  assert.equal(await recoveredUnpaid.count(),1);
+  page.once('dialog',dialog=>dialog.accept());
+  await recoveredUnpaid.locator('[data-skip-overdue]').click();
+  await recoveredUnpaid.waitFor({state:'detached'});
+  assert.equal(await recoveredUnpaid.count(),0,
+   'Skip one payment removes the alert, separate from simply ignoring it');
+  assert.ok(writes.some(w=>Object.values(w.predictions?.futureTransactionEdits||{})
+   .some(edit=>edit.skipped&&edit.label==='Fictional Recurring Housing')),
+   'Skipping one unpaid occurrence saves a reversible forecast-only exception');
+  assert.equal(realPayload.adjustments.predictions.futureRecurringRules[0].anchorDate,
+   '2026-11-19','Skipping a payment never changes future schedule cadence');
   assert.deepEqual(errors,[]);
   assert.deepEqual(errors,[]);
   await real.close();
