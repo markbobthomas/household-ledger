@@ -356,6 +356,22 @@ const {chromium,webkit}=require('playwright');
     'Estimated Monthly Low');
    assert.equal(await page.locator('.summary-minimum .summary-overline').innerText(),
     '3-year low');
+   assert.equal(await page.locator('.summary-low-warning').count(),0,
+    'Red metric values alone indicate a below-threshold or negative low, without warning copy');
+   assert.ok(await page.locator('.summary-minimum .summary-low').evaluate(
+    el=>el.classList.contains('summary-low-alert')),
+    'Low-balance warning continues to color the metric red');
+   const metricAlignment=await page.evaluate(()=>{
+    const row=document.querySelector('.summary-numbers').getBoundingClientRect();
+    const monthly=document.querySelector('.summary-monthly .summary-low').getBoundingClientRect();
+    const threeYear=document.querySelector('.summary-minimum .summary-low').getBoundingClientRect();
+    const date=document.querySelector('.summary-minimum .summary-low-date').getBoundingClientRect();
+    return {center:Math.abs((monthly.left+monthly.right)/2-(row.left+row.right)/2),
+     right:Math.abs(threeYear.right-row.right),dateRight:Math.abs(date.right-row.right)};
+   });
+   assert.ok(metricAlignment.center<=3&&metricAlignment.right<=3&&metricAlignment.dateRight<=3,
+    'Monthly metric is centered and three-year value/date align to full row right edge: '+
+    JSON.stringify(metricAlignment));
    assert.match(await page.locator('[data-calendar-first-tip]').innerText(),/Choose a future date.*Edit/s,
     'The Calendar shows contextual first-use editing guidance');
    await page.locator('[data-calendar-tip-dismiss]').click();
