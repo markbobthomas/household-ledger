@@ -570,6 +570,11 @@ const {chromium,webkit}=require('playwright');
     'A monthly category budget is saved across page reloads');
    assert.deepEqual(await selectedMonths(page),['2026-10'],
     'Reload resets the view to the current calendar month');
+   const categoryAmount=async name=>Number((await page.locator(
+    '[data-history-category-row="'+name+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''));
+   const utilitiesBefore=await categoryAmount('Utility'),
+    subscriptionsBefore=await categoryAmount('Subscriptions');
 
    // A category edit teaches a merchant lesson, which Settings can forget
     // without reverting the transaction's individual saved correction.
@@ -584,6 +589,14 @@ const {chromium,webkit}=require('playwright');
     assert.ok(Object.values(categoryLesson.learning.categoryRules).some(rule=>
      rule.merchant==='Xfinity Internet'&&rule.category==='Subscriptions'),
      'A category correction stores its merchant lesson');
+    await page.locator('[data-history-view="categories"]').click();
+    assert.equal(Math.round(await categoryAmount('Subscriptions')*100),
+     Math.round(subscriptionsBefore*100)+7999,
+     'A saved posted purchase immediately moves into the selected budget category');
+    assert.equal(Math.round(await categoryAmount('Utility')*100),
+     Math.round(utilitiesBefore*100)-7999,
+     'The old budget category no longer counts that same purchase');
+    await page.locator('[data-history-view="list"]').click();
     await page.locator('#planner-menu summary').click();
     await page.locator('#planner-menu [data-view="settings"]').click();
     assert.equal(await page.locator('[data-forget-category-rule]').count(),1,

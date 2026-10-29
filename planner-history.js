@@ -28,6 +28,21 @@ const accountOf=(t,accounts)=>shared.accountRef(t.accountId||t.account,accounts)
 const canPlan=t=>Boolean(t&&validDate(t.date)&&
  ['expense','income','refund','transfer'].includes(t.type)&&
  Number.isFinite(Number(t.amount))&&Number(t.amount)>=0);
+// An outward bank-coded transfer can represent a real paid bill (e.g. a
+// Zelle daycare payment). Only a deliberate saved category correction can
+// count such an unmatched debit in spending reports. Never reclassify the
+// bank fact, forecast ledger, linked transfers, card settlements or deposits.
+function categorizedOutflowCents(t){
+ if(!t||t.pending||t.pairedTransactionId||t.type!=='transfer'||
+    t.cashDirection!=='out'||t.method!=='manual'||
+    t.reconciliationStatus==='ambiguous'||
+    ['card_payment','unclassified_card_credit'].includes(t.accountingKind)||
+    t.accountType==='credit'||t.accountType==='loan'||
+    ['Uncategorized','Income','Transfer','Savings'].includes(String(t.category||'')))
+  return 0;
+ const cents=Math.round(Number(t.amount)*100);
+ return Number.isFinite(cents)&&cents>0?cents:0;
+}
 const isMortgage=t=>{
  const p=t.personal_finance_category||t.source?.personalFinanceCategory||{};
  return /\b(mortgage|mtg|home loan|pennymac|loandepot|newrez|shellpoint|mr cooper)\b/i.test(String(t.merchant||''))||
@@ -270,7 +285,7 @@ function recommendedRepeating(records,accounts,asOf){
  return output.sort((a,b)=>b.occurrences-a.occurrences||
   b.lastDate.localeCompare(a.lastDate));
 }
-const api={candidates,recommendedRepeating,guessFrequency,nextDate,canPlan,accountOf,draftFor,isMortgage};
+const api={candidates,recommendedRepeating,guessFrequency,nextDate,canPlan,accountOf,draftFor,isMortgage,categorizedOutflowCents};
 root.HouseholdPlannerHistory=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
