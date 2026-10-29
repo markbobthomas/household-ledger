@@ -988,7 +988,7 @@ function scheduleFields(r,isNew,s){
    '</select></label>':'')+
   '<label>Bank merchant<input name="merchant" maxlength="160"'+(isNew?'':' required')+' value="'+escapeHTML(r.merchant||'')+'"></label>'+
   '<label>Category<select name="category">'+categories.map(c=>
-   '<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+'</select></label>'+
+   '<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+'</select></label>'+
   '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
    '<option value="fixed"'+(r.amountBasis!=='estimate'?' selected':'')+'>Fixed</option></select></label>'+
   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>To account'+
@@ -1319,7 +1319,7 @@ function schedulesPage(bundle,s){
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-schedule-quick-category="'+id+'" '+
     'aria-label="Category for prediction '+number+': '+title+'">'+
     categories.map(category=>'<option value="'+escapeHTML(category)+'"'+
-     (category===categoryOf(r)?' selected':'')+'>'+escapeHTML(category)+'</option>').join('')+
+     (category===categoryOf(r)?' selected':'')+'>'+escapeHTML(categoryLabel(category))+'</option>').join('')+
    '</select></div>'+
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for prediction '+number+'" title="More actions">⋯</summary>'+
@@ -1353,7 +1353,7 @@ function schedulesPage(bundle,s){
   [...new Set(visible.map(({rule})=>categoryOf(rule)))].map(category=>{
    const items=visible.filter(({rule})=>categoryOf(rule)===category);
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
-    '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
+    '<div class="schedule-category-heading"><strong>'+escapeHTML(categoryLabel(category))+
     ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
     scheduleCategorySummary(items,nextAmount,rule=>upcomingByRule.get(String(rule.id)))+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
@@ -1371,7 +1371,7 @@ function schedulesPage(bundle,s){
    '</select></label>'+
    '<div class="schedule-category-controls"><label>Category <select data-schedule-category-filter><option value="">All categories</option>'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
-     (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+     (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
    '</select></label>'+
    '</div>'+
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
@@ -1655,7 +1655,7 @@ function historyInsights(rows,view,options={}){
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-legend-dot" style="background:'+colors[i%colors.length]+'"></span>'+
      '<span class="history-category-name"><span class="history-category-glyph">'+cue(g.name)+'</span>'+
-      escapeHTML(g.name)+'<small>'+g.count+' purchases</small></span></button>'+ 
+      escapeHTML(categoryLabel(g.name))+'<small>'+g.count+' purchases</small></span></button>'+ 
      budgetBar(g)+
      '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
@@ -1709,8 +1709,8 @@ function historyPage(bundle,s){
  const accounts=activeAccounts(s),
   records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
   .map(t=>({...t,category:
-    ['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
-    ['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
+    t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
+    t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
     model.canonicalCategory(state(),t.category)||t.category||'Other'}))
   .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),
   // Both filters and row editors consult the same canonical category registry.
@@ -1848,7 +1848,7 @@ function historyPage(bundle,s){
     // Keep the full catalog available without injecting every option's
     // text into every bank row (which can make a merchant text search match
     // an unrelated row merely because e.g. "Mortgage" is an option).
-    categories.map(c=>'<option value="'+escapeHTML(c)+'" label="'+escapeHTML(c)+'"'+
+    categories.map(c=>'<option value="'+escapeHTML(c)+'" label="'+escapeHTML(categoryLabel(c))+'"'+
      (c===t.category?' selected':'')+'></option>').join('')+
    '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
    detail+'</div>';
@@ -1912,7 +1912,7 @@ function historyPage(bundle,s){
     '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
     '<option value="">All categories</option>'+
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
-     (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+     (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select></label></div>')+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
