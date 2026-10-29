@@ -20,9 +20,9 @@ const row=(id,merchant,date,primary='GENERAL_MERCHANDISE',confidence='LOW')=>({
  category:{primary,detailed:primary+'_OTHER',confidence_level:confidence}
 });
 const transactionRows=[
- row('coffee-1','Fictional Corner Café','2026-10-04','GENERAL_MERCHANDISE','LOW'),
- row('coffee-2','Fictional Corner Café','2026-10-11','GENERAL_MERCHANDISE','LOW'),
- row('coffee-3','Fictional Corner Café','2026-10-18','GENERAL_MERCHANDISE','LOW'),
+ row('coffee-1','Fictional Corner Kiosk','2026-10-04','GENERAL_MERCHANDISE','LOW'),
+ row('coffee-2','Fictional Corner Kiosk','2026-10-11','GENERAL_MERCHANDISE','LOW'),
+ row('coffee-3','Fictional Corner Kiosk','2026-10-18','GENERAL_MERCHANDISE','LOW'),
  row('amazon-1','Amazon','2026-10-10','GENERAL_MERCHANDISE','HIGH'),
  row('amazon-2','Amazon','2026-10-15','GENERAL_MERCHANDISE','HIGH'),
  row('pay-1','Fictional Paycheck','2026-10-01','INCOME','HIGH')
