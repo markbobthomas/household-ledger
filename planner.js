@@ -1565,7 +1565,7 @@ function historyPage(bundle,s){
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
   if(historyView!=='categories'&&historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
-  if(!historySearch)return true;
+  if(historyView!=='list'||!historySearch)return true;
   return [t.merchant,t.description,t.date,t.category,t.account,t.amount]
    .some(v=>String(v||'').toLowerCase().includes(historySearch.toLowerCase()));
  });
@@ -1693,7 +1693,7 @@ function historyPage(bundle,s){
     [['1','1 month'],['3','3 months'],['6','6 months'],['12','12 months'],['all','All history']].map(([id,name])=>
       '<option value="'+id+'"'+(historyMonths===id?' selected':'')+'>'+name+'</option>').join('')+
     '</select></label></div></div>'+
-  '<form class="history-filters ledger-toolbar" data-history-filter>'+
+  '<form class="history-filters ledger-toolbar'+(historyView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
@@ -2567,14 +2567,14 @@ document.addEventListener('click',async e=>{
  if(sizeBand){
   const i=Number(sizeBand.dataset.historySizeBand);
   if(i<0||i>=historyBands.length)return;
-  historyView='list';historySizeFilter=i;historyPurchaseDrill=true;historyLimit=90;render();return;
+  historyView='list';historySizeFilter=i;historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
  }
  if(e.target.closest?.('[data-history-clear-size]')){
   historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;render();return;
  }
  const categoryDrill=e.target.closest?.('[data-history-drill-category]');
  if(categoryDrill){
-  historyView='list';historySizeFilter=-1;historyPurchaseDrill=true;
+  historyView='list';historySizeFilter=-1;historyPurchaseDrill=true;historySearch='';
   historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
   historyLimit=90;render();return;
  }
