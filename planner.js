@@ -2057,7 +2057,7 @@ function reviewQueue(bundle,s){
   outstanding:decisionsNeeded+pending.length+overdue.length};
 }
 function updateReviewTabCount(queue){
- const badge=document.querySelector('.main-navigation [data-review-tab-count]');
+ const badge=document.querySelector('.topbar [data-review-tab-count]');
  if(!badge)return;
  const count=Number(queue?.outstanding||0);
  badge.hidden=!(count>0);
