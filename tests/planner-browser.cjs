@@ -28,8 +28,21 @@ const {chromium,webkit}=require('playwright');
   assert.ok(months.every(m=>offered.includes(m)),
    'Expected complete calendar months '+JSON.stringify(months)+'; offered '+JSON.stringify(offered));
   // Keep the popup open: checking and unchecking updates the report immediately.
-  for(const month of months)
-   await page.locator('[data-history-month-option="'+month+'"]').check();
+  for(const month of months){
+   try{await page.locator('[data-history-month-option="'+month+'"]').check({timeout:4500})}
+   catch(error){
+    const diag=await page.evaluate(()=>({
+     active:document.querySelector('.planner-page')?.className,
+     picker:document.querySelector('[data-history-month-picker]')?.outerHTML.slice(0,500),
+     menuVisible:Boolean(document.querySelector('[data-history-month-menu]')?.getClientRects().length),
+     menuHidden:document.querySelector('[data-history-month-menu]')?.hidden,
+     expanded:document.querySelector('[data-history-month-toggle]')?.getAttribute('aria-expanded'),
+     options:[...document.querySelectorAll('[data-history-month-option]')].map(x=>({v:x.value,visible:Boolean(x.getClientRects().length)})),
+     notice:document.querySelector('#planner-notice')?.textContent.slice(0,200)
+    }));
+    throw new Error('Could not check '+month+'; '+JSON.stringify(diag)+'; '+error.message);
+   }
+  }
   for(const month of offered.filter(m=>!months.includes(m)))
    await page.locator('[data-history-month-option="'+month+'"]').uncheck();
   await page.locator('[data-history-month-toggle]').click();
