@@ -110,7 +110,7 @@ const {chromium,webkit}=require('playwright');
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   assert.equal(await page.locator('.history-subtab').count(),3);
+   assert.equal(await page.locator('.history-subtab').count(),4);
    assert.equal(await page.locator('.history-period-controls [data-history-month]').count(),1);
    assert.equal(await page.locator('[data-history-months]').count(),1);
    assert.equal(await page.locator('.history-page [data-history-view="list"][aria-pressed="true"]').count(),1);
@@ -269,6 +269,66 @@ const {chromium,webkit}=require('playwright');
     }
     await page.locator('[data-history-clear-size]').click();
    }
+
+   // Merchant view: one intuitive calendar-month spend total per merchant,
+   // independent of the existing Category and Purchase Sizes analysis.
+   await page.locator('[data-history-view="merchants"]').click();
+   assert.equal(await page.locator('[data-history-merchant-insights]').count(),1);
+   assert.equal(await page.locator('.history-list-surface').count(),0,
+    'Merchant analysis does not duplicate individual bank rows');
+   await page.locator('[data-history-months]').selectOption('1');
+   assert.equal(await page.locator('[data-history-month]').inputValue(),'2026-10');
+   const amazon=page.locator('[data-history-drill-merchant="amazon"]'),
+    costcoWarehouse=page.locator('[data-history-drill-merchant="costco warehouse"]'),
+    costcoGas=page.locator('[data-history-drill-merchant="costco gas"]');
+   assert.equal(await amazon.count(),1,'Amazon purchases are grouped into one merchant');
+   assert.equal(await amazon.locator('.history-merchant-amount').innerText(),'$77.91',
+    'Amazon is summed only for the current calendar month');
+   assert.match(await amazon.innerText(),/1 purchase/);
+   assert.equal(await costcoWarehouse.count(),1);
+   assert.equal(await costcoGas.count(),1,
+    'Costco warehouse and gas are distinct merchants');
+   const allCents=await page.locator('[data-history-drill-merchant]').evaluateAll(rows=>
+    rows.reduce((sum,row)=>sum+Number(row.dataset.historyMerchantCents||0),0));
+   const currency=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'})
+    .format(Math.abs(n)/100);
+   assert.equal(await page.locator('[data-history-merchant-total]').innerText(),
+    (allCents<0?'−':'')+currency(allCents),
+    'Period total equals sum of the individually grouped merchant net spends');
+
+   await page.locator('[data-history-merchant-search]').fill('Ama');
+   assert.equal(await page.locator('[data-history-drill-merchant]:visible').count(),1,
+    'Merchant search narrows visible rows');
+   assert.equal(await page.locator('[data-history-merchant-count]').innerText(),'1');
+   assert.equal(await page.locator('[data-history-merchant-total]').innerText(),'$77.91');
+   await page.locator('[data-history-merchant-search]').fill('nonesuchfictional');
+   assert.equal(await page.locator('[data-history-drill-merchant]:visible').count(),0);
+   assert.equal(await page.locator('[data-history-merchant-total]').innerText(),'$0.00');
+   await page.locator('[data-history-merchant-search]').fill('');
+   await page.locator('[data-history-months]').selectOption('3');
+   assert.ok((await amazon.innerText()).includes('purchases'),
+    'Expanding the calendar-month period aggregates more Amazon purchases');
+   await amazon.click();
+   assert.equal(await page.locator('[data-history-view="list"][aria-pressed="true"]').count(),1,
+    'Choosing a merchant drills into the existing Transactions page');
+   assert.ok(await page.locator('.history-actual-row').count()>1);
+   assert.ok(await page.locator('.history-actual-row').evaluateAll(rows=>rows.every(row=>
+    /Amazon/i.test(row.querySelector('.history-actual-description strong')?.textContent||'')),
+    'Merchant drilldown contains no unrelated transactions');
+   assert.equal(await page.locator('[data-history-months]').inputValue(),'3',
+    'Merchant drilldown preserves the month span');
+   assert.match(await page.locator('.history-active-filter').innerText(),/Merchant: Amazon/);
+   await page.locator('[data-history-clear-merchant]').click();
+   assert.equal(await page.locator('[data-history-view="merchants"][aria-pressed="true"]').count(),1,
+    'Back to Merchants returns to its grouped spend view');
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const size=await page.evaluate(()=>document.documentElement.scrollWidth);
+    assert.ok(size<=width+3,'Merchants layout fits '+width+'px viewport: '+size);
+    assert.equal(await page.locator('[data-history-view="merchants"]').isVisible(),true);
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   await page.locator('[data-history-view="list"]').click();
 
    await page.locator('[data-history-months]').selectOption('1');
    await page.locator('[data-history-month]').fill('2026-09');
