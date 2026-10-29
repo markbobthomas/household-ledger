@@ -312,6 +312,7 @@ const {chromium,webkit}=require('playwright');
    assert.ok(!(catalog.scheduleCategories||[]).includes('Fictional Pet Care'),
     'Deleted category stays absent from saved preferences');
    
+   await chooseMonths(page,['2026-10']);
    assert.equal(await page.locator('.history-donut').count(),1);
    assert.ok(await page.locator('.history-category-item').count()>0,
     'Category legend is populated from fictional posted purchase records');
@@ -322,6 +323,33 @@ const {chromium,webkit}=require('playwright');
    if(await unsetBar.count())assert.equal(
     Number.parseFloat(await unsetBar.locator('.history-budget-fill').evaluate(el=>el.style.width)),0,
     'Without a target, the usage bar is empty');
+   assert.equal(await page.locator('[data-history-total-budget]').count(),1,
+    'Categories view includes one overall budget summary');
+   const checkOverall=async months=>{
+    const rows=await page.locator('.history-category-item').evaluateAll(items=>
+     items.map(item=>({
+      spent:Number(item.querySelector('.history-category-actual').textContent.replace(/[^0-9.-]/g,'')),
+      budget:item.querySelector('[data-history-budget]').value
+     })));
+    const totals=rows.reduce((sum,row)=>{
+     if(row.budget==='')return sum;
+     sum.spentCents+=Math.round(row.spent*100);
+     sum.limitCents+=Math.round(Number(row.budget)*100)*months;
+     return sum;
+    },{spentCents:0,limitCents:0});
+    const summary=page.locator('[data-history-total-budget]');
+    if(totals.limitCents<=0){
+     assert.equal(await summary.locator('[data-history-total-budget-percent]').count(),0,
+      'No misleading percentage is shown without a positive overall budget');
+    }else{
+     const percent=Number((await summary.locator('[data-history-total-budget-percent]').innerText()).replace('%',''));
+     assert.equal(percent,Math.round(totals.spentCents/totals.limitCents*100),
+      'Overall percent divides spending in budgeted categories by combined calendar-month limits');
+     const bar=await summary.locator('.history-budget-summary-track>span').evaluate(el=>parseFloat(el.style.width));
+     assert.ok(Math.abs(bar-Math.max(0,Math.min(100,totals.spentCents/totals.limitCents*100)))<.02,
+      'Summary bar caps at 100% without capping the stated percentage');
+    }
+   };
    const budgetCategory=page.locator('.history-category-item').first(),
     categoryName=await budgetCategory.getAttribute('data-history-category-row');
    assert.equal(await budgetCategory.locator('[data-history-budget]').count(),1,
@@ -334,6 +362,7 @@ const {chromium,webkit}=require('playwright');
     return saved.categoryMonthlyBudgets?.[category]===275.5;
    },categoryName);
    assert.equal(await page.locator('.history-category-item').first().locator('[data-history-budget]').inputValue(),'275.50');
+   await checkOverall(1);
    assert.match(await page.locator('.history-category-item').first()
     .locator('[data-history-budget-bar]').getAttribute('aria-label'),/spent of .* budget/,
     'The saved budget appears in the accessible progress description');
@@ -344,6 +373,7 @@ const {chromium,webkit}=require('playwright');
     'Three-month actual spending is compared against three full calendar monthly targets');
    assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
     'A monthly budget carries across report periods');
+   await checkOverall(3);
    const budgetRow=page.locator('.history-category-item').filter({
     has:page.locator('[data-history-budget="'+categoryName+'"]')
    });
@@ -359,10 +389,12 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await budgetRow.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'over');
     assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
      'The over-budget fill caps at its full track width');
+    await checkOverall(3);
     await budgetRow.locator('[data-history-budget]').fill('275.50');
     await budgetRow.locator('[data-history-budget]').press('Tab');
     await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
      'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===275.5,categoryName);
+    await checkOverall(3);
    }
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
