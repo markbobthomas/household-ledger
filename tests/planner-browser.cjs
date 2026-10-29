@@ -334,7 +334,8 @@ const {chromium,webkit}=require('playwright');
     'Deleted category stays absent from saved preferences');
    
    await chooseMonths(page,['2026-10']);
-   assert.equal(await page.locator('.history-donut').count(),1);
+   assert.equal(await page.locator('.history-donut,.history-legend-dot').count(),0,
+    'Budget uses the full-width list without the redundant pie or legend colors');
    assert.ok(await page.locator('.history-category-item').count()>0,
     'Category legend is populated from fictional posted purchase records');
    assert.equal(await page.locator('[data-history-budget-bar]').count(),
@@ -352,8 +353,8 @@ const {chromium,webkit}=require('playwright');
     'Redundant explanatory paragraphs are removed');
    assert.equal(await page.locator('.history-spending-overview').innerText().then(x=>/average/i.test(x)),false,
     'The average is not displayed in the budget overview');
-   assert.equal(await page.locator('.history-donut-center strong').count(),0,
-    'The donut does not repeat the same spending total');
+   assert.equal(await page.locator('.history-category-layout').count(),0,
+    'Budget category columns are no longer constrained by a chart layout');
    const assertBudgetSorted=async()=>{
     const actual=await page.locator('.history-category-item').evaluateAll(items=>items.map(item=>({
      name:item.dataset.historyCategoryRow,budget:item.querySelector('[data-history-budget]').value
@@ -449,29 +450,45 @@ const {chromium,webkit}=require('playwright');
     const compact=await page.evaluate(()=>{
      const title=document.querySelector('.history-category-panel-heading h2').getBoundingClientRect(),
       manage=document.querySelector('.history-category-manager>summary').getBoundingClientRect(),
-      donut=document.querySelector('.history-donut').getBoundingClientRect();
+      table=document.querySelector('.history-category-table').getBoundingClientRect(),
+      panel=document.querySelector('[data-history-category-insights]').getBoundingClientRect();
      return {titleRight:title.right,manageLeft:manage.left,titleTop:title.top,manageTop:manage.top,
-      donutWidth:donut.width};
+      tableWidth:table.width,panelWidth:panel.width};
     });
     assert.ok(compact.titleRight<=compact.manageLeft+2 &&
      Math.abs(compact.titleTop-compact.manageTop)<20,
-     'Category management stays beside the heading at '+width+': '+JSON.stringify(compact));
-    if(mobile)assert.ok(compact.donutWidth<=170,
-     'Compact mobile donut does not dominate the page at '+width);
+     'Category management stays beside heading at '+width+': '+JSON.stringify(compact));
+    assert.ok(compact.tableWidth>compact.panelWidth*.8,
+     'Budget categories use the panel width rather than a half-width chart legend at '+width);
     const dimensions=await budgetRow.evaluate(row=>{
      const rect=sel=>row.querySelector(sel).getBoundingClientRect(),
       name=rect('.history-category-drill'),bar=rect('[data-history-budget-bar]'),
-      actual=rect('.history-category-actual'),budget=rect('.history-category-budget');
+      actual=rect('.history-category-actual'),budget=rect('.history-category-budget'),
+      input=rect('.history-budget-input'),
+      headings=[...document.querySelectorAll('.history-category-columns span')]
+       .map(x=>x.getBoundingClientRect());
      return {nameRight:name.right,barLeft:bar.left,barRight:bar.right,barWidth:bar.width,
       actualLeft:actual.left,actualRight:actual.right,budgetLeft:budget.left,
+      budgetRight:budget.right,inputRight:input.right,inputCenterY:(input.top+input.bottom)/2,
+      amountCenterY:(actual.top+actual.bottom)/2,
+      targetHeaderRight:headings[3].right,spentHeaderRight:headings[2].right,
+      inputTextAlign:getComputedStyle(row.querySelector('.history-budget-input input')).textAlign,
       viewport:document.documentElement.scrollWidth};
     });
     assert.ok(dimensions.nameRight<=dimensions.barLeft+2&&
      dimensions.barRight<=dimensions.actualLeft+2&&
      dimensions.actualRight<=dimensions.budgetLeft+2,
-     'The category progress bar stays between the name and amounts: '+JSON.stringify(dimensions));
+     'The progress bar stays between name and amounts: '+JSON.stringify(dimensions));
     assert.ok(dimensions.barWidth>=20&&dimensions.viewport<=width+3,
-     'Category bar does not overflow at '+width+'px: '+JSON.stringify(dimensions));
+     'Budget row does not overflow at '+width+'px: '+JSON.stringify(dimensions));
+    assert.ok(Math.abs(dimensions.budgetRight-dimensions.inputRight)<=2&&
+     Math.abs(dimensions.budgetRight-dimensions.targetHeaderRight)<=2,
+     'Budget input and column heading share the exact right edge at '+width+': '+JSON.stringify(dimensions));
+    assert.ok(Math.abs(dimensions.actualRight-dimensions.spentHeaderRight)<=2&&
+     Math.abs(dimensions.amountCenterY-dimensions.inputCenterY)<=4,
+     'Spent and budget amounts align in the same horizontal row at '+width+': '+JSON.stringify(dimensions));
+    assert.equal(dimensions.inputTextAlign,'right',
+     'Editable budget values line up numerically with the Spent amounts');
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await chooseAllMonths(page);
