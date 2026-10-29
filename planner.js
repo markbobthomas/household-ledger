@@ -2117,7 +2117,7 @@ function historyPage(bundle,s){
   '<div class="history-view-header"><h2>'+(activeTab==='activity'?'Activity':'Spending')+'</h2>'+
    '<p>'+(activeTab==='activity'?'Your actual bank transactions. These records are read-only.':
      'Your budget, where money went, and purchase patterns.')+'</p></div>'+
-  '<div class="history-view-toolbar">'+(activeTab==='activity'?'':+
+  '<div class="history-view-toolbar">'+(activeTab==='activity'?'':
    '<nav class="history-subtabs" aria-label="Spending views">'+
     [['categories','Budget','◔'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
       '<button type="button" class="history-subtab'+(displayView===id?' active':'')+
