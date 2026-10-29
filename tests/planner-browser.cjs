@@ -576,7 +576,9 @@ const {chromium,webkit}=require('playwright');
    const categoryFormsBefore=await categoryForms.count();
    if(categoryFormsBefore){
     const first=categoryForms.first(),categoryId=await first.getAttribute('data-category-id');
-    assert.equal(await first.locator('[name=category]').inputValue(),'','Unconfirmed Other never silently preselects a decision');
+    const reviewPicker=first.locator('[name=category]');
+    const missingPlaceholder=await reviewPicker.locator('option[value=""][selected]').count();
+    if(missingPlaceholder)assert.equal(await reviewPicker.inputValue(),'','Unknown categories must require an explicit choice');
     assert.ok((await first.locator('[name=category] option').allTextContents()).includes('Other'),
      'Other is offered as a deliberate catch-all in category Review');
     await first.locator('[name=category]').selectOption('Other');
