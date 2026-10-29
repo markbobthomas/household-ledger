@@ -1613,15 +1613,6 @@ function historyInsights(rows,view,options={}){
     sum+Math.round(monthly*100)*periodMonths:sum;
   },0);
   const totalBudgetPercent=totalBudgetCents>0?Math.max(0,cents/totalBudgetCents*100):null;
-  const colors=['#3565a1','#dc9445','#4c8676','#8e75ad','#b56d75','#7893ad','#556a85','#b4beca'];
-  // A refund can make a category negative. Those credits reduce the net
-  // amount but cannot be a negative slice of a conic chart.
-  const chartTotal=values.reduce((sum,g)=>sum+Math.max(0,g.cents),0);
-  let start=0;
-  const gradient=chartTotal>0?values.map((g,i)=>{
-   const from=start;start+=Math.max(0,g.cents)/chartTotal*100;
-   return colors[i%colors.length]+' '+from.toFixed(3)+'% '+start.toFixed(3)+'%';
-  }).join(','):'#e6edf3 0% 100%';
   const budgetField=g=>{
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
@@ -1693,22 +1684,18 @@ function historyInsights(rows,view,options={}){
     '<strong>'+cash(total)+' spent</strong><span>'+n+' transactions</span></div>'+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    budgetSummary+
-   (values.length?'<div class="history-category-layout">'+
-    '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+(gradient||'#e6edf3 0% 100%')+')">'+
-    '<div class="history-donut-center"><span>By category</span></div></div>'+
-    '<div class="history-category-table"><div class="history-category-columns">'+
+   (values.length?'<div class="history-category-table"><div class="history-category-columns">'+
      '<span>Category</span><span>Budget used</span><span>Spent</span><span>Budget / month</span></div>'+
-    '<div class="history-category-legend">'+values.map((g,i)=>
+    '<div class="history-category-legend">'+values.map(g=>
      '<div class="history-category-item" data-history-category-row="'+escapeHTML(g.name)+'">'+
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="See category transactions">'+
-     '<span class="history-legend-dot" style="background:'+colors[i%colors.length]+'"></span>'+
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
       '<small>'+g.count+' transactions</small></span></button>'+ 
      budgetBar(g)+
      '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
-    '</div></div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
+    '</div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
    '</section>';
  }
  const groups=historyBands.map(b=>({...b,count:0,cents:0}));

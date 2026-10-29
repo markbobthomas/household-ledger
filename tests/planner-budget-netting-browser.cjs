@@ -83,9 +83,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     rows.map(x=>parseFloat(x.style.width)));
    assert.ok(widths.every(n=>Number.isFinite(n)&&n>=0&&n<=100),
     name+': refunds never produce a negative or invalid progress width');
-   const ring=await page.locator('.history-donut').evaluate(el=>getComputedStyle(el).backgroundImage);
-   assert.ok(!/NaN|-[0-9]+(?:\.[0-9]+)?%/.test(ring),
-    name+': signed refunds never create negative chart slices');
+   assert.equal(await page.locator('.history-donut,.history-legend-dot').count(),0,
+    name+': Budget omits the unused pie chart and color legend');
+   assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
+    name+': refunds still appear as signed spending in the full-width Budget list');
    await page.locator('[data-history-category-row="Entertainment"] [data-history-drill-category]').click();
    assert.equal(await page.locator('[data-history-entry="ui-later-refund"]').count(),1,
     name+': drilling into net-negative category finds the posted refund');
