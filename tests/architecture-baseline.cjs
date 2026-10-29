@@ -113,12 +113,12 @@ function summary(bundle,scenario,context){
  const cardHTML=Summary.render({...options,chosen:snap.accounts[2],derived:card});
  const noneHTML=Summary.render({...options,chosen:snap.accounts[3],
   derived:projection.accounts.find(a=>a.id==='other-card')});
- assert.match(checkingHTML,/Lowest this month/);
+ assert.match(checkingHTML,/Lowest in next 90 days/);
  assert.doesNotMatch(checkingHTML,/Long-term outlook|3-year low/,
   'Distant predictions stay in Balance Trend, not above the daily calendar');
  assert.match(cardHTML,/Next statement estimate/);
  assert.doesNotMatch(cardHTML,/3-month estimated low/);
- assert.doesNotMatch(cardHTML,/Lowest this month/);
+ assert.doesNotMatch(cardHTML,/Lowest in next 90 days/);
  // Preserve the frozen numeric architecture contract independently of how
  // far-future estimates are presented in the interface.
  const threeYear=new Intl.NumberFormat('en-US',
@@ -143,6 +143,21 @@ function summary(bundle,scenario,context){
  const through90=plus(AS_OF,90),prior90=card.series.filter(p=>
   p.date>=AS_OF&&p.date<=through90&&Number.isFinite(p.balance));
  const originalLow=prior90.length?formatCard(Math.min(...prior90.map(p=>p.balance))):'Unverified';
+ // Contract: the visible 90-day checking minimum uses the SAME canonical
+ // series (calendar days 0..90) and stays independent of the viewed month.
+ const visible90=Summary.getPoints(current,snap.asOf,DAYS).filter(p=>
+  p.date>=AS_OF&&p.date<=through90&&Number.isFinite(p.balance)&&
+  ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
+ const expected90=visible90.length?formatCard(Math.min(...visible90.map(p=>p.balance))):'Not projected';
+ assert.equal(metric(checkingHTML,'summary-next-90-value'),expected90,
+  'Home 90-day checking minimum must match the canonical cash forecast');
+ // Preserve the original frozen architecture snapshot for the FIRST CALENDAR
+ // MONTH; it is still valuable as a regression contract, but is no longer UI.
+ const historicalMonth=Summary.getPoints(current,snap.asOf,DAYS).filter(p=>
+  p.date.startsWith(snap.asOf.slice(0,7))&&Number.isFinite(p.balance)&&
+  ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
+ const frozenMonthlyLow=historicalMonth.length?
+  formatCard(Math.min(...historicalMonth.map(p=>p.balance))):'Not projected';
  const byAccount=projection.accounts.map(a=>({
   id:a.id,valid:a.valid,status:a.balanceStatus,opening:money(a.openingCurrent),
   close:money(a.closing),available:money(a.closingAvailable),
@@ -169,7 +184,7 @@ function summary(bundle,scenario,context){
    configuredMetric:metric(cardHTML,'summary-statement-value'),
    cardLowMetric:originalLow, // frozen old 90-day numeric checksum, no longer shown
    unconfiguredMetric:metric(noneHTML,'summary-statement-value')},
-  checking:{monthLow:metric(checkingHTML,'summary-month-value'),
+  checking:{monthLow:frozenMonthlyLow,
    threeYearLow:threeYear},
   warningsHash:sha(bundle.payments.warnings||[]),
   diagnosticsHash:sha(projection.diagnostics)

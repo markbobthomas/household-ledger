@@ -103,6 +103,23 @@ const {chromium,webkit}=require('playwright');
     'No instructional cards, setup text, or long-range disclosure above the Calendar');
    assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
     'The Calendar surface is the direct Home landing view');
+   assert.equal(await page.locator('[data-summary-next-90-low] .summary-overline').innerText(),
+    'Lowest in next 90 days','The balance card explicitly says 90 calendar days');
+   const rollingValue=await page.locator('[data-summary-next-90-value]').innerText(),
+    rollingDate=await page.locator('[data-calendar-next-90-low]').getAttribute('data-calendar-next-90-low');
+   assert.ok(rollingDate,'The 90-day card names a navigable forecast date');
+   const initialMonth=await page.locator('.calendar-month-title').innerText();
+   await page.locator('[data-calendar-nav="1"]').click();
+   assert.notEqual(await page.locator('.calendar-month-title').innerText(),initialMonth,
+    'Month navigation changes the calendar grid');
+   assert.equal(await page.locator('[data-summary-next-90-value]').innerText(),rollingValue,
+    'The rolling 90-day low remains anchored to the as-of date while browsing other months');
+   assert.equal(await page.locator('[data-calendar-next-90-low]').getAttribute('data-calendar-next-90-low'),
+    rollingDate,'Changing calendar months must not change the 90-day low date');
+   await page.locator('[data-calendar-next-90-low]').click();
+   assert.equal(await page.locator('[data-calendar-day="'+rollingDate+'"][aria-pressed="true"]').count(),1,
+    'Selecting the lowest date jumps to its correct month and opens the day');
+   await page.locator('[data-calendar-today]').click();
    assert.equal(await page.locator('#planner-menu [data-view="recap"]').count(),0,
     'Summary is no longer hidden inside More');
    // Summary is a discoverable, read-only subtab inside Spending.
