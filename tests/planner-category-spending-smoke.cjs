@@ -11,11 +11,12 @@ const accounts=[
 ];
 const row=(id,merchant,amount,type='transfer',extra={})=>({
  id,merchant,date:'2026-10-12',amount,type,accountId:'checking',
- category:'Other',source:{provider:'demo',verified:true},...extra
+ category:'Other',source:{provider:'demo',verified:true,
+  plaidAmount:extra.cashDirection==='in'?-amount:amount},...extra
 });
 const fixture=model.migrate({accounts,transactions:[
  row('bill','Zelle for daycare',95),
- row('savings-out','Transfer to savings',220,{value:1}.type||'transfer',{
+ row('savings-out','Transfer to savings',220,'transfer',{
   pairedTransactionId:'savings-in'}),
  row('savings-in','Transfer from checking',220,'transfer',{
   accountId:'savings',cashDirection:'in',pairedTransactionId:'savings-out'}),
