@@ -169,6 +169,28 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await page.locator('[data-recap-next-card-payment]').count(),0,
     name+': the card payment within first five must not require an extra row');
 
+
+   // Configured card autopay is generated from a statement rule instead of
+   // the Bills recurring editor. Its linked cash withdrawal must use the
+   // same Summary inclusion logic, with the card purchase itself excluded.
+   await page.evaluate(()=>{
+    const key='household-planner-sample-settings-v1',
+     saved=JSON.parse(localStorage.getItem(key)||'{}');
+    saved.futureRecurringRules=[];
+    saved.paymentRules={'demo-visa':{
+     billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
+     nextPaymentDate:'2026-10-22',nextDueDate:'2026-10-23',
+     fromAccountId:'demo-checking',method:'statement',
+     autopayEnabled:true,lastStatementBalance:420,closingDay:18
+    }};
+    localStorage.setItem(key,JSON.stringify(saved));
+   });
+   await page.reload({waitUntil:'load'});
+   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   const autopayFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
+   assert.match(autopayFive,/Credit-card payment \(autopay\)/,
+    name+': configured card autopay next week must be one of Summary next five');
+
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
     name+': refunds still appear as signed spending in the full-width Budget list');
