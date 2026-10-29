@@ -105,6 +105,10 @@ const {chromium,webkit}=require('playwright');
      await page.locator('.planner-nav-primary [data-view="'+tab+'"]').click();
      assert.equal(await page.locator('.planner-nav-primary .tab-link.active').count(),1);
      if(tab==='history'){
+      assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
+       'Every entry into Bank History opens Budget');
+      // Geometry checks below apply specifically to the Transactions list.
+      await page.locator('[data-history-view="list"]').click();
       // A malformed category control once closed the History page early,
       // shrinking ledger rows to a narrow vertical strip. Measure geometry
       // and check the DOM hierarchy, not merely document horizontal overflow.
@@ -204,6 +208,13 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('.history-subtab').count(),4);
+   assert.deepEqual((await page.locator('.history-subtab').allTextContents()).map(s=>s.trim()),
+    ['◔Budget','≡Transactions','◉Merchants','▥Purchase sizes'],
+    'Budget is the first named Bank History view');
+   assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
+    'Budget opens by default rather than Transactions');
+   assert.equal(await page.locator('[data-history-sort]').count(),0,
+    'Transaction sort selector does not misleadingly control Budget order');
     for(const report of ['list','merchants','sizes']){
      await page.locator('[data-history-view="'+report+'"]').click();
      const field=await page.evaluate(()=>{
@@ -343,6 +354,19 @@ const {chromium,webkit}=require('playwright');
     'The average is not displayed in the budget overview');
    assert.equal(await page.locator('.history-donut-center strong').count(),0,
     'The donut does not repeat the same spending total');
+   const assertBudgetSorted=async()=>{
+    const actual=await page.locator('.history-category-item').evaluateAll(items=>items.map(item=>({
+     name:item.dataset.historyCategoryRow,budget:item.querySelector('[data-history-budget]').value
+    })));
+    const expected=[...actual].sort((a,b)=>
+     Number(b.budget!=='')-Number(a.budget!=='')||
+     Number(b.budget||0)-Number(a.budget||0)||
+     a.name.localeCompare(b.name));
+    assert.deepEqual(actual.map(row=>row.name),expected.map(row=>row.name),
+     'Budget rows are ranked by monthly target high to low, with unset categories last');
+    assert.ok(actual.some(row=>row.budget===''),'Unbudgeted categories stay visible');
+   };
+   await assertBudgetSorted();
    const checkOverall=async months=>{
     const rows=await page.locator('.history-category-item').evaluateAll(items=>
      items.map(item=>({
@@ -372,8 +396,8 @@ const {chromium,webkit}=require('playwright');
       'Inclusive spending is conveyed without another visible explanatory paragraph');
     }
    };
-   const budgetCategory=page.locator('.history-category-item').first(),
-    categoryName=await budgetCategory.getAttribute('data-history-category-row');
+   const categoryName=await page.locator('.history-category-item').first().getAttribute('data-history-category-row'),
+    budgetCategory=page.locator('.history-category-item[data-history-category-row="'+categoryName+'"]');
    assert.equal(await budgetCategory.locator('[data-history-budget]').count(),1,
     'Actual spending has an immediately adjacent editable monthly budget');
    assert.equal(await page.locator('.history-category-columns').innerText().then(x=>x.includes('Budget / month')),true);
@@ -383,10 +407,10 @@ const {chromium,webkit}=require('playwright');
     const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
     return saved.categoryMonthlyBudgets?.[category]===275.5;
    },categoryName);
-   assert.equal(await page.locator('.history-category-item').first().locator('[data-history-budget]').inputValue(),'275.50');
+   assert.equal(await budgetCategory.locator('[data-history-budget]').inputValue(),'275.50');
+   await assertBudgetSorted();
    await checkOverall(1);
-   assert.match(await page.locator('.history-category-item').first()
-    .locator('[data-history-budget-bar]').getAttribute('aria-label'),/spent of .* budget/,
+   assert.match(await budgetCategory.locator('[data-history-budget-bar]').getAttribute('aria-label'),/spent of .* budget/,
     'The saved budget appears in the accessible progress description');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Category view shows its tailored chart rather than duplicating line-item history');
@@ -408,6 +432,7 @@ const {chromium,webkit}=require('playwright');
     await budgetRow.locator('[data-history-budget]').press('Tab');
     await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
      'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===.01,categoryName);
+    await assertBudgetSorted();
     assert.equal(await budgetRow.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'over');
     assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
      'The over-budget fill caps at its full track width');
@@ -416,6 +441,7 @@ const {chromium,webkit}=require('playwright');
     await budgetRow.locator('[data-history-budget]').press('Tab');
     await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
      'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===275.5,categoryName);
+    await assertBudgetSorted();
     await checkOverall(3);
    }
    for(const width of (mobile?[320,390]:[768,1280])){
@@ -609,6 +635,9 @@ const {chromium,webkit}=require('playwright');
     assert.ok(Object.values(afterForget.categoryOverrides||{}).includes('Subscriptions'),
      'Forgetting a merchant rule leaves the individual correction intact');
     await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
+    'Reopening Bank History from Settings also defaults to Budget');
+   await page.locator('[data-history-view="list"]').click();
 
     // Actual bank records are inspectable through the shared panel, never editable.
    const bankRow=page.locator('.history-row-open').first();
