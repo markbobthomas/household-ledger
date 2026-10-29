@@ -2145,7 +2145,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '<option value=""'+(['Other','Uncategorized',''].includes(c)?' selected':'')+
     ' disabled>Choose a category</option>'+
    categoryChoices.map(option=>'<option value="'+escapeHTML(option)+'"'+
-    (option===c?' selected':'')+'>'+escapeHTML(option)+'</option>').join(''),
+    (option===c&&!['Other','Uncategorized'].includes(c)?' selected':'')+'>'+escapeHTML(option)+'</option>').join(''),
   categoryRows=[
    ...categoryIssues.plans.map(item=>({...item,isPlan:true})),
    ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
