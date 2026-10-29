@@ -59,7 +59,7 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
-let historyView='list',historyMonths='1',historyEndMonth='',historySizeFilter=-1,historyPurchaseDrill=false;
+let historyView='list',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let historyBudgetMessage='',historyBudgetBusy=false;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
@@ -1695,11 +1695,23 @@ function historyPage(bundle,s){
   // are not saved as duplicate registry entries.
   categories=model.categories(state(),records.map(t=>t.category)),
   filterCategories=categories;
- const selectedMonth=historyEndMonth||s.asOf.slice(0,7),
-  span=historyMonths==='all'?null:Number(historyMonths)||3,
-  startMonth=span?(()=>{const d=new Date(selectedMonth+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()-(span-1));return d.toISOString().slice(0,7)})():'';
+ // Each checked item is one whole calendar month; selection need not be consecutive.
+ const currentMonth=s.asOf.slice(0,7),
+  earliestMonth=records.reduce((first,row)=>row.date.slice(0,7)<first?row.date.slice(0,7):first,currentMonth),
+  availableMonths=[];
+ for(let d=new Date(currentMonth+'-01T12:00:00Z');d.toISOString().slice(0,7)>=earliestMonth;d.setUTCMonth(d.getUTCMonth()-1))
+  availableMonths.push(d.toISOString().slice(0,7));
+ if(!historySelectedMonths)historySelectedMonths=new Set([currentMonth]);
+ const availableSet=new Set(availableMonths);
+ for(const month of historySelectedMonths)if(!availableSet.has(month))historySelectedMonths.delete(month);
+ if(!historySelectedMonths.size)historySelectedMonths.add(currentMonth);
+ const monthLabel=m=>new Date(m+'-01T12:00:00Z')
+  .toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'}),
+  monthSummary=historySelectedMonths.size===1?monthLabel([...historySelectedMonths][0]):
+   historySelectedMonths.size===availableMonths.length?'All months ('+availableMonths.length+')':
+   historySelectedMonths.size+' months selected';
  const filtered=records.filter(t=>{
-  if(t.date.slice(0,7)>selectedMonth||(startMonth&&t.date.slice(0,7)<startMonth))return false;
+  if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
   if(historyView==='list'&&historyPurchaseDrill&&cardActivityCents(t)<=0)return false;
   if(historyView==='list'&&historyMerchantFilter&&
     (historyMerchantKey(t)!==historyMerchantFilter||!cardActivityCents(t)))return false;
@@ -1733,9 +1745,7 @@ function historyPage(bundle,s){
  const selectedRows=visible.filter(t=>historySelected.has(historySelectionKey(
   window.HouseholdPlannerHistory.accountOf(t,accounts),t.id))),
   selectedCents=selectedRows.reduce((sum,t)=>sum+historySignedCents(t),0);
- const monthNumber=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7)),
-  earliestMonth=filtered.reduce((first,row)=>!first||row.date.slice(0,7)<first?row.date.slice(0,7):first,''),
-  monthsInRange=span||Math.max(1,earliestMonth?monthNumber(selectedMonth)-monthNumber(earliestMonth)+1:1),
+ const monthsInRange=historySelectedMonths.size,
   insight=historyView!=='list'?historyInsights(filtered,historyView,{
    budgets:state().predictions?.categoryMonthlyBudgets||{},
    months:monthsInRange,allAccounts:historyAccount==='all',
@@ -1849,12 +1859,22 @@ function historyPage(bundle,s){
       '<button type="button" class="history-subtab'+(historyView===id?' active':'')+
       '" data-history-view="'+id+'" aria-pressed="'+(historyView===id)+'">'+
       '<span aria-hidden="true">'+icon+'</span>'+name+'</button>').join('')+
-    '</nav><div class="history-period-controls"><label>Ending month <input type="month" data-history-month value="'+
-    escapeHTML(selectedMonth)+'" max="'+escapeHTML(s.asOf.slice(0,7))+'"></label>'+
-    '<label>Period <select data-history-months>'+
-    [['1','1 month'],['3','3 months'],['6','6 months'],['12','12 months'],['all','All history']].map(([id,name])=>
-      '<option value="'+id+'"'+(historyMonths===id?' selected':'')+'>'+name+'</option>').join('')+
-    '</select></label></div></div>'+
+    '</nav><div class="history-period-controls">'+
+     '<div class="history-month-picker" data-history-month-picker>'+
+      '<button type="button" class="history-month-trigger" data-history-month-toggle aria-haspopup="true" aria-expanded="'+
+       historyMonthPickerOpen+'" aria-controls="history-month-menu" aria-label="Calendar months: '+
+       escapeHTML(monthSummary)+'"><span>Months</span><strong>'+escapeHTML(monthSummary)+
+       '</strong><span aria-hidden="true" class="history-month-caret">⌄</span></button>'+
+      '<div id="history-month-menu" class="history-month-menu" data-history-month-menu'+
+       (historyMonthPickerOpen?'':' hidden')+'>'+
+       '<div class="history-month-actions">'+
+        '<button type="button" data-history-month-current>This month</button>'+
+        '<button type="button" data-history-month-all>All months</button></div>'+
+       '<div class="history-month-list" data-history-month-list role="group" aria-label="Choose calendar months">'+
+        availableMonths.map(month=>'<label class="history-month-option"><input type="checkbox" data-history-month-option value="'+
+         escapeHTML(month)+'"'+(historySelectedMonths.has(month)?' checked':'')+'><span>'+
+         escapeHTML(monthLabel(month))+'</span></label>').join('')+
+       '</div></div></div></div></div>'+
   '<form class="history-filters ledger-toolbar'+(historyView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
@@ -2428,6 +2448,31 @@ function render(){
  if(activeTab==='history')updateHistorySelectionSummary();
 }
 document.addEventListener('click',async e=>{
+ const monthToggle=e.target.closest?.('[data-history-month-toggle]');
+ if(monthToggle){
+  historyMonthPickerOpen=!historyMonthPickerOpen;
+  monthToggle.setAttribute('aria-expanded',String(historyMonthPickerOpen));
+  const menu=document.querySelector('[data-history-month-menu]');
+  if(menu)menu.hidden=!historyMonthPickerOpen;
+  return;
+ }
+ const monthShortcut=e.target.closest?.('[data-history-month-current],[data-history-month-all]');
+ if(monthShortcut){
+  if(monthShortcut.hasAttribute('data-history-month-current'))
+   historySelectedMonths=new Set([snapshot().asOf.slice(0,7)]);
+  else historySelectedMonths=new Set([...document.querySelectorAll('[data-history-month-option]')]
+   .map(input=>input.value));
+  historyLimit=90;render();
+  document.querySelector(monthShortcut.hasAttribute('data-history-month-current')?
+   '[data-history-month-current]':'[data-history-month-all]')?.focus({preventScroll:true});
+  return;
+ }
+ if(historyMonthPickerOpen&&!e.target.closest?.('[data-history-month-picker]')){
+  historyMonthPickerOpen=false;
+  const menu=document.querySelector('[data-history-month-menu]');
+  if(menu)menu.hidden=true;
+  document.querySelector('[data-history-month-toggle]')?.setAttribute('aria-expanded','false');
+ }
  if(e.target.closest?.('[data-undo-forecast]')){
   e.preventDefault();await undoLastForecastChange();return;
  }
@@ -2734,7 +2779,7 @@ document.addEventListener('click',async e=>{
  if(historyTab){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
     !window.confirm('Discard unsaved payment changes?'))return;
-  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
+  historyView=historyTab.dataset.historyView;historyMonthPickerOpen=false;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   recurringDraft=null;transactionDetail=null;render();return;
  }
@@ -3431,6 +3476,13 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&historyMonthPickerOpen){
+  historyMonthPickerOpen=false;
+  const menu=document.querySelector('[data-history-month-menu]');
+  if(menu)menu.hidden=true;
+  const toggle=document.querySelector('[data-history-month-toggle]');
+  toggle?.setAttribute('aria-expanded','false');toggle?.focus();return;
+ }
  if(e.key==='Escape'&&document.querySelector('[data-inline-transaction-editor]')){
   closeInlineTransaction();return;
  }
@@ -3481,16 +3533,19 @@ document.addEventListener('change',e=>{
   });
   updateHistorySelectionSummary();return;
  }
- const periodSelect=e.target.closest?.('[data-history-months]');
- if(periodSelect){
-  if(!['1','3','6','12','all'].includes(periodSelect.value))return;
-  historyMonths=periodSelect.value;historyLimit=90;render();return;
- }
- const monthInput=e.target.closest?.('[data-history-month]');
- if(monthInput){
-  const next=String(monthInput.value||'');
-  if(!/^\d{4}-\d{2}$/.test(next)||next>snapshot().asOf.slice(0,7))return;
-  historyEndMonth=next;historyLimit=90;render();return;
+ const monthCheckbox=e.target.closest?.('[data-history-month-option]');
+ if(monthCheckbox){
+  const month=monthCheckbox.value;
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))return;
+  if(monthCheckbox.checked)historySelectedMonths.add(month);
+  else if(historySelectedMonths.size>1)historySelectedMonths.delete(month);
+  else{monthCheckbox.checked=true;return}
+  const scroll=monthCheckbox.closest('[data-history-month-list]')?.scrollTop||0;
+  historyLimit=90;render();
+  const monthList=document.querySelector('[data-history-month-list]');
+  if(monthList)monthList.scrollTop=scroll;
+  document.querySelector('[data-history-month-option][value="'+month+'"]')?.focus({preventScroll:true});
+  return;
  }
  if(!e.target.matches?.('[data-calendar-type]'))return;
  const form=e.target.closest('[data-calendar-quick-form]');

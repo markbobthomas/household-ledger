@@ -4068,3 +4068,54 @@ a:hover{color:#166e61}
  .history-page .history-merchant-name{font-size:12px}
  .history-page .history-merchant-amount{font-size:11px}
 }
+
+/* Bank History: one soft checkbox picker for any combination of calendar months. */
+.history-page .history-month-picker{position:relative;min-width:230px;max-width:100%}
+.history-page .history-month-trigger{
+ display:flex;align-items:center;gap:12px;min-width:230px;max-width:100%;
+ min-height:42px;width:100%;padding:8px 13px;
+ border:1px solid #dce7de;border-radius:12px;background:#fafcf9;
+ color:#365746;text-align:left;box-shadow:0 2px 7px #3556420a;
+}
+.history-page .history-month-trigger>span:first-child{color:#758d7f;font-size:11px;font-weight:650}
+.history-page .history-month-trigger strong{
+ flex:1;min-width:0;font-size:12px;font-weight:750;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.history-page .history-month-caret{color:#739284;font-size:18px;line-height:1}
+.history-page .history-month-trigger:hover{background:#f0f8f1;border-color:#b9d6c5}
+.history-page .history-month-trigger:focus-visible,
+.history-page .history-month-menu button:focus-visible,
+.history-page .history-month-option:focus-within{outline:2px solid #458b72;outline-offset:2px}
+.history-page .history-month-menu{
+ position:absolute;top:calc(100% + 7px);right:0;z-index:35;
+ width:min(310px,calc(100vw - 32px));max-width:100vw;
+ padding:9px;background:#fff;border:1px solid #dfe8e0;border-radius:16px;
+ box-shadow:0 16px 38px #26432e26;
+}
+.history-page .history-month-actions{display:flex;gap:6px;padding:3px 3px 8px}
+.history-page .history-month-actions button{
+ flex:1;min-height:34px;padding:6px 9px;border:0;
+ border-radius:9px;background:#eef6ef;color:#32715b;font-size:11px;font-weight:720;
+}
+.history-page .history-month-actions button:hover{background:#e0eee3}
+.history-page .history-month-list{
+ display:flex;flex-direction:column;gap:2px;max-height:min(345px,48vh);
+ overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 3px;
+}
+.history-page .history-month-option{
+ display:flex;align-items:center;gap:10px;padding:9px 10px;
+ min-height:38px;border-radius:9px;cursor:pointer;color:#425c4c;font-size:12px;
+ font-weight:620;
+}
+.history-page .history-month-option:hover{background:#f5faf5}
+.history-page .history-month-option:has(input:checked){background:#eef7f0;color:#26684f}
+.history-page .history-month-option input{
+ flex:0 0 auto;appearance:auto;accent-color:#42896d;width:16px;height:16px;
+ margin:0;cursor:pointer;
+}
+@media(max-width:650px){
+ .history-page .history-month-picker,.history-page .history-month-trigger{width:100%;min-width:0}
+ .history-page .history-period-controls{width:100%}
+ .history-page .history-month-menu{left:0;right:auto}
+}
