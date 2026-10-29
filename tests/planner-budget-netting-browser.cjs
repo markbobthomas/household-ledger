@@ -113,7 +113,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    // The separate, read-only Summary must match Budget's complete monthly
    // spending, including cross-account card-payment suppression and refunds.
    const budgetSpend=(await page.locator('.history-spending-overview strong').innerText()).replace(/ spent$/,'');
-   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   await page.locator('#planner-menu>summary').click();
+   await page.locator('#planner-menu [data-view="recap"]').click();
    assert.equal(await page.locator('[data-recap-spent] strong').innerText(),budgetSpend,
     name+': Summary and Budget net posted spending must agree');
    assert.equal(await page.locator('.financial-recap-page input,.financial-recap-page button').count(),0,
@@ -162,7 +163,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await recurring.count(),1,name+': recurring card payment is listed in Bills');
    assert.match(await recurring.innerText(),/Oct 22/,
     name+': Bills presents a next-week dated card payment, not an unforecasted placeholder');
-   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   await page.locator('#planner-menu>summary').click();
+   await page.locator('#planner-menu [data-view="recap"]').click();
    const firstFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
    assert.match(firstFive,/Fictional Recurring Card Repayment/,
     name+': a next-week card payment shown in Bills must also be among Summary next five');
@@ -186,7 +188,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     localStorage.setItem(key,JSON.stringify(saved));
    });
    await page.reload({waitUntil:'load'});
-   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   await page.locator('#planner-menu>summary').click();
+   await page.locator('#planner-menu [data-view="recap"]').click();
    const autopayFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
    assert.match(autopayFive,/Credit-card payment \(autopay\)/,
     name+': configured card autopay next week must be one of Summary next five');
