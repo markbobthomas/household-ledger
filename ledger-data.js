@@ -234,9 +234,10 @@ function categoryReviewQueue(state){
     category=knownKind&&missingCategory(t.category)?
      (t.type==='income'?'Income':'Transfer'):
      String(t.category||'Other'),
-    missing=missingCategory(category),
     manual=knownKind||Boolean(state.categoryOverrides?.[t.id])||
      ['manual','learned'].includes(t.method),
+    // An explicitly saved Other category is a reviewed choice, not a gap.
+    missing=missingCategory(category)&&!manual,
     score=confidenceScore(t),
     low=!manual&&(score!==null&&score<.7||
      ['merchant-match','suggested','unclassified'].includes(t.method)||
@@ -252,7 +253,7 @@ function categoryReviewQueue(state){
   for(const row of rows||[]){
    if(!row||row.id===undefined||row.id===null||row.enabled===false)continue;
    const category=String(row.category||'Uncategorized'),
-    missing=missingCategory(category),
+    missing=missingCategory(category)&&!row.categoryReviewed,
     low=!row.categoryReviewed&&Number.isFinite(Number(row.categoryConfidence))&&
      row.categoryConfidence!==null&&row.categoryConfidence!==''&&Number(row.categoryConfidence)<.7;
    if(!missing&&!low)continue;
