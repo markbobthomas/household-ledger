@@ -30,6 +30,9 @@ try{
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
+  if(saved.learning&&typeof saved.learning==='object'&&!Array.isArray(saved.learning))
+   demoState.learning={categoryRules:{...(saved.learning.categoryRules||{})},
+    ruleHistory:Array.isArray(saved.learning.ruleHistory)?saved.learning.ruleHistory:[]};
  }
 }catch{}
 const horizon=1095; // Three-year modeled floor. No user-selectable time windows.
@@ -84,7 +87,7 @@ function savePlanning(){
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
     recurringForecastMode:p.recurringForecastMode,
-    categoryOverrides:demoState.categoryOverrides||{}}));
+    categoryOverrides:demoState.categoryOverrides||{},learning:demoState.learning||{}}));
   return true;
  }
 }
@@ -2344,6 +2347,17 @@ function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
  return calendar;
 }
 function settingsPage(bundle,s,chosen){
+ const rules=Object.entries(state().learning?.categoryRules||{});
+ const categoryLearning=rules.length?
+  '<section class="panel mini-panel" aria-label="Learned merchant categories">'+
+   '<div class="section-title"><h2>Learned categories</h2></div>'+
+   '<p>When a bank category is missing or uncertain, corrections can be reused for the same merchant and account. Multi-purpose merchants need individual review. Forgetting a rule keeps existing transaction corrections.</p>'+
+   rules.map(([key,rule])=>'<div class="future-skip-line">'+
+    '<strong>'+escapeHTML(rule.merchant||'Merchant')+'</strong> · '+
+    escapeHTML(rule.category||'Category')+' · '+
+    escapeHTML(rule.mode==='auto'?'Automatic when safe':'Review first')+
+    ' <button type="button" class="btn" data-forget-category-rule="'+escapeHTML(key)+
+    '">Forget rule</button></div>').join('')+'</section>':'';
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
   '<h2>Settings</h2></div></div>'+
   '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
@@ -2365,7 +2379,7 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
+  categoryLearning+auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
@@ -2510,6 +2524,23 @@ document.addEventListener('click',async e=>{
   const menu=document.querySelector('[data-history-month-menu]');
   if(menu)menu.hidden=true;
   document.querySelector('[data-history-month-toggle]')?.setAttribute('aria-expanded','false');
+ }
+ const forgetCategory=e.target.closest?.('[data-forget-category-rule]');
+ if(forgetCategory){
+  const key=forgetCategory.dataset.forgetCategoryRule,current=state(),
+   previous=JSON.stringify(current.learning||{});
+  forgetCategory.disabled=true;
+  try{
+   if(!model.removeCategoryRule(current,key))throw Error('Rule no longer exists');
+   const result=live()?
+    await window.HouseholdLiveSource.forgetCategoryRule(key):savePlanning();
+   if(live()&&(!result||result.saved!==true))throw Error('Rule removal was not saved');
+   render();
+  }catch(error){
+   current.learning=JSON.parse(previous);
+   setNotice('Could not forget category rule: '+String(error.message||error));
+  }
+  return;
  }
  if(e.target.closest?.('[data-undo-forecast]')){
   e.preventDefault();await undoLastForecastChange();return;
