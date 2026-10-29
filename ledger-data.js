@@ -209,7 +209,8 @@ function categoryReviewQueue(state){
    if(!missing&&!low)return null;
    return {kind:'transaction',id:String(t.id),category,reason:missing?'Missing category':'Low-confidence automatic category',
     merchant:String(t.merchant||t.description||'Transaction'),date:String(t.date||''),
-    amount:Number(t.amount)||0,accountId:String(t.accountId||t.account||'')};
+    amount:Number(t.amount)||0,accountId:String(t.accountId||t.account||''),
+     suggested:t.suggested&&t.suggested!==category?String(t.suggested):null};
   }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
  const prefs=state.predictions||{},plans=[];
  const add=(rows,kind)=>{
