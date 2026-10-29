@@ -2559,7 +2559,7 @@ document.addEventListener('click',async e=>{
  if(historyTab){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
     !window.confirm('Discard unsaved payment changes?'))return;
-  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;
+  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyCategoryFilter='';historyPurchaseDrill=false;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   recurringDraft=null;transactionDetail=null;render();return;
  }
@@ -2567,7 +2567,7 @@ document.addEventListener('click',async e=>{
  if(sizeBand){
   const i=Number(sizeBand.dataset.historySizeBand);
   if(i<0||i>=historyBands.length)return;
-  historyView='list';historySizeFilter=i;historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
+  historyView='list';historySizeFilter=i;historyCategoryFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
  }
  if(e.target.closest?.('[data-history-clear-size]')){
   historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;render();return;
