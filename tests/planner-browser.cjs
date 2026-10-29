@@ -107,7 +107,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.financial-recap-card').count(),3);
    assert.equal(await page.locator('.financial-recap-page input,.financial-recap-page select,.financial-recap-page button').count(),0,
     'Summary cannot edit budgets, bank facts, recurring plans, or saved preferences');
-   assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('/ month')),
+   assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Total monthly bills')),
     'Bills are explicitly labeled a monthly estimate');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1);
