@@ -228,10 +228,44 @@ async function start(port=Number(env.PORT||8788)){
   try{
    if(accountRemovalBusy&&[
     '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
-     '/api/ledger/category-rule','/api/exchange',
+     '/api/ledger/category-rule','/api/ledger/categories/delete','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
+   if(requestPath==='/api/ledger/categories/delete'){
+    if(!state.items.length)return respond(409,{error:'No bank account connected'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+     Object.keys(body).length!==1||typeof body.category!=='string'||
+     !body.category||body.category.length>40)
+     return respond(400,{error:'Choose a category to delete'});
+    const M=require('../ledger-data.js'),feed=require('./data-source.js'),
+     before=JSON.parse(JSON.stringify(state.ledgerAdjustments||{})),
+     accounts=new Map(state.accounts.map(a=>[String(a.id),a]));
+    // The server determines all matching bank IDs from its authoritative feed.
+    // The client supplies only the name, not bank history or predicted rows.
+    const rows=Object.values(state.transactions).map(tx=>{
+     const account=accounts.get(String(tx.accountId));
+     return account?feed.record(tx,account):null;
+    }).filter(Boolean);
+    const decision=M.migrate({transactions:rows,predictions:before.predictions||{},
+     categoryOverrides:before.categoryOverrides||{},learning:before.learning||{},
+     reviews:before.reviews||{}});
+    let removed;
+    try{removed=M.removeCategory(decision,body.category)}
+    catch(error){return respond(400,{error:String(error.message||error)})}
+    try{
+     await saveForecast(decision.predictions);
+     state.ledgerAdjustments={...before,predictions:decision.predictions,
+      categoryOverrides:decision.categoryOverrides,learning:decision.learning};
+     await save();
+    }catch(error){
+     state.ledgerAdjustments=before;
+     try{await saveForecast(before.predictions||{})}catch{}
+     throw error;
+    }
+    return respond(200,{saved:true,scope:'category-deletion',category:removed,
+     unassigned:rows.filter(row=>decision.categoryOverrides[row.id]==='Uncategorized').length});
+   }
    if(requestPath==='/api/ledger/category'){
     // Scoped, read-only-source classification adjustment. Never upload entire
     // bank history or a stale prediction snapshot to change one row's category.
