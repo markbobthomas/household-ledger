@@ -100,7 +100,49 @@ const {chromium,webkit}=require('playwright');
     rows.map(row=>row.dataset.historySortDate));
    assert.ok(currentDates.every(date=>date.startsWith('2026-10')),
     'Current-month view does not include the previous month as a rolling 30-day window');
+
+   // Bank History multi-select is a read-only, immediate sum of displayed rows.
+   const boxes=page.locator('.history-page [data-history-select]'),
+    total=page.locator('[data-history-selected-total]'),
+    count=page.locator('[data-history-selected-count]');
+   assert.ok(await boxes.count()>=2,'Two fictional bank rows exist for multi-selection');
+   assert.equal(await boxes.count(),await page.locator('.history-actual-row').count(),
+    'Each transaction has exactly one selection checkbox');
+   assert.equal(await total.innerText(),'Net total: $0.00');
+   await boxes.nth(0).check();
+   await boxes.nth(1).check();
+   assert.equal(await count.innerText(),'2 selected');
+   assert.equal(await page.locator('[data-transaction-overlay]').count(),0,
+    'Checking transactions must not open the payment detail editor');
+   const expectedCents=await boxes.evaluateAll(inputs=>inputs.filter(input=>input.checked)
+    .reduce((sum,input)=>{
+     const row=input.closest('.history-actual-row'),
+      sign=row.querySelector('.ledger-money-sign')?.textContent?.trim();
+     return sum+Math.round(Number(row.dataset.historySortAmount)*100)*(sign==='+'?1:-1);
+    },0));
+   const money=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'})
+    .format(Math.abs(expectedCents)/100);
+   assert.equal(await total.innerText(),'Net total: '+
+    (expectedCents<0?'−':expectedCents>0?'+':'')+money,
+    'Two selected rows have a cent-accurate signed net sum');
+   assert.equal(await page.locator('.history-actual-row.selected').count(),2);
+   await boxes.nth(0).uncheck();
+   assert.equal(await count.innerText(),'1 selected');
+   assert.equal(await page.locator('[data-history-select-all]').evaluate(el=>el.indeterminate),true,
+    'Select-all shows a partial selection');
+   await page.locator('[data-history-select-all]').check();
+   assert.equal(await count.innerText(),(await boxes.count())+' selected');
+   await page.locator('[data-history-clear-selection]').click();
+   assert.equal(await count.innerText(),'0 selected');
+   assert.equal(await total.innerText(),'Net total: $0.00');
+   assert.equal(await page.locator('.history-actual-row.selected').count(),0);
+   await boxes.nth(0).check();
    await page.locator('[data-history-months]').selectOption('all');
+   assert.equal(await count.innerText(),'1 selected',
+    'Increasing the visible transaction range retains checked displayed rows');
+   await page.locator('[data-history-view="categories"]').click();
+   assert.equal(await page.locator('[data-history-selection-summary]').count(),0,
+    'The multi-selection UI belongs only to Transactions view');
    await page.locator('[data-history-view="categories"]').click();
    assert.equal(await page.locator('[data-history-category-insights]').count(),1);
    assert.equal(await page.locator('.history-donut').count(),1);
