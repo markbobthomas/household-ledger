@@ -4183,3 +4183,44 @@ a:hover{color:#166e61}
  .topbar .planner-menu>summary{padding:7px 8px!important}
  .topbar .top-actions{gap:5px}
 }
+
+/* Align the Calendar's three metrics on shared label/value/date rows.
+   This overrides legacy flex centering of Available Balance. */
+.summary-page .summary-numbers{
+ display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
+ align-items:start!important;
+}
+.summary-page .summary-numbers>.summary-bank,
+.summary-page .summary-numbers>.summary-monthly,
+.summary-page .summary-numbers>.summary-minimum{
+ display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+ grid-template-rows:minmax(34px,auto) minmax(48px,auto) minmax(22px,auto)!important;
+ align-content:start!important;align-items:stretch!important;
+ flex-direction:initial!important;justify-content:stretch!important;
+ gap:4px!important;padding:0!important;min-width:0;
+}
+.summary-page .summary-numbers>.summary-bank{justify-items:start!important}
+.summary-page .summary-numbers>div:nth-child(2){justify-items:center!important;text-align:center}
+.summary-page .summary-numbers>div:nth-child(3){justify-items:end!important;text-align:right}
+.summary-page .summary-numbers .summary-bank>small:first-child,
+.summary-page .summary-numbers .summary-overline{
+ display:block;align-self:end!important;line-height:1.25!important;
+ min-height:0!important;margin:0!important;
+}
+.summary-page .summary-numbers .summary-bank>strong,
+.summary-page .summary-numbers .summary-monthly>strong,
+.summary-page .summary-numbers .summary-minimum>strong{
+ display:block;align-self:end!important;line-height:1.12!important;
+ margin:0!important;
+}
+.summary-page .summary-numbers .summary-low-date{align-self:start!important;margin:0!important}
+.summary-page .summary-numbers [data-bank-available-value]{color:#099f53!important}
+.summary-page .summary-numbers [data-bank-available-value].summary-bank-negative{color:#b44d4e!important}
+@media(max-width:600px){
+ .summary-page .summary-numbers>.summary-bank,
+ .summary-page .summary-numbers>.summary-monthly,
+ .summary-page .summary-numbers>.summary-minimum{
+  grid-template-rows:minmax(39px,auto) minmax(36px,auto) minmax(22px,auto)!important;
+  gap:3px!important;
+ }
+}
