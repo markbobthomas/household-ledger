@@ -1,43 +1,54 @@
 'use strict';
 const assert=require('node:assert/strict');
 const M=require('../ledger-data.js');
-const clone=s=>JSON.parse(JSON.stringify(s));
-const state=M.migrate({
- transactions:[{id:'posted',date:'2026-10-12',merchant:'Fictional Kiosk',
-  category:'Other',type:'expense',accountId:'checking',amount:10}],
- predictions:{categoryMonthlyBudgets:{},futureRecurringRules:[],futureTransactionAdds:[]}
-});
-const original=JSON.stringify(state.transactions);
-assert.ok(M.categories(state).includes('Other'),'Other is a permanent built-in category');
-assert.throws(()=>M.removeCategory(state,'Other'),/Built-in categories/);
-assert.throws(()=>M.removeCategory(state,'Groceries'),/Built-in categories/);
-M.addCategory(state,'Pet Care');
-state.predictions.categoryMonthlyBudgets['Pet Care']=75;
-assert.equal(M.removeCategory(state,'Pet Care'),'Pet Care',
- 'Unused custom category can be deleted with its saved budget');
-assert.ok(!M.categories(state).includes('Pet Care'));
-assert.equal(state.predictions.categoryMonthlyBudgets['Pet Care'],undefined);
-assert.deepEqual(JSON.stringify(state.transactions),original,'Removing category never edits posted bank data');
-M.addCategory(state,'Vet visits');
-state.categoryOverrides.posted='Vet visits';
-assert.throws(()=>M.removeCategory(state,'Vet visits'),/Category is in use/,
- 'Manual category overrides require reassignment before deleting');
-assert.ok(M.categories(state).includes('Vet visits'),'Failed removal keeps the category');
-delete state.categoryOverrides.posted;
-state.learning.categoryRules.test={category:'Vet visits',mode:'suggest'};
-assert.throws(()=>M.removeCategory(state,'Vet visits'),/Category is in use/,
- 'Learned merchant categories cannot be orphaned');
-delete state.learning.categoryRules.test;
-state.predictions.futureRecurringRules.push({id:'bill',category:'Vet visits'});
-assert.throws(()=>M.removeCategory(state,'Vet visits'),/Category is in use/,
- 'Saved recurring bills remain protected');
-state.predictions.futureRecurringRules=[];
-state.predictions.futureTransactionAdds.push({id:'oneoff',category:'Vet visits'});
-assert.throws(()=>M.removeCategory(state,'Vet visits'),/Category is in use/,
- 'One-off future payments remain protected');
-state.predictions.futureTransactionAdds=[];
-assert.equal(M.removeCategory(state,'Vet visits'),'Vet visits');
-assert.ok(!M.categories(state).includes('Vet visits'));
-assert.equal(M.addCategory(state,'Vet visits'),'Vet visits','Deleted categories can be re-added');
-assert.deepEqual(JSON.stringify(state.transactions),original,'All category actions preserve bank source history');
-console.log('PASS Other permanent, create/delete, budget cleanup, and assigned-category safeguards');
+const clone=x=>JSON.parse(JSON.stringify(x));
+const bankRows=[
+ {id:'groceries-1',date:'2026-10-12',merchant:'Fictional Grocer',
+  category:'Groceries',type:'expense',accountId:'checking',amount:10},
+ {id:'other-1',date:'2026-10-13',merchant:'Fictional Shop',
+  category:'Other',type:'expense',accountId:'checking',amount:15},
+ {id:'income-1',date:'2026-10-14',merchant:'Fictional Pay',
+  category:'Income',type:'income',accountId:'checking',amount:200}
+];
+const s=M.migrate({transactions:bankRows,predictions:{
+ scheduleCategories:['Pet Care'],categoryMonthlyBudgets:{Groceries:80,'Pet Care':50},
+ futureRecurringRules:[{id:'bill',merchant:'Fictional Grocery Bill',category:'Groceries',categoryReviewed:true,amount:30,anchorDate:'2026-11-01'}],
+ futureTransactionAdds:[{id:'oneoff',merchant:'Fictional Pet',category:'Pet Care',categoryReviewed:true,amount:20,date:'2026-11-02'}],
+ paymentBills:[{id:'legacy',merchant:'Fictional Income Bill',category:'Income',amount:25,date:'2026-11-03'}]
+ }});
+const original=JSON.stringify(s.transactions),
+ paymentAmounts=s.predictions.futureRecurringRules.map(r=>r.amount);
+assert.ok(M.categories(s).includes('Other'));
+assert.equal(M.removeCategory(s,'Groceries'),'Groceries','Built-ins can now be deleted');
+assert.ok(!M.categories(s,['Groceries']).includes('Groceries'),'Source-observed removed names stay hidden');
+assert.equal(M.categoryFor(s,'groceries-1'),'Uncategorized');
+assert.equal(s.categoryOverrides['groceries-1'],'Uncategorized');
+assert.ok(M.categoryReviewQueue(s).transactions.some(x=>x.id==='groceries-1'),'Affected historical transaction needs review');
+assert.equal(s.predictions.futureRecurringRules[0].category,'Uncategorized');
+assert.equal(s.predictions.futureRecurringRules[0].categoryReviewed,false);
+assert.ok(M.categoryReviewQueue(s).plans.some(x=>x.id==='bill'),'Affected saved bill needs review');
+assert.deepEqual(s.predictions.futureRecurringRules.map(r=>r.amount),paymentAmounts,'Payment amounts preserved');
+assert.equal(s.predictions.categoryMonthlyBudgets.Groceries,undefined,'Removed category budget no longer active');
+assert.equal(M.removeCategory(s,'Pet Care'),'Pet Care','Used custom categories also delete');
+assert.equal(s.predictions.futureTransactionAdds[0].category,'Uncategorized');
+assert.ok(M.categoryReviewQueue(s).plans.some(x=>x.id==='oneoff'));
+assert.equal(M.removeCategory(s,'Other'),'Other','Other is not protected from deletion');
+assert.ok(!M.categories(s).includes('Other'));
+assert.equal(M.categoryFor(s,'other-1'),'Uncategorized');
+assert.equal(M.removeCategory(s,'Income'),'Income','Income is a removable named category');
+assert.ok(M.categoryReviewQueue(s).transactions.some(x=>x.id==='income-1'),
+ 'Deleting the Income category must not silently classify this transaction as Income');
+assert.ok(M.categoryReviewQueue(s).plans.some(x=>x.id==='legacy'));
+assert.deepEqual(JSON.stringify(s.transactions),original,'Actual posted transaction source stays identical');
+const refreshed=M.migrate(clone(s));
+assert.ok(!M.categories(refreshed,bankRows.map(t=>t.category)).includes('Groceries'),
+ 'Deleted category remains hidden after reloading provider source history');
+assert.equal(M.categoryFor(refreshed,'groceries-1'),'Uncategorized');
+assert.equal(M.addCategory(refreshed,'Groceries'),'Groceries','A deleted built-in can be restored intentionally');
+assert.ok(M.categories(refreshed).includes('Groceries'));
+assert.equal(M.categoryFor(refreshed,'groceries-1'),'Uncategorized',
+ 'Restoring a category does not silently recategorize already-unassigned records');
+assert.equal(M.addCategory(refreshed,'Pet Care'),'Pet Care','Deleted custom categories can be restored');
+assert.throws(()=>M.removeCategory(refreshed,'Uncategorized'),/not available/,
+ 'Unassigned remains an internal status rather than a named category');
+console.log('PASS any category deletion, historical/forecast Unassigned review, tombstones, restart, and banking immutability');
