@@ -162,6 +162,54 @@ assert.equal(movedAmbiguous.ledger.filter(e=>e.date==='2026-11-04').length,2,
 assert.ok(movedPaid.projection.diagnostics.balanceMismatches.length===0,
  'Moved-posting reconciliation preserves daily balance integrity');
 
+// Provider renames a previously pending bank debit, so there is no merchant
+// alias or persisted bank-ID link. The same posted cash debit must still settle
+// exactly one uniquely evidenced scheduled obligation, not charge it twice.
+const renamedPost=post('plaid-renamed','Opaque ACH Descriptor',1200,'2026-10-17');
+const renamedPaid=Core.materialize(liveSnap,[renamedPost],
+ {futureRecurringRules:[lateRule]},T,null,70,policy);
+assert.equal(renamedPaid.overduePayments.length,0,
+ 'A single same-account, same-direction, near-date, near-exact posted debit settles a renamed recurring installment');
+assert.ok(!renamedPaid.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-10-29'),
+ 'A renamed posted bank debit must not be subtracted from a second future day');
+assert.ok(renamedPaid.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-11-13'),
+ 'Later scheduled payments are preserved after a renamed match');
+const renamedMoved=Core.materialize(liveSnap,[renamedPost],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.ok(!renamedMoved.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-11-04'),
+ 'A previously moved installment is cleared even when bank posted merchant is different');
+const renamedPending=Core.materialize(liveSnap,[{...renamedPost,pending:true}],
+ {futureRecurringRules:[lateRule]},T,null,70,policy);
+assert.equal(renamedPending.overduePayments.length,1,
+ 'Pending renamed record is not proof of a completed withdrawal');
+const renamedDifferentAccount=Core.materialize(liveSnap,
+ [{...renamedPost,accountId:'other'}],{futureRecurringRules:[lateRule]},T,null,70,policy);
+assert.equal(renamedDifferentAccount.overduePayments.length,1,
+ 'Matching dollars and timing cannot settle a bill from another bank account');
+const renamedWrongAmount=Core.materialize(liveSnap,
+ [{...renamedPost,amount:1080}],{futureRecurringRules:[lateRule]},T,null,70,policy);
+assert.equal(renamedWrongAmount.overduePayments.length,1,
+ 'An unrelated similar-dollar bank debit cannot clear a renamed schedule');
+const renamedWrongDate=Core.materialize(liveSnap,
+ [{...renamedPost,date:'2026-10-23'}],{futureRecurringRules:[lateRule]},T,null,70,policy);
+assert.equal(renamedWrongDate.overduePayments.length,1,
+ 'A same-dollar posted debit outside the strict fallback timing is not enough');
+const renamedTwins=Core.materialize(liveSnap,[renamedPost],
+ {futureRecurringRules:[lateRule,{...lateRule,id:'second-equal-obligation'}]},T,null,70,policy);
+assert.equal(renamedTwins.overduePayments.length,2,
+ 'One name-unknown bank posting cannot erase two plausible independent recurring bills');
+const renamedTwoDebits=Core.materialize(liveSnap,[renamedPost,
+ {...renamedPost,id:'another-debit',merchant:'Other ACH Descriptor',date:'2026-10-18'}],
+ {futureRecurringRules:[lateRule]},T,null,70,policy);
+assert.equal(renamedTwoDebits.overduePayments.length,1,
+ 'Multiple same-size near-date posted bank rows require identity evidence, not a guessed match');
+const renamedExternalACH=Core.materialize(liveSnap,
+ [{...renamedPost,type:'transfer',cashDirection:'out'}],
+ {futureRecurringRules:[lateRule]},T,null,70,policy);
+assert.equal(renamedExternalACH.overduePayments.length,0,
+ 'A bank-classified external cash-out ACH remains eligible when uniquely evidenced');
+assert.equal(renamedPaid.projection.diagnostics.balanceMismatches.length,0,
+ 'Renamed debit matching preserves daily checking arithmetic');
 const wrongAccount=Core.materialize(liveSnap,[post('wrong-account',
  'Fictional Housing ACH',1275,'2026-10-19','other')],latePrefs,T,null,70,policy);
 assert.equal(wrongAccount.overduePayments.length,1,'A payment from the wrong account cannot clear bill');
