@@ -336,7 +336,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    if(paid.has(e.id)||!rule||tools.bankDirection(t)!=='expense'||
     !eligible.some(r=>String(r.id)===String(rule.id))||
     String(tools.accountRef(t.accountId||t.account,accounts))!==String(e.accountId))return [];
-   const dates=postingDates(e).filter(d=>d<=asOf&&d>=add(asOf,-90)&&
+   const dates=postingDates(e).filter(d=>d<=add(asOf,14)&&d>=add(asOf,-90)&&
     tools.postedWithinMatchWindow(rule,t,d,e.amount,
      explicit.some(r=>String(r.id)===String(rule.id)),true));
    if(!dates.length)return [];
