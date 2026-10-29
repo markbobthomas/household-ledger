@@ -66,7 +66,7 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
-let historyView='list',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
+let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40;
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='';
@@ -1587,7 +1587,18 @@ function historyInsights(rows,view,options={}){
    if(name&&Number.isFinite(Number(value))&&!groups.has(name))
     groups.set(name,{name,cents:0,count:0});
   }
-  const values=[...groups.values()].sort((a,b)=>b.cents-a.cents||a.name.localeCompare(b.name));
+  // Sort by the saved *monthly* budget, not spending or number of selected
+  // calendar months. Explicit $0 budgets come before unbudgeted categories.
+  const monthlyBudgetCents=name=>{
+   if(!Object.hasOwn(budgets,name))return null;
+   const amount=Number(budgets[name]);
+   return Number.isFinite(amount)&&amount>=0?Math.round(amount*100):null;
+  };
+  const values=[...groups.values()].sort((a,b)=>{
+   const left=monthlyBudgetCents(a.name),right=monthlyBudgetCents(b.name);
+   return Number(right!==null)-Number(left!==null)||
+    (right??0)-(left??0)||a.name.localeCompare(b.name);
+  });
   // The overall ratio counts ALL posted purchases, even in unbudgeted categories.
   // Only explicitly saved monthly targets form the budget denominator.
   const totalBudgetCents=values.reduce((sum,g)=>{
@@ -1909,7 +1920,7 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page">'+
   '<div class="history-view-header"><p>Explore your bank activity. Actual bank records are read-only.</p></div>'+
   '<div class="history-view-toolbar"><nav class="history-subtabs" aria-label="Bank History views">'+
-    [['list','Transactions','≡'],['categories','Categories','◔'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
+    [['categories','Budget','◔'],['list','Transactions','≡'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
       '<button type="button" class="history-subtab'+(historyView===id?' active':'')+
       '" data-history-view="'+id+'" aria-pressed="'+(historyView===id)+'">'+
       '<span aria-hidden="true">'+icon+'</span>'+name+'</button>').join('')+
@@ -1933,12 +1944,12 @@ function historyPage(bundle,s){
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
-   '<label>Sort by<select name="historySort" data-history-sort>'+
+   (historyView==='categories'?'':'<label>Sort by<select name="historySort" data-history-sort>'+
     [['newest','Newest first'],['oldest','Oldest first'],
      ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
      ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
      '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
-      label+'</option>').join('')+'</select></label>'+
+      label+'</option>').join('')+'</select></label>')+
    (historyView==='categories'?'':
     '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
     '<option value="">All categories</option>'+
@@ -2926,6 +2937,12 @@ document.addEventListener('click',async e=>{
  }
  const view=e.target.closest('[data-view]');
  if(view){
+  // Budget is the Bank History landing view when the main destination opens.
+  // Keep the user's selected calendar months and account.
+  if(view.dataset.view==='history'){
+   historyView='categories';historyCategoryFilter='';historySizeFilter=-1;
+   historyMerchantFilter='';historyPurchaseDrill=false;historyMonthPickerOpen=false;
+  }
   activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;

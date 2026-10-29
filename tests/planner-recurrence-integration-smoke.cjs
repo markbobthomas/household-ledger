@@ -108,6 +108,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
   'A bank-derived mortgage must not be absent from the future schedule');
  await click('[data-view]',{view:'history'});
+ await click('[data-history-view]',{historyView:'list'});
  await chooseHistoryMonth('2026-09'); // September mortgage is outside the default October calendar month.
  assert.match(future(),/Home Mortgage ACH/);
  await click('[data-history-plan]',{
@@ -131,6 +132,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  // A bank transaction already attached to the recurring plan is identified
  // as confirmed, without offering a duplicate-creation action.
  await click('[data-view]',{view:'history'});
+ await click('[data-history-view]',{historyView:'list'});
  assert.match(future(),/Repeating plan saved/, 'Known bank payment remains identified as recurring');
  assert.match(future(),/Open repeating payment details: Home Mortgage ACH/,
   'Linked bank payment exposes its saved repeating plan through the in-row control');
@@ -146,6 +148,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  // Its category/name provides no fixed-bill shortcut, so detection genuinely
  // depends on the two observed exact-amount calendar payments.
  await click('[data-view]',{view:'history'});
+ await click('[data-history-view]',{historyView:'list'});
  await chooseHistoryMonth('2026-10');
  await click('[data-history-plan]',{
   historyPlan:'generic-bank-second',historyAccount:'demo-checking'});
