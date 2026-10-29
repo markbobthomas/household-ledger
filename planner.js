@@ -1532,6 +1532,26 @@ function historyInsights(rows,view,options={}){
      cash(Math.abs(remaining))+(remaining<0?' over':' left')+'</small>':
      '<small class="history-budget-difference">'+(set?'Household target':'Not set')+'</small>');
   };
+
+  // Visual comparison only; use the same monthly target and selected period as
+  // the adjacent budget editor. Bank transactions and forecasts are untouched.
+  const budgetBar=g=>{
+   const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
+    set=Number.isFinite(raw)&&raw>=0,
+    monthly=set?Math.round(raw*100)/100:0,
+    spent=g.cents/100,totalBudget=monthly*periodMonths,
+    over=set&&spent>totalBudget,
+    percent=!set?0:totalBudget>0?Math.min(100,spent/totalBudget*100):over?100:0,
+    description=set?cash(spent)+' spent of '+cash(totalBudget)+' budget for '+g.name+
+     (periodMonths>1?' over '+periodMonths+' months':' this month')+
+     (over?' (over budget)':''):
+     'No monthly budget set for '+g.name;
+   return '<span class="history-budget-track'+(!set?' unset':over?' over':'')+
+    '" role="img" data-history-budget-bar data-budget-status="'+
+    (!set?'unset':over?'over':'within')+'" aria-label="'+escapeHTML(description)+
+    '" title="'+escapeHTML(description)+'">'+
+    '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span></span>';
+  };
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<h2>Where your money went</h2>'+
    '<p>Choose a category to see purchases, or edit its monthly budget right beside actual spending.</p>'+
@@ -1544,14 +1564,15 @@ function historyInsights(rows,view,options={}){
     '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+(gradient||'#e6edf3 0% 100%')+')">'+
     '<div class="history-donut-center"><span>Total purchases</span><strong>'+cash(total)+'</strong></div></div>'+
     '<div class="history-category-table"><div class="history-category-columns">'+
-     '<span>Category</span><span>Actual</span><span>Budget / month</span></div>'+
+     '<span>Category</span><span>Budget used</span><span>Spent</span><span>Budget / month</span></div>'+
     '<div class="history-category-legend">'+values.map((g,i)=>
      '<div class="history-category-item" data-history-category-row="'+escapeHTML(g.name)+'">'+
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-legend-dot" style="background:'+colors[i%colors.length]+'"></span>'+
      '<span class="history-category-name"><span class="history-category-glyph">'+cue(g.name)+'</span>'+
-      escapeHTML(g.name)+'<small>'+g.count+' purchases</small></span></button>'+
+      escapeHTML(g.name)+'<small>'+g.count+' purchases</small></span></button>'+ 
+     budgetBar(g)+
      '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
     '</div></div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
