@@ -575,15 +575,16 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const listed=lowDay.events||[];
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
+ const ninetyDayMinimum=credit?null:next90Low();
  const calendarHtml='<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
    '<div class="summary-monthly" data-summary-next-90-low>'+
     '<div class="summary-overline">Lowest in next 90 days</div>'+
-    '<strong class="summary-low'+balanceRiskClass(next90Low()?.balance,prefs)+'" data-summary-next-90-value>'+
-     (next90Low()?money(next90Low().balance):'Not projected')+'</strong>'+
-    '<button type="button" class="summary-low-date" data-calendar-next-90-low="'+esc(next90Low()?.date||'')+'"'+
-     (next90Low()?'':' disabled')+'>'+
-     (next90Low()?esc(dateLabel(next90Low().date))+' →':'No projected date')+'</button>'+
+    '<strong class="summary-low'+balanceRiskClass(ninetyDayMinimum?.balance,prefs)+'" data-summary-next-90-value>'+
+     (ninetyDayMinimum?money(ninetyDayMinimum.balance):'Not projected')+'</strong>'+
+    '<button type="button" class="summary-low-date" data-calendar-next-90-low="'+esc(ninetyDayMinimum?.date||'')+'"'+
+     (ninetyDayMinimum?'':' disabled')+'>'+
+     (ninetyDayMinimum?esc(dateLabel(ninetyDayMinimum.date))+' →':'No projected date')+'</button>'+
     '</div>')+'</div>'+
     calendarGrid()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
