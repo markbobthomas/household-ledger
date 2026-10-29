@@ -1184,7 +1184,7 @@ const {chromium,webkit}=require('playwright');
      red:metric?.querySelector('.summary-low')?.classList.contains('summary-low-negative'),
      noCaption:doc.querySelector('.calendar-balance-explainer')===null};
    });
-   assert.deepEqual(fullLowFixture,{bank:'Sample Current Balance',
+   assert.deepEqual(fullLowFixture,{bank:'Sample Available Balance',
     month:'Estimated Monthly Low',label:'3-year low',
     amount:'-$1,200.00',lowDate:'2027-10-19',orange:false,red:true,noCaption:true},
     'Three-year minimum reflects the later true trough and links to its date');
