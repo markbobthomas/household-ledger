@@ -34,7 +34,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('#planner-main .planner-page').first().waitFor();
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Payments','Bank History']);
+    ['Calendar','Bills','Bank History']);
    assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),1,
     'Things to check is a visible action outside three main destinations');
    assert.equal(await page.locator('.planner-nav-primary svg').count(),3,
@@ -92,16 +92,42 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.history-period-controls [data-history-month]').count(),1);
    assert.equal(await page.locator('[data-history-months]').count(),1);
    assert.equal(await page.locator('.history-page [data-history-view="list"][aria-pressed="true"]').count(),1);
+   assert.equal(await page.locator('[data-history-months]').inputValue(),'1',
+    'All Bank History subtabs default to one whole calendar month');
+   assert.equal(await page.locator('[data-history-month]').inputValue(),'2026-10',
+    'Default reporting month is the current calendar month');
+   const currentDates=await page.locator('.history-actual-row').evaluateAll(rows=>
+    rows.map(row=>row.dataset.historySortDate));
+   assert.ok(currentDates.every(date=>date.startsWith('2026-10')),
+    'Current-month view does not include the previous month as a rolling 30-day window');
    await page.locator('[data-history-months]').selectOption('all');
    await page.locator('[data-history-view="categories"]').click();
    assert.equal(await page.locator('[data-history-category-insights]').count(),1);
    assert.equal(await page.locator('.history-donut').count(),1);
    assert.ok(await page.locator('.history-category-item').count()>0,
     'Category legend is populated from fictional posted purchase records');
+   const budgetCategory=page.locator('.history-category-item').first(),
+    categoryName=await budgetCategory.getAttribute('data-history-category-row');
+   assert.equal(await budgetCategory.locator('[data-history-budget]').count(),1,
+    'Actual spending has an immediately adjacent editable monthly budget');
+   assert.equal(await page.locator('.history-category-columns').innerText().then(x=>x.includes('Budget / month')),true);
+   await budgetCategory.locator('[data-history-budget]').fill('275.50');
+   await budgetCategory.locator('[data-history-budget]').press('Tab');
+   await page.waitForFunction(category=>{
+    const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return saved.categoryMonthlyBudgets?.[category]===275.5;
+   },categoryName);
+   assert.equal(await page.locator('.history-category-item').first().locator('[data-history-budget]').inputValue(),'275.50');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Category view shows its tailored chart rather than duplicating line-item history');
+   await page.locator('[data-history-months]').selectOption('3');
+   assert.match(await page.locator('.history-budget-explanation').innerText(),/3 monthly budgets/,
+    'Three-month actual spending is compared against three full calendar monthly targets');
+   assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
+    'A monthly budget carries across report periods');
+   await page.locator('[data-history-months]').selectOption('all');
    const firstCategory=page.locator('.history-category-item').first();
-   await firstCategory.click();
+   await firstCategory.locator('[data-history-drill-category]').click();
    assert.equal(await page.locator('[data-history-view="list"][aria-pressed="true"]').count(),1,
     'Category drill-down opens the detailed transaction list');
    assert.ok(await page.locator('.history-actual-row').count()>0);
@@ -135,6 +161,13 @@ const {chromium,webkit}=require('playwright');
     'A selected month restricts every line-item bank record');
    await page.locator('[data-history-months]').selectOption('all');
    await page.locator('[data-history-month]').fill('2026-10');
+   await page.reload({waitUntil:'load'});
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('[data-history-view="categories"]').click();
+   assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
+    'A monthly category budget is saved across page reloads');
+   assert.equal(await page.locator('[data-history-months]').inputValue(),'1',
+    'Returning to Bank History starts with the current calendar month');
 
    // Actual bank records are inspectable through the shared panel, never editable.
    const bankRow=page.locator('.history-row-open').first();
