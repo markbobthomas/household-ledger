@@ -576,6 +576,7 @@ const {chromium,webkit}=require('playwright');
    const categoryFormsBefore=await categoryForms.count();
    if(categoryFormsBefore){
     const first=categoryForms.first(),categoryId=await first.getAttribute('data-category-id');
+    assert.equal(await first.locator('[name=category]').inputValue(),'','Unconfirmed Other never silently preselects a decision');
     assert.ok((await first.locator('[name=category] option').allTextContents()).includes('Other'),
      'Other is offered as a deliberate catch-all in category Review');
     await first.locator('[name=category]').selectOption('Other');
