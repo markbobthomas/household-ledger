@@ -4515,3 +4515,74 @@ a:hover{color:#166e61}
  .main-navigation .tab-link svg{width:16px;height:16px}
  .main-navigation .tab-link span{font-size:11px}
 }
+
+/* A newcomer can understand the purpose before learning the planning tools. */
+.summary-page .home-intro{margin:0 0 15px;padding:7px 2px 4px}
+.summary-page .home-eyebrow{font-size:11px;font-weight:760;letter-spacing:1.3px;color:#658273;margin:0 0 8px}
+.summary-page .home-intro h2{font-size:clamp(22px,3.4vw,30px);font-weight:760;letter-spacing:-.7px;line-height:1.17;color:#274536;margin:0 0 8px}
+.summary-page .home-intro>p:not(.home-eyebrow){font-size:13px;line-height:1.55;color:#718377;max-width:680px;margin:0 0 13px}
+.summary-page .home-next-bill{display:flex;align-items:center;justify-content:space-between;gap:15px;min-width:0;
+ width:100%;text-align:left;background:#f2f8f3;border:1px solid #dfece1;border-radius:14px;
+ padding:12px 16px;color:#344d3c}
+.summary-page button.home-next-bill{cursor:pointer}
+.summary-page button.home-next-bill:hover{background:#e9f4ec}
+.summary-page .home-next-bill>span:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.summary-page .home-next-bill small{color:#718c7a;font-size:11px;font-weight:730}
+.summary-page .home-next-bill span strong{font-size:14px;overflow-wrap:anywhere}
+.summary-page .home-next-bill span span{font-size:12px;color:#738777}
+.summary-page .home-next-bill>strong{font-size:17px;font-weight:780;white-space:nowrap;font-variant-numeric:tabular-nums}
+.summary-page .home-next-step{display:flex;gap:16px;align-items:center;justify-content:space-between;
+ margin:0 0 18px;padding:15px 18px;background:#fff;border:1px solid #e3ebe3;border-radius:16px}
+.summary-page .home-next-step h3{font-size:15px;color:#2e4a39;font-weight:750;margin:4px 0 4px}
+.summary-page .home-next-step p{font-size:12px;color:#697e6f;margin:0;line-height:1.5}
+.summary-page .home-next-step-label{font-size:10px;font-weight:760;letter-spacing:1px;color:#9b6234}
+.summary-page .home-next-step .btn{flex:none;max-width:100%}
+.summary-page .home-all-set{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+ color:#648071;font-size:12px;padding:9px 4px;margin:0 0 15px}
+.summary-page .home-all-set>span:first-child{background:#eaf5eb;border-radius:50%;padding:3px 6px;color:#2c8157}
+.summary-page .home-all-set button{margin-left:auto;border:0;background:transparent;color:#4d8065;font-size:11px;cursor:pointer}
+.summary-page .home-long-range{margin:4px 0 15px;border-top:1px solid #e8eee9;padding-top:10px;color:#7a897f}
+.summary-page .home-long-range>summary{cursor:pointer;min-height:31px;font-size:12px;font-weight:690;list-style:revert}
+.summary-page .home-long-range .summary-minimum{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;text-align:left;padding:8px 5px}
+.summary-page .home-long-range .summary-minimum>span{font-size:12px;color:#728579}
+.summary-page .home-long-range .summary-minimum strong{font-size:20px!important;letter-spacing:-.4px}
+.summary-page .home-long-range .summary-minimum .summary-low-date{font-size:12px}
+.summary-page .summary-numbers{justify-content:flex-start;gap:clamp(16px,4vw,60px)}
+.summary-page .summary-numbers .summary-bank,.summary-page .summary-numbers .summary-monthly{flex:1;min-width:0}
+.summary-page .summary-numbers .summary-low{font-size:clamp(23px,3.4vw,37px);letter-spacing:-.7px}
+.history-page .history-view-header{display:block;padding:2px 1px 11px}
+.history-page .history-view-header h2{font-size:21px;margin:0 0 5px;color:#2d4d3d}
+.history-page .history-view-header p{font-size:12px;color:#738779;margin:0}
+.bills-upcoming.panel{padding:19px 21px;border-radius:17px;border-color:#e0ebe1}
+.bills-heading{display:flex;align-items:start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.bills-heading h2{font-size:20px;color:#2c4b39;margin:0 0 5px}
+.bills-heading p{font-size:12px;color:#728577;line-height:1.5;margin:0}
+.bills-upcoming-total{white-space:nowrap;color:#718977;background:#eff6ef;padding:6px 9px;border-radius:8px;font-size:11px;font-weight:710}
+.bills-upcoming-row{display:grid;grid-template-columns:75px minmax(0,1fr) auto 10px;gap:12px;align-items:center;
+ text-align:left;width:100%;min-height:56px;border:0;border-bottom:1px solid #eef2ee;background:transparent;color:#304a38;padding:11px 1px;cursor:pointer}
+.bills-upcoming-row:hover{background:#f7faf7}
+.bills-upcoming-date{font-size:12px;color:#718679;white-space:nowrap}
+.bills-upcoming-description{display:flex;flex-direction:column;min-width:0;gap:4px}
+.bills-upcoming-description strong{font-size:13px;overflow-wrap:anywhere}
+.bills-upcoming-description small{font-size:11px;color:#839488}
+.bills-upcoming-row>strong{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bills-upcoming-empty{font-size:12px;color:#7c8d7e;padding:12px 0}
+.bills-range-toggle{border:0;background:transparent;padding:12px 1px 4px;font-size:12px;color:#34835c;font-weight:730;cursor:pointer}
+.bills-manage-heading{margin:20px 1px 12px}
+.bills-manage-heading h2{font-size:18px;margin:0 0 4px;color:#395846}
+.bills-manage-heading p{font-size:12px;color:#7a8c80;margin:0}
+@media(max-width:650px){
+ .summary-page .home-intro h2{font-size:23px}
+ .summary-page .home-next-step{flex-direction:column;align-items:stretch;padding:13px 14px}
+ .summary-page .home-next-step .btn{width:100%}
+ .summary-page .home-next-bill{padding:11px 12px}
+ .summary-page .home-next-bill>strong{font-size:14px}
+ .summary-page .summary-numbers{gap:9px}
+ .summary-page .summary-numbers .summary-bank strong{font-size:clamp(18px,5vw,27px)}
+ .summary-page .summary-numbers .summary-low{font-size:clamp(20px,6vw,29px)}
+ .bills-upcoming.panel{padding:15px 13px}
+ .bills-heading{flex-wrap:wrap}
+ .bills-upcoming-row{grid-template-columns:54px minmax(0,1fr) auto;gap:7px}
+ .bills-upcoming-row>span:last-child{display:none}
+ .bills-upcoming-row>strong{font-size:12px}
+}
