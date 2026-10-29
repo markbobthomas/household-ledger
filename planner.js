@@ -1104,6 +1104,12 @@ function cardStatementPeriod(accountId,when){
  return window.HouseholdPaymentObligations.statementPeriodFor(
   state().predictions?.paymentRules?.[accountId],when);
 }
+function categorySpendingCents(row){
+ // Reporting-only: an explicitly classified, unpaired outward bank transfer
+ // is spending even when the bank called it a transfer. True transfers and
+ // card settlements remain excluded; statement/merchant totals stay unchanged.
+ return cardActivityCents(row)+window.HouseholdPlannerHistory.categorizedOutflowCents(row);
+}
 function cardActivityCents(row){
  // The History statement total is purchases minus merchant refunds only.
  // A paired card payment is never a new purchase, even if an earlier
@@ -1501,8 +1507,9 @@ function historyMerchantKey(row){return historyMerchantName(row).toLocaleLowerCa
 // Read-only reporting. Actual bank records, future predictions, and recurring
 // matching are untouched. Exclude pending, paired transfers and card payments.
 function historyInsights(rows,view,options={}){
- const purchases=rows.filter(r=>cardActivityCents(r)>0),
-  cents=purchases.reduce((sum,r)=>sum+cardActivityCents(r),0),
+ const spendCents=view==='categories'?categorySpendingCents:cardActivityCents,
+  purchases=rows.filter(r=>spendCents(r)>0),
+  cents=purchases.reduce((sum,r)=>sum+spendCents(r),0),
   total=cents/100,n=purchases.length;
  const header='<div class="history-insights-head"><strong>'+n+' posted purchases</strong>'+
   '<strong>'+cash(total)+' spent</strong><span>'+cash(n?total/n:0)+' average</span></div>'+
@@ -1565,7 +1572,7 @@ function historyInsights(rows,view,options={}){
   for(const r of purchases){
    const category=String(r.category||'Other');
    const g=groups.get(category)||{name:category,cents:0,count:0};
-   g.cents+=cardActivityCents(r);g.count++;groups.set(category,g);
+   g.cents+=categorySpendingCents(r);g.count++;groups.set(category,g);
   }
   // Spending is filtered by the selected calendar months, but the category
   // catalog is not: show every active named category, even when it has no
@@ -1663,8 +1670,8 @@ function historyInsights(rows,view,options={}){
      '</div></details></div>'+
    (historyCategoryNotice?'<p class="history-category-manage-status" role="status">'+
     escapeHTML(historyCategoryNotice)+'</p>':'')+
-   '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(total)+' spent across '+n+' purchases')+'">'+
-    '<strong>'+cash(total)+' spent</strong><span>'+n+' purchases</span></div>'+
+   '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(total)+' spent across '+n+' spending transactions')+'">'+
+    '<strong>'+cash(total)+' spent</strong><span>'+n+' transactions</span></div>'+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    budgetSummary+
    (values.length?'<div class="history-category-layout">'+
@@ -1678,7 +1685,7 @@ function historyInsights(rows,view,options={}){
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-legend-dot" style="background:'+colors[i%colors.length]+'"></span>'+
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
-      '<small>'+g.count+' purchases</small></span></button>'+ 
+      '<small>'+g.count+' transactions</small></span></button>'+ 
      budgetBar(g)+
      '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
@@ -1758,7 +1765,8 @@ function historyPage(bundle,s){
    historySelectedMonths.size+' months selected';
  const filtered=records.filter(t=>{
   if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
-  if(historyView==='list'&&historyPurchaseDrill&&cardActivityCents(t)<=0)return false;
+  if(historyView==='list'&&historyPurchaseDrill&&
+   (historyCategoryFilter?categorySpendingCents(t):cardActivityCents(t))<=0)return false;
   if(historyView==='list'&&historyMerchantFilter&&
     (historyMerchantKey(t)!==historyMerchantFilter||!cardActivityCents(t)))return false;
   if(historyView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
