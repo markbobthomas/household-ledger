@@ -1246,7 +1246,7 @@ function schedulesPage(bundle,s){
  const cardHtml=({rule:r,index})=>{
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
-   isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
+   isEditing=scheduleMode==='edit'&&!transactionDetail&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    occurrence=upcomingByRule.get(String(r.id)),
    effectiveNext=occurrence?.date||null,
@@ -2360,8 +2360,8 @@ document.addEventListener('click',async e=>{
    recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
    !window.confirm('Discard unsaved prediction changes?'))return;
   scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
-  transactionDetail=null;render();
-  document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
+  transactionDetail={kind:'schedule',mode:'new'};render();
+  document.querySelector('.transaction-detail [name=merchant]')?.focus();
   return}
  const jump=e.target.closest?.('[data-schedule-view-calendar]');
  if(jump){
@@ -2594,7 +2594,7 @@ document.addEventListener('click',async e=>{
   return;
  }
  const actualRow=e.target.closest?.('[data-historical-transaction]');
- if(actualRow&&activeTab==='history'){
+ if(actualRow&&activeTab==='history'&&typeof $('planner-main')?.insertAdjacentHTML!=='function'){
   const id=actualRow.dataset.historicalTransaction,account=actualRow.dataset.historicalAccount,
    same=historyExpandedId===id&&historyExpandedAccount===account;
   if(same){
@@ -3094,6 +3094,7 @@ document.addEventListener('submit',async e=>{
   }else if(transactionDetail?.kind==='schedule'&&savedPlanId){
    scheduleMode='edit';scheduleTarget=savedPlanId;
    transactionDetail={kind:'schedule',id:savedPlanId,mode:'edit',selectedKey:''};
+   render();
   }else{
    scheduleMode='';scheduleTarget='';transactionDetail=null;
    if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
