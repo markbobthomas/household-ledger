@@ -154,13 +154,8 @@ function resolution(state,t,index){
  const bankCategory=t.source?.provider==='plaid'&&
   (['expense','refund'].includes(t.type)||legacyMortgage)?
   Categorization.classify(t):null;
- // Income and transfers have a category established by their transaction kind;
-  // this does not rewrite the immutable posted-bank classification.
-  const byKind=original==='Other'&&t.type==='income'?'Income':
-   original==='Other'&&t.type==='transfer'?'Transfer':null;
-  const inferred=byKind||(original==='Other'&&bankCategory?.category&&
-   bankCategory.category!=='Other'?bankCategory.category:original);
- const origin=byKind?'system-type':original!=='Other'&&t.source?.provider==='plaid'?
+ const inferred=original==='Other'&&bankCategory?.category&&bankCategory.category!=='Other'?bankCategory.category:original;
+ const origin=original!=='Other'&&t.source?.provider==='plaid'?
   t.source?.categoryOrigin||'plaid-category':bankCategory?.method||'source';
  const originLabel=origin==='plaid-category'?'Plaid category':
   origin==='merchant-match'?'Merchant match':'Source';
@@ -198,9 +193,15 @@ const confidenceScore=t=>{
 function categoryReviewQueue(state){
  const tx=records(state).filter(t=>!t.pending&&t.id!==null&&t.id!==undefined)
   .map(t=>{
-   const category=canonicalCategory(state,t.category)||t.category||'Other',
+   // Known income/transfer kinds are safe to label in reporting without
+   // changing the authoritative bank-derived record used for forecasting.
+   const knownKind=t.type==='income'||t.type==='transfer',
+    category=knownKind&&missingCategory(t.category)?
+     (t.type==='income'?'Income':'Transfer'):
+     canonicalCategory(state,t.category)||t.category||'Other',
     missing=missingCategory(category),
-    manual=Boolean(state.categoryOverrides?.[t.id])||['manual','learned','system-type'].includes(t.method),
+    manual=knownKind||Boolean(state.categoryOverrides?.[t.id])||
+     ['manual','learned'].includes(t.method),
     score=confidenceScore(t),
     low=!manual&&(score!==null&&score<.7||
      ['merchant-match','suggested','unclassified'].includes(t.method)||
