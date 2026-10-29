@@ -1567,7 +1567,15 @@ function historyInsights(rows,view,options={}){
    const g=groups.get(category)||{name:category,cents:0,count:0};
    g.cents+=cardActivityCents(r);g.count++;groups.set(category,g);
   }
-  // Retain monthly targets for categories with zero activity this month.
+  // Spending is filtered by the selected calendar months, but the category
+  // catalog is not: show every active named category, even when it has no
+  // spending and no monthly budget. Deleted categories stay excluded by the
+  // same canonical registry used by selectors and the Manage control.
+  for(const name of model.categories(state())){
+   if(name!=='Uncategorized'&&!groups.has(name))
+    groups.set(name,{name,cents:0,count:0});
+  }
+  // Retain saved targets that have zero activity (including legacy targets).
   for(const [name,value] of Object.entries(budgets)){
    if(name&&Number.isFinite(Number(value))&&!groups.has(name))
     groups.set(name,{name,cents:0,count:0});
@@ -1583,12 +1591,6 @@ function historyInsights(rows,view,options={}){
   },0);
   const totalBudgetPercent=totalBudgetCents>0?cents/totalBudgetCents*100:null;
   const colors=['#3565a1','#dc9445','#4c8676','#8e75ad','#b56d75','#7893ad','#556a85','#b4beca'];
-  const cue=name=>/grocer|food|dining|restaurant/i.test(name)?'◉':
-   /house|rent|mortgage/i.test(name)?'⌂':
-   /transport|travel|fuel|gas/i.test(name)?'↗':
-   /health|medical/i.test(name)?'✚':
-   /utilit|electric|phone|internet/i.test(name)?'ϟ':
-   /entertain/i.test(name)?'★':'▣';
   let start=0;
   const gradient=values.map((g,i)=>{
    const from=start;start+=cents?g.cents/cents*100:0;
@@ -1675,8 +1677,8 @@ function historyInsights(rows,view,options={}){
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-legend-dot" style="background:'+colors[i%colors.length]+'"></span>'+
-     '<span class="history-category-name"><span class="history-category-glyph">'+cue(g.name)+'</span>'+
-      escapeHTML(categoryLabel(g.name))+'<small>'+g.count+' purchases</small></span></button>'+ 
+     '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
+      '<small>'+g.count+' purchases</small></span></button>'+ 
      budgetBar(g)+
      '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
