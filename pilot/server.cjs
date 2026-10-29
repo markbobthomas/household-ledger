@@ -227,7 +227,8 @@ async function start(port=Number(env.PORT||8788)){
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   try{
    if(accountRemovalBusy&&[
-    '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category','/api/exchange',
+    '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
+     '/api/ledger/category-rule','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
@@ -236,8 +237,9 @@ async function start(port=Number(env.PORT||8788)){
     // bank history or a stale prediction snapshot to change one row's category.
     if(!state.items.length)return respond(409,{error:'No bank account connected'});
     if(!body||typeof body!=='object'||Array.isArray(body)||
-     Object.keys(body).some(k=>!['transactionId','category'].includes(k))||
-     Object.keys(body).length!==2)return respond(400,{error:'Invalid category change'});
+     Object.keys(body).some(k=>!['transactionId','category','remember'].includes(k))||
+     (body.remember!==undefined&&body.remember!==true)||
+     Object.keys(body).length!==(body.remember===true?3:2))return respond(400,{error:'Invalid category change'});
     const id=String(body.transactionId||'');
     if(!Object.prototype.hasOwnProperty.call(state.transactions,id))
      return respond(400,{error:'Unknown bank transaction'});
@@ -246,15 +248,49 @@ async function start(port=Number(env.PORT||8788)){
     const selected=body.category===null?null:
      allowedCats.find(c=>c.toLowerCase()===String(body.category).toLowerCase());
     if(body.category!==null&&!selected)return respond(400,{error:'Invalid category'});
-    const before={...(state.ledgerAdjustments?.categoryOverrides||{})};
-    const overrides={...before};
+    const before=state.ledgerAdjustments||{};
+    const overrides={...(before.categoryOverrides||{})};
     if(body.category===null)delete overrides[id];else overrides[id]=selected;
-    state.ledgerAdjustments={...state.ledgerAdjustments,categoryOverrides:overrides};
+    let learned=null,nextLearning=null;
+    if(body.remember===true&&selected&&!['Other','Uncategorized'].includes(selected)){
+     // Rebuild source-backed normalized facts. Never trust a browser-supplied
+     // merchant, category history or learned rule.
+     const feed=require('./data-source.js'),model=require('../ledger-data.js'),
+      byAccount=new Map(state.accounts.map(a=>[String(a.id),a]));
+     const rows=Object.values(state.transactions).map(tx=>{
+      const account=byAccount.get(String(tx.accountId));
+      return account?feed.record(tx,account):null;
+     }).filter(Boolean);
+     const source=rows.find(tx=>tx.id===id);
+     if(source?.type==='expense'){
+      const decision=model.migrate({transactions:rows,categoryOverrides:overrides,
+       learning:before.learning||{},predictions:before.predictions||{}});
+      learned=model.learnCategory(decision,id,selected);
+      nextLearning=decision.learning;
+     }
+    }
+    state.ledgerAdjustments={...before,categoryOverrides:overrides,
+     ...(nextLearning?{learning:nextLearning}:{})};
     try{await save()}catch(error){
-     state.ledgerAdjustments.categoryOverrides=before;
+     state.ledgerAdjustments=before;
      throw error;
     }
-    return respond(200,{saved:true,scope:'category'});
+    return respond(200,{saved:true,scope:'category',learningMode:learned?.mode||null});
+   }
+   if(requestPath==='/api/ledger/category-rule'){
+    if(!state.items.length)return respond(409,{error:'No bank account connected'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+     Object.keys(body).length!==1||typeof body.ruleKey!=='string'||
+     !body.ruleKey||body.ruleKey.length>900)
+     return respond(400,{error:'Invalid category rule'});
+    const before=state.ledgerAdjustments||{},current=before.learning||{};
+    if(!Object.prototype.hasOwnProperty.call(current.categoryRules||{},body.ruleKey))
+     return respond(404,{error:'Learned category no longer exists'});
+    const next={learning:JSON.parse(JSON.stringify(current))};
+    require('../ledger-data.js').removeCategoryRule(next,body.ruleKey);
+    state.ledgerAdjustments={...before,learning:next.learning};
+    try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
+    return respond(200,{saved:true,scope:'category-rule'});
    }
    if(requestPath==='/api/ledger/forecasts'){
     // Forecast rules are not edits to Plaid transactions, balances, or
