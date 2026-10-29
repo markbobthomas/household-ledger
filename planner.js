@@ -60,6 +60,7 @@ function forecastSaveFeedback(message,allowUndo=false){
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='list',historyMonths='1',historyEndMonth='',historySizeFilter=-1,historyPurchaseDrill=false;
+let historyMerchantFilter='',historyMerchantSearch='';
 let historyBudgetMessage='',historyBudgetBusy=false;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
@@ -1483,6 +1484,17 @@ const historyBands=[
  {name:'$250–$499',min:250,max:500},{name:'$500+',min:500,max:Infinity}
 ];
 const historyBandIndex=n=>historyBands.findIndex(b=>n>=b.min&&n<b.max);
+// Reporting-only merchant names: consolidate common bank descriptor variants.
+// Keep unrelated merchants and distinct stores (e.g., Costco Gas vs warehouse)
+// separate. Never rewrite the actual bank-provided merchant field.
+function historyMerchantName(row){
+ const source=String(row.merchant||row.name||row.description||'Unknown merchant')
+  .normalize('NFKC').replace(/\s+/g,' ').trim();
+ if(/^(?:AMZN|AMAZON)(?=[^a-z]|$)/i.test(source))return 'Amazon';
+ return source||'Unknown merchant';
+}
+function historyMerchantKey(row){return historyMerchantName(row).toLocaleLowerCase('en-US')}
+
 // Read-only reporting. Actual bank records, future predictions, and recurring
 // matching are untouched. Exclude pending, paired transfers and card payments.
 function historyInsights(rows,view,options={}){
@@ -1492,6 +1504,56 @@ function historyInsights(rows,view,options={}){
  const header='<div class="history-insights-head"><strong>'+n+' posted purchases</strong>'+
   '<strong>'+cash(total)+' spent</strong><span>'+cash(n?total/n:0)+' average</span></div>'+
   '<p class="history-insight-note">Purchases only · excludes pending items, transfers and card payments</p>';
+ if(view==='merchants'){
+  // Merchant spending is net posted purchases less merchant refunds. The
+  // same cardActivityCents exclusion prevents transfers and card payments
+  // from being counted as additional shopping.
+  const groups=new Map();
+  for(const r of rows){
+   const amount=cardActivityCents(r);
+   if(!amount)continue;
+   const key=historyMerchantKey(r),name=historyMerchantName(r),
+    g=groups.get(key)||{key,name,cents:0,count:0,refunds:0};
+   g.cents+=amount;
+   if(amount>0)g.count++;
+   else g.refunds++;
+   groups.set(key,g);
+  }
+  const values=[...groups.values()].sort((a,b)=>b.cents-a.cents||
+   a.name.localeCompare(b.name));
+  const search=String(options.merchantSearch||'').trim().toLocaleLowerCase('en-US'),
+   matched=values.filter(g=>g.name.toLocaleLowerCase('en-US').includes(search)),
+   visibleCents=matched.reduce((sum,g)=>sum+g.cents,0),
+   largest=Math.max(1,...values.map(g=>Math.max(0,g.cents))),
+   showTotal=sum=>(sum<0?'−':'')+cash(Math.abs(sum)/100);
+  return '<section class="history-insight-panel" data-history-merchant-insights>'+
+   '<h2>Spending by merchant</h2>'+
+   '<p>See how much you spent at each merchant this period. Choose one to view its transactions.</p>'+
+   '<div class="history-merchant-overview">'+
+    '<div><small>Net merchant spending</small><strong data-history-merchant-total>'+
+     showTotal(visibleCents)+'</strong></div>'+
+    '<div><small>Merchants</small><strong data-history-merchant-count>'+
+     matched.length+'</strong></div></div>'+
+   '<p class="history-insight-note">Posted purchases less merchant refunds · excludes pending items, transfers and card payments</p>'+
+   '<label class="history-merchant-search-label">Find a merchant'+
+    '<input type="search" data-history-merchant-search placeholder="e.g. Amazon" value="'+
+     escapeHTML(options.merchantSearch||'')+'"></label>'+
+   '<div class="history-merchant-list">'+values.map(g=>
+    '<button type="button" class="history-merchant-row" data-history-drill-merchant="'+
+     escapeHTML(g.key)+'" data-history-merchant-cents="'+g.cents+
+     '" data-history-merchant-name="'+escapeHTML(g.name)+'"'+
+     (search&&!g.name.toLocaleLowerCase('en-US').includes(search)?' hidden':'')+'>'+
+    '<span class="history-merchant-name">'+escapeHTML(g.name)+'</span>'+
+    '<span class="history-merchant-track" aria-hidden="true"><span style="width:'+
+     Math.max(0,g.cents)/largest*100+'%"></span></span>'+
+    '<span class="history-merchant-count">'+g.count+' purchase'+(g.count===1?'':'s')+
+     (g.refunds?' · '+g.refunds+' refund'+(g.refunds===1?'':'s'):'')+'</span>'+
+    '<strong class="history-merchant-amount">'+showTotal(g.cents)+'</strong>'+
+    '<span class="history-size-arrow" aria-hidden="true">›</span></button>').join('')+
+   '</div><p class="history-merchant-empty" data-history-merchant-empty'+
+    (matched.length?' hidden':'')+'>'+ (values.length?'No merchants match your search.':'No posted merchant purchases in this period.')+
+   '</p></section>';
+ }
  if(view==='categories'){
   const budgets=options.budgets&&typeof options.budgets==='object'&&!Array.isArray(options.budgets)?
    options.budgets:{},periodMonths=Math.max(1,Number(options.months)||1),
@@ -1639,6 +1701,8 @@ function historyPage(bundle,s){
  const filtered=records.filter(t=>{
   if(t.date.slice(0,7)>selectedMonth||(startMonth&&t.date.slice(0,7)<startMonth))return false;
   if(historyView==='list'&&historyPurchaseDrill&&cardActivityCents(t)<=0)return false;
+  if(historyView==='list'&&historyMerchantFilter&&
+    (historyMerchantKey(t)!==historyMerchantFilter||!cardActivityCents(t)))return false;
   if(historyView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
@@ -1674,7 +1738,8 @@ function historyPage(bundle,s){
   monthsInRange=span||Math.max(1,earliestMonth?monthNumber(selectedMonth)-monthNumber(earliestMonth)+1:1),
   insight=historyView!=='list'?historyInsights(filtered,historyView,{
    budgets:state().predictions?.categoryMonthlyBudgets||{},
-   months:monthsInRange,allAccounts:historyAccount==='all'
+   months:monthsInRange,allAccounts:historyAccount==='all',
+   merchantSearch:historyMerchantSearch
   }):'';
  const selectedHistoryCard=historyAccount==='all'?null:
   accounts.find(a=>String(a.id)===historyAccount&&accountType(a)==='credit');
@@ -1780,7 +1845,7 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page">'+
   '<div class="history-view-header"><p>Explore your bank activity. Actual bank records are read-only.</p></div>'+
   '<div class="history-view-toolbar"><nav class="history-subtabs" aria-label="Bank History views">'+
-    [['list','Transactions','≡'],['categories','Categories','◔'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
+    [['list','Transactions','≡'],['categories','Categories','◔'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
       '<button type="button" class="history-subtab'+(historyView===id?' active':'')+
       '" data-history-view="'+id+'" aria-pressed="'+(historyView===id)+'">'+
       '<span aria-hidden="true">'+icon+'</span>'+name+'</button>').join('')+
@@ -1827,6 +1892,9 @@ function historyPage(bundle,s){
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
   (historyView!=='list'?insight:'')+
+  (historyView==='list'&&historyMerchantFilter?'<div class="history-active-filter">Merchant: '+
+    escapeHTML(historyMerchantFilter==='amazon'?'Amazon':historyMerchantFilter)+
+    ' <button type="button" data-history-clear-merchant>Back to Merchants</button></div>':'')+
   (historyView==='list'&&historySizeFilter>=0?'<div class="history-active-filter">Purchase size: '+
     escapeHTML(historyBands[historySizeFilter]?.name||'')+' <button type="button" data-history-clear-size>Clear</button></div>':'')+
   (historyView==='list'?'<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
@@ -2666,22 +2734,33 @@ document.addEventListener('click',async e=>{
  if(historyTab){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
     !window.confirm('Discard unsaved payment changes?'))return;
-  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyCategoryFilter='';historyPurchaseDrill=false;historyLimit=90;
+  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   recurringDraft=null;transactionDetail=null;render();return;
+ }
+ const merchant=e.target.closest?.('[data-history-drill-merchant]');
+ if(merchant){
+  if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+    !window.confirm('Discard unsaved payment changes?'))return;
+  historyView='list';historyMerchantFilter=merchant.dataset.historyDrillMerchant;
+  historySizeFilter=-1;historyCategoryFilter='';historyPurchaseDrill=false;
+  historySearch='';historyLimit=90;render();return;
+ }
+ if(e.target.closest?.('[data-history-clear-merchant]')){
+  historyView='merchants';historyMerchantFilter='';historyLimit=90;render();return;
  }
  const sizeBand=e.target.closest?.('[data-history-size-band]');
  if(sizeBand){
   const i=Number(sizeBand.dataset.historySizeBand);
   if(i<0||i>=historyBands.length)return;
-  historyView='list';historySizeFilter=i;historyCategoryFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
+  historyView='list';historySizeFilter=i;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
  }
  if(e.target.closest?.('[data-history-clear-size]')){
   historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;render();return;
  }
  const categoryDrill=e.target.closest?.('[data-history-drill-category]');
  if(categoryDrill){
-  historyView='list';historySizeFilter=-1;historyPurchaseDrill=true;historySearch='';
+  historyView='list';historySizeFilter=-1;historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';
   historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
   historyLimit=90;render();return;
  }
@@ -3364,6 +3443,25 @@ document.addEventListener('keydown',e=>{
   return;
  }
  if(e.key==='Escape')document.getElementById('planner-menu')?.removeAttribute('open');
+});
+document.addEventListener('input',e=>{
+ const search=e.target.closest?.('[data-history-merchant-search]');
+ if(!search)return;
+ historyMerchantSearch=String(search.value||'').slice(0,100);
+ const root=search.closest('[data-history-merchant-insights]');
+ if(!root)return;
+ const query=historyMerchantSearch.trim().toLocaleLowerCase('en-US');
+ let shown=0,cents=0;
+ root.querySelectorAll('[data-history-drill-merchant]').forEach(row=>{
+  const matched=String(row.dataset.historyMerchantName||'').toLocaleLowerCase('en-US').includes(query);
+  row.hidden=!matched;
+  if(matched){shown++;cents+=Number(row.dataset.historyMerchantCents)||0}
+ });
+ root.querySelector('[data-history-merchant-total]').textContent=
+  (cents<0?'−':'')+cash(Math.abs(cents)/100);
+ root.querySelector('[data-history-merchant-count]').textContent=String(shown);
+ const empty=root.querySelector('[data-history-merchant-empty]');
+ if(empty){empty.hidden=shown>0;empty.textContent='No merchants match your search.'}
 });
 document.addEventListener('change',e=>{
  const selected=e.target.closest?.('[data-history-select]');
