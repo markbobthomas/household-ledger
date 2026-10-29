@@ -713,9 +713,14 @@ function detailHtml(bundle,s){
  if(transactionDetail.kind==='schedule'){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===transactionDetail.id);
   const isNew=transactionDetail.mode==='new',picked=transactionDetail.selectedKey||'';
-  const edit=document.querySelector(isNew?'[data-schedule-new-form]':'[data-schedule-edit-form]');
-  const editHtml=edit?.outerHTML||'<p>Prediction details are temporarily unavailable. Close and reopen the plan.</p>';
-  edit?.remove();
+  const editFields=scheduleFields({...((isNew?schedulePreset:rule)||{}),
+   date:!isNew?window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,shiftDay(s.asOf,horizon))[0]||shiftDay(s.asOf,1):
+    (schedulePreset?.date||shiftDay(s.asOf,1))},isNew,s);
+  const editHtml='<form class="schedule-form" '+(isNew?'data-schedule-new-form':'data-schedule-edit-form="'+escapeHTML(rule.id)+'"')+'>'+
+   (isNew?'<input type="hidden" name="separateSchedule" value="on">':'')+
+   editFields+'<div class="future-form-actions"><button class="btn primary" type="submit">'+
+   (isNew?'Add repeating payment':'Save repeating payment')+'</button>'+
+   '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div></form>';
   const account=rule?activeAccounts(s).find(a=>String(a.id)===String(rule.accountId||rule.fromAccountId)):null;
   const info=!isNew&&rule?'<div class="plan-summary">'+
    '<div><small>Repeats</small><strong>'+escapeHTML(rule.frequency||'Recurring')+'</strong></div>'+
@@ -792,46 +797,12 @@ function confirmInlineSave(key,message){
  target.insertAdjacentHTML(row?'beforeend':'afterbegin',
   '<p class="inline-save-result" role="status">'+escapeHTML(message)+'</p>');
 }
-function openInlineTransaction(button){
- const wrapper=button?.closest?.('[data-inline-row-wrapper]');
- if(!wrapper)return false;
- const existing=wrapper.querySelector('[data-inline-transaction-editor]');
- if(existing){closeInlineTransaction();return true}
- const focused=button.dataset.openTransaction;
- const s=snapshot(),bundle=forecastFor(s),
-  row=futureRows(bundle,s).find(r=>r.key===focused);
- if(!row){setNotice('That forecast has changed. Refresh the calendar and select the updated payment.');return true}
- if(!closeInlineTransaction())return true;
- const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
- const nearby=rule?futureRows(bundle,s).filter(r=>r.recurringRuleId===rule.id&&r.date>=row.date).length:0;
- const helper='<p class="inline-editor-explanation" data-edit-impact>'+
-  (rule||row.seriesKey?'Choose one payment or all future.':'This payment only.')+'</p>';
- const settings=rule?'<details class="inline-plan-settings">'+
-  '<summary>More prediction settings <small>label, category, repeat rule</small></summary>'+
-  '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
-   scheduleFields({...rule,date:window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,
-    shiftDay(s.asOf,horizon))[0]||shiftDay(s.asOf,1)},false,s)+
-   '<div class="future-form-actions"><button class="btn primary" type="submit">Save repeating plan</button>'+
-   '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
- const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
-  helper+relatedCardCalculation(bundle,row)+
-  editorFor(row,s,bundle?.rows||[])+settings+'</div>';
- wrapper.insertAdjacentHTML('beforeend',html);
- button.setAttribute('aria-expanded','true');
- wrapper.querySelectorAll('[data-inline-transaction-editor] form').forEach(form=>{
-  form.dataset.initialValues=JSON.stringify([...new FormData(form)]);
- });
- wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
- return true;
-}
+// One shared editor for future payments.
+function openInlineTransaction(_button){return false;}
 function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===id);
  if(!rule)return false;
  detailReturnFocus=origin||null;
- if(activeTab!=='schedules'){
-  if(!detailOriginTab)detailOriginTab=activeTab;
-  activeTab='schedules';
- }
  scheduleMode=mode;scheduleTarget=id;detailParentSchedule=null;
  transactionDetail={kind:'schedule',id,mode,selectedKey:String(selectedKey||'')};
  render();
@@ -1263,7 +1234,7 @@ function schedulesPage(bundle,s){
    categoryOf(a.rule).localeCompare(categoryOf(b.rule))||a.index-b.index:
   a.index-b.index);
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
- const create=scheduleMode==='new'?'<section class="schedule-creation recurrence-inline-detail" data-schedule-create-inline>'+
+ const create=scheduleMode==='new'&&!transactionDetail?'<section class="schedule-creation recurrence-inline-detail" data-schedule-create-inline>'+
   recurringEditor('<form class="schedule-form" data-schedule-new-form>'+
    
   '<input name="separateSchedule" type="hidden" value="on">'+
