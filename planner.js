@@ -1104,10 +1104,12 @@ function cardStatementPeriod(accountId,when){
  return window.HouseholdPaymentObligations.statementPeriodFor(
   state().predictions?.paymentRules?.[accountId],when);
 }
-function categorySpendingCents(row){
- // Reporting-only: an explicitly classified, unpaired outward bank transfer
- // is spending even when the bank called it a transfer. True transfers and
- // card settlements remain excluded; statement/merchant totals stay unchanged.
+function categorySpendingCents(row,settlements){
+ // Reporting-only: preserve actual posted purchases/refunds, and recognize
+ // high-confidence bank-matched card settlements even when the bank describes
+ // the checking debit as an ordinary payment. Neither settlement side is
+ // budget spending. Merchant/statement forecasts keep their own calculations.
+ if(settlements?.has(String(row.id)))return 0;
  return cardActivityCents(row)+window.HouseholdPlannerHistory.categorizedOutflowCents(row);
 }
 function cardActivityCents(row){
@@ -1507,8 +1509,11 @@ function historyMerchantKey(row){return historyMerchantName(row).toLocaleLowerCa
 // Read-only reporting. Actual bank records, future predictions, and recurring
 // matching are untouched. Exclude pending, paired transfers and card payments.
 function historyInsights(rows,view,options={}){
- const spendCents=view==='categories'?categorySpendingCents:cardActivityCents,
-  purchases=rows.filter(r=>spendCents(r)>0),
+ const spendCents=view==='categories'?
+  r=>categorySpendingCents(r,options.cardSettlementIds):cardActivityCents,
+  // Budget is NET spending: refunds are signed credits in the month of
+  // posting, including months where the purchase was in an earlier period.
+  purchases=rows.filter(r=>view==='categories'?spendCents(r)!==0:spendCents(r)>0),
   cents=purchases.reduce((sum,r)=>sum+spendCents(r),0),
   total=cents/100,n=purchases.length;
  const header='<div class="history-insights-head"><strong>'+n+' posted purchases</strong>'+
@@ -1607,13 +1612,16 @@ function historyInsights(rows,view,options={}){
    return Number.isFinite(monthly)&&monthly>=0?
     sum+Math.round(monthly*100)*periodMonths:sum;
   },0);
-  const totalBudgetPercent=totalBudgetCents>0?cents/totalBudgetCents*100:null;
+  const totalBudgetPercent=totalBudgetCents>0?Math.max(0,cents/totalBudgetCents*100):null;
   const colors=['#3565a1','#dc9445','#4c8676','#8e75ad','#b56d75','#7893ad','#556a85','#b4beca'];
+  // A refund can make a category negative. Those credits reduce the net
+  // amount but cannot be a negative slice of a conic chart.
+  const chartTotal=values.reduce((sum,g)=>sum+Math.max(0,g.cents),0);
   let start=0;
-  const gradient=values.map((g,i)=>{
-   const from=start;start+=cents?g.cents/cents*100:0;
+  const gradient=chartTotal>0?values.map((g,i)=>{
+   const from=start;start+=Math.max(0,g.cents)/chartTotal*100;
    return colors[i%colors.length]+' '+from.toFixed(3)+'% '+start.toFixed(3)+'%';
-  }).join(',');
+  }).join(','):'#e6edf3 0% 100%';
   const budgetField=g=>{
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
@@ -1637,7 +1645,7 @@ function historyInsights(rows,view,options={}){
     monthly=set?Math.round(raw*100)/100:0,
     spent=g.cents/100,totalBudget=monthly*periodMonths,
     over=set&&spent>totalBudget,
-    percent=!set?0:totalBudget>0?Math.min(100,spent/totalBudget*100):over?100:0,
+    percent=!set?0:totalBudget>0?Math.max(0,Math.min(100,spent/totalBudget*100)):over?100:0,
     description=set?cash(spent)+' spent of '+cash(totalBudget)+' budget for '+g.name+
      (periodMonths>1?' over '+periodMonths+' months':' this month')+
      (over?' (over budget)':''):
@@ -1774,10 +1782,13 @@ function historyPage(bundle,s){
   monthSummary=historySelectedMonths.size===1?monthLabel([...historySelectedMonths][0]):
    historySelectedMonths.size===availableMonths.length?'All months ('+availableMonths.length+')':
    historySelectedMonths.size+' months selected';
+ // Use complete posted, cross-account history to recognize a bank-coded card
+ // payment even when the Budget is filtered to one account or calendar month.
+ const budgetCardSettlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records);
  const filtered=records.filter(t=>{
   if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
   if(historyView==='list'&&historyPurchaseDrill&&
-   (historyCategoryFilter?categorySpendingCents(t):cardActivityCents(t))<=0)return false;
+   (historyCategoryFilter?categorySpendingCents(t,budgetCardSettlements):cardActivityCents(t))===0)return false;
   if(historyView==='list'&&historyMerchantFilter&&
     (historyMerchantKey(t)!==historyMerchantFilter||!cardActivityCents(t)))return false;
   if(historyView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
@@ -1813,6 +1824,7 @@ function historyPage(bundle,s){
  const monthsInRange=historySelectedMonths.size,
   insight=historyView!=='list'?historyInsights(filtered,historyView,{
    budgets:state().predictions?.categoryMonthlyBudgets||{},
+   cardSettlementIds:budgetCardSettlements,
    months:monthsInRange,allAccounts:historyAccount==='all',
    merchantSearch:historyMerchantSearch
   }):'';
