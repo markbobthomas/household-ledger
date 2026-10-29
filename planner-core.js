@@ -376,6 +376,63 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   // recurrences intact; the actual bank balance already contains this debit.
   paid.add(best.e.id);usedBank.add(String(t.id));
  }
+ // PENDING is not POSTED. It can, however, provisionally account for the
+ // same forecast obligation when the bank's AVAILABLE balance has already
+ // reserved every currently pending outflow on this cash account. If the
+ // balance does not demonstrate that coverage, keep one conservative
+ // forecast debit rather than claim the money was already deducted.
+ const pendingRows=rows.filter(t=>t.pending&&valid(t.date)&&t.date<=asOf&&
+  Number(t.amount)>0&&String(t.id||'')&&
+  tools.bankDirection(t)==='expense'&&
+  cashIds.has(String(tools.accountRef(t.accountId||t.account,accounts))));
+ const pendingCoveredAccounts=new Set();
+ for(const a of accounts){
+  if(!cashIds.has(String(a.id))||a.current==null||a.available==null||
+   !Number.isFinite(Number(a.current))||!Number.isFinite(Number(a.available)))continue;
+  const outstanding=pendingRows.filter(t=>
+   String(tools.accountRef(t.accountId||t.account,accounts))===String(a.id))
+   .reduce((n,t)=>n+Number(t.amount),0);
+  if(outstanding>0&&Number(a.current)-Number(a.available)+.01>=outstanding)
+   pendingCoveredAccounts.add(String(a.id));
+ }
+ const pendingPaymentMatches=[];
+ for(const t of pendingRows){
+  const account=String(tools.accountRef(t.accountId||t.account,accounts));
+  if(!pendingCoveredAccounts.has(account))continue;
+  // Do not provisionally clear anything if a corresponding posted bank row
+  // exists concurrently; posted matching is authoritative.
+  if(bankRows.some(b=>tools.bankDirection(b)==='expense'&&
+   String(tools.accountRef(b.accountId||b.account,accounts))===account&&
+   closeAmount(b.amount,t.amount)&&Math.abs(diff(b.date,t.date))<=3))continue;
+  const candidates=tools.historicalScheduleMatches?.(t,accounts,rules)||[],
+   linked=candidates.filter(r=>(r.exampleIds||[]).some(id=>String(id)===String(t.id))),
+   eligible=linked.length?linked:candidates;
+  const matches=dueEntries.filter(e=>{
+   if(paid.has(e.id)||String(e.accountId)!==account||
+    !closeAmount(t.amount,edits[eventKey(tools,e)]?.amount??e.amount))return false;
+   const rule=ruleMap.get(String(e.ruleId));
+   if(!rule)return false;
+   const named=eligible.some(r=>String(r.id)===String(rule.id));
+   if(!named&&candidates.length)return false;
+   return postingDates(e).some(d=>d>=add(asOf,-90)&&d<=add(asOf,14)&&
+    (named?tools.postedWithinMatchWindow(rule,t,d,e.amount,
+     linked.some(r=>String(r.id)===String(rule.id)),true):
+     Math.abs(diff(t.date,d))<=3));
+  });
+  if(matches.length!==1)continue;
+  const [e]=matches;
+  // Matching must be one pending payment to one obligation, never an equal-
+  // dollar guess when another pending payment might be the real owner.
+  const competitors=pendingRows.some(other=>String(other.id)!==String(t.id)&&
+   String(tools.accountRef(other.accountId||other.account,accounts))===account&&
+   closeAmount(other.amount,t.amount)&&
+   Math.abs(diff(other.date,t.date))<=3);
+  if(competitors)continue;
+  paid.add(e.id);usedBank.add(String(t.id));
+  pendingPaymentMatches.push({id:e.id,ruleId:String(e.ruleId),
+   accountId:account,bankId:String(t.id),status:'pending',
+   reservedInAvailable:true});
+ }
  // Check both current future rows and overdue roll-forwards against the same
  // one-to-one posted evidence, including manually postponed occurrences.
  for(const e of covered.events)if(!paid.has(e.id)&&e.date>asOf&&e.date<=end&&
@@ -582,7 +639,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
-  postedMatchReview:covered.review||[],overduePayments};
+  postedMatchReview:covered.review||[],pendingPaymentMatches,overduePayments};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){

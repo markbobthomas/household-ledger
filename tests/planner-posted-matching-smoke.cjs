@@ -162,6 +162,94 @@ assert.equal(movedAmbiguous.ledger.filter(e=>e.date==='2026-11-04').length,2,
 assert.ok(movedPaid.projection.diagnostics.balanceMismatches.length===0,
  'Moved-posting reconciliation preserves daily balance integrity');
 
+// Pending cash withdrawals are provisional evidence, not settled bank facts.
+// A pending withdrawal already reserved in AVAILABLE must not be subtracted
+// again from the future calendar, even if the prediction was moved.
+const pendingBank=Object.freeze({...post('pending-provisional','Opaque ACH Descriptor',
+ 1200,'2026-10-17'),pending:true});
+const availableHeld={...liveSnap,accounts:accounts.map(a=>
+ a.id==='checking'?{...a,current:9000,available:7800}:a)};
+const pendingProvisional=Core.materialize(availableHeld,[pendingBank],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.equal(pendingProvisional.overduePayments.length,0,
+ 'A uniquely matched pending withdrawal covered by available balance is not an overdue unpaid bill');
+assert.equal(pendingProvisional.ledger.some(e=>
+ e.ruleId===lateRule.id&&e.date==='2026-11-04'),false,
+ 'A pending withdrawal already reserved by the bank must not be deducted at the moved forecast date');
+assert.equal(pendingProvisional.pendingPaymentMatches.length,1,
+ 'Pending matching is reported provisionally, without claiming a posted bank transaction');
+assert.equal(pendingProvisional.pendingPaymentMatches[0].status,'pending');
+assert.ok(pendingProvisional.ledger.some(e=>e.ruleId===lateRule.id&&
+ e.date==='2026-11-13'),
+ 'The following monthly obligation survives a pending match');
+assert.equal(pendingProvisional.projection.accounts.find(a=>a.id==='checking')
+ .series.find(p=>p.date==='2026-11-04').balance,7800,
+ 'Available funds already reserve the pending payment, so calendar does not subtract it again');
+const pendingNotReserved=Core.materialize({...availableHeld,
+ accounts:accounts.map(a=>a.id==='checking'?{...a,current:9000,available:9000}:a)},
+ [pendingBank],moveDate('2026-11-04'),T,null,70,policy);
+assert.equal(pendingNotReserved.pendingPaymentMatches.length,0);
+assert.ok(pendingNotReserved.ledger.some(e=>e.ruleId===lateRule.id&&
+ e.date==='2026-11-04'),
+ 'When available funds do not demonstrate a pending hold, retain exactly one forecast reserve');
+assert.equal(pendingNotReserved.projection.accounts.find(a=>a.id==='checking')
+ .series.find(p=>p.date==='2026-11-04').balance,7800,
+ 'A bank not yet reserving a pending debit needs the forecast to subtract it');
+const pendingUnknownAvailable=Core.materialize({...availableHeld,
+ accounts:accounts.map(a=>a.id==='checking'?{...a,available:null}:a)},
+ [pendingBank],moveDate('2026-11-04'),T,null,70,policy);
+assert.ok(pendingUnknownAvailable.ledger.some(e=>e.ruleId===lateRule.id&&
+ e.date==='2026-11-04'),
+ 'Missing available balance cannot be treated as proof the cash was reserved');
+const pendingInadequateAvailable=Core.materialize({...availableHeld,
+ accounts:accounts.map(a=>a.id==='checking'?{...a,available:8800}:a)},
+ [pendingBank],latePrefs,T,null,70,policy);
+assert.equal(pendingInadequateAvailable.overduePayments.length,1,
+ 'Small available-current gap cannot prove a larger pending bill was deducted');
+const pendingDisappeared=Core.materialize(availableHeld,[],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.ok(pendingDisappeared.ledger.some(e=>e.ruleId===lateRule.id&&
+ e.date==='2026-11-04'),
+ 'A pending bank record that disappears without posting automatically restores the prediction');
+const pendingPosted=Core.materialize({...availableHeld,
+ accounts:accounts.map(a=>a.id==='checking'?{...a,current:7800,available:7800}:a)},
+ [{...pendingBank,id:'new-provider-posted-id',pending:false,
+  source:{pendingTransactionId:pendingBank.id}}],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.equal(pendingPosted.pendingPaymentMatches.length,0,
+ 'When Plaid replaces the pending ID, the match becomes final posted reconciliation');
+assert.ok(!pendingPosted.ledger.some(e=>e.ruleId===lateRule.id&&
+ e.date==='2026-11-04'),'Posted replacement is not charged again');
+assert.equal(JSON.stringify(pendingBank),JSON.stringify({...post('pending-provisional',
+ 'Opaque ACH Descriptor',1200,'2026-10-17'),pending:true}),
+ 'Provisional matching never mutates source bank transactions');
+const pendingCompetitors=Core.materialize({...availableHeld,
+ accounts:accounts.map(a=>a.id==='checking'?{...a,available:6600}:a)},
+ [pendingBank,{...pendingBank,id:'unrelated-pending',
+  merchant:'Completely Separate ACH',date:'2026-10-18'}],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.equal(pendingCompetitors.pendingPaymentMatches.length,0,
+ 'Two similar pending bank debits must not be guessed as one exact mortgage obligation');
+const pendingTwinRules=Core.materialize(availableHeld,[pendingBank],
+ {futureRecurringRules:[lateRule,{...lateRule,id:'other-identical-housing'}]},
+ T,null,70,policy);
+assert.equal(pendingTwinRules.pendingPaymentMatches.length,0,
+ 'One pending payment cannot silently clear independent equal-amount obligations');
+assert.equal(pendingTwinRules.overduePayments.length,2);
+const pendingOtherBank=Core.materialize(availableHeld,
+ [{...pendingBank,accountId:'other'}],latePrefs,T,null,70,policy);
+assert.equal(pendingOtherBank.overduePayments.length,1,
+ 'A pending debit to a different account does not settle the mortgage');
+const pendingWrongAmount=Core.materialize(availableHeld,
+ [{...pendingBank,amount:950}],latePrefs,T,null,70,policy);
+assert.equal(pendingWrongAmount.overduePayments.length,1,
+ 'A significantly different pending amount is never a provisional match');
+const pendingWrongDate=Core.materialize(availableHeld,
+ [{...pendingBank,date:'2026-10-23'}],latePrefs,T,null,70,policy);
+assert.equal(pendingWrongDate.overduePayments.length,1,
+ 'An unrelated pending debit outside original and edited dates does not settle the bill');
+assert.deepEqual(pendingProvisional.projection.diagnostics.balanceMismatches,[],
+ 'Pending matches preserve the canonical checking balance audit');
 // Provider renames a previously pending bank debit, so there is no merchant
 // alias or persisted bank-ID link. The same posted cash debit must still settle
 // exactly one uniquely evidenced scheduled obligation, not charge it twice.
