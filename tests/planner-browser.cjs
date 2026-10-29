@@ -63,22 +63,23 @@ const {chromium,webkit}=require('playwright');
    await page.goto(staticUrl,{waitUntil:'load'});
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
    assert.equal(await page.locator('meta[name="ledger-ui-revision"]').getAttribute('content'),
-    'calendar-toolbar-width-20261025-v1','The loaded HTML identifies the full-width Calendar toolbar release');
+    'novice-history-views-20261028-v1','The loaded HTML identifies the full-width Calendar toolbar release');
    assert.match(await page.locator('#deployment-version').textContent(),/Focused Review v1/,
     'More exposes the current Calendar build, even when its menu is closed');
    assert.equal(await page.locator('.side-link').count(),0,
     'No duplicate sidebar navigation');
-   assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),4,
+   assert.equal(await page.locator('.planner-nav-primary .tab-link').count(),3,
     'One primary navigation row: calendar, schedules, history');
    const tabLabels=await page.locator('.planner-nav-primary .tab-link').allTextContents();
-   assert.deepEqual(tabLabels.slice(0,3),['Calendar','Predictions','Transactions']);
-   assert.match(tabLabels[3],/^Review(?: \[\d+\])?$/,
-    'Review keeps its accessible button label, with an optional inline count');
+   assert.deepEqual(tabLabels,['Calendar','Payments','Bank History']);
+   assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),1,
+    'Things to check remains a separate visible action');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0,
     'Predictions is available through More instead of the main row');
    const go=async tab=>{
     const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
     if(await primary.count()){await primary.click();return}
+    if(tab==='reviews'){await page.locator('.attention-link[data-view="reviews"]').click();return}
     if(tab==='overview'){
      await page.evaluate(()=>{
       const b=document.createElement('button');b.dataset.view='overview';
@@ -133,17 +134,17 @@ const {chromium,webkit}=require('playwright');
     assert.ok(menu&&menu.x>=0&&menu.x+menu.width<=321,'Menu trigger itself stays onscreen at 320px');
     const tabs=await page.locator('.planner-nav-primary .tab-link').evaluateAll(els=>
      els.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,visible:r.width>0&&r.height>0}}));
-    assert.equal(tabs.length,4);
+    assert.equal(tabs.length,3);
     assert.ok(tabs.every(r=>r.visible&&r.left>=-1&&r.right<=321),
-     'All four task-based tabs are reachable without sideways navigation at 320px: '+JSON.stringify(tabs));
+     'All three task-based tabs are reachable without sideways navigation at 320px: '+JSON.stringify(tabs));
     const mobileTabs=await page.locator('.planner-nav-primary .tab-link').evaluateAll(els=>
      els.map(el=>({text:el.textContent.trim(),whiteSpace:getComputedStyle(el).whiteSpace,
       height:el.getBoundingClientRect().height,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth})));
     assert.deepEqual(mobileTabs.slice(0,3).map(t=>t.text),
-     ['Calendar','Predictions','Transactions']);
-    assert.match(mobileTabs[3].text,/^Review(?: \[\d+\])?$/,
-     'Review count is part of its button on a narrow iPhone');
-    assert.ok(mobileTabs.every(t=>t.whiteSpace==='normal'&&t.height>=44&&
+     ['Calendar','Payments','Bank History']);
+    assert.equal(await page.locator('.attention-link').count(),1,
+      'Things to check is accessible on a narrow phone');
+    assert.ok(mobileTabs.every(t=>t.height>=44&&
      t.scrollWidth<=t.clientWidth+1),
      'Renamed tabs fit within a narrow phone without clipping: '+JSON.stringify(mobileTabs));
     const compact=await page.locator('.summary-heading.calendar-toolbar').evaluate(el=>{
@@ -478,14 +479,14 @@ const {chromium,webkit}=require('playwright');
    });
    assert.ok(previewFits,'Two complete payments and overflow count fit in a fixed-height day');
    assert.equal(await page.locator('.summary-bank [data-bank-available-value]').evaluate(el=>
-    getComputedStyle(el).color),'rgb(35, 113, 74)',
+    getComputedStyle(el).backgroundColor),'rgb(35, 113, 74)',
     'Checking available balance uses the established green metric style');
    for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
     const risk=await page.locator(selector).evaluate(el=>({
      value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
      orange:el.classList.contains('summary-low-alert'),
      red:el.classList.contains('summary-low-negative'),
-     color:getComputedStyle(el).color
+     color:getComputedStyle(el).backgroundColor
     }));
     assert.equal(risk.red,risk.value<0,'Negative balances must receive red severity');
     assert.equal(risk.orange,risk.value>=0&&risk.value<100000,
@@ -718,8 +719,8 @@ const {chromium,webkit}=require('playwright');
    const countMatch=(await migrationBanner.innerText()).match(/(\d+) unsaved automatic repeating estimate/);
    if(countMatch)await migrationBanner.locator('[data-view="reviews"]').click();
    else await go('reviews');
-   const reviewBadge=page.locator('.planner-nav-primary [data-review-tab-count]');
-   const badgeCount=async()=>Number((await reviewBadge.textContent()||'').match(/\[(\d+)\]/)?.[1]||0);
+   const reviewBadge=page.locator('.main-navigation [data-review-tab-count]');
+   const badgeCount=async()=>Number((await reviewBadge.textContent()||'').trim()||0);
    const unresolvedRows=async()=>page.locator(
     '.reviews-page [data-legacy-estimate][data-recommendation-status="pending"],'+
     '.reviews-page [data-recommended-repeating] [data-recommendation-status="pending"]').count();
@@ -728,15 +729,15 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await badgeCount(),n,label+': nav counts every undecided review item exactly once');
     assert.equal(await reviewBadge.isVisible(),n>0,
      label+': no red bracket or empty badge when there is nothing to review');
-    const btn=page.locator('.planner-nav-primary [data-view="reviews"]');
+    const btn=page.locator('.attention-link[data-view="reviews"]');
     assert.equal((await btn.innerText()).replace(/\s+/g,' ').trim(),
-     n?'Review ['+n+']':'Review',
-     label+': bracketed count is inside the existing button name');
+     n?'Things to check '+n:'Things to check',
+     label+': count is visible in the attention action');
     if(n>0){
-     const color=await reviewBadge.evaluate(el=>getComputedStyle(el).color);
+     const color=await reviewBadge.evaluate(el=>getComputedStyle(el).backgroundColor);
      const [red,green,blue]=(color.match(/\d+/g)||[]).map(Number);
      assert.ok(red>green*1.45&&red>blue*1.18,
-      label+': bracketed review number stays visibly red ('+color+')');
+      label+': attention badge background stays visibly red ('+color+')');
     }
    };
    await checkReviewNav('Unresolved review queue');
@@ -761,7 +762,7 @@ const {chromium,webkit}=require('playwright');
     assert.ok((await legacySection.locator('.legacy-estimate-state').first().innerText())
      .includes('forecast'),'The row explicitly explains the balance impact');
     const warningColor=await legacySection.locator('.legacy-estimate-count').first()
-     .evaluate(el=>getComputedStyle(el).color);
+     .evaluate(el=>getComputedStyle(el).backgroundColor);
     const channels=(warningColor.match(/\d+/g)||[]).map(Number);
     assert.ok(channels.length>=3&&channels[0]>channels[1]*1.5&&
      channels[0]>channels[2]*1.5,
@@ -1211,7 +1212,7 @@ const {chromium,webkit}=require('playwright');
       const el=probe.querySelector(selector);
       return el?{orange:el.classList.contains('summary-low-alert'),
        red:el.classList.contains('summary-low-negative'),
-       color:getComputedStyle(el).color}:null;
+       color:getComputedStyle(el).backgroundColor}:null;
      };
      const monthly=details('.summary-monthly .summary-low');
      const threeYear=details('.summary-minimum .summary-low');
@@ -2312,7 +2313,8 @@ const {chromium,webkit}=require('playwright');
   const go=async tab=>{
    const primary=page.locator('.planner-nav-primary [data-view="'+tab+'"]');
    if(await primary.count()){await primary.click();return}
-   if(tab==='overview'){
+   if(tab==='reviews'){await page.locator('.attention-link[data-view="reviews"]').click();return}
+    if(tab==='overview'){
     await page.evaluate(()=>{
      const b=document.createElement('button');b.dataset.view='overview';
      b.hidden=true;document.body.appendChild(b);b.click();b.remove();
@@ -2748,7 +2750,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('[data-overdue-review] .overdue-review-row')
    .filter({hasText:'Fictional Housing ACH'}).count(),1,
    'Unposted bill remains in Review two weeks after its due date');
-  assert.ok(await page.locator('.planner-nav-primary [data-view="reviews"]')
+  assert.ok(await page.locator('.attention-link[data-view="reviews"]')
    .evaluate(el=>el.classList.contains('has-review-items')),
    'Missed payment turns Review red');
   // Ignore is a review disposition only: preserve the unpaid checking debit.
