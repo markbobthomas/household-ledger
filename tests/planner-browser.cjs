@@ -590,9 +590,11 @@ const {chromium,webkit}=require('playwright');
      rule.merchant==='Xfinity Internet'&&rule.category==='Subscriptions'),
      'A category correction stores its merchant lesson');
     await page.locator('[data-history-view="categories"]').click();
-    assert.equal(await categoryAmount('Subscriptions'),subscriptionsBefore+79.99,
+    assert.equal(Math.round(await categoryAmount('Subscriptions')*100),
+     Math.round(subscriptionsBefore*100)+7999,
      'A saved posted purchase immediately moves into the selected budget category');
-    assert.equal(await categoryAmount('Utility'),utilitiesBefore-79.99,
+    assert.equal(Math.round(await categoryAmount('Utility')*100),
+     Math.round(utilitiesBefore*100)-7999,
      'The old budget category no longer counts that same purchase');
     await page.locator('[data-history-view="list"]').click();
     await page.locator('#planner-menu summary').click();
