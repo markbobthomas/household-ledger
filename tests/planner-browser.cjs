@@ -111,7 +111,7 @@ const {chromium,webkit}=require('playwright');
     'Each category shows a budget usage bar');
    const unsetBar=page.locator('[data-history-budget-bar][data-budget-status="unset"]').first();
    if(await unsetBar.count())assert.equal(
-    await unsetBar.locator('.history-budget-fill').evaluate(el=>el.style.width),'0.00%',
+    Number.parseFloat(await unsetBar.locator('.history-budget-fill').evaluate(el=>el.style.width)),0,
     'Without a target, the usage bar is empty');
    const budgetCategory=page.locator('.history-category-item').first(),
     categoryName=await budgetCategory.getAttribute('data-history-category-row');
@@ -148,7 +148,7 @@ const {chromium,webkit}=require('playwright');
     await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
      'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===.01,categoryName);
     assert.equal(await budgetRow.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'over');
-    assert.equal(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width),'100.00%',
+    assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
      'The over-budget fill caps at its full track width');
     await budgetRow.locator('[data-history-budget]').fill('275.50');
     await budgetRow.locator('[data-history-budget]').press('Tab');
