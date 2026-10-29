@@ -51,4 +51,34 @@ assert.equal(M.categoryFor(refreshed,'groceries-1'),'Uncategorized',
 assert.equal(M.addCategory(refreshed,'Pet Care'),'Pet Care','Deleted custom categories can be restored');
 assert.throws(()=>M.removeCategory(refreshed,'Uncategorized'),/not available/,
  'Unassigned remains an internal status rather than a named category');
+// Bank providers can supply an 'Other' category even though History displays
+// the known income/transfer type. Deleting either displayed category must
+// move those records to Unassigned without changing the source.
+const displayOnly=M.migrate({transactions:[
+ {id:'wages',date:'2026-10-16',merchant:'Fictional Payroll',category:'Other',
+  type:'income',accountId:'checking',amount:900},
+ {id:'move',date:'2026-10-17',merchant:'Fictional Transfer',category:'Other',
+  type:'transfer',cashDirection:'in',accountId:'checking',amount:90},
+ {id:'handpicked',date:'2026-10-18',merchant:'Fictional Other Deposit',
+  category:'Other',type:'income',accountId:'checking',amount:100}
+],categoryOverrides:{handpicked:'Savings'}});
+const bankOriginal=JSON.stringify(displayOnly.transactions);
+assert.equal(M.removeCategory(displayOnly,'Income'),'Income');
+assert.equal(displayOnly.categoryOverrides.wages,'Uncategorized',
+ 'Displayed Income must be unassigned even when source bank category is Other');
+assert.equal(displayOnly.categoryOverrides.handpicked,'Savings',
+ 'A manually categorized income transaction keeps its separate category');
+assert.ok(M.categoryReviewQueue(displayOnly).transactions.some(t=>t.id==='wages'),
+ 'Unassigned incoming bank records re-enter review');
+assert.equal(M.removeCategory(displayOnly,'Transfer'),'Transfer');
+assert.equal(displayOnly.categoryOverrides.move,'Uncategorized');
+assert.ok(M.categoryReviewQueue(displayOnly).transactions.some(t=>t.id==='move'),
+ 'Unassigned transfers re-enter review');
+displayOnly.transactions.push({id:'new-wages',date:'2026-10-19',
+ merchant:'Fictional Payroll',category:'Other',type:'income',
+ accountId:'checking',amount:950});
+assert.equal(M.categoryFor(displayOnly,'new-wages'),'Uncategorized',
+ 'Newly synced bank income cannot resurrect a deleted display category');
+assert.deepEqual(JSON.stringify(displayOnly.transactions.slice(0,3)),bankOriginal,
+ 'No original bank transaction data is changed by deleting displayed categories');
 console.log('PASS any category deletion, historical/forecast Unassigned review, tombstones, restart, and banking immutability');
