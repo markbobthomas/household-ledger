@@ -3911,7 +3911,7 @@ document.addEventListener('submit',async e=>{
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
    model.records(state()),linked?[]:linkedHistoryIds(form)));
   const origin=draft.merchant;
-  if(activeTab==='history'){
+  if(activeTab==='history'||activeTab==='activity'){
    historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   }
   recurringDraft=null;transactionDetail=null;reviewNotice='Saved recurring forecast for '+origin+'.';
