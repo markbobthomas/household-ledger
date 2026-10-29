@@ -406,30 +406,22 @@ function showCalendar(date){
 }
 
 function rawBalanceMarkup(account,real){
- const bankNumber=value=>value===null||value===undefined||value===''||
-  !Number.isFinite(Number(value))?null:Number(value);
- const current=bankNumber(account?.current),
-  credit=String(account?.accountType||account?.type||'').toLowerCase()==='credit',
-  // The checking Calendar forecasts from AVAILABLE when the bank reports it.
-  // Show exactly that same bank fact, not an inferred debit or a synthetic
-  // "current" balance. Credit liability always uses the bank's CURRENT.
-  available=!credit&&current!==null?bankNumber(account?.available):null,
-  usingAvailable=available!==null,
-  primary=usingAvailable?available:current,
-  title=usingAvailable?(real?'Available Balance':'Sample Available Balance'):
-   (real?'Actual Current Balance':'Sample Current Balance'),
-  note=usingAvailable?'Current: '+money(current):
-   (real?(!credit?'Available not reported · bank current shown':
-    'Bank reported, not projected'):'Sample data');
+ const credit=String(account?.accountType||account?.type||'').toLowerCase()==='credit';
+ // Checking displays only the bank's AVAILABLE cash. It is also the
+ // projection's opening cash balance when supplied, so pending holds are
+ // reflected once without changing bank records or recurring predictions.
+ // Do not silently substitute CURRENT when AVAILABLE is unavailable.
+ // Credit-card balances remain liability (CURRENT), not available credit.
+ const raw=credit?account?.current:account?.available;
+ const n=raw===null||raw===undefined||raw===''||!Number.isFinite(Number(raw))?
+  null:Number(raw);
+ const title=credit?(real?'Actual Current Balance':'Sample Current Balance'):
+  (real?'Available Balance':'Sample Available Balance');
  return '<div class="summary-bank"><small>'+title+'</small>'+
-  '<strong data-bank-balance-value'+(usingAvailable?
-   ' data-bank-available-value':' data-bank-current-value')+
-   ' title="'+(usingAvailable?
-    'Bank-reported available funds may already reflect pending withdrawals and holds':
-    'Bank-reported current balance')+'">'+
-   (primary===null?'Not reported':money(primary))+'</strong>'+
-  '<small class="summary-bank-detail"'+(usingAvailable?
-   ' data-bank-current-value="'+money(current)+'"':'')+'>'+note+'</small></div>';
+  '<strong data-bank-balance-value'+(credit?
+   ' data-bank-current-value':' data-bank-available-value')+'>'+
+   (n===null?'Not reported':money(n))+'</strong>'+
+  '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
 }
 // Issued card statements and reconstructed statement estimates are already
 // differentiated by the canonical card obligations engine. Never substitute
