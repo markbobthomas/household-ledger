@@ -396,7 +396,7 @@ const {chromium,webkit}=require('playwright');
       'Inclusive spending is conveyed without another visible explanatory paragraph');
     }
    };
-   const categoryName=await page.locator('.history-category-item').first().getAttribute('data-history-category-row'),
+   const categoryName=await page.locator('.history-category-item').filter({hasText:/[1-9][0-9]* transactions/}).first().getAttribute('data-history-category-row'),
     budgetCategory=page.locator('.history-category-item[data-history-category-row="'+categoryName+'"]');
    assert.equal(await budgetCategory.locator('[data-history-budget]').count(),1,
     'Actual spending has an immediately adjacent editable monthly budget');
@@ -475,7 +475,7 @@ const {chromium,webkit}=require('playwright');
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await chooseAllMonths(page);
-   const firstCategory=page.locator('.history-category-item').first();
+   const firstCategory=page.locator('.history-category-item').filter({hasText:/[1-9][0-9]* transactions/}).first();
    await firstCategory.locator('[data-history-drill-category]').click();
    assert.equal(await page.locator('[data-history-view="list"][aria-pressed="true"]').count(),1,
     'Category drill-down opens the detailed transaction list');
