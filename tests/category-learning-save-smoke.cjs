@@ -39,7 +39,7 @@ const Feed=require('../pilot/data-source.js'),Ledger=require('../ledger-data.js'
  let server;
  try{
   server=await start(0);
-  const origin='http://127.0.0.1:'+server.address().port,
+  let origin='http://127.0.0.1:'+server.address().port,
    auth='Basic '+Buffer.from('pilot:'+password).toString('base64');
   const request=async(route,body)=>{
    const response=await fetch(origin+route,{method:body===undefined?'GET':'POST',
@@ -102,6 +102,7 @@ const Feed=require('../pilot/data-source.js'),Ledger=require('../ledger-data.js'
   assert.deepEqual(final.transactions,before.data.transactions);
   await new Promise(resolve=>server.close(resolve));server=null;
   server=await start(0);
+  origin='http://127.0.0.1:'+server.address().port;
   const restarted=await request('/api/ledger');
   assert.equal(restarted.status,200);
   assert.ok(!restarted.data.adjustments.learning.categoryRules[ruleKey]);
