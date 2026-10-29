@@ -1719,6 +1719,38 @@ const {chromium,webkit}=require('playwright');
    await fourWeekPlan.locator('[data-schedule-edit]').click();
    assert.equal(await fourWeekPlan.locator('[data-schedule-edit-form] [name=date]').inputValue(),
     '2026-11-01','Editing the recurrence preserves its Sunday anchor without drift');
+   // The Sunday-to-Friday posting hint adds a second line only under Next date.
+   // Grid peers must still share label and control top edges on desktop and iPhone.
+   const primaryLayout=await fourWeekPlan.locator(
+    '[data-schedule-edit-form] .schedule-primary-fields').evaluate(grid=>{
+    const fields=[...grid.querySelectorAll(':scope > label')].filter(el=>
+     getComputedStyle(el).display!=='none');
+    const columns=getComputedStyle(grid).gridTemplateColumns.trim().split(/\\s+/).length;
+    const note=grid.querySelector('.schedule-posting-date');
+    return {
+     noteVisible:!!note&&getComputedStyle(note).display!=='none',
+     fields:fields.map((label,i)=>({
+      row:Math.floor(i/columns),
+      name:label.firstChild?.textContent?.trim(),
+      labelTop:label.getBoundingClientRect().top,
+      controlTop:label.querySelector('input,select').getBoundingClientRect().top
+     }))
+    };
+   });
+   assert.equal(primaryLayout.noteVisible,true,
+    'Weekend dates explain their earlier Calendar posting beneath the date control');
+   assert.equal(primaryLayout.fields.length,5,'All five primary controls remain visible');
+   for(const row of new Set(primaryLayout.fields.map(field=>field.row))){
+    const peers=primaryLayout.fields.filter(field=>field.row===row);
+    for(const peer of peers.slice(1)){
+     assert.ok(Math.abs(peer.labelTop-peers[0].labelTop)<=2,
+      'Primary schedule labels share their row top even with a date hint: '+
+      JSON.stringify({mobile,primaryLayout}));
+     assert.ok(Math.abs(peer.controlTop-peers[0].controlTop)<=2,
+      'Primary schedule inputs share their row top even with a date hint: '+
+      JSON.stringify({mobile,primaryLayout}));
+    }
+   }
    await fourWeekPlan.locator('[data-schedule-edit]').click();
    assert.equal(await page.locator('.schedule-discovery,[data-schedule-from-actual]').count(),0,
     'Same-merchant charges no longer create an independent heuristic panel or extra-schedule prompts');
