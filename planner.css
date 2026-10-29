@@ -3319,3 +3319,11 @@ body{background:#f6f8fa}
  .history-size-count,.history-size-arrow{display:none}
  .history-size-name,.history-size-row>strong{font-size:11px}
 }
+
+/* Analysis tabs keep only account and (where useful) category controls visible. */
+.history-page .history-analysis-filters{display:flex!important;align-items:flex-end;justify-content:flex-start;flex-wrap:wrap;gap:10px;min-width:0}
+.history-page .history-analysis-filters .history-search-wrap,
+.history-page .history-analysis-filters label:has([data-history-sort]),
+.history-page .history-analysis-filters .ledger-history-clear-button{display:none!important}
+.history-page .history-analysis-filters>label,
+.history-page .history-analysis-filters .history-category-controls{flex:0 1 245px;min-width:160px}
