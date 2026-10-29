@@ -29,7 +29,7 @@ const {chromium,webkit}=require('playwright');
    'Expected complete calendar months '+JSON.stringify(months)+'; offered '+JSON.stringify(offered));
   // Keep the popup open: checking and unchecking updates the report immediately.
   for(const month of months){
-   try{await page.locator('[data-history-month-option="'+month+'"]').check({timeout:4500})}
+   try{await page.locator('[data-history-month-option][value="'+month+'"]').check({timeout:4500})}
    catch(error){
     const diag=await page.evaluate(()=>({
      active:document.querySelector('.planner-page')?.className,
@@ -44,7 +44,7 @@ const {chromium,webkit}=require('playwright');
    }
   }
   for(const month of offered.filter(m=>!months.includes(m)))
-   await page.locator('[data-history-month-option="'+month+'"]').uncheck();
+   await page.locator('[data-history-month-option][value="'+month+'"]').uncheck();
   await page.locator('[data-history-month-toggle]').click();
  }
  async function chooseAllMonths(page){
