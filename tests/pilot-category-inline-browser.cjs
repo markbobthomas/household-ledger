@@ -52,6 +52,8 @@ let desktop,iphone;
     text:document.querySelector('#planner-main')?.textContent||''};
   });
   assert.equal(classifierRequests,0,name+': the private HTML embeds the classifier without another network request');
+  assert.ok(await page.evaluate(()=>Boolean(window.HouseholdAccounting?.recognizedIncome)),
+   name+': accounting helper initialized before the private bank adapter');
   assert.equal(outcome.classifier,'function',name+': browser has the required classifier');
   assert.ok(outcome.category&&outcome.category!=='Uncategorized',
    name+': Plaid expense can be classified without a null dereference');
