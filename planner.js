@@ -3383,6 +3383,32 @@ document.addEventListener('submit',async e=>{
  }catch(error){if(notice)notice.textContent=String(error.message||error)}
  finally{if(submit)submit.disabled=false}
 });
+// Store one correction and its conservative merchant lesson as one decision.
+// Bank-provided source records and unrelated forecasts are never rewritten here.
+async function saveTransactionCategory(id,category,confirm=false){
+ const current=state(),beforeOverrides=JSON.stringify(current.categoryOverrides||{}),
+  beforeLearning=JSON.stringify(current.learning||{});
+ try{
+  model.setCategory(current,id,category,confirm);
+  const tx=(current.transactions||[]).find(row=>String(row.id)===String(id));
+  const lesson=tx?.type==='expense'&&!['Other','Uncategorized'].includes(category)?
+   model.learnCategory(current,id,category):null;
+  const saved=live()?
+   await window.HouseholdLiveSource.persistCategory(id,current.categoryOverrides?.[id]??null,Boolean(lesson)):
+   savePlanning();
+  if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
+  if(live()&&lesson){
+   if(!saved.learningMode)current.learning=JSON.parse(beforeLearning);
+   else if(current.learning?.categoryRules?.[lesson.key])
+    current.learning.categoryRules[lesson.key].mode=saved.learningMode;
+  }
+  return lesson;
+ }catch(error){
+  current.categoryOverrides=JSON.parse(beforeOverrides);
+  current.learning=JSON.parse(beforeLearning);
+  throw error;
+ }
+}
 // Category decisions use the existing per-bank overrides and forecast preferences.
 // Even confirming a plausible existing category saves a user-approved classification.
 document.addEventListener('submit',async e=>{
@@ -3403,14 +3429,7 @@ document.addEventListener('submit',async e=>{
  if(button)button.disabled=true;
  try{
   if(kind==='transaction'){
-   const previous=JSON.stringify(state().categoryOverrides||{});
-   try{
-    model.setCategory(state(),id,chosen,true);
-    const saved=live()?
-     await window.HouseholdLiveSource.persistCategory(id,state().categoryOverrides[id]):
-     savePlanning();
-    if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
-   }catch(error){state().categoryOverrides=JSON.parse(previous);throw error}
+   await saveTransactionCategory(id,chosen,true);
   }else{
    await commitForecastChange(()=>{
     if(kind==='schedule')window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,chosen);
@@ -3880,25 +3899,19 @@ document.addEventListener('change',async e=>{
  if(historyCategory){
   const id=historyCategory.dataset.historyCategory,
    current=(state().transactions||[]).find(t=>String(t.id)===String(id)),
-   originalCategory=current?model.categoryFor(state(),id):null,
-   previous=JSON.stringify(state().categoryOverrides||{});
+   originalCategory=current?model.categoryFor(state(),id):null;
   if(!current||!originalCategory){historyCategory.value=originalCategory||'Other';return}
   if(historyCategory.value===originalCategory)return;
   historyCategory.disabled=true;
   try{
-   // Only the local classification overlay changes; immutable Plaid history
-   // and forecast rules are neither edited nor uploaded.
-   model.setCategory(state(),id,historyCategory.value);
-   const saved=live()?
-    await window.HouseholdLiveSource.persistCategory(id,state().categoryOverrides?.[id]??null):
-    savePlanning();
-   if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
+   // A correction may teach uncertain future transactions at this merchant
+   // without editing original bank facts or the predicted balance.
+   await saveTransactionCategory(id,historyCategory.value);
    reviewNotice='';latestError='';render();
    document.querySelectorAll('[data-history-category]').forEach(select=>{
     if(select.dataset.historyCategory===id)select.focus({preventScroll:true});
    });
   }catch(err){
-   state().categoryOverrides=JSON.parse(previous);
    historyCategory.disabled=false;historyCategory.value=originalCategory;
    const alert=document.createElement('span');alert.className='history-category-error';
    alert.setAttribute('role','alert');alert.textContent='Could not save category: '+String(err.message||err);
