@@ -543,8 +543,14 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-history-view="categories"]').click();
    assert.deepEqual(await selectedMonths(page),['2026-08','2026-10'],
     'Checked months remain selected across all four reports');
-   assert.match(await page.locator('.history-budget-explanation').innerText(),/2 monthly budgets/,
-    'Monthly budgets scale by number of checked months');
+   await checkOverall(2);
+   const twoMonthRow=page.locator('.history-category-item').filter({
+    has:page.locator('[data-history-budget="'+categoryName+'"]')
+   });
+   const twoMonthSpent=Number((await twoMonthRow.locator('.history-category-actual').innerText()).replace(/[^0-9.]/g,''));
+   const twoMonthWidth=Number.parseFloat(await twoMonthRow.locator('.history-budget-fill').evaluate(el=>el.style.width));
+   assert.ok(Math.abs(twoMonthWidth-Math.min(100,twoMonthSpent/(275.5*2)*100))<.02,
+    'Nonadjacent calendar months compare against exactly two monthly budgets');
    await page.locator('[data-history-view="list"]').click();
    await chooseAllMonths(page);
    await page.reload({waitUntil:'load'});
