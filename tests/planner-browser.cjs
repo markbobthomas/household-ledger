@@ -90,9 +90,11 @@ const {chromium,webkit}=require('playwright');
    assert.notEqual(newTheme.mark,'none','Ledger has the new soft brand mark');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
     ['Calendar','Bills','Bank History']);
-   assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),1,
+   assert.equal(await page.locator('.topbar [data-view="reviews"]').count(),1,
     'Things to check is a visible action outside three main destinations');
-   assert.equal(await page.locator('.planner-nav-primary svg').count(),3,
+   assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),0,
+     'Things to check no longer consumes a second navigation row');
+    assert.equal(await page.locator('.planner-nav-primary svg').count(),3,
     'Each primary destination has its own navigation icon');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0);
 
@@ -134,7 +136,20 @@ const {chromium,webkit}=require('playwright');
       assert.ok(Math.abs(geometry.rowLeft-geometry.frameLeft)<26,
        'History row must stay aligned with its list container: '+JSON.stringify(geometry));
      }
-     const size=await page.evaluate(()=>({body:document.body.scrollWidth,
+     const headerGeometry=await page.evaluate(()=>{
+       const title=document.querySelector('.topbar h1').getBoundingClientRect(),
+        review=document.querySelector('.topbar .attention-link').getBoundingClientRect(),
+        menu=document.querySelector('.topbar .planner-menu>summary').getBoundingClientRect();
+       return {titleRight:title.right,reviewLeft:review.left,reviewRight:review.right,
+        menuLeft:menu.left,reviewTop:review.top,menuTop:menu.top};
+      });
+      assert.ok(headerGeometry.titleRight<=headerGeometry.reviewLeft+1,
+       'Review must not cover the brand at '+width+': '+JSON.stringify(headerGeometry));
+      assert.ok(headerGeometry.reviewRight<=headerGeometry.menuLeft+1,
+       'Review and More must not overlap at '+width+': '+JSON.stringify(headerGeometry));
+      assert.ok(Math.abs(headerGeometry.reviewTop-headerGeometry.menuTop)<12,
+       'Review and More must share the header row at '+width+': '+JSON.stringify(headerGeometry));
+      const size=await page.evaluate(()=>({body:document.body.scrollWidth,
       root:document.documentElement.scrollWidth,window:innerWidth}));
      assert.ok(size.root<=width+3&&size.body<=width+3,
       'No horizontal page overflow at '+width+'px on '+tab+': '+JSON.stringify(size));
@@ -144,6 +159,26 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('.history-subtab').count(),4);
+    for(const report of ['list','merchants','sizes']){
+     await page.locator('[data-history-view="'+report+'"]').click();
+     const field=await page.evaluate(()=>{
+      const label=document.querySelector('.history-page .history-category-controls>label'),
+       select=label?.querySelector('select'),
+       account=document.querySelector('.history-page select[name="historyAccount"]');
+      if(!label||!select||!account)return null;
+      const lineHeight=parseFloat(getComputedStyle(label).lineHeight),
+       selectRect=select.getBoundingClientRect(),labelRect=label.getBoundingClientRect(),
+       accountRect=account.getBoundingClientRect();
+      return {lineHeight,labelTop:labelRect.top,selectTop:selectRect.top,
+       categoryLeft:selectRect.left,accountRight:accountRect.right};
+     });
+     assert.ok(field&&field.lineHeight>=12&&field.selectTop>=field.labelTop+12,
+      'Category label must clear dropdown on '+report+': '+JSON.stringify(field));
+     if(report!=='list'&&mobile)
+      assert.ok(field.categoryLeft>=field.accountRight-2,
+       'Analysis filters sit in aligned columns: '+JSON.stringify(field));
+    }
+    await page.locator('[data-history-view="list"]').click();
    assert.equal(await page.locator('.history-period-controls [data-history-month-picker]').count(),1);
    assert.equal(await page.locator('[data-history-month-toggle]').count(),1);
    assert.equal(await page.locator('[data-history-months],[data-history-month]').count(),0);
