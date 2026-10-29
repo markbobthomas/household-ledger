@@ -4499,6 +4499,8 @@ a:hover{color:#166e61}
 .financial-recap-row>span>strong{display:block;font-weight:680;color:#355644}
 .financial-recap-row>span>small{display:block;margin-top:3px;font-size:11px;color:#839386}
 .financial-recap-row>strong{font:730 13px var(--mono);color:#274a39;white-space:nowrap;font-variant-numeric:tabular-nums}
+.financial-recap-card-followup{margin-top:12px;padding-top:13px;border-top:1px solid #e1eae1}
+.financial-recap-card-followup>small{display:block;color:#638875;font-size:11px;font-weight:700}
 .financial-recap-note{display:block;margin-top:15px;color:#839386;font-size:11px;line-height:1.5}
 .financial-recap-empty{color:#839386;font-size:12px;padding:8px 0}
 @media(max-width:850px){.financial-recap-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
