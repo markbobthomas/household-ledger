@@ -49,5 +49,17 @@ T.setScheduleCategory(s,'r2','Insurance');
 assert.ok(!M.categoryReviewQueue(s).plans.some(x=>x.id==='r2'),
  'Explicitly confirming a bill category clears low-confidence review');
 assert.ok(s.predictions.futureRecurringRules.find(x=>x.id==='r2').categoryReviewed);
+// Other is a deliberate catch-all when the owner approves it. Unreviewed
+// Other remains a missing-category item until an explicit confirmation.
+M.setCategory(s,'missing','Other',true);
+assert.ok(!M.categoryReviewQueue(s).transactions.some(x=>x.id==='missing'),
+ 'Confirmed Other is not a perpetual missing-category alert');
+assert.equal(s.categoryOverrides.missing,'Other');
+T.setScheduleCategory(s,'r1','Other');
+assert.ok(!M.categoryReviewQueue(s).plans.some(x=>x.id==='r1'),
+ 'A schedule confirmed as Other no longer needs review');
+s.predictions.futureTransactionAdds[0].categoryReviewed=true;
+assert.ok(!M.categoryReviewQueue(s).plans.some(x=>x.id==='once'),
+ 'One-off payments confirmed as Other are resolved');
 assert.equal(JSON.stringify(s.transactions),source,'Bill and transaction reviews cannot alter bank rows');
 console.log('PASS categorized transaction/bill review, uncertain sources, confirmation and bank immutability');
