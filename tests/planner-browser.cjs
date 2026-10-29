@@ -301,6 +301,14 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-history-category-add] button[type=submit]').click();
    assert.equal(await page.locator('.history-category-manage-status').innerText(),
     'Added Fictional Pet Care. Select it on any transaction or bill.');
+   assert.equal(await page.locator('[data-history-category-row="Fictional Pet Care"]').count(),1,
+    'Newly added categories appear immediately with no purchases or budget');
+   assert.equal(await page.locator('[data-history-category-row="Fictional Pet Care"] .history-category-actual').innerText(),
+    '$0.00','Unused category displays zero spending');
+   assert.equal(await page.locator('.history-category-glyph').count(),0,
+    'Categories have no decorative logos or symbols');
+   assert.equal(await page.locator('[data-history-category-row="Income"]').count(),1,
+    'Even built-in categories with no period purchases are visible');
    await page.locator('.history-category-manager>summary').click();
    assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),1);
    page.once('dialog',dialog=>dialog.accept());
@@ -308,6 +316,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.history-category-manage-status').innerText(),
     'Deleted Fictional Pet Care. Affected items are Unassigned in Things to check.');
    assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),0);
+   assert.equal(await page.locator('[data-history-category-row="Fictional Pet Care"]').count(),0,
+    'Deleted categories are removed from the spending list too');
    const catalog=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}'));
    assert.ok(!(catalog.scheduleCategories||[]).includes('Fictional Pet Care'),
     'Deleted category stays absent from saved preferences');
