@@ -23,6 +23,11 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
    'The required classifier ships inside the authenticated private page');
   assert.doesNotMatch(ledger.body,/<script src="categorization\.js"><\/script>/,
    'Private Calendar never depends on a separate categorization network request');
+  const accountingIndex=ledger.body.indexOf('accounting.js?v='),
+   privateIndex=ledger.body.indexOf('<script src="/pilot/data-source.js"></script>'),
+   modelIndex=ledger.body.indexOf('ledger-data.js?v=');
+  assert.ok(accountingIndex>=0&&accountingIndex<privateIndex&&privateIndex<modelIndex,
+   'Private bank adapter loads after the accounting/classifier modules and before the data model');
   for(const route of ['/?utm_source=chatgpt.com','/?utm_source=chatgpt.com&ref=planner','/index.html?ref=planner']){
    const result=await get(route,true);
    assert.equal(result.status,200,'Homepage navigation must ignore harmless query parameters: '+route);
