@@ -89,19 +89,34 @@ const {chromium,webkit}=require('playwright');
     'Current destination is the calm mint-tinted pill');
    assert.notEqual(newTheme.mark,'none','Ledger has the new soft brand mark');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Bills','Bank History']);
+    ['Calendar','Bills','Bank History','Summary']);
    assert.equal(await page.locator('.topbar [data-view="reviews"]').count(),1,
     'Things to check is a visible action outside three main destinations');
    assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),0,
      'Things to check no longer consumes a second navigation row');
-    assert.equal(await page.locator('.planner-nav-primary svg').count(),3,
+    assert.equal(await page.locator('.planner-nav-primary svg').count(),4,
     'Each primary destination has its own navigation icon');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0);
+   // New fourth top-level page is read-only and derived from canonical data.
+   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   assert.equal(await page.locator('[data-financial-recap]').count(),1);
+   for(const key of ['bills','spent','income','budget']){
+    assert.equal(await page.locator('[data-recap-'+key+']').count(),1,
+     'Summary includes '+key+' metric in '+(mobile?'iPhone':'desktop')+' mode');
+   }
+   assert.equal(await page.locator('.financial-recap-card').count(),3);
+   assert.equal(await page.locator('.financial-recap-page input,.financial-recap-page select,.financial-recap-page button').count(),0,
+    'Summary cannot edit budgets, bank facts, recurring plans, or saved preferences');
+   assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('/ month')),
+    'Bills are explicitly labeled a monthly estimate');
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1);
+
 
    // Responsive navigation and calendar must never push the entire page sideways.
    for(const width of (mobile?[320,390,744]:[768,1024,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
-    for(const tab of ['summary','schedules','history']){
+    for(const tab of ['summary','schedules','history','recap']){
      await page.locator('.planner-nav-primary [data-view="'+tab+'"]').click();
      assert.equal(await page.locator('.planner-nav-primary .tab-link.active').count(),1);
      if(tab==='history'){
