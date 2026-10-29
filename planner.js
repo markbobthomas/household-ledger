@@ -1692,7 +1692,7 @@ function historyInsights(rows,view,options={}){
    '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(total)+' spent across '+n+' spending transactions')+'">'+
     '<strong>'+cash(total)+' spent</strong><span>'+n+' transactions</span></div>'+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
-   budgetSaveFeedback+budgetSummary+
+   budgetSummary+
    (values.length?'<div class="history-category-layout">'+
     '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+(gradient||'#e6edf3 0% 100%')+')">'+
     '<div class="history-donut-center"><span>By category</span></div></div>'+
@@ -2016,7 +2016,7 @@ function historyPage(bundle,s){
       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
-  (historyView!=='list'?insight:'')+
+  budgetSaveFeedback+(historyView!=='list'?insight:'')+
   (historyView==='list'&&historyMerchantFilter?'<div class="history-active-filter">Merchant: '+
     escapeHTML(historyMerchantFilter==='amazon'?'Amazon':historyMerchantFilter)+
     ' <button type="button" data-history-clear-merchant>Back to Merchants</button></div>':'')+
