@@ -68,11 +68,20 @@ async function click(marker,dataset){
  const event={target:{closest:selector=>selector===marker?{dataset}:null}};
  for(const fn of handlers.click||[])await fn(event);
 }
+// Synthetic DOM event for the new shared month checklist. The fixture does
+// not implement a browser; the Playwright suite tests the real dropdown.
 async function chooseHistoryMonth(month){
- const target={value:month,
-  closest(selector){return selector==='[data-history-month]'?this:null},
-  matches(){return false}};
- for(const fn of handlers.change||[])await fn({target});
+ async function setChecked(value,checked){
+  const target={value,checked,
+   closest(selector){
+    if(selector==='[data-history-month-option]')return this;
+    if(selector==='[data-history-month-list]')return {scrollTop:0};
+    return null;
+   },matches(){return false}};
+  for(const fn of handlers.change||[])await fn({target});
+ }
+ await setChecked(month,true);
+ if(month!=='2026-10')await setChecked('2026-10',false);
 }
 async function submit(fields){
  const form={fields,hasAttribute:key=>key==='data-history-recurring-form',
