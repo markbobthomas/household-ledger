@@ -147,7 +147,7 @@ function postedDay(date){
   (rows.length?'<div class="calendar-detail-items">'+body+'</div>':
    '<p class="calendar-empty">No bank transactions recorded on this date.</p>')+
   '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
-  '<button type="button" class="calendar-edit" data-view="history">All bank history →</button></section>';
+  '<button type="button" class="calendar-edit" data-view="activity">All bank history →</button></section>';
 }
 function paymentDetail(event){
  const id=String(event?.transferGroupId||'');
