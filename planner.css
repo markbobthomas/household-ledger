@@ -3341,19 +3341,35 @@ body{background:#f6f8fa}
    Budget targets are monthly reporting preferences, never ledger forecasts. */
 .history-page .history-category-table{width:100%;min-width:0}
 .history-page .history-category-columns{
- display:grid;grid-template-columns:minmax(0,1fr) 105px 126px;
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(36px,.65fr) 88px 126px;
  gap:9px;align-items:center;
  padding:5px 7px 9px;border-bottom:1px solid #dce5eb;
  font-size:10px;font-weight:750;color:#667787;
 }
-.history-page .history-category-columns span:nth-child(2){text-align:right}
-.history-page .history-category-columns span:nth-child(3){text-align:center}
+.history-page .history-category-columns span:nth-child(2){text-align:left}
+.history-page .history-category-columns span:nth-child(3){text-align:right}
+.history-page .history-category-columns span:nth-child(4){text-align:center}
 .history-page .history-category-item{
- display:grid;grid-template-columns:minmax(0,1fr) 105px 126px;
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(36px,.65fr) 88px 126px;
  gap:9px;align-items:center;width:100%;padding:9px 7px;
  border:0;border-bottom:1px solid #edf1f4;background:transparent;
 }
 .history-page .history-category-item:hover{background:#f5f8fb}
+.history-page .history-budget-track{
+ display:block;width:100%;min-width:0;height:12px;overflow:hidden;
+ border-radius:4px;background:#e5edf4;box-shadow:inset 0 0 0 1px #d4e0e9;
+}
+.history-page .history-budget-fill{
+ display:block;height:100%;border-radius:inherit;background:#3b76a9;
+ transition:width .2s ease;
+}
+.history-page .history-budget-track.over .history-budget-fill{background:#c47b31}
+.history-page .history-budget-track.unset{
+ background:repeating-linear-gradient(90deg,#edf2f6 0,#edf2f6 6px,#e1e9f0 6px,#e1e9f0 12px);
+}
+@media(prefers-reduced-motion:reduce){
+ .history-page .history-budget-fill{transition:none}
+}
 .history-page .history-category-drill{
  display:flex;gap:9px;min-width:0;align-items:center;border:0;
  background:transparent;padding:0;text-align:left;cursor:pointer;
@@ -3402,7 +3418,7 @@ body{background:#f6f8fa}
 @media(max-width:650px){
  .history-page .history-category-columns,
  .history-page .history-category-item{
-  grid-template-columns:minmax(0,1fr) 77px 104px;
+  grid-template-columns:minmax(0,1.15fr) minmax(32px,.65fr) 69px 104px;
   gap:5px;padding-inline:2px;
  }
  .history-page .history-category-actual{font-size:11px}
@@ -3415,7 +3431,8 @@ body{background:#f6f8fa}
 }
 @media(max-width:380px){
  .history-page .history-category-glyph{display:none}
+ .history-page .history-budget-track{height:10px}
  .history-page .history-category-columns,
- .history-page .history-category-item{grid-template-columns:minmax(0,1fr) 70px 93px;gap:3px}
+ .history-page .history-category-item{grid-template-columns:minmax(0,1fr) minmax(24px,.55fr) 62px 93px;gap:3px}
  .history-page .history-budget-input{width:91px}
 }

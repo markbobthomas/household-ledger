@@ -106,6 +106,13 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.history-donut').count(),1);
    assert.ok(await page.locator('.history-category-item').count()>0,
     'Category legend is populated from fictional posted purchase records');
+   assert.equal(await page.locator('[data-history-budget-bar]').count(),
+    await page.locator('.history-category-item').count(),
+    'Each category shows a budget usage bar');
+   const unsetBar=page.locator('[data-history-budget-bar][data-budget-status="unset"]').first();
+   if(await unsetBar.count())assert.equal(
+    Number.parseFloat(await unsetBar.locator('.history-budget-fill').evaluate(el=>el.style.width)),0,
+    'Without a target, the usage bar is empty');
    const budgetCategory=page.locator('.history-category-item').first(),
     categoryName=await budgetCategory.getAttribute('data-history-category-row');
    assert.equal(await budgetCategory.locator('[data-history-budget]').count(),1,
@@ -118,6 +125,9 @@ const {chromium,webkit}=require('playwright');
     return saved.categoryMonthlyBudgets?.[category]===275.5;
    },categoryName);
    assert.equal(await page.locator('.history-category-item').first().locator('[data-history-budget]').inputValue(),'275.50');
+   assert.match(await page.locator('.history-category-item').first()
+    .locator('[data-history-budget-bar]').getAttribute('aria-label'),/spent of .* budget/,
+    'The saved budget appears in the accessible progress description');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Category view shows its tailored chart rather than duplicating line-item history');
    await page.locator('[data-history-months]').selectOption('3');
@@ -125,6 +135,44 @@ const {chromium,webkit}=require('playwright');
     'Three-month actual spending is compared against three full calendar monthly targets');
    assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
     'A monthly budget carries across report periods');
+   const budgetRow=page.locator('.history-category-item').filter({
+    has:page.locator('[data-history-budget="'+categoryName+'"]')
+   });
+   const threeActual=Number((await budgetRow.locator('.history-category-actual').innerText()).replace(/[^0-9.]/g,''));
+   const threeBar=Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width));
+   assert.ok(Math.abs(threeBar-Math.min(100,threeActual/(275.5*3)*100))<.02,
+    'Three months of purchases use three times the monthly budget');
+   if(threeActual>.01){
+    await budgetRow.locator('[data-history-budget]').fill('0.01');
+    await budgetRow.locator('[data-history-budget]').press('Tab');
+    await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===.01,categoryName);
+    assert.equal(await budgetRow.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'over');
+    assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
+     'The over-budget fill caps at its full track width');
+    await budgetRow.locator('[data-history-budget]').fill('275.50');
+    await budgetRow.locator('[data-history-budget]').press('Tab');
+    await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===275.5,categoryName);
+   }
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const dimensions=await budgetRow.evaluate(row=>{
+     const rect=sel=>row.querySelector(sel).getBoundingClientRect(),
+      name=rect('.history-category-drill'),bar=rect('[data-history-budget-bar]'),
+      actual=rect('.history-category-actual'),budget=rect('.history-category-budget');
+     return {nameRight:name.right,barLeft:bar.left,barRight:bar.right,barWidth:bar.width,
+      actualLeft:actual.left,actualRight:actual.right,budgetLeft:budget.left,
+      viewport:document.documentElement.scrollWidth};
+    });
+    assert.ok(dimensions.nameRight<=dimensions.barLeft+2&&
+     dimensions.barRight<=dimensions.actualLeft+2&&
+     dimensions.actualRight<=dimensions.budgetLeft+2,
+     'The category progress bar stays between the name and amounts: '+JSON.stringify(dimensions));
+    assert.ok(dimensions.barWidth>=20&&dimensions.viewport<=width+3,
+     'Category bar does not overflow at '+width+'px: '+JSON.stringify(dimensions));
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await page.locator('[data-history-months]').selectOption('all');
    const firstCategory=page.locator('.history-category-item').first();
    await firstCategory.locator('[data-history-drill-category]').click();
