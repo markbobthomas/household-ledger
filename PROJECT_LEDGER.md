@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-10-28 (Pacific)  
+**Updated:** 2026-10-29 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -24,6 +24,8 @@ Product priorities:
 **Banking safety:** Preserve the current GitHub, Plaid and private Render architecture. Actual source transactions/balances remain authoritative and unchanged by editable predictions. Do not use public fictional Demo data as if it were real bank data. This repository is public: do not put actual financial records, private amounts, authentication details, or private user messages in this ledger.
 
 ## Current state (reviewed October 28, 2026)
+
+- **2026-10-29 Bank History Transactions multi-selection (implementation; checks pending):** Added a per-bank-row checkbox on the Transactions subtab, a compact top-of-list count and signed net total in cents, Select all shown, Clear, and a subtle selected-row state. Selection is session-only/read-only, restricted to displayed rows and never saved to bank data, forecasts or budgets; account+transaction keys avoid collisions. Checkbox interactions update the sum without full page redraw, while the row detail and category editor remain independent. Extended fictional desktop Chromium and iPhone WebKit tests for totals, partial/full selection, reset, responsive layout and no accidental detail overlay. Files: `planner.js`, `planner.css`, `tests/planner-browser.cjs`. Feature branch: `feature/history-multi-select-total-20261029`; banking and browser CI, PR merge, Pages and private Render publication **pending independent verification**.
 
 - **2026-10-28 Bank History category budget progress bars — MERGED, VERIFIED:** [PR #285](https://github.com/markbobthomas/household-ledger/pull/285) squash-merged to `main` at `0ffff712540c898f17187d26100fff540f9c793e` (final feature head `5900c94a710bb83f9b37d481dc77c120ceabe7ba`). Each category row now shows a compact budget-used bar between its category name and posted-spending / editable monthly-budget values. Blue tracks within target, orange capped fill when over, empty neutral track when no budget is saved. The bar compares spending to the monthly target multiplied by selected calendar-month count, keeping the existing budget editor, purchase donut, drilldown and source bank facts unchanged. Fictional [banking/forecast safety #40822693563](https://github.com/markbobthomas/household-ledger/actions/runs/40822693563) and [desktop Chromium/iPhone WebKit #40822693499](https://github.com/markbobthomas/household-ledger/actions/runs/40822693499) both **passed** on final head, including responsive layout and spending-bar states. A browser assertion was corrected to compare CSS percentage numerically (`0%` versus `0.00%`); no production behavior changed by this test fix. [GitHub Pages publish #40822866843](https://github.com/markbobthomas/household-ledger/actions/runs/40822866843) **succeeded** for exact merge SHA. Private Render `/healthz` was not accessible to independent verifier: the live private deployment remains **unverified**. This entry supersedes the pending implementation entry below.
 
