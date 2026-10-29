@@ -65,7 +65,13 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
          fromAccountId:'demo-checking',toAccountId:'demo-visa'},
         {id:'fictional-savings-move',type:'transfer',date:'2026-11-13',
          merchant:'Fictional Savings Transfer',amount:500,
-         fromAccountId:'demo-checking',toAccountId:'demo-savings'}
+         fromAccountId:'demo-checking',toAccountId:'demo-savings'},
+        ...Array.from({length:6},(_,i)=>({
+         id:'fictional-early-bill-'+i,type:'expense',
+         date:'2026-10-'+String(20+i).padStart(2,'0'),
+         merchant:'Fictional Earlier Bill '+i,amount:10+i,
+         accountId:'demo-checking'
+        }))
        ]
       };
       data.transactions.push(
@@ -122,7 +128,19 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': internal cash transfer is not a bill');
    assert.match(await page.locator('.financial-recap-upcoming').innerText(),
     /Fictional Visa Payment/,
-    name+': credit-card payment appears in upcoming predicted bills');
+    name+': credit-card payment appears even when five earlier bills precede it');
+   assert.equal(await page.locator('.financial-recap-upcoming .financial-recap-rows .financial-recap-row').count(),5,
+    name+': Summary preserves the five earliest bills in chronological order');
+   assert.doesNotMatch(await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText(),
+    /Fictional Visa Payment/,
+    name+': the next card payment occurs after the first five in this fixture');
+   assert.equal(await page.locator('[data-recap-next-card-payment]').count(),1,
+    name+': the next card payment is separately visible without hiding the first five');
+   assert.equal((await page.locator('.financial-recap-upcoming').innerText().then(v=>
+    v.match(/Fictional Visa Payment/g)||[])).length,1,
+    name+': the linked card payment is shown only once');
+   assert.doesNotMatch(await page.locator('.financial-recap-upcoming').innerText(),/Fictional Savings Transfer/,
+    name+': internal savings transfer must not appear as a bill');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
     name+': refunds still appear as signed spending in the full-width Budget list');
