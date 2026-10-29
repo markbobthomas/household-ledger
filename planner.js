@@ -18,6 +18,8 @@ const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{mon
   return 500;
  };
 const model=window.HouseholdLedgerData;
+// Keep the catch-all visible first in normal category dropdowns.
+const categoryOptionsWithOther=list=>['Other',...(list||[]).filter(c=>c!=='Other')];
 const available=()=>Boolean(window.HouseholdLiveSource);
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
 const demoState=model.migrate(rawDemo);
@@ -65,7 +67,7 @@ let historyAccount='all',historySearch='',historySort='newest',historyCategoryFi
 let historyView='list',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40;
-let historyBudgetMessage='',historyBudgetBusy=false;
+let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='';
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
@@ -1229,7 +1231,7 @@ function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
   tomorrow=shiftDay(s.asOf,1),
-  categories=T.scheduleCategories(state()),
+  categories=categoryOptionsWithOther(T.scheduleCategories(state())),
   categoryOf=r=>model.canonicalCategory(state(),r.category)||'Uncategorized';
  // Canonical prediction rows already include weekend-to-Friday posting,
  // individual date overrides and skipped occurrences. Show their actual dates
@@ -1369,12 +1371,7 @@ function schedulesPage(bundle,s){
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
    '</select></label>'+
-   '<details class="schedule-category-manager" data-schedule-category-manager>'+
-    '<summary title="Add category" aria-label="Add category">+</summary>'+
-    '<form data-schedule-category-add><label>New category<input name="categoryName" maxlength="40" '+
-    'placeholder="e.g. Pet care" required></label>'+
-    '<button type="submit" class="btn">Add</button></form>'+
-    '<p data-schedule-category-notice role="status"></p></details></div>'+
+   '</div>'+
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+'<div class="schedule-grid">'+
@@ -1620,8 +1617,26 @@ function historyInsights(rows,view,options={}){
     '" title="'+escapeHTML(description)+'">'+
     '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span></span>';
   };
+  const custom=(state().predictions?.scheduleCategories||[]).filter(c=>
+   model.canonicalCategory(state(),c)===c&&c!=='Other');
   return '<section class="history-insight-panel" data-history-category-insights>'+
-   '<h2>Where your money went</h2>'+
+   '<div class="history-category-panel-heading"><h2>Where your money went</h2>'+
+    '<details class="history-category-manager" data-history-category-manager>'+
+     '<summary>+ Add category</summary>'+
+     '<div class="history-category-manager-body">'+
+      '<form data-history-category-add><label>New category'+
+       '<input name="categoryName" maxlength="40" placeholder="e.g. Pet care" required></label>'+
+       '<button type="submit" class="btn primary">Add category</button></form>'+
+      '<div class="history-category-manager-list"><strong>Your categories</strong>'+
+       (custom.length?custom.map(c=>'<div class="history-custom-category">'+
+        '<span>'+escapeHTML(c)+'</span><button type="button" data-history-category-delete="'+
+        escapeHTML(c)+'" aria-label="Delete custom category '+escapeHTML(c)+'">Delete</button></div>').join(''):
+        '<p>No custom categories yet.</p>')+
+       '<small>Other is built in and cannot be deleted. Reassign a custom category before deleting it if still used by transactions or bills.</small></div>'+
+      '<p data-history-category-manage-message role="status"></p>'+
+     '</div></details></div>'+
+   (historyCategoryNotice?'<p class="history-category-manage-status" role="status">'+
+    escapeHTML(historyCategoryNotice)+'</p>':'')+
    '<p>Choose a category to see purchases, or edit its monthly budget right beside actual spending.</p>'+
    header+
    '<p class="history-budget-explanation">Monthly budgets repeat each calendar month. '+
@@ -1700,7 +1715,7 @@ function historyPage(bundle,s){
   // Both filters and row editors consult the same canonical category registry.
   // Effective provider labels are included as read-only observed names; they
   // are not saved as duplicate registry entries.
-  categories=model.categories(state(),records.map(t=>t.category)),
+  categories=categoryOptionsWithOther(model.categories(state(),records.map(t=>t.category))),
   filterCategories=categories;
  // Each checked item is one whole calendar month; selection need not be consecutive.
  const currentMonth=s.asOf.slice(0,7),
@@ -3355,33 +3370,38 @@ async function undoLastForecastChange(){
   render();
  }
 }
-// Add a category without rebuilding an unsaved editor or modifying bank data.
+// Custom category management belongs in Bank History → Categories, not Bills.
 document.addEventListener('submit',async e=>{
- const form=e.target.closest?.('[data-schedule-category-add]');
+ const form=e.target.closest?.('[data-history-category-add]');
  if(!form)return;
  e.preventDefault();
- const field=form.querySelector('[name=categoryName]'),
-  submit=form.querySelector('[type=submit]'),
-  notice=form.parentElement.querySelector('[data-schedule-category-notice]');
- if(submit)submit.disabled=true;
+ const field=form.querySelector('[name=categoryName]'),button=form.querySelector('[type=submit]');
+ if(button)button.disabled=true;
  try{
   const label=await commitForecastChange(()=>model.addCategory(state(),field.value));
-  // The custom name is stored ONCE, in the canonical forecast category
-  // registry. Refresh every currently open category selector from that list
-  // without rebuilding an unsaved prediction or adding duplicate <option>s.
-  document.querySelectorAll('select[name=category],[data-schedule-category-filter],'+
-   '[data-schedule-quick-category],[data-history-category],'+
-   '[data-history-category-filter]').forEach(select=>{
-    if(![...select.options].some(option=>option.value.toLowerCase()===label.toLowerCase())){
-     const option=document.createElement('option');option.value=label;option.textContent=label;
-     select.appendChild(option);
-    }
-    if(select.name==='category')select.value=label;
-  });
-  field.value='';
-  if(notice)notice.textContent='Added '+label+'. Choose it for any prediction.';
- }catch(error){if(notice)notice.textContent=String(error.message||error)}
- finally{if(submit)submit.disabled=false}
+  historyCategoryNotice='Added '+label+'. Select it on any transaction or bill.';
+  render();
+ }catch(error){
+  if(button)button.disabled=false;
+  const notice=form.closest('[data-history-category-manager]')?.querySelector('[data-history-category-manage-message]');
+  if(notice)notice.textContent=String(error.message||error);
+ }
+});
+document.addEventListener('click',async e=>{
+ const button=e.target.closest?.('[data-history-category-delete]');
+ if(!button)return;
+ const label=button.dataset.historyCategoryDelete;
+ if(!window.confirm('Delete custom category "'+label+'"? This cannot be undone.'))return;
+ button.disabled=true;
+ try{
+  await commitForecastChange(()=>model.removeCategory(state(),label));
+  historyCategoryNotice='Deleted '+label+'. Existing bank history was not changed.';
+  render();
+ }catch(error){
+  button.disabled=false;
+  const notice=button.closest('[data-history-category-manager]')?.querySelector('[data-history-category-manage-message]');
+  if(notice)notice.textContent=String(error.message||error);
+ }
 });
 // Store one correction and its conservative merchant lesson as one decision.
 // Bank-provided source records and unrelated forecasts are never rewritten here.
