@@ -74,7 +74,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='',lat
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false;
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -476,6 +476,22 @@ function futureRows(bundle,s){
    addedId:String(e.id||'').startsWith('future-add|')?String(e.id):null});
  }
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||a.key.localeCompare(b.key));
+}
+// One canonical set of projected cash bills for Home and Bills. Card purchases
+// are NOT checking bills; a linked cash-to-card settlement counts exactly once.
+function forecastCashBills(bundle,s,accountId=''){
+ const accounts=new Map(activeAccounts(s).map(a=>[String(a.id),a]));
+ const cardPlans=new Set((bundle?.projection?.plans||[]).filter(p=>
+  accounts.has(String(p.fromAccountId))&&accounts.has(String(p.toAccountId))&&
+  accountType(accounts.get(String(p.fromAccountId)))==='cash'&&
+  accountType(accounts.get(String(p.toAccountId)))==='credit')
+  .map(p=>String(p.id)));
+ return futureRows(bundle,s).filter(row=>{
+  if(row.kind==='movement')return cardPlans.has(String(row.id))&&
+   (!accountId||String(row.fromAccountId)===String(accountId));
+  return row.type==='expense'&&accountType(accounts.get(String(row.accountId))||{})==='cash'&&
+   (!accountId||String(row.accountId)===String(accountId));
+ }).map(row=>({...row,cardBill:row.kind==='movement'}));
 }
 function cadenceOption(cadence){
  return {'weekly':'weekly','every 2 weeks':'biweekly',biweekly:'biweekly',
@@ -1367,7 +1383,23 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
+ const upcomingBills=forecastCashBills(bundle,s).filter(row=>row.date<=shiftDay(s.asOf,billsExpanded?90:30));
+ const groupedBills=upcomingBills.map(row=>'<button type="button" class="bills-upcoming-row" data-open-transaction="'+
+  escapeHTML(row.key)+'"><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+  '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+  '<small>'+(row.cardBill?'Credit card payment':'Expected withdrawal')+
+   ' · '+escapeHTML((accounts.find(a=>String(a.id)===String(row.fromAccountId||row.accountId))||{}).name||'Account')+
+   '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">›</span></button>').join('');
  return '<div class="planner-page schedule-page">'+
+  '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
+   '<div class="bills-heading"><div><h2>Upcoming bills</h2>'+
+    '<p>Predicted money leaving your accounts, including credit card payments. Select a bill to change it.</p></div>'+
+    '<span class="bills-upcoming-total">'+upcomingBills.length+' predicted</span></div>'+
+   (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period. Review your repeating payments below.</p>')+
+   '<button type="button" class="bills-range-toggle" data-bills-more>'+
+    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section>'+
+  '<div class="bills-manage-heading"><div><h2>Manage repeating payments</h2>'+
+   '<p>Change payment schedules here. One-time payments are editable above or on Home.</p></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
@@ -2556,15 +2588,61 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    '</section></div>';
 }
 function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
- const calendar=window.HouseholdPlannerSummary.render({
-  snapshot:s,chosen,derived,bundle,days:horizon,
+ const credit=accountType(chosen)==='credit';
+ const nextBill=forecastCashBills(bundle,s,credit?'':String(chosen.id))[0]||null;
+ const queue=reviewQueue(bundle,s),
+  missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
+   !window.HouseholdPaymentObligations.ready(
+    state().predictions?.paymentRules?.[a.id],a,activeAccounts(s)));
+ // A single actionable next step, ordered by impact. Unconfirmed suggestions
+ // remain accessible in Things to check even after the guidance is dismissed.
+ const priority=missingCards.length?{
+   title:'Set up your credit card payment',
+   detail:'Its withdrawal date is missing, so your future balance may be too high.',
+   action:'Set up payment',view:'settings',target:'#card-autopay'}:
+  queue.overdue.length?{
+   title:'Check an expected payment',
+   detail:'A bill was expected but has not been confirmed by the bank.',
+   action:'Review payment',view:'reviews',target:'[data-overdue-review]'}:
+  queue.decisionsNeeded?{
+   title:'Confirm an earlier payment estimate',
+   detail:'This estimate affects your future balance and needs your decision.',
+   action:'Review estimate',view:'reviews',target:'[data-active-legacy-estimates]'}:
+  queue.categoryCount?{
+   title:'Choose a category',
+   detail:'Help keep your spending totals accurate. Choosing a category saves automatically.',
+   action:'Choose category',view:'reviews',target:'[data-category-review]'}:
+  queue.pending.length?{
+   title:'Check a suggested repeating payment',
+   detail:'Decide if this transaction should be predicted again.',
+   action:'Review suggestion',view:'reviews',target:'[data-recommended-repeating]'}:null;
+ const nextBillLine=nextBill?'<button type="button" class="home-next-bill" data-open-transaction="'+
+   escapeHTML(nextBill.key)+'"><span><small>Next predicted bill</small><strong>'+
+    escapeHTML(nextBill.merchant)+'</strong><span>'+escapeHTML(dayLabel(nextBill.date))+
+    ' · '+(nextBill.cardBill?'Credit card payment':'Expected withdrawal')+
+    '</span></span><strong>−'+cash(nextBill.amount)+'</strong></button>':
+   '<div class="home-next-bill home-no-bill"><span><small>Next predicted bill</small>'+
+    '<strong>No upcoming bill identified</strong><span>Check Bills to make sure your plan is complete.</span></span>'+
+    '<button type="button" class="btn" data-view="schedules">Open Bills</button></div>';
+ const guidance=priority?'<section class="home-next-step" aria-label="Next step">'+
+    '<div><span class="home-next-step-label">NEXT STEP</span><h3>'+
+     escapeHTML(priority.title)+'</h3><p>'+escapeHTML(priority.detail)+'</p></div>'+
+    '<button type="button" class="btn primary" data-view="'+priority.view+
+    '" data-focus-target="'+escapeHTML(priority.target)+'">'+escapeHTML(priority.action)+
+    ' →</button></section>':
+   '<div class="home-all-set"><span aria-hidden="true">✓</span>'+
+    '<span>Your plan has no outstanding checks right now.</span>'+
+    '<button type="button" data-view="reviews">Things to check</button></div>';
+ const homeIntro=view==='calendar'?'<section class="home-intro">'+
+   '<p class="home-eyebrow">YOUR MONEY, LOOKING AHEAD</p>'+
+   '<h2>Will your upcoming bills be covered?</h2>'+
+   '<p>See how your balance changes as paychecks arrive and bills get paid. Choose a date to see why.</p>'+
+   (credit?'':nextBillLine)+'</section>'+guidance:'';
+ return window.HouseholdPlannerSummary.render({
+  snapshot:s,chosen,derived,bundle,days:horizon,homeIntro,
   prefs:state().predictions||{},accounts:activeAccounts(s),
   fresh,ready:window.HouseholdPaymentObligations.ready,view
  });
- // Calendar is the entry point for forecast details and unresolved decisions.
- // Retain the full Predictions editor and skipped-payment restore functionality
- // as drill-down views, rather than competing permanent navigation entries.
- return calendar;
 }
 function settingsPage(bundle,s,chosen){
  const rules=Object.entries(state().learning?.categoryRules||{});
