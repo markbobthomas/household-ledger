@@ -327,6 +327,15 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   Number(t.amount)>0&&String(t.id||'')).sort((a,b)=>
   a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
  const paid=new Set(),usedBank=new Set();
+ // A bank can rename an outgoing debit when pending becomes posted. If there
+ // is NO saved-name or linked-ID match, accept strong bank evidence only when
+ // BOTH the debit and the due occurrence are unique: same source checking
+ // account, cash-out direction, near the original/edited due date and nearly
+ // identical cents. Keep unclear cases unpaid rather than deleting a bill.
+ const closeAmount=(actual,expected)=>Math.abs(Number(actual)-Number(expected))<=
+  Math.max(2,Number(expected)*.003);
+ const closePosting=(t,e)=>postingDates(e).some(d=>
+  d>=add(asOf,-90)&&d<=add(asOf,14)&&Math.abs(diff(t.date,d))<=3);
  for(const t of bankRows){
   const candidates=tools.historicalScheduleMatches?.(t,accounts,rules)||[],
    explicit=candidates.filter(r=>(r.exampleIds||[]).some(id=>String(id)===String(t.id))),
@@ -334,24 +343,37 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   const matches=dueEntries.flatMap(e=>{
    const rule=ruleMap.get(String(e.ruleId));
    if(paid.has(e.id)||!rule||tools.bankDirection(t)!=='expense'||
-    !eligible.some(r=>String(r.id)===String(rule.id))||
     String(tools.accountRef(t.accountId||t.account,accounts))!==String(e.accountId))return [];
+   const named=eligible.some(r=>String(r.id)===String(rule.id)),
+    // Never override evidence that this bank row belongs to a DIFFERENT rule.
+    fallback=!candidates.length&&closeAmount(t.amount,e.amount)&&closePosting(t,e);
+   if(!named&&!fallback)return [];
    const dates=postingDates(e).filter(d=>d<=add(asOf,14)&&d>=add(asOf,-90)&&
-    tools.postedWithinMatchWindow(rule,t,d,e.amount,
-     explicit.some(r=>String(r.id)===String(rule.id)),true));
+    (fallback?Math.abs(diff(t.date,d))<=3:
+     tools.postedWithinMatchWindow(rule,t,d,e.amount,
+      explicit.some(r=>String(r.id)===String(rule.id)),true)));
    if(!dates.length)return [];
    const gap=Math.min(...dates.map(d=>Math.abs(diff(t.date,d)))),
     variance=Math.abs(Number(t.amount)-Number(e.amount))/Math.max(1,Number(e.amount));
-   return [{e,rule,gap,variance,explicit:explicit.some(r=>String(r.id)===String(rule.id)),
-    score:gap+Math.min(variance,2)*5}];
+   return [{e,rule,gap,variance,fallback,
+    explicit:explicit.some(r=>String(r.id)===String(rule.id)),
+    score:(fallback?100:0)+gap+Math.min(variance,2)*5}];
   }).sort((a,b)=>a.score-b.score||a.e.id.localeCompare(b.e.id));
   if(!matches.length)continue;
   const [best,next]=matches;
-  // Independent same-payee bills are never cleared speculatively. Distinct
-  // dates, deliberately linked bank IDs or clear amounts disambiguate.
-  if(next&&!(best.explicit&&!next.explicit||
+  if(best.fallback){
+   // A one-to-one amount/date match is NOT evidence if two independent bills
+   // or two similar bank withdrawals could represent this installment.
+   if(next||bankRows.some(other=>String(other.id)!==String(t.id)&&
+    tools.bankDirection(other)==='expense'&&
+    String(tools.accountRef(other.accountId||other.account,accounts))===
+     String(best.e.accountId)&&
+    closeAmount(other.amount,best.e.amount)&&closePosting(other,best.e)))continue;
+  }else if(next&&!(best.explicit&&!next.explicit||
     best.variance<=.18&&(next.variance-best.variance>.18||
      next.gap-best.gap>=3)))continue;
+  // One posted bank withdrawal pays at most one obligation. Keep future
+  // recurrences intact; the actual bank balance already contains this debit.
   paid.add(best.e.id);usedBank.add(String(t.id));
  }
  // Check both current future rows and overdue roll-forwards against the same
