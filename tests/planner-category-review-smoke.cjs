@@ -32,10 +32,12 @@ const flagged=new Set(issues.transactions.map(x=>x.id));
 assert.deepEqual([...flagged].sort(),['low','missing','suggested']);
 assert.equal(issues.plans.length,4,'Missing and uncertain recurring, one-off and legacy bills need review');
 assert.ok(issues.plans.every(x=>x.kind!=='transaction'));
-assert.equal(M.records(s).find(x=>x.id==='income').category,'Income',
- 'Income receives its type-backed category without a guessed merchant classification');
-assert.equal(M.records(s).find(x=>x.id==='transfer').category,'Transfer',
- 'Transfers have their own category and do not count as spending');
+assert.ok(!flagged.has('income')&&!flagged.has('transfer'),
+ 'Income and transfer types are established by accounting, not guessed merchant categories');
+assert.equal(M.records(s).find(x=>x.id==='income').category,'Other',
+ 'The canonical bank record must retain its original classification');
+assert.equal(M.records(s).find(x=>x.id==='transfer').category,'Other',
+ 'Transfer banking facts remain unmodified for forecast and baseline integrity');
 assert.equal(JSON.stringify(s.transactions),source,'Review must never modify authoritative bank records');
 M.setCategory(s,'low','Shopping',true);
 assert.ok(!M.categoryReviewQueue(s).transactions.some(x=>x.id==='low'),
