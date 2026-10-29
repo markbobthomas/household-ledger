@@ -3370,33 +3370,38 @@ async function undoLastForecastChange(){
   render();
  }
 }
-// Add a category without rebuilding an unsaved editor or modifying bank data.
+// Custom category management belongs in Bank History → Categories, not Bills.
 document.addEventListener('submit',async e=>{
- const form=e.target.closest?.('[data-schedule-category-add]');
+ const form=e.target.closest?.('[data-history-category-add]');
  if(!form)return;
  e.preventDefault();
- const field=form.querySelector('[name=categoryName]'),
-  submit=form.querySelector('[type=submit]'),
-  notice=form.parentElement.querySelector('[data-schedule-category-notice]');
- if(submit)submit.disabled=true;
+ const field=form.querySelector('[name=categoryName]'),button=form.querySelector('[type=submit]');
+ if(button)button.disabled=true;
  try{
   const label=await commitForecastChange(()=>model.addCategory(state(),field.value));
-  // The custom name is stored ONCE, in the canonical forecast category
-  // registry. Refresh every currently open category selector from that list
-  // without rebuilding an unsaved prediction or adding duplicate <option>s.
-  document.querySelectorAll('select[name=category],[data-schedule-category-filter],'+
-   '[data-schedule-quick-category],[data-history-category],'+
-   '[data-history-category-filter]').forEach(select=>{
-    if(![...select.options].some(option=>option.value.toLowerCase()===label.toLowerCase())){
-     const option=document.createElement('option');option.value=label;option.textContent=label;
-     select.appendChild(option);
-    }
-    if(select.name==='category')select.value=label;
-  });
-  field.value='';
-  if(notice)notice.textContent='Added '+label+'. Choose it for any prediction.';
- }catch(error){if(notice)notice.textContent=String(error.message||error)}
- finally{if(submit)submit.disabled=false}
+  historyCategoryNotice='Added '+label+'. Select it on any transaction or bill.';
+  render();
+ }catch(error){
+  if(button)button.disabled=false;
+  const notice=form.closest('[data-history-category-manager]')?.querySelector('[data-history-category-manage-message]');
+  if(notice)notice.textContent=String(error.message||error);
+ }
+});
+document.addEventListener('click',async e=>{
+ const button=e.target.closest?.('[data-history-category-delete]');
+ if(!button)return;
+ const label=button.dataset.historyCategoryDelete;
+ if(!window.confirm('Delete custom category "'+label+'"? This cannot be undone.'))return;
+ button.disabled=true;
+ try{
+  await commitForecastChange(()=>model.removeCategory(state(),label));
+  historyCategoryNotice='Deleted '+label+'. Existing bank history was not changed.';
+  render();
+ }catch(error){
+  button.disabled=false;
+  const notice=button.closest('[data-history-category-manager]')?.querySelector('[data-history-category-manage-message]');
+  if(notice)notice.textContent=String(error.message||error);
+ }
 });
 // Store one correction and its conservative merchant lesson as one decision.
 // Bank-provided source records and unrelated forecasts are never rewritten here.
