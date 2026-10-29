@@ -1910,6 +1910,7 @@ function updateHistorySelectionSummary(){
  if(clear)clear.hidden=checked.length===0;
 }
 function historyPage(bundle,s){
+ const displayView=activeTab==='activity'?'list':historyView;
  const accounts=activeAccounts(s),
   // Read the current category overrides directly. The derived forecast is
   // independently cached and must never be the authority for Budget totals.
@@ -1944,15 +1945,15 @@ function historyPage(bundle,s){
  const budgetCardSettlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records);
  const filtered=records.filter(t=>{
   if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
-  if(historyView==='list'&&historyPurchaseDrill&&
+  if(displayView==='list'&&historyPurchaseDrill&&
    (historyCategoryFilter?categorySpendingCents(t,budgetCardSettlements):cardActivityCents(t))===0)return false;
-  if(historyView==='list'&&historyMerchantFilter&&
+  if(displayView==='list'&&historyMerchantFilter&&
     (historyMerchantKey(t)!==historyMerchantFilter||!cardActivityCents(t)))return false;
-  if(historyView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
+  if(displayView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
-  if(historyView!=='categories'&&historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
-  if(historyView!=='list'||!historySearch)return true;
+  if(displayView!=='categories'&&historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
+  if(displayView!=='list'||!historySearch)return true;
   return [t.merchant,t.description,t.date,t.category,t.account,t.amount]
    .some(v=>String(v||'').toLowerCase().includes(historySearch.toLowerCase()));
  });
@@ -1983,7 +1984,7 @@ function historyPage(bundle,s){
  // user's calendar-month/account filters or count transfers as purchases.
  const savedRow=latestCategorySave&&records.find(t=>
   String(t.id)===latestCategorySave.id);
- const budgetSaveFeedback=historyView==='categories'&&savedRow?(()=>{
+ const budgetSaveFeedback=displayView==='categories'&&savedRow?(()=>{
   const amount=categorySpendingCents(savedRow,budgetCardSettlements),
    month=savedRow.date.slice(0,7),
    monthText=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',{
@@ -2005,7 +2006,7 @@ function historyPage(bundle,s){
     'Show that month</button>':'')+'</p>';
  })():'';
  const monthsInRange=historySelectedMonths.size,
-  insight=historyView!=='list'?historyInsights(filtered,historyView,{
+  insight=displayView!=='list'?historyInsights(filtered,displayView,{
    budgets:state().predictions?.categoryMonthlyBudgets||{},
    cardSettlementIds:budgetCardSettlements,
    months:monthsInRange,allAccounts:historyAccount==='all',
@@ -2113,13 +2114,16 @@ function historyPage(bundle,s){
    ungrouped.join('');
  })();
  return '<div class="planner-page history-page">'+
-  '<div class="history-view-header"><p>Explore your bank activity. Actual bank records are read-only.</p></div>'+
-  '<div class="history-view-toolbar"><nav class="history-subtabs" aria-label="Bank History views">'+
-    [['categories','Budget','◔'],['list','Transactions','≡'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
-      '<button type="button" class="history-subtab'+(historyView===id?' active':'')+
-      '" data-history-view="'+id+'" aria-pressed="'+(historyView===id)+'">'+
+  '<div class="history-view-header"><h2>'+(activeTab==='activity'?'Activity':'Spending')+'</h2>'+
+   '<p>'+(activeTab==='activity'?'Your actual bank transactions. These records are read-only.':
+     'Your budget, where money went, and purchase patterns.')+'</p></div>'+
+  '<div class="history-view-toolbar">'+(activeTab==='activity'?'':+
+   '<nav class="history-subtabs" aria-label="Spending views">'+
+    [['categories','Budget','◔'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
+      '<button type="button" class="history-subtab'+(displayView===id?' active':'')+
+      '" data-history-view="'+id+'" aria-pressed="'+(displayView===id)+'">'+
       '<span aria-hidden="true">'+icon+'</span>'+name+'</button>').join('')+
-    '</nav><div class="history-period-controls">'+
+    '</nav>')+'<div class="history-period-controls">'+
      '<div class="history-month-picker" data-history-month-picker>'+
       '<button type="button" class="history-month-trigger" data-history-month-toggle aria-haspopup="true" aria-expanded="'+
        historyMonthPickerOpen+'" aria-controls="history-month-menu" aria-label="Calendar months: '+
@@ -2135,17 +2139,17 @@ function historyPage(bundle,s){
          escapeHTML(month)+'"'+(historySelectedMonths.has(month)?' checked':'')+'><span>'+
          escapeHTML(monthLabel(month))+'</span></label>').join('')+
        '</div></div></div></div></div>'+
-  '<form class="history-filters ledger-toolbar'+(historyView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
+  '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
-   (historyView==='categories'?'':'<label>Sort by<select name="historySort" data-history-sort>'+
+   (displayView==='categories'?'':'<label>Sort by<select name="historySort" data-history-sort>'+
     [['newest','Newest first'],['oldest','Oldest first'],
      ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
      ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
      '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
       label+'</option>').join('')+'</select></label>')+
-   (historyView==='categories'?'':
+   (displayView==='categories'?'':
     '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
     '<option value="">All categories</option>'+
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
@@ -2171,13 +2175,13 @@ function historyPage(bundle,s){
       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
-  budgetSaveFeedback+(historyView!=='list'?insight:'')+
-  (historyView==='list'&&historyMerchantFilter?'<div class="history-active-filter">Merchant: '+
+  budgetSaveFeedback+(displayView!=='list'?insight:'')+
+  (displayView==='list'&&historyMerchantFilter?'<div class="history-active-filter">Merchant: '+
     escapeHTML(historyMerchantFilter==='amazon'?'Amazon':historyMerchantFilter)+
     ' <button type="button" data-history-clear-merchant>Back to Merchants</button></div>':'')+
-  (historyView==='list'&&historySizeFilter>=0?'<div class="history-active-filter">Purchase size: '+
+  (displayView==='list'&&historySizeFilter>=0?'<div class="history-active-filter">Purchase size: '+
     escapeHTML(historyBands[historySizeFilter]?.name||'')+' <button type="button" data-history-clear-size>Clear</button></div>':'')+
-  (historyView==='list'?'<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
+  (displayView==='list'?'<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
     ' matching transaction'+(filtered.length===1?'':'s')+
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    '<div class="history-selection-summary" data-history-selection-summary>'+
@@ -2702,7 +2706,7 @@ function render(){
  try{bundle=forecastFor(s)}catch(e){error=String(e.message||e)}
  // Actual bank history must remain usable even if the separate future
  // balance projection cannot be calculated or needs a repaired account.
- if(!bundle&&['history','reviews','recap'].includes(activeTab)){
+ if(!bundle&&['history','activity','reviews','recap'].includes(activeTab)){
   try{
    const rows=model.records(state()),accounts=activeAccounts(s),asOf=s.asOf||dateToday();
    const candidates=window.HouseholdFutureLedger.analyze(
@@ -2777,7 +2781,7 @@ function render(){
  let important=(derived?.events||[]).filter(e=>['expense','transfer_out'].includes(e.kind));
  const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
-  activeTab==='history'?historyPage(bundle,s):
+  (activeTab==='history'||activeTab==='activity')?historyPage(bundle,s):
   activeTab==='recap'?financialRecapPage(bundle,s):
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
@@ -2796,7 +2800,7 @@ function render(){
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
  drawTransactionDetail(bundle,s);
  if(activeTab==='schedules')applyScheduleSearch(root);
- if(activeTab==='history')updateHistorySelectionSummary();
+ if(activeTab==='history'||activeTab==='activity')updateHistorySelectionSummary();
 }
 document.addEventListener('click',async e=>{
  const monthToggle=e.target.closest?.('[data-history-month-toggle]');
@@ -3155,40 +3159,41 @@ document.addEventListener('click',async e=>{
  if(merchant){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
     !window.confirm('Discard unsaved payment changes?'))return;
-  historyView='list';historyMerchantFilter=merchant.dataset.historyDrillMerchant;
+  activeTab='activity';historyView='list';historyMerchantFilter=merchant.dataset.historyDrillMerchant;
   historySizeFilter=-1;historyCategoryFilter='';historyPurchaseDrill=false;
   historySearch='';historyLimit=90;render();return;
  }
  if(e.target.closest?.('[data-history-clear-merchant]')){
-  historyView='merchants';historyMerchantFilter='';historyLimit=90;render();return;
+  activeTab='history';historyView='merchants';historyMerchantFilter='';historyLimit=90;render();return;
  }
  const sizeBand=e.target.closest?.('[data-history-size-band]');
  if(sizeBand){
   const i=Number(sizeBand.dataset.historySizeBand);
   if(i<0||i>=historyBands.length)return;
-  historyView='list';historySizeFilter=i;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
+  activeTab='activity';historyView='list';historySizeFilter=i;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
  }
  if(e.target.closest?.('[data-history-clear-size]')){
   historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;render();return;
  }
  const categoryDrill=e.target.closest?.('[data-history-drill-category]');
  if(categoryDrill){
-  historyView='list';historySizeFilter=-1;historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';
+  activeTab='activity';historyView='list';historySizeFilter=-1;historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';
   historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
   historyLimit=90;render();return;
  }
  const savedBudget=e.target.closest?.('[data-show-saved-budget]');
  if(savedBudget&&latestCategorySave){
   historySelectedMonths=new Set([latestCategorySave.date.slice(0,7)]);
-  historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
+  activeTab='history';historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
   render();return;
  }
+ if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;render();return;}
  const view=e.target.closest('[data-view]');
  if(view){
   // Budget is the Bank History landing view when the main destination opens.
   // Keep the user's selected calendar months and account.
-  if(view.dataset.view==='history'){
-   historyView='categories';historyCategoryFilter='';historySizeFilter=-1;
+  if(view.dataset.view==='history'||view.dataset.view==='activity'){
+   historyView=view.dataset.view==='activity'?'list':'categories';historyCategoryFilter='';historySizeFilter=-1;
    historyMerchantFilter='';historyPurchaseDrill=false;historyMonthPickerOpen=false;
   }
   activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
@@ -3196,9 +3201,10 @@ document.addEventListener('click',async e=>{
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   render();
+  if(view.dataset.focusTarget)document.querySelector(view.dataset.focusTarget)?.scrollIntoView?.({block:'center',behavior:'instant'});
   // Tab navigation should not animate the global header's position.
   // 'auto' inherits html's smooth scrolling and briefly shifts the header.
-  window.scrollTo({top:0,behavior:'instant'});
+  if(!view.dataset.focusTarget)window.scrollTo({top:0,behavior:'instant'});
   return;
  }
  const selectBankPlan=e.target.closest?.('[data-history-inline-rule]');
@@ -3225,7 +3231,7 @@ document.addEventListener('click',async e=>{
   return;
  }
  const actualRow=e.target.closest?.('[data-historical-transaction]');
- if(actualRow&&activeTab==='history'&&typeof $('planner-main')?.insertAdjacentHTML!=='function'){
+ if(actualRow&&(activeTab==='history'||activeTab==='activity')&&typeof $('planner-main')?.insertAdjacentHTML!=='function'){
   const id=actualRow.dataset.historicalTransaction,account=actualRow.dataset.historicalAccount,
    same=historyExpandedId===id&&historyExpandedAccount===account;
   if(same){
@@ -3426,7 +3432,7 @@ document.addEventListener('click',async e=>{
  }
  if(e.target.closest('[data-cancel-review-form]')){
   recurringDraft=null;
-  if(activeTab==='history'){historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId=''}
+  if(activeTab==='history'||activeTab==='activity'){historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId=''}
   if(transactionDetail) dismissTransaction();
   else render();
   return;
@@ -3836,7 +3842,7 @@ document.addEventListener('submit',async e=>{
    scheduleMode='edit';scheduleTarget=savedPlanId;render();
    const card=[...document.querySelectorAll('[data-schedule-card]')].find(x=>x.dataset.scheduleCard===savedPlanId);
    card?.insertAdjacentHTML('afterbegin','<p class="inline-save-result" role="status">'+escapeHTML(scheduleNotice)+'</p>');
-  }else if(activeTab==='history'&&savedPlanId&&!transactionDetail){
+  }else if((activeTab==='history'||activeTab==='activity')&&savedPlanId&&!transactionDetail){
    historyExpandedRuleId=savedPlanId;recurringDraft=null;
    reviewNotice='Saved — repeating prediction updated. Bank records remain unchanged.';
    render();
