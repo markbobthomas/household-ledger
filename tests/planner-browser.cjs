@@ -2358,7 +2358,7 @@ const {chromium,webkit}=require('playwright');
   assert.equal(await page.locator('[data-bank-available-value]').innerText(),'$4,800.00',
    'The primary checking cash metric is the bank available balance, including holds');
   assert.match(await page.locator('.summary-bank').innerText(),/Available Balance/);
-  assert.doesNotMatch(await page.locator('.summary-bank').innerText(),/Actual Current|5,000\\.00/,
+  assert.doesNotMatch(await page.locator('.summary-bank').innerText(),/Actual Current|5,000/,
    'No checking current balance should appear above the Calendar');
   await page.locator('#summary-account').selectOption('credit-real');
   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$1,200.00',
