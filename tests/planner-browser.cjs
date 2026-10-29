@@ -136,7 +136,27 @@ const {chromium,webkit}=require('playwright');
       assert.ok(Math.abs(geometry.rowLeft-geometry.frameLeft)<26,
        'History row must stay aligned with its list container: '+JSON.stringify(geometry));
      }
-     if(tab==='summary'){
+     if(tab==='schedules'){
+       const layout=await page.evaluate(()=>{
+        const label=document.querySelector('.schedule-page .schedule-category-controls>label'),
+         control=label?.querySelector('[data-schedule-category-filter]');
+        if(!label||!control)return null;
+        const range=document.createRange();
+        range.selectNodeContents(label.firstChild);
+        const caption=range.getBoundingClientRect(),select=control.getBoundingClientRect(),
+         computed=getComputedStyle(label);
+        return {captionBottom:caption.bottom,selectTop:select.top,
+         lineHeight:parseFloat(computed.lineHeight),fontSize:parseFloat(computed.fontSize),
+         options:[...control.options].map(o=>o.value)};
+       });
+       assert.ok(layout&&layout.fontSize>=10&&layout.lineHeight>=12&&
+        layout.selectTop>=layout.captionBottom+3,
+        'Bills Category caption must not overlap its dropdown at '+width+': '+JSON.stringify(layout));
+       assert.equal(layout.options[1],'Other','Other is the first named category in Bills');
+       assert.equal(await page.locator('.schedule-page [data-schedule-category-add],.schedule-page .schedule-category-manager').count(),0,
+        'Category creation is no longer part of the Bills toolbar');
+      }
+      if(tab==='summary'){
        const metricLayout=await page.evaluate(()=>{
         const root=document.querySelector('.summary-page .summary-numbers');
         const cards=[root?.querySelector('.summary-bank'),root?.querySelector('.summary-monthly'),
@@ -272,6 +292,25 @@ const {chromium,webkit}=require('playwright');
     'The multi-selection UI belongs only to Transactions view');
    await page.locator('[data-history-view="categories"]').click();
    assert.equal(await page.locator('[data-history-category-insights]').count(),1);
+   // Create and delete categories in Bank History → Categories only.
+   assert.equal(await page.locator('[data-history-category-manager]').count(),1);
+   assert.equal(await page.locator('[data-history-category-delete="Other"]').count(),0);
+   await page.locator('.history-category-manager>summary').click();
+   await page.locator('[data-history-category-add] [name=categoryName]').fill('Fictional Pet Care');
+   await page.locator('[data-history-category-add] button[type=submit]').click();
+   assert.equal(await page.locator('.history-category-manage-status').innerText(),
+    'Added Fictional Pet Care. Select it on any transaction or bill.');
+   await page.locator('.history-category-manager>summary').click();
+   assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),1);
+   page.once('dialog',dialog=>dialog.accept());
+   await page.locator('[data-history-category-delete="Fictional Pet Care"]').click();
+   assert.equal(await page.locator('.history-category-manage-status').innerText(),
+    'Deleted Fictional Pet Care. Existing bank history was not changed.');
+   assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),0);
+   const catalog=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}'));
+   assert.ok(!(catalog.scheduleCategories||[]).includes('Fictional Pet Care'),
+    'Deleted category stays absent from saved preferences');
+   
    assert.equal(await page.locator('.history-donut').count(),1);
    assert.ok(await page.locator('.history-category-item').count()>0,
     'Category legend is populated from fictional posted purchase records');
