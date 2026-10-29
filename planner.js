@@ -59,7 +59,7 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
-let historyView='list',historyMonths='3',historyEndMonth='',historySizeFilter=-1;
+let historyView='list',historyMonths='3',historyEndMonth='',historySizeFilter=-1,historyPurchaseDrill=false;
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
@@ -1560,6 +1560,7 @@ function historyPage(bundle,s){
   startMonth=span?(()=>{const d=new Date(selectedMonth+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()-(span-1));return d.toISOString().slice(0,7)})():'';
  const filtered=records.filter(t=>{
   if(t.date.slice(0,7)>selectedMonth||(startMonth&&t.date.slice(0,7)<startMonth))return false;
+  if(historyView==='list'&&historyPurchaseDrill&&cardActivityCents(t)<=0)return false;
   if(historyView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
@@ -2557,7 +2558,7 @@ document.addEventListener('click',async e=>{
  if(historyTab){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
     !window.confirm('Discard unsaved payment changes?'))return;
-  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyLimit=90;
+  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   recurringDraft=null;transactionDetail=null;render();return;
  }
@@ -2565,14 +2566,14 @@ document.addEventListener('click',async e=>{
  if(sizeBand){
   const i=Number(sizeBand.dataset.historySizeBand);
   if(i<0||i>=historyBands.length)return;
-  historyView='list';historySizeFilter=i;historyLimit=90;render();return;
+  historyView='list';historySizeFilter=i;historyPurchaseDrill=true;historyLimit=90;render();return;
  }
  if(e.target.closest?.('[data-history-clear-size]')){
-  historySizeFilter=-1;historyLimit=90;render();return;
+  historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;render();return;
  }
  const categoryDrill=e.target.closest?.('[data-history-drill-category]');
  if(categoryDrill){
-  historyView='list';historySizeFilter=-1;
+  historyView='list';historySizeFilter=-1;historyPurchaseDrill=true;
   historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
   historyLimit=90;render();return;
  }
