@@ -1622,7 +1622,7 @@ function historyInsights(rows,view,options={}){
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<div class="history-category-panel-heading"><h2>Where your money went</h2>'+
     '<details class="history-category-manager" data-history-category-manager>'+
-     '<summary>+ Add category</summary>'+
+     '<summary>+ Add or delete category</summary>'+
      '<div class="history-category-manager-body">'+
       '<form data-history-category-add><label>New category'+
        '<input name="categoryName" maxlength="40" placeholder="e.g. Pet care" required></label>'+
@@ -2140,12 +2140,12 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     recurringEditor(repeatingReviewForm(s,{inline:true}),'review')+'</div>':'')+
    '</article>';
  };
- const categoryChoices=model.categories(state()).filter(c=>!['Other','Uncategorized'].includes(c)),
+ const categoryChoices=categoryOptionsWithOther(model.categories(state())).filter(c=>c!=='Uncategorized'),
   categoryOptions=c=>
    '<option value=""'+(['Other','Uncategorized',''].includes(c)?' selected':'')+
     ' disabled>Choose a category</option>'+
    categoryChoices.map(option=>'<option value="'+escapeHTML(option)+'"'+
-    (option===c?' selected':'')+'>'+escapeHTML(option)+'</option>').join(''),
+    (option===c&&!['Other','Uncategorized'].includes(c)?' selected':'')+'>'+escapeHTML(option)+'</option>').join(''),
   categoryRows=[
    ...categoryIssues.plans.map(item=>({...item,isPlan:true})),
    ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
@@ -3440,11 +3440,11 @@ document.addEventListener('submit',async e=>{
   button=form.querySelector('[type=submit]'),
   issues=model.categoryReviewQueue(state()),
   active=[...issues.transactions,...issues.plans].some(item=>item.kind===kind&&item.id===id);
- if(!active||!chosen||['Other','Uncategorized'].includes(chosen)){
+ if(!active||!chosen||chosen==='Uncategorized'){
   let msg=form.querySelector('[data-category-review-error]');
   if(!msg){msg=document.createElement('small');msg.dataset.categoryReviewError='true';
    msg.setAttribute('role','alert');form.appendChild(msg)}
-  msg.textContent='Choose a specific category and try again.';return;
+  msg.textContent='Choose a category, or select Other if nothing fits.';return;
  }
  if(button)button.disabled=true;
  try{
