@@ -2142,7 +2142,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
     '<div class="category-review-info"><strong>'+escapeHTML(item.merchant)+'</strong>'+
     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
-    ' · '+escapeHTML(item.reason)+'</small></div>'+
+    ' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></div>'+
     '<label>Category<select name="category" required aria-label="Category for '+
      escapeHTML(item.merchant)+'">'+categoryOptions(c)+'</select></label>'+
     '<button type="submit" class="btn primary">Confirm</button></form>';
