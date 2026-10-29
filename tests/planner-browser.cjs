@@ -21,6 +21,23 @@ const {chromium,webkit}=require('playwright');
   constructor(...xs){if(xs.length)super(...xs);else super('2026-10-19T12:00:00Z')}
   static now(){return new Base('2026-10-19T12:00:00Z').getTime()}
  }window.Date=Fixed};
+ // The same month checklist controls all reports. Choose actual calendar months.
+ async function chooseMonths(page,months){
+  await page.locator('[data-history-month-toggle]').click();
+  await page.locator('[data-history-month-current]').click();
+  for(const month of months.filter(m=>m!=='2026-10'))
+   await page.locator('[data-history-month-option="'+month+'"]').check();
+  if(!months.includes('2026-10'))
+   await page.locator('[data-history-month-option="2026-10"]').uncheck();
+  await page.locator('[data-history-month-toggle]').click();
+ }
+ async function chooseAllMonths(page){
+  await page.locator('[data-history-month-toggle]').click();
+  await page.locator('[data-history-month-all]').click();
+  await page.locator('[data-history-month-toggle]').click();
+ }
+ const selectedMonths=page=>page.locator('[data-history-month-option]:checked')
+  .evaluateAll(inputs=>inputs.map(input=>input.value).sort());
  try{
   await ready();
   chrome=await chromium.launch({headless:true});
@@ -111,13 +128,19 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('.history-subtab').count(),4);
-   assert.equal(await page.locator('.history-period-controls [data-history-month]').count(),1);
-   assert.equal(await page.locator('[data-history-months]').count(),1);
+   assert.equal(await page.locator('.history-period-controls [data-history-month-picker]').count(),1);
+   assert.equal(await page.locator('[data-history-month-toggle]').count(),1);
+   assert.equal(await page.locator('[data-history-months],[data-history-month]').count(),0);
    assert.equal(await page.locator('.history-page [data-history-view="list"][aria-pressed="true"]').count(),1);
-   assert.equal(await page.locator('[data-history-months]').inputValue(),'1',
-    'All Bank History subtabs default to one whole calendar month');
-   assert.equal(await page.locator('[data-history-month]').inputValue(),'2026-10',
-    'Default reporting month is the current calendar month');
+   assert.deepEqual(await selectedMonths(page),['2026-10'],
+    'All Bank History subtabs default to the current calendar month');
+   assert.match(await page.locator('[data-history-month-toggle]').innerText(),/October 2026/);
+   await page.locator('[data-history-month-toggle]').click();
+   assert.equal(await page.locator('[data-history-month-option]').count(),4,
+    'Each available calendar month appears as an independent checkbox');
+   await page.keyboard.press('Escape');
+   assert.equal(await page.locator('[data-history-month-menu]').isVisible(),false,
+    'Escape closes the month picker');
    const historySoftStyle=await page.locator('.history-page .history-list-surface').evaluate(el=>{
     const s=getComputedStyle(el);
     return {radius:parseFloat(s.borderTopLeftRadius),background:s.backgroundColor};
@@ -165,7 +188,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await total.innerText(),'Net total: $0.00');
    assert.equal(await page.locator('.history-actual-row.selected').count(),0);
    await boxes.nth(0).check();
-   await page.locator('[data-history-months]').selectOption('all');
+   await chooseAllMonths(page);
    assert.equal(await count.innerText(),'1 selected',
     'Increasing the visible transaction range retains checked displayed rows');
    await page.locator('[data-history-view="categories"]').click();
@@ -200,7 +223,7 @@ const {chromium,webkit}=require('playwright');
     'The saved budget appears in the accessible progress description');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Category view shows its tailored chart rather than duplicating line-item history');
-   await page.locator('[data-history-months]').selectOption('3');
+   await chooseMonths(page,['2026-10','2026-09','2026-08']);
    assert.match(await page.locator('.history-budget-explanation').innerText(),/3 monthly budgets/,
     'Three-month actual spending is compared against three full calendar monthly targets');
    assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
@@ -243,7 +266,7 @@ const {chromium,webkit}=require('playwright');
      'Category bar does not overflow at '+width+'px: '+JSON.stringify(dimensions));
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
-   await page.locator('[data-history-months]').selectOption('all');
+   await chooseAllMonths(page);
    const firstCategory=page.locator('.history-category-item').first();
    await firstCategory.locator('[data-history-drill-category]').click();
    assert.equal(await page.locator('[data-history-view="list"][aria-pressed="true"]').count(),1,
@@ -276,8 +299,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-history-merchant-insights]').count(),1);
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Merchant analysis does not duplicate individual bank rows');
-   await page.locator('[data-history-months]').selectOption('1');
-   assert.equal(await page.locator('[data-history-month]').inputValue(),'2026-10');
+   await chooseMonths(page,['2026-10']);
+   assert.deepEqual(await selectedMonths(page),['2026-10']);
    const amazon=page.locator('[data-history-drill-merchant="amazon"]'),
     costcoWarehouse=page.locator('[data-history-drill-merchant="costco warehouse"]'),
     costcoGas=page.locator('[data-history-drill-merchant="costco gas"]');
@@ -305,7 +328,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-history-drill-merchant]:visible').count(),0);
    assert.equal(await page.locator('[data-history-merchant-total]').innerText(),'$0.00');
    await page.locator('[data-history-merchant-search]').fill('');
-   await page.locator('[data-history-months]').selectOption('3');
+   await chooseMonths(page,['2026-10','2026-09','2026-08']);
    assert.ok((await amazon.innerText()).includes('purchases'),
     'Expanding the calendar-month period aggregates more Amazon purchases');
    await amazon.click();
@@ -315,8 +338,8 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.history-actual-row').evaluateAll(rows=>rows.every(row=>
     /Amazon/i.test(row.querySelector('.history-actual-description strong')?.textContent||''))),
     'Merchant drilldown contains no unrelated transactions');
-   assert.equal(await page.locator('[data-history-months]').inputValue(),'3',
-    'Merchant drilldown preserves the month span');
+   assert.deepEqual(await selectedMonths(page),['2026-08','2026-09','2026-10'],
+    'Merchant drilldown preserves the month selection');
    assert.match(await page.locator('.history-active-filter').innerText(),/Merchant: Amazon/);
    await page.locator('[data-history-clear-merchant]').click();
    assert.equal(await page.locator('[data-history-view="merchants"][aria-pressed="true"]').count(),1,
@@ -330,22 +353,35 @@ const {chromium,webkit}=require('playwright');
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await page.locator('[data-history-view="list"]').click();
 
-   await page.locator('[data-history-months]').selectOption('1');
-   await page.locator('[data-history-month]').fill('2026-09');
-   assert.equal(await page.locator('[data-history-month]').inputValue(),'2026-09');
+   await chooseMonths(page,['2026-09']);
+   assert.deepEqual(await selectedMonths(page),['2026-09']);
    const recordDates=await page.locator('.history-actual-row').evaluateAll(rows=>
     rows.map(row=>row.dataset.historySortDate));
    assert.ok(recordDates.every(date=>date.startsWith('2026-09')),
     'A selected month restricts every line-item bank record');
-   await page.locator('[data-history-months]').selectOption('all');
-   await page.locator('[data-history-month]').fill('2026-10');
+   await chooseAllMonths(page);
+   // Nonadjacent months must omit September instead of taking a continuous range.
+   await chooseMonths(page,['2026-10','2026-08']);
+   assert.deepEqual(await selectedMonths(page),['2026-08','2026-10']);
+   const nonadjacent=await page.locator('.history-actual-row').evaluateAll(rows=>
+    rows.map(row=>row.dataset.historySortDate.slice(0,7)));
+   assert.ok(nonadjacent.includes('2026-08')&&nonadjacent.includes('2026-10')&&
+    nonadjacent.every(month=>month==='2026-08'||month==='2026-10'),
+    'August and October selected, but September excluded');
+   await page.locator('[data-history-view="categories"]').click();
+   assert.deepEqual(await selectedMonths(page),['2026-08','2026-10'],
+    'Checked months remain selected across all four reports');
+   assert.match(await page.locator('.history-budget-explanation').innerText(),/2 monthly budgets/,
+    'Monthly budgets scale by number of checked months');
+   await page.locator('[data-history-view="list"]').click();
+   await chooseAllMonths(page);
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('[data-history-view="categories"]').click();
    assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
     'A monthly category budget is saved across page reloads');
-   assert.equal(await page.locator('[data-history-months]').inputValue(),'1',
-    'Returning to Bank History starts with the current calendar month');
+   assert.deepEqual(await selectedMonths(page),['2026-10'],
+    'Reload resets the view to the current calendar month');
 
    // Actual bank records are inspectable through the shared panel, never editable.
    const bankRow=page.locator('.history-row-open').first();
