@@ -406,11 +406,21 @@ function showCalendar(date){
 }
 
 function rawBalanceMarkup(account,real){
- const raw=account?.current;
- const n=raw==null||raw===''?null:Number(raw);
- const displayed=n!==null&&Number.isFinite(n)?money(n):'Not reported';
- return '<div class="summary-bank"><small>'+(real?'Actual Current Balance':'Sample Current Balance')+
-  '</small><strong data-bank-current-value>'+displayed+'</strong>'+
+ const credit=String(account?.accountType||account?.type||'').toLowerCase()==='credit';
+ // Checking displays only the bank's AVAILABLE cash. It is also the
+ // projection's opening cash balance when supplied, so pending holds are
+ // reflected once without changing bank records or recurring predictions.
+ // Do not silently substitute CURRENT when AVAILABLE is unavailable.
+ // Credit-card balances remain liability (CURRENT), not available credit.
+ const raw=credit?account?.current:account?.available;
+ const n=raw===null||raw===undefined||raw===''||!Number.isFinite(Number(raw))?
+  null:Number(raw);
+ const title=credit?(real?'Actual Current Balance':'Sample Current Balance'):
+  (real?'Available Balance':'Sample Available Balance');
+ return '<div class="summary-bank"><small>'+title+'</small>'+
+  '<strong data-bank-balance-value'+(credit?
+   ' data-bank-current-value':' data-bank-available-value')+'>'+
+   (n===null?'Not reported':money(n))+'</strong>'+
   '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
 }
 // Issued card statements and reconstructed statement estimates are already

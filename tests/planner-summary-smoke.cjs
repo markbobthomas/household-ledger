@@ -108,9 +108,34 @@ assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(1095),
  'The full three-year forecast is modeled rather than truncated to one year');
 const liveView=tool.render({...opts,days:1095,chosen:{...opts.chosen,current:5650.25,available:5400.25},
  snapshot:{...opts.snapshot,connected:true},isReal:true});
-assert.ok(liveView.includes('data-bank-current-value>$5,650.25<'));
-assert.match(liveView,/Actual Current Balance/);
-assert.ok(!liveView.includes('data-bank-current-value>$5,400.25<'));
+assert.ok(liveView.includes('data-bank-available-value>$5,400.25<'));
+assert.match(liveView,/Available Balance/);
+assert.doesNotMatch(liveView,/Current:|Actual Current Balance|5,650\.25/,
+ 'Checking Calendar shows available only, never the bank current balance');
+const pendingDisplayed=tool.render({...opts,days:1095,
+ chosen:{...opts.chosen,current:6800,available:5600},
+ snapshot:{...opts.snapshot,connected:true},isReal:true});
+const postedDisplayed=tool.render({...opts,days:1095,
+ chosen:{...opts.chosen,current:5600,available:5600},
+ snapshot:{...opts.snapshot,connected:true},isReal:true});
+assert.match(pendingDisplayed,/data-bank-available-value>\$5,600\.00</);
+assert.match(postedDisplayed,/data-bank-available-value>\$5,600\.00</,
+ 'Pending-to-posted settlement leaves the visible available balance consistent');
+assert.doesNotMatch(pendingDisplayed,/6,800\.00/,
+ 'Pending account current balance is not shown as extra cash');
+const missingAvailable=tool.render({...opts,days:1095,
+ chosen:{...opts.chosen,current:6000,available:null},
+ snapshot:{...opts.snapshot,connected:true},isReal:true});
+assert.match(missingAvailable,/Available Balance/);
+assert.match(missingAvailable,/data-bank-available-value>Not reported</);
+assert.doesNotMatch(missingAvailable,/6,000\.00/,
+ 'Missing bank available cash must not silently fall back to current');
+const cardView=tool.render({...opts,days:1095,
+ chosen:{...opts.chosen,type:'credit',current:1234.56,available:9000},
+ snapshot:{...opts.snapshot,connected:true},isReal:true});
+assert.match(cardView,/Actual Current Balance/);
+assert.match(cardView,/data-bank-current-value>\$1,234\.56</,
+ 'Credit-card debt must not be mislabeled as available checking cash');
 for(const n of [10,30,90,180,360,1095])
  assert.ok(trend.includes('data-trend-days="'+n+'"'));
 assert.doesNotMatch(liveView,/data-trend-days|data-summary-plot/);
@@ -118,5 +143,5 @@ const unavailableTrend=tool.render({...opts,days:90,fresh:false,view:'trend'});
 assert.match(unavailableTrend,/A verified starting balance is needed for the trend/);
 assert.doesNotMatch(unavailableTrend,/data-summary-plot|data-calendar-stage/);
 const noCurrent=tool.render({...opts,days:1095,chosen:{...opts.chosen,current:null,available:5000}});
-assert.ok(noCurrent.includes('data-bank-current-value>Not reported<'));
+assert.ok(noCurrent.includes('data-bank-available-value>$5,000.00<'));
 console.log('PASS three-year lowest-balance Summary: single minimum, no major-payments checklist, warnings and unverified suppression');
