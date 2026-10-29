@@ -406,12 +406,30 @@ function showCalendar(date){
 }
 
 function rawBalanceMarkup(account,real){
- const raw=account?.current;
- const n=raw==null||raw===''?null:Number(raw);
- const displayed=n!==null&&Number.isFinite(n)?money(n):'Not reported';
- return '<div class="summary-bank"><small>'+(real?'Actual Current Balance':'Sample Current Balance')+
-  '</small><strong data-bank-current-value>'+displayed+'</strong>'+
-  '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
+ const bankNumber=value=>value===null||value===undefined||value===''||
+  !Number.isFinite(Number(value))?null:Number(value);
+ const current=bankNumber(account?.current),
+  credit=String(account?.accountType||account?.type||'').toLowerCase()==='credit',
+  // The checking Calendar forecasts from AVAILABLE when the bank reports it.
+  // Show exactly that same bank fact, not an inferred debit or a synthetic
+  // "current" balance. Credit liability always uses the bank's CURRENT.
+  available=!credit&&current!==null?bankNumber(account?.available):null,
+  usingAvailable=available!==null,
+  primary=usingAvailable?available:current,
+  title=usingAvailable?(real?'Available Balance':'Sample Available Balance'):
+   (real?'Actual Current Balance':'Sample Current Balance'),
+  note=usingAvailable?'Current: '+money(current):
+   (real?(!credit?'Available not reported · bank current shown':
+    'Bank reported, not projected'):'Sample data');
+ return '<div class="summary-bank"><small>'+title+'</small>'+
+  '<strong data-bank-balance-value'+(usingAvailable?
+   ' data-bank-available-value':' data-bank-current-value')+
+   ' title="'+(usingAvailable?
+    'Bank-reported available funds may already reflect pending withdrawals and holds':
+    'Bank-reported current balance')+'">'+
+   (primary===null?'Not reported':money(primary))+'</strong>'+
+  '<small class="summary-bank-detail"'+(usingAvailable?
+   ' data-bank-current-value="'+money(current)+'"':'')+'>'+note+'</small></div>';
 }
 // Issued card statements and reconstructed statement estimates are already
 // differentiated by the canonical card obligations engine. Never substitute
