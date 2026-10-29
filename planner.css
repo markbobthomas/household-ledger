@@ -4385,3 +4385,52 @@ a:hover{color:#166e61}
  .history-page .history-category-manager-body{padding:11px}
  .history-page [data-history-category-add] button{width:100%}
 }
+
+/* Compact spending report: preserve controls, remove visual repetition. */
+.history-page [data-history-category-insights]{padding-top:18px!important}
+.history-page .history-category-panel-heading{
+ display:flex;flex-direction:row;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:7px 12px;margin-bottom:8px;
+}
+.history-page .history-category-panel-heading h2{margin:0;font-size:20px}
+.history-page .history-category-manager{width:auto;min-width:0}
+.history-page .history-category-manager[open]{flex-basis:100%;width:100%}
+.history-page .history-category-manager>summary{
+ width:auto;min-height:32px;padding:5px 9px;
+ background:transparent;border:1px solid #e0e9e1;
+ border-radius:9px;font-size:11px;font-weight:710;
+}
+.history-page .history-spending-overview{
+ display:flex;align-items:baseline;flex-wrap:wrap;gap:5px 12px;
+ margin:5px 0 12px;color:#365247;
+}
+.history-page .history-spending-overview strong{font:780 clamp(16px,4.5vw,21px) var(--mono)}
+.history-page .history-spending-overview span{font-size:12px;color:#788a80}
+.history-page .history-budget-summary{
+ margin:0 0 14px;padding:0;border:0;border-radius:0;background:transparent;
+}
+.history-page .history-budget-summary-head{
+ display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap;margin-bottom:7px;
+}
+.history-page .history-budget-summary-head>span{font-size:12px;font-weight:700;color:#65796e}
+.history-page .history-budget-summary-head>strong{font:800 21px var(--mono)}
+.history-page .history-budget-summary-head small{
+ display:inline;font-size:11px;color:#788a80;margin:0 0 0 auto;
+}
+.history-page .history-budget-summary-track{height:8px}
+.history-page .history-category-layout{
+ gap:16px;grid-template-columns:minmax(155px,.5fr) minmax(0,1.5fr)
+}
+.history-page .history-donut{width:min(190px,100%);border-width:6px}
+.history-page .history-donut-center span{font-size:12px;font-weight:680;color:#73877b}
+@media(max-width:850px){
+ .history-page .history-category-layout{grid-template-columns:minmax(0,1fr)}
+ .history-page .history-donut{width:min(155px,55vw)}
+}
+@media(max-width:650px){
+ .history-page [data-history-category-insights]{padding:14px 14px!important}
+ .history-page .history-category-panel-heading{
+  flex-direction:row;align-items:center
+ }
+ .history-page .history-category-manager>summary{width:auto}
+}
