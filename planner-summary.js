@@ -418,7 +418,7 @@ function rawBalanceMarkup(account,real){
  const title=credit?(real?'Actual Current Balance':'Sample Current Balance'):
   (real?'Available Balance':'Sample Available Balance');
  return '<div class="summary-bank"><small>'+title+'</small>'+
-  '<strong data-bank-balance-value'+(credit?
+  '<strong class="'+(!credit&&n!==null&&n<0?'summary-bank-negative':'')+'" data-bank-balance-value'+(credit?
    ' data-bank-current-value':' data-bank-available-value')+'>'+
    (n===null?'Not reported':money(n))+'</strong>'+
   '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
