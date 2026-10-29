@@ -4428,3 +4428,50 @@ a:hover{color:#166e61}
  }
  .history-page .history-category-manager>summary{width:auto}
 }
+
+
+/* Budget is a full-width ledger list, not a chart with an inset legend.
+   Use identical tracks for the header and every row at each breakpoint.
+   Vertically center the Spent amount against the first line (editable target),
+   with remaining/over-budget information directly underneath that target. */
+.history-page .history-category-table{width:100%;min-width:0}
+.history-page .history-category-columns,
+.history-page .history-category-item{
+ grid-template-columns:minmax(0,1.7fr) minmax(58px,1fr) minmax(78px,94px) minmax(116px,140px);
+ column-gap:14px;
+}
+.history-page .history-category-columns span:nth-child(4){text-align:right}
+.history-page .history-category-item{align-items:stretch}
+.history-page .history-category-drill,
+.history-page .history-category-item .history-budget-track{align-self:center}
+.history-page .history-category-item .history-category-actual{
+ align-self:start;line-height:32px;
+}
+.history-page .history-category-item .history-category-budget{
+ width:100%;min-width:0;align-items:stretch;align-self:start;
+}
+.history-page .history-category-item .history-budget-input{
+ width:100%;max-width:100%;height:32px;min-height:32px;margin:0;
+}
+.history-page .history-category-item .history-budget-input input{
+ text-align:right;font-variant-numeric:tabular-nums;
+}
+.history-page .history-category-item .history-budget-difference{
+ text-align:right;line-height:14px;
+}
+@media(max-width:650px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(0,1.2fr) minmax(26px,.65fr) 68px 108px;
+  column-gap:6px;
+ }
+ .history-page .history-category-item .history-budget-input{height:30px;min-height:30px}
+ .history-page .history-category-item .history-category-actual{line-height:30px}
+}
+@media(max-width:380px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(0,1fr) minmax(23px,.42fr) 62px 97px;
+  column-gap:3px;
+ }
+}
