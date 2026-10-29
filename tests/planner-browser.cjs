@@ -1725,7 +1725,7 @@ const {chromium,webkit}=require('playwright');
     '[data-schedule-edit-form] .schedule-primary-fields').evaluate(grid=>{
     const fields=[...grid.querySelectorAll(':scope > label')].filter(el=>
      getComputedStyle(el).display!=='none');
-    const columns=getComputedStyle(grid).gridTemplateColumns.trim().split(/\\s+/).length;
+    const columns=getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length;
     const note=grid.querySelector('.schedule-posting-date');
     return {
      noteVisible:!!note&&getComputedStyle(note).display!=='none',
