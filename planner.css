@@ -4262,3 +4262,97 @@ a:hover{color:#166e61}
  .reviews-page .category-review-row label{grid-column:1;grid-row:auto}
  .reviews-page .category-review-row button{grid-column:2}
 }
+
+
+/* Category management lives on Bank History → Categories. On mobile, never
+   collapse the Bills filter label to zero line height: that caused the text
+   to overlap the select. Treat both rows as true label + control stacks. */
+.schedule-page .ledger-toolbar>.schedule-category-controls{
+ display:flex;align-items:stretch;min-width:0;width:100%;
+}
+.schedule-page .schedule-category-controls>label{
+ display:flex!important;flex:1 1 100%;min-width:0;
+ flex-direction:column!important;align-items:stretch!important;
+ gap:6px!important;margin:0!important;
+ color:#71877b!important;font-size:11px!important;
+ font-weight:680!important;line-height:1.4!important;
+}
+.schedule-page .schedule-category-controls>label select{
+ display:block;width:100%;min-width:0;
+ height:40px;min-height:40px;margin:0!important;
+ font-size:12px!important;line-height:1.35!important;
+}
+.history-page .history-category-panel-heading{
+ display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:10px 16px;margin-bottom:8px;
+}
+.history-page .history-category-panel-heading h2{margin:0}
+.history-page .history-category-manager{width:100%;min-width:0}
+.history-page .history-category-manager>summary{
+ width:max-content;max-width:100%;min-height:38px;
+ display:flex;align-items:center;justify-content:center;
+ padding:9px 15px;list-style:none;cursor:pointer;
+ background:#eef6ef;border:1px solid #dce8de;
+ border-radius:11px;color:#2e7057;font-size:12px;font-weight:740;
+}
+.history-page .history-category-manager>summary::-webkit-details-marker{display:none}
+.history-page .history-category-manager>summary:focus-visible,
+.history-page .history-custom-category button:focus-visible{
+ outline:2px solid #398367;outline-offset:2px;
+}
+.history-page .history-category-manager-body{
+ width:100%;min-width:0;margin:11px 0 3px;padding:14px;
+ border:1px solid #e4eee5;border-radius:13px;background:#f8fbf8;
+ box-sizing:border-box;
+}
+.history-page [data-history-category-add]{
+ display:flex;align-items:end;flex-wrap:wrap;gap:9px;
+}
+.history-page [data-history-category-add] label{
+ flex:1 1 200px;display:flex;flex-direction:column;gap:6px;
+ font-size:11px;font-weight:650;color:#607a69;
+}
+.history-page [data-history-category-add] input{
+ width:100%;min-width:0;min-height:40px;
+ padding:8px 11px;box-sizing:border-box;
+ border:1px solid #dce8df;border-radius:10px;background:#fff;
+ font-size:13px;
+}
+.history-page [data-history-category-add] button{min-height:40px}
+.history-page .history-category-manager-list{
+ margin-top:16px;padding-top:13px;border-top:1px solid #e6eee6;
+ display:flex;flex-direction:column;gap:6px;
+}
+.history-page .history-category-manager-list>strong{font-size:12px;color:#335743}
+.history-page .history-category-manager-list>small,
+.history-page .history-category-manager-list>p{
+ font-size:11px;line-height:1.5;color:#718578;margin:5px 0;
+}
+.history-page .history-custom-category{
+ display:flex;align-items:center;justify-content:space-between;
+ min-width:0;gap:12px;padding:7px 3px;border-bottom:1px solid #edf2ed;
+}
+.history-page .history-custom-category>span{
+ min-width:0;overflow-wrap:anywhere;font-size:12px;font-weight:630;
+}
+.history-page .history-custom-category button{
+ border:1px solid #efddd5;background:#fff8f4;border-radius:9px;
+ color:#a25440;font-size:11px;font-weight:700;padding:7px 12px;
+ min-height:34px;cursor:pointer;
+}
+.history-page [data-history-category-manage-message]{color:#a25440;font-size:11px;margin:10px 0 0}
+.history-page .history-category-manage-status{color:#39765a;font-size:12px;font-weight:650}
+@media(max-width:850px){
+ .schedule-page .ledger-toolbar>.schedule-category-controls{
+  grid-column:1;grid-row:3;align-self:stretch;
+ }
+ .schedule-page .schedule-category-controls>label{
+  font-size:11px!important;line-height:1.4!important;gap:6px!important;
+ }
+}
+@media(max-width:650px){
+ .history-page .history-category-panel-heading{align-items:stretch;flex-direction:column}
+ .history-page .history-category-manager>summary{width:100%}
+ .history-page .history-category-manager-body{padding:11px}
+ .history-page [data-history-category-add] button{width:100%}
+}
