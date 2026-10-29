@@ -1749,9 +1749,12 @@ function financialRecapPage(bundle,s){
   // A card payment is one predicted withdrawal from checking, even though
   // the canonical ledger models both cash and credit-card legs of the transfer.
   cardPayments=new Set((bundle?.projection?.plans||[])
-   .filter(p=>p.kind==='card_payment'&&
-    accountType(accountsById.get(String(p.fromAccountId))||{})==='cash'&&
-    accountType(accountsById.get(String(p.toAccountId))||{})==='credit')
+   // Checking-to-card movement endpoints identify settlements even when
+   // imported plans do not carry an explicit card-payment kind label.
+   .filter(p=>accountsById.has(String(p.fromAccountId))&&
+    accountsById.has(String(p.toAccountId))&&
+    accountType(accountsById.get(String(p.fromAccountId)))==='cash'&&
+    accountType(accountsById.get(String(p.toAccountId)))==='credit')
    .map(p=>String(p.id))),
   eventCategories=new Map((bundle?.projection?.events||[])
    .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
@@ -1792,6 +1795,11 @@ function financialRecapPage(bundle,s){
   .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,5),
   lastDay=shiftDay(asOf,30),
   upcoming=forecastBills.filter(r=>r.date<=lastDay).slice(0,5),
+  // Preserve the five chronological bills, but also surface the next card
+  // payment if five other withdrawals occur before it.
+  nextCard=forecastBills.find(r=>r.date<=lastDay&&r.kind==='movement'&&
+   cardPayments.has(String(r.id))),
+  cardAfterFive=nextCard&&!upcoming.some(r=>r.key===nextCard.key)?nextCard:null,
   metric=(label,value,note,attr)=>'<div class="financial-recap-metric"'+
    (attr?' data-recap-'+attr:'')+'><span>'+escapeHTML(label)+'</span>'+
    '<strong>'+escapeHTML(value)+'</strong><small>'+escapeHTML(note)+'</small></div>',
@@ -1827,14 +1835,19 @@ function financialRecapPage(bundle,s){
     breakdown(topSpending,false,'No posted purchases this month.')+
     '<small class="financial-recap-note">Uses the same spending rules as Budget, across all connected accounts.</small></section>'+
    '<section class="financial-recap-card financial-recap-upcoming"><h3>Next predicted bills</h3>'+
-    '<p>Up to five predicted payments in the next 30 days</p>'+
+    '<p>Five earliest predicted payments in the next 30 days</p>'+
     (hasProjection?(upcoming.length?'<div class="financial-recap-rows">'+
       upcoming.map(r=>'<div class="financial-recap-row"><span><strong>'+
        escapeHTML(r.merchant)+'</strong><small>'+escapeHTML(dayLabel(r.date))+
        '</small></span><strong>'+cash(r.amount)+'</strong></div>').join('')+
       '</div>':'<p class="financial-recap-empty">No outgoing payments predicted in the next 30 days.</p>'):
      '<p class="financial-recap-empty">Future bills are unavailable until the forecast is ready.</p>')+
-    '<small class="financial-recap-note">These are predictions, not confirmed posted withdrawals. Credit-card payments are included once.</small></section>'+
+    (cardAfterFive?'<div class="financial-recap-card-followup" data-recap-next-card-payment>'+
+     '<small>Also coming up · Next credit-card payment</small>'+
+     '<div class="financial-recap-row"><span><strong>'+escapeHTML(cardAfterFive.merchant)+
+     '</strong><small>'+escapeHTML(dayLabel(cardAfterFive.date))+'</small></span>'+
+     '<strong>'+cash(cardAfterFive.amount)+'</strong></div></div>':'')+
+    '<small class="financial-recap-note">These are predictions, not confirmed posted withdrawals. Card payments are counted once; if one falls after the first five, it appears separately.</small></section>'+
   '</div></div>';
 }
 
