@@ -33,6 +33,28 @@ const {chromium,webkit}=require('playwright');
    await page.goto(url,{waitUntil:'load'});
    await page.locator('#planner-main .planner-page').first().waitFor();
    assert.equal(await page.locator('h1').innerText(),'Household Ledger');
+   // The refresh is presentation-only, with the same routes and inputs.
+   // Verify that the new visual theme actually loads instead of silently
+   // falling back to the industrial stylesheet after a cached deployment.
+   const newTheme=await page.evaluate(()=>{
+    const css=selector=>getComputedStyle(document.querySelector(selector));
+    const nav=css('.main-navigation'),header=css('.topbar'),
+     selected=css('.main-navigation .tab-link.active'),
+     logo=getComputedStyle(document.querySelector('.topbar h1'),'::before');
+    return {background:css('body').backgroundColor,
+     nav:nav.backgroundColor,rounding:parseFloat(nav.borderTopLeftRadius),
+     header:header.backgroundColor,active:selected.backgroundColor,
+     mark:logo.content,accent:css('.btn.primary').borderTopLeftRadius};
+   });
+   assert.equal(newTheme.background,'rgb(247, 249, 246)',
+    'The warm Ledger theme must be loaded, not the retired dark one');
+   assert.equal(newTheme.nav,'rgb(255, 255, 255)');
+   assert.ok(newTheme.rounding>=18,'Navigation uses soft rounded surfaces');
+   assert.equal(newTheme.header,'rgba(0, 0, 0, 0)',
+    'Dark industrial top bar is removed');
+   assert.equal(newTheme.active,'rgb(230, 244, 237)',
+    'Current destination is the calm mint-tinted pill');
+   assert.notEqual(newTheme.mark,'none','Ledger has the new soft brand mark');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
     ['Calendar','Bills','Bank History']);
    assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),1,
@@ -96,6 +118,12 @@ const {chromium,webkit}=require('playwright');
     'All Bank History subtabs default to one whole calendar month');
    assert.equal(await page.locator('[data-history-month]').inputValue(),'2026-10',
     'Default reporting month is the current calendar month');
+   const historySoftStyle=await page.locator('.history-page .history-list-surface').evaluate(el=>{
+    const s=getComputedStyle(el);
+    return {radius:parseFloat(s.borderTopLeftRadius),background:s.backgroundColor};
+   });
+   assert.ok(historySoftStyle.radius>=16,'History lines live in soft shared cards');
+   assert.equal(historySoftStyle.background,'rgb(255, 255, 255)');
    const currentDates=await page.locator('.history-actual-row').evaluateAll(rows=>
     rows.map(row=>row.dataset.historySortDate));
    assert.ok(currentDates.every(date=>date.startsWith('2026-10')),
