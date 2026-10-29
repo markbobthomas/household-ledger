@@ -7,6 +7,14 @@
 const VERSION=3;
 const Accounting=root.HouseholdAccounting||(typeof require==='function'?require('./accounting.js'):null);
 const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('./categorization.js'):null);
+function classifier(){
+ // If the page was partially delivered, fail with a clear missing UI-module
+ // error, not a misleading bank-balance/reconnection error.
+ if(!Categorization||typeof Categorization.classify!=='function'||
+    typeof Categorization.loanBill!=='function')
+  throw Error('The calendar categorization component failed to load. Reload the app; your bank connection and saved predictions are unchanged.');
+ return Categorization;
+}
 const copy=x=>JSON.parse(JSON.stringify(x));
 const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(String(d)+'T12:00:00Z'));
 // The ONE category registry for History, Scheduled, Calendar editors and Review.
@@ -220,10 +228,10 @@ function resolution(state,t,index){
  // Re-evaluate old Plaid mortgage rows even if an earlier import mislabeled
  // the loan withdrawal as a transfer. Keep the original bank record unchanged.
  const legacyMortgage=t.source?.provider==='plaid'&&t.type==='transfer'&&
-  Categorization.loanBill?.(t)?.isMortgage&&Number(t.source?.plaidAmount)>0;
+  classifier().loanBill(t)?.isMortgage&&Number(t.source?.plaidAmount)>0;
  const bankCategory=t.source?.provider==='plaid'&&
   (['expense','refund'].includes(t.type)||legacyMortgage)?
-  Categorization.classify(t):null;
+  classifier().classify(t):null;
  const inferred=original==='Other'&&bankCategory?.category&&bankCategory.category!=='Other'?bankCategory.category:original;
  const origin=original!=='Other'&&t.source?.provider==='plaid'?
   t.source?.categoryOrigin||'plaid-category':bankCategory?.method||'source';
@@ -561,7 +569,7 @@ function applyPlaidSync(state,change){
   const foreign=itemId?(staged.transactions||[]).find(row=>row.source?.provider==='plaid'&&row.source?.providerTransactionId===String(t.transaction_id)&&row.source?.itemId&&row.source.itemId!==itemId&&row.source?.accountId===String(t.account_id)):null;
   if(foreign)throw Error('Same bank transaction appears under multiple Plaid Items; review duplicate connection');
   const current=byId.get(id);
-  const classified=Categorization.classify(t);
+  const classified=classifier().classify(t);
   const defaultCategory=classified.category!=='Other'?classified.category:current?.category||'Other';
   const pfc=t.personal_finance_category&&typeof t.personal_finance_category==='object'?
    {primary:String(t.personal_finance_category.primary||'').slice(0,90),
