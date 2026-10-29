@@ -4,6 +4,14 @@
 const assert=require('node:assert/strict'),path=require('node:path');
 const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwright');
 (async()=>{
+ // One-time read-only deployment revision probe. No authenticated endpoints,
+ // account records, or secret material; remove before merging.
+ try{
+  const health=await fetch('https://household-ledger-test.onrender.com/healthz',
+   {signal:AbortSignal.timeout(15000)});
+  console.log('DEPLOYMENT PROBE STATUS',health.status);
+  console.log('DEPLOYMENT PROBE RESPONSE',String(await health.text()).slice(0,400));
+ }catch(error){console.log('DEPLOYMENT PROBE FAILED',String(error.message||error))}
  const port=19871,server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],
   {cwd:path.resolve(__dirname,'..'),stdio:'ignore'});
  let chrome,iphone;
