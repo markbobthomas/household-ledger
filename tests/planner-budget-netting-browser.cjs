@@ -141,6 +141,34 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': the linked card payment is shown only once');
    assert.doesNotMatch(await page.locator('.financial-recap-upcoming').innerText(),/Fictional Savings Transfer/,
     name+': internal savings transfer must not appear as a bill');
+
+   // A saved recurring checking-to-card bill (the Bills page, not a
+   // one-time Payments add) must be in Summary's NEXT FIVE when due before
+   // the other projected withdrawals. Store only fictional demo preferences.
+   await page.evaluate(()=>{
+    const key='household-planner-sample-settings-v1',
+     saved=JSON.parse(localStorage.getItem(key)||'{}');
+    saved.futureRecurringRules=[...(saved.futureRecurringRules||[]),{
+     id:'fictional-recurring-card-pay',kind:'movement',type:'transfer',
+     fromAccountId:'demo-checking',toAccountId:'demo-visa',
+     date:'2026-10-22',anchorDate:'2026-10-22',frequency:'monthly',
+     merchant:'Fictional Recurring Card Repayment',amount:321,category:'Other'
+    }];
+    localStorage.setItem(key,JSON.stringify(saved));
+   });
+   await page.reload({waitUntil:'load'});
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   const recurring=page.locator('[data-schedule-card="fictional-recurring-card-pay"]');
+   assert.equal(await recurring.count(),1,name+': recurring card payment is listed in Bills');
+   assert.match(await recurring.innerText(),/Oct 22/,
+    name+': Bills presents a next-week dated card payment, not an unforecasted placeholder');
+   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   const firstFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
+   assert.match(firstFive,/Fictional Recurring Card Repayment/,
+    name+': a next-week card payment shown in Bills must also be among Summary next five');
+   assert.equal(await page.locator('[data-recap-next-card-payment]').count(),0,
+    name+': the card payment within first five must not require an extra row');
+
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
     name+': refunds still appear as signed spending in the full-width Budget list');
