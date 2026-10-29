@@ -5,7 +5,7 @@ const suites = {
   forecast: ['pilot-account-forecast-links-smoke','planner-routine-smoke','planner-backtest-smoke','planner-series-smoke','planner-recurring-confirmation-smoke','planner-merchant-streams-smoke','planner-recurring-collision-smoke','planner-card-estimate-smoke','planner-alternating-pay-smoke','planner-payroll-safety-smoke','planner-missing-mortgage-smoke','planner-history-smoke','history-any-recurring-smoke','planner-early-recurrence-smoke','recurrence-early-dedupe-smoke','planner-income-smoke','payment-obligations-smoke','planner-three-year-smoke','planner-business-days-smoke','planner-schedule-categories-smoke','planner-coverage-smoke','mortgage-prediction-smoke'],
   parity: ['planner-parity'],
   reconciliation: ['planner-category-spending-smoke','bank-balance-authority','review-to-budget-parity','reconciliation-phase1-smoke','reconciliation-phase3-stress','conservative-categorization-phase2','sandbox-categorization-smoke','planner-category-review-smoke','planner-category-management-smoke','category-deletion-save-smoke','category-learning-save-smoke'],
-  browser: ['planner-browser','pilot-remove-account-browser','pilot-category-inline-browser'],
+  browser: ['planner-browser','planner-budget-netting-browser','pilot-remove-account-browser','pilot-category-inline-browser'],
   historic: ['recurrence-reconcile-smoke']
 };
 const coreGroups = ['baseline','banking','forecast','parity','reconciliation'];
