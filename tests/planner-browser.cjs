@@ -310,9 +310,9 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('#source-type').innerText(),/DEMO/);
    await page.keyboard.press('Escape');
    assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
-   assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,650.25',
-    'The demo current balance uses the bank snapshot current, not available $5,400.25');
-   assert.match(await page.locator('.summary-bank').innerText(),/Sample Current Balance/);
+   assert.equal(await page.locator('[data-bank-available-value]').innerText(),'$5,400.25',
+    'The demo checking balance shows the reported available, including any holds');
+   assert.match(await page.locator('.summary-bank').innerText(),/Sample Available Balance/);
    assert.equal(await page.locator('.planner-menu-content [data-view="transactions"]').count(),1,
     'Overlapping forecast destinations are removed from the main menu');
    assert.equal(await page.locator('.calendar-drilldowns [data-view="transactions"]').count(),0,
@@ -477,9 +477,9 @@ const {chromium,webkit}=require('playwright');
     return fit;
    });
    assert.ok(previewFits,'Two complete payments and overflow count fit in a fixed-height day');
-   assert.equal(await page.locator('.summary-bank [data-bank-current-value]').evaluate(el=>
+   assert.equal(await page.locator('.summary-bank [data-bank-available-value]').evaluate(el=>
     getComputedStyle(el).color),'rgb(35, 113, 74)',
-    'Bank-reported current balance is green');
+    'Checking available balance uses the established green metric style');
    for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
     const risk=await page.locator(selector).evaluate(el=>({
      value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
@@ -2662,8 +2662,8 @@ const {chromium,webkit}=require('playwright');
   await page.locator('#planner-notice').getByText('Bank connection needs attention.').waitFor();
   assert.match(await page.locator('#planner-notice').innerText(),/sign in again|renew permission/i);
   assert.equal(await page.locator('#planner-notice a[href="/bank-connect"]').innerText(),'Reconnect bank');
-  assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
-   'Bank authorization failure never clears the previously imported starting balance');
+  assert.equal(await page.locator('[data-bank-available-value]').innerText(),'$4,800.00',
+   'Bank authorization failure preserves the previously imported available balance');
   loginRequired=false;
   await page.locator('#refresh-bank').click();
   await page.waitForFunction(()=>!document.querySelector('#planner-notice')?.textContent
