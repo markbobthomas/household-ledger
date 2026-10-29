@@ -1909,7 +1909,20 @@ function updateHistorySelectionSummary(){
  if(total)total.textContent='Net total: '+(cents<0?'−':cents>0?'+':'')+cash(Math.abs(cents)/100);
  if(clear)clear.hidden=checked.length===0;
 }
+// Spending navigation reflects the user's questions, not implementation modules.
+// The existing Summary stays read-only and uses the unchanged canonical totals.
+function spendingTabNav(active){
+ return '<nav class="history-subtabs spending-tabs" aria-label="Spending views">'+
+  [['categories','Budget','◔'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥'],['summary','Summary','▤']]
+   .map(([id,name,icon])=>'<button type="button" class="history-subtab'+
+    (active===id?' active':'')+'" data-history-view="'+id+
+    '" aria-pressed="'+(active===id)+'"><span aria-hidden="true">'+icon+'</span>'+name+'</button>')
+   .join('')+'</nav>';
+}
 function historyPage(bundle,s){
+ if(activeTab==='history'&&historyView==='summary')return '<div class="planner-page history-page spending-summary-page">'+
+  '<div class="history-view-toolbar">'+spendingTabNav('summary')+'</div>'+
+  financialRecapPage(bundle,s)+'</div>';
  const displayView=activeTab==='activity'?'list':historyView;
  const accounts=activeAccounts(s),
   // Read the current category overrides directly. The derived forecast is
@@ -2114,16 +2127,8 @@ function historyPage(bundle,s){
    ungrouped.join('');
  })();
  return '<div class="planner-page history-page">'+
-  '<div class="history-view-header"><h2>'+(activeTab==='activity'?'Activity':'Spending')+'</h2>'+
-   '<p>'+(activeTab==='activity'?'Your actual bank transactions. These records are read-only.':
-     'Your budget, where money went, and purchase patterns.')+'</p></div>'+
-  '<div class="history-view-toolbar">'+(activeTab==='activity'?'':
-   '<nav class="history-subtabs" aria-label="Spending views">'+
-    [['categories','Budget','◔'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
-      '<button type="button" class="history-subtab'+(displayView===id?' active':'')+
-      '" data-history-view="'+id+'" aria-pressed="'+(displayView===id)+'">'+
-      '<span aria-hidden="true">'+icon+'</span>'+name+'</button>').join('')+
-    '</nav>')+'<div class="history-period-controls">'+
+  '<div class="history-view-toolbar">'+(activeTab==='activity'?'':spendingTabNav(displayView))+
+   '<div class="history-period-controls">'+
      '<div class="history-month-picker" data-history-month-picker>'+
       '<button type="button" class="history-month-trigger" data-history-month-toggle aria-haspopup="true" aria-expanded="'+
        historyMonthPickerOpen+'" aria-controls="history-month-menu" aria-label="Calendar months: '+
@@ -2592,58 +2597,9 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    '</section></div>';
 }
 function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
- const credit=accountType(chosen)==='credit';
- const nextBill=forecastCashBills(bundle,s,credit?'':String(chosen.id))[0]||null;
- const queue=reviewQueue(bundle,s),
-  missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
-   !window.HouseholdPaymentObligations.ready(
-    state().predictions?.paymentRules?.[a.id],a,activeAccounts(s)));
- // A single actionable next step, ordered by impact. Unconfirmed suggestions
- // remain accessible in Things to check even after the guidance is dismissed.
- const priority=missingCards.length?{
-   title:'Set up your credit card payment',
-   detail:'Its withdrawal date is missing, so your future balance may be too high.',
-   action:'Set up payment',view:'settings',target:'#card-autopay'}:
-  queue.overdue.length?{
-   title:'Check an expected payment',
-   detail:'A bill was expected but has not been confirmed by the bank.',
-   action:'Review payment',view:'reviews',target:'[data-overdue-review]'}:
-  queue.decisionsNeeded?{
-   title:'Confirm an earlier payment estimate',
-   detail:'This estimate affects your future balance and needs your decision.',
-   action:'Review estimate',view:'reviews',target:'[data-active-legacy-estimates]'}:
-  queue.categoryCount?{
-   title:'Choose a category',
-   detail:'Help keep your spending totals accurate. Choosing a category saves automatically.',
-   action:'Choose category',view:'reviews',target:'[data-category-review]'}:
-  queue.pending.length?{
-   title:'Check a suggested repeating payment',
-   detail:'Decide if this transaction should be predicted again.',
-   action:'Review suggestion',view:'reviews',target:'[data-recommended-repeating]'}:null;
- const nextBillLine=nextBill?'<button type="button" class="home-next-bill" data-open-transaction="'+
-   escapeHTML(nextBill.key)+'"><span><small>Next predicted bill</small><strong>'+
-    escapeHTML(nextBill.merchant)+'</strong><span>'+escapeHTML(dayLabel(nextBill.date))+
-    ' · '+(nextBill.cardBill?'Credit card payment':'Expected withdrawal')+
-    '</span></span><strong>−'+cash(nextBill.amount)+'</strong></button>':
-   '<div class="home-next-bill home-no-bill"><span><small>Next predicted bill</small>'+
-    '<strong>No upcoming bill identified</strong><span>Check Bills to make sure your plan is complete.</span></span>'+
-    '<button type="button" class="btn" data-view="schedules">Open Bills</button></div>';
- const guidance=priority?'<section class="home-next-step" aria-label="Next step">'+
-    '<div><span class="home-next-step-label">NEXT STEP</span><h3>'+
-     escapeHTML(priority.title)+'</h3><p>'+escapeHTML(priority.detail)+'</p></div>'+
-    '<button type="button" class="btn primary" data-view="'+priority.view+
-    '" data-focus-target="'+escapeHTML(priority.target)+'">'+escapeHTML(priority.action)+
-    ' →</button></section>':
-   '<div class="home-all-set"><span aria-hidden="true">✓</span>'+
-    '<span>Your plan has no outstanding checks right now.</span>'+
-    '<button type="button" data-view="reviews">Things to check</button></div>';
- const homeIntro=view==='calendar'?'<section class="home-intro">'+
-   '<p class="home-eyebrow">YOUR MONEY, LOOKING AHEAD</p>'+
-   '<h2>Will your upcoming bills be covered?</h2>'+
-   '<p>See how your balance changes as paychecks arrive and bills get paid. Choose a date to see why.</p>'+
-   (credit?'':nextBillLine)+'</section>'+guidance:'';
+ // Home leads with bank-backed balances and the forecast calendar, not text.
  return window.HouseholdPlannerSummary.render({
-  snapshot:s,chosen,derived,bundle,days:horizon,homeIntro,
+  snapshot:s,chosen,derived,bundle,days:horizon,
   prefs:state().predictions||{},accounts:activeAccounts(s),
   fresh,ready:window.HouseholdPaymentObligations.ready,view
  });
@@ -3192,11 +3148,13 @@ document.addEventListener('click',async e=>{
  if(view){
   // Budget is the Bank History landing view when the main destination opens.
   // Keep the user's selected calendar months and account.
-  if(view.dataset.view==='history'||view.dataset.view==='activity'){
-   historyView=view.dataset.view==='activity'?'list':'categories';historyCategoryFilter='';historySizeFilter=-1;
+  if(['history','activity','recap'].includes(view.dataset.view)){
+   historyView=view.dataset.view==='activity'?'list':
+    view.dataset.view==='recap'?'summary':'categories';
+   historyCategoryFilter='';historySizeFilter=-1;
    historyMerchantFilter='';historyPurchaseDrill=false;historyMonthPickerOpen=false;
   }
-  activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
+  activeTab=view.dataset.view==='recap'?'history':view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
