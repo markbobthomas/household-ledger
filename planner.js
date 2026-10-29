@@ -653,8 +653,39 @@ function scheduleOccurrencesHtml(bundle,s,rule){
   '</section>';
 }
 
+
+function universalCreateForm(s,preset={}){
+ const accounts=activeAccounts(s),chosen=preset.accountId||selected(s)?.id||accounts[0]?.id,
+  other=accounts.find(a=>String(a.id)!==String(chosen))?.id||chosen;
+ const choices=[['once','One time'],['weekly','Weekly'],['biweekly','Every 2 weeks'],
+  ['every-4-weeks','Every 4 weeks'],['monthly','Monthly'],['quarterly','Every 3 months'],
+  ['annual','Yearly']];
+ return '<form class="calendar-quick-form universal-form" data-calendar-quick-form="add" data-quick-kind="'+
+  escapeHTML(preset.type||'expense')+'"><p class="transaction-detail-help">Only your forecast will change. No money will move.</p>'+
+  '<div class="calendar-quick-fields">'+
+  '<label>Type<select data-calendar-type name="type">'+[['expense','Money out'],['income','Money in'],['refund','Refund'],['transfer','Between accounts']]
+   .map(([id,label])=>'<option value="'+id+'"'+((preset.type||'expense')===id?' selected':'')+'>'+label+'</option>').join('')+'</select></label>'+
+  '<label>Description<input name="merchant" required maxlength="160" value="'+escapeHTML(preset.merchant||'')+'" placeholder="Mortgage, paycheck, insurance…"></label>'+
+  '<label>Amount ($)<input name="amount" required type="number" min=".01" max="999999999" step=".01" value="'+escapeHTML(preset.amount||'')+'"></label>'+
+  '<label>Date<input name="date" required type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+
+   '" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+escapeHTML(preset.date||shiftDay(s.asOf,1))+'"></label>'+
+  '<label class="calendar-single-account">Account'+accountSelect(accounts,chosen,'accountId')+'</label>'+
+  '<label class="calendar-transfer-field">From'+accountSelect(accounts,chosen,'fromAccountId')+'</label>'+
+  '<label class="calendar-transfer-field">To'+accountSelect(accounts,other,'toAccountId')+'</label>'+
+  '<label>Repeat<select name="frequency">'+choices.map(([id,label])=>'<option value="'+id+'">'+label+'</option>').join('')+'</select></label>'+
+  '</div><details class="calendar-advanced"><summary>More options</summary>'+
+  '<label><input type="checkbox" name="separateSchedule"> Separate from another bill with the same name</label></details>'+
+  '<div class="calendar-quick-actions"><button type="submit" class="btn primary">Add to plan</button>'+
+  '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div>'+
+  '<p role="alert" class="calendar-quick-error" data-calendar-error></p></form>';
+}
 function detailHtml(bundle,s){
  if(!transactionDetail)return '';
+ if(transactionDetail.kind==='new-payment')return detailShell('Add a payment',
+   'Add a one-time or repeating payment',universalCreateForm(s,transactionDetail.preset||{}),'PLAN ONLY');
+ if(transactionDetail.kind==='suggestion')return detailShell('Confirm repeating payment',
+   'Review this suggestion before it affects your future balance',
+   repeatingReviewForm(s,{inline:true}),'SUGGESTED PAYMENT');
  if(transactionDetail.kind==='prediction'){
   const row=futureRows(bundle,s).find(r=>r.key===transactionDetail.key);
   if(!row)return detailShell('Prediction unavailable','It may have posted, been skipped, or changed. Close and refresh.',
@@ -813,41 +844,14 @@ function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
 // point. Keep a same-page anchor for standalone buttons (e.g. card statements)
 // instead of routing the user to a different tab or modal.
 function openPrediction(key,origin){
- const s=snapshot(),bundle=forecastFor(s),
-  row=futureRows(bundle,s).find(r=>r.key===String(key));
- if(!row){setNotice('This forecast changed. Select the updated payment and try again.');return}
- if(origin){
-  let wrapper=origin.closest?.('[data-inline-row-wrapper]'),
-   trigger=wrapper?.querySelector('[data-open-transaction]');
-  if(!trigger&&origin.hasAttribute?.('data-open-transaction')&&wrapper)
-   trigger=origin;
-  if(!wrapper&&origin.parentElement){
-   let host=origin.nextElementSibling;
-   if(!host?.matches?.('[data-standalone-inline]')){
-    host=document.createElement('div');
-    host.className='standalone-inline-editor';
-    host.dataset.standaloneInline='';
-    origin.insertAdjacentElement('afterend',host);
-   }
-   host.dataset.inlineRowWrapper='';
-   host.dataset.paymentKey=String(key);
-   let proxy=host.querySelector('[data-open-transaction]');
-   if(!proxy){
-    proxy=document.createElement('button');
-    proxy.type='button';proxy.hidden=true;proxy.dataset.openTransaction=String(key);
-    host.appendChild(proxy);
-   }
-   wrapper=host;trigger=proxy;
-  }
-  if(trigger&&openInlineTransaction(trigger))return;
- }
- // Defensive fallback only for programmatic callers without a visible row.
+ const snap=snapshot(),bundle=forecastFor(snap),
+  row=futureRows(bundle,snap).find(r=>r.key===String(key));
+ if(!row){setNotice('This prediction changed. Reopen the payment.');return}
  transactionDetail={kind:'prediction',key:String(key)};
  detailReturnFocus=origin||null;
- try{drawTransactionDetail(bundle,s)}
- catch(err){transactionDetail=null;setNotice(String(err.message||err))}
+ drawTransactionDetail(bundle,snap);
+ document.querySelector('.transaction-detail [name=amount]')?.focus();
 }
-
 function restoreScheduleAfterOccurrence(){
  if(transactionDetail?.kind==='schedule'&&transactionDetail.selectedKey){
   transactionDetail.selectedKey='';
@@ -2432,10 +2436,15 @@ document.addEventListener('click',async e=>{
   const date=calendar.currentDay(),chosen=selected(snapshot()),suggestion=gap?
    calendar.currentGap(gap.dataset.calendarFillGap):null;
   if(!chosen||date<=snapshot().asOf)return;
-  calendar.openEditor({mode:'add',preset:{date,accountId:chosen.id,
-   ...(suggestion?{merchant:suggestion.merchant,amount:suggestion.amount,
-     type:suggestion.type}: {})}});
-  document.querySelector('[data-calendar-quick-form] [name=merchant]')?.focus();
+  const preset={date,accountId:chosen.id,...(suggestion?{
+   merchant:suggestion.merchant,amount:suggestion.amount,type:suggestion.type}:{})};
+  if(typeof $('planner-main')?.insertAdjacentHTML!=='function'){
+   calendar.openEditor({mode:'add',preset});return;
+  }
+  transactionDetail={kind:'new-payment',preset};
+  detailReturnFocus=addCalendar||gap;
+  drawTransactionDetail(forecastFor(snapshot()),snapshot());
+  document.querySelector('.transaction-detail [name=merchant]')?.focus();
   return;
  }
  const editCalendar=e.target.closest('[data-calendar-edit]');
@@ -2451,7 +2460,7 @@ document.addEventListener('click',async e=>{
   openPrediction(row.key,editCalendar);
   return;
  }
- if(e.target.closest('[data-calendar-cancel]')){calendar.closeEditor();return;}
+ if(e.target.closest('[data-calendar-cancel]')){if(transactionDetail)dismissTransaction();else calendar.closeEditor();return;}
  const skipCalendar=e.target.closest('[data-calendar-skip]');
  if(skipCalendar){
   const form=skipCalendar.closest('[data-calendar-quick-form]'),
@@ -3202,7 +3211,7 @@ document.addEventListener('submit',async e=>{
      state(),fields,accounts,asOf,null,model.records(state()),[]));
    else await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
   }else throw Error('Unknown calendar action.');
-  latestError='';render();
+  latestError='';transactionDetail=null;render();
   window.HouseholdPlannerSummary.refreshNotice(mode==='edit'?'Prediction updated. All daily balances recalculated.':
    'Prediction added. All daily balances recalculated.');
  }catch(err){
