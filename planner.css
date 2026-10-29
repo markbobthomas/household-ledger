@@ -4229,7 +4229,7 @@ a:hover{color:#166e61}
 .reviews-page .category-review-panel{margin:14px 0;padding:17px 19px!important}
 .reviews-page .category-review-panel>.lead{margin:6px 0 12px}
 .reviews-page .category-review-row{
- display:grid;grid-template-columns:minmax(0,1fr) minmax(155px,210px) auto;
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(155px,240px);
  align-items:end;gap:12px;padding:11px 3px;
  border-bottom:1px solid #edf1ed;min-width:0
 }
@@ -4248,7 +4248,9 @@ a:hover{color:#166e61}
  width:100%;min-width:0;min-height:38px;padding:7px 9px;
  border:1px solid #dfe9e2;border-radius:11px;background:#fafcf9;color:#31483e
 }
-.reviews-page .category-review-row button{min-height:38px}
+.reviews-page .category-review-row [data-category-review-status]{
+ font-size:11px;color:#527967;font-weight:650
+}
 .reviews-page .category-review-row [data-category-review-error]{
  grid-column:1/-1;color:#b44d4e
 }
@@ -4256,11 +4258,11 @@ a:hover{color:#166e61}
 @media(max-width:650px){
  .reviews-page .category-review-panel{padding:14px 12px!important}
  .reviews-page .category-review-row{
-  grid-template-columns:minmax(0,1fr) auto;gap:8px 10px
+  grid-template-columns:minmax(0,1fr);gap:8px 10px
  }
  .reviews-page .category-review-info{grid-column:1/-1}
  .reviews-page .category-review-row label{grid-column:1;grid-row:auto}
- .reviews-page .category-review-row button{grid-column:2}
+ .reviews-page .category-review-row select{width:100%}
 }
 
 
