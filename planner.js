@@ -2142,26 +2142,26 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '</article>';
  };
  const categoryChoices=categoryOptionsWithOther(model.categories(state())).filter(c=>c!=='Uncategorized'),
-  categoryOptions=c=>
-   '<option value=""'+(['Other','Uncategorized',''].includes(c)?' selected':'')+
-    ' disabled>Choose a category</option>'+
-   categoryChoices.map(option=>'<option value="'+escapeHTML(option)+'"'+
-    (option===c&&!['Other','Uncategorized'].includes(c)?' selected':'')+'>'+escapeHTML(option)+'</option>').join(''),
+  // Always display a placeholder: choosing even the existing bank guess
+  // must fire a change event and count as explicit user approval.
+  categoryOptions=()=>
+   '<option value="" selected disabled>Choose a category</option>'+
+   categoryChoices.map(option=>'<option value="'+escapeHTML(option)+'">'+
+    escapeHTML(option)+'</option>').join(''),
   categoryRows=[
    ...categoryIssues.plans.map(item=>({...item,isPlan:true})),
    ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
   ],shownCategories=categoryRows.slice(0,categoryReviewLimit),
   categoryRow=item=>{
-   const label=item.isPlan?'Bill':'Transaction',
-    c=model.canonicalCategory(state(),item.category)||'Uncategorized';
-   return '<form class="category-review-row" data-category-review-form data-category-kind="'+
+   const label=item.isPlan?'Bill':'Transaction';
+   return '<div class="category-review-row" data-category-review-form data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
     '<div class="category-review-info"><strong>'+escapeHTML(item.merchant)+'</strong>'+
     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
     ' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></div>'+
-    '<label>Category<select name="category" required aria-label="Category for '+
-     escapeHTML(item.merchant)+'">'+categoryOptions(c)+'</select></label>'+
-    '<button type="submit" class="btn primary">Confirm</button></form>';
+    '<label>Category<select name="category" aria-label="Category for '+
+     escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
+    '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
   };
  const normalCard=r=>row(r);
  const legacyCard=({auto,owner})=>{
@@ -2186,8 +2186,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+' TO REVIEW</span></div>'+
-   '<p class="lead">Assign a specific category to each posted transaction and saved bill. '+
-    'Confirm uncertain automatic matches here; bank records and forecasts stay unchanged.</p>'+
+   '<p class="lead">Choose a category to save it immediately. Bank records and payment amounts stay unchanged.</p>'+
    (categoryCount?shownCategories.map(categoryRow).join('')+
     (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
      'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
@@ -3448,24 +3447,30 @@ async function saveTransactionCategory(id,category,confirm=false){
   throw error;
  }
 }
-// Category decisions use the existing per-bank overrides and forecast preferences.
-// Even confirming a plausible existing category saves a user-approved classification.
-document.addEventListener('submit',async e=>{
- const form=e.target.closest?.('[data-category-review-form]');
- if(!form)return;
- e.preventDefault();
- const kind=form.dataset.categoryKind,id=form.dataset.categoryId,
-  chosen=model.canonicalCategory(state(),form.elements.category?.value),
-  button=form.querySelector('[type=submit]'),
-  issues=model.categoryReviewQueue(state()),
-  active=[...issues.transactions,...issues.plans].some(item=>item.kind===kind&&item.id===id);
- if(!active||!chosen||chosen==='Uncategorized'){
-  let msg=form.querySelector('[data-category-review-error]');
-  if(!msg){msg=document.createElement('small');msg.dataset.categoryReviewError='true';
-   msg.setAttribute('role','alert');form.appendChild(msg)}
-  msg.textContent='Choose a category, or select Other if nothing fits.';return;
+// Selecting a category is explicit approval. The category issue remains
+// visible until its private bank override or forecast edit has been saved.
+document.addEventListener('change',async e=>{
+ const select=e.target;
+ if(!select.matches?.('[data-category-review-form] select[name="category"]'))return;
+ const item=select.closest('[data-category-review-form]');
+ if(!item||item.dataset.saving==='true')return;
+ const kind=item.dataset.categoryKind,id=item.dataset.categoryId,
+  chosen=model.canonicalCategory(state(),select.value);
+ if(!chosen||chosen==='Uncategorized'){select.value='';return}
+ const issues=model.categoryReviewQueue(state()),
+  active=[...issues.transactions,...issues.plans].some(row=>row.kind===kind&&row.id===id);
+ if(!active){
+  select.value='';
+  setNotice('This item changed. Refresh and try again.');
+  return;
  }
- if(button)button.disabled=true;
+ item.dataset.saving='true';
+ item.setAttribute('aria-busy','true');
+ select.disabled=true;
+ const saveStatus=item.querySelector('[data-category-review-status]');
+ if(saveStatus)saveStatus.hidden=false;
+ const prior=item.querySelector('[data-category-review-error]');
+ if(prior)prior.remove();
  try{
   if(kind==='transaction'){
    await saveTransactionCategory(id,chosen,true);
@@ -3481,12 +3486,18 @@ document.addEventListener('submit',async e=>{
     }
    });
   }
-  reviewNotice='Category confirmed.';render();
+  reviewNotice='Category saved.';render();
  }catch(error){
-  if(button)button.disabled=false;
-  let msg=form.querySelector('[data-category-review-error]');
+  // Reset to the placeholder for easy retry, including reselecting the same
+  // value on iPhone. Never hide an item if persistence was rejected.
+  select.disabled=false;
+  select.value='';
+  if(saveStatus)saveStatus.hidden=true;
+  item.dataset.saving='false';
+  item.removeAttribute('aria-busy');
+  let msg=item.querySelector('[data-category-review-error]');
   if(!msg){msg=document.createElement('small');msg.dataset.categoryReviewError='true';
-   msg.setAttribute('role','alert');form.appendChild(msg)}
+   msg.setAttribute('role','alert');item.appendChild(msg)}
   msg.textContent='Could not save category: '+String(error.message||error);
  }
 });

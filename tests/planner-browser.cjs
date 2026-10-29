@@ -578,23 +578,47 @@ const {chromium,webkit}=require('playwright');
    if(categoryFormsBefore){
     const first=categoryForms.first(),categoryId=await first.getAttribute('data-category-id');
     const reviewPicker=first.locator('[name=category]');
-    const missingPlaceholder=await reviewPicker.locator('option[value=""][selected]').count();
-    if(missingPlaceholder)assert.equal(await reviewPicker.inputValue(),'','Unknown categories must require an explicit choice');
-    assert.ok((await first.locator('[name=category] option').allTextContents()).includes('Other'),
-     'Other is offered as a deliberate catch-all in category Review');
-    await first.locator('[name=category]').selectOption('Other');
-    await first.locator('[type=submit]').click();
+    assert.equal(await first.locator('[type=submit]').count(),0,
+     'Category Review no longer requires a separate Confirm button');
+    assert.equal(await reviewPicker.inputValue(),'',
+     'Every review dropdown starts with Choose a category, including low-confidence existing values');
+    assert.ok((await reviewPicker.locator('option').allTextContents()).includes('Other'),
+     'Other remains a deliberate catch-all option');
+    // Simulate one failed private-preference save in fictional Demo mode.
+    // Failure must not dismiss the item or prevent choosing the same value again.
+    await page.evaluate(()=>{
+     const original=Storage.prototype.setItem;
+     window.__ledgerReviewOriginalSet=original;
+     Storage.prototype.setItem=function(key,value){
+      if(key==='household-planner-sample-settings-v1')
+       throw new Error('Fictional save rejected');
+      return original.call(this,key,value);
+     };
+    });
+    await reviewPicker.selectOption('Other');
+    const reviewError=first.locator('[data-category-review-error]');
+    await reviewError.waitFor({state:'visible'});
+    assert.match(await reviewError.innerText(),/Fictional save rejected/,
+     'On a failed save the category review remains visible with an error');
+    assert.equal(await reviewPicker.isEnabled(),true);
+    assert.equal(await reviewPicker.inputValue(),'',
+     'Failure resets the placeholder to allow retrying the same selection');
+    await page.evaluate(()=>{
+     Storage.prototype.setItem=window.__ledgerReviewOriginalSet;
+     delete window.__ledgerReviewOriginalSet;
+    });
+    await reviewPicker.selectOption('Other');
+    await page.locator('[data-category-review-form][data-category-id="'+categoryId+'"]').waitFor({state:'detached'});
     assert.equal(await page.locator('[data-category-review-form]').count(),categoryFormsBefore-1,
-     'A saved category confirmation removes its issue from Things to check');
-    assert.equal(await page.locator('[data-category-review-form][data-category-id="'+categoryId+'"]').count(),0,
-     'Confirmed issue stays out of the current review list');
+     'One category selection auto-saves and clears the corresponding review issue');
     const afterOther=page.locator('[data-category-review-form]');
     if(await afterOther.count()){
      const second=afterOther.first(),id=await second.getAttribute('data-category-id');
+     assert.equal(await second.locator('[name=category]').inputValue(),'');
      await second.locator('[name=category]').selectOption('Shopping');
-     await second.locator('[type=submit]').click();
+     await page.locator('[data-category-review-form][data-category-id="'+id+'"]').waitFor({state:'detached'});
      assert.equal(await page.locator('[data-category-review-form][data-category-id="'+id+'"]').count(),0,
-      'Specific categories also remain valid and clear Review');
+      'A specific category also saves on selection with no extra tap');
     }
    }
 
