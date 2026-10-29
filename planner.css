@@ -4119,3 +4119,67 @@ a:hover{color:#166e61}
  .history-page .history-period-controls{width:100%}
  .history-page .history-month-menu{left:0;right:auto}
 }
+
+/* Place the persistent review action beside More; avoid the old second navigation row.
+   Restore readable History Category labels and align analysis filters. */
+.topbar .top-actions{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto}
+.topbar .attention-link{
+ display:inline-flex;position:relative;align-items:center;justify-content:center;gap:7px;
+ min-height:40px;padding:9px 12px;border:1px solid #e7ece8!important;
+ border-radius:13px;background:#fff;color:#547469;white-space:nowrap;
+ font-size:12px;font-family:inherit;font-weight:690;box-shadow:0 2px 9px #36574609;
+}
+.topbar .attention-link svg{
+ height:18px;width:18px;fill:none;stroke:currentColor;stroke-width:1.8;flex:none;
+}
+.topbar .attention-link:hover,.topbar .attention-link.active{background:#e6f4ed;color:#246d5d}
+.topbar .attention-link.has-review-items{color:#a24f38;border-color:#f1d9d0!important;background:#fff9f4}
+.topbar .attention-link .review-tab-count{
+ display:inline-grid;place-items:center;min-width:21px;height:21px;padding:1px 5px;
+ border-radius:9px;background:#f9e7df;color:#ad583d;font:750 11px var(--mono);
+}
+.topbar .attention-short{display:none}
+.main-navigation{justify-content:flex-start!important}
+.main-navigation .planner-tabs{flex:1;width:100%}
+.main-navigation .tab-link{flex:1;min-width:0}
+.history-page .history-view-toolbar{margin-bottom:10px}
+.history-page .history-analysis-filters{
+ display:grid!important;grid-template-columns:repeat(2,minmax(0,245px));
+ align-items:start!important;justify-content:start;gap:12px!important;
+}
+.history-page .history-analysis-filters>label,
+.history-page .history-analysis-filters>.history-category-controls{
+ grid-column:auto!important;grid-row:auto!important;
+ width:100%!important;min-width:0!important;flex:initial!important;align-self:stretch;
+}
+.history-page .history-analysis-filters:not(:has(.history-category-controls))>label:has([name="historyAccount"]){
+ grid-column:1/-1!important;
+}
+.history-page .history-category-controls>label{
+ display:flex!important;flex-direction:column!important;
+ gap:6px!important;line-height:1.4!important;font-size:11px!important;
+ min-width:0;align-items:stretch!important;
+}
+.history-page .history-category-controls>label select{margin:0!important;width:100%;min-width:0}
+@media(max-width:850px){
+ .main-navigation{flex-direction:row!important;align-items:center!important}
+ .main-navigation .planner-tabs{width:100%;justify-content:space-between}
+ .history-page .ledger-toolbar:not(.history-analysis-filters)>.history-category-controls{
+  grid-column:1/-1!important;grid-row:3!important;
+ }
+}
+@media(max-width:650px){
+ .topbar .attention-label{display:none}
+ .topbar .attention-short{display:inline}
+ .history-page .history-analysis-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .history-page .history-month-trigger{min-height:40px;box-shadow:none}
+}
+@media(max-width:350px){
+ .topbar h1{font-size:15px!important;letter-spacing:-.5px}
+ .topbar h1::before{width:23px;height:23px;border-radius:8px}
+ .topbar h1{gap:7px}
+ .topbar .attention-short{display:none}
+ .topbar .attention-link{width:37px;min-width:37px;padding:8px 6px}
+ .topbar .planner-menu>summary{padding:7px 8px!important}
+ .topbar .top-actions{gap:5px}
+}
