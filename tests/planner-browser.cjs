@@ -479,14 +479,14 @@ const {chromium,webkit}=require('playwright');
    });
    assert.ok(previewFits,'Two complete payments and overflow count fit in a fixed-height day');
    assert.equal(await page.locator('.summary-bank [data-bank-available-value]').evaluate(el=>
-    getComputedStyle(el).backgroundColor),'rgb(35, 113, 74)',
+    getComputedStyle(el).color),'rgb(35, 113, 74)',
     'Checking available balance uses the established green metric style');
    for(const selector of ['.summary-monthly .summary-low','.summary-minimum .summary-low']){
     const risk=await page.locator(selector).evaluate(el=>({
      value:Number(el.textContent.replace(/[^0-9.-]/g,'')),
      orange:el.classList.contains('summary-low-alert'),
      red:el.classList.contains('summary-low-negative'),
-     color:getComputedStyle(el).backgroundColor
+     color:getComputedStyle(el).color
     }));
     assert.equal(risk.red,risk.value<0,'Negative balances must receive red severity');
     assert.equal(risk.orange,risk.value>=0&&risk.value<100000,
@@ -762,7 +762,7 @@ const {chromium,webkit}=require('playwright');
     assert.ok((await legacySection.locator('.legacy-estimate-state').first().innerText())
      .includes('forecast'),'The row explicitly explains the balance impact');
     const warningColor=await legacySection.locator('.legacy-estimate-count').first()
-     .evaluate(el=>getComputedStyle(el).backgroundColor);
+     .evaluate(el=>getComputedStyle(el).color);
     const channels=(warningColor.match(/\d+/g)||[]).map(Number);
     assert.ok(channels.length>=3&&channels[0]>channels[1]*1.5&&
      channels[0]>channels[2]*1.5,
@@ -1212,7 +1212,7 @@ const {chromium,webkit}=require('playwright');
       const el=probe.querySelector(selector);
       return el?{orange:el.classList.contains('summary-low-alert'),
        red:el.classList.contains('summary-low-negative'),
-       color:getComputedStyle(el).backgroundColor}:null;
+       color:getComputedStyle(el).color}:null;
      };
      const monthly=details('.summary-monthly .summary-low');
      const threeYear=details('.summary-minimum .summary-low');
