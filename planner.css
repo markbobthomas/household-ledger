@@ -4475,3 +4475,41 @@ a:hover{color:#166e61}
   column-gap:3px;
  }
 }
+
+/* The fourth main destination is a compact, strictly read-only financial recap. */
+.financial-recap-page{max-width:1100px;margin:0 auto}
+.financial-recap-header{display:flex;justify-content:space-between;align-items:start;gap:14px;margin:0 0 18px}
+.financial-recap-header h2{margin:0;font-size:24px;letter-spacing:-.6px;color:#254838}
+.financial-recap-header p{margin:4px 0 0;color:#7a8d80;font-size:12px}
+.financial-recap-readonly{font-size:11px;font-weight:700;color:#638875;background:#edf6ee;border-radius:20px;padding:7px 11px;white-space:nowrap}
+.financial-recap-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.financial-recap-metric{min-width:0;border:1px solid #e1eae1;border-radius:16px;background:#fff;padding:19px 17px;display:flex;flex-direction:column;gap:9px}
+.financial-recap-metric>span{font-size:12px;color:#688272;font-weight:680}
+.financial-recap-metric>strong{font:770 clamp(19px,2.3vw,28px)/1.15 var(--mono);color:#284a3b;letter-spacing:-.7px;overflow-wrap:anywhere}
+.financial-recap-metric>small{font-size:11px;color:#87978a;line-height:1.45}
+.financial-recap-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.financial-recap-card{min-width:0;background:#fff;border:1px solid #e1eae1;border-radius:16px;padding:19px 21px}
+.financial-recap-card h3{margin:0;font-size:15px;color:#294b3b}
+.financial-recap-card>p:first-of-type{font-size:11px;color:#839386;margin:6px 0 17px}
+.financial-recap-upcoming{grid-column:1/-1}
+.financial-recap-rows{display:flex;flex-direction:column}
+.financial-recap-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #edf2ec;font-size:13px}
+.financial-recap-row:last-child{border-bottom:0}
+.financial-recap-row>span{min-width:0;overflow-wrap:anywhere;color:#4c6856}
+.financial-recap-row>span>strong{display:block;font-weight:680;color:#355644}
+.financial-recap-row>span>small{display:block;margin-top:3px;font-size:11px;color:#839386}
+.financial-recap-row>strong{font:730 13px var(--mono);color:#274a39;white-space:nowrap;font-variant-numeric:tabular-nums}
+.financial-recap-note{display:block;margin-top:15px;color:#839386;font-size:11px;line-height:1.5}
+.financial-recap-empty{color:#839386;font-size:12px;padding:8px 0}
+@media(max-width:850px){.financial-recap-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){
+ .financial-recap-metrics{gap:9px}
+ .financial-recap-metric{padding:14px 12px;gap:7px}
+ .financial-recap-metric>strong{font-size:clamp(18px,5vw,23px)}
+ .financial-recap-sections{grid-template-columns:minmax(0,1fr);gap:10px}
+ .financial-recap-upcoming{grid-column:1}
+ .financial-recap-card{padding:16px}
+ .main-navigation .tab-link{padding-left:4px!important;padding-right:4px!important}
+ .main-navigation .tab-link svg{width:16px;height:16px}
+ .main-navigation .tab-link span{font-size:11px}
+}
