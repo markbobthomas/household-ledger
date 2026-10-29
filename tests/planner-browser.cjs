@@ -24,15 +24,14 @@ const {chromium,webkit}=require('playwright');
  // The same month checklist controls all reports. Choose actual calendar months.
  async function chooseMonths(page,months){
   await page.locator('[data-history-month-toggle]').click();
-  await page.locator('[data-history-month-current]').click();
   const offered=await page.locator('[data-history-month-option]').evaluateAll(xs=>xs.map(x=>x.value));
   assert.ok(months.every(m=>offered.includes(m)),
-   'Expected complete calendar months '+JSON.stringify(months)+'; dropdown offered '+JSON.stringify(offered)+
-    '; visible page: '+(await page.locator('#planner-main').innerText()).slice(0,250));
-  for(const month of months.filter(m=>m!=='2026-10'))
+   'Expected complete calendar months '+JSON.stringify(months)+'; offered '+JSON.stringify(offered));
+  // Keep the popup open: checking and unchecking updates the report immediately.
+  for(const month of months)
    await page.locator('[data-history-month-option="'+month+'"]').check();
-  if(!months.includes('2026-10'))
-   await page.locator('[data-history-month-option="2026-10"]').uncheck();
+  for(const month of offered.filter(m=>!months.includes(m)))
+   await page.locator('[data-history-month-option="'+month+'"]').uncheck();
   await page.locator('[data-history-month-toggle]').click();
  }
  async function chooseAllMonths(page){
