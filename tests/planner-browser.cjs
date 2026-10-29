@@ -584,6 +584,29 @@ const {chromium,webkit}=require('playwright');
      'Every review dropdown starts with Choose a category, including low-confidence existing values');
     assert.ok((await reviewPicker.locator('option').allTextContents()).includes('Other'),
      'Other remains a deliberate catch-all option');
+    // Simulate one failed private-preference save in fictional Demo mode.
+    // Failure must not dismiss the item or prevent choosing the same value again.
+    await page.evaluate(()=>{
+     const original=Storage.prototype.setItem;
+     window.__ledgerReviewOriginalSet=original;
+     Storage.prototype.setItem=function(key,value){
+      if(key==='household-planner-sample-settings-v1')
+       throw new Error('Fictional save rejected');
+      return original.call(this,key,value);
+     };
+    });
+    await reviewPicker.selectOption('Other');
+    const reviewError=first.locator('[data-category-review-error]');
+    await reviewError.waitFor({state:'visible'});
+    assert.match(await reviewError.innerText(),/Fictional save rejected/,
+     'On a failed save the category review remains visible with an error');
+    assert.equal(await reviewPicker.isEnabled(),true);
+    assert.equal(await reviewPicker.inputValue(),'',
+     'Failure resets the placeholder to allow retrying the same selection');
+    await page.evaluate(()=>{
+     Storage.prototype.setItem=window.__ledgerReviewOriginalSet;
+     delete window.__ledgerReviewOriginalSet;
+    });
     await reviewPicker.selectOption('Other');
     await page.locator('[data-category-review-form][data-category-id="'+categoryId+'"]').waitFor({state:'detached'});
     assert.equal(await page.locator('[data-category-review-form]').count(),categoryFormsBefore-1,
