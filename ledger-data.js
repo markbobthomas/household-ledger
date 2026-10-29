@@ -178,6 +178,58 @@ function records(state){
  const index=Object.keys(learned).length?categorySafetyIndex(state):null;
  return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t,index),originalCategory:t.category||'Other'}));
 }
+// The same category registry and manual overrides serve Bank History and Review.
+// A category that only came from low-confidence provider/merchant evidence stays
+// reviewable until its specific choice is explicitly saved. No bank row is edited.
+const missingCategory=c=>!c||['Other','Uncategorized'].includes(String(c));
+const confidenceScore=t=>{
+ const raw=t?.categoryConfidence??t?.category_confidence??t?.source?.categoryConfidence;
+ if(raw!==null&&raw!==undefined&&raw!==''&&Number.isFinite(Number(raw)))return Number(raw);
+ const p=t?.personal_finance_category||t?.personalFinanceCategory||
+  t?.source?.personalFinanceCategory||t?.source?.personal_finance_category||{};
+ const level=String(p.confidence_level||p.confidenceLevel||'').toUpperCase();
+ return ({VERY_HIGH:.99,HIGH:.93,MEDIUM:.75,LOW:.4,UNKNOWN:0})[level]??null;
+};
+function categoryReviewQueue(state){
+ const tx=records(state).filter(t=>!t.pending&&t.id!==null&&t.id!==undefined)
+  .map(t=>{
+   // Known income/transfer kinds are safe to label in reporting without
+   // changing the authoritative bank-derived record used for forecasting.
+   const knownKind=t.type==='income'||t.type==='transfer',
+    category=knownKind&&missingCategory(t.category)?
+     (t.type==='income'?'Income':'Transfer'):
+     String(t.category||'Other'),
+    missing=missingCategory(category),
+    manual=knownKind||Boolean(state.categoryOverrides?.[t.id])||
+     ['manual','learned'].includes(t.method),
+    score=confidenceScore(t),
+    low=!manual&&(score!==null&&score<.7||
+     ['merchant-match','suggested','unclassified'].includes(t.method)||
+     ['merchant-match','unclassified'].includes(t.source?.categoryOrigin));
+   if(!missing&&!low)return null;
+   return {kind:'transaction',id:String(t.id),category,reason:missing?'Missing category':'Low-confidence automatic category',
+    merchant:String(t.merchant||t.description||'Transaction'),date:String(t.date||''),
+    amount:Number(t.amount)||0,accountId:String(t.accountId||t.account||'')};
+  }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
+ const prefs=state.predictions||{},plans=[];
+ const add=(rows,kind)=>{
+  for(const row of rows||[]){
+   if(!row||row.id===undefined||row.id===null||row.enabled===false)continue;
+   const category=String(row.category||'Uncategorized'),
+    missing=missingCategory(category),
+    low=!row.categoryReviewed&&Number.isFinite(Number(row.categoryConfidence))&&
+     row.categoryConfidence!==null&&row.categoryConfidence!==''&&Number(row.categoryConfidence)<.7;
+   if(!missing&&!low)continue;
+   plans.push({kind,id:String(row.id),category,reason:missing?'Missing category':'Low-confidence automatic category',
+    merchant:String(row.scheduleLabel||row.merchant||row.name||'Planned payment'),
+    date:String(row.anchorDate||row.date||''),amount:Number(row.amount)||0});
+  }
+ };
+ add(prefs.futureRecurringRules,'schedule');
+ add(prefs.futureTransactionAdds,'oneoff');
+ add(prefs.paymentBills,'bill');
+ return {transactions:tx,plans};
+}
 function categoryFor(state,id){
  const t=(state.transactions||[]).find(x=>x.id===id);
  return t?resolution(state,t).category:null;
@@ -208,13 +260,13 @@ function removeCategoryRule(state,key){
  state.learning.ruleHistory.push({key,action:'removed',category:old.category,date:new Date().toISOString()});
  return true;
 }
-function setCategory(state,id,category){
+function setCategory(state,id,category,confirm=false){
  if(!(state.transactions||[]).some(t=>t.id===id))throw Error('Unknown transaction');
  const value=canonicalCategory(state,category);
  if(!value)throw Error('Invalid category');
  state.categoryOverrides??={};
  const original=canonicalCategory(state,state.transactions.find(t=>t.id===id).category||'Other');
- if(value===original)delete state.categoryOverrides[id];else state.categoryOverrides[id]=value;
+ if(value===original&&!confirm)delete state.categoryOverrides[id];else state.categoryOverrides[id]=value;
 }
 function setMonthlyBudget(state,category,amount){
  if(!isCategory(state,category)||!Number.isFinite(Number(amount))||Number(amount)<0)throw Error('Invalid budget');
@@ -559,7 +611,7 @@ function setCashCushion(state,amount){
  if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
  state.predictions.cashCushion=round(amount);
 }
-const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
+const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

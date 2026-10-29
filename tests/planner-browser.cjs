@@ -505,6 +505,20 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.attention-link[data-view="reviews"]').click();
    assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
    assert.equal(await page.locator('.reviews-page .review-priority').count(),1);
+   assert.equal(await page.locator('[data-category-review]').count(),1,
+    'Missing or uncertain transaction and bill categories have a persistent review section');
+   const categoryForms=page.locator('[data-category-review-form]');
+   const categoryFormsBefore=await categoryForms.count();
+   if(categoryFormsBefore){
+    const first=categoryForms.first(),categoryId=await first.getAttribute('data-category-id');
+    await first.locator('[name=category]').selectOption('Shopping');
+    await first.locator('[type=submit]').click();
+    assert.equal(await page.locator('[data-category-review-form]').count(),categoryFormsBefore-1,
+     'A saved category confirmation removes its issue from Things to check');
+    assert.equal(await page.locator('[data-category-review-form][data-category-id="'+categoryId+'"]').count(),0,
+     'Confirmed issue stays out of the current review list');
+   }
+
    const suggestion=page.locator('[data-review-recommendation]').first();
    if(await suggestion.count()){
     await suggestion.click();
