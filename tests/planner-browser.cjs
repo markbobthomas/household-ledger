@@ -97,9 +97,18 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await page.locator('.planner-nav-primary svg').count(),4,
     'Each primary destination has its own navigation icon');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0);
-   // New fourth top-level page is read-only and derived from canonical data.
-   await page.locator('#planner-menu>summary').click();
-    await page.locator('#planner-menu [data-view="recap"]').click();
+   // Home is a balance-and-calendar surface, not an explanatory landing page.
+   assert.equal(await page.locator(
+    '.home-intro,.home-next-step,.home-all-set,.home-next-bill,.home-long-range,.calendar-first-tip').count(),0,
+    'No instructional cards, setup text, or long-range disclosure above the Calendar');
+   assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
+    'The Calendar surface is the direct Home landing view');
+   assert.equal(await page.locator('#planner-menu [data-view="recap"]').count(),0,
+    'Summary is no longer hidden inside More');
+   // Summary is a discoverable, read-only subtab inside Spending.
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('[data-history-view="summary"]').click();
+   assert.equal(await page.locator('[data-history-view="summary"][aria-pressed="true"]').count(),1);
    assert.equal(await page.locator('[data-financial-recap]').count(),1);
    for(const key of ['bills','spent','income','budget']){
     assert.equal(await page.locator('[data-recap-'+key+']').count(),1,
@@ -223,9 +232,9 @@ const {chromium,webkit}=require('playwright');
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   assert.equal(await page.locator('.history-subtab').count(),3);
+   assert.equal(await page.locator('.history-subtab').count(),4);
    assert.deepEqual((await page.locator('.history-subtab').allTextContents()).map(s=>s.trim()),
-    ['◔Budget','◉Merchants','▥Purchase sizes'],
+    ['◔Budget','◉Merchants','▥Purchase sizes','▤Summary'],
     'Budget is the first named Bank History view');
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     'Budget opens by default rather than Transactions');
