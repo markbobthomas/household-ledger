@@ -1789,7 +1789,7 @@ function financialRecapPage(bundle,s){
   '<p>'+escapeHTML(monthTitle)+' · posted activity through '+escapeHTML(dateLong(asOf))+
   '</p></div><span class="financial-recap-readonly">Read-only</span></header>'+
   '<div class="financial-recap-metrics">'+
-   metric('Bills / month',monthlyBills===null?'Unavailable':cash(monthlyBills),
+   metric('Total monthly bills',monthlyBills===null?'Unavailable':cash(monthlyBills),
     '12-month average of saved recurring bills','bills')+
    metric('Spent this month',cash(spendingCents/100),
     'Posted purchases less refunds','spent')+
