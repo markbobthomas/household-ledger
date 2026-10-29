@@ -77,13 +77,24 @@ function addCategory(state,name){
 
 // Category deletion affects only classification overlays and saved preferences;
 // never edit bank source transactions, their amounts, account links or dates.
+// Bank income and transfers are displayed under their known transaction type
+// when the source category is Other. Treat that display category as assigned
+// for deletion, while preserving the original bank record.
+const kindDisplayCategory=(t,category)=>{
+ if(!['Other','Uncategorized',''].includes(String(category||'Other')))return null;
+ return t.type==='income'?'Income':t.type==='transfer'?'Transfer':null;
+};
 function removeCategory(state,name){
  const category=canonicalCategory(state,name);
  if(!category||category==='Uncategorized')throw Error('Category is not available');
  state.predictions??={};
  const p=state.predictions,target=category.toLowerCase(),
   same=v=>normalizeCategory(v).toLowerCase()===target,
-  affected=(state.transactions||[]).filter(t=>same(categoryFor(state,t.id))).map(t=>t.id);
+  affected=(state.transactions||[]).filter(t=>{
+   const category=categoryFor(state,t.id);
+   return same(category)||(!state.categoryOverrides?.[t.id]&&
+    same(kindDisplayCategory(t,category)));
+  }).map(t=>t.id);
  state.categoryOverrides??={};
  for(const id of affected)state.categoryOverrides[id]='Uncategorized';
  for(const [id,value] of Object.entries(state.categoryOverrides))
@@ -218,7 +229,7 @@ function resolution(state,t,index){
   t.source?.categoryOrigin||'plaid-category':bankCategory?.method||'source';
  const originLabel=origin==='plaid-category'?'Plaid category':
   origin==='merchant-match'?'Merchant match':'Source';
- if(removedCategory(state,inferred))
+ if(removedCategory(state,inferred)||removedCategory(state,kindDisplayCategory(t,inferred)))
   return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
  const key=categoryRuleKey(t),rule=state.learning?.categoryRules?.[key];
  if(!rule||t.type!=='expense'||removedCategory(state,rule.category))return {category:inferred,method:origin,
