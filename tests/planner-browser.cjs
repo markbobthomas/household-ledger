@@ -2355,9 +2355,15 @@ const {chromium,webkit}=require('playwright');
   await go('summary');
 
   assert.match(await page.locator('.summary-page').innerText(),/3-year low/);
-  assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$5,000.00',
-   'Live bank current must be the Plaid current, not $4,800 available');
-  assert.match(await page.locator('.summary-bank').innerText(),/Actual Current Balance/);
+  assert.equal(await page.locator('[data-bank-available-value]').innerText(),'$4,800.00',
+   'The primary checking cash metric is the bank available balance, including holds');
+  assert.match(await page.locator('.summary-bank').innerText(),/Available Balance/);
+  assert.doesNotMatch(await page.locator('.summary-bank').innerText(),/Actual Current|5,000\\.00/,
+   'No checking current balance should appear above the Calendar');
+  await page.locator('#summary-account').selectOption('credit-real');
+  assert.equal(await page.locator('[data-bank-current-value]').innerText(),'$1,200.00',
+   'Credit-card current remains a liability, not available spending credit');
+  await page.locator('#summary-account').selectOption('checking-real');
 
   assert.match(await page.locator('.summary-numbers').innerText(),/3-year low/);
   assert.equal(await page.locator('.coverage-month,.coverage-table,.calendar-checklist').count(),0,
