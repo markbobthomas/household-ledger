@@ -2747,6 +2747,11 @@ html{scrollbar-gutter:stable}
 .schedule-form .schedule-advanced .future-fields{
  margin-top:5px!important;
 }
+/* A posting-date hint belongs below Next date; it must not push the
+   Name / Amount / Repeat / Account labels or controls down within that row. */
+.planner-page .recurrence-editor .future-fields.schedule-primary-fields{
+ align-items:start;
+}
 .schedule-form .schedule-primary-fields{margin-bottom:3px!important}
 
 /* Keep recurrence anchors unchanged; make cross-month forecast posting clear. */
