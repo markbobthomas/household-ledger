@@ -2160,7 +2160,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
     ' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></div>'+
     '<label>Category<select name="category" aria-label="Category for '+
-     escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select></label></div>';
+     escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
+    '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
   };
  const normalCard=r=>row(r);
  const legacyCard=({auto,owner})=>{
@@ -3466,6 +3467,8 @@ document.addEventListener('change',async e=>{
  item.dataset.saving='true';
  item.setAttribute('aria-busy','true');
  select.disabled=true;
+ const saveStatus=item.querySelector('[data-category-review-status]');
+ if(saveStatus)saveStatus.hidden=false;
  const prior=item.querySelector('[data-category-review-error]');
  if(prior)prior.remove();
  try{
@@ -3489,6 +3492,7 @@ document.addEventListener('change',async e=>{
   // value on iPhone. Never hide an item if persistence was rejected.
   select.disabled=false;
   select.value='';
+  if(saveStatus)saveStatus.hidden=true;
   item.dataset.saving='false';
   item.removeAttribute('aria-busy');
   let msg=item.querySelector('[data-category-review-error]');
