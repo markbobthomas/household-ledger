@@ -216,8 +216,12 @@ async function start(port=Number(env.PORT||8788)){
     const dependency='<script src="categorization.js"></script>';
     if(!page.includes(dependency))
      return respond(503,{error:'Required calendar script order is unavailable. Please reload after deployment.'});
-    page=page.replace(dependency,'<script>\n'+classifier+'\n</script>');
-    body=Buffer.from(page.replace('</head>','<script src="/pilot/data-source.js"></script></head>'));
+    // The private adapter must execute AFTER accounting + categorization and
+    // BEFORE ledger-data/planner initialization. Injecting in <head> previously
+    // captured null dependency constants permanently, even on successful loads.
+    page=page.replace(dependency,'<script>\n'+classifier+'\n</script>\n'+
+     '<script src="/pilot/data-source.js"></script>');
+    body=Buffer.from(page);
    }
    res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
    return res.end(body);
