@@ -683,6 +683,15 @@ function detailHtml(bundle,s){
  if(!transactionDetail)return '';
  if(transactionDetail.kind==='new-payment')return detailShell('Add a payment',
    'Add a one-time or repeating payment',universalCreateForm(s,transactionDetail.preset||{}),'PLAN ONLY');
+ if(transactionDetail.kind==='overdue'){
+  const host=[...document.querySelectorAll('[data-overdue-item]')]
+   .find(el=>el.dataset.overdueItem===transactionDetail.key);
+  const form=host?.querySelector('[data-overdue-date]');
+  const markup=form?.outerHTML||'<p>Reopen this payment from Things to check.</p>';
+  form?.remove();
+  return detailShell('Change expected payment','One unpaid forecast payment',
+   markup,'UNCONFIRMED · NOT A BANK RECORD');
+ }
  if(transactionDetail.kind==='suggestion')return detailShell('Confirm repeating payment',
    'Review this suggestion before it affects your future balance',
    repeatingReviewForm(s,{inline:true}),'SUGGESTED PAYMENT');
@@ -877,6 +886,7 @@ function dismissTransaction(){
   detailReturnFocus=null;render();return;
  }
  transactionDetail=null;detailParentSchedule=null;
+ if(mode==='overdue'){overdueEditKey='';render();return;}
  if(mode==='schedule'){
   scheduleMode='';scheduleTarget='';schedulePreset=null;
   if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null;}
@@ -1594,7 +1604,7 @@ function historyPage(bundle,s){
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
    status=matches.length?'confirmed':predicted?'automatic':'unplanned',
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
-    status==='automatic'?'Unconfirmed estimate — check the Review tab':'Not predicted',
+    status==='automatic'?'Unconfirmed estimate — open Things to check':'Not predicted',
    primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
     canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record',
    isExpanded=historyExpandedId===String(t.id)&&historyExpandedAccount===aid,
@@ -1959,7 +1969,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
         '<label>Checking account '+accountSelect(cashAccounts,item.accountId,'accountId')+'</label>'+
         common+'</div>'+
        '<div class="overdue-edit-actions"><button type="submit" class="btn primary">Save this payment</button>'+
-        '<button type="button" class="btn" data-edit-overdue="'+escapeHTML(item.key)+'">Cancel</button></div>':
+        '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div>':
        common+'<button type="submit" class="btn primary">Move just this payment</button>')+
      '<small>Only this occurrence changes. Future repeating dates and actual bank records stay unchanged.</small>'+
      '</form></article>';
@@ -2297,10 +2307,8 @@ document.addEventListener('click',async e=>{
    snap=snapshot(),item=forecastFor(snap)?.overduePayments?.find(x=>x.key===key);
   if(!item){reviewNotice='This payment changed or posted. Refresh Review.';render();return}
   if(overdueAction.hasAttribute('data-edit-overdue')){
-   overdueEditKey=overdueEditKey===key?'':key;
-   render();
-   if(overdueEditKey)document.querySelector('[data-overdue-item] [name=merchant]')?.focus();
-   return;
+   overdueEditKey=key;transactionDetail={kind:'overdue',key};render();
+   document.querySelector('.transaction-detail [name=merchant]')?.focus();return;
   }
   if(overdueAction.hasAttribute('data-skip-overdue')&&
    !window.confirm('Skip this one unpaid payment? It will be REMOVED from projected withdrawals. Other recurring payments and bank records stay unchanged.'))return;
@@ -2457,7 +2465,7 @@ document.addEventListener('click',async e=>{
    all.find(r=>r.kind==='movement'&&r.id===String(item.transferGroupId)):
    all.find(r=>r.kind==='event'&&r.id===String(item.id)&&
     r.accountId===String(item.accountId));
-  if(!row){setNotice('This prediction changed. Open Predictions to inspect it.');return}
+  if(!row){setNotice('This prediction changed. Open Payments to inspect it.');return}
   openPrediction(row.key,editCalendar);
   return;
  }
@@ -3284,7 +3292,7 @@ document.addEventListener('submit',async e=>{
    state(),key,{...fields,type:transactionType,
     ...(transactionType==='transfer'?{cashDirection:'out'}:{})},
    activeAccounts(snap),snap.asOf));
-  overdueEditKey='';
+  overdueEditKey='';transactionDetail=null;
   reviewNotice=(detailed?'Updated':'Moved')+' only this unpaid payment to '+dayLabel(target)+
    '. Other recurring dates and bank transactions are unchanged.';
   render();
