@@ -1704,7 +1704,7 @@ function historyPage(bundle,s){
      '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
       label+'</option>').join('')+'</select></label>'+
    (historyView==='categories'?'':
-    '<div="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
+    '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
     '<option value="">All categories</option>'+
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
