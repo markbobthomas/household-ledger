@@ -1541,7 +1541,7 @@ function historyInsights(rows,view,options={}){
    (!allAccounts?'Select All accounts for a complete budget comparison.':'')+'</p>'+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    (values.length?'<div class="history-category-layout">'+
-    '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+gradient+')">'+
+    '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+(gradient||'#e6edf3 0% 100%')+')">'+
     '<div class="history-donut-center"><span>Total purchases</span><strong>'+cash(total)+'</strong></div></div>'+
     '<div class="history-category-table"><div class="history-category-columns">'+
      '<span>Category</span><span>Actual</span><span>Budget / month</span></div>'+
@@ -3500,7 +3500,7 @@ document.addEventListener('change',async e=>{
   }catch(err){
    prefs.categoryMonthlyBudgets=old;
    historyBudgetMessage='Could not save budget. Try again.';
-   budgetInput.disabled=false;
+   document.querySelectorAll('[data-history-budget]').forEach(input=>input.disabled=false);
    const alert=document.createElement('span');
    alert.className='history-budget-error';alert.setAttribute('role','alert');
    alert.textContent='Could not save: '+String(err.message||err);
