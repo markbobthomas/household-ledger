@@ -61,6 +61,7 @@ function forecastSaveFeedback(message,allowUndo=false){
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='list',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
+let categoryReviewLimit=40;
 let historyBudgetMessage='',historyBudgetBusy=false;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
@@ -2046,7 +2047,9 @@ function reviewQueue(bundle,s){
   // suppressing a different billing cycle if a key is ever reused.
   overdue=allOverdue.filter(item=>dismissals[item.key]!==item.expectedDate),
   ignoredOverdue=allOverdue.filter(item=>dismissals[item.key]===item.expectedDate);
- const migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
+ const categoryIssues=model.categoryReviewQueue(state()),
+  categoryCount=categoryIssues.transactions.length+categoryIssues.plans.length,
+  migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
   legacySeries=migration.approvedOnly?[]:migration.legacySeries||[],
   findOwner=auto=>recommendations.find(r=>(r.activeLegacyStreams||[]).includes(auto.seriesKey)),
   legacyItems=legacySeries.map(auto=>({auto,owner:findOwner(auto)})),
@@ -2054,7 +2057,8 @@ function reviewQueue(bundle,s){
   pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
   ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
  return {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,
-  outstanding:decisionsNeeded+pending.length+overdue.length};
+  categoryIssues,categoryCount,
+  outstanding:decisionsNeeded+pending.length+overdue.length+categoryCount};
 }
 function updateReviewTabCount(queue){
  const badge=document.querySelector('.topbar [data-review-tab-count]');
@@ -2067,7 +2071,7 @@ function updateReviewTabCount(queue){
 }
 function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  // Reuse the count's exact queue, including distinct unsaved legacy streams.
- const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue}=queue;
+ const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,categoryIssues,categoryCount}=queue;
  lastRecommendedRepeating=recommendations;
  const
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
@@ -2115,6 +2119,28 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     recurringEditor(repeatingReviewForm(s,{inline:true}),'review')+'</div>':'')+
    '</article>';
  };
+ const categoryChoices=model.categories(state()).filter(c=>!['Other','Uncategorized'].includes(c)),
+  categoryOptions=c=>
+   '<option value=""'+(['Other','Uncategorized',''].includes(c)?' selected':'')+
+    ' disabled>Choose a category</option>'+
+   categoryChoices.map(option=>'<option value="'+escapeHTML(option)+'"'+
+    (option===c?' selected':'')+'>'+escapeHTML(option)+'</option>').join(''),
+  categoryRows=[
+   ...categoryIssues.plans.map(item=>({...item,isPlan:true})),
+   ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
+  ],shownCategories=categoryRows.slice(0,categoryReviewLimit),
+  categoryRow=item=>{
+   const label=item.isPlan?'Bill':'Transaction',
+    c=model.canonicalCategory(state(),item.category)||'Uncategorized';
+   return '<form class="category-review-row" data-category-review-form data-category-kind="'+
+    escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
+    '<div class="category-review-info"><strong>'+escapeHTML(item.merchant)+'</strong>'+
+    '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
+    ' · '+escapeHTML(item.reason)+'</small></div>'+
+    '<label>Category<select name="category" required aria-label="Category for '+
+     escapeHTML(item.merchant)+'">'+categoryOptions(c)+'</select></label>'+
+    '<button type="submit" class="btn primary">Confirm</button></form>';
+  };
  const normalCard=r=>row(r);
  const legacyCard=({auto,owner})=>{
   const account=activeAccounts(s).find(a=>String(a.id)===String(auto.accountId)),
@@ -2131,10 +2157,19 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
     '<div><h2>Things to check</h2><p>Confirm important payments and choose which suggestions belong in your plan. Your bank records stay unchanged.</p></div></div>'+
   '<div class="review-priority" aria-label="Review priorities">'+
-   '<strong>Needs action: '+(overdue.length+decisionsNeeded)+'</strong>'+
-   '<span>'+overdue.length+' unposted payments · '+decisionsNeeded+' earlier estimates</span>'+
+   '<strong>Needs action: '+(overdue.length+decisionsNeeded+categoryCount)+'</strong>'+
+   '<span>'+overdue.length+' unposted payments · '+decisionsNeeded+' earlier estimates · '+categoryCount+' categories</span>'+
    '<strong>Suggestions: '+pending.length+'</strong></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
+  '<section class="panel category-review-panel" data-category-review>'+
+   '<div class="section-title"><h2>Categories to confirm</h2>'+
+    '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+' TO REVIEW</span></div>'+
+   '<p class="lead">Assign a specific category to each posted transaction and saved bill. '+
+    'Confirm uncertain automatic matches here; bank records and forecasts stay unchanged.</p>'+
+   (categoryCount?shownCategories.map(categoryRow).join('')+
+    (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
+     'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
+    '<p class="lead">All categories have been checked.</p>')+'</section>'+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
@@ -3058,6 +3093,7 @@ document.addEventListener('click',async e=>{
   });
   updateHistorySelectionSummary();return;
  }
+ if(e.target.closest('[data-more-category-review]')){categoryReviewLimit+=40;render();return}
  if(e.target.closest('[data-history-more]')){
   historyLimit+=90;render();return;
  }
@@ -3312,6 +3348,55 @@ document.addEventListener('submit',async e=>{
   if(notice)notice.textContent='Added '+label+'. Choose it for any prediction.';
  }catch(error){if(notice)notice.textContent=String(error.message||error)}
  finally{if(submit)submit.disabled=false}
+});
+// Category decisions use the existing per-bank overrides and forecast preferences.
+// Even confirming a plausible existing category saves a user-approved classification.
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest?.('[data-category-review-form]');
+ if(!form)return;
+ e.preventDefault();
+ const kind=form.dataset.categoryKind,id=form.dataset.categoryId,
+  chosen=model.canonicalCategory(state(),form.elements.category?.value),
+  button=form.querySelector('[type=submit]'),
+  issues=model.categoryReviewQueue(state()),
+  active=[...issues.transactions,...issues.plans].some(item=>item.kind===kind&&item.id===id);
+ if(!active||!chosen||['Other','Uncategorized'].includes(chosen)){
+  let msg=form.querySelector('[data-category-review-error]');
+  if(!msg){msg=document.createElement('small');msg.dataset.categoryReviewError='true';
+   msg.setAttribute('role','alert');form.appendChild(msg)}
+  msg.textContent='Choose a specific category and try again.';return;
+ }
+ if(button)button.disabled=true;
+ try{
+  if(kind==='transaction'){
+   const previous=JSON.stringify(state().categoryOverrides||{});
+   try{
+    model.setCategory(state(),id,chosen,true);
+    const saved=live()?
+     await window.HouseholdLiveSource.persistCategory(id,state().categoryOverrides[id]):
+     savePlanning();
+    if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
+   }catch(error){state().categoryOverrides=JSON.parse(previous);throw error}
+  }else{
+   await commitForecastChange(()=>{
+    if(kind==='schedule')window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,chosen);
+    else{
+     const group=kind==='oneoff'?state().predictions?.futureTransactionAdds:
+      kind==='bill'?state().predictions?.paymentBills:null;
+     const entry=(group||[]).find(row=>String(row.id)===id);
+     if(!entry)throw Error('This bill changed. Refresh and try again.');
+     entry.category=chosen;entry.categoryReviewed=true;
+    }
+   });
+  }
+  reviewNotice='Category confirmed.';render();
+ }catch(error){
+  if(button)button.disabled=false;
+  let msg=form.querySelector('[data-category-review-error]');
+  if(!msg){msg=document.createElement('small');msg.dataset.categoryReviewError='true';
+   msg.setAttribute('role','alert');form.appendChild(msg)}
+  msg.textContent='Could not save category: '+String(error.message||error);
+ }
 });
 document.addEventListener('submit',async e=>{
  const form=e.target.closest?.('[data-schedule-new-form],[data-schedule-edit-form]');
