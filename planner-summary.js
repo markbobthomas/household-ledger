@@ -147,7 +147,7 @@ function postedDay(date){
   (rows.length?'<div class="calendar-detail-items">'+body+'</div>':
    '<p class="calendar-empty">No bank transactions recorded on this date.</p>')+
   '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
-  '<button type="button" class="calendar-edit" data-view="history">All bank history →</button></section>';
+  '<button type="button" class="calendar-edit" data-view="activity">All bank history →</button></section>';
 }
 function paymentDetail(event){
  const id=String(event?.transferGroupId||'');
@@ -416,7 +416,7 @@ function rawBalanceMarkup(account,real){
  const n=raw===null||raw===undefined||raw===''||!Number.isFinite(Number(raw))?
   null:Number(raw);
  const title=credit?(real?'Actual Current Balance':'Sample Current Balance'):
-  (real?'Available Balance':'Sample Available Balance');
+  (real?'Available today':'Sample available today');
  return '<div class="summary-bank"><small>'+title+'</small>'+
   '<strong class="'+(!credit&&n!==null&&n<0?'summary-bank-negative':'')+'" data-bank-balance-value'+(credit?
    ' data-bank-current-value':' data-bank-available-value')+'>'+
@@ -479,7 +479,7 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
   ):'<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
   '</div>';
 }
-function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false,view='calendar'}){
+function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false,view='calendar',homeIntro=''}){
  const credit=String(chosen.accountType||chosen.type)==='credit';
  trendDays=1095; // Chart reset after switching account or bank refresh.
  const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
@@ -542,8 +542,8 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
    '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Trend account">'+
    options+'</select></label></div>'+
    '<div class="summary-empty">A verified starting balance is needed for the trend. '+esc(reason)+
-   ' <button type="button" class="btn" data-view="summary">Back to Calendar</button></div></div>';
-  return '<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
+   ' <button type="button" class="btn" data-view="summary">Back to Home</button></div></div>';
+  return '<div class="planner-page summary-page">'+homeIntro+'<section class="summary-stage">'+lead()+
    '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
    (credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,[]):
     '<div class="summary-minimum"><div class="summary-overline">3-year low</div>'+
@@ -571,20 +571,19 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const listed=lowDay.events||[];
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
- const calendarHtml='<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
+ const calendarHtml='<div class="planner-page summary-page">'+homeIntro+'<section class="summary-stage">'+lead()+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
    '<div class="summary-monthly" data-summary-month-low>'+
-    '<div class="summary-overline">Estimated Monthly Low</div>'+
+    '<div class="summary-overline">Lowest this month</div>'+
     '<strong class="summary-low'+balanceRiskClass(monthLow(calendarMonth)?.balance,prefs)+'" data-summary-month-value>'+money(monthLow(calendarMonth)?.balance??NaN)+'</strong>'+
     '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthLow(calendarMonth)?.date||'')+'">'+
      (monthLow(calendarMonth)?esc(dateLabel(monthLow(calendarMonth).date))+' →':'No projected date')+'</button>'+
-    '</div>'+
-    '<div class="summary-minimum">'+
-    '<div class="summary-overline">3-year low</div>'+
-    '<strong class="summary-low'+balanceRiskClass(low,prefs)+'">'+money(low)+'</strong>'+
-    '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
-    '">'+esc(dateLabel(lowDay.date))+' →</button>'+
     '</div>')+'</div>'+
+    (credit?'':'<details class="home-long-range"><summary>Long-term outlook · 3-year low</summary>'+
+     '<div class="summary-minimum"><span>Lowest predicted balance in three years</span>'+
+     '<strong class="summary-low'+balanceRiskClass(low,prefs)+'">'+money(low)+'</strong>'+
+     '<button type="button" class="summary-low-date" data-summary-low-date="'+esc(lowDay.date)+
+     '">'+esc(dateLabel(lowDay.date))+' →</button></div></details>')+
     calendarGrid()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
 

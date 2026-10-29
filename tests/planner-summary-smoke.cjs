@@ -30,7 +30,7 @@ for(const days of [1095]){
  assert.match(html,/data-summary-month-value/);
  assert.match(html,/data-calendar-month-low/);
  assert.match(html,/month-minimum/);
- assert.match(html,/Estimated Monthly Low/);
+ assert.match(html,/Lowest this month/);
  assert.match(html,/data-summary-month-value>\$5,000\.00<\/strong>/,
   'October monthly low must be the first $5,000 day rather than later higher balances');
  assert.match(html,/data-calendar-month-low="2026-10-21"/,
@@ -109,7 +109,7 @@ assert.equal(tool.getPoints(derived,iso(0),1095).at(-1).date,iso(1095),
 const liveView=tool.render({...opts,days:1095,chosen:{...opts.chosen,current:5650.25,available:5400.25},
  snapshot:{...opts.snapshot,connected:true},isReal:true});
 assert.ok(liveView.includes('data-bank-available-value>$5,400.25<'));
-assert.match(liveView,/Available Balance/);
+assert.match(liveView,/Available today/);
 assert.doesNotMatch(liveView,/Current:|Actual Current Balance|5,650\.25/,
  'Checking Calendar shows available only, never the bank current balance');
 const pendingDisplayed=tool.render({...opts,days:1095,
@@ -126,7 +126,7 @@ assert.doesNotMatch(pendingDisplayed,/6,800\.00/,
 const missingAvailable=tool.render({...opts,days:1095,
  chosen:{...opts.chosen,current:6000,available:null},
  snapshot:{...opts.snapshot,connected:true},isReal:true});
-assert.match(missingAvailable,/Available Balance/);
+assert.match(missingAvailable,/Available today/);
 assert.match(missingAvailable,/data-bank-available-value>Not reported</);
 assert.doesNotMatch(missingAvailable,/6,000\.00/,
  'Missing bank available cash must not silently fall back to current');

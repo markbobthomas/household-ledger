@@ -113,13 +113,13 @@ function summary(bundle,scenario,context){
  const cardHTML=Summary.render({...options,chosen:snap.accounts[2],derived:card});
  const noneHTML=Summary.render({...options,chosen:snap.accounts[3],
   derived:projection.accounts.find(a=>a.id==='other-card')});
- assert.match(checkingHTML,/Estimated Monthly Low/);
+ assert.match(checkingHTML,/Lowest this month/);
  assert.match(checkingHTML,/3-year low/);
  assert.match(cardHTML,/Next statement estimate/);
  assert.doesNotMatch(cardHTML,/3-month estimated low/);
- assert.doesNotMatch(cardHTML,/Estimated Monthly Low/);
- const threeYear=(checkingHTML.match(/3-year low<\/div><strong[^>]*>([^<]+)/)||[])[1]||null;
- assert.ok(threeYear,'Checking Calendar must retain its visible three-year low value');
+ assert.doesNotMatch(cardHTML,/Lowest this month/);
+ const threeYear=(checkingHTML.match(/Lowest predicted balance in three years<\/span><strong[^>]*>([^<]+)/)||[])[1]||null;
+ assert.ok(threeYear,'Home must retain the exact three-year low in optional long-range details');
  assert.match(noneHTML,/Not available/,'Unconfigured credit cards must not show a fictional statement');
  const metric=(html,name)=>{
   const match=html.match(new RegExp('data-'+name+'[^>]*>([^<]+)'));

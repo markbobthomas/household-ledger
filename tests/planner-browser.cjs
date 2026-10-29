@@ -89,7 +89,7 @@ const {chromium,webkit}=require('playwright');
     'Current destination is the calm mint-tinted pill');
    assert.notEqual(newTheme.mark,'none','Ledger has the new soft brand mark');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Calendar','Bills','Bank History','Summary']);
+    ['Home','Spending','Bills','Activity']);
    assert.equal(await page.locator('.topbar [data-view="reviews"]').count(),1,
     'Things to check is a visible action outside three main destinations');
    assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),0,
@@ -98,7 +98,8 @@ const {chromium,webkit}=require('playwright');
     'Each primary destination has its own navigation icon');
    assert.equal(await page.locator('.planner-nav-primary [data-view="transactions"]').count(),0);
    // New fourth top-level page is read-only and derived from canonical data.
-   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   await page.locator('#planner-menu>summary').click();
+    await page.locator('#planner-menu [data-view="recap"]').click();
    assert.equal(await page.locator('[data-financial-recap]').count(),1);
    for(const key of ['bills','spent','income','budget']){
     assert.equal(await page.locator('[data-recap-'+key+']').count(),1,
@@ -116,14 +117,15 @@ const {chromium,webkit}=require('playwright');
    // Responsive navigation and calendar must never push the entire page sideways.
    for(const width of (mobile?[320,390,744]:[768,1024,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
-    for(const tab of ['summary','schedules','history','recap']){
+    for(const tab of ['summary','schedules','history','activity']){
      await page.locator('.planner-nav-primary [data-view="'+tab+'"]').click();
      assert.equal(await page.locator('.planner-nav-primary .tab-link.active').count(),1);
      if(tab==='history'){
-      assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
-       'Every entry into Bank History opens Budget');
-      // Geometry checks below apply specifically to the Transactions list.
-      await page.locator('[data-history-view="list"]').click();
+       assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
+        'Spending opens Budget by default');
+      }
+      if(tab==='activity'){
+       // Standalone Activity opens posted transactions directly.
       // A malformed category control once closed the History page early,
       // shrinking ledger rows to a narrow vertical strip. Measure geometry
       // and check the DOM hierarchy, not merely document horizontal overflow.
@@ -178,8 +180,7 @@ const {chromium,webkit}=require('playwright');
       if(tab==='summary'){
        const metricLayout=await page.evaluate(()=>{
         const root=document.querySelector('.summary-page .summary-numbers');
-        const cards=[root?.querySelector('.summary-bank'),root?.querySelector('.summary-monthly'),
-         root?.querySelector('.summary-minimum')];
+        const cards=[root?.querySelector('.summary-bank'),root?.querySelector('.summary-monthly')];
         if(cards.some(card=>!card))return null;
         const box=el=>el.getBoundingClientRect();
         const labels=cards.map((card,i)=>box(i?card.querySelector('.summary-overline'):card.querySelector('small:first-child')));
@@ -222,15 +223,15 @@ const {chromium,webkit}=require('playwright');
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   assert.equal(await page.locator('.history-subtab').count(),4);
+   assert.equal(await page.locator('.history-subtab').count(),3);
    assert.deepEqual((await page.locator('.history-subtab').allTextContents()).map(s=>s.trim()),
-    ['◔Budget','≡Transactions','◉Merchants','▥Purchase sizes'],
+    ['◔Budget','◉Merchants','▥Purchase sizes'],
     'Budget is the first named Bank History view');
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     'Budget opens by default rather than Transactions');
    assert.equal(await page.locator('[data-history-sort]').count(),0,
     'Transaction sort selector does not misleadingly control Budget order');
-    for(const report of ['list','merchants','sizes']){
+    for(const report of ['merchants','sizes']){
      await page.locator('[data-history-view="'+report+'"]').click();
      const field=await page.evaluate(()=>{
       const label=document.querySelector('.history-page .history-category-controls>label'),
@@ -249,11 +250,11 @@ const {chromium,webkit}=require('playwright');
       assert.ok(field.categoryLeft>=field.accountRight-2,
        'Analysis filters sit in aligned columns: '+JSON.stringify(field));
     }
-    await page.locator('[data-history-view="list"]').click();
+    await page.locator('.planner-nav-primary [data-view="activity"]').click();
    assert.equal(await page.locator('.history-period-controls [data-history-month-picker]').count(),1);
    assert.equal(await page.locator('[data-history-month-toggle]').count(),1);
    assert.equal(await page.locator('[data-history-months],[data-history-month]').count(),0);
-   assert.equal(await page.locator('.history-page [data-history-view="list"][aria-pressed="true"]').count(),1);
+   assert.equal(await page.locator('.planner-nav-primary [data-view="activity"][aria-current="page"]').count(),1);
    assert.deepEqual(await selectedMonths(page),['2026-10'],
     'All Bank History subtabs default to the current calendar month');
    assert.match(await page.locator('[data-history-month-toggle]').innerText(),/October 2026/);
@@ -313,10 +314,10 @@ const {chromium,webkit}=require('playwright');
    await chooseAllMonths(page);
    assert.equal(await count.innerText(),'1 selected',
     'Increasing the visible transaction range retains checked displayed rows');
-   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-selection-summary]').count(),0,
     'The multi-selection UI belongs only to Transactions view');
-   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-category-insights]').count(),1);
    // Create and delete categories in Bank History → Categories only.
    assert.equal(await page.locator('[data-history-category-manager]').count(),1);
@@ -509,11 +510,12 @@ const {chromium,webkit}=require('playwright');
    await chooseAllMonths(page);
    const firstCategory=page.locator('.history-category-item').filter({hasText:/[1-9][0-9]* transactions/}).first();
    await firstCategory.locator('[data-history-drill-category]').click();
-   assert.equal(await page.locator('[data-history-view="list"][aria-pressed="true"]').count(),1,
+   assert.equal(await page.locator('.planner-nav-primary [data-view="activity"][aria-current="page"]').count(),1,
     'Category drill-down opens the detailed transaction list');
    assert.ok(await page.locator('.history-actual-row').count()>0);
 
-   await page.locator('[data-history-view="sizes"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+    await page.locator('[data-history-view="sizes"]').click();
    assert.equal(await page.locator('[data-history-size-insights]').count(),1);
    assert.equal(await page.locator('[data-history-size-band]').count(),6);
    const band=page.locator('[data-history-size-band]').filter({hasText:/[1-9][0-9]* purchases/}).first();
@@ -535,7 +537,8 @@ const {chromium,webkit}=require('playwright');
 
    // Merchant view: one intuitive calendar-month spend total per merchant,
    // independent of the existing Category and Purchase Sizes analysis.
-   await page.locator('[data-history-view="merchants"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+    await page.locator('[data-history-view="merchants"]').click();
    assert.equal(await page.locator('[data-history-merchant-insights]').count(),1);
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Merchant analysis does not duplicate individual bank rows');
@@ -572,7 +575,7 @@ const {chromium,webkit}=require('playwright');
    assert.ok((await amazon.innerText()).includes('purchases'),
     'Expanding the calendar-month period aggregates more Amazon purchases');
    await amazon.click();
-   assert.equal(await page.locator('[data-history-view="list"][aria-pressed="true"]').count(),1,
+   assert.equal(await page.locator('.planner-nav-primary [data-view="activity"][aria-current="page"]').count(),1,
     'Choosing a merchant drills into the existing Transactions page');
    assert.ok(await page.locator('.history-actual-row').count()>1);
    assert.ok(await page.locator('.history-actual-row').evaluateAll(rows=>rows.every(row=>
@@ -591,7 +594,7 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await page.locator('[data-history-view="merchants"]').isVisible(),true);
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
-   await page.locator('[data-history-view="list"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
 
    await chooseMonths(page,['2026-09']);
    assert.deepEqual(await selectedMonths(page),['2026-09']);
@@ -608,7 +611,7 @@ const {chromium,webkit}=require('playwright');
    assert.ok(nonadjacent.includes('2026-08')&&nonadjacent.includes('2026-10')&&
     nonadjacent.every(month=>month==='2026-08'||month==='2026-10'),
     'August and October selected, but September excluded');
-   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.deepEqual(await selectedMonths(page),['2026-08','2026-10'],
     'Checked months remain selected across all four reports');
    await checkOverall(2);
@@ -619,11 +622,11 @@ const {chromium,webkit}=require('playwright');
    const twoMonthWidth=Number.parseFloat(await twoMonthRow.locator('.history-budget-fill').evaluate(el=>el.style.width));
    assert.ok(Math.abs(twoMonthWidth-Math.min(100,twoMonthSpent/(275.5*2)*100))<.02,
     'Nonadjacent calendar months compare against exactly two monthly budgets');
-   await page.locator('[data-history-view="list"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
    await chooseAllMonths(page);
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
     'A monthly category budget is saved across page reloads');
    assert.deepEqual(await selectedMonths(page),['2026-10'],
@@ -636,7 +639,7 @@ const {chromium,webkit}=require('playwright');
 
    // A category edit teaches a merchant lesson, which Settings can forget
     // without reverting the transaction's individual saved correction.
-    await page.locator('[data-history-view="list"]').click();
+    await page.locator('.planner-nav-primary [data-view="activity"]').click();
     const lessonRow=page.locator('.history-entry').filter({hasText:'Xfinity Internet'}).first();
     assert.equal(await lessonRow.count(),1,'Fictional merchant exists for category learning');
     await lessonRow.locator('[data-history-category]').selectOption('Subscriptions');
@@ -647,14 +650,14 @@ const {chromium,webkit}=require('playwright');
     assert.ok(Object.values(categoryLesson.learning.categoryRules).some(rule=>
      rule.merchant==='Xfinity Internet'&&rule.category==='Subscriptions'),
      'A category correction stores its merchant lesson');
-    await page.locator('[data-history-view="categories"]').click();
+    await page.locator('.planner-nav-primary [data-view="history"]').click();
     assert.equal(Math.round(await categoryAmount('Subscriptions')*100),
      Math.round(subscriptionsBefore*100)+7999,
      'A saved posted purchase immediately moves into the selected budget category');
     assert.equal(Math.round(await categoryAmount('Utility')*100),
      Math.round(utilitiesBefore*100)-7999,
      'The old budget category no longer counts that same purchase');
-    await page.locator('[data-history-view="list"]').click();
+    await page.locator('.planner-nav-primary [data-view="activity"]').click();
     await page.locator('#planner-menu summary').click();
     await page.locator('#planner-menu [data-view="settings"]').click();
     assert.equal(await page.locator('[data-forget-category-rule]').count(),1,
@@ -669,7 +672,7 @@ const {chromium,webkit}=require('playwright');
     await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     'Reopening Bank History from Settings also defaults to Budget');
-   await page.locator('[data-history-view="list"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
 
     // Actual bank records are inspectable through the shared panel, never editable.
    const bankRow=page.locator('.history-row-open').first();
@@ -778,7 +781,7 @@ const {chromium,webkit}=require('playwright');
    // Deleting an assigned built-in category should not require reassignment.
    // An existing fictional merchant correction is already Subscriptions.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('.history-category-manager>summary').click();
    assert.equal(await page.locator('[data-history-category-delete="Subscriptions"]').count(),1);
    page.once('dialog',dialog=>dialog.accept());
@@ -797,7 +800,7 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('[data-category-review-form]').count()>0,
     'Deleted categories push affected transactions back into Things to check');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   await page.locator('[data-history-view="list"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
    assert.equal(await page.locator('[data-history-category-filter] option[value="Subscriptions"]').count(),0,
     'Deleted categories must not reappear in History filters');
 
@@ -812,11 +815,11 @@ const {chromium,webkit}=require('playwright');
     targetCategory=oldCategory==='Health'?'Dining':'Health',
     movedCents=Math.round(Number(await spendRow.locator('[data-history-sort-amount]')
      .getAttribute('data-history-sort-amount'))*100);
-   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    const oldTargetCents=Math.round(Number((await page.locator(
     '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
     .replace(/[^0-9.-]/g,''))*100);
-   await page.locator('[data-history-view="list"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
    const rowAgain=page.locator('.history-entry')
     .filter({has:page.locator('.history-actual-row[data-history-kind="expense"]')}).first();
    const chosenId=await rowAgain.getAttribute('data-history-entry');
@@ -825,7 +828,7 @@ const {chromium,webkit}=require('playwright');
     const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
     return saved.categoryOverrides?.[id]===category;
    },[chosenId,targetCategory]);
-   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(Math.round(Number((await page.locator(
     '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
     .replace(/[^0-9.-]/g,''))*100),oldTargetCents+movedCents,
