@@ -2448,6 +2448,31 @@ function render(){
  if(activeTab==='history')updateHistorySelectionSummary();
 }
 document.addEventListener('click',async e=>{
+ const monthToggle=e.target.closest?.('[data-history-month-toggle]');
+ if(monthToggle){
+  historyMonthPickerOpen=!historyMonthPickerOpen;
+  monthToggle.setAttribute('aria-expanded',String(historyMonthPickerOpen));
+  const menu=document.querySelector('[data-history-month-menu]');
+  if(menu)menu.hidden=!historyMonthPickerOpen;
+  return;
+ }
+ const monthShortcut=e.target.closest?.('[data-history-month-current],[data-history-month-all]');
+ if(monthShortcut){
+  if(monthShortcut.hasAttribute('data-history-month-current'))
+   historySelectedMonths=new Set([snapshot().asOf.slice(0,7)]);
+  else historySelectedMonths=new Set([...document.querySelectorAll('[data-history-month-option]')]
+   .map(input=>input.value));
+  historyLimit=90;render();
+  document.querySelector(monthShortcut.hasAttribute('data-history-month-current')?
+   '[data-history-month-current]':'[data-history-month-all]')?.focus({preventScroll:true});
+  return;
+ }
+ if(historyMonthPickerOpen&&!e.target.closest?.('[data-history-month-picker]')){
+  historyMonthPickerOpen=false;
+  const menu=document.querySelector('[data-history-month-menu]');
+  if(menu)menu.hidden=true;
+  document.querySelector('[data-history-month-toggle]')?.setAttribute('aria-expanded','false');
+ }
  if(e.target.closest?.('[data-undo-forecast]')){
   e.preventDefault();await undoLastForecastChange();return;
  }
@@ -2754,7 +2779,7 @@ document.addEventListener('click',async e=>{
  if(historyTab){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
     !window.confirm('Discard unsaved payment changes?'))return;
-  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
+  historyView=historyTab.dataset.historyView;historyMonthPickerOpen=false;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   recurringDraft=null;transactionDetail=null;render();return;
  }
@@ -3451,6 +3476,13 @@ document.addEventListener('submit',async e=>{
  }
 });
 document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&historyMonthPickerOpen){
+  historyMonthPickerOpen=false;
+  const menu=document.querySelector('[data-history-month-menu]');
+  if(menu)menu.hidden=true;
+  const toggle=document.querySelector('[data-history-month-toggle]');
+  toggle?.setAttribute('aria-expanded','false');toggle?.focus();return;
+ }
  if(e.key==='Escape'&&document.querySelector('[data-inline-transaction-editor]')){
   closeInlineTransaction();return;
  }
@@ -3501,16 +3533,19 @@ document.addEventListener('change',e=>{
   });
   updateHistorySelectionSummary();return;
  }
- const periodSelect=e.target.closest?.('[data-history-months]');
- if(periodSelect){
-  if(!['1','3','6','12','all'].includes(periodSelect.value))return;
-  historyMonths=periodSelect.value;historyLimit=90;render();return;
- }
- const monthInput=e.target.closest?.('[data-history-month]');
- if(monthInput){
-  const next=String(monthInput.value||'');
-  if(!/^\d{4}-\d{2}$/.test(next)||next>snapshot().asOf.slice(0,7))return;
-  historyEndMonth=next;historyLimit=90;render();return;
+ const monthCheckbox=e.target.closest?.('[data-history-month-option]');
+ if(monthCheckbox){
+  const month=monthCheckbox.value;
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))return;
+  if(monthCheckbox.checked)historySelectedMonths.add(month);
+  else if(historySelectedMonths.size>1)historySelectedMonths.delete(month);
+  else{monthCheckbox.checked=true;return}
+  const scroll=monthCheckbox.closest('[data-history-month-list]')?.scrollTop||0;
+  historyLimit=90;render();
+  const monthList=document.querySelector('[data-history-month-list]');
+  if(monthList)monthList.scrollTop=scroll;
+  document.querySelector('[data-history-month-option="'+month+'"]')?.focus({preventScroll:true});
+  return;
  }
  if(!e.target.matches?.('[data-calendar-type]'))return;
  const form=e.target.closest('[data-calendar-quick-form]');
