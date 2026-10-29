@@ -1689,7 +1689,10 @@ function updateHistorySelectionSummary(){
 function historyPage(bundle,s){
  const accounts=activeAccounts(s),
   records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
-  .map(t=>({...t,category:model.canonicalCategory(state(),t.category)||t.category||'Other'}))
+  .map(t=>({...t,category:
+    ['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
+    ['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
+    model.canonicalCategory(state(),t.category)||t.category||'Other'}))
   .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),
   // Both filters and row editors consult the same canonical category registry.
   // Effective provider labels are included as read-only observed names; they
