@@ -69,7 +69,7 @@ let historyAccount='all',historySearch='',historySort='newest',historyCategoryFi
 let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40;
-let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='';
+let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='',latestCategorySave=null;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
@@ -1692,7 +1692,7 @@ function historyInsights(rows,view,options={}){
    '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(total)+' spent across '+n+' spending transactions')+'">'+
     '<strong>'+cash(total)+' spent</strong><span>'+n+' transactions</span></div>'+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
-   budgetSummary+
+   budgetSaveFeedback+budgetSummary+
    (values.length?'<div class="history-category-layout">'+
     '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+(gradient||'#e6edf3 0% 100%')+')">'+
     '<div class="history-donut-center"><span>By category</span></div></div>'+
@@ -1756,7 +1756,9 @@ function updateHistorySelectionSummary(){
 }
 function historyPage(bundle,s){
  const accounts=activeAccounts(s),
-  records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
+  // Read the current category overrides directly. The derived forecast is
+  // independently cached and must never be the authority for Budget totals.
+  records=model.records(state()).filter(x=>x.date&&x.date<=s.asOf)
   .map(t=>({...t,category:
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
@@ -1821,6 +1823,32 @@ function historyPage(bundle,s){
  const selectedRows=visible.filter(t=>historySelected.has(historySelectionKey(
   window.HouseholdPlannerHistory.accountOf(t,accounts),t.id))),
   selectedCents=selectedRows.reduce((sum,t)=>sum+historySignedCents(t),0);
+ // After a successful category save, tell the user whether its posted
+ // spending is in the currently selected Budget. Do not silently change the
+ // user's calendar-month/account filters or count transfers as purchases.
+ const savedRow=latestCategorySave&&records.find(t=>
+  String(t.id)===latestCategorySave.id);
+ const budgetSaveFeedback=historyView==='categories'&&savedRow?(()=>{
+  const amount=categorySpendingCents(savedRow,budgetCardSettlements),
+   month=savedRow.date.slice(0,7),
+   monthText=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',{
+    month:'long',year:'numeric',timeZone:'UTC'}),
+   inMonth=historySelectedMonths.has(month),
+   inAccount=historyAccount==='all'||String(window.HouseholdPlannerHistory.accountOf(savedRow,accounts))===historyAccount,
+   category=escapeHTML(categoryLabel(savedRow.category));
+  let message='';
+  if(!inMonth||!inAccount)message='Saved to '+category+' · '+monthText+
+   '. This transaction is outside the selected Budget '+(!inMonth?'months':'account')+'.';
+  else if(!amount)message='Saved to '+category+', but this '+
+   (savedRow.pending?'pending transaction':savedRow.type==='income'?'deposit':
+    ['card_payment','internal_transfer'].includes(savedRow.accountingKind)||
+     budgetCardSettlements.has(String(savedRow.id))?'card payment or internal transfer':'transaction')+
+   ' does not count as posted Budget spending.';
+  else message='Updated '+category+' Budget for '+monthText+'.';
+  return '<p class="history-budget-feedback" role="status">'+message+
+   ((!inMonth||!inAccount)?' <button type="button" class="btn" data-show-saved-budget>'+
+    'Show that month</button>':'')+'</p>';
+ })():'';
  const monthsInRange=historySelectedMonths.size,
   insight=historyView!=='list'?historyInsights(filtered,historyView,{
    budgets:state().predictions?.categoryMonthlyBudgets||{},
@@ -2947,6 +2975,12 @@ document.addEventListener('click',async e=>{
   historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
   historyLimit=90;render();return;
  }
+ const savedBudget=e.target.closest?.('[data-show-saved-budget]');
+ if(savedBudget&&latestCategorySave){
+  historySelectedMonths=new Set([latestCategorySave.date.slice(0,7)]);
+  historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
+  render();return;
+ }
  const view=e.target.closest('[data-view]');
  if(view){
   // Budget is the Bank History landing view when the main destination opens.
@@ -3500,6 +3534,11 @@ async function saveTransactionCategory(id,category,confirm=false){
    else if(current.learning?.categoryRules?.[lesson.key])
     current.learning.categoryRules[lesson.key].mode=saved.learningMode;
   }
+  const posted=(current.transactions||[]).find(row=>String(row.id)===String(id));
+  latestCategorySave=posted?{id:String(id),date:String(posted.date||''),category}:null;
+  // A category correction changes historical reporting. Refresh only this
+  // in-memory projection cache; do not refetch or mutate bank transactions.
+  forecastCache=null;
   return lesson;
  }catch(error){
   current.categoryOverrides=JSON.parse(beforeOverrides);
