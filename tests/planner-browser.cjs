@@ -136,7 +136,32 @@ const {chromium,webkit}=require('playwright');
       assert.ok(Math.abs(geometry.rowLeft-geometry.frameLeft)<26,
        'History row must stay aligned with its list container: '+JSON.stringify(geometry));
      }
-     const headerGeometry=await page.evaluate(()=>{
+     if(tab==='summary'){
+       const metricLayout=await page.evaluate(()=>{
+        const root=document.querySelector('.summary-page .summary-numbers');
+        const cards=[root?.querySelector('.summary-bank'),root?.querySelector('.summary-monthly'),
+         root?.querySelector('.summary-minimum')];
+        if(cards.some(card=>!card))return null;
+        const box=el=>el.getBoundingClientRect();
+        const labels=cards.map((card,i)=>box(i?card.querySelector('.summary-overline'):card.querySelector('small:first-child')));
+        const values=cards.map(card=>box(card.querySelector('strong')));
+        const bankValue=cards[0].querySelector('[data-bank-available-value]');
+        return {labelBottoms:labels.map(b=>b.bottom),valueBottoms:values.map(b=>b.bottom),
+         bankColor:bankValue?getComputedStyle(bankValue).color:null,
+         bankText:bankValue?.textContent||''};
+       });
+       if(metricLayout){
+        const spread=xs=>Math.max(...xs)-Math.min(...xs);
+        assert.ok(spread(metricLayout.labelBottoms)<=2,
+         'Calendar metric labels must align at '+width+': '+JSON.stringify(metricLayout));
+        assert.ok(spread(metricLayout.valueBottoms)<=2,
+         'Calendar metric values must align at '+width+': '+JSON.stringify(metricLayout));
+        if(metricLayout.bankColor&&!/^-|Not reported/.test(metricLayout.bankText.trim()))
+         assert.equal(metricLayout.bankColor,'rgb(9, 159, 83)',
+          'Available Balance should use the brighter green accent');
+       }
+      }
+      const headerGeometry=await page.evaluate(()=>{
        const title=document.querySelector('.topbar h1').getBoundingClientRect(),
         review=document.querySelector('.topbar .attention-link').getBoundingClientRect(),
         menu=document.querySelector('.topbar .planner-menu>summary').getBoundingClientRect();
