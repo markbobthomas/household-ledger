@@ -58,7 +58,8 @@ const {start}=require('../pilot/server.cjs');
   };
   const rule={id:'manual|checking|mortgage',kind:'event',type:'expense',frequency:'monthly',
    accountId:'checking',merchant:'Mortgage Servicer',amount:2000,anchorDate:'2026-11-15'};
-  const planned={cashCushion:350,futureRecurringRules:[rule]};
+  const planned={cashCushion:350,futureRecurringRules:[rule],
+    categoryMonthlyBudgets:{Groceries:325.50,Utilities:175}};
   const legacy=await request('/api/ledger/adjustments',{
    categoryOverrides:initial.ledgerAdjustments.categoryOverrides,predictions:planned});
   assert.equal(legacy.status,400,'Legacy full-adjustments request is blocked by stale category overrides');
@@ -80,7 +81,7 @@ const {start}=require('../pilot/server.cjs');
   assert.equal(fs.readFileSync(statePath,'utf8'),bankBefore,
    'The entire encrypted bank file remains byte-for-byte unchanged after editing a forecast');
   assert.deepEqual(decryptForecast(),planned,
-   'Only future ledger preferences are persisted to a small encrypted file');
+   'Budget reporting preferences and forecast rules are encrypted separately from bank records');
   assert.doesNotMatch(fs.readFileSync(forecastPath,'utf8'),/Mortgage Servicer/,
    'Forecast preferences remain encrypted at rest');
   const retry=await request('/api/ledger/forecasts',{predictions:planned});

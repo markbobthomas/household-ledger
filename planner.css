@@ -3335,3 +3335,87 @@ body{background:#f6f8fa}
  .history-subtab>span{font-size:18px}
  .history-period-controls label{max-width:100%}
 }
+
+
+/* Bank History category targets: compact editable amounts next to actual spend.
+   Budget targets are monthly reporting preferences, never ledger forecasts. */
+.history-page .history-category-table{width:100%;min-width:0}
+.history-page .history-category-columns{
+ display:grid;grid-template-columns:minmax(0,1fr) 105px 126px;
+ gap:9px;align-items:center;
+ padding:5px 7px 9px;border-bottom:1px solid #dce5eb;
+ font-size:10px;font-weight:750;color:#667787;
+}
+.history-page .history-category-columns span:nth-child(2){text-align:right}
+.history-page .history-category-columns span:nth-child(3){text-align:center}
+.history-page .history-category-item{
+ display:grid;grid-template-columns:minmax(0,1fr) 105px 126px;
+ gap:9px;align-items:center;width:100%;padding:9px 7px;
+ border:0;border-bottom:1px solid #edf1f4;background:transparent;
+}
+.history-page .history-category-item:hover{background:#f5f8fb}
+.history-page .history-category-drill{
+ display:flex;gap:9px;min-width:0;align-items:center;border:0;
+ background:transparent;padding:0;text-align:left;cursor:pointer;
+ color:#263849;
+}
+.history-page .history-category-drill:hover .history-category-name{text-decoration:underline;text-underline-offset:2px}
+.history-page .history-category-name{min-width:0;overflow-wrap:anywhere}
+.history-page .history-category-name small{padding-left:31px}
+.history-page .history-category-actual{
+ justify-self:end;text-align:right;white-space:nowrap;
+ font:750 12px var(--mono);color:#233749;
+}
+.history-page .history-category-budget{
+ display:flex;flex-direction:column;align-items:flex-end;
+ min-width:0;gap:3px;
+}
+.history-page .history-budget-input{
+ display:flex;align-items:center;gap:3px;width:116px;max-width:100%;
+ padding:5px 7px;border:1px solid #b6c7d5;border-radius:5px;
+ color:#617789;background:#fff;box-sizing:border-box;
+}
+.history-page .history-budget-input:focus-within{
+ border-color:#346a9f;outline:2px solid #c8dbea;outline-offset:0;
+}
+.history-page .history-budget-input input{
+ width:100%;min-width:0;border:0;outline:none!important;
+ padding:0;background:transparent;color:#21394b;
+ font:700 12px var(--mono);height:20px;cursor:text;
+}
+.history-page .history-budget-input input::-webkit-inner-spin-button,
+.history-page .history-budget-input input::-webkit-outer-spin-button{
+ -webkit-appearance:none;margin:0;
+}
+.history-page .history-budget-input input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.history-page .history-budget-difference{
+ font-size:10px;font-weight:600;color:#5c7980;white-space:nowrap;
+}
+.history-page .history-budget-difference.over{color:#b56820}
+.history-page .history-budget-explanation{
+ margin:0 0 14px;font-size:11px;color:#62778a;
+}
+.history-page .history-budget-feedback{
+ display:inline-block;margin:0 0 11px;color:#2a6650;font-weight:700;font-size:11px;
+}
+.history-page .history-budget-error{font-size:10px;color:#b42332;overflow-wrap:anywhere}
+@media(max-width:650px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(0,1fr) 77px 104px;
+  gap:5px;padding-inline:2px;
+ }
+ .history-page .history-category-actual{font-size:11px}
+ .history-page .history-category-name{font-size:11px;gap:4px}
+ .history-page .history-category-name small{padding-left:0;margin-top:0}
+ .history-page .history-category-glyph{width:20px;height:20px;font-size:11px}
+ .history-page .history-budget-input{width:101px;padding:4px 5px}
+ .history-page .history-budget-input input{font-size:11px}
+ .history-page .history-budget-difference{font-size:9px}
+}
+@media(max-width:380px){
+ .history-page .history-category-glyph{display:none}
+ .history-page .history-category-columns,
+ .history-page .history-category-item{grid-template-columns:minmax(0,1fr) 70px 93px;gap:3px}
+ .history-page .history-budget-input{width:91px}
+}

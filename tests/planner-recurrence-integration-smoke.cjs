@@ -68,6 +68,12 @@ async function click(marker,dataset){
  const event={target:{closest:selector=>selector===marker?{dataset}:null}};
  for(const fn of handlers.click||[])await fn(event);
 }
+async function chooseHistoryMonth(month){
+ const target={value:month,
+  closest(selector){return selector==='[data-history-month]'?this:null},
+  matches(){return false}};
+ for(const fn of handlers.change||[])await fn({target});
+}
 async function submit(fields){
  const form={fields,hasAttribute:key=>key==='data-history-recurring-form',
   querySelector(){return{disabled:false}},appendChild(){}};
@@ -93,6 +99,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
   'A bank-derived mortgage must not be absent from the future schedule');
  await click('[data-view]',{view:'history'});
+ await chooseHistoryMonth('2026-09'); // September mortgage is outside the default October calendar month.
  assert.match(future(),/Home Mortgage ACH/);
  await click('[data-history-plan]',{
   historyPlan:'solo-bank-mortgage',historyAccount:'demo-checking'});
@@ -130,6 +137,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  // Its category/name provides no fixed-bill shortcut, so detection genuinely
  // depends on the two observed exact-amount calendar payments.
  await click('[data-view]',{view:'history'});
+ await chooseHistoryMonth('2026-10');
  await click('[data-history-plan]',{
   historyPlan:'generic-bank-second',historyAccount:'demo-checking'});
  await submit({merchant:'ABC Draft 984',accountId:'demo-checking',

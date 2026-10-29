@@ -26,7 +26,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
@@ -59,7 +59,8 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
-let historyView='list',historyMonths='3',historyEndMonth='',historySizeFilter=-1,historyPurchaseDrill=false;
+let historyView='list',historyMonths='1',historyEndMonth='',historySizeFilter=-1,historyPurchaseDrill=false;
+let historyBudgetMessage='',historyBudgetBusy=false;
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
@@ -74,7 +75,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   scheduleCategories:p.scheduleCategories,
+   scheduleCategories:p.scheduleCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,overdueReviewDismissals:p.overdueReviewDismissals,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
@@ -98,12 +99,14 @@ function activeAccounts(s){return Array.isArray(s?.accounts)?s.accounts:[]}
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  const source=state(),prefs=source.predictions||{};
+ // Budgets are reporting preferences and never change forecast projections.
+ const {categoryMonthlyBudgets:_reportOnly,...forecastPrefs}=prefs;
  // The live bank adapter replaces the source state on every refresh. Saved
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
  // category-learning decision must also recompute all projected balances.
  const signature=JSON.stringify({
-  snapshot:s,predictions:prefs,categoryOverrides:source.categoryOverrides,
+  snapshot:s,predictions:forecastPrefs,categoryOverrides:source.categoryOverrides,
   learning:source.learning,accounts:source.accounts
  });
  if(forecastCache&&forecastCache.source===source&&
@@ -1480,7 +1483,7 @@ const historyBands=[
 const historyBandIndex=n=>historyBands.findIndex(b=>n>=b.min&&n<b.max);
 // Read-only reporting. Actual bank records, future predictions, and recurring
 // matching are untouched. Exclude pending, paired transfers and card payments.
-function historyInsights(rows,view){
+function historyInsights(rows,view,options={}){
  const purchases=rows.filter(r=>cardActivityCents(r)>0),
   cents=purchases.reduce((sum,r)=>sum+cardActivityCents(r),0),
   total=cents/100,n=purchases.length;
@@ -1488,16 +1491,21 @@ function historyInsights(rows,view){
   '<strong>'+cash(total)+' spent</strong><span>'+cash(n?total/n:0)+' average</span></div>'+
   '<p class="history-insight-note">Purchases only · excludes pending items, transfers and card payments</p>';
  if(view==='categories'){
+  const budgets=options.budgets&&typeof options.budgets==='object'&&!Array.isArray(options.budgets)?
+   options.budgets:{},periodMonths=Math.max(1,Number(options.months)||1),
+   allAccounts=options.allAccounts!==false;
   const groups=new Map();
   for(const r of purchases){
    const category=String(r.category||'Other');
    const g=groups.get(category)||{name:category,cents:0,count:0};
    g.cents+=cardActivityCents(r);g.count++;groups.set(category,g);
   }
-  const sorted=[...groups.values()].sort((a,b)=>b.cents-a.cents);
-  const values=sorted.length>7?[...sorted.slice(0,7),{
-   name:'Other categories',count:sorted.slice(7).reduce((n,g)=>n+g.count,0),
-   cents:sorted.slice(7).reduce((n,g)=>n+g.cents,0)}]:sorted;
+  // Retain monthly targets for categories with zero activity this month.
+  for(const [name,value] of Object.entries(budgets)){
+   if(name&&Number.isFinite(Number(value))&&!groups.has(name))
+    groups.set(name,{name,cents:0,count:0});
+  }
+  const values=[...groups.values()].sort((a,b)=>b.cents-a.cents||a.name.localeCompare(b.name));
   const colors=['#3565a1','#dc9445','#4c8676','#8e75ad','#b56d75','#7893ad','#556a85','#b4beca'];
   const cue=name=>/grocer|food|dining|restaurant/i.test(name)?'◉':
    /house|rent|mortgage/i.test(name)?'⌂':
@@ -1508,24 +1516,45 @@ function historyInsights(rows,view){
   let start=0;
   const gradient=values.map((g,i)=>{
    const from=start;start+=cents?g.cents/cents*100:0;
-   return colors[i]+' '+from.toFixed(3)+'% '+start.toFixed(3)+'%';
+   return colors[i%colors.length]+' '+from.toFixed(3)+'% '+start.toFixed(3)+'%';
   }).join(',');
+  const budgetField=g=>{
+   const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
+    set=Number.isFinite(raw)&&raw>=0,
+    value=set?Math.round(raw*100)/100:null,
+    remaining=set?value*periodMonths-g.cents/100:0;
+   return '<label class="history-budget-input"><span aria-hidden="true">$</span>'+
+    '<input type="number" inputmode="decimal" min="0" max="999999999" step="0.01" '+
+    'data-history-budget="'+escapeHTML(g.name)+'" aria-label="Monthly budget for '+
+    escapeHTML(g.name)+'" placeholder="Set" value="'+
+    (set?escapeHTML(value.toFixed(2)):'')+'"></label>'+
+    (set&&allAccounts?'<small class="history-budget-difference'+(remaining<0?' over':'')+'">'+
+     cash(Math.abs(remaining))+(remaining<0?' over':' left')+'</small>':
+     '<small class="history-budget-difference">'+(set?'Household target':'Not set')+'</small>');
+  };
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<h2>Where your money went</h2>'+
-   '<p>See how purchases are distributed. Choose a category to view the transactions.</p>'+
+   '<p>Choose a category to see purchases, or edit its monthly budget right beside actual spending.</p>'+
    header+
+   '<p class="history-budget-explanation">Monthly budgets repeat each calendar month. '+
+   (periodMonths>1?'The selected period includes '+periodMonths+' monthly budgets. ':'')+
+   (!allAccounts?'Select All accounts for a complete budget comparison.':'')+'</p>'+
+   (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    (values.length?'<div class="history-category-layout">'+
-    '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+gradient+')">'+
+    '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+(gradient||'#e6edf3 0% 100%')+')">'+
     '<div class="history-donut-center"><span>Total purchases</span><strong>'+cash(total)+'</strong></div></div>'+
+    '<div class="history-category-table"><div class="history-category-columns">'+
+     '<span>Category</span><span>Actual</span><span>Budget / month</span></div>'+
     '<div class="history-category-legend">'+values.map((g,i)=>
-     '<button type="button" class="history-category-item" data-history-drill-category="'+
-      escapeHTML(g.name==='Other categories'?'':g.name)+'">'+
-     '<span class="history-legend-dot" style="background:'+colors[i]+'"></span>'+
+     '<div class="history-category-item" data-history-category-row="'+escapeHTML(g.name)+'">'+
+     '<button type="button" class="history-category-drill" data-history-drill-category="'+
+      escapeHTML(g.name)+'" title="See category transactions">'+
+     '<span class="history-legend-dot" style="background:'+colors[i%colors.length]+'"></span>'+
      '<span class="history-category-name"><span class="history-category-glyph">'+cue(g.name)+'</span>'+
-      escapeHTML(g.name)+'<small>'+g.count+' purchases</small></span>'+
-     '<strong>'+cash(g.cents/100)+'</strong>'+
-     '<span class="history-category-share">'+(g.cents/cents*100).toFixed(0)+'%</span></button>').join('')+
-    '</div></div>':'<p class="history-insight-empty">No purchases in this period.</p>')+
+      escapeHTML(g.name)+'<small>'+g.count+' purchases</small></span></button>'+
+     '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
+     '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
+    '</div></div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
    '</section>';
  }
  const groups=historyBands.map(b=>({...b,count:0,cents:0}));
@@ -1583,7 +1612,13 @@ function historyPage(bundle,s){
    textOf(a).localeCompare(textOf(b))||dateDesc(a,b):
   dateDesc(a,b));
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
- const insight=historyView!=='list'?historyInsights(filtered,historyView):'';
+ const monthNumber=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7)),
+  earliestMonth=filtered.reduce((first,row)=>!first||row.date.slice(0,7)<first?row.date.slice(0,7):first,''),
+  monthsInRange=span||Math.max(1,earliestMonth?monthNumber(selectedMonth)-monthNumber(earliestMonth)+1:1),
+  insight=historyView!=='list'?historyInsights(filtered,historyView,{
+   budgets:state().predictions?.categoryMonthlyBudgets||{},
+   months:monthsInRange,allAccounts:historyAccount==='all'
+  }):'';
  const selectedHistoryCard=historyAccount==='all'?null:
   accounts.find(a=>String(a.id)===historyAccount&&accountType(a)==='credit');
  const groupHistoryCard=Boolean(selectedHistoryCard&&
@@ -3432,6 +3467,47 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',async e=>{
+ const budgetInput=e.target.closest?.('[data-history-budget]');
+ if(budgetInput){
+  if(historyBudgetBusy)return;
+  const category=String(budgetInput.dataset.historyBudget||''),
+   raw=String(budgetInput.value||'').trim(),
+   value=raw===''?null:Number(raw);
+  const invalid=!category||['__proto__','constructor','prototype'].includes(category)||
+   (raw!==''&&(!Number.isFinite(value)||value<0||value>999999999||
+    Math.abs(value*100-Math.round(value*100))>1e-6));
+  if(invalid){
+   budgetInput.setCustomValidity('Enter a nonnegative dollar amount with up to two decimal places.');
+   budgetInput.reportValidity();return;
+  }
+  budgetInput.setCustomValidity('');
+  const prefs=state().predictions??={},
+   before=JSON.stringify(prefs.categoryMonthlyBudgets||{}),
+   old=JSON.parse(before),next={...old};
+  if(value===null)delete next[category];
+  else next[category]=Math.round(value*100)/100;
+  if(JSON.stringify(next)===before)return;
+  historyBudgetBusy=true;
+  document.querySelectorAll('[data-history-budget]').forEach(input=>input.disabled=true);
+  historyBudgetMessage='Saving budget…';
+  try{
+   // Saves private planning preferences, never bank facts or forecast entries.
+   prefs.categoryMonthlyBudgets=next;
+   const result=await savePlanning();
+   if(live()&&(!result||result.saved!==true))throw Error('Budget save was not confirmed');
+   historyBudgetMessage='Monthly budget saved';
+   render();
+  }catch(err){
+   prefs.categoryMonthlyBudgets=old;
+   historyBudgetMessage='Could not save budget. Try again.';
+   document.querySelectorAll('[data-history-budget]').forEach(input=>input.disabled=false);
+   const alert=document.createElement('span');
+   alert.className='history-budget-error';alert.setAttribute('role','alert');
+   alert.textContent='Could not save: '+String(err.message||err);
+   budgetInput.closest('.history-category-budget')?.appendChild(alert);
+  }finally{historyBudgetBusy=false;}
+  return;
+ }
  const historyCategory=e.target.closest?.('[data-history-category]');
  if(historyCategory){
   const id=historyCategory.dataset.historyCategory,
