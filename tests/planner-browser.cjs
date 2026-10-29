@@ -325,6 +325,14 @@ const {chromium,webkit}=require('playwright');
     'Without a target, the usage bar is empty');
    assert.equal(await page.locator('[data-history-total-budget]').count(),1,
     'Categories view includes one overall budget summary');
+   assert.equal(await page.locator('.history-spending-overview').count(),1,
+    'Compact category view shows one spending total and purchase count');
+   assert.equal(await page.locator('.history-insight-note,.history-budget-explanation').count(),0,
+    'Redundant explanatory paragraphs are removed');
+   assert.equal(await page.locator('.history-spending-overview').innerText().then(x=>/average/i.test(x)),false,
+    'The average is not displayed in the budget overview');
+   assert.equal(await page.locator('.history-donut-center strong').count(),0,
+    'The donut does not repeat the same spending total');
    const checkOverall=async months=>{
     const rows=await page.locator('.history-category-item').evaluateAll(items=>
      items.map(item=>({
@@ -332,22 +340,26 @@ const {chromium,webkit}=require('playwright');
       budget:item.querySelector('[data-history-budget]').value
      })));
     const totals=rows.reduce((sum,row)=>{
-     if(row.budget==='')return sum;
      sum.spentCents+=Math.round(row.spent*100);
-     sum.limitCents+=Math.round(Number(row.budget)*100)*months;
+     if(row.budget!=='')sum.limitCents+=Math.round(Number(row.budget)*100)*months;
      return sum;
     },{spentCents:0,limitCents:0});
     const summary=page.locator('[data-history-total-budget]');
+    assert.equal(await summary.locator('p,small').count(),1,
+     'Budget summary contains just one short budget amount label');
     if(totals.limitCents<=0){
      assert.equal(await summary.locator('[data-history-total-budget-percent]').count(),0,
       'No misleading percentage is shown without a positive overall budget');
     }else{
      const percent=Number((await summary.locator('[data-history-total-budget-percent]').innerText()).replace('%',''));
      assert.equal(percent,Math.round(totals.spentCents/totals.limitCents*100),
-      'Overall percent divides spending in budgeted categories by combined calendar-month limits');
+      'Overall percentage includes unbudgeted category spending in its numerator');
      const bar=await summary.locator('.history-budget-summary-track>span').evaluate(el=>parseFloat(el.style.width));
      assert.ok(Math.abs(bar-Math.max(0,Math.min(100,totals.spentCents/totals.limitCents*100)))<.02,
       'Summary bar caps at 100% without capping the stated percentage');
+     assert.match(await summary.locator('.history-budget-summary-track').getAttribute('aria-label'),
+      /including unbudgeted category spending/,
+      'Inclusive spending is conveyed without another visible explanatory paragraph');
     }
    };
    const budgetCategory=page.locator('.history-category-item').first(),
@@ -369,8 +381,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Category view shows its tailored chart rather than duplicating line-item history');
    await chooseMonths(page,['2026-10','2026-09','2026-08']);
-   assert.match(await page.locator('.history-budget-explanation').innerText(),/3 monthly budgets/,
-    'Three-month actual spending is compared against three full calendar monthly targets');
+   assert.match(await page.locator('.history-budget-summary-track').getAttribute('aria-label'),/including unbudgeted category spending/,
+    'Multi-month budget comparison retains all purchase spending');
    assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
     'A monthly budget carries across report periods');
    await checkOverall(3);
@@ -398,6 +410,18 @@ const {chromium,webkit}=require('playwright');
    }
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
+    const compact=await page.evaluate(()=>{
+     const title=document.querySelector('.history-category-panel-heading h2').getBoundingClientRect(),
+      manage=document.querySelector('.history-category-manager>summary').getBoundingClientRect(),
+      donut=document.querySelector('.history-donut').getBoundingClientRect();
+     return {titleRight:title.right,manageLeft:manage.left,titleTop:title.top,manageTop:manage.top,
+      donutWidth:donut.width};
+    });
+    assert.ok(compact.titleRight<=compact.manageLeft+2 &&
+     Math.abs(compact.titleTop-compact.manageTop)<20,
+     'Category management stays beside the heading at '+width+': '+JSON.stringify(compact));
+    if(mobile)assert.ok(compact.donutWidth<=170,
+     'Compact mobile donut does not dominate the page at '+width);
     const dimensions=await budgetRow.evaluate(row=>{
      const rect=sel=>row.querySelector(sel).getBoundingClientRect(),
       name=rect('.history-category-drill'),bar=rect('[data-history-budget-bar]'),
@@ -519,8 +543,14 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-history-view="categories"]').click();
    assert.deepEqual(await selectedMonths(page),['2026-08','2026-10'],
     'Checked months remain selected across all four reports');
-   assert.match(await page.locator('.history-budget-explanation').innerText(),/2 monthly budgets/,
-    'Monthly budgets scale by number of checked months');
+   await checkOverall(2);
+   const twoMonthRow=page.locator('.history-category-item').filter({
+    has:page.locator('[data-history-budget="'+categoryName+'"]')
+   });
+   const twoMonthSpent=Number((await twoMonthRow.locator('.history-category-actual').innerText()).replace(/[^0-9.]/g,''));
+   const twoMonthWidth=Number.parseFloat(await twoMonthRow.locator('.history-budget-fill').evaluate(el=>el.style.width));
+   assert.ok(Math.abs(twoMonthWidth-Math.min(100,twoMonthSpent/(275.5*2)*100))<.02,
+    'Nonadjacent calendar months compare against exactly two monthly budgets');
    await page.locator('[data-history-view="list"]').click();
    await chooseAllMonths(page);
    await page.reload({waitUntil:'load'});

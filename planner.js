@@ -1573,19 +1573,15 @@ function historyInsights(rows,view,options={}){
     groups.set(name,{name,cents:0,count:0});
   }
   const values=[...groups.values()].sort((a,b)=>b.cents-a.cents||a.name.localeCompare(b.name));
-  // Only categories with saved limits enter either side of this ratio.
-  // Monthly budgets scale with the count of selected calendar months.
-  const budgetTotals=values.reduce((sum,g)=>{
+  // The overall ratio counts ALL posted purchases, even in unbudgeted categories.
+  // Only explicitly saved monthly targets form the budget denominator.
+  const totalBudgetCents=values.reduce((sum,g)=>{
    if(!Object.hasOwn(budgets,g.name))return sum;
    const monthly=Number(budgets[g.name]);
-   if(!Number.isFinite(monthly)||monthly<0)return sum;
-   sum.spentCents+=g.cents;
-   sum.limitCents+=Math.round(monthly*100)*periodMonths;
-   sum.categories++;
-   return sum;
-  },{spentCents:0,limitCents:0,categories:0});
-  const totalBudgetPercent=budgetTotals.limitCents>0?
-   budgetTotals.spentCents/budgetTotals.limitCents*100:null;
+   return Number.isFinite(monthly)&&monthly>=0?
+    sum+Math.round(monthly*100)*periodMonths:sum;
+  },0);
+  const totalBudgetPercent=totalBudgetCents>0?cents/totalBudgetCents*100:null;
   const colors=['#3565a1','#dc9445','#4c8676','#8e75ad','#b56d75','#7893ad','#556a85','#b4beca'];
   const cue=name=>/grocer|food|dining|restaurant/i.test(name)?'◉':
    /house|rent|mortgage/i.test(name)?'⌂':
@@ -1635,24 +1631,22 @@ function historyInsights(rows,view,options={}){
   const budgetSummary=allAccounts?
    '<div class="history-budget-summary" data-history-total-budget>'+
     (totalBudgetPercent===null?
-     '<span class="history-budget-summary-empty">Set a monthly budget to see the overall percent spent.</span>':
-     '<div class="history-budget-summary-head"><span>Overall budget used</span>'+
-      '<strong data-history-total-budget-percent>'+Math.round(totalBudgetPercent)+'%</strong></div>'+
-     '<p>'+cash(budgetTotals.spentCents/100)+' of '+cash(budgetTotals.limitCents/100)+
-      ' spent across '+budgetTotals.categories+' budgeted '+
-      (budgetTotals.categories===1?'category':'categories')+'</p>'+
+     '<span class="history-budget-summary-empty">Set a budget to see progress.</span>':
+     '<div class="history-budget-summary-head"><span>Budget used</span>'+
+      '<strong data-history-total-budget-percent>'+Math.round(totalBudgetPercent)+'%</strong>'+
+      '<small>'+cash(totalBudgetCents/100)+' budget</small></div>'+
      '<div class="history-budget-summary-track'+(totalBudgetPercent>100?' over':'')+
       '" role="img" aria-label="'+escapeHTML(
-       cash(budgetTotals.spentCents/100)+' spent of '+cash(budgetTotals.limitCents/100)+
-       ' overall budget, '+Math.round(totalBudgetPercent)+' percent used')+'">'+
-      '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>'+
-     '<small>Categories without a budget are excluded.</small>')+'</div>':
+       cash(total)+' of '+cash(totalBudgetCents/100)+
+       ' budget used, including unbudgeted category spending, '+Math.round(totalBudgetPercent)+
+       ' percent')+'">'+
+      '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>':
     '';
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   return '<section class="history-insight-panel" data-history-category-insights>'+
-   '<div class="history-category-panel-heading"><h2>Where your money went</h2>'+
+   '<div class="history-category-panel-heading"><h2>Spending</h2>'+
     '<details class="history-category-manager" data-history-category-manager>'+
-     '<summary>+ Add or delete category</summary>'+
+     '<summary aria-label="Manage categories: add or delete">Manage</summary>'+
      '<div class="history-category-manager-body">'+
       '<form data-history-category-add><label>New category'+
        '<input name="categoryName" maxlength="40" placeholder="e.g. Pet care" required></label>'+
@@ -1667,16 +1661,13 @@ function historyInsights(rows,view,options={}){
      '</div></details></div>'+
    (historyCategoryNotice?'<p class="history-category-manage-status" role="status">'+
     escapeHTML(historyCategoryNotice)+'</p>':'')+
-   '<p>Choose a category to see purchases, or edit its monthly budget right beside actual spending.</p>'+
-   header+
-   '<p class="history-budget-explanation">Monthly budgets repeat each calendar month. '+
-   (periodMonths>1?'The selected period includes '+periodMonths+' monthly budgets. ':'')+
-   (!allAccounts?'Select All accounts for a complete budget comparison.':'')+'</p>'+
+   '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(total)+' spent across '+n+' purchases')+'">'+
+    '<strong>'+cash(total)+' spent</strong><span>'+n+' purchases</span></div>'+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    budgetSummary+
    (values.length?'<div class="history-category-layout">'+
     '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+(gradient||'#e6edf3 0% 100%')+')">'+
-    '<div class="history-donut-center"><span>Total purchases</span><strong>'+cash(total)+'</strong></div></div>'+
+    '<div class="history-donut-center"><span>By category</span></div></div>'+
     '<div class="history-category-table"><div class="history-category-columns">'+
      '<span>Category</span><span>Budget used</span><span>Spent</span><span>Budget / month</span></div>'+
     '<div class="history-category-legend">'+values.map((g,i)=>
