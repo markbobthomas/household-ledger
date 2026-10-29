@@ -287,7 +287,6 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // future entry which would shadow the carried-forward payment's stable ID.
  const expectedPosting=e=>options.weekendPolicy==='friday'?
   tools.forecastBusinessDate(e.date,add(e.date,-7)):e.date;
- for(const e of covered.events)if(e.date>asOf&&e.date<=end&&expectedPosting(e)>asOf)seen(e);
  // An as-of snapshot is the bank's REAL current balance. A forecast due
  // yesterday is not necessarily in that balance: it must be carried forward
  // if the bank has not posted it, or the future checking projection is too
@@ -313,8 +312,17 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  const isDebit=e=>(e.type==='expense'||e.type==='transfer'&&e.cashDirection==='out')&&
   e.source==='user-recurring'&&cashIds.has(String(e.accountId))&&valid(e.date)&&
   !edits[eventKey(tools,e)]?.skipped;
- const dueEntries=ownerEntries.filter(e=>isDebit(e)&&dueOf(e)<=asOf&&
-  dueOf(e)>=add(asOf,-90)).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+ // An occurrence moved into the future still represents its ORIGINAL bill.
+ // A late bank posting may settle that obligation around its original date,
+ // even when it is outside the manually postponed date's matching window.
+ // Never use another recurrence's date as proof of this one.
+ const postingDates=e=>{
+  const revised=edits[eventKey(tools,e)]?.date;
+  return valid(revised)?[dueOf(e),expectedPosting(e)]:[dueOf(e)];
+ };
+ const dueEntries=ownerEntries.filter(e=>isDebit(e)&&
+  postingDates(e).some(d=>d<=asOf&&d>=add(asOf,-90)))
+  .sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
  const bankRows=rows.filter(t=>!t.pending&&valid(t.date)&&t.date<=asOf&&
   Number(t.amount)>0&&String(t.id||'')).sort((a,b)=>
   a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
@@ -327,10 +335,12 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    const rule=ruleMap.get(String(e.ruleId));
    if(paid.has(e.id)||!rule||tools.bankDirection(t)!=='expense'||
     !eligible.some(r=>String(r.id)===String(rule.id))||
-    String(tools.accountRef(t.accountId||t.account,accounts))!==String(e.accountId)||
-    !tools.postedWithinMatchWindow(rule,t,dueOf(e),e.amount,
-      explicit.some(r=>String(r.id)===String(rule.id)),true))return [];
-   const gap=Math.abs(diff(t.date,dueOf(e))),
+    String(tools.accountRef(t.accountId||t.account,accounts))!==String(e.accountId))return [];
+   const dates=postingDates(e).filter(d=>d<=add(asOf,14)&&d>=add(asOf,-90)&&
+    tools.postedWithinMatchWindow(rule,t,d,e.amount,
+     explicit.some(r=>String(r.id)===String(rule.id)),true));
+   if(!dates.length)return [];
+   const gap=Math.min(...dates.map(d=>Math.abs(diff(t.date,d)))),
     variance=Math.abs(Number(t.amount)-Number(e.amount))/Math.max(1,Number(e.amount));
    return [{e,rule,gap,variance,explicit:explicit.some(r=>String(r.id)===String(rule.id)),
     score:gap+Math.min(variance,2)*5}];
@@ -344,8 +354,12 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
      next.gap-best.gap>=3)))continue;
   paid.add(best.e.id);usedBank.add(String(t.id));
  }
+ // Check both current future rows and overdue roll-forwards against the same
+ // one-to-one posted evidence, including manually postponed occurrences.
+ for(const e of covered.events)if(!paid.has(e.id)&&e.date>asOf&&e.date<=end&&
+  expectedPosting(e)>asOf)seen(e);
  for(const e of ownerEntries){
-  if(!isDebit(e))continue;
+  if(!isDebit(e)||paid.has(e.id))continue;
   const due=dueOf(e);
   if(due>asOf){
    if(expectedPosting(e)<=asOf)

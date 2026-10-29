@@ -106,6 +106,62 @@ assert.ok(!paidLate.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-10-29'
  'Posting is already included in the actual balance: no double subtraction');
 assert.ok(paidLate.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-11-13'),
  'The next monthly due remains in the forecast');
+
+ // A manually moved late prediction remains THE SAME occurrence when it posts.
+ // Match the immutable original due date OR the edited date. Do not debit it
+ // again merely because the moved date is now in the future.
+const moveDate=(date,rule=lateRule)=>({
+ futureRecurringRules:[rule],futureTransactionEdits:{
+  [T.keyEvent('user|'+rule.id+'|2026-10-15','checking')]:{
+   date,merchant:rule.merchant,amount:1200,type:'expense',accountId:'checking'
+  }
+ }
+});
+const movedUnpaid=Core.materialize(liveSnap,[],moveDate('2026-11-04'),
+ T,null,70,policy);
+assert.deepEqual(movedUnpaid.ledger.filter(e=>e.ruleId===lateRule.id).map(e=>e.date).slice(0,2),
+ ['2026-11-04','2026-11-13'],
+ 'Moving the unpaid current bill does not erase it or change the next monthly due');
+const movedPaid=Core.materialize(liveSnap,[post('late-but-posted',
+ 'Fictional Housing ACH',1250,'2026-10-19')],moveDate('2026-11-04'),
+ T,null,70,policy);
+assert.equal(movedPaid.overduePayments.length,0,
+ 'Actual posted withdrawal resolves a predicted payment moved into the future');
+assert.deepEqual(movedPaid.ledger.filter(e=>e.ruleId===lateRule.id).map(e=>e.date),
+ ['2026-11-13','2026-12-15'],
+ 'Already-posted bill must not be subtracted again at its moved date');
+const postedNearMoved=Core.materialize(liveSnap,[post('near-moved',
+ 'Fictional Housing ACH',1205,'2026-10-27')],moveDate('2026-10-30'),
+ T,null,70,policy);
+assert.equal(postedNearMoved.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-10-30'),false,
+ 'Bank posting near moved date covers the original obligation when original posting window has passed');
+const movedPending=Core.materialize(liveSnap,[{...post('pending-moved',
+ 'Fictional Housing ACH',1200,'2026-10-19'),pending:true}],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.ok(movedPending.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-11-04'),
+ 'Pending bank records do not settle moved predictions');
+const movedOtherAccount=Core.materialize(liveSnap,[post('wrong-account-moved',
+ 'Fictional Housing ACH',1200,'2026-10-19','other')],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.ok(movedOtherAccount.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-11-04'),
+ 'Posting from another account cannot settle a moved checking withdrawal');
+const movedUnrelated=Core.materialize(liveSnap,[post('unrelated-old',
+ 'Fictional Housing ACH',1200,'2026-10-01')],
+ moveDate('2026-11-04'),T,null,70,policy);
+assert.ok(movedUnrelated.ledger.some(e=>e.ruleId===lateRule.id&&e.date==='2026-11-04'),
+ 'Distant posted debit does not erase a separately owed moved prediction');
+const twin={...lateRule,id:'another-equal-bill'};
+const movedAmbiguous=Core.materialize(liveSnap,[post('single-bank-payment',
+ 'Fictional Housing ACH',1200,'2026-10-19')],
+ {futureRecurringRules:[lateRule,twin],futureTransactionEdits:{
+   ...moveDate('2026-11-04',lateRule).futureTransactionEdits,
+   ...moveDate('2026-11-04',twin).futureTransactionEdits
+  }},T,null,70,policy);
+assert.equal(movedAmbiguous.ledger.filter(e=>e.date==='2026-11-04').length,2,
+ 'One ambiguous posted payment must not erase two independent equal-amount bills');
+assert.ok(movedPaid.projection.diagnostics.balanceMismatches.length===0,
+ 'Moved-posting reconciliation preserves daily balance integrity');
+
 const wrongAccount=Core.materialize(liveSnap,[post('wrong-account',
  'Fictional Housing ACH',1275,'2026-10-19','other')],latePrefs,T,null,70,policy);
 assert.equal(wrongAccount.overduePayments.length,1,'A payment from the wrong account cannot clear bill');
