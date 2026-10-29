@@ -1741,10 +1741,20 @@ function financialRecapPage(bundle,s){
   budgetSet=Object.entries(budgets).some(([name,amount])=>
    categories.has(name)&&amount!==null&&amount!==''&&Number.isFinite(Number(amount))&&Number(amount)>=0),
   hasProjection=Boolean(bundle?.projection),
+  accountsById=new Map(activeAccounts(s).map(a=>[String(a.id),a])),
   rules=new Map((state().predictions?.futureRecurringRules||[])
    .filter(rule=>rule.kind!=='movement'&&rule.type==='expense')
    .map(rule=>[String(rule.id),rule])),
   future=hasProjection?futureRows(bundle,s):[],
+  // A card payment is one predicted withdrawal from checking, even though
+  // the canonical ledger models both cash and credit-card legs of the transfer.
+  cardPayments=new Set((bundle?.projection?.plans||[])
+   .filter(p=>p.kind==='card_payment'&&
+    accountType(accountsById.get(String(p.fromAccountId))||{})==='cash'&&
+    accountType(accountsById.get(String(p.toAccountId))||{})==='credit')
+   .map(p=>String(p.id))),
+  eventCategories=new Map((bundle?.projection?.events||[])
+   .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
   // Twelve COMPLETE upcoming calendar months avoid treating the remainder of
   // this month as a normal monthly bill amount.
   start=new Date(month+'-01T12:00:00Z');
@@ -1753,15 +1763,21 @@ function financialRecapPage(bundle,s){
   after=new Date(start);
  after.setUTCMonth(after.getUTCMonth()+12);
  const periodEnd=shiftDay(after.toISOString().slice(0,10),-1),
-  forecastBills=future.filter(r=>r.kind==='event'&&r.type==='expense'&&
-   rules.has(String(r.recurringRuleId||''))),
+  // Bill = predicted outgoing cash. Include recurring, automatic and one-off
+  // expenses, plus card payments; exclude purchases on card accounts and
+  // unrelated internal transfers, avoiding a second count of card spending.
+  forecastBills=future.filter(r=>
+   (r.kind==='event'&&r.type==='expense'&&
+    accountType(accountsById.get(String(r.accountId))||{})==='cash')||
+   (r.kind==='movement'&&cardPayments.has(String(r.id)))),
   fullYearBills=forecastBills.filter(r=>r.date>=periodStart&&r.date<=periodEnd),
   billCents=fullYearBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
   monthlyBills=hasProjection?billCents/1200:null,
   groupBills=new Map();
  for(const row of fullYearBills){
-  const rule=rules.get(String(row.recurringRuleId)),category=
-   model.canonicalCategory(state(),rule?.category)||'Other';
+  const rule=rules.get(String(row.recurringRuleId)),
+   category=row.kind==='movement'?'Credit card payments':
+    model.canonicalCategory(state(),rule?.category||eventCategories.get(String(row.id)))||'Other';
   groupBills.set(category,(groupBills.get(category)||0)+Math.round(Number(row.amount)*100||0));
  }
  const billCategories=[...groupBills].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),
@@ -1790,7 +1806,7 @@ function financialRecapPage(bundle,s){
   '</p></div><span class="financial-recap-readonly">Read-only</span></header>'+
   '<div class="financial-recap-metrics">'+
    metric('Total monthly bills',monthlyBills===null?'Unavailable':cash(monthlyBills),
-    '12-month average of saved recurring bills','bills')+
+    '12-month average of predicted checking payments','bills')+
    metric('Spent this month',cash(spendingCents/100),
     'Posted purchases less refunds','spent')+
    metric('Income this month',cash(incomeCents/100),
@@ -1800,25 +1816,25 @@ function financialRecapPage(bundle,s){
     'Targets are set on Budget','budget')+
   '</div>'+
   '<div class="financial-recap-sections">'+
-   '<section class="financial-recap-card"><h3>Recurring bills by category</h3>'+
+   '<section class="financial-recap-card"><h3>Predicted bills by category</h3>'+
     '<p>Estimated monthly equivalent · next 12 complete months</p>'+
     (hasProjection?breakdown(billCategories,true,
-     'No saved recurring expenses are forecast for the next 12 months.'):
+     'No outgoing payments are forecast for the next 12 months.'):
      '<p class="financial-recap-empty">Bill forecasts are unavailable until the Calendar projection is ready.</p>')+
-    '<small class="financial-recap-note">Includes bills charged to credit cards. Excludes card repayments, transfers and unsaved automatic estimates. Individual changes and skips are reflected.</small></section>'+
+    '<small class="financial-recap-note">Includes predicted credit-card payments and cash expenses. Excludes card purchases and other transfers to avoid double counting. Individual edits and skips are reflected.</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
     '<p>Posted this month · net of refunds</p>'+
     breakdown(topSpending,false,'No posted purchases this month.')+
     '<small class="financial-recap-note">Uses the same spending rules as Budget, across all connected accounts.</small></section>'+
-   '<section class="financial-recap-card financial-recap-upcoming"><h3>Next recurring bills</h3>'+
-    '<p>Up to five saved bill forecasts in the next 30 days</p>'+
+   '<section class="financial-recap-card financial-recap-upcoming"><h3>Next predicted bills</h3>'+
+    '<p>Up to five predicted payments in the next 30 days</p>'+
     (hasProjection?(upcoming.length?'<div class="financial-recap-rows">'+
       upcoming.map(r=>'<div class="financial-recap-row"><span><strong>'+
        escapeHTML(r.merchant)+'</strong><small>'+escapeHTML(dayLabel(r.date))+
        '</small></span><strong>'+cash(r.amount)+'</strong></div>').join('')+
-      '</div>':'<p class="financial-recap-empty">No saved bill predictions in the next 30 days.</p>'):
+      '</div>':'<p class="financial-recap-empty">No outgoing payments predicted in the next 30 days.</p>'):
      '<p class="financial-recap-empty">Future bills are unavailable until the forecast is ready.</p>')+
-    '<small class="financial-recap-note">These are predictions, not confirmed posted withdrawals. Credit-card repayment is excluded.</small></section>'+
+    '<small class="financial-recap-note">These are predictions, not confirmed posted withdrawals. Credit-card payments are included once.</small></section>'+
   '</div></div>';
 }
 
