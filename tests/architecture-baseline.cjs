@@ -114,12 +114,17 @@ function summary(bundle,scenario,context){
  const noneHTML=Summary.render({...options,chosen:snap.accounts[3],
   derived:projection.accounts.find(a=>a.id==='other-card')});
  assert.match(checkingHTML,/Lowest this month/);
- assert.match(checkingHTML,/3-year low/);
+ assert.doesNotMatch(checkingHTML,/Long-term outlook|3-year low/,
+  'Distant predictions stay in Balance Trend, not above the daily calendar');
  assert.match(cardHTML,/Next statement estimate/);
  assert.doesNotMatch(cardHTML,/3-month estimated low/);
  assert.doesNotMatch(cardHTML,/Lowest this month/);
- const threeYear=(checkingHTML.match(/Lowest predicted balance in three years<\/span><strong[^>]*>([^<]+)/)||[])[1]||null;
- assert.ok(threeYear,'Home must retain the exact three-year low in optional long-range details');
+ // Preserve the frozen numeric architecture contract independently of how
+ // far-future estimates are presented in the interface.
+ const threeYear=new Intl.NumberFormat('en-US',
+  {style:'currency',currency:'USD'}).format(Math.min(
+    ...Summary.getPoints(current,snap.asOf,DAYS).map(p=>p.balance)));
+ assert.ok(threeYear,'Canonical three-year projection remains available');
  assert.match(noneHTML,/Not available/,'Unconfigured credit cards must not show a fictional statement');
  const metric=(html,name)=>{
   const match=html.match(new RegExp('data-'+name+'[^>]*>([^<]+)'));

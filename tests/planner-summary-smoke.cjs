@@ -18,11 +18,13 @@ const opts={snapshot,chosen:snapshot.accounts[0],derived,bundle:{historyCandidat
  prefs:{cashCushion:500},accounts:snapshot.accounts,fresh:true,ready:()=>true};
 for(const days of [1095]){
  const html=tool.render({...opts,days});
- assert.match(html,/3-year low/);
+ assert.doesNotMatch(html,/Long-term outlook|3-year low/,
+  'Calendar omits distant metrics; the separate Balance Trend remains available');
  assert.doesNotMatch(html,/calendar-balance-explainer/,
   'Redundant explanation does not consume space above calendar');
  assert.doesNotMatch(html,/data-summary-days|Major payments|Payment checklist/);
- assert.match(html,/data-summary-low-date/);
+ assert.doesNotMatch(html,/data-summary-low-date/,
+  'No distant balance disclosure between monthly metrics and the date grid');
  assert.doesNotMatch(html,/data-summary-plot|summary-extras/,
   'Calendar no longer embeds the Balance Trend chart or disclosure');
  assert.match(html,/data-calendar-stage/);

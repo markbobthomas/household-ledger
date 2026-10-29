@@ -4516,40 +4516,6 @@ a:hover{color:#166e61}
  .main-navigation .tab-link span{font-size:11px}
 }
 
-/* A newcomer can understand the purpose before learning the planning tools. */
-.summary-page .home-intro{margin:0 0 15px;padding:7px 2px 4px}
-.summary-page .home-eyebrow{font-size:11px;font-weight:760;letter-spacing:1.3px;color:#658273;margin:0 0 8px}
-.summary-page .home-intro h2{font-size:clamp(22px,3.4vw,30px);font-weight:760;letter-spacing:-.7px;line-height:1.17;color:#274536;margin:0 0 8px}
-.summary-page .home-intro>p:not(.home-eyebrow){font-size:13px;line-height:1.55;color:#718377;max-width:680px;margin:0 0 13px}
-.summary-page .home-next-bill{display:flex;align-items:center;justify-content:space-between;gap:15px;min-width:0;
- width:100%;text-align:left;background:#f2f8f3;border:1px solid #dfece1;border-radius:14px;
- padding:12px 16px;color:#344d3c}
-.summary-page button.home-next-bill{cursor:pointer}
-.summary-page button.home-next-bill:hover{background:#e9f4ec}
-.summary-page .home-next-bill>span:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
-.summary-page .home-next-bill small{color:#718c7a;font-size:11px;font-weight:730}
-.summary-page .home-next-bill span strong{font-size:14px;overflow-wrap:anywhere}
-.summary-page .home-next-bill span span{font-size:12px;color:#738777}
-.summary-page .home-next-bill>strong{font-size:17px;font-weight:780;white-space:nowrap;font-variant-numeric:tabular-nums}
-.summary-page .home-next-step{display:flex;gap:16px;align-items:center;justify-content:space-between;
- margin:0 0 18px;padding:15px 18px;background:#fff;border:1px solid #e3ebe3;border-radius:16px}
-.summary-page .home-next-step h3{font-size:15px;color:#2e4a39;font-weight:750;margin:4px 0 4px}
-.summary-page .home-next-step p{font-size:12px;color:#697e6f;margin:0;line-height:1.5}
-.summary-page .home-next-step-label{font-size:10px;font-weight:760;letter-spacing:1px;color:#9b6234}
-.summary-page .home-next-step .btn{flex:none;max-width:100%}
-.summary-page .home-all-set{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
- color:#648071;font-size:12px;padding:9px 4px;margin:0 0 15px}
-.summary-page .home-all-set>span:first-child{background:#eaf5eb;border-radius:50%;padding:3px 6px;color:#2c8157}
-.summary-page .home-all-set button{margin-left:auto;border:0;background:transparent;color:#4d8065;font-size:11px;cursor:pointer}
-.summary-page .home-long-range{margin:4px 0 15px;border-top:1px solid #e8eee9;padding-top:10px;color:#7a897f}
-.summary-page .home-long-range>summary{cursor:pointer;min-height:31px;font-size:12px;font-weight:690;list-style:revert}
-.summary-page .home-long-range .summary-minimum{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;text-align:left;padding:8px 5px}
-.summary-page .home-long-range .summary-minimum>span{font-size:12px;color:#728579}
-.summary-page .home-long-range .summary-minimum strong{font-size:20px!important;letter-spacing:-.4px}
-.summary-page .home-long-range .summary-minimum .summary-low-date{font-size:12px}
-.summary-page .summary-numbers{justify-content:flex-start;gap:clamp(16px,4vw,60px)}
-.summary-page .summary-numbers .summary-bank,.summary-page .summary-numbers .summary-monthly{flex:1;min-width:0}
-.summary-page .summary-numbers .summary-low{font-size:clamp(23px,3.4vw,37px);letter-spacing:-.7px}
 .history-page .history-view-header{display:block;padding:2px 1px 11px}
 .history-page .history-view-header h2{font-size:21px;margin:0 0 5px;color:#2d4d3d}
 .history-page .history-view-header p{font-size:12px;color:#738779;margin:0}
@@ -4585,4 +4551,37 @@ a:hover{color:#166e61}
  .bills-upcoming-row{grid-template-columns:54px minmax(0,1fr) auto;gap:7px}
  .bills-upcoming-row>span:last-child{display:none}
  .bills-upcoming-row>strong{font-size:12px}
+}
+
+/* Calendar-first: show balances, not setup cards or instructional prose. */
+.summary-page .summary-numbers{
+ display:grid!important;
+ grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ gap:clamp(12px,4vw,50px)!important;
+}
+.summary-page .summary-numbers>.summary-bank,
+.summary-page .summary-numbers>.summary-monthly{
+ width:100%;min-width:0;
+}
+.summary-page .summary-numbers>div:nth-child(2){
+ justify-items:end!important;text-align:right!important;
+}
+.summary-page .summary-numbers .summary-low{
+ font-size:clamp(23px,3.6vw,40px);
+}
+.history-page.spending-summary-page>.history-view-toolbar{margin-bottom:14px}
+.history-page .spending-tabs{display:flex;gap:5px;flex-wrap:nowrap}
+.history-page .spending-tabs .history-subtab{flex:1 1 0;min-width:0}
+.history-page.spending-summary-page .financial-recap-page{max-width:100%;margin:0}
+.history-page.spending-summary-page .financial-recap-header h2{
+ /* The Summary tab already identifies the page; metrics lead the visual hierarchy. */
+ display:none;
+}
+@media(max-width:650px){
+ .summary-page .summary-numbers{gap:9px!important}
+ .history-page .spending-tabs{gap:3px}
+ .history-page .spending-tabs .history-subtab{
+  padding:10px 4px!important;min-width:0;font-size:11px!important;
+ }
+ .history-page .spending-tabs .history-subtab>span{display:none}
 }
