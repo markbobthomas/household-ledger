@@ -19,6 +19,10 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   assert.equal((await get('/api/status',true)).status,200);
   assert.equal(JSON.parse((await get('/api/status',true)).body).connected,false);
   const ledger=await get('/',true);assert.equal(ledger.status,200);assert.match(ledger.body,/Household Ledger/,'Existing Ledger is served in live mode');
+  assert.match(ledger.body,/<script>\\s*[\\s\\S]*HouseholdCategorization=api;/,
+   'The required classifier ships inside the authenticated private page');
+  assert.doesNotMatch(ledger.body,/<script src="categorization\\.js"><\\/script>/,
+   'Private Calendar never depends on a separate categorization network request');
   for(const route of ['/?utm_source=chatgpt.com','/?utm_source=chatgpt.com&ref=planner','/index.html?ref=planner']){
    const result=await get(route,true);
    assert.equal(result.status,200,'Homepage navigation must ignore harmless query parameters: '+route);
@@ -69,7 +73,8 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
    assert.equal(await alternate('/healthz'),200);
    assert.equal(await alternate('/planner.js'),404,'Absent asset should give 404, not kill server');
    assert.equal(await alternate('/healthz'),200,'Server remains healthy after asset error');
-   assert.equal(await alternate('/'),200,'Homepage still serves after asset error');
+   assert.equal(await alternate('/'),503,
+    'Partial deployments fail visibly instead of serving a broken forecast page');
   }finally{partialChild.kill()}
   console.log('PASS pilot auth, health, missing-asset crash protection and no leaked credentials');
  }finally{child.kill();fs.rmSync(dir,{recursive:true,force:true})}
