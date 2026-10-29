@@ -59,6 +59,7 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
+let historyView='list',historyMonths='3',historyEndMonth='',historySizeFilter=-1,historyPurchaseDrill=false;
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
@@ -652,8 +653,48 @@ function scheduleOccurrencesHtml(bundle,s,rule){
   '</section>';
 }
 
+
+function universalCreateForm(s,preset={}){
+ const accounts=activeAccounts(s),chosen=preset.accountId||selected(s)?.id||accounts[0]?.id,
+  other=accounts.find(a=>String(a.id)!==String(chosen))?.id||chosen;
+ const choices=[['once','One time'],['weekly','Weekly'],['biweekly','Every 2 weeks'],
+  ['every-4-weeks','Every 4 weeks'],['monthly','Monthly'],['quarterly','Every 3 months'],
+  ['annual','Yearly']];
+ return '<form class="calendar-quick-form universal-form" data-calendar-quick-form="add" data-quick-kind="'+
+  escapeHTML(preset.type||'expense')+'"><p class="transaction-detail-help">Only your forecast will change. No money will move.</p>'+
+  '<div class="calendar-quick-fields">'+
+  '<label>Type<select data-calendar-type name="type">'+[['expense','Money out'],['income','Money in'],['refund','Refund'],['transfer','Between accounts']]
+   .map(([id,label])=>'<option value="'+id+'"'+((preset.type||'expense')===id?' selected':'')+'>'+label+'</option>').join('')+'</select></label>'+
+  '<label>Description<input name="merchant" required maxlength="160" value="'+escapeHTML(preset.merchant||'')+'" placeholder="Mortgage, paycheck, insurance…"></label>'+
+  '<label>Amount ($)<input name="amount" required type="number" min=".01" max="999999999" step=".01" value="'+escapeHTML(preset.amount||'')+'"></label>'+
+  '<label>Date<input name="date" required type="date" min="'+escapeHTML(shiftDay(s.asOf,1))+
+   '" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+escapeHTML(preset.date||shiftDay(s.asOf,1))+'"></label>'+
+  '<label class="calendar-single-account">Account'+accountSelect(accounts,chosen,'accountId')+'</label>'+
+  '<label class="calendar-transfer-field">From'+accountSelect(accounts,chosen,'fromAccountId')+'</label>'+
+  '<label class="calendar-transfer-field">To'+accountSelect(accounts,other,'toAccountId')+'</label>'+
+  '<label>Repeat<select name="frequency">'+choices.map(([id,label])=>'<option value="'+id+'">'+label+'</option>').join('')+'</select></label>'+
+  '</div><details class="calendar-advanced"><summary>More options</summary>'+
+  '<label><input type="checkbox" name="separateSchedule"> Separate from another bill with the same name</label></details>'+
+  '<div class="calendar-quick-actions"><button type="submit" class="btn primary">Add to plan</button>'+
+  '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div>'+
+  '<p role="alert" class="calendar-quick-error" data-calendar-error></p></form>';
+}
 function detailHtml(bundle,s){
  if(!transactionDetail)return '';
+ if(transactionDetail.kind==='new-payment')return detailShell('Add a payment',
+   'Add a one-time or repeating payment',universalCreateForm(s,transactionDetail.preset||{}),'PLAN ONLY');
+ if(transactionDetail.kind==='overdue'){
+  const host=[...document.querySelectorAll('[data-overdue-item]')]
+   .find(el=>el.dataset.overdueItem===transactionDetail.key);
+  const form=host?.querySelector('[data-overdue-date]');
+  const markup=form?.outerHTML||'<p>Reopen this payment from Things to check.</p>';
+  form?.remove();
+  return detailShell('Change expected payment','One unpaid forecast payment',
+   markup,'UNCONFIRMED · NOT A BANK RECORD');
+ }
+ if(transactionDetail.kind==='suggestion')return detailShell('Confirm repeating payment',
+   'Review this suggestion before it affects your future balance',
+   repeatingReviewForm(s,{inline:true}),'SUGGESTED PAYMENT');
  if(transactionDetail.kind==='prediction'){
   const row=futureRows(bundle,s).find(r=>r.key===transactionDetail.key);
   if(!row)return detailShell('Prediction unavailable','It may have posted, been skipped, or changed. Close and refresh.',
@@ -712,9 +753,14 @@ function detailHtml(bundle,s){
  if(transactionDetail.kind==='schedule'){
   const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===transactionDetail.id);
   const isNew=transactionDetail.mode==='new',picked=transactionDetail.selectedKey||'';
-  const edit=document.querySelector(isNew?'[data-schedule-new-form]':'[data-schedule-edit-form]');
-  const editHtml=edit?.outerHTML||'<p>Prediction details are temporarily unavailable. Close and reopen the plan.</p>';
-  edit?.remove();
+  const editFields=scheduleFields({...((isNew?schedulePreset:rule)||{}),
+   date:!isNew?window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,shiftDay(s.asOf,horizon))[0]||shiftDay(s.asOf,1):
+    (schedulePreset?.date||shiftDay(s.asOf,1))},isNew,s);
+  const editHtml='<form class="schedule-form" '+(isNew?'data-schedule-new-form':'data-schedule-edit-form="'+escapeHTML(rule.id)+'"')+'>'+
+   (isNew?'<input type="hidden" name="separateSchedule" value="on">':'')+
+   editFields+'<div class="future-form-actions"><button class="btn primary" type="submit">'+
+   (isNew?'Add repeating payment':'Save repeating payment')+'</button>'+
+   '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div></form>';
   const account=rule?activeAccounts(s).find(a=>String(a.id)===String(rule.accountId||rule.fromAccountId)):null;
   const info=!isNew&&rule?'<div class="plan-summary">'+
    '<div><small>Repeats</small><strong>'+escapeHTML(rule.frequency||'Recurring')+'</strong></div>'+
@@ -791,46 +837,12 @@ function confirmInlineSave(key,message){
  target.insertAdjacentHTML(row?'beforeend':'afterbegin',
   '<p class="inline-save-result" role="status">'+escapeHTML(message)+'</p>');
 }
-function openInlineTransaction(button){
- const wrapper=button?.closest?.('[data-inline-row-wrapper]');
- if(!wrapper)return false;
- const existing=wrapper.querySelector('[data-inline-transaction-editor]');
- if(existing){closeInlineTransaction();return true}
- const focused=button.dataset.openTransaction;
- const s=snapshot(),bundle=forecastFor(s),
-  row=futureRows(bundle,s).find(r=>r.key===focused);
- if(!row){setNotice('That forecast has changed. Refresh the calendar and select the updated payment.');return true}
- if(!closeInlineTransaction())return true;
- const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===row.recurringRuleId);
- const nearby=rule?futureRows(bundle,s).filter(r=>r.recurringRuleId===rule.id&&r.date>=row.date).length:0;
- const helper='<p class="inline-editor-explanation" data-edit-impact>'+
-  (rule||row.seriesKey?'Choose one payment or all future.':'This payment only.')+'</p>';
- const settings=rule?'<details class="inline-plan-settings">'+
-  '<summary>More prediction settings <small>label, category, repeat rule</small></summary>'+
-  '<form class="schedule-form" data-schedule-edit-form="'+escapeHTML(rule.id)+'">'+
-   scheduleFields({...rule,date:window.HouseholdPlannerTransactions.recurrenceDates(rule,s.asOf,
-    shiftDay(s.asOf,horizon))[0]||shiftDay(s.asOf,1)},false,s)+
-   '<div class="future-form-actions"><button class="btn primary" type="submit">Save repeating plan</button>'+
-   '<button class="btn" type="button" data-cancel-inline-schedule>Cancel</button></div></form></details>':'';
- const html='<div class="inline-transaction-editor" data-inline-transaction-editor>'+
-  helper+relatedCardCalculation(bundle,row)+
-  editorFor(row,s,bundle?.rows||[])+settings+'</div>';
- wrapper.insertAdjacentHTML('beforeend',html);
- button.setAttribute('aria-expanded','true');
- wrapper.querySelectorAll('[data-inline-transaction-editor] form').forEach(form=>{
-  form.dataset.initialValues=JSON.stringify([...new FormData(form)]);
- });
- wrapper.querySelector('[data-inline-transaction-editor] [name=amount]')?.focus({preventScroll:true});
- return true;
-}
+// One shared editor for future payments.
+function openInlineTransaction(_button){return false;}
 function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===id);
  if(!rule)return false;
  detailReturnFocus=origin||null;
- if(activeTab!=='schedules'){
-  if(!detailOriginTab)detailOriginTab=activeTab;
-  activeTab='schedules';
- }
  scheduleMode=mode;scheduleTarget=id;detailParentSchedule=null;
  transactionDetail={kind:'schedule',id,mode,selectedKey:String(selectedKey||'')};
  render();
@@ -841,41 +853,14 @@ function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
 // point. Keep a same-page anchor for standalone buttons (e.g. card statements)
 // instead of routing the user to a different tab or modal.
 function openPrediction(key,origin){
- const s=snapshot(),bundle=forecastFor(s),
-  row=futureRows(bundle,s).find(r=>r.key===String(key));
- if(!row){setNotice('This forecast changed. Select the updated payment and try again.');return}
- if(origin){
-  let wrapper=origin.closest?.('[data-inline-row-wrapper]'),
-   trigger=wrapper?.querySelector('[data-open-transaction]');
-  if(!trigger&&origin.hasAttribute?.('data-open-transaction')&&wrapper)
-   trigger=origin;
-  if(!wrapper&&origin.parentElement){
-   let host=origin.nextElementSibling;
-   if(!host?.matches?.('[data-standalone-inline]')){
-    host=document.createElement('div');
-    host.className='standalone-inline-editor';
-    host.dataset.standaloneInline='';
-    origin.insertAdjacentElement('afterend',host);
-   }
-   host.dataset.inlineRowWrapper='';
-   host.dataset.paymentKey=String(key);
-   let proxy=host.querySelector('[data-open-transaction]');
-   if(!proxy){
-    proxy=document.createElement('button');
-    proxy.type='button';proxy.hidden=true;proxy.dataset.openTransaction=String(key);
-    host.appendChild(proxy);
-   }
-   wrapper=host;trigger=proxy;
-  }
-  if(trigger&&openInlineTransaction(trigger))return;
- }
- // Defensive fallback only for programmatic callers without a visible row.
+ const snap=snapshot(),bundle=forecastFor(snap),
+  row=futureRows(bundle,snap).find(r=>r.key===String(key));
+ if(!row){setNotice('This prediction changed. Reopen the payment.');return}
  transactionDetail={kind:'prediction',key:String(key)};
  detailReturnFocus=origin||null;
- try{drawTransactionDetail(bundle,s)}
- catch(err){transactionDetail=null;setNotice(String(err.message||err))}
+ drawTransactionDetail(bundle,snap);
+ document.querySelector('.transaction-detail [name=amount]')?.focus();
 }
-
 function restoreScheduleAfterOccurrence(){
  if(transactionDetail?.kind==='schedule'&&transactionDetail.selectedKey){
   transactionDetail.selectedKey='';
@@ -901,6 +886,7 @@ function dismissTransaction(){
   detailReturnFocus=null;render();return;
  }
  transactionDetail=null;detailParentSchedule=null;
+ if(mode==='overdue'){overdueEditKey='';render();return;}
  if(mode==='schedule'){
   scheduleMode='';scheduleTarget='';schedulePreset=null;
   if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null;}
@@ -1262,7 +1248,7 @@ function schedulesPage(bundle,s){
    categoryOf(a.rule).localeCompare(categoryOf(b.rule))||a.index-b.index:
   a.index-b.index);
  const fields=(r,isNew)=>scheduleFields(r,isNew,s);
- const create=scheduleMode==='new'?'<section class="schedule-creation recurrence-inline-detail" data-schedule-create-inline>'+
+ const create=scheduleMode==='new'&&!transactionDetail?'<section class="schedule-creation recurrence-inline-detail" data-schedule-create-inline>'+
   recurringEditor('<form class="schedule-form" data-schedule-new-form>'+
    
   '<input name="separateSchedule" type="hidden" value="on">'+
@@ -1274,7 +1260,7 @@ function schedulesPage(bundle,s){
  const cardHtml=({rule:r,index})=>{
   const id=escapeHTML(r.id),planOpen=transactionDetail?.kind==='schedule'&&
    transactionDetail.id===r.id,
-   isEditing=(scheduleMode==='edit'||planOpen)&&scheduleTarget===r.id,
+   isEditing=scheduleMode==='edit'&&!transactionDetail&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    occurrence=upcomingByRule.get(String(r.id)),
    effectiveNext=occurrence?.date||null,
@@ -1485,6 +1471,80 @@ function repeatingReviewForm(s,{inline=false}={}){
   '<div class="future-form-actions"><button type="submit" class="btn primary">Save recurring forecast</button>'+
   '<button type="button" class="btn" data-cancel-review-form>Cancel</button></div></form>';
 }
+
+const historyBands=[
+ {name:'Under $25',min:0,max:25},{name:'$25–$49',min:25,max:50},
+ {name:'$50–$99',min:50,max:100},{name:'$100–$249',min:100,max:250},
+ {name:'$250–$499',min:250,max:500},{name:'$500+',min:500,max:Infinity}
+];
+const historyBandIndex=n=>historyBands.findIndex(b=>n>=b.min&&n<b.max);
+// Read-only reporting. Actual bank records, future predictions, and recurring
+// matching are untouched. Exclude pending, paired transfers and card payments.
+function historyInsights(rows,view){
+ const purchases=rows.filter(r=>cardActivityCents(r)>0),
+  cents=purchases.reduce((sum,r)=>sum+cardActivityCents(r),0),
+  total=cents/100,n=purchases.length;
+ const header='<div class="history-insights-head"><strong>'+n+' posted purchases</strong>'+
+  '<strong>'+cash(total)+' spent</strong><span>'+cash(n?total/n:0)+' average</span></div>'+
+  '<p class="history-insight-note">Purchases only · excludes pending items, transfers and card payments</p>';
+ if(view==='categories'){
+  const groups=new Map();
+  for(const r of purchases){
+   const category=String(r.category||'Other');
+   const g=groups.get(category)||{name:category,cents:0,count:0};
+   g.cents+=cardActivityCents(r);g.count++;groups.set(category,g);
+  }
+  const sorted=[...groups.values()].sort((a,b)=>b.cents-a.cents);
+  const values=sorted.length>7?[...sorted.slice(0,7),{
+   name:'Other categories',count:sorted.slice(7).reduce((n,g)=>n+g.count,0),
+   cents:sorted.slice(7).reduce((n,g)=>n+g.cents,0)}]:sorted;
+  const colors=['#3565a1','#dc9445','#4c8676','#8e75ad','#b56d75','#7893ad','#556a85','#b4beca'];
+  const cue=name=>/grocer|food|dining|restaurant/i.test(name)?'◉':
+   /house|rent|mortgage/i.test(name)?'⌂':
+   /transport|travel|fuel|gas/i.test(name)?'↗':
+   /health|medical/i.test(name)?'✚':
+   /utilit|electric|phone|internet/i.test(name)?'ϟ':
+   /entertain/i.test(name)?'★':'▣';
+  let start=0;
+  const gradient=values.map((g,i)=>{
+   const from=start;start+=cents?g.cents/cents*100:0;
+   return colors[i]+' '+from.toFixed(3)+'% '+start.toFixed(3)+'%';
+  }).join(',');
+  return '<section class="history-insight-panel" data-history-category-insights>'+
+   '<h2>Where your money went</h2>'+
+   '<p>See how purchases are distributed. Choose a category to view the transactions.</p>'+
+   header+
+   (values.length?'<div class="history-category-layout">'+
+    '<div class="history-donut" role="img" aria-label="Purchase totals by category" style="background:conic-gradient('+gradient+')">'+
+    '<div class="history-donut-center"><span>Total purchases</span><strong>'+cash(total)+'</strong></div></div>'+
+    '<div class="history-category-legend">'+values.map((g,i)=>
+     '<button type="button" class="history-category-item" data-history-drill-category="'+
+      escapeHTML(g.name==='Other categories'?'':g.name)+'">'+
+     '<span class="history-legend-dot" style="background:'+colors[i]+'"></span>'+
+     '<span class="history-category-name"><span class="history-category-glyph">'+cue(g.name)+'</span>'+
+      escapeHTML(g.name)+'<small>'+g.count+' purchases</small></span>'+
+     '<strong>'+cash(g.cents/100)+'</strong>'+
+     '<span class="history-category-share">'+(g.cents/cents*100).toFixed(0)+'%</span></button>').join('')+
+    '</div></div>':'<p class="history-insight-empty">No purchases in this period.</p>')+
+   '</section>';
+ }
+ const groups=historyBands.map(b=>({...b,count:0,cents:0}));
+ for(const r of purchases){
+  const i=historyBandIndex(Math.abs(Number(r.amount)||0));
+  if(i>=0){groups[i].count++;groups[i].cents+=cardActivityCents(r);}
+ }
+ const largest=Math.max(1,...groups.map(g=>g.count));
+ return '<section class="history-insight-panel" data-history-size-insights>'+
+  '<h2>Purchase sizes</h2>'+
+  '<p>Many small purchases, or a few large ones? Select a price band to see its transactions.</p>'+
+  header+'<div class="history-size-list">'+groups.map((g,i)=>
+   '<button type="button" class="history-size-row" data-history-size-band="'+i+'">'+
+   '<span class="history-size-name">'+escapeHTML(g.name)+'</span>'+
+   '<span class="history-size-track"><span style="width:'+Math.round(g.count/largest*100)+'%"></span></span>'+
+   '<span class="history-size-count">'+g.count+' purchases</span>'+
+   '<strong>'+cash(g.cents/100)+'</strong><span class="history-size-arrow">›</span></button>').join('')+
+  '</div><p class="history-insight-footnote">Bands are based on individual posted purchase amounts, not totals per day.</p></section>';
+}
 function historyPage(bundle,s){
  const accounts=activeAccounts(s),
   records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
@@ -1495,11 +1555,17 @@ function historyPage(bundle,s){
   // are not saved as duplicate registry entries.
   categories=model.categories(state(),records.map(t=>t.category)),
   filterCategories=categories;
+ const selectedMonth=historyEndMonth||s.asOf.slice(0,7),
+  span=historyMonths==='all'?null:Number(historyMonths)||3,
+  startMonth=span?(()=>{const d=new Date(selectedMonth+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()-(span-1));return d.toISOString().slice(0,7)})():'';
  const filtered=records.filter(t=>{
+  if(t.date.slice(0,7)>selectedMonth||(startMonth&&t.date.slice(0,7)<startMonth))return false;
+  if(historyView==='list'&&historyPurchaseDrill&&cardActivityCents(t)<=0)return false;
+  if(historyView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
-  if(historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
-  if(!historySearch)return true;
+  if(historyView!=='categories'&&historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
+  if(historyView!=='list'||!historySearch)return true;
   return [t.merchant,t.description,t.date,t.category,t.account,t.amount]
    .some(v=>String(v||'').toLowerCase().includes(historySearch.toLowerCase()));
  });
@@ -1517,6 +1583,7 @@ function historyPage(bundle,s){
    textOf(a).localeCompare(textOf(b))||dateDesc(a,b):
   dateDesc(a,b));
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
+ const insight=historyView!=='list'?historyInsights(filtered,historyView):'';
  const selectedHistoryCard=historyAccount==='all'?null:
   accounts.find(a=>String(a.id)===historyAccount&&accountType(a)==='credit');
  const groupHistoryCard=Boolean(selectedHistoryCard&&
@@ -1538,7 +1605,7 @@ function historyPage(bundle,s){
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
    status=matches.length?'confirmed':predicted?'automatic':'unplanned',
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
-    status==='automatic'?'Unconfirmed estimate — check the Review tab':'Not predicted',
+    status==='automatic'?'Unconfirmed estimate — open Things to check':'Not predicted',
    primary=status==='confirmed'?(ambiguous?'Choose plan':'Edit plan'):
     canPlan?(status==='automatic'?'Confirm repeating':'Add repeating'):'View bank record',
    isExpanded=historyExpandedId===String(t.id)&&historyExpandedAccount===aid,
@@ -1614,7 +1681,19 @@ function historyPage(bundle,s){
    ungrouped.join('');
  })();
  return '<div class="planner-page history-page">'+
-  '<form class="history-filters ledger-toolbar" data-history-filter>'+
+  '<div class="history-view-header"><p>Explore your bank activity. Actual bank records are read-only.</p></div>'+
+  '<div class="history-view-toolbar"><nav class="history-subtabs" aria-label="Bank History views">'+
+    [['list','Transactions','≡'],['categories','Categories','◔'],['sizes','Purchase sizes','▥']].map(([id,name,icon])=>
+      '<button type="button" class="history-subtab'+(historyView===id?' active':'')+
+      '" data-history-view="'+id+'" aria-pressed="'+(historyView===id)+'">'+
+      '<span aria-hidden="true">'+icon+'</span>'+name+'</button>').join('')+
+    '</nav><div class="history-period-controls"><label>Ending month <input type="month" data-history-month value="'+
+    escapeHTML(selectedMonth)+'" max="'+escapeHTML(s.asOf.slice(0,7))+'"></label>'+
+    '<label>Period <select data-history-months>'+
+    [['1','1 month'],['3','3 months'],['6','6 months'],['12','12 months'],['all','All history']].map(([id,name])=>
+      '<option value="'+id+'"'+(historyMonths===id?' selected':'')+'>'+name+'</option>').join('')+
+    '</select></label></div></div>'+
+  '<form class="history-filters ledger-toolbar'+(historyView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
@@ -1624,11 +1703,12 @@ function historyPage(bundle,s){
      ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
      '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
       label+'</option>').join('')+'</select></label>'+
-   '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
+   (historyView==='categories'?'':
+    '<div="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
     '<option value="">All categories</option>'+
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
-   '</select></label></div>'+
+    '</select></label></div>')+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':
@@ -1649,14 +1729,17 @@ function historyPage(bundle,s){
       '" data-posted-match-rule="'+escapeHTML(c.ruleId)+'">'+
       '#'+(scheduleListNumber(c.ruleId)||'?')+' '+escapeHTML(c.label)+'</button>').join('')+
     '</div></div>').join('')+'</section>':'')+
-  '<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
+  (historyView!=='list'?insight:'')+
+  (historyView==='list'&&historySizeFilter>=0?'<div class="history-active-filter">Purchase size: '+
+    escapeHTML(historyBands[historySizeFilter]?.name||'')+' <button type="button" data-history-clear-size>Clear</button></div>':'')+
+  (historyView==='list'?'<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
     ' matching transaction'+(filtered.length===1?'':'s')+
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '</div><p class="page-task-hint history-explanation ledger-footer-hint">Transactions stay here. Saved repeating plans take priority. '+
    'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
-   'older patterns in Review. New repeating payments require a saved prediction.</p></div>';
+   'older patterns in Things to check. New repeating payments require a saved prediction.</p>':'')+'</div>';
 }
 // A cumulative, forecast-only recommendation ledger. Discovered suggestions
 // are snapshotted so later dismissals, bank refreshes and approved schedules
@@ -1780,11 +1863,11 @@ function reviewQueue(bundle,s){
   outstanding:decisionsNeeded+pending.length+overdue.length};
 }
 function updateReviewTabCount(queue){
- const badge=document.querySelector('.planner-nav-primary [data-review-tab-count]');
+ const badge=document.querySelector('.main-navigation [data-review-tab-count]');
  if(!badge)return;
  const count=Number(queue?.outstanding||0);
  badge.hidden=!(count>0);
- badge.textContent=count>0?' ['+count+']':'';
+ badge.textContent=count>0?String(count):'';
  const tab=badge.closest('[data-view="reviews"]');
  if(tab)tab.classList.toggle('has-review-items',count>0);
 }
@@ -1851,15 +1934,17 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     'Needs a decision — currently included in your forecast'});
  };
  return '<div class="planner-page reviews-page">'+
+  '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
+    '<div><h2>Things to check</h2><p>Confirm important payments and choose which suggestions belong in your plan. Your bank records stay unchanged.</p></div></div>'+
   '<div class="review-priority" aria-label="Review priorities">'+
    '<strong>Needs action: '+(overdue.length+decisionsNeeded)+'</strong>'+
    '<span>'+overdue.length+' unposted payments · '+decisionsNeeded+' earlier estimates</span>'+
    '<strong>Suggestions: '+pending.length+'</strong></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
-   '<div class="section-title"><h2>Needs action · payments not yet posted</h2>'+
+   '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
-   '<p class="lead">These withdrawals have no confirmed matching bank payment. '+
+   '<p class="lead">The bank has not confirmed these payments. '+
     'Each unpaid payment remains reserved once in the forecast until it posts, is moved, or is skipped. '+
     'Ignoring an alert hides it from Review but keeps the withdrawal in your projected balance.</p>'+
    overdue.map(item=>{
@@ -1886,7 +1971,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
         '<label>Checking account '+accountSelect(cashAccounts,item.accountId,'accountId')+'</label>'+
         common+'</div>'+
        '<div class="overdue-edit-actions"><button type="submit" class="btn primary">Save this payment</button>'+
-        '<button type="button" class="btn" data-edit-overdue="'+escapeHTML(item.key)+'">Cancel</button></div>':
+        '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div>':
        common+'<button type="submit" class="btn primary">Move just this payment</button>')+
      '<small>Only this occurrence changes. Future repeating dates and actual bank records stay unchanged.</small>'+
      '</form></article>';
@@ -1903,7 +1988,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '</section>':'')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
-    '<div class="section-title"><h2>Needs action · earlier automatic estimates</h2>'+
+    '<div class="section-title"><h2>Earlier estimates to confirm</h2>'+
      '<strong class="legacy-estimate-count" data-legacy-estimate-count="'+legacyItems.length+'">'+
       legacyItems.length+' UNSAVED</strong></div>'+
     '<p class="lead">These '+legacyItems.length+' repeating payment'+
@@ -1921,7 +2006,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       '>Use saved predictions only</button></div>'+
    '</section>':'')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
-   '<div class="section-title"><h2>Suggestions · possible repeating payments</h2>'+
+   '<div class="section-title"><h2>Suggested repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
    (pending.length?pending.map(normalCard).join(''):
     '<p class="lead">Nothing else to review.</p>')+
@@ -2224,10 +2309,8 @@ document.addEventListener('click',async e=>{
    snap=snapshot(),item=forecastFor(snap)?.overduePayments?.find(x=>x.key===key);
   if(!item){reviewNotice='This payment changed or posted. Refresh Review.';render();return}
   if(overdueAction.hasAttribute('data-edit-overdue')){
-   overdueEditKey=overdueEditKey===key?'':key;
-   render();
-   if(overdueEditKey)document.querySelector('[data-overdue-item] [name=merchant]')?.focus();
-   return;
+   overdueEditKey=key;transactionDetail={kind:'overdue',key};render();
+   document.querySelector('.transaction-detail [name=merchant]')?.focus();return;
   }
   if(overdueAction.hasAttribute('data-skip-overdue')&&
    !window.confirm('Skip this one unpaid payment? It will be REMOVED from projected withdrawals. Other recurring payments and bank records stay unchanged.'))return;
@@ -2291,8 +2374,8 @@ document.addEventListener('click',async e=>{
    recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
    !window.confirm('Discard unsaved prediction changes?'))return;
   scheduleMode='new';scheduleTarget='';schedulePreset=null;scheduleNotice='';
-  transactionDetail=null;render();
-  document.querySelector('[data-schedule-new-form] [name=merchant]')?.focus();
+  transactionDetail={kind:'schedule',mode:'new'};render();
+  document.querySelector('.transaction-detail [name=merchant]')?.focus();
   return}
  const jump=e.target.closest?.('[data-schedule-view-calendar]');
  if(jump){
@@ -2320,8 +2403,9 @@ document.addEventListener('click',async e=>{
   const id=scheduleEdit.dataset.scheduleEdit;
   const same=scheduleMode==='edit'&&scheduleTarget===id;
   scheduleRemoveTarget='';scheduleNotice='';
-  scheduleMode=same?'':'edit';scheduleTarget=same?'':id;
-  transactionDetail=null;render();return;
+  scheduleMode='';scheduleTarget='';
+  if(!openSchedulePlan(id,'',scheduleEdit))setNotice('That payment plan changed.');
+  return;
  }
  const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
  if(removeWindow){
@@ -2363,10 +2447,15 @@ document.addEventListener('click',async e=>{
   const date=calendar.currentDay(),chosen=selected(snapshot()),suggestion=gap?
    calendar.currentGap(gap.dataset.calendarFillGap):null;
   if(!chosen||date<=snapshot().asOf)return;
-  calendar.openEditor({mode:'add',preset:{date,accountId:chosen.id,
-   ...(suggestion?{merchant:suggestion.merchant,amount:suggestion.amount,
-     type:suggestion.type}: {})}});
-  document.querySelector('[data-calendar-quick-form] [name=merchant]')?.focus();
+  const preset={date,accountId:chosen.id,...(suggestion?{
+   merchant:suggestion.merchant,amount:suggestion.amount,type:suggestion.type}:{})};
+  if(typeof $('planner-main')?.insertAdjacentHTML!=='function'){
+   calendar.openEditor({mode:'add',preset});return;
+  }
+  transactionDetail={kind:'new-payment',preset};
+  detailReturnFocus=addCalendar||gap;
+  drawTransactionDetail(forecastFor(snapshot()),snapshot());
+  document.querySelector('.transaction-detail [name=merchant]')?.focus();
   return;
  }
  const editCalendar=e.target.closest('[data-calendar-edit]');
@@ -2378,11 +2467,11 @@ document.addEventListener('click',async e=>{
    all.find(r=>r.kind==='movement'&&r.id===String(item.transferGroupId)):
    all.find(r=>r.kind==='event'&&r.id===String(item.id)&&
     r.accountId===String(item.accountId));
-  if(!row){setNotice('This prediction changed. Open Predictions to inspect it.');return}
+  if(!row){setNotice('This prediction changed. Open Payments to inspect it.');return}
   openPrediction(row.key,editCalendar);
   return;
  }
- if(e.target.closest('[data-calendar-cancel]')){calendar.closeEditor();return;}
+ if(e.target.closest('[data-calendar-cancel]')){if(transactionDetail)dismissTransaction();else calendar.closeEditor();return;}
  const skipCalendar=e.target.closest('[data-calendar-skip]');
  if(skipCalendar){
   const form=skipCalendar.closest('[data-calendar-quick-form]'),
@@ -2464,6 +2553,31 @@ document.addEventListener('click',async e=>{
    String(error.message||error))}
   return;
  }
+
+ // History view switching and drill-down are read-only.
+ const historyTab=e.target.closest?.('[data-history-view]');
+ if(historyTab){
+  if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+    !window.confirm('Discard unsaved payment changes?'))return;
+  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyCategoryFilter='';historyPurchaseDrill=false;historyLimit=90;
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
+  recurringDraft=null;transactionDetail=null;render();return;
+ }
+ const sizeBand=e.target.closest?.('[data-history-size-band]');
+ if(sizeBand){
+  const i=Number(sizeBand.dataset.historySizeBand);
+  if(i<0||i>=historyBands.length)return;
+  historyView='list';historySizeFilter=i;historyCategoryFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
+ }
+ if(e.target.closest?.('[data-history-clear-size]')){
+  historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;render();return;
+ }
+ const categoryDrill=e.target.closest?.('[data-history-drill-category]');
+ if(categoryDrill){
+  historyView='list';historySizeFilter=-1;historyPurchaseDrill=true;historySearch='';
+  historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
+  historyLimit=90;render();return;
+ }
  const view=e.target.closest('[data-view]');
  if(view){
   activeTab=view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
@@ -2500,7 +2614,7 @@ document.addEventListener('click',async e=>{
   return;
  }
  const actualRow=e.target.closest?.('[data-historical-transaction]');
- if(actualRow&&activeTab==='history'){
+ if(actualRow&&activeTab==='history'&&typeof $('planner-main')?.insertAdjacentHTML!=='function'){
   const id=actualRow.dataset.historicalTransaction,account=actualRow.dataset.historicalAccount,
    same=historyExpandedId===id&&historyExpandedAccount===account;
   if(same){
@@ -2618,7 +2732,7 @@ document.addEventListener('click',async e=>{
   if(recurringDraft?.reviewRowKey===candidate.key&&
     String(recurringDraft.reviewLegacyKey||'')===legacyKey){
    if(reviewFormDirty()&&!window.confirm('Discard unsaved prediction changes?'))return;
-   recurringDraft=null;reviewNotice='';render();return;
+   recurringDraft=null;transactionDetail=null;reviewNotice='';render();return;
   }
   if(reviewFormDirty()&&!window.confirm('Discard unsaved prediction changes?'))return;
   const legacyMatch=legacyKey||null,
@@ -2646,8 +2760,9 @@ document.addEventListener('click',async e=>{
     examples:legacy?(legacy.historicalIds||[]).map(String):draft.examples||[],
     reviewRowKey:candidate.key,reviewLegacyKey:legacyKey};
    reviewNotice='';
+   transactionDetail={kind:'suggestion',key:candidate.key};
    render();
-   document.querySelector('.reviews-page [data-review-inline-detail] [name=merchant]')?.focus();
+   document.querySelector('.transaction-detail [name=merchant]')?.focus();
   }catch(error){setNotice(String(error.message||error))}
   return;
  }
@@ -2736,6 +2851,10 @@ document.addEventListener('click',async e=>{
   return;
  }
  if(e.target.closest('[data-show-new]')){
+  if(typeof $('planner-main')?.insertAdjacentHTML==='function'){
+   transactionDetail={kind:'new-payment',preset:{accountId:selected(snapshot())?.id}};
+   drawTransactionDetail(forecastFor(snapshot()),snapshot());return;
+  }
   showNewTransaction=true;mortgageDraft=null;editingKey='';transactionNotice='';render();
   $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});return;
  }
@@ -3000,6 +3119,7 @@ document.addEventListener('submit',async e=>{
   }else if(transactionDetail?.kind==='schedule'&&savedPlanId){
    scheduleMode='edit';scheduleTarget=savedPlanId;
    transactionDetail={kind:'schedule',id:savedPlanId,mode:'edit',selectedKey:''};
+   render();
   }else{
    scheduleMode='';scheduleTarget='';transactionDetail=null;
    if(detailOriginTab){activeTab=detailOriginTab;detailOriginTab=null}
@@ -3107,7 +3227,7 @@ document.addEventListener('submit',async e=>{
      state(),fields,accounts,asOf,null,model.records(state()),[]));
    else await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
   }else throw Error('Unknown calendar action.');
-  latestError='';render();
+  latestError='';transactionDetail=null;render();
   window.HouseholdPlannerSummary.refreshNotice(mode==='edit'?'Prediction updated. All daily balances recalculated.':
    'Prediction added. All daily balances recalculated.');
  }catch(err){
@@ -3132,6 +3252,17 @@ document.addEventListener('keydown',e=>{
  if(e.key==='Escape')document.getElementById('planner-menu')?.removeAttribute('open');
 });
 document.addEventListener('change',e=>{
+ const periodSelect=e.target.closest?.('[data-history-months]');
+ if(periodSelect){
+  if(!['1','3','6','12','all'].includes(periodSelect.value))return;
+  historyMonths=periodSelect.value;historyLimit=90;render();return;
+ }
+ const monthInput=e.target.closest?.('[data-history-month]');
+ if(monthInput){
+  const next=String(monthInput.value||'');
+  if(!/^\d{4}-\d{2}$/.test(next)||next>snapshot().asOf.slice(0,7))return;
+  historyEndMonth=next;historyLimit=90;render();return;
+ }
  if(!e.target.matches?.('[data-calendar-type]'))return;
  const form=e.target.closest('[data-calendar-quick-form]');
  if(form)form.dataset.quickKind=e.target.value;
@@ -3163,7 +3294,7 @@ document.addEventListener('submit',async e=>{
    state(),key,{...fields,type:transactionType,
     ...(transactionType==='transfer'?{cashDirection:'out'}:{})},
    activeAccounts(snap),snap.asOf));
-  overdueEditKey='';
+  overdueEditKey='';transactionDetail=null;
   reviewNotice=(detailed?'Updated':'Moved')+' only this unpaid payment to '+dayLabel(target)+
    '. Other recurring dates and bank transactions are unchanged.';
   render();
