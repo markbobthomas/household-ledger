@@ -47,6 +47,38 @@ const {chromium,webkit}=require('playwright');
     for(const tab of ['summary','schedules','history']){
      await page.locator('.planner-nav-primary [data-view="'+tab+'"]').click();
      assert.equal(await page.locator('.planner-nav-primary .tab-link.active').count(),1);
+     if(tab==='history'){
+      // A malformed category control once closed the History page early,
+      // shrinking ledger rows to a narrow vertical strip. Measure geometry
+      // and check the DOM hierarchy, not merely document horizontal overflow.
+      const geometry=await page.evaluate(()=>{
+       const pageEl=document.querySelector('.history-page'),
+        list=pageEl?.querySelector('.history-list-surface'),
+        row=list?.querySelector('.history-actual-row'),
+        entry=list?.querySelector('.history-entry'),
+        trigger=row?.querySelector('.history-row-open'),
+        category=pageEl?.querySelector('.history-category-controls');
+       if(!pageEl||!list||!entry||!row||!trigger||!category)return null;
+       const outer=pageEl.getBoundingClientRect(),
+        frame=list.getBoundingClientRect(),item=row.getBoundingClientRect(),
+        action=trigger.getBoundingClientRect();
+       return {pageWidth:outer.width,frameWidth:frame.width,
+        rowWidth:item.width,buttonWidth:action.width,
+        rowLeft:item.left,frameLeft:frame.left,
+        categoryTag:category.tagName,
+        descriptionWidth:row.querySelector('.history-actual-description')?.getBoundingClientRect().width};
+      });
+      assert.ok(geometry,'History controls, list and rows must all remain inside the History page');
+      assert.equal(geometry.categoryTag,'DIV','Category control must be a valid div element');
+      assert.ok(geometry.rowWidth>=geometry.frameWidth-35,
+       'History row should fill its ledger frame: '+JSON.stringify(geometry));
+      assert.ok(geometry.buttonWidth>=geometry.frameWidth*.5,
+       'History button must not collapse into a narrow vertical strip: '+JSON.stringify(geometry));
+      assert.ok(geometry.descriptionWidth>=40,
+       'Merchant description must have usable horizontal space: '+JSON.stringify(geometry));
+      assert.ok(Math.abs(geometry.rowLeft-geometry.frameLeft)<26,
+       'History row must stay aligned with its list container: '+JSON.stringify(geometry));
+     }
      const size=await page.evaluate(()=>({body:document.body.scrollWidth,
       root:document.documentElement.scrollWidth,window:innerWidth}));
      assert.ok(size.root<=width+3&&size.body<=width+3,
