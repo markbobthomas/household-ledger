@@ -198,7 +198,7 @@ function categoryReviewQueue(state){
    const knownKind=t.type==='income'||t.type==='transfer',
     category=knownKind&&missingCategory(t.category)?
      (t.type==='income'?'Income':'Transfer'):
-     canonicalCategory(state,t.category)||t.category||'Other',
+     String(t.category||'Other'),
     missing=missingCategory(category),
     manual=knownKind||Boolean(state.categoryOverrides?.[t.id])||
      ['manual','learned'].includes(t.method),
@@ -215,7 +215,7 @@ function categoryReviewQueue(state){
  const add=(rows,kind)=>{
   for(const row of rows||[]){
    if(!row||row.id===undefined||row.id===null||row.enabled===false)continue;
-   const category=canonicalCategory(state,row.category)||row.category||'Uncategorized',
+   const category=String(row.category||'Uncategorized'),
     missing=missingCategory(category),
     low=!row.categoryReviewed&&Number.isFinite(Number(row.categoryConfidence))&&
      row.categoryConfidence!==null&&row.categoryConfidence!==''&&Number(row.categoryConfidence)<.7;
