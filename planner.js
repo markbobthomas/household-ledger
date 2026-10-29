@@ -3467,6 +3467,47 @@ document.addEventListener('input',e=>{
  }
 });
 document.addEventListener('change',async e=>{
+ const budgetInput=e.target.closest?.('[data-history-budget]');
+ if(budgetInput){
+  if(historyBudgetBusy)return;
+  const category=String(budgetInput.dataset.historyBudget||''),
+   raw=String(budgetInput.value||'').trim(),
+   value=raw===''?null:Number(raw);
+  const invalid=!category||['__proto__','constructor','prototype'].includes(category)||
+   (raw!==''&&(!Number.isFinite(value)||value<0||value>999999999||
+    Math.abs(value*100-Math.round(value*100))>1e-6));
+  if(invalid){
+   budgetInput.setCustomValidity('Enter a nonnegative dollar amount with up to two decimal places.');
+   budgetInput.reportValidity();return;
+  }
+  budgetInput.setCustomValidity('');
+  const prefs=state().predictions??={},
+   before=JSON.stringify(prefs.categoryMonthlyBudgets||{}),
+   old=JSON.parse(before),next={...old};
+  if(value===null)delete next[category];
+  else next[category]=Math.round(value*100)/100;
+  if(JSON.stringify(next)===before)return;
+  historyBudgetBusy=true;
+  document.querySelectorAll('[data-history-budget]').forEach(input=>input.disabled=true);
+  historyBudgetMessage='Saving budget…';
+  try{
+   // Saves private planning preferences, never bank facts or forecast entries.
+   prefs.categoryMonthlyBudgets=next;
+   const result=await savePlanning();
+   if(live()&&(!result||result.saved!==true))throw Error('Budget save was not confirmed');
+   historyBudgetMessage='Monthly budget saved';
+   render();
+  }catch(err){
+   prefs.categoryMonthlyBudgets=old;
+   historyBudgetMessage='Could not save budget. Try again.';
+   budgetInput.disabled=false;
+   const alert=document.createElement('span');
+   alert.className='history-budget-error';alert.setAttribute('role','alert');
+   alert.textContent='Could not save: '+String(err.message||err);
+   budgetInput.closest('.history-category-budget')?.appendChild(alert);
+  }finally{historyBudgetBusy=false;}
+  return;
+ }
  const historyCategory=e.target.closest?.('[data-history-category]');
  if(historyCategory){
   const id=historyCategory.dataset.historyCategory,
