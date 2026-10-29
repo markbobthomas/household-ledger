@@ -313,7 +313,7 @@ const {chromium,webkit}=require('playwright');
     'Choosing a merchant drills into the existing Transactions page');
    assert.ok(await page.locator('.history-actual-row').count()>1);
    assert.ok(await page.locator('.history-actual-row').evaluateAll(rows=>rows.every(row=>
-    /Amazon/i.test(row.querySelector('.history-actual-description strong')?.textContent||'')),
+    /Amazon/i.test(row.querySelector('.history-actual-description strong')?.textContent||''))),
     'Merchant drilldown contains no unrelated transactions');
    assert.equal(await page.locator('[data-history-months]').inputValue(),'3',
     'Merchant drilldown preserves the month span');
