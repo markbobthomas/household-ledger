@@ -19,7 +19,9 @@ const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{mon
  };
 const model=window.HouseholdLedgerData;
 // Keep the catch-all visible first in normal category dropdowns.
-const categoryOptionsWithOther=list=>['Other',...(list||[]).filter(c=>c!=='Other')];
+const categoryOptionsWithOther=list=>(list||[]).includes('Other')?
+ ['Other',...(list||[]).filter(c=>c!=='Other')]:list||[];
+const categoryLabel=name=>name==='Uncategorized'?'Unassigned':name;
 const available=()=>Boolean(window.HouseholdLiveSource);
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
 const demoState=model.migrate(rawDemo);
@@ -28,7 +30,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
@@ -84,7 +86,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   scheduleCategories:p.scheduleCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,
+   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,overdueReviewDismissals:p.overdueReviewDismissals,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
@@ -986,7 +988,7 @@ function scheduleFields(r,isNew,s){
    '</select></label>':'')+
   '<label>Bank merchant<input name="merchant" maxlength="160"'+(isNew?'':' required')+' value="'+escapeHTML(r.merchant||'')+'"></label>'+
   '<label>Category<select name="category">'+categories.map(c=>
-   '<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+'</select></label>'+
+   '<option value="'+escapeHTML(c)+'"'+(c===category?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+'</select></label>'+
   '<label>Amount type<select name="amountBasis"><option value="estimate"'+(r.amountBasis==='estimate'?' selected':'')+'>Variable / estimated</option>'+
    '<option value="fixed"'+(r.amountBasis!=='estimate'?' selected':'')+'>Fixed</option></select></label>'+
   '<label class="schedule-transfer-account"'+(transfer?'':' hidden')+'>To account'+
@@ -1317,7 +1319,7 @@ function schedulesPage(bundle,s){
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-schedule-quick-category="'+id+'" '+
     'aria-label="Category for prediction '+number+': '+title+'">'+
     categories.map(category=>'<option value="'+escapeHTML(category)+'"'+
-     (category===categoryOf(r)?' selected':'')+'>'+escapeHTML(category)+'</option>').join('')+
+     (category===categoryOf(r)?' selected':'')+'>'+escapeHTML(categoryLabel(category))+'</option>').join('')+
    '</select></div>'+
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for prediction '+number+'" title="More actions">⋯</summary>'+
@@ -1351,7 +1353,7 @@ function schedulesPage(bundle,s){
   [...new Set(visible.map(({rule})=>categoryOf(rule)))].map(category=>{
    const items=visible.filter(({rule})=>categoryOf(rule)===category);
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
-    '<div class="schedule-category-heading"><strong>'+escapeHTML(category)+
+    '<div class="schedule-category-heading"><strong>'+escapeHTML(categoryLabel(category))+
     ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
     scheduleCategorySummary(items,nextAmount,rule=>upcomingByRule.get(String(rule.id)))+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
@@ -1369,7 +1371,7 @@ function schedulesPage(bundle,s){
    '</select></label>'+
    '<div class="schedule-category-controls"><label>Category <select data-schedule-category-filter><option value="">All categories</option>'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
-     (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+     (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
    '</select></label>'+
    '</div>'+
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
@@ -1617,8 +1619,7 @@ function historyInsights(rows,view,options={}){
     '" title="'+escapeHTML(description)+'">'+
     '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span></span>';
   };
-  const custom=(state().predictions?.scheduleCategories||[]).filter(c=>
-   model.canonicalCategory(state(),c)===c&&c!=='Other');
+  const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<div class="history-category-panel-heading"><h2>Where your money went</h2>'+
     '<details class="history-category-manager" data-history-category-manager>'+
@@ -1627,12 +1628,12 @@ function historyInsights(rows,view,options={}){
       '<form data-history-category-add><label>New category'+
        '<input name="categoryName" maxlength="40" placeholder="e.g. Pet care" required></label>'+
        '<button type="submit" class="btn primary">Add category</button></form>'+
-      '<div class="history-category-manager-list"><strong>Your categories</strong>'+
+      '<div class="history-category-manager-list"><strong>All categories</strong>'+
        (custom.length?custom.map(c=>'<div class="history-custom-category">'+
         '<span>'+escapeHTML(c)+'</span><button type="button" data-history-category-delete="'+
-        escapeHTML(c)+'" aria-label="Delete custom category '+escapeHTML(c)+'">Delete</button></div>').join(''):
-        '<p>No custom categories yet.</p>')+
-       '<small>Other is built in and cannot be deleted. Reassign a custom category before deleting it if still used by transactions or bills.</small></div>'+
+        escapeHTML(c)+'" aria-label="Delete category '+escapeHTML(c)+'">Delete</button></div>').join(''):
+        '<p>No named categories. Add one above.</p>')+
+       '<small>Deleting any category moves its transactions and bills to Unassigned in Things to check. Amounts and dates stay unchanged.</small></div>'+
       '<p data-history-category-manage-message role="status"></p>'+
      '</div></details></div>'+
    (historyCategoryNotice?'<p class="history-category-manage-status" role="status">'+
@@ -1654,7 +1655,7 @@ function historyInsights(rows,view,options={}){
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-legend-dot" style="background:'+colors[i%colors.length]+'"></span>'+
      '<span class="history-category-name"><span class="history-category-glyph">'+cue(g.name)+'</span>'+
-      escapeHTML(g.name)+'<small>'+g.count+' purchases</small></span></button>'+ 
+      escapeHTML(categoryLabel(g.name))+'<small>'+g.count+' purchases</small></span></button>'+ 
      budgetBar(g)+
      '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
@@ -1708,8 +1709,8 @@ function historyPage(bundle,s){
  const accounts=activeAccounts(s),
   records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
   .map(t=>({...t,category:
-    ['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
-    ['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
+    t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
+    t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
     model.canonicalCategory(state(),t.category)||t.category||'Other'}))
   .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),
   // Both filters and row editors consult the same canonical category registry.
@@ -1847,7 +1848,7 @@ function historyPage(bundle,s){
     // Keep the full catalog available without injecting every option's
     // text into every bank row (which can make a merchant text search match
     // an unrelated row merely because e.g. "Mortgage" is an option).
-    categories.map(c=>'<option value="'+escapeHTML(c)+'" label="'+escapeHTML(c)+'"'+
+    categories.map(c=>'<option value="'+escapeHTML(c)+'" label="'+escapeHTML(categoryLabel(c))+'"'+
      (c===t.category?' selected':'')+'></option>').join('')+
    '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
    detail+'</div>';
@@ -1911,7 +1912,7 @@ function historyPage(bundle,s){
     '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
     '<option value="">All categories</option>'+
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
-     (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(c)+'</option>').join('')+
+     (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select></label></div>')+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
@@ -3391,11 +3392,29 @@ document.addEventListener('click',async e=>{
  const button=e.target.closest?.('[data-history-category-delete]');
  if(!button)return;
  const label=button.dataset.historyCategoryDelete;
- if(!window.confirm('Delete custom category "'+label+'"? This cannot be undone.'))return;
+ if(!window.confirm('Delete "'+label+'"? Its transactions and bills will become Unassigned and appear in Things to check.'))return;
  button.disabled=true;
  try{
-  await commitForecastChange(()=>model.removeCategory(state(),label));
-  historyCategoryNotice='Deleted '+label+'. Existing bank history was not changed.';
+  const current=state(),previous={
+   predictions:JSON.stringify(current.predictions||{}),
+   categoryOverrides:JSON.stringify(current.categoryOverrides||{}),
+   learning:JSON.stringify(current.learning||{})
+  };
+  try{
+   model.removeCategory(current,label);
+   if(live()){
+    const saved=await window.HouseholdLiveSource.deleteCategory(label);
+    if(!saved||saved.saved!==true)throw Error('Category deletion was not confirmed');
+   }else savePlanning();
+  }catch(error){
+   current.predictions=JSON.parse(previous.predictions);
+   current.categoryOverrides=JSON.parse(previous.categoryOverrides);
+   current.learning=JSON.parse(previous.learning);
+   throw error;
+  }
+  if(scheduleCategoryFilter===label)scheduleCategoryFilter='';
+  if(historyCategoryFilter===label)historyCategoryFilter='';
+  historyCategoryNotice='Deleted '+label+'. Affected items are Unassigned in Things to check.';
   render();
  }catch(error){
   button.disabled=false;

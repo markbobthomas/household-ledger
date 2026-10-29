@@ -294,7 +294,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-history-category-insights]').count(),1);
    // Create and delete categories in Bank History → Categories only.
    assert.equal(await page.locator('[data-history-category-manager]').count(),1);
-   assert.equal(await page.locator('[data-history-category-delete="Other"]').count(),0);
+   assert.equal(await page.locator('[data-history-category-delete="Other"]').count(),1,
+    'Built-in Other is deletable like every other named category');
    await page.locator('.history-category-manager>summary').click();
    await page.locator('[data-history-category-add] [name=categoryName]').fill('Fictional Pet Care');
    await page.locator('[data-history-category-add] button[type=submit]').click();
@@ -305,7 +306,7 @@ const {chromium,webkit}=require('playwright');
    page.once('dialog',dialog=>dialog.accept());
    await page.locator('[data-history-category-delete="Fictional Pet Care"]').click();
    assert.equal(await page.locator('.history-category-manage-status').innerText(),
-    'Deleted Fictional Pet Care. Existing bank history was not changed.');
+    'Deleted Fictional Pet Care. Affected items are Unassigned in Things to check.');
    assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),0);
    const catalog=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}'));
    assert.ok(!(catalog.scheduleCategories||[]).includes('Fictional Pet Care'),
@@ -604,6 +605,32 @@ const {chromium,webkit}=require('playwright');
      'Review suggestions open the same shared editor');
     await page.locator('.transaction-detail-close').click();
    }
+   // Deleting an assigned built-in category should not require reassignment.
+   // An existing fictional merchant correction is already Subscriptions.
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('[data-history-view="categories"]').click();
+   await page.locator('.history-category-manager>summary').click();
+   assert.equal(await page.locator('[data-history-category-delete="Subscriptions"]').count(),1);
+   page.once('dialog',dialog=>dialog.accept());
+   await page.locator('[data-history-category-delete="Subscriptions"]').click();
+   assert.equal(await page.locator('.history-category-manage-status').innerText(),
+    'Deleted Subscriptions. Affected items are Unassigned in Things to check.');
+   const deletedPrefs=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}'));
+   assert.ok((deletedPrefs.deletedCategories||[]).includes('Subscriptions'),
+    'Built-in category deletion survives reload');
+   assert.equal(deletedPrefs.categoryOverrides[
+    Object.keys(deletedPrefs.categoryOverrides||{}).find(k=>
+     deletedPrefs.categoryOverrides[k]==='Uncategorized')]||'','Uncategorized',
+    'Historical corrections are reset to Unassigned without bank source edits');
+   await page.locator('.attention-link[data-view="reviews"]').click();
+   assert.ok(await page.locator('[data-category-review-form]').count()>0,
+    'Deleted categories push affected transactions back into Things to check');
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('[data-history-view="list"]').click();
+   assert.equal(await page.locator('[data-history-category-filter] option[value="Subscriptions"]').count(),0,
+    'Deleted categories must not reappear in History filters');
+
    assert.deepEqual(errors,[],'No uncaught client errors on '+(mobile?'iPhone WebKit':'desktop Chromium'));
    await context.close();
   }

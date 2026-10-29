@@ -171,6 +171,16 @@ function persistCategory(transactionId,category,remember=false){
   lastError='';return result;
  });
 }
+function deleteCategory(category){
+ if(!live)return Promise.reject(new Error('Connect Real Bank mode to delete a category'));
+ const task=writeQueue.catch(()=>{}).then(()=>request('/categories/delete',{category:String(category)}));
+ writeQueue=task.catch(()=>{});
+ return task.then(result=>{
+  if(!result||result.saved!==true||result.scope!=='category-deletion')
+   throw Error('Category deletion was not acknowledged by the private server');
+  lastError='';return result;
+ });
+}
 function forgetCategoryRule(ruleKey){
  if(!live)return Promise.reject(new Error('Connect Real Bank mode to remove a learned category'));
  const task=writeQueue.catch(()=>{}).then(()=>request('/category-rule',{ruleKey:String(ruleKey)}));
@@ -225,6 +235,6 @@ function bind(callbacks){
  if(localStorage.getItem(MODE)==='real')enter();
 }
 if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
-root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCategory,forgetCategoryRule,enterReal:enter,refresh,mode:selection,
+root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCategory,deleteCategory,forgetCategoryRule,enterReal:enter,refresh,mode:selection,
  get loading(){return loading},get error(){return lastError}};
 })(typeof window!=='undefined'?window:globalThis);

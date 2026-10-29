@@ -36,9 +36,12 @@ function dedupeCategoryNames(names){
  }
  return all;
 }
+// Deleted names stay hidden even if immutable provider records still use them.
+// "Uncategorized" is the internal Unassigned status, not a named category.
+const removedCategory=(state,name)=>Array.isArray(state?.predictions?.deletedCategories)&&
+ state.predictions.deletedCategories.some(c=>normalizeCategory(c).toLowerCase()===normalizeCategory(name).toLowerCase());
 function categories(state,observed=[]){
  const saved=state?.predictions?.scheduleCategories||[];
- // Assigned categories are references, not a second stored registry.
  const assigned=[
   ...(state?.predictions?.futureRecurringRules||[]).map(r=>r?.category),
   ...(state?.transactions||[]).map(t=>t?.category),
@@ -47,7 +50,8 @@ function categories(state,observed=[]){
  ];
  return dedupeCategoryNames([...categorySet,...(Array.isArray(saved)?saved:[]),
   ...(Array.isArray(state?.customCategories)?state.customCategories:[]),
-  ...(Array.isArray(observed)?observed:[]),...assigned]);
+  ...(Array.isArray(observed)?observed:[]),...assigned])
+  .filter(c=>c==='Uncategorized'||!removedCategory(state,c));
 }
 function canonicalCategory(state,name){
  const requested=normalizeCategory(name);
@@ -57,47 +61,60 @@ const isCategory=(state,name)=>Boolean(canonicalCategory(state,name));
 function addCategory(state,name){
  const value=normalizeCategory(name);
  if(!validCustomName(value))throw Error('Category must be 2–40 letters/numbers and ordinary punctuation');
+ if(value==='Uncategorized')throw Error('Unassigned is a status, not a named category');
  if(isCategory(state,value))throw Error('Category already exists');
  state.predictions??={};
+ if(removedCategory(state,value)){
+  state.predictions.deletedCategories=state.predictions.deletedCategories.filter(c=>
+   normalizeCategory(c).toLowerCase()!==value.toLowerCase());
+  if(categorySet.has(value))return value;
+ }
  const saved=state.predictions.scheduleCategories??=[];
  if(!Array.isArray(saved)||saved.length>=100)throw Error('Category limit reached');
  saved.push(value);
  return value;
 }
 
-// Only user-created categories are removable. Never silently recategorize
-// posted bank transactions, approved forecasts or learned merchant rules.
-function customCategoryUsage(state,name){
- const target=normalizeCategory(name),s=state||{},p=s.predictions||{},
-  overridden=Object.values(s.categoryOverrides||{}).some(c=>normalizeCategory(c)===target),
-  source=(s.transactions||[]).some(t=>normalizeCategory(t.category)===target),
-  learned=Object.values(s.learning?.categoryRules||{}).some(r=>normalizeCategory(r.category)===target);
- const references=(value,depth=0)=>{
-  if(depth>20||!value||typeof value!=='object')return false;
-  if(Array.isArray(value))return value.some(row=>references(row,depth+1));
-  return Object.entries(value).some(([key,item])=>
-   key==='category'&&normalizeCategory(item)===target||
-   !['scheduleCategories','categoryMonthlyBudgets','monthlyBudgets','categoryForecasts'].includes(key)&&
-   typeof item==='object'&&references(item,depth+1));
- };
- return {overridden,source,learned,planned:references(p)};
-}
+// Category deletion affects only classification overlays and saved preferences;
+// never edit bank source transactions, their amounts, account links or dates.
 function removeCategory(state,name){
- const category=canonicalCategory(state,name),p=state.predictions||{};
- if(!category)throw Error('Category not found');
- if(builtinsByName.has(category.toLocaleLowerCase()))
-  throw Error('Built-in categories such as Other cannot be deleted');
- const saved=Array.isArray(p.scheduleCategories)?p.scheduleCategories:[],
-  index=saved.findIndex(c=>normalizeCategory(c)===category);
- if(index<0)throw Error('Only categories you added can be deleted');
- const usage=customCategoryUsage(state,category);
- if(Object.values(usage).some(Boolean))
-  throw Error('Category is in use. Reassign its transactions, bills or learned rules before deleting it.');
- saved.splice(index,1);
- // A budget target is a setting, not a bank transaction. Remove the unused
- // custom category's target alongside its registry name in the same forecast save.
- for(const key of ['categoryMonthlyBudgets','monthlyBudgets','categoryForecasts'])
-  if(p[key]&&typeof p[key]==='object')delete p[key][category];
+ const category=canonicalCategory(state,name);
+ if(!category||category==='Uncategorized')throw Error('Category is not available');
+ state.predictions??={};
+ const p=state.predictions,target=category.toLowerCase(),
+  same=v=>normalizeCategory(v).toLowerCase()===target,
+  affected=(state.transactions||[]).filter(t=>same(categoryFor(state,t.id))).map(t=>t.id);
+ state.categoryOverrides??={};
+ for(const id of affected)state.categoryOverrides[id]='Uncategorized';
+ for(const [id,value] of Object.entries(state.categoryOverrides))
+  if(same(value))state.categoryOverrides[id]='Uncategorized';
+ const update=(value,depth=0)=>{
+  if(!value||typeof value!=='object'||depth>18)return;
+  if(Array.isArray(value)){for(const item of value)update(item,depth+1);return}
+  if(Object.prototype.hasOwnProperty.call(value,'category')&&same(value.category)){
+   value.category='Uncategorized';
+   value.categoryReviewed=false;
+  }
+  for(const [key,item] of Object.entries(value)){
+   if(['deletedCategories','scheduleCategories','categoryMonthlyBudgets','monthlyBudgets',
+    'categoryForecasts'].includes(key))continue;
+   if(item&&typeof item==='object')update(item,depth+1);
+  }
+ };
+ update(p);
+ p.scheduleCategories=(Array.isArray(p.scheduleCategories)?p.scheduleCategories:[]).filter(c=>!same(c));
+ p.deletedCategories=dedupeCategoryNames([...(p.deletedCategories||[]),category]);
+ for(const key of ['categoryMonthlyBudgets','monthlyBudgets']){
+  if(!p[key]||typeof p[key]!=='object')continue;
+  for(const k of Object.keys(p[key]))if(same(k))delete p[key][k];
+ }
+ if(p.categoryForecasts&&typeof p.categoryForecasts==='object')
+  for(const k of Object.keys(p.categoryForecasts))
+   if(same(k.slice(k.indexOf('|')+1)))delete p.categoryForecasts[k];
+ state.learning??={categoryRules:{},ruleHistory:[]};
+ state.learning.categoryRules??={};
+ for(const [key,rule] of Object.entries(state.learning.categoryRules))
+  if(same(rule.category))removeCategoryRule(state,key);
  return category;
 }
 function migrate(input){
@@ -117,6 +134,9 @@ function migrate(input){
   ...(Array.isArray(predictions.scheduleCategories)?predictions.scheduleCategories:[]),
   ...(Array.isArray(old.customCategories)?old.customCategories:[])
  ]).filter(name=>!categorySet.has(name));
+ predictions.deletedCategories=dedupeCategoryNames(
+  Array.isArray(predictions.deletedCategories)?predictions.deletedCategories:[])
+  .filter(name=>name!=='Uncategorized');
  predictions.monthlyBudgets=predictions.monthlyBudgets&&typeof predictions.monthlyBudgets==='object'?predictions.monthlyBudgets:copy(old.budgets||{});
  predictions.categoryForecasts=predictions.categoryForecasts&&typeof predictions.categoryForecasts==='object'?predictions.categoryForecasts:{};
  // Kept for migration only: former undated aggregate overrides never alter dated transaction predictions.
@@ -180,8 +200,12 @@ function categoryRuleSafety(state,t,index){
 }
 function resolution(state,t,index){
  const explicit=state.categoryOverrides?.[t.id];
+ if(explicit==='Uncategorized'||explicit&&removedCategory(state,explicit))
+  return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
  if(explicit)return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
  const original=t.category||'Other';
+ if(removedCategory(state,original))
+  return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
  // Re-evaluate old Plaid mortgage rows even if an earlier import mislabeled
  // the loan withdrawal as a transfer. Keep the original bank record unchanged.
  const legacyMortgage=t.source?.provider==='plaid'&&t.type==='transfer'&&
@@ -194,8 +218,10 @@ function resolution(state,t,index){
   t.source?.categoryOrigin||'plaid-category':bankCategory?.method||'source';
  const originLabel=origin==='plaid-category'?'Plaid category':
   origin==='merchant-match'?'Merchant match':'Source';
+ if(removedCategory(state,inferred))
+  return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
  const key=categoryRuleKey(t),rule=state.learning?.categoryRules?.[key];
- if(!rule||t.type!=='expense')return {category:inferred,method:origin,
+ if(!rule||t.type!=='expense'||removedCategory(state,rule.category))return {category:inferred,method:origin,
   confidence:originLabel,ruleKey:null};
  const safety=categoryRuleSafety(state,t,index);
  const applicable=original==='Other'||(numericCategoryConfidence(t)!==null&&numericCategoryConfidence(t)<.7);
@@ -230,11 +256,11 @@ function categoryReviewQueue(state){
   .map(t=>{
    // Known income/transfer kinds are safe to label in reporting without
    // changing the authoritative bank-derived record used for forecasting.
-   const knownKind=t.type==='income'||t.type==='transfer',
+   const knownKind=(t.type==='income'||t.type==='transfer')&&t.method!=='unassigned',
     category=knownKind&&missingCategory(t.category)?
      (t.type==='income'?'Income':'Transfer'):
      String(t.category||'Other'),
-    manual=knownKind||Boolean(state.categoryOverrides?.[t.id])||
+    manual=knownKind||Boolean(state.categoryOverrides?.[t.id]&&state.categoryOverrides[t.id]!=='Uncategorized')||
      ['manual','learned'].includes(t.method),
     // An explicitly saved Other category is a reviewed choice, not a gap.
     missing=missingCategory(category)&&!manual,
@@ -303,7 +329,8 @@ function setCategory(state,id,category,confirm=false){
  if(!value)throw Error('Invalid category');
  state.categoryOverrides??={};
  const original=canonicalCategory(state,state.transactions.find(t=>t.id===id).category||'Other');
- if(value===original&&!confirm)delete state.categoryOverrides[id];else state.categoryOverrides[id]=value;
+ if(value===original&&!confirm&&value!=='Uncategorized')delete state.categoryOverrides[id];
+ else state.categoryOverrides[id]=value;
 }
 function setMonthlyBudget(state,category,amount){
  if(!isCategory(state,category)||!Number.isFinite(Number(amount))||Number(amount)<0)throw Error('Invalid budget');
@@ -648,7 +675,7 @@ function setCashCushion(state,amount){
  if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
  state.predictions.cashCushion=round(amount);
 }
-const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,removeCategory,customCategoryUsage,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
+const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,removeCategory,removedCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
