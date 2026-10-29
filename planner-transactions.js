@@ -280,6 +280,7 @@ function setScheduleCategory(state,id,category){
  const p=ensure(state),current=p.futureRecurringRules.find(r=>String(r.id)===String(id));
  if(!current)throw Error('This prediction changed. Open the list again.');
  current.category=value;
+ current.categoryReviewed=true;
  return {id:current.id,category:value};
 }
 const addScheduleCategory=(state,name)=>CategoryLibrary.addCategory(state,name);
