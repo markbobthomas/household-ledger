@@ -61,6 +61,8 @@ function forecastSaveFeedback(message,allowUndo=false){
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='list',historyMonths='1',historyEndMonth='',historySizeFilter=-1,historyPurchaseDrill=false;
 let historyBudgetMessage='',historyBudgetBusy=false;
+// Session-only selection of visible bank records; never stored with bank data or forecasts.
+const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
 let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all';
@@ -1595,6 +1597,32 @@ function historyInsights(rows,view,options={}){
    '<strong>'+cash(g.cents/100)+'</strong><span class="history-size-arrow">›</span></button>').join('')+
   '</div><p class="history-insight-footnote">Bands are based on individual posted purchase amounts, not totals per day.</p></section>';
 }
+function historySelectionKey(account,id){return JSON.stringify([String(account),String(id)])}
+function historySignedCents(t){
+ const incoming=['income','refund'].includes(t.type)||
+  (t.type==='transfer'&&t.cashDirection==='in');
+ return Math.round(Math.abs(Number(t.amount)||0)*100)*(incoming?1:-1);
+}
+// Update selection in place so checking boxes does not reopen editors,
+// lose scroll position, or recalculate the financial forecast.
+function updateHistorySelectionSummary(){
+ const root=document.querySelector('.history-page [data-history-selection-summary]');
+ if(!root)return;
+ const checkboxes=[...document.querySelectorAll('.history-page [data-history-select]')],
+  checked=checkboxes.filter(input=>input.checked),
+  cents=checked.reduce((sum,input)=>sum+Number(input.dataset.historySignedCents||0),0),
+  all=root.querySelector('[data-history-select-all]'),
+  tally=root.querySelector('[data-history-selected-count]'),
+  total=root.querySelector('[data-history-selected-total]'),
+  clear=root.querySelector('[data-history-clear-selection]');
+ if(all){
+  all.checked=checkboxes.length>0&&checked.length===checkboxes.length;
+  all.indeterminate=checked.length>0&&checked.length<checkboxes.length;
+ }
+ if(tally)tally.textContent=checked.length+' selected';
+ if(total)total.textContent='Net total: '+(cents<0?'−':cents>0?'+':'')+cash(Math.abs(cents)/100);
+ if(clear)clear.hidden=checked.length===0;
+}
 function historyPage(bundle,s){
  const accounts=activeAccounts(s),
   records=(bundle?.rows||[]).filter(x=>x.date&&x.date<=s.asOf)
@@ -1633,6 +1661,14 @@ function historyPage(bundle,s){
    textOf(a).localeCompare(textOf(b))||dateDesc(a,b):
   dateDesc(a,b));
  const visible=filtered.slice(0,historyLimit),label=id=>accounts.find(a=>String(a.id)===id)?.name||id;
+ // A selection is scoped to what is actually displayed. Do not silently
+ // include hidden transactions when month, search or account filters change.
+ const visibleKeys=new Set(visible.map(t=>historySelectionKey(
+  window.HouseholdPlannerHistory.accountOf(t,accounts),t.id)));
+ for(const key of historySelected)if(!visibleKeys.has(key))historySelected.delete(key);
+ const selectedRows=visible.filter(t=>historySelected.has(historySelectionKey(
+  window.HouseholdPlannerHistory.accountOf(t,accounts),t.id))),
+  selectedCents=selectedRows.reduce((sum,t)=>sum+historySignedCents(t),0);
  const monthNumber=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7)),
   earliestMonth=filtered.reduce((first,row)=>!first||row.date.slice(0,7)<first?row.date.slice(0,7):first,''),
   monthsInRange=span||Math.max(1,earliestMonth?monthNumber(selectedMonth)-monthNumber(earliestMonth)+1:1),
@@ -1685,12 +1721,17 @@ function historyPage(bundle,s){
    ):'',
    detail=isExpanded?'<div class="history-inline-detail recurrence-inline-detail" data-history-inline-detail>'+
     editor+'</div>':'';
+  const selected=historySelected.has(historySelectionKey(aid,t.id));
   return '<div class="history-entry" data-history-entry="'+escapeHTML(String(t.id))+'">'+
-   '<div class="history-actual-row ledger-list-row recurrence-row" data-history-kind="'+escapeHTML(kind||'unknown')+
+   '<div class="history-actual-row ledger-list-row recurrence-row'+(selected?' selected':'')+'" data-history-kind="'+escapeHTML(kind||'unknown')+
    '" data-history-sort-date="'+escapeHTML(t.date)+
    '" data-history-sort-amount="'+escapeHTML(String(Math.abs(Number(t.amount)||0)))+
    '" data-history-recurring-state="'+(status==='unplanned'?'unscheduled':status)+
    '" data-history-forecast-state="'+status+'">'+
+   '<label class="history-select-wrap"><input type="checkbox" data-history-select="'+
+    escapeHTML(historySelectionKey(aid,t.id))+'" data-history-signed-cents="'+historySignedCents(t)+
+    '" aria-label="Select '+escapeHTML(t.merchant||'bank transaction')+' on '+
+    escapeHTML(t.date)+'"'+(selected?' checked':'')+'></label>'+
    '<button type="button" class="history-row-open ledger-row-open recurrence-row-trigger" data-historical-transaction="'+
    escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
    '" aria-expanded="'+isExpanded+'" aria-label="'+escapeHTML((isExpanded?'Close':'Open')+
@@ -1791,6 +1832,15 @@ function historyPage(bundle,s){
   (historyView==='list'?'<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
     ' matching transaction'+(filtered.length===1?'':'s')+
     (filtered.length>historyLimit?' · More available below':'')+'</p>'+
+   '<div class="history-selection-summary" data-history-selection-summary>'+
+    '<label class="history-select-all"><input type="checkbox" data-history-select-all aria-label="Select all shown transactions"'+
+     (visible.length&&selectedRows.length===visible.length?' checked':'')+
+     (!visible.length?' disabled':'')+'><span>Select all shown</span></label>'+
+    '<span data-history-selected-count>'+selectedRows.length+' selected</span>'+
+    '<strong data-history-selected-total role="status">Net total: '+
+     (selectedCents<0?'−':selectedCents>0?'+':'')+cash(Math.abs(selectedCents)/100)+'</strong>'+
+    '<button type="button" class="history-clear-selection" data-history-clear-selection'+
+     (!selectedRows.length?' hidden':'')+'>Clear</button></div>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
    '</div><p class="page-task-hint history-explanation ledger-footer-hint">Transactions stay here. Saved repeating plans take priority. '+
@@ -2307,6 +2357,7 @@ function render(){
   root.querySelectorAll('[data-card-rule]'):[]))configureCardFields(form);
  drawTransactionDetail(bundle,s);
  if(activeTab==='schedules')applyScheduleSearch(root);
+ if(activeTab==='history')updateHistorySelectionSummary();
 }
 document.addEventListener('click',async e=>{
  if(e.target.closest?.('[data-undo-forecast]')){
@@ -2876,6 +2927,13 @@ document.addEventListener('click',async e=>{
   else render();
   return;
  }
+ if(e.target.closest('[data-history-clear-selection]')){
+  historySelected.clear();
+  document.querySelectorAll('.history-page [data-history-select]').forEach(input=>{
+   input.checked=false;input.closest('.history-actual-row')?.classList.remove('selected');
+  });
+  updateHistorySelectionSummary();return;
+ }
  if(e.target.closest('[data-history-more]')){
   historyLimit+=90;render();return;
  }
@@ -3308,6 +3366,23 @@ document.addEventListener('keydown',e=>{
  if(e.key==='Escape')document.getElementById('planner-menu')?.removeAttribute('open');
 });
 document.addEventListener('change',e=>{
+ const selected=e.target.closest?.('[data-history-select]');
+ if(selected){
+  if(selected.checked)historySelected.add(selected.dataset.historySelect);
+  else historySelected.delete(selected.dataset.historySelect);
+  selected.closest('.history-actual-row')?.classList.toggle('selected',selected.checked);
+  updateHistorySelectionSummary();return;
+ }
+ const selectAll=e.target.closest?.('[data-history-select-all]');
+ if(selectAll){
+  document.querySelectorAll('.history-page [data-history-select]').forEach(input=>{
+   input.checked=selectAll.checked;
+   if(input.checked)historySelected.add(input.dataset.historySelect);
+   else historySelected.delete(input.dataset.historySelect);
+   input.closest('.history-actual-row')?.classList.toggle('selected',input.checked);
+  });
+  updateHistorySelectionSummary();return;
+ }
  const periodSelect=e.target.closest?.('[data-history-months]');
  if(periodSelect){
   if(!['1','3','6','12','all'].includes(periodSelect.value))return;
