@@ -576,12 +576,22 @@ const {chromium,webkit}=require('playwright');
    const categoryFormsBefore=await categoryForms.count();
    if(categoryFormsBefore){
     const first=categoryForms.first(),categoryId=await first.getAttribute('data-category-id');
-    await first.locator('[name=category]').selectOption('Shopping');
+    assert.ok((await first.locator('[name=category] option').allTextContents()).includes('Other'),
+     'Other is offered as a deliberate catch-all in category Review');
+    await first.locator('[name=category]').selectOption('Other');
     await first.locator('[type=submit]').click();
     assert.equal(await page.locator('[data-category-review-form]').count(),categoryFormsBefore-1,
      'A saved category confirmation removes its issue from Things to check');
     assert.equal(await page.locator('[data-category-review-form][data-category-id="'+categoryId+'"]').count(),0,
      'Confirmed issue stays out of the current review list');
+    const afterOther=page.locator('[data-category-review-form]');
+    if(await afterOther.count()){
+     const second=afterOther.first(),id=await second.getAttribute('data-category-id');
+     await second.locator('[name=category]').selectOption('Shopping');
+     await second.locator('[type=submit]').click();
+     assert.equal(await page.locator('[data-category-review-form][data-category-id="'+id+'"]').count(),0,
+      'Specific categories also remain valid and clear Review');
+    }
    }
 
    const suggestion=page.locator('[data-review-recommendation]').first();
