@@ -160,7 +160,7 @@ function resolution(state,t,index){
    original==='Other'&&t.type==='transfer'?'Transfer':null;
   const inferred=byKind||(original==='Other'&&bankCategory?.category&&
    bankCategory.category!=='Other'?bankCategory.category:original);
- const origin=original!=='Other'&&t.source?.provider==='plaid'?
+ const origin=byKind?'system-type':original!=='Other'&&t.source?.provider==='plaid'?
   t.source?.categoryOrigin||'plaid-category':bankCategory?.method||'source';
  const originLabel=origin==='plaid-category'?'Plaid category':
   origin==='merchant-match'?'Merchant match':'Source';
