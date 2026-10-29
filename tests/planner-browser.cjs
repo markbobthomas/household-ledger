@@ -769,6 +769,50 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-history-category-filter] option[value="Subscriptions"]').count(),0,
     'Deleted categories must not reappear in History filters');
 
+   // Recategorizing a posted purchase must immediately update Budget from the
+   // saved overlay without a browser reload. Budget also explains when its
+   // current month/account filter hides the changed historical transaction.
+   await chooseMonths(page,['2026-09']);
+   const spendRow=page.locator('.history-entry')
+    .filter({has:page.locator('.history-actual-row[data-history-kind="expense"]')}).first();
+   assert.equal(await spendRow.count(),1,'September contains a posted fictional expense');
+   const oldCategory=await spendRow.locator('[data-history-category]').inputValue(),
+    targetCategory=oldCategory==='Health'?'Dining':'Health',
+    movedCents=Math.round(Number(await spendRow.locator('[data-history-sort-amount]')
+     .getAttribute('data-history-sort-amount'))*100);
+   await page.locator('[data-history-view="categories"]').click();
+   const oldTargetCents=Math.round(Number((await page.locator(
+    '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''))*100);
+   await page.locator('[data-history-view="list"]').click();
+   const rowAgain=page.locator('.history-entry')
+    .filter({has:page.locator('.history-actual-row[data-history-kind="expense"]')}).first();
+   const chosenId=await rowAgain.getAttribute('data-history-entry');
+   await rowAgain.locator('[data-history-category]').selectOption(targetCategory);
+   await page.waitForFunction(([id,category])=>{
+    const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return saved.categoryOverrides?.[id]===category;
+   },[chosenId,targetCategory]);
+   await page.locator('[data-history-view="categories"]').click();
+   assert.equal(Math.round(Number((await page.locator(
+    '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''))*100),oldTargetCents+movedCents,
+    'A just-saved correction updates Budget in place, without refresh');
+   assert.match(await page.locator('.history-budget-feedback').last().innerText(),
+    /Updated .* Budget for September 2026/,
+    'Budget explicitly acknowledges a saved category change');
+   await chooseMonths(page,['2026-10']);
+   assert.match(await page.locator('.history-budget-feedback').last().innerText(),
+    /outside the selected Budget months/,
+    'A correct category save explains why an older purchase is not in this month');
+   await page.locator('[data-show-saved-budget]').click();
+   assert.deepEqual(await selectedMonths(page),['2026-09'],
+    'Show that month opens the changed category’s transaction month');
+   assert.equal(Math.round(Number((await page.locator(
+    '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''))*100),oldTargetCents+movedCents,
+    'Budget reflects the saved correction without forcing a bank refresh');
+
    assert.deepEqual(errors,[],'No uncaught client errors on '+(mobile?'iPhone WebKit':'desktop Chromium'));
    await context.close();
   }
