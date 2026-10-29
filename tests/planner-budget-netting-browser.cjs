@@ -49,6 +49,25 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
        account:accountId==='demo-visa'?'Visa':'Checking',pending:false,
        demo:true,source:{provider:'demo',verified:true,plaidAmount}
       });
+      // These fictional future forecasts are deliberately different:
+      // the Visa subscription is a card PURCHASE (not a checking bill),
+      // while the Visa PAYMENT is a checking withdrawal (a Summary bill).
+      data.predictions={
+       recurringForecastMode:'approved-only',
+       futureRecurringRules:[{
+        id:'fictional-visa-sub',kind:'event',type:'expense',accountId:'demo-visa',
+        frequency:'monthly',anchorDate:'2026-11-05',date:'2026-11-05',
+        merchant:'Fictional Visa Subscription',amount:25,category:'Subscriptions'
+       }],
+       futureTransactionAdds:[
+        {id:'fictional-visa-pay',type:'transfer',date:'2026-11-12',
+         merchant:'Fictional Visa Payment',amount:600,
+         fromAccountId:'demo-checking',toAccountId:'demo-visa'},
+        {id:'fictional-savings-move',type:'transfer',date:'2026-11-13',
+         merchant:'Fictional Savings Transfer',amount:500,
+         fromAccountId:'demo-checking',toAccountId:'demo-savings'}
+       ]
+      };
       data.transactions.push(
        extra('ui-card-health','2026-10-09','Fictional Clinic',100,'Health',
         'expense','demo-visa',100),
@@ -93,6 +112,17 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Summary and Budget net posted spending must agree');
    assert.equal(await page.locator('.financial-recap-page input,.financial-recap-page button').count(),0,
     name+': Summary may not edit any banking or planning information');
+   const billCategories=await page.locator('.financial-recap-card').first().innerText();
+   assert.match(billCategories,/Credit card payments/);
+   assert.match(billCategories,/\$50\.00/,
+    name+': one $600 future card payment contributes $50/month across 12 months');
+   assert.doesNotMatch(billCategories,/Fictional Visa Subscription/,
+    name+': the underlying $25/month card purchases must not also count as bills');
+   assert.doesNotMatch(billCategories,/Savings Transfer/,
+    name+': internal cash transfer is not a bill');
+   assert.match(await page.locator('.financial-recap-upcoming').innerText(),
+    /Fictional Visa Payment/,
+    name+': credit-card payment appears in upcoming predicted bills');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
     name+': refunds still appear as signed spending in the full-width Budget list');
