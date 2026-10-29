@@ -65,6 +65,41 @@ function addCategory(state,name){
  return value;
 }
 
+// Only user-created categories are removable. Never silently recategorize
+// posted bank transactions, approved forecasts or learned merchant rules.
+function customCategoryUsage(state,name){
+ const target=normalizeCategory(name),s=state||{},p=s.predictions||{},
+  overridden=Object.values(s.categoryOverrides||{}).some(c=>normalizeCategory(c)===target),
+  source=(s.transactions||[]).some(t=>normalizeCategory(t.category)===target),
+  learned=Object.values(s.learning?.categoryRules||{}).some(r=>normalizeCategory(r.category)===target);
+ const references=(value,depth=0)=>{
+  if(depth>20||!value||typeof value!=='object')return false;
+  if(Array.isArray(value))return value.some(row=>references(row,depth+1));
+  return Object.entries(value).some(([key,item])=>
+   key==='category'&&normalizeCategory(item)===target||
+   !['scheduleCategories','categoryMonthlyBudgets','monthlyBudgets','categoryForecasts'].includes(key)&&
+   typeof item==='object'&&references(item,depth+1));
+ };
+ return {overridden,source,learned,planned:references(p)};
+}
+function removeCategory(state,name){
+ const category=canonicalCategory(state,name),p=state.predictions||{};
+ if(!category)throw Error('Category not found');
+ if(builtinsByName.has(category.toLocaleLowerCase()))
+  throw Error('Built-in categories such as Other cannot be deleted');
+ const saved=Array.isArray(p.scheduleCategories)?p.scheduleCategories:[],
+  index=saved.findIndex(c=>normalizeCategory(c)===category);
+ if(index<0)throw Error('Only categories you added can be deleted');
+ const usage=customCategoryUsage(state,category);
+ if(Object.values(usage).some(Boolean))
+  throw Error('Category is in use. Reassign its transactions, bills or learned rules before deleting it.');
+ saved.splice(index,1);
+ // A budget target is a setting, not a bank transaction. Remove the unused
+ // custom category's target alongside its registry name in the same forecast save.
+ for(const key of ['categoryMonthlyBudgets','monthlyBudgets','categoryForecasts'])
+  if(p[key]&&typeof p[key]==='object')delete p[key][category];
+ return category;
+}
 function migrate(input){
  const old=input&&typeof input==='object'?input:{};
  const categoryOverrides=old.categoryOverrides&&typeof old.categoryOverrides==='object'&&!Array.isArray(old.categoryOverrides)?copy(old.categoryOverrides):{};
@@ -612,7 +647,7 @@ function setCashCushion(state,amount){
  if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
  state.predictions.cashCushion=round(amount);
 }
-const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
+const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,removeCategory,customCategoryUsage,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
