@@ -19,7 +19,9 @@ const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{mon
  };
 const model=window.HouseholdLedgerData;
 // Keep the catch-all visible first in normal category dropdowns.
-const categoryOptionsWithOther=list=>['Other',...(list||[]).filter(c=>c!=='Other')];
+const categoryOptionsWithOther=list=>(list||[]).includes('Other')?
+ ['Other',...(list||[]).filter(c=>c!=='Other')]:list||[];
+const categoryLabel=name=>name==='Uncategorized'?'Unassigned':name;
 const available=()=>Boolean(window.HouseholdLiveSource);
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
 const demoState=model.migrate(rawDemo);
@@ -28,7 +30,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
@@ -84,7 +86,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   scheduleCategories:p.scheduleCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,
+   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,overdueReviewDismissals:p.overdueReviewDismissals,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
@@ -1617,8 +1619,7 @@ function historyInsights(rows,view,options={}){
     '" title="'+escapeHTML(description)+'">'+
     '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span></span>';
   };
-  const custom=(state().predictions?.scheduleCategories||[]).filter(c=>
-   model.canonicalCategory(state(),c)===c&&c!=='Other');
+  const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<div class="history-category-panel-heading"><h2>Where your money went</h2>'+
     '<details class="history-category-manager" data-history-category-manager>'+
@@ -1627,12 +1628,12 @@ function historyInsights(rows,view,options={}){
       '<form data-history-category-add><label>New category'+
        '<input name="categoryName" maxlength="40" placeholder="e.g. Pet care" required></label>'+
        '<button type="submit" class="btn primary">Add category</button></form>'+
-      '<div class="history-category-manager-list"><strong>Your categories</strong>'+
+      '<div class="history-category-manager-list"><strong>All categories</strong>'+
        (custom.length?custom.map(c=>'<div class="history-custom-category">'+
         '<span>'+escapeHTML(c)+'</span><button type="button" data-history-category-delete="'+
-        escapeHTML(c)+'" aria-label="Delete custom category '+escapeHTML(c)+'">Delete</button></div>').join(''):
-        '<p>No custom categories yet.</p>')+
-       '<small>Other is built in and cannot be deleted. Reassign a custom category before deleting it if still used by transactions or bills.</small></div>'+
+        escapeHTML(c)+'" aria-label="Delete category '+escapeHTML(c)+'">Delete</button></div>').join(''):
+        '<p>No named categories. Add one above.</p>')+
+       '<small>Deleting any category moves its transactions and bills to Unassigned in Things to check. Amounts and dates stay unchanged.</small></div>'+
       '<p data-history-category-manage-message role="status"></p>'+
      '</div></details></div>'+
    (historyCategoryNotice?'<p class="history-category-manage-status" role="status">'+
@@ -3391,11 +3392,29 @@ document.addEventListener('click',async e=>{
  const button=e.target.closest?.('[data-history-category-delete]');
  if(!button)return;
  const label=button.dataset.historyCategoryDelete;
- if(!window.confirm('Delete custom category "'+label+'"? This cannot be undone.'))return;
+ if(!window.confirm('Delete "'+label+'"? Its transactions and bills will become Unassigned and appear in Things to check.'))return;
  button.disabled=true;
  try{
-  await commitForecastChange(()=>model.removeCategory(state(),label));
-  historyCategoryNotice='Deleted '+label+'. Existing bank history was not changed.';
+  const current=state(),previous={
+   predictions:JSON.stringify(current.predictions||{}),
+   categoryOverrides:JSON.stringify(current.categoryOverrides||{}),
+   learning:JSON.stringify(current.learning||{})
+  };
+  try{
+   model.removeCategory(current,label);
+   if(live()){
+    const saved=await window.HouseholdLiveSource.deleteCategory(label);
+    if(!saved||saved.saved!==true)throw Error('Category deletion was not confirmed');
+   }else savePlanning();
+  }catch(error){
+   current.predictions=JSON.parse(previous.predictions);
+   current.categoryOverrides=JSON.parse(previous.categoryOverrides);
+   current.learning=JSON.parse(previous.learning);
+   throw error;
+  }
+  if(scheduleCategoryFilter===label)scheduleCategoryFilter='';
+  if(historyCategoryFilter===label)historyCategoryFilter='';
+  historyCategoryNotice='Deleted '+label+'. Affected items are Unassigned in Things to check.';
   render();
  }catch(error){
   button.disabled=false;
