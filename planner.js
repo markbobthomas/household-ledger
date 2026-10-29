@@ -1876,11 +1876,11 @@ function reviewQueue(bundle,s){
   outstanding:decisionsNeeded+pending.length+overdue.length};
 }
 function updateReviewTabCount(queue){
- const badge=document.querySelector('.planner-nav-primary [data-review-tab-count]');
+ const badge=document.querySelector('.main-navigation [data-review-tab-count]');
  if(!badge)return;
  const count=Number(queue?.outstanding||0);
  badge.hidden=!(count>0);
- badge.textContent=count>0?' ['+count+']':'';
+ badge.textContent=count>0?String(count):'';
  const tab=badge.closest('[data-view="reviews"]');
  if(tab)tab.classList.toggle('has-review-items',count>0);
 }
@@ -1947,15 +1947,17 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     'Needs a decision — currently included in your forecast'});
  };
  return '<div class="planner-page reviews-page">'+
+  '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
+    '<div><h2>Things to check</h2><p>Confirm important payments and choose which suggestions belong in your plan. Your bank records stay unchanged.</p></div></div>'+
   '<div class="review-priority" aria-label="Review priorities">'+
    '<strong>Needs action: '+(overdue.length+decisionsNeeded)+'</strong>'+
    '<span>'+overdue.length+' unposted payments · '+decisionsNeeded+' earlier estimates</span>'+
    '<strong>Suggestions: '+pending.length+'</strong></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
-   '<div class="section-title"><h2>Needs action · payments not yet posted</h2>'+
+   '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
-   '<p class="lead">These withdrawals have no confirmed matching bank payment. '+
+   '<p class="lead">The bank has not confirmed these payments. '+
     'Each unpaid payment remains reserved once in the forecast until it posts, is moved, or is skipped. '+
     'Ignoring an alert hides it from Review but keeps the withdrawal in your projected balance.</p>'+
    overdue.map(item=>{
@@ -1999,7 +2001,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '</section>':'')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
-    '<div class="section-title"><h2>Needs action · earlier automatic estimates</h2>'+
+    '<div class="section-title"><h2>Earlier estimates to confirm</h2>'+
      '<strong class="legacy-estimate-count" data-legacy-estimate-count="'+legacyItems.length+'">'+
       legacyItems.length+' UNSAVED</strong></div>'+
     '<p class="lead">These '+legacyItems.length+' repeating payment'+
@@ -2017,7 +2019,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       '>Use saved predictions only</button></div>'+
    '</section>':'')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
-   '<div class="section-title"><h2>Suggestions · possible repeating payments</h2>'+
+   '<div class="section-title"><h2>Suggested repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
    (pending.length?pending.map(normalCard).join(''):
     '<p class="lead">Nothing else to review.</p>')+
@@ -2559,6 +2561,31 @@ document.addEventListener('click',async e=>{
   }catch(error){setNotice('Mortgage identification could not be cleared: '+
    String(error.message||error))}
   return;
+ }
+
+ // History view switching and drill-down are read-only.
+ const historyTab=e.target.closest?.('[data-history-view]');
+ if(historyTab){
+  if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
+    !window.confirm('Discard unsaved payment changes?'))return;
+  historyView=historyTab.dataset.historyView;historySizeFilter=-1;historyLimit=90;
+  historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
+  recurringDraft=null;transactionDetail=null;render();return;
+ }
+ const sizeBand=e.target.closest?.('[data-history-size-band]');
+ if(sizeBand){
+  const i=Number(sizeBand.dataset.historySizeBand);
+  if(i<0||i>=historyBands.length)return;
+  historyView='list';historySizeFilter=i;historyLimit=90;render();return;
+ }
+ if(e.target.closest?.('[data-history-clear-size]')){
+  historySizeFilter=-1;historyLimit=90;render();return;
+ }
+ const categoryDrill=e.target.closest?.('[data-history-drill-category]');
+ if(categoryDrill){
+  historyView='list';historySizeFilter=-1;
+  historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
+  historyLimit=90;render();return;
  }
  const view=e.target.closest('[data-view]');
  if(view){
@@ -3228,6 +3255,17 @@ document.addEventListener('keydown',e=>{
  if(e.key==='Escape')document.getElementById('planner-menu')?.removeAttribute('open');
 });
 document.addEventListener('change',e=>{
+ const periodSelect=e.target.closest?.('[data-history-months]');
+ if(periodSelect){
+  if(!['1','3','6','12','all'].includes(periodSelect.value))return;
+  historyMonths=periodSelect.value;historyLimit=90;render();return;
+ }
+ const monthInput=e.target.closest?.('[data-history-month]');
+ if(monthInput){
+  const next=String(monthInput.value||'');
+  if(!/^\d{4}-\d{2}$/.test(next)||next>snapshot().asOf.slice(0,7))return;
+  historyEndMonth=next;historyLimit=90;render();return;
+ }
  if(!e.target.matches?.('[data-calendar-type]'))return;
  const form=e.target.closest('[data-calendar-quick-form]');
  if(form)form.dataset.quickKind=e.target.value;
