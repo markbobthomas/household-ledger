@@ -3544,7 +3544,7 @@ document.addEventListener('change',e=>{
   historyLimit=90;render();
   const monthList=document.querySelector('[data-history-month-list]');
   if(monthList)monthList.scrollTop=scroll;
-  document.querySelector('[data-history-month-option="'+month+'"]')?.focus({preventScroll:true});
+  document.querySelector('[data-history-month-option][value="'+month+'"]')?.focus({preventScroll:true});
   return;
  }
  if(!e.target.matches?.('[data-calendar-type]'))return;
