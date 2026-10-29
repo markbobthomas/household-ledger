@@ -459,7 +459,33 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(await selectedMonths(page),['2026-10'],
     'Reload resets the view to the current calendar month');
 
-   // Actual bank records are inspectable through the shared panel, never editable.
+   // A category edit teaches a merchant lesson, which Settings can forget
+    // without reverting the transaction's individual saved correction.
+    await page.locator('[data-history-view="list"]').click();
+    const lessonRow=page.locator('.history-entry').filter({hasText:'Xfinity Internet'}).first();
+    assert.equal(await lessonRow.count(),1,'Fictional merchant exists for category learning');
+    await lessonRow.locator('[data-history-category]').selectOption('Subscriptions');
+    await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}').learning?.categoryRules||{}).length>0);
+    const categoryLesson=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}'));
+    assert.ok(Object.values(categoryLesson.learning.categoryRules).some(rule=>
+     rule.merchant==='Xfinity Internet'&&rule.category==='Subscriptions'),
+     'A category correction stores its merchant lesson');
+    await page.locator('#planner-menu summary').click();
+    await page.locator('#planner-menu [data-view="settings"]').click();
+    assert.equal(await page.locator('[data-forget-category-rule]').count(),1,
+     'Learned merchant rules are reviewable in Settings');
+    await page.locator('[data-forget-category-rule]').click();
+    await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}').learning?.categoryRules||{}).length===0);
+    const afterForget=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}'));
+    assert.ok(Object.values(afterForget.categoryOverrides||{}).includes('Subscriptions'),
+     'Forgetting a merchant rule leaves the individual correction intact');
+    await page.locator('.planner-nav-primary [data-view="history"]').click();
+
+    // Actual bank records are inspectable through the shared panel, never editable.
    const bankRow=page.locator('.history-row-open').first();
    if(await bankRow.count()){
     await bankRow.click();

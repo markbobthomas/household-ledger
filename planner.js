@@ -30,6 +30,9 @@ try{
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
+  if(saved.learning&&typeof saved.learning==='object'&&!Array.isArray(saved.learning))
+   demoState.learning={categoryRules:{...(saved.learning.categoryRules||{})},
+    ruleHistory:Array.isArray(saved.learning.ruleHistory)?saved.learning.ruleHistory:[]};
  }
 }catch{}
 const horizon=1095; // Three-year modeled floor. No user-selectable time windows.
@@ -84,7 +87,7 @@ function savePlanning(){
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
     recurringForecastMode:p.recurringForecastMode,
-    categoryOverrides:demoState.categoryOverrides||{}}));
+    categoryOverrides:demoState.categoryOverrides||{},learning:demoState.learning||{}}));
   return true;
  }
 }
@@ -2139,7 +2142,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
     '<div class="category-review-info"><strong>'+escapeHTML(item.merchant)+'</strong>'+
     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
-    ' · '+escapeHTML(item.reason)+'</small></div>'+
+    ' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></div>'+
     '<label>Category<select name="category" required aria-label="Category for '+
      escapeHTML(item.merchant)+'">'+categoryOptions(c)+'</select></label>'+
     '<button type="submit" class="btn primary">Confirm</button></form>';
@@ -2344,6 +2347,17 @@ function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
  return calendar;
 }
 function settingsPage(bundle,s,chosen){
+ const rules=Object.entries(state().learning?.categoryRules||{});
+ const categoryLearning=rules.length?
+  '<section class="panel mini-panel" aria-label="Learned merchant categories">'+
+   '<div class="section-title"><h2>Learned categories</h2></div>'+
+   '<p>When a bank category is missing or uncertain, corrections can be reused for the same merchant and account. Multi-purpose merchants need individual review. Forgetting a rule keeps existing transaction corrections.</p>'+
+   rules.map(([key,rule])=>'<div class="future-skip-line">'+
+    '<strong>'+escapeHTML(rule.merchant||'Merchant')+'</strong> · '+
+    escapeHTML(rule.category||'Category')+' · '+
+    escapeHTML(rule.mode==='auto'?'Automatic when safe':'Review first')+
+    ' <button type="button" class="btn" data-forget-category-rule="'+escapeHTML(key)+
+    '">Forget rule</button></div>').join('')+'</section>':'';
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
   '<h2>Settings</h2></div></div>'+
   '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
@@ -2365,7 +2379,7 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
+  categoryLearning+auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
@@ -2510,6 +2524,23 @@ document.addEventListener('click',async e=>{
   const menu=document.querySelector('[data-history-month-menu]');
   if(menu)menu.hidden=true;
   document.querySelector('[data-history-month-toggle]')?.setAttribute('aria-expanded','false');
+ }
+ const forgetCategory=e.target.closest?.('[data-forget-category-rule]');
+ if(forgetCategory){
+  const key=forgetCategory.dataset.forgetCategoryRule,current=state(),
+   previous=JSON.stringify(current.learning||{});
+  forgetCategory.disabled=true;
+  try{
+   if(!model.removeCategoryRule(current,key))throw Error('Rule no longer exists');
+   const result=live()?
+    await window.HouseholdLiveSource.forgetCategoryRule(key):savePlanning();
+   if(live()&&(!result||result.saved!==true))throw Error('Rule removal was not saved');
+   render();
+  }catch(error){
+   current.learning=JSON.parse(previous);
+   setNotice('Could not forget category rule: '+String(error.message||error));
+  }
+  return;
  }
  if(e.target.closest?.('[data-undo-forecast]')){
   e.preventDefault();await undoLastForecastChange();return;
@@ -3352,6 +3383,32 @@ document.addEventListener('submit',async e=>{
  }catch(error){if(notice)notice.textContent=String(error.message||error)}
  finally{if(submit)submit.disabled=false}
 });
+// Store one correction and its conservative merchant lesson as one decision.
+// Bank-provided source records and unrelated forecasts are never rewritten here.
+async function saveTransactionCategory(id,category,confirm=false){
+ const current=state(),beforeOverrides=JSON.stringify(current.categoryOverrides||{}),
+  beforeLearning=JSON.stringify(current.learning||{});
+ try{
+  model.setCategory(current,id,category,confirm);
+  const tx=(current.transactions||[]).find(row=>String(row.id)===String(id));
+  const lesson=tx?.type==='expense'&&!['Other','Uncategorized'].includes(category)?
+   model.learnCategory(current,id,category):null;
+  const saved=live()?
+   await window.HouseholdLiveSource.persistCategory(id,current.categoryOverrides?.[id]??null,Boolean(lesson)):
+   savePlanning();
+  if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
+  if(live()&&lesson){
+   if(!saved.learningMode)current.learning=JSON.parse(beforeLearning);
+   else if(current.learning?.categoryRules?.[lesson.key])
+    current.learning.categoryRules[lesson.key].mode=saved.learningMode;
+  }
+  return lesson;
+ }catch(error){
+  current.categoryOverrides=JSON.parse(beforeOverrides);
+  current.learning=JSON.parse(beforeLearning);
+  throw error;
+ }
+}
 // Category decisions use the existing per-bank overrides and forecast preferences.
 // Even confirming a plausible existing category saves a user-approved classification.
 document.addEventListener('submit',async e=>{
@@ -3372,14 +3429,7 @@ document.addEventListener('submit',async e=>{
  if(button)button.disabled=true;
  try{
   if(kind==='transaction'){
-   const previous=JSON.stringify(state().categoryOverrides||{});
-   try{
-    model.setCategory(state(),id,chosen,true);
-    const saved=live()?
-     await window.HouseholdLiveSource.persistCategory(id,state().categoryOverrides[id]):
-     savePlanning();
-    if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
-   }catch(error){state().categoryOverrides=JSON.parse(previous);throw error}
+   await saveTransactionCategory(id,chosen,true);
   }else{
    await commitForecastChange(()=>{
     if(kind==='schedule')window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,chosen);
@@ -3849,25 +3899,19 @@ document.addEventListener('change',async e=>{
  if(historyCategory){
   const id=historyCategory.dataset.historyCategory,
    current=(state().transactions||[]).find(t=>String(t.id)===String(id)),
-   originalCategory=current?model.categoryFor(state(),id):null,
-   previous=JSON.stringify(state().categoryOverrides||{});
+   originalCategory=current?model.categoryFor(state(),id):null;
   if(!current||!originalCategory){historyCategory.value=originalCategory||'Other';return}
   if(historyCategory.value===originalCategory)return;
   historyCategory.disabled=true;
   try{
-   // Only the local classification overlay changes; immutable Plaid history
-   // and forecast rules are neither edited nor uploaded.
-   model.setCategory(state(),id,historyCategory.value);
-   const saved=live()?
-    await window.HouseholdLiveSource.persistCategory(id,state().categoryOverrides?.[id]??null):
-    savePlanning();
-   if(live()&&(!saved||saved.saved!==true))throw Error('Category was not saved');
+   // A correction may teach uncertain future transactions at this merchant
+   // without editing original bank facts or the predicted balance.
+   await saveTransactionCategory(id,historyCategory.value);
    reviewNotice='';latestError='';render();
    document.querySelectorAll('[data-history-category]').forEach(select=>{
     if(select.dataset.historyCategory===id)select.focus({preventScroll:true});
    });
   }catch(err){
-   state().categoryOverrides=JSON.parse(previous);
    historyCategory.disabled=false;historyCategory.value=originalCategory;
    const alert=document.createElement('span');alert.className='history-category-error';
    alert.setAttribute('role','alert');alert.textContent='Could not save category: '+String(err.message||err);

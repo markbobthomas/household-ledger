@@ -3,6 +3,8 @@
 (function(root){
 'use strict';
 const MODE='household-ledger-view-mode';
+const Accounting=root.HouseholdAccounting||(typeof require==='function'?require('../accounting.js'):null);
+const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('../categorization.js'):null);
 let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
 const today=()=>new Date().toLocaleDateString('en-CA');
@@ -46,12 +48,12 @@ function record(t,account){
  const name=String(t.merchant||t.name||'Bank transaction').slice(0,250);
  const code=String(pfc?.primary||'').toUpperCase(),lower=name.toLowerCase();
  const incoming=amount<0,card=account.type==='credit';
- const obligation=root.HouseholdCategorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
+ const obligation=Categorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
  // External mortgage and other bank-coded loan installments are cash bills,
  // NOT internal account transfers. Card settlements remain transfers.
  const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(name)||
    code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
- const earned=incoming&&!card&&root.HouseholdAccounting?.recognizedIncome?.({
+ const earned=incoming&&!card&&Accounting?.recognizedIncome?.({
   merchant:name,personal_finance_category:pfc,source:{plaidAmount:amount}
  },account);
  const transfer=!earned&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
@@ -63,7 +65,7 @@ function record(t,account){
   source:{provider:'plaid',verified:true,itemId:account.itemId||'connected-bank-item',
    providerTransactionId:String(t.id),accountId:account.id,plaidAmount:amount,personalFinanceCategory:pfc,
    categoryConfidence:pfc?.confidence_level==='VERY_HIGH'?.99:pfc?.confidence_level==='HIGH'?.93:0}};
- const classification=root.HouseholdCategorization?.classify(row);
+ const classification=Categorization?.classify(row);
  if(!transfer&&classification?.category&&classification.category!=='Other'){
   row.category=classification.category;
   row.categoryConfidence=classification.confidence;
@@ -157,15 +159,25 @@ function panel(){
   '<p>Real data is stored on the private server, separate from fictional data. Only your mode preference is stored on this device.</p>'+
   '<a href="/bank-connect">Connect, sync or disconnect bank account</a>'+statusText()+'</section>';
 }
-function persistCategory(transactionId,category){
+function persistCategory(transactionId,category,remember=false){
  if(!live)return Promise.reject(new Error('Connect Real Bank mode to save a private category'));
  const task=writeQueue.catch(()=>{}).then(()=>request('/category',{
-  transactionId:String(transactionId),category
+  transactionId:String(transactionId),category,...(remember?{remember:true}:{})
  }));
  writeQueue=task.catch(()=>{});
  return task.then(result=>{
   if(!result||result.saved!==true||result.scope!=='category')
    throw Error('Bank category change was not acknowledged');
+  lastError='';return result;
+ });
+}
+function forgetCategoryRule(ruleKey){
+ if(!live)return Promise.reject(new Error('Connect Real Bank mode to remove a learned category'));
+ const task=writeQueue.catch(()=>{}).then(()=>request('/category-rule',{ruleKey:String(ruleKey)}));
+ writeQueue=task.catch(()=>{});
+ return task.then(result=>{
+  if(!result||result.saved!==true||result.scope!=='category-rule')
+   throw Error('Removing the learned category was not acknowledged');
   lastError='';return result;
  });
 }
@@ -213,6 +225,6 @@ function bind(callbacks){
  if(localStorage.getItem(MODE)==='real')enter();
 }
 if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
-root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCategory,enterReal:enter,refresh,mode:selection,
+root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCategory,forgetCategoryRule,enterReal:enter,refresh,mode:selection,
  get loading(){return loading},get error(){return lastError}};
 })(typeof window!=='undefined'?window:globalThis);
