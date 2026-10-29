@@ -85,6 +85,15 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': refunds never produce a negative or invalid progress width');
    assert.equal(await page.locator('.history-donut,.history-legend-dot').count(),0,
     name+': Budget omits the unused pie chart and color legend');
+   // The separate, read-only Summary must match Budget's complete monthly
+   // spending, including cross-account card-payment suppression and refunds.
+   const budgetSpend=(await page.locator('.history-spending-overview strong').innerText()).replace(/ spent$/,'');
+   await page.locator('.planner-nav-primary [data-view="recap"]').click();
+   assert.equal(await page.locator('[data-recap-spent] strong').innerText(),budgetSpend,
+    name+': Summary and Budget net posted spending must agree');
+   assert.equal(await page.locator('.financial-recap-page input,.financial-recap-page button').count(),0,
+    name+': Summary may not edit any banking or planning information');
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
     name+': refunds still appear as signed spending in the full-width Budget list');
    await page.locator('[data-history-category-row="Entertainment"] [data-history-drill-category]').click();

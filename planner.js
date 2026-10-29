@@ -1715,6 +1715,113 @@ function historyInsights(rows,view,options={}){
    '<strong>'+cash(g.cents/100)+'</strong><span class="history-size-arrow">›</span></button>').join('')+
   '</div><p class="history-insight-footnote">Bands are based on individual posted purchase amounts, not totals per day.</p></section>';
 }
+
+/* Read-only fourth main tab: bank history and the canonical forecast supply
+   the numbers. Never persist a second financial model or change bank facts. */
+function financialRecapPage(bundle,s){
+ const asOf=String(s.asOf||dateToday()),month=asOf.slice(0,7),
+  monthTitle=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',
+   {month:'long',year:'numeric',timeZone:'UTC'}),
+  posted=model.records(state()).filter(r=>r.date&&r.date<=asOf),
+  settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(posted),
+  current=posted.filter(r=>r.date.startsWith(month)),
+  spendingCents=current.reduce((total,r)=>total+categorySpendingCents(r,settlements),0),
+  incomeCents=current.reduce((total,r)=>{
+   if(r.pending||r.pairedTransactionId||r.type!=='income'||
+      ['card_payment','internal_transfer'].includes(r.accountingKind))return total;
+   const cents=Math.round(Math.abs(Number(r.amount))*100);
+   return total+(Number.isSafeInteger(cents)?cents:0);
+  },0),
+  budgets=state().predictions?.categoryMonthlyBudgets||{},
+  categories=new Set(model.categories(state())),
+  budgetCents=Object.entries(budgets).reduce((sum,[name,amount])=>
+   categories.has(name)&&amount!==null&&amount!==''&&
+   Number.isFinite(Number(amount))&&Number(amount)>=0?
+    sum+Math.round(Number(amount)*100):sum,0),
+  budgetSet=Object.entries(budgets).some(([name,amount])=>
+   categories.has(name)&&amount!==null&&amount!==''&&Number.isFinite(Number(amount))&&Number(amount)>=0),
+  hasProjection=Boolean(bundle?.projection),
+  rules=new Map((state().predictions?.futureRecurringRules||[])
+   .filter(rule=>rule.kind!=='movement'&&rule.type==='expense')
+   .map(rule=>[String(rule.id),rule])),
+  future=hasProjection?futureRows(bundle,s):[],
+  // Twelve COMPLETE upcoming calendar months avoid treating the remainder of
+  // this month as a normal monthly bill amount.
+  start=new Date(month+'-01T12:00:00Z');
+ start.setUTCMonth(start.getUTCMonth()+1);
+ const periodStart=start.toISOString().slice(0,10),
+  after=new Date(start);
+ after.setUTCMonth(after.getUTCMonth()+12);
+ const periodEnd=shiftDay(after.toISOString().slice(0,10),-1),
+  forecastBills=future.filter(r=>r.kind==='event'&&r.type==='expense'&&
+   rules.has(String(r.recurringRuleId||''))),
+  fullYearBills=forecastBills.filter(r=>r.date>=periodStart&&r.date<=periodEnd),
+  billCents=fullYearBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
+  monthlyBills=hasProjection?billCents/1200:null,
+  groupBills=new Map();
+ for(const row of fullYearBills){
+  const rule=rules.get(String(row.recurringRuleId)),category=
+   model.canonicalCategory(state(),rule?.category)||'Other';
+  groupBills.set(category,(groupBills.get(category)||0)+Math.round(Number(row.amount)*100||0));
+ }
+ const billCategories=[...groupBills].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),
+  spendCategories=new Map();
+ for(const row of current){
+  const cents=categorySpendingCents(row,settlements);
+  if(!cents)continue;
+  const category=model.canonicalCategory(state(),row.category)||'Other';
+  spendCategories.set(category,(spendCategories.get(category)||0)+cents);
+ }
+ const topSpending=[...spendCategories].filter(([,cents])=>cents>0)
+  .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,5),
+  lastDay=shiftDay(asOf,30),
+  upcoming=forecastBills.filter(r=>r.date<=lastDay).slice(0,5),
+  metric=(label,value,note,attr)=>'<div class="financial-recap-metric"'+
+   (attr?' data-recap-'+attr:'')+'><span>'+escapeHTML(label)+'</span>'+
+   '<strong>'+escapeHTML(value)+'</strong><small>'+escapeHTML(note)+'</small></div>',
+  breakdown=(items,average,empty)=>items.length?
+   '<div class="financial-recap-rows">'+items.map(([name,cents])=>
+    '<div class="financial-recap-row"><span>'+escapeHTML(categoryLabel(name))+'</span>'+
+    '<strong>'+cash(cents/(average?1200:100))+'</strong></div>').join('')+'</div>':
+   '<p class="financial-recap-empty">'+escapeHTML(empty)+'</p>';
+ return '<div class="planner-page financial-recap-page" data-financial-recap>'+
+  '<header class="financial-recap-header"><div><h2>Summary</h2>'+
+  '<p>'+escapeHTML(monthTitle)+' · posted activity through '+escapeHTML(dateLong(asOf))+
+  '</p></div><span class="financial-recap-readonly">Read-only</span></header>'+
+  '<div class="financial-recap-metrics">'+
+   metric('Total monthly bills',monthlyBills===null?'Unavailable':cash(monthlyBills),
+    '12-month average of saved recurring bills','bills')+
+   metric('Spent this month',cash(spendingCents/100),
+    'Posted purchases less refunds','spent')+
+   metric('Income this month',cash(incomeCents/100),
+    'Posted deposits, excluding transfers','income')+
+   metric('Monthly budget',budgetSet?cash(budgetCents/100):'Not set',
+    budgetSet?Math.round(budgetCents?spendingCents/budgetCents*100:0)+'% used this month':
+    'Targets are set on Budget','budget')+
+  '</div>'+
+  '<div class="financial-recap-sections">'+
+   '<section class="financial-recap-card"><h3>Recurring bills by category</h3>'+
+    '<p>Estimated monthly equivalent · next 12 complete months</p>'+
+    (hasProjection?breakdown(billCategories,true,
+     'No saved recurring expenses are forecast for the next 12 months.'):
+     '<p class="financial-recap-empty">Bill forecasts are unavailable until the Calendar projection is ready.</p>')+
+    '<small class="financial-recap-note">Includes bills charged to credit cards. Excludes card repayments, transfers and unsaved automatic estimates. Individual changes and skips are reflected.</small></section>'+
+   '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
+    '<p>Posted this month · net of refunds</p>'+
+    breakdown(topSpending,false,'No posted purchases this month.')+
+    '<small class="financial-recap-note">Uses the same spending rules as Budget, across all connected accounts.</small></section>'+
+   '<section class="financial-recap-card financial-recap-upcoming"><h3>Next recurring bills</h3>'+
+    '<p>Up to five saved bill forecasts in the next 30 days</p>'+
+    (hasProjection?(upcoming.length?'<div class="financial-recap-rows">'+
+      upcoming.map(r=>'<div class="financial-recap-row"><span><strong>'+
+       escapeHTML(r.merchant)+'</strong><small>'+escapeHTML(dayLabel(r.date))+
+       '</small></span><strong>'+cash(r.amount)+'</strong></div>').join('')+
+      '</div>':'<p class="financial-recap-empty">No saved bill predictions in the next 30 days.</p>'):
+     '<p class="financial-recap-empty">Future bills are unavailable until the forecast is ready.</p>')+
+    '<small class="financial-recap-note">These are predictions, not confirmed posted withdrawals. Credit-card repayment is excluded.</small></section>'+
+  '</div></div>';
+}
+
 function historySelectionKey(account,id){return JSON.stringify([String(account),String(id)])}
 function historySignedCents(t){
  const incoming=['income','refund'].includes(t.type)||
@@ -2488,7 +2595,7 @@ function render(){
  try{bundle=forecastFor(s)}catch(e){error=String(e.message||e)}
  // Actual bank history must remain usable even if the separate future
  // balance projection cannot be calculated or needs a repaired account.
- if(!bundle&&['history','reviews'].includes(activeTab)){
+ if(!bundle&&['history','reviews','recap'].includes(activeTab)){
   try{
    const rows=model.records(state()),accounts=activeAccounts(s),asOf=s.asOf||dateToday();
    const candidates=window.HouseholdFutureLedger.analyze(
@@ -2564,6 +2671,7 @@ function render(){
  const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
   activeTab==='history'?historyPage(bundle,s):
+  activeTab==='recap'?financialRecapPage(bundle,s):
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
   activeTab==='transactions'?transactionsPage(bundle,s):
