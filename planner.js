@@ -2393,8 +2393,9 @@ document.addEventListener('click',async e=>{
   const id=scheduleEdit.dataset.scheduleEdit;
   const same=scheduleMode==='edit'&&scheduleTarget===id;
   scheduleRemoveTarget='';scheduleNotice='';
-  scheduleMode=same?'':'edit';scheduleTarget=same?'':id;
-  transactionDetail=null;render();return;
+  scheduleMode='';scheduleTarget='';
+  if(!openSchedulePlan(id,'',scheduleEdit))setNotice('That payment plan changed.');
+  return;
  }
  const removeWindow=e.target.closest?.('[data-schedule-remove-estimate]');
  if(removeWindow){
@@ -2721,7 +2722,7 @@ document.addEventListener('click',async e=>{
   if(recurringDraft?.reviewRowKey===candidate.key&&
     String(recurringDraft.reviewLegacyKey||'')===legacyKey){
    if(reviewFormDirty()&&!window.confirm('Discard unsaved prediction changes?'))return;
-   recurringDraft=null;reviewNotice='';render();return;
+   recurringDraft=null;transactionDetail=null;reviewNotice='';render();return;
   }
   if(reviewFormDirty()&&!window.confirm('Discard unsaved prediction changes?'))return;
   const legacyMatch=legacyKey||null,
@@ -2749,8 +2750,9 @@ document.addEventListener('click',async e=>{
     examples:legacy?(legacy.historicalIds||[]).map(String):draft.examples||[],
     reviewRowKey:candidate.key,reviewLegacyKey:legacyKey};
    reviewNotice='';
+   transactionDetail={kind:'suggestion',key:candidate.key};
    render();
-   document.querySelector('.reviews-page [data-review-inline-detail] [name=merchant]')?.focus();
+   document.querySelector('.transaction-detail [name=merchant]')?.focus();
   }catch(error){setNotice(String(error.message||error))}
   return;
  }
@@ -2839,6 +2841,10 @@ document.addEventListener('click',async e=>{
   return;
  }
  if(e.target.closest('[data-show-new]')){
+  if(typeof $('planner-main')?.insertAdjacentHTML==='function'){
+   transactionDetail={kind:'new-payment',preset:{accountId:selected(snapshot())?.id}};
+   drawTransactionDetail(forecastFor(snapshot()),snapshot());return;
+  }
   showNewTransaction=true;mortgageDraft=null;editingKey='';transactionNotice='';render();
   $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});return;
  }
