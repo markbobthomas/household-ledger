@@ -561,6 +561,25 @@ const {chromium,webkit}=require('playwright');
     'The average is not displayed in the budget overview');
    assert.equal(await page.locator('.history-category-layout').count(),0,
     'Budget category columns are no longer constrained by a chart layout');
+   assert.equal(await page.locator('.history-view-toolbar [data-history-month-toggle]').count(),0,
+    'Budget month picker no longer occupies the navigation row');
+   assert.equal(await page.locator('.history-budget-month-field [data-history-month-toggle]').count(),1,
+    'Budget month picker shares the account filter row');
+   const accountAndMonths=await page.evaluate(()=>{
+    const account=document.querySelector('.history-budget-filters [name="historyAccount"]').getBoundingClientRect(),
+     month=document.querySelector('.history-budget-filters .history-month-trigger').getBoundingClientRect(),
+     form=document.querySelector('.history-budget-filters').getBoundingClientRect();
+    return {accountTop:account.top,monthTop:month.top,accountRight:account.right,
+     monthLeft:month.left,monthRight:month.right,formRight:form.right};
+   });
+   assert.ok(Math.abs(accountAndMonths.accountTop-accountAndMonths.monthTop)<5&&
+    accountAndMonths.accountRight<accountAndMonths.monthLeft&&
+    accountAndMonths.monthRight<=accountAndMonths.formRight,
+    'Account and Months stay on one horizontal filter row: '+JSON.stringify(accountAndMonths));
+   await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
+   assert.ok(await page.locator('[data-history-month-option][value="2026-09"]').count()>0,
+    'Earlier complete calendar months are available for historical Budget review');
+   await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
    let expectedBudgetOrder=await page.locator('.history-category-item')
     .evaluateAll(items=>items.map(item=>item.dataset.historyCategoryRow));
    assert.deepEqual(expectedBudgetOrder,[...expectedBudgetOrder].sort((a,b)=>a.localeCompare(b)),
@@ -682,6 +701,12 @@ const {chromium,webkit}=require('playwright');
      'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===.01,categoryName);
     await assertBudgetSorted();
     assert.equal(await budgetRow.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'over');
+    const overageColor=await budgetRow.locator('.history-category-actual').evaluate(el=>({
+     over:el.classList.contains('over'),color:getComputedStyle(el).color
+    }));
+    assert.equal(overageColor.over,true,'Over-budget spent amount receives its own overage state');
+    assert.equal(overageColor.color,'rgb(196, 123, 49)',
+     'The over-budget dollar amount itself turns orange');
     assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
      'The over-budget fill caps at its full track width');
     await checkOverall(3);
@@ -766,6 +791,7 @@ const {chromium,webkit}=require('playwright');
       amountCenterY:(actual.top+actual.bottom)/2,
       targetHeaderRight:headings[3].right,spentHeaderRight:headings[2].right,
       inputTextAlign:getComputedStyle(row.querySelector('.history-budget-input input')).textAlign,
+      barCenterY:(bar.top+bar.bottom)/2,barHeight:bar.height,
       viewport:document.documentElement.scrollWidth};
     });
     assert.ok(dimensions.nameRight<=dimensions.barLeft+2&&
@@ -774,6 +800,10 @@ const {chromium,webkit}=require('playwright');
      'The progress bar stays between name and amounts: '+JSON.stringify(dimensions));
     assert.ok(dimensions.barWidth>=20&&dimensions.viewport<=width+3,
      'Budget row does not overflow at '+width+'px: '+JSON.stringify(dimensions));
+    assert.ok(dimensions.barHeight>=(width<=650?15:18)&&
+     Math.abs(dimensions.barCenterY-dimensions.amountCenterY)<=3,
+     'The thicker progress bar is vertically centered on the first-line amount at '+
+      width+': '+JSON.stringify(dimensions));
     assert.ok(Math.abs(dimensions.budgetRight-dimensions.inputRight)<=2&&
      Math.abs(dimensions.budgetRight-dimensions.targetHeaderRight)<=2,
      'Budget input and column heading share the exact right edge at '+width+': '+JSON.stringify(dimensions));
