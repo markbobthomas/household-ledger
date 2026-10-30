@@ -123,7 +123,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('#planner-menu [data-view="recap"]').count(),0,
     'Summary is no longer hidden inside More');
    // Bigger, readable type on desktop, with proportionate mobile type.
-   // Keep the same Budget columns and editable amount alignment.
+   // Compare actual spending at the endpoint of the progress track, with one editable target.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    const budgetType=await page.evaluate(()=>{
     const root=document.querySelector('[data-history-category-insights]'),
@@ -153,8 +153,8 @@ const {chromium,webkit}=require('playwright');
      'Desktop text and Budget table headings are enlarged');
     assert.ok(budgetType.count>=12,'Desktop category transaction counts are readable');
    }
-   assert.ok(budgetType.rowWidth>0&&budgetType.targetLeft>=budgetType.amountRight-1,
-    'Larger numbers must not overlap the editable monthly target');
+   assert.ok(budgetType.rowWidth>0,
+    'The simplified Budget rows remain visible with readable actual and target values');
    assert.ok(budgetType.scrollWidth<=budgetType.viewport+1,
     'Larger Budget type must not create horizontal page overflow');
    await page.locator('[data-history-view="summary"]').click();
@@ -569,13 +569,20 @@ const {chromium,webkit}=require('playwright');
     const account=document.querySelector('.history-budget-filters [name="historyAccount"]').getBoundingClientRect(),
      month=document.querySelector('.history-budget-filters .history-month-trigger').getBoundingClientRect(),
      form=document.querySelector('.history-budget-filters').getBoundingClientRect();
-    return {accountTop:account.top,monthTop:month.top,accountRight:account.right,
-     monthLeft:month.left,monthRight:month.right,formRight:form.right};
+    const accountLabel=document.querySelector('.history-budget-filters>label:has([name="historyAccount"])').getBoundingClientRect(),
+     monthLabel=document.querySelector('.history-budget-month-field>span').getBoundingClientRect();
+    return {accountTop:account.top,monthTop:month.top,accountBottom:account.bottom,
+     monthBottom:month.bottom,accountHeight:account.height,monthHeight:month.height,
+     accountLabelTop:accountLabel.top,monthLabelTop:monthLabel.top,
+     accountRight:account.right,monthLeft:month.left,monthRight:month.right,formRight:form.right};
    });
-   assert.ok(Math.abs(accountAndMonths.accountTop-accountAndMonths.monthTop)<5&&
-    accountAndMonths.accountRight<accountAndMonths.monthLeft&&
+   assert.ok(Math.abs(accountAndMonths.accountTop-accountAndMonths.monthTop)<=2&&
+    Math.abs(accountAndMonths.accountBottom-accountAndMonths.monthBottom)<=2&&
+    Math.abs(accountAndMonths.accountLabelTop-accountAndMonths.monthLabelTop)<=2&&
+    Math.abs(accountAndMonths.accountHeight-accountAndMonths.monthHeight)<=1&&
+    accountAndMonths.accountRight<=accountAndMonths.monthLeft&&
     accountAndMonths.monthRight<=accountAndMonths.formRight,
-    'Account and Months stay on one horizontal filter row: '+JSON.stringify(accountAndMonths));
+    'Account and Months labels/dropdowns must align precisely in one row: '+JSON.stringify(accountAndMonths));
    await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
    assert.ok(await page.locator('[data-history-month-option][value="2026-09"]').count()>0,
     'Earlier complete calendar months are available for historical Budget review');
@@ -598,14 +605,18 @@ const {chromium,webkit}=require('playwright');
      track=bounds(row.querySelector('.history-budget-track')),
      amount=bounds(row.querySelector('.history-category-actual')),
      label=bounds(row.querySelector('.history-category-label-cell'));
-    return {trackWidth:track.width,trackRight:track.right,amountLeft:amount.left,
-     labelRight:label.right};
+    return {trackWidth:track.width,trackLeft:track.left,trackRight:track.right,
+     amountLeft:amount.left,amountRight:amount.right,labelRight:label.right,
+     trackTop:track.top,labelBottom:label.bottom};
    });
-   assert.ok(budgetGrid.trackWidth>(mobile?6:100),
-    'The progress track stretches across the flexible space between name and amount');
-   assert.ok(budgetGrid.trackRight<=budgetGrid.amountLeft&&
-    budgetGrid.amountLeft-budgetGrid.trackRight<(mobile?45:80),
-    'The progress track ends immediately beside the spent amount');
+   assert.ok(budgetGrid.trackWidth>(mobile?100:200),
+    'The combined progress-and-actual column leaves room for a wide bar');
+   assert.ok(budgetGrid.amountLeft>=budgetGrid.trackLeft-1&&
+    budgetGrid.amountRight<=budgetGrid.trackRight+1,
+    'Actual dollars sit inside the progress-track bounds instead of crowding the target');
+   assert.ok(mobile?budgetGrid.trackTop>=budgetGrid.labelBottom:
+    budgetGrid.labelRight<=budgetGrid.trackLeft+2,
+    'The phone layout places the bar below the category; desktop keeps it beside it');
    const checkOverall=async months=>{
     const rows=await page.locator('.history-category-item').evaluateAll(items=>
      items.map(item=>({
@@ -640,6 +651,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await budgetCategory.locator('[data-history-budget]').count(),1,
     'Actual spending has an immediately adjacent editable monthly budget');
    assert.equal(await page.locator('.history-category-columns').innerText().then(x=>x.includes('Budget / month')),true);
+   assert.equal(await page.locator('.history-category-columns span').count(),3,
+    'Budget has three column headings, not separate spent and bar columns');
+   assert.equal(await budgetCategory.locator('[data-budget-marker]').count(),1,
+    'Actual spending is represented once, attached to the bar endpoint');
+   assert.equal(await budgetCategory.locator('.history-budget-difference').count(),0,
+    'Redundant per-category remaining-dollar captions do not crowd the target');
    await budgetCategory.locator('[data-history-budget]').fill('275.50');
    await budgetCategory.locator('[data-history-budget]').press('Tab');
    await page.waitForFunction(category=>{
@@ -784,34 +801,41 @@ const {chromium,webkit}=require('playwright');
       actual=rect('.history-category-actual'),budget=rect('.history-category-budget'),
       input=rect('.history-budget-input'),
       headings=[...document.querySelectorAll('.history-category-columns span')]
-       .map(x=>x.getBoundingClientRect());
-     return {nameRight:name.right,barLeft:bar.left,barRight:bar.right,barWidth:bar.width,
-      actualLeft:actual.left,actualRight:actual.right,budgetLeft:budget.left,
-      budgetRight:budget.right,inputRight:input.right,inputCenterY:(input.top+input.bottom)/2,
-      amountCenterY:(actual.top+actual.bottom)/2,
-      targetHeaderRight:headings[3].right,spentHeaderRight:headings[2].right,
+       .map(x=>x.getBoundingClientRect()),
+      percent=Number.parseFloat(getComputedStyle(row.querySelector('[data-history-budget-bar]'))
+       .getPropertyValue('--budget-used'))/100,
+      markerCenter=(actual.left+actual.right)/2,
+      expectedCenter=bar.left+Math.min(Math.max(percent*bar.width,
+       width<=650?41:43),bar.width-(width<=650?41:43));
+     return {nameRight:name.right,nameBottom:name.bottom,
+      barLeft:bar.left,barTop:bar.top,barRight:bar.right,barWidth:bar.width,
+      actualLeft:actual.left,actualRight:actual.right,
+      actualTop:actual.top,barBottom:bar.bottom,
+      budgetLeft:budget.left,budgetRight:budget.right,
+      inputRight:input.right,targetHeaderRight:headings[2].right,
       inputTextAlign:getComputedStyle(row.querySelector('.history-budget-input input')).textAlign,
-      barCenterY:(bar.top+bar.bottom)/2,barHeight:bar.height,
+      barHeight:bar.height,markerCenter,expectedCenter,
       viewport:document.documentElement.scrollWidth};
     });
-    assert.ok(dimensions.nameRight<=dimensions.barLeft+2&&
-     dimensions.barRight<=dimensions.actualLeft+2&&
-     dimensions.actualRight<=dimensions.budgetLeft+2,
-     'The progress bar stays between name and amounts: '+JSON.stringify(dimensions));
-    assert.ok(dimensions.barWidth>=20&&dimensions.viewport<=width+3,
-     'Budget row does not overflow at '+width+'px: '+JSON.stringify(dimensions));
+    assert.ok(dimensions.barWidth>=(width<=650?100:200)&&dimensions.viewport<=width+3,
+     'Responsive Budget progress bar remains wide and does not overflow at '+
+      width+'px: '+JSON.stringify(dimensions));
     assert.ok(dimensions.barHeight>=(width<=650?15:18)&&
-     Math.abs(dimensions.barCenterY-dimensions.amountCenterY)<=3,
-     'The thicker progress bar is vertically centered on the first-line amount at '+
-      width+': '+JSON.stringify(dimensions));
+     dimensions.actualTop>=dimensions.barBottom&&
+     Math.abs(dimensions.markerCenter-dimensions.expectedCenter)<=2,
+     'Spent dollars follow the actual fill endpoint at '+width+': '+JSON.stringify(dimensions));
+    assert.ok(dimensions.actualLeft>=dimensions.barLeft-1&&
+     dimensions.actualRight<=dimensions.barRight+1,
+     'Endpoint dollars do not overflow the bar column at '+width+': '+JSON.stringify(dimensions));
+    assert.ok(width<=650?dimensions.barTop>=dimensions.nameBottom:
+     dimensions.nameRight<=dimensions.barLeft+2,
+     'Responsive Budget structure has uncluttered rows at '+width+': '+JSON.stringify(dimensions));
     assert.ok(Math.abs(dimensions.budgetRight-dimensions.inputRight)<=2&&
      Math.abs(dimensions.budgetRight-dimensions.targetHeaderRight)<=2,
-     'Budget input and column heading share the exact right edge at '+width+': '+JSON.stringify(dimensions));
-    assert.ok(Math.abs(dimensions.actualRight-dimensions.spentHeaderRight)<=2&&
-     Math.abs(dimensions.amountCenterY-dimensions.inputCenterY)<=4,
-     'Spent and budget amounts align in the same horizontal row at '+width+': '+JSON.stringify(dimensions));
+     'The editable monthly target and heading align at '+width+': '+JSON.stringify(dimensions));
     assert.equal(dimensions.inputTextAlign,'right',
-     'Editable budget values line up numerically with the Spent amounts');
+     'Editable budget values remain right-aligned and easy to scan');
+
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await chooseAllMonths(page);
