@@ -4594,3 +4594,64 @@ a:hover{color:#166e61}
 .history-page .history-insights-head{margin-bottom:13px}
 .history-page .history-merchant-overview{margin-top:0}
 .reviews-page .review-intro{align-items:center}
+
+/* Readability pass: let budget labels and numbers lead, especially on desktop.
+   Preserve the existing 4-column grid and the narrow-screen breakpoints. */
+@media(min-width:851px){
+ body{font-size:15px}
+ .main-navigation .tab-link{font-size:15px}
+ .history-page .spending-tabs .history-subtab{font-size:15px}
+ .history-page .history-month-trigger strong{font-size:14px}
+ .history-page .history-month-trigger>span:first-child{font-size:12px}
+ .history-page .history-spending-overview strong{font-size:24px}
+ .history-page .history-spending-overview span{font-size:14px}
+ .history-page .history-budget-summary-head>span{font-size:14px}
+ .history-page .history-budget-summary-head>strong{font-size:24px}
+ .history-page .history-budget-summary-head small{font-size:13px}
+ .history-page .history-category-columns{font-size:12px}
+ .history-page .history-category-item{padding-block:12px}
+ .history-page .history-category-name{
+  font-size:18px;line-height:1.25;font-weight:760;
+ }
+ .history-page .history-category-name small{
+  font-size:12px;line-height:1.35;font-weight:550;
+ }
+ .history-page .history-category-actual{font-size:16px}
+ .history-page .history-budget-input input{font-size:15px}
+ .history-page .history-category-item .history-budget-difference{
+  font-size:12px;line-height:1.35;
+ }
+ .history-page .history-merchant-name{font-size:15px}
+ .history-page .history-merchant-amount{font-size:15px}
+ .history-page .history-merchant-count{font-size:12px}
+ .history-page .history-size-name{font-size:15px}
+ .history-page .history-size-row>strong{font-size:15px}
+ .history-page .history-size-count{font-size:12px}
+ .history-page .financial-recap-row{font-size:14px}
+ .history-page .financial-recap-row>strong{font-size:15px}
+ .history-page .financial-recap-card h3{font-size:17px}
+ .schedule-page .ledger-row-description strong,
+ .history-page .ledger-row-description strong{font-size:15px}
+ .bills-upcoming-description strong{font-size:15px}
+ .bills-upcoming-row>strong{font-size:16px}
+}
+@media(min-width:651px) and (max-width:850px){
+ .history-page .history-category-columns{font-size:11px}
+ .history-page .history-category-name{font-size:16px;line-height:1.3}
+ .history-page .history-category-name small{font-size:11px}
+ .history-page .history-category-actual{font-size:14px}
+ .history-page .history-budget-input input{font-size:14px}
+ .history-page .history-category-item .history-budget-difference{font-size:11px}
+}
+@media(max-width:650px){
+ .history-page .history-category-name{font-size:13px;line-height:1.3}
+ .history-page .history-category-name small{font-size:10.5px;line-height:1.3}
+ .history-page .history-category-actual{font-size:12px}
+ .history-page .history-budget-input input{font-size:12px}
+ .history-page .history-category-item .history-budget-difference{font-size:10px}
+}
+@media(max-width:380px){
+ .history-page .history-category-name{font-size:12px}
+ .history-page .history-category-name small{font-size:10px}
+ .history-page .history-budget-input input{font-size:11px}
+}
