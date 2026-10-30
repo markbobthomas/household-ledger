@@ -4599,7 +4599,7 @@ a:hover{color:#166e61}
    Preserve the existing 4-column grid and the narrow-screen breakpoints. */
 @media(min-width:851px){
  body{font-size:15px}
- .main-navigation .tab-link{font-size:15px}
+ .main-navigation .tab-link{font-size:15px!important}
  .history-page .spending-tabs .history-subtab{font-size:15px}
  .history-page .history-month-trigger strong{font-size:14px}
  .history-page .history-month-trigger>span:first-child{font-size:12px}
