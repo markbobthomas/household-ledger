@@ -1740,16 +1740,21 @@ function historyInsights(rows,view,options={}){
 }
 
 // One shared checkbox picker keeps calendar-month selections consistent across reports.
-function spendingMonthPicker(records,asOf){
+function spendingMonthPicker(records,asOf,includeUpcoming=false){
  // Each checked item is one whole calendar month; selection need not be consecutive.
  const currentMonth=asOf.slice(0,7),
   earliestMonth=records.reduce((first,row)=>row.date.slice(0,7)<first?row.date.slice(0,7):first,currentMonth),
-  availableMonths=[];
- // The same month selector must also reach upcoming predicted bills. Show
- // today, the next twelve calendar months, then available historical months.
- for(let i=0,d=new Date(currentMonth+'-01T12:00:00Z');i<=12;i++,d.setUTCMonth(d.getUTCMonth()+1))
+  availableMonths=[],
+  monthIndex=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7)),
+  // Summary offers twelve upcoming months; other Spending views show history
+  // by default but retain future months already selected on Summary.
+  futureCount=includeUpcoming?12:Math.max(0,...[...(historySelectedMonths||[])]
+   .map(m=>monthIndex(m)-monthIndex(currentMonth)));
+ for(let i=0,d=new Date(currentMonth+'-01T12:00:00Z');i<=futureCount;i++,d.setUTCMonth(d.getUTCMonth()+1))
   availableMonths.push(d.toISOString().slice(0,7));
- for(let d=new Date(currentMonth+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()-1),d.toISOString().slice(0,7)>=earliestMonth;)
+ const past=new Date(currentMonth+'-01T12:00:00Z');
+ past.setUTCMonth(past.getUTCMonth()-1);
+ for(let d=past;d.toISOString().slice(0,7)>=earliestMonth;d.setUTCMonth(d.getUTCMonth()-1))
   availableMonths.push(d.toISOString().slice(0,7));
  if(!historySelectedMonths)historySelectedMonths=new Set([currentMonth]);
  const availableSet=new Set(availableMonths);
@@ -1784,7 +1789,7 @@ function spendingMonthPicker(records,asOf){
 function financialRecapPage(bundle,s){
  const asOf=String(s.asOf||dateToday()),month=asOf.slice(0,7),
   posted=model.records(state()).filter(r=>r.date&&r.date<=asOf),
-  picker=spendingMonthPicker(posted,asOf),
+  picker=spendingMonthPicker(posted,asOf,true),
   selectedMonths=historySelectedMonths,
   periodLabel=picker.label,
   settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(posted),
