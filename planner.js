@@ -795,6 +795,16 @@ function detailHtml(bundle,s){
   if(!row)return detailShell('Bank transaction unavailable','This bank record could not be found.',
    '<p>No changes were made.</p>','BANK HISTORY');
   const account=activeAccounts(s).find(a=>String(a.id)===transactionDetail.account);
+  const resolved=model.records(state()).find(t=>String(t.id)===String(row.id)&&
+   window.HouseholdPlannerHistory.accountOf(t,activeAccounts(s))===transactionDetail.account),
+   assigned=model.canonicalCategory(state(),resolved?.category||row.category)||'Other',
+   selectCategories=categoryOptionsWithOther(model.categories(state())),
+   categoryEditor='<label class="transaction-actual-category">Category'+
+    '<select data-actual-transaction-category="'+escapeHTML(String(row.id))+'" '+
+     'aria-label="Category for '+escapeHTML(row.merchant||'Bank transaction')+'">'+
+     selectCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
+      (c===assigned?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
+    '</select><small data-actual-category-status role="status"></small></label>';
   const summary='<div class="transaction-detail-info">'+
    '<div><span>Bank date</span><strong>'+escapeHTML(dayLabel(row.date))+'</strong></div>'+
    '<div><span>Account</span><strong>'+escapeHTML(account?.name||transactionDetail.account)+'</strong></div>'+
@@ -803,7 +813,7 @@ function detailHtml(bundle,s){
    '<p class="transaction-detail-help">This is an actual bank record. Its amount, date and classification are read-only. To predict future occurrences, save a separate prediction below.</p>';
   return detailShell(row.merchant||'Bank transaction',
    'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
-   summary+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
+   summary+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
     (recurringDraft?repeatingReviewForm(s):'<p>Unable to create a prediction from this transaction.</p>'),
    'ACTUAL · BANK-RECORDED');
  }
@@ -2434,6 +2444,49 @@ function updateReviewTabCount(queue){
  const tab=badge.closest('[data-view="reviews"]');
  if(tab)tab.classList.toggle('has-review-items',count>0);
 }
+function openReviewCategoryTransaction(button){
+ const s=snapshot(),accounts=activeAccounts(s),bundle=forecastFor(s),
+  id=String(button.dataset.reviewBankId||''),requested=String(button.dataset.reviewBankAccount||''),
+  records=lastHistoryRows.length?lastHistoryRows:model.records(state()),
+  matches=records.filter(row=>String(row.id)===id),
+  bank=matches.find(row=>window.HouseholdPlannerHistory.accountOf(row,accounts)===requested)||
+   (matches.length===1?matches[0]:null);
+ if(!bank){setNotice('That transaction changed. Refresh Things to check.');return;}
+ const account=window.HouseholdPlannerHistory.accountOf(bank,accounts);
+ if(!account){setNotice('That transaction account is unavailable.');return;}
+ // The same actual-bank detail panel as Transactions. Read-only bank facts;
+ // category confirmation, personal note and recurring plan remain separate.
+ recurringDraft=null;
+ const linked=window.HouseholdPlannerTransactions.historicalScheduleMatches(
+  bank,accounts,state().predictions?.futureRecurringRules||[]);
+ if(!linked.length&&window.HouseholdPlannerHistory.canPlan(bank)){
+  try{
+   const draft=window.HouseholdPlannerHistory.draftFor(
+    bank,records,accounts,s.asOf);
+   recurringDraft={...draft,historyRowId:id,category:bank.category};
+  }catch(_error){recurringDraft=null}
+ }
+ detailReturnFocus=button;
+ transactionDetail={kind:'actual',id,account};
+ drawTransactionDetail(bundle,s);
+ document.querySelector('.transaction-detail-close')?.focus();
+}
+function openReviewCategoryPlan(button){
+ const id=String(button.dataset.reviewPlanId||''),kind=button.dataset.reviewPlanKind;
+ if(kind==='schedule'){
+  if(!openSchedulePlan(id,'',button))setNotice('That saved bill changed. Refresh Things to check.');
+  return;
+ }
+ const snap=snapshot(),bundle=forecastFor(snap),
+  matches=futureRows(bundle,snap).filter(row=>
+   String(row.addedId||'')===id||String(row.id||'')===id);
+ if(matches.length===1){
+  openPrediction(matches[0].key,button);return;
+ }
+ // Non-occurrence plan definitions can still be categorized using the
+ // existing one-click selector; do not fabricate a future transaction.
+ setNotice('This payment does not have a single editable occurrence. Use its Category selector.');
+}
 // Sort review presentation only; never touch bank records or predictions.
 function sortedReviewRows(items,dateOf,nameOf,amountOf){
  const date=row=>String(dateOf(row)||''),
@@ -2524,11 +2577,18 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    item=>item.merchant,item=>item.amount).slice(0,categoryReviewLimit),
   categoryRow=item=>{
    const label=item.isPlan?'Bill':'Transaction';
+   const openAttrs=item.isPlan?
+    ' data-review-plan-kind="'+escapeHTML(item.kind)+'" data-review-plan-id="'+escapeHTML(item.id)+'"':
+    ' data-review-bank-id="'+escapeHTML(item.id)+'" data-review-bank-account="'+escapeHTML(item.accountId||'')+'"';
    return '<div class="category-review-row" data-category-review-form data-review-order-date="'+escapeHTML(item.date||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
-    '<div class="category-review-info"><strong>'+escapeHTML(item.merchant)+'</strong>'+
-    '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
-    ' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></div>'+
+    '<button type="button" class="category-review-info category-review-open"'+openAttrs+
+     ' aria-label="Open '+escapeHTML(label.toLowerCase())+' details for '+escapeHTML(item.merchant)+'">'+
+     '<strong>'+escapeHTML(item.merchant)+'</strong>'+
+     (item.isPlan?'':transactionNote(bankNoteKey(item.accountId||'',item.id))?
+       '<small class="transaction-note-subtitle">'+escapeHTML(transactionNote(bankNoteKey(item.accountId||'',item.id)))+'</small>':'')+
+     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
+     ' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></button>'+
     '<label>Category<select name="category" aria-label="Category for '+
      escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
     '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
@@ -2937,6 +2997,12 @@ document.addEventListener('click',async e=>{
  detailReturnFocus=trigger;
  drawTransactionDetail(forecastFor(snapshot()),snapshot());
  document.querySelector('.transaction-detail [name=note]')?.focus();
+});
+document.addEventListener('click',e=>{
+ const bank=e.target.closest?.('[data-review-bank-id]');
+ if(bank){openReviewCategoryTransaction(bank);return}
+ const plan=e.target.closest?.('[data-review-plan-kind]');
+ if(plan){openReviewCategoryPlan(plan);return}
 });
 document.addEventListener('click',async e=>{
  const monthToggle=e.target.closest?.('[data-history-month-toggle]');
@@ -3894,6 +3960,25 @@ async function saveTransactionCategory(id,category,confirm=false){
 }
 // Selecting a category is explicit approval. The category issue remains
 // visible until its private bank override or forecast edit has been saved.
+document.addEventListener('change',async e=>{
+ const select=e.target.closest?.('[data-actual-transaction-category]');
+ if(!select)return;
+ const id=select.dataset.actualTransactionCategory,
+  status=select.closest('.transaction-actual-category')?.querySelector('[data-actual-category-status]'),
+  chosen=model.canonicalCategory(state(),select.value);
+ if(!chosen){if(status)status.textContent='Choose a valid category';return}
+ select.disabled=true;
+ if(status)status.textContent='Saving…';
+ try{
+  await saveTransactionCategory(id,chosen,true);
+  reviewNotice='Category saved.';
+  render();
+ }catch(error){
+  select.disabled=false;
+  if(status){status.textContent='Could not save: '+String(error.message||error);
+   status.setAttribute('role','alert')}
+ }
+});
 document.addEventListener('change',async e=>{
  const select=e.target;
  if(!select.matches?.('[data-category-review-form] select[name="category"]'))return;
