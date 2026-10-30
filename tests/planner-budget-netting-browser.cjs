@@ -64,6 +64,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
         {id:'fictional-energy',kind:'event',type:'expense',accountId:'demo-checking',
          frequency:'monthly',anchorDate:'2026-10-04',date:'2026-10-04',
          merchant:'Puget Sound Energy',amount:106.70,category:'Utilities'},
+        {id:'fictional-zelle-childcare',kind:'event',type:'transfer',
+         cashDirection:'out',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-08',date:'2026-10-08',
+         merchant:'Fictional Zelle Childcare',amount:125,category:'Kids & Family'},
         {id:'fictional-visa-sub',kind:'event',type:'expense',accountId:'demo-visa',
          frequency:'monthly',anchorDate:'2026-10-05',date:'2026-10-05',
          merchant:'Fictional Visa Subscription',amount:25,category:'Subscriptions'}
@@ -96,6 +100,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
         'Fictional Unscheduled Card Shopping',50,'Subscriptions','expense','demo-visa',50),
        extra('ui-incidental-checking-bill','2026-10-07',
         'Fictional Unscheduled Utility',99,'Utilities','expense','demo-checking',99),
+       {...extra('ui-confirmed-zelle','2026-10-08','Fictional Zelle Childcare',
+         125,'Kids & Family','transfer','demo-checking',125),cashDirection:'out'},
        extra('ui-card-health','2026-10-09','Fictional Clinic',100,'Health',
         'expense','demo-visa',100),
        extra('ui-card-health-refund','2026-10-13','Refund Fictional Clinic',40,'Other',
@@ -167,8 +173,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     paidMatch=octoberBreakdown.match(/Paid (\$[\d,.]+) · Upcoming (\$[\d,.]+)/);
    assert.ok(paidMatch,name+': October shows posted and remaining bills');
    const paidOctober=moneyCents(paidMatch[1]),upcomingOctober=moneyCents(paidMatch[2]);
-   assert.equal(paidOctober,360670,
-    name+': only confirmed checking mortgage/daycare/energy and card subscription count as paid bills');
+   assert.equal(paidOctober,373170,
+    name+': posted recurring cash bills, outward Zelle bill and card subscription all count');
    assert.doesNotMatch(await page.locator('.financial-recap-card').first().innerText(),
     /Fictional Unscheduled Utility/,
     name+': checking purchases do not become bills solely because their category says Utilities');
@@ -181,8 +187,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('[data-history-month-toggle]').click();
    await page.locator('[data-history-month-option][value="2026-11"]').check();
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
-   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$3,763.70',
-    name+': November includes checking mortgage, daycare, energy, one-off checking and both card charges');
+   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$3,888.70',
+    name+': November includes scheduled checking, outward Zelle and credit-card expenses');
    const billCategories=await page.locator('.financial-recap-card').first().innerText();
    assert.match(billCategories,/Subscriptions/);
    assert.match(billCategories,/\$25\.00/,
@@ -195,8 +201,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': card repayment cannot inflate monthly bill categories');
    await page.locator('[data-history-month-option][value="2026-10"]').check();
    assert.equal(moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
-    octoberBills+376370,
-    name+': two selected months add scheduled November expenses across accounts');
+    octoberBills+388870,
+    name+': two selected months add checking, Zelle and card November bill schedules');
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
    await page.locator('[data-history-month-toggle]').click();
    assert.doesNotMatch(billCategories,/Fictional Unscheduled Card Shopping/,
