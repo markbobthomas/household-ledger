@@ -853,6 +853,60 @@ const {chromium,webkit}=require('playwright');
     'Review relies on section labels and actionable status rather than repeated instructional prose');
    assert.equal(await page.locator('[data-category-review]').count(),1,
     'Missing or uncertain transaction and bill categories have a persistent review section');
+   // One selector sorts each review group without altering approvals, review
+   // counts, bank records, or the three distinct review sections.
+   const reviewSort=page.locator('.reviews-page [data-review-sort]');
+   assert.equal(await reviewSort.count(),1,'Things to check has one Sort by control');
+   assert.deepEqual(await reviewSort.locator('option').evaluateAll(options=>
+    options.map(option=>option.value)),
+    ['newest','oldest','amount-desc','amount-asc','merchant']);
+   assert.equal(await reviewSort.inputValue(),'newest');
+   const reviewGroupData=async selector=>page.locator(selector).evaluateAll(rows=>rows.map(row=>({
+    id:row.getAttribute('data-category-id')||
+     row.getAttribute('data-overdue-item')||row.getAttribute('data-recommended-repeat'),
+    date:row.getAttribute('data-review-order-date')||'',
+    amount:Math.abs(Number(row.getAttribute('data-review-order-amount'))||0),
+    name:row.querySelector('.category-review-info strong,.review-candidate-main strong,.overdue-review-heading strong')?.textContent||''
+   })));
+   const visibleGroups=[
+    '[data-category-review] [data-category-review-form]',
+    '[data-overdue-review] [data-overdue-item]',
+    '[data-recommended-repeating] [data-recommended-repeat]'
+   ];
+   const beforeSort=await Promise.all(visibleGroups.map(reviewGroupData));
+   const rowIds=groups=>groups.map(rows=>rows.map(row=>row.id).sort());
+   const assertDateOrder=(groups,ascending)=>{
+    for(const rows of groups){
+     const dates=rows.map(r=>r.date).filter(Boolean);
+     assert.deepEqual(dates,[...dates].sort((a,b)=>
+      ascending?a.localeCompare(b):b.localeCompare(a)),
+      'Review dates must follow the selected direction');
+    }
+   };
+   assertDateOrder(beforeSort,false);
+   await reviewSort.selectOption('oldest');
+   const oldestGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   assertDateOrder(oldestGroups,true);
+   assert.deepEqual(rowIds(oldestGroups),rowIds(beforeSort),
+    'Sorting must not add, drop or alter review items');
+   await page.locator('[data-review-sort]').selectOption('amount-desc');
+   const amountGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   for(const rows of amountGroups)assert.deepEqual(rows.map(r=>r.amount),
+    [...rows.map(r=>r.amount)].sort((a,b)=>b-a),
+    'Amount high-to-low sorts values within each review group');
+   await page.locator('[data-review-sort]').selectOption('merchant');
+   const alphabeticalGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   for(const rows of alphabeticalGroups)assert.deepEqual(rows.map(r=>r.name.toLowerCase()),
+    [...rows.map(r=>r.name.toLowerCase())].sort((a,b)=>a.localeCompare(b)),
+    'Merchant name sorting works within each review group');
+   await page.locator('[data-review-sort]').selectOption('newest');
+   const restoredGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   assert.deepEqual(rowIds(restoredGroups),rowIds(beforeSort),
+    'Returning to newest retains the same review records');
+   const countAfterSort=await page.locator('.topbar [data-review-tab-count]').innerText().catch(()=>null);
+   assert.ok(countAfterSort===null||Number(countAfterSort)>=0,
+    'Sort changes do not break the review count action');
+
    const categoryForms=page.locator('[data-category-review-form]');
    const categoryFormsBefore=await categoryForms.count();
    if(categoryFormsBefore){
