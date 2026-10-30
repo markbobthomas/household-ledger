@@ -139,21 +139,28 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Total monthly bills')),
     'Single-month bills are a selected-month sum, not a 12-month average');
    assert.doesNotMatch(await page.locator('[data-recap-bills]').innerText(),/12-month average/);
-   // All Summary totals use the same calendar-month checklist, while bills
-   // remain predicted cash withdrawals rather than historical purchases.
+   // Summary bills combine paid checking bills and future predicted bills
+   // for entire selected calendar months, not just the days after today.
    const recapMoney=async key=>{
     const amount=await page.locator('[data-recap-'+key+'] strong').innerText();
     return amount==='Not set'?null:Math.round(Number(amount.replace(/[^0-9.-]/g,''))*100);
    };
    const october={spent:await recapMoney('spent'),income:await recapMoney('income'),
     budget:await recapMoney('budget'),bills:await recapMoney('bills')};
+   const paidOctober=Math.round((2650+825+106.70+79.99+186.40+67.30+17.99)*100);
+   assert.ok(october.bills>=paidOctober,
+    'Full October bill total includes already-posted mortgage, childcare, utilities, insurance and subscription');
+   assert.match(await page.locator('[data-recap-bills] small').innerText(),/Paid .*Upcoming/,
+    'Summary distinguishes paid bills from future estimates without extra controls');
    assert.deepEqual(await selectedMonths(page),['2026-10'],
     'Summary initially shows the current calendar month');
    await chooseMonths(page,['2026-09']);
    const september={spent:await recapMoney('spent'),income:await recapMoney('income'),
-    budget:await recapMoney('budget')};
-   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'Not projected',
-    'Past-only selections cannot be called a $0 historical bill forecast');
+    budget:await recapMoney('budget'),bills:await recapMoney('bills')};
+   assert.ok(september.bills>0,
+    'A completed calendar month reports posted bills, not Not projected');
+   assert.ok(september.bills<september.spent,
+    'Regular bills exclude unrelated posted groceries, shopping and restaurant purchases');
    await chooseMonths(page,['2026-11']);
    const novemberBills=await recapMoney('bills');
    assert.ok(Number.isInteger(novemberBills)&&novemberBills>=0,
@@ -166,7 +173,7 @@ const {chromium,webkit}=require('playwright');
     'Selected-month bill category amounts add up to the same total');
    await chooseMonths(page,['2026-10','2026-11']);
    assert.equal(await recapMoney('bills'),october.bills+novemberBills,
-    'Two selected months sum their actual dated bill predictions, not yearly averages');
+    'Two selected months sum posted bills plus actual dated bill predictions, not yearly averages');
    assert.equal(await categoryBillCents(),october.bills+novemberBills);
    await chooseMonths(page,['2026-09','2026-10']);
    assert.deepEqual(await selectedMonths(page),['2026-09','2026-10']);
@@ -176,8 +183,10 @@ const {chromium,webkit}=require('playwright');
      assert.equal(combined,october[key]+september[key],
       'Summary '+key+' totals exactly sum selected whole calendar months');
    }
-   assert.equal(await recapMoney('bills'),october.bills,
-    'Selecting a past month does not invent forecasted bills from bank spending');
+   assert.equal(await recapMoney('bills'),october.bills+september.bills,
+    'Past plus current sums posted bills with current-month upcoming bills');
+   assert.equal(await categoryBillCents(),october.bills+september.bills,
+    'Past and upcoming bill category amounts reconcile to the full-month total');
    assert.match(await page.locator('[data-recap-spent]').innerText(),/2 months selected/);
    await page.setViewportSize({width:320,height:844});
    const summaryWidth=await page.evaluate(()=>({content:document.documentElement.scrollWidth,viewport:innerWidth}));

@@ -493,6 +493,46 @@ function forecastCashBills(bundle,s,accountId=''){
    (!accountId||String(row.accountId)===String(accountId));
  }).map(row=>({...row,cardBill:row.kind==='movement'}));
 }
+// Historical bills are a read-only report of POSTED checking debits. The
+// future cash-bill ledger only covers dates after asOf; combine the two for a
+// full selected calendar month without reclassifying shopping as a bill.
+function postedCashBills(posted,s,settlements){
+ const accounts=activeAccounts(s),byId=new Map(accounts.map(a=>[String(a.id),a])),
+  byTransaction=new Map(posted.map(r=>[String(r.id),r])),
+  rules=state().predictions?.futureRecurringRules||[],
+  T=window.HouseholdPlannerTransactions,
+  knownBillCategories=new Set(['Utilities','Insurance','Subscriptions','Mortgage',
+   'Rent','Loans','Loan payments','Debt payments','Childcare','Tuition']);
+ return posted.flatMap(row=>{
+  const aid=T.accountRef(row.accountId||row.account,accounts),account=byId.get(aid),
+   amount=Number(row.amount),peer=byTransaction.get(String(row.pairedTransactionId||'')),
+   cardPeer=peer&&accountType(byId.get(T.accountRef(peer.accountId||peer.account,accounts))||{})==='credit';
+  if(!account||accountType(account)!=='cash'||row.pending||
+     !Number.isFinite(amount)||amount<=0||
+     !(['expense','transfer'].includes(row.type))||
+     row.cashDirection==='in')return [];
+  // Paired cash-to-cash movements are not household bills; only one (the
+  // checking debit) of a paired cash-to-card settlement is included.
+  if(row.pairedTransactionId&&!cardPeer)return [];
+  const cardPayment=Boolean(cardPeer||
+   row.accountingKind==='card_payment'||settlements.has(String(row.id))||
+   row.type==='transfer'&&/\bcredit[ -]?card payment\b/i.test(String(row.merchant||'')));
+  if(row.accountingKind==='internal_transfer'&&!cardPayment)return [];
+  const matches=T.historicalScheduleMatches(row,accounts,rules).filter(rule=>
+   rule.kind!=='movement'&&
+   (rule.type==='expense'||rule.type==='transfer'&&rule.cashDirection==='out')),
+   rule=matches.length===1?matches[0]:null,
+   category=model.canonicalCategory(state(),row.category)||'Other',
+   name=String(row.merchant||'')+' '+String(row.description||''),
+   namedBill=/\b(?:mortgage|rent|daycare|tuition|insurance|premium|subscription|utility|utilities|electric|water|sewer|internet|wireless|phone plan|loan payment)\b/i.test(name),
+   categoryBill=knownBillCategories.has(category)||
+    category==='Housing'&&/\b(?:mortgage|rent|loan)\b/i.test(name);
+  if(!cardPayment&&!matches.length&&!categoryBill&&!namedBill)return [];
+  const label=cardPayment?'Credit card payments':
+   model.canonicalCategory(state(),rule?.category||category)||'Other';
+  return [{row,amount,category:label,rule}];
+ });
+}
 function cadenceOption(cadence){
  return {'weekly':'weekly','every 2 weeks':'biweekly',biweekly:'biweekly',
   'every 4 weeks':'every-4-weeks','every-4-weeks':'every-4-weeks',monthly:'monthly',
@@ -1819,11 +1859,22 @@ function financialRecapPage(bundle,s){
   // Use the exact cash-bill entries shown by Bills/Home. Card settlements
   // count once; credit-card purchases and internal transfers are excluded.
   forecastBills=hasProjection?forecastCashBills(bundle,s):[],
-  selectedBills=forecastBills.filter(r=>selectedMonths.has(r.date.slice(0,7))),
-  billCents=selectedBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
-  // A historical month has no reconstructed forecast. Don't call that $0.
+  postedBills=postedCashBills(current,s,settlements),
+  // A posted bill may arrive early. Suppress only a future occurrence of the
+  // SAME confirmed rule inside its configured matching window; never drop an
+  // independent twice-monthly payment or merge different payees by amount.
+  selectedBills=forecastBills.filter(r=>selectedMonths.has(r.date.slice(0,7))&&
+   !postedBills.some(p=>p.rule&&String(r.recurringRuleId)===String(p.rule.id)&&
+    window.HouseholdPlannerTransactions.postedWithinMatchWindow(
+     p.rule,p.row,r.date,r.amount,(p.rule.exampleIds||[]).map(String).includes(String(p.row.id))))),
+  paidCents=postedBills.reduce((sum,r)=>sum+Math.round(r.amount*100),0),
+  upcomingCents=selectedBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
+  billCents=paidCents+upcomingCents,
   selectedForecastPeriod=[...selectedMonths].some(m=>m>=month),
+  canSummarizeBills=Boolean(postedBills.length||hasProjection&&selectedForecastPeriod),
   groupBills=new Map();
+ for(const row of postedBills)
+  groupBills.set(row.category,(groupBills.get(row.category)||0)+Math.round(row.amount*100));
  for(const row of selectedBills){
   const rule=rules.get(String(row.recurringRuleId)),
    category=row.cardBill?'Credit card payments':
@@ -1859,8 +1910,9 @@ function financialRecapPage(bundle,s){
    picker.markup+'</header>'+
   '<div class="financial-recap-metrics">'+
    metric(selectedMonths.size===1?'Total monthly bills':'Total bills',
-    !hasProjection?'Unavailable':!selectedForecastPeriod?'Not projected':cash(billCents/100),
-    'Predicted checking payments · '+periodLabel,'bills')+
+    canSummarizeBills?cash(billCents/100):'Unavailable',
+    'Paid '+cash(paidCents/100)+' · Upcoming '+(hasProjection?cash(upcomingCents/100):'Unavailable')+
+    ' · '+periodLabel,'bills')+
    metric('Spent',cash(spendingCents/100),
     periodLabel+' · net purchases','spent')+
    metric('Income',cash(incomeCents/100),
@@ -1870,13 +1922,10 @@ function financialRecapPage(bundle,s){
     'Targets are set on Budget','budget')+
   '</div>'+
   '<div class="financial-recap-sections">'+
-   '<section class="financial-recap-card"><h3>Predicted bills by category</h3>'+
-    '<p>'+escapeHTML(periodLabel)+' · cash withdrawals</p>'+
-    (hasProjection&&selectedForecastPeriod?breakdown(billCategories,
-     'No bills predicted for the selected months.'):
-     '<p class="financial-recap-empty">'+
-      (!hasProjection?'Bill forecasts are unavailable until the Calendar projection is ready.':
-       'Past months have no stored bill forecast.')+'</p>')+
+   '<section class="financial-recap-card"><h3>Bills by category</h3>'+
+    '<p>'+escapeHTML(periodLabel)+' · paid and upcoming</p>'+
+    (canSummarizeBills?breakdown(billCategories,'No bills recorded or predicted for the selected months.'):
+     '<p class="financial-recap-empty">Bill totals unavailable for the selected months.</p>')+
     '<small class="financial-recap-note">Card payments counted once · transfers excluded</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
     '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
