@@ -54,11 +54,20 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
       // additional household expense in the monthly bill summary.
       data.predictions={
        recurringForecastMode:'approved-only',
-       futureRecurringRules:[{
-        id:'fictional-visa-sub',kind:'event',type:'expense',accountId:'demo-visa',
-        frequency:'monthly',anchorDate:'2026-10-05',date:'2026-10-05',
-        merchant:'Fictional Visa Subscription',amount:25,category:'Subscriptions'
-       }],
+       futureRecurringRules:[
+        {id:'fictional-mortgage',kind:'event',type:'expense',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-02',date:'2026-10-02',
+         merchant:'Mortgage',amount:2650,category:'Housing'},
+        {id:'fictional-daycare',kind:'event',type:'expense',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-03',date:'2026-10-03',
+         merchant:'Daycare',amount:825,category:'Kids & Family'},
+        {id:'fictional-energy',kind:'event',type:'expense',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-04',date:'2026-10-04',
+         merchant:'Puget Sound Energy',amount:106.70,category:'Utilities'},
+        {id:'fictional-visa-sub',kind:'event',type:'expense',accountId:'demo-visa',
+         frequency:'monthly',anchorDate:'2026-10-05',date:'2026-10-05',
+         merchant:'Fictional Visa Subscription',amount:25,category:'Subscriptions'}
+       ],
        futureTransactionAdds:[
         {id:'fictional-visa-pay',type:'transfer',date:'2026-11-12',
          merchant:'Fictional Visa Payment',amount:600,
@@ -66,6 +75,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
         {id:'fictional-scheduled-visa-charge',type:'expense',
          date:'2026-11-18',merchant:'Fictional Scheduled Card Charge',
          amount:15,category:'Insurance',accountId:'demo-visa'},
+        {id:'fictional-scheduled-checking-charge',type:'expense',
+         date:'2026-11-19',merchant:'Fictional Scheduled Checking Charge',
+         amount:100,category:'Health',accountId:'demo-checking'},
         {id:'fictional-savings-move',type:'transfer',date:'2026-11-13',
          merchant:'Fictional Savings Transfer',amount:500,
          fromAccountId:'demo-checking',toAccountId:'demo-savings'},
@@ -82,6 +94,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
         'Fictional Visa Subscription',25,'Subscriptions','expense','demo-visa',25),
        extra('ui-incidental-card-shopping','2026-10-06',
         'Fictional Unscheduled Card Shopping',50,'Subscriptions','expense','demo-visa',50),
+       extra('ui-incidental-checking-bill','2026-10-07',
+        'Fictional Unscheduled Utility',99,'Utilities','expense','demo-checking',99),
        extra('ui-card-health','2026-10-09','Fictional Clinic',100,'Health',
         'expense','demo-visa',100),
        extra('ui-card-health-refund','2026-10-13','Refund Fictional Clinic',40,'Other',
@@ -153,29 +167,36 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     paidMatch=octoberBreakdown.match(/Paid (\$[\d,.]+) · Upcoming (\$[\d,.]+)/);
    assert.ok(paidMatch,name+': October shows posted and remaining bills');
    const paidOctober=moneyCents(paidMatch[1]),upcomingOctober=moneyCents(paidMatch[2]);
-   assert.ok(paidOctober>300000,
-    name+': already-posted October mortgage and utilities remain in the month total');
+   assert.equal(paidOctober,360670,
+    name+': only confirmed checking mortgage/daycare/energy and card subscription count as paid bills');
+   assert.doesNotMatch(await page.locator('.financial-recap-card').first().innerText(),
+    /Fictional Unscheduled Utility/,
+    name+': checking purchases do not become bills solely because their category says Utilities');
    assert.equal(upcomingOctober,7500,
     name+': six future October checking bills total $75');
    assert.equal(octoberBills,paidOctober+upcomingOctober,
     name+': current calendar month includes posted plus upcoming bills without averaging');
-   // Only saved recurring and expressly scheduled Visa charges are November
-   // bills. The $600 settlement and savings transfer remain cash-flow only.
+   // Saved checking and Visa rules plus one-time schedules across both
+   // accounts are November bills. The repayment and savings transfer are not.
    await page.locator('[data-history-month-toggle]').click();
    await page.locator('[data-history-month-option][value="2026-11"]').check();
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
-   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$40.00',
-    name+': November includes $25 recurring and $15 scheduled card charges, not $600 repayment');
+   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$3,763.70',
+    name+': November includes checking mortgage, daycare, energy, one-off checking and both card charges');
    const billCategories=await page.locator('.financial-recap-card').first().innerText();
    assert.match(billCategories,/Subscriptions/);
    assert.match(billCategories,/\$25\.00/,
-    name+': scheduled recurring charge appears under its actual category');
+    name+': recurring card subscription is reported at the charge amount');
+   assert.match(billCategories,/Housing|\$2,650\.00/,
+    name+': recurring checking mortgage also appears in monthly bills');
+   assert.match(billCategories,/Health|\$100\.00/,
+    name+': expressly scheduled checking charge is included');
    assert.doesNotMatch(billCategories,/Credit card payments|\$600\.00/,
     name+': card repayment cannot inflate monthly bill categories');
    await page.locator('[data-history-month-option][value="2026-10"]').check();
    assert.equal(moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
-    octoberBills+4000,
-    name+': two selected months add only $40 in scheduled November card charges');
+    octoberBills+376370,
+    name+': two selected months add scheduled November expenses across accounts');
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
    await page.locator('[data-history-month-toggle]').click();
    assert.doesNotMatch(billCategories,/Fictional Unscheduled Card Shopping/,
