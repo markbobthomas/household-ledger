@@ -169,6 +169,10 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.deepEqual(await selectedMonths(page),['2026-09','2026-10'],
     'Selection persists when returning from Summary to Budget');
+   // Restore the default period for the independent existing view regressions.
+   await page.locator('[data-history-month-toggle]').click();
+   await page.locator('[data-history-month-current]').click();
+   await page.locator('[data-history-month-toggle]').click();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1);
 
