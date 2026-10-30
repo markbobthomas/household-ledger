@@ -30,7 +30,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
@@ -90,7 +90,7 @@ function savePlanning(){
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,overdueReviewDismissals:p.overdueReviewDismissals,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
-    recurringForecastMode:p.recurringForecastMode,
+    recurringForecastMode:p.recurringForecastMode,transactionNotes:p.transactionNotes,
     categoryOverrides:demoState.categoryOverrides||{},learning:demoState.learning||{}}));
   return true;
  }
@@ -111,7 +111,7 @@ function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  const source=state(),prefs=source.predictions||{};
  // Budgets are reporting preferences and never change forecast projections.
- const {categoryMonthlyBudgets:_reportOnly,...forecastPrefs}=prefs;
+ const {categoryMonthlyBudgets:_reportOnly,transactionNotes:_annotations,...forecastPrefs}=prefs;
  // The live bank adapter replaces the source state on every refresh. Saved
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
@@ -696,6 +696,10 @@ function editableForecastRow(row,opts={}){
   '" aria-expanded="false"'+(opts.kind==='schedule'?' data-schedule-occurrence-key="'+escapeHTML(row.key)+'"':'')+'>'+
   '<span class="unified-payment-date future-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
   '<span class="unified-payment-name"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+   (transactionNote(forecastNoteKey(row.key))?
+    '<small class="transaction-note-subtitle" data-note-subtitle="'+
+     escapeHTML(forecastNoteKey(row.key))+'">'+
+     escapeHTML(transactionNote(forecastNoteKey(row.key)))+'</small>':'')+
    '<small>'+escapeHTML(subtitle)+'</small></span>'+
   '<span class="unified-payment-value future-amount'+(inbound?' incoming':'')+'">'+
    (inbound?'+':'−')+cash(row.amount)+'</span>'+
@@ -752,6 +756,10 @@ function detailHtml(bundle,s){
   return detailShell('Change expected payment','One unpaid forecast payment',
    markup,'UNCONFIRMED · NOT A BANK RECORD');
  }
+ if(transactionDetail.kind==='note')return detailShell(
+   transactionDetail.name||'Transaction note',
+   transactionDetail.date?dayLabel(transactionDetail.date):'Personal note',
+   transactionNoteForm(transactionDetail.key),'PERSONAL NOTE');
  if(transactionDetail.kind==='suggestion')return detailShell('Confirm repeating payment',
    'Review this suggestion before it affects your future balance',
    repeatingReviewForm(s,{inline:true}),'SUGGESTED PAYMENT');
@@ -777,7 +785,8 @@ function detailHtml(bundle,s){
   return detailShell(row.merchant,
    (row.seriesKey?'Detected repeating plan':'One-time payment plan')+
    ' · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
-   impact+relatedCardCalculation(bundle,row)+editorFor(row,s,bundle?.rows||[]),
+   impact+transactionNoteForm(forecastNoteKey(row.key))+
+   relatedCardCalculation(bundle,row)+editorFor(row,s,bundle?.rows||[]),
    row.seriesKey?'REPEATING · NOT YET CONFIRMED':'ONE-TIME PLAN · FORECAST');
  }
  if(transactionDetail.kind==='actual'){
@@ -794,7 +803,8 @@ function detailHtml(bundle,s){
    '<p class="transaction-detail-help">This is an actual bank record. Its amount, date and classification are read-only. To predict future occurrences, save a separate prediction below.</p>';
   return detailShell(row.merchant||'Bank transaction',
    'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
-   summary+(recurringDraft?repeatingReviewForm(s):'<p>Unable to create a prediction from this transaction.</p>'),
+   summary+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
+    (recurringDraft?repeatingReviewForm(s):'<p>Unable to create a prediction from this transaction.</p>'),
    'ACTUAL · BANK-RECORDED');
  }
  if(transactionDetail.kind==='history-choice'){
@@ -1952,6 +1962,48 @@ function financialRecapPage(bundle,s){
 }
 
 function historySelectionKey(account,id){return JSON.stringify([String(account),String(id)])}
+// User notes are private preference overlays, not edits to source bank facts or
+// changes to dated predictions. Account+ID distinguishes same IDs on two banks.
+function bankNoteKey(account,id){return 'bank:'+historySelectionKey(account,id)}
+function forecastNoteKey(key){return 'forecast:'+String(key)}
+function transactionNote(key){
+ const notes=state().predictions?.transactionNotes;
+ return notes&&Object.prototype.hasOwnProperty.call(notes,key)&&
+  typeof notes[key]==='string'?notes[key]:'';
+}
+function transactionNoteForm(key){
+ return '<form class="transaction-note-form" data-transaction-note-form="'+escapeHTML(key)+'">'+
+  '<label>Note<input name="note" type="text" maxlength="160" autocomplete="off" '+
+   'placeholder="Add a note" value="'+escapeHTML(transactionNote(key))+'"></label>'+
+  '<div class="transaction-note-actions"><button type="submit" class="btn primary">Save note</button>'+
+   '<small role="status" data-note-status></small></div></form>';
+}
+async function saveTransactionNote(key,note){
+ const clean=String(note||'').trim();
+ if(clean.length>160)throw Error('Notes must be 160 characters or fewer');
+ // Shared save queue prevents a note snapshot from overwriting another quick
+ // change to private planning preferences or a concurrent forecast edit.
+ const save=reviewCatalogSave.catch(()=>{}).then(async()=>{
+  const original=state(),notes=original.predictions?.transactionNotes||{},
+   had=Object.prototype.hasOwnProperty.call(notes,key),before=notes[key];
+  original.predictions.transactionNotes={...notes};
+  if(clean)original.predictions.transactionNotes[key]=clean;
+  else delete original.predictions.transactionNotes[key];
+  try{
+   const result=await savePlanning();
+   if(live()&&(!result||result.saved!==true))throw Error('The note was not saved');
+  }catch(error){
+   if(original===state()){
+    if(had)original.predictions.transactionNotes[key]=before;
+    else delete original.predictions.transactionNotes[key];
+   }
+   throw error;
+  }
+  return clean;
+ });
+ reviewCatalogSave=save.catch(()=>{});
+ return save;
+}
 function historySignedCents(t){
  const incoming=['income','refund'].includes(t.type)||
   (t.type==='transfer'&&t.cashDirection==='in');
@@ -2141,6 +2193,8 @@ function historyPage(bundle,s){
     ' repeating payment details: '+(t.merchant||'Bank transaction'))+'">'+
    '<span class="history-actual-date ledger-row-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
    '<span class="history-actual-description ledger-row-description recurrence-row-name"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
+   (transactionNote(bankNoteKey(aid,t.id))?'<small class="transaction-note-subtitle" data-note-subtitle="'+
+    escapeHTML(bankNoteKey(aid,t.id))+'">'+escapeHTML(transactionNote(bankNoteKey(aid,t.id)))+'</small>':'')+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
     escapeHTML(caption)+'</span></small></span>'+
@@ -2155,7 +2209,11 @@ function historyPage(bundle,s){
     // an unrelated row merely because e.g. "Mortgage" is an option).
     categories.map(c=>'<option value="'+escapeHTML(c)+'" label="'+escapeHTML(categoryLabel(c))+'"'+
      (c===t.category?' selected':'')+'></option>').join('')+
-   '</select></div><span class="ledger-row-menu-space" aria-hidden="true"></span></div>'+
+   '</select></div><button type="button" class="transaction-note-trigger" data-edit-transaction-note="'+
+    escapeHTML(bankNoteKey(aid,t.id))+'" data-note-name="'+escapeHTML(t.merchant||'Bank transaction')+
+    '" data-note-date="'+escapeHTML(t.date)+'" aria-label="'+
+    escapeHTML(transactionNote(bankNoteKey(aid,t.id))?'Edit note for ':'Add note for ')+
+    escapeHTML(t.merchant||'Bank transaction')+'" title="Note">✎</button></div>'+
    detail+'</div>';
  });
  // Preserve each user's chosen sort order inside each statement, and present
@@ -2832,6 +2890,37 @@ function render(){
  if(activeTab==='schedules')applyScheduleSearch(root);
  if(activeTab==='history'||activeTab==='activity')updateHistorySelectionSummary();
 }
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest?.('[data-transaction-note-form]');
+ if(!form)return;
+ e.preventDefault();
+ const key=form.dataset.transactionNoteForm,field=form.querySelector('[name=note]'),
+  button=form.querySelector('[type=submit]'),status=form.querySelector('[data-note-status]');
+ if(!key||!field)return;
+ button.disabled=true;
+ if(status)status.textContent='Saving…';
+ try{
+  const note=await saveTransactionNote(key,field.value);
+  document.querySelectorAll('[data-note-subtitle]').forEach(el=>{
+   if(el.dataset.noteSubtitle!==key)return;
+   el.textContent=note;el.hidden=!note;
+  });
+  if(status)status.textContent='Saved';
+  button.disabled=false;
+ }catch(err){
+  button.disabled=false;
+  if(status){status.textContent='Not saved: '+String(err.message||err);status.setAttribute('role','alert')}
+ }
+});
+document.addEventListener('click',async e=>{
+ const trigger=e.target.closest?.('[data-edit-transaction-note]');
+ if(!trigger)return;
+ transactionDetail={kind:'note',key:trigger.dataset.editTransactionNote,
+  name:trigger.dataset.noteName||'Transaction',date:trigger.dataset.noteDate||''};
+ detailReturnFocus=trigger;
+ drawTransactionDetail(forecastFor(snapshot()),snapshot());
+ document.querySelector('.transaction-detail [name=note]')?.focus();
+});
 document.addEventListener('click',async e=>{
  const monthToggle=e.target.closest?.('[data-history-month-toggle]');
  if(monthToggle){
