@@ -5511,11 +5511,22 @@ a:hover{color:#166e61}
   gap:2px!important;
   align-content:start!important;
 }
+/* Shared rows align label and amount baselines without fixed blank heights.
+   Only the two-metric checking layout participates; card views can have three. */
+.summary-page:not(.trend-page) .summary-numbers:has(> :nth-child(2):last-child){
+  grid-template-rows:auto auto auto!important;
+  row-gap:2px!important;
+}
+.summary-page:not(.trend-page) .summary-numbers:has(> :nth-child(2):last-child) > :is(.summary-bank,.summary-monthly,.summary-minimum){
+  grid-row:1 / span 3;
+  grid-template-rows:subgrid!important;
+  row-gap:2px!important;
+}
 .summary-page:not(.trend-page) .summary-numbers :is(.summary-bank>small:first-child,.summary-overline){
-  align-self:start!important;
+  align-self:end!important;
 }
 .summary-page:not(.trend-page) .summary-numbers :is(.summary-bank>strong,.summary-monthly>strong,.summary-minimum>strong){
-  align-self:start!important;
+  align-self:end!important;
 }
 .summary-page:not(.trend-page) .summary-numbers .summary-low-date{
   min-height:0!important;
