@@ -784,6 +784,18 @@ const {chromium,webkit}=require('playwright');
    await chooseMonths(page,['2026-10','2026-09','2026-08']);
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
+    const selectorAlignment=await page.evaluate(()=>{
+     const account=document.querySelector('.history-budget-filters [name="historyAccount"]')?.getBoundingClientRect(),
+      month=document.querySelector('.history-budget-filters .history-month-trigger')?.getBoundingClientRect(),
+      scrollWidth=document.documentElement.scrollWidth;
+     return {accountTop:account.top,monthTop:month.top,accountRight:account.right,
+      monthLeft:month.left,accountHeight:account.height,monthHeight:month.height,scrollWidth};
+    });
+    assert.ok(Math.abs(selectorAlignment.accountTop-selectorAlignment.monthTop)<=2&&
+     Math.abs(selectorAlignment.accountHeight-selectorAlignment.monthHeight)<=1&&
+     selectorAlignment.accountRight<=selectorAlignment.monthLeft+1&&
+     selectorAlignment.scrollWidth<=width+3,
+     'Account and Months dropdowns stay precisely aligned at '+width+': '+JSON.stringify(selectorAlignment));
     const compact=await page.evaluate(()=>{
      const manage=document.querySelector('.history-category-manager>summary').getBoundingClientRect(),
       table=document.querySelector('.history-category-table').getBoundingClientRect(),
