@@ -1851,9 +1851,14 @@ function financialRecapPage(bundle,s){
   // recurring rule or explicit scheduled one-time event. Full card repayments
   // remain visible in Bills and checking forecasts, but are not expenses here.
   forecastBills=hasProjection?forecastCashBills(bundle,s):[],
+  // Projection preserves each explicit addition's ID but does not retain its
+  // original source label. Use the saved one-off IDs rather than guessing.
+  scheduledOneOffIds=new Set((state().predictions?.futureTransactionAdds||[])
+   .filter(add=>add.type==='expense'||add.type==='transfer'&&add.cashDirection==='out')
+   .map(add=>String(add.id))),
   summaryForecastBills=hasProjection?futureRows(bundle,s).filter(row=>
    row.kind==='event'&&row.type==='expense'&&
-   (rules.has(String(row.recurringRuleId))||row.source==='manual'||Boolean(row.addedId))):[],
+   (rules.has(String(row.recurringRuleId))||scheduledOneOffIds.has(String(row.id)))):[],
   postedBills=postedScheduledBills(current,s,settlements),
   // A posted bill may arrive early. Suppress only a future occurrence of the
   // SAME confirmed rule inside its configured matching window; never drop an
