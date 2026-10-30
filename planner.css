@@ -5135,7 +5135,7 @@ a:hover{color:#166e61}
  display:block;
  min-width:0;
  color:#7a8c80!important;
- font:650 12px/1.4 inherit;
+ font-weight:650;
  font-size:12px!important;
  font-variant-numeric:tabular-nums;
  white-space:nowrap;
