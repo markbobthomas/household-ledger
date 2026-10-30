@@ -402,6 +402,42 @@ const {chromium,webkit}=require('playwright');
     total=page.locator('[data-history-selected-total]'),
     count=page.locator('[data-history-selected-count]');
    assert.ok(await boxes.count()>=2,'Two fictional bank rows exist for multi-selection');
+   // A personal note is a subtitle tied to one actual bank record, NOT a
+   // source-bank mutation. It survives page refresh, editing and clearing.
+   const noteRow=page.locator('.history-entry:has([data-history-select])').first();
+   const noteEdit=noteRow.locator('[data-edit-transaction-note]');
+   assert.equal(await noteEdit.count(),1,'Every actual transaction offers an edit-note cue');
+   await noteEdit.click();
+   const noteForm=page.locator('.transaction-detail [data-transaction-note-form]');
+   assert.equal(await noteForm.count(),1);
+   const noteKey=await noteForm.getAttribute('data-transaction-note-form');
+   const noteText='Fictional family supply purchase';
+   await noteForm.locator('[name=note]').fill(noteText);
+   await noteForm.locator('[type=submit]').click();
+   assert.equal(await noteForm.locator('[data-note-status]').innerText(),'Saved',
+    'Note saves to planning preferences without a bank edit');
+   const notePrefs=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}'));
+   assert.equal(notePrefs.transactionNotes?.[noteKey],noteText);
+   await page.locator('.transaction-detail-close').click();
+   assert.equal(await noteRow.locator('.transaction-note-subtitle').innerText(),noteText,
+    'Saved note becomes a visible subtitle directly beneath the transaction name');
+   await page.reload({waitUntil:'load'});
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   const persistedRow=page.locator('[data-edit-transaction-note="'+noteKey+'"]').first();
+   assert.equal(await persistedRow.count(),1,'Account and transaction ID survive reload');
+   assert.equal(await persistedRow.locator('xpath=..').locator('.transaction-note-subtitle').innerText(),noteText,
+    'Note subtitle survives reloading the transaction list');
+   await persistedRow.click();
+   await page.locator('.transaction-detail [name=note]').fill('');
+   await page.locator('.transaction-detail [data-transaction-note-form] [type=submit]').click();
+   assert.equal(await page.locator('.transaction-detail [data-note-status]').innerText(),'Saved');
+   await page.locator('.transaction-detail-close').click();
+   const clearedPrefs=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}'));
+   assert.ok(!Object.hasOwn(clearedPrefs.transactionNotes||{},noteKey),
+    'Clearing a note preserves bank records and removes the private overlay');
+
    assert.equal(await boxes.count(),await page.locator('.history-actual-row').count(),
     'Each transaction has exactly one selection checkbox');
    assert.equal(await total.innerText(),'Net total: $0.00');
