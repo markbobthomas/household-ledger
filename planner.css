@@ -5110,3 +5110,165 @@ a:hover{color:#166e61}
  width:min(310px,calc(100vw - 32px));
  max-width:calc(100vw - 32px);
 }
+
+/* One transaction-row visual language throughout Household Ledger.
+   Posted rows, saved repeating bills, dated predictions, Calendar entries,
+   Home previews and category/repeating Review all share:
+   DATE | MERCHANT + SECONDARY DETAIL | AMOUNT | ACTION.
+   Their existing click targets, category inputs and financial signs remain. */
+.planner-page .ledger-transaction-row{
+ display:grid!important;
+ grid-template-columns:68px minmax(0,1fr) minmax(86px,max-content) 28px!important;
+ align-items:center!important;
+ gap:10px!important;
+ min-width:0!important;
+ min-height:54px;
+ padding:9px 10px!important;
+ box-sizing:border-box;
+ border-radius:9px;
+ background:transparent;
+ text-align:left;
+ font-family:inherit;
+ line-height:1.4;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-date{
+ display:block;
+ min-width:0;
+ color:#7a8c80!important;
+ font:650 12px/1.4 inherit;
+ font-size:12px!important;
+ font-variant-numeric:tabular-nums;
+ white-space:nowrap;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-identity{
+ display:block;
+ min-width:0;
+ overflow:hidden;
+ color:#2e473c;
+ text-align:left;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-identity strong,
+.planner-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong{
+ color:#2e473c!important;
+ font-family:inherit!important;
+ font-size:14px!important;
+ font-weight:730!important;
+ line-height:1.4;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-identity small{
+ display:block;
+ color:#809186;
+ font-size:11px;
+ font-weight:500;
+ line-height:1.45;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-amount{
+ display:block;
+ min-width:0;
+ text-align:right;
+ justify-self:end;
+ color:#2d4c3b;
+ font-family:inherit!important;
+ font-size:14px!important;
+ font-weight:750!important;
+ line-height:1.4;
+ font-variant-numeric:tabular-nums;
+ white-space:nowrap;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-amount>strong{
+ color:inherit!important;
+ font-family:inherit!important;
+ font-size:inherit!important;
+ font-weight:inherit!important;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-amount.in,
+.planner-page .ledger-transaction-row .ledger-transaction-amount.incoming{
+ color:#27815f!important;
+}
+.planner-page .ledger-transaction-row .ledger-transaction-action{
+ min-width:0;
+ justify-self:end;
+ text-align:center;
+ color:#6f8978;
+ font-size:17px;
+ text-decoration:none;
+ line-height:1;
+ white-space:nowrap;
+}
+.planner-page .ledger-transaction-row:hover,
+.planner-page .ledger-transaction-row:focus-visible{
+ background:#f0f7f2!important;
+}
+.planner-page .ledger-transaction-row[aria-expanded="true"]{
+ background:#edf6ef!important;
+}
+.planner-page .ledger-transaction-row .schedule-number{
+ float:left;margin-right:5px;color:#87978d;
+}
+.planner-page .ledger-transaction-row .unified-payment-name{gap:1px}
+.planner-page .ledger-transaction-row .payment-edit-cue{display:none}
+.planner-page .ledger-transaction-row .unified-payment-chevron{
+ justify-self:end;justify-content:flex-end;
+}
+.planner-page .ledger-transaction-row .calendar-monthly-view{
+ text-decoration:none!important;font-weight:650;
+}
+.planner-page .ledger-transaction-row.calendar-actual-row{
+ border-bottom:1px solid #edf1ed;
+}
+.planner-page .calendar-actual-row .calendar-item-edit.ledger-transaction-action{
+ width:28px;min-width:0;max-width:28px;
+ padding:7px 0;border:0;background:transparent;
+ overflow:hidden;white-space:nowrap;
+ font-size:0!important;
+}
+.planner-page .calendar-actual-row .calendar-item-edit.ledger-transaction-action:after{
+ content:"›";font-size:19px;line-height:1;color:#688b77;
+}
+.planner-page .category-review-row .category-review-open.ledger-transaction-row{
+ width:100%;margin:0;padding:9px 7px!important;
+}
+.planner-page .category-review-row .ledger-transaction-identity small{
+ overflow:hidden;text-overflow:ellipsis;
+}
+.planner-page .review-row-top .review-row-open.ledger-transaction-row,
+.planner-page .review-row-top .review-row-unavailable.ledger-transaction-row{
+ width:100%;
+}
+.planner-page .overview-upcoming-open.ledger-transaction-row{
+ width:100%;border:0;border-bottom:1px solid #edf1ed;
+ cursor:pointer;
+}
+@media(max-width:850px){
+ .planner-page .ledger-transaction-row{
+  grid-template-columns:53px minmax(0,1fr) minmax(70px,max-content) 24px!important;
+  gap:7px!important;padding:9px 7px!important;
+ }
+ .planner-page .ledger-transaction-row .ledger-transaction-date{font-size:11px!important}
+ .planner-page .ledger-transaction-row .ledger-transaction-identity strong,
+ .planner-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong{
+  font-size:13px!important;
+ }
+ .planner-page .ledger-transaction-row .ledger-transaction-amount{font-size:13px!important}
+ .planner-page .ledger-transaction-row .ledger-transaction-identity small{font-size:10px}
+}
+@media(max-width:390px){
+ .planner-page .ledger-transaction-row{
+  grid-template-columns:47px minmax(0,1fr) minmax(62px,max-content) 20px!important;
+  gap:5px!important;padding:8px 4px!important;
+ }
+ .planner-page .ledger-transaction-row .ledger-transaction-identity strong,
+ .planner-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong{
+  font-size:12px!important;
+ }
+ .planner-page .ledger-transaction-row .ledger-transaction-amount{font-size:12px!important}
+ .planner-page .calendar-actual-row .calendar-item-edit.ledger-transaction-action{
+  width:20px;max-width:20px;
+ }
+}
