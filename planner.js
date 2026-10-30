@@ -1655,7 +1655,10 @@ function historyInsights(rows,view,options={}){
    const amount=Number(budgets[name]);
    return Number.isFinite(amount)&&amount>=0?Math.round(amount*100):null;
   };
-  const values=[...groups.values()].sort((a,b)=>{
+  // Income and household transfers remain valid transaction classifications,
+  // but are not spending-budget categories or editable monthly targets.
+  // Keep their saved settings intact in case users later change their setup.
+  const values=[...groups.values()].filter(g=>!['Income','Transfer'].includes(g.name)).sort((a,b)=>{
    const left=monthlyBudgetCents(a.name),right=monthlyBudgetCents(b.name);
    return Number(right!==null)-Number(left!==null)||
     (right??0)-(left??0)||a.name.localeCompare(b.name);
@@ -1832,7 +1835,7 @@ function financialRecapPage(bundle,s){
    return total+(Number.isSafeInteger(cents)?cents:0);
   },0),
   budgets=state().predictions?.categoryMonthlyBudgets||{},
-  categories=new Set(model.categories(state())),
+  categories=new Set(model.categories(state()).filter(c=>!['Income','Transfer'].includes(c))),
   budgetCents=Object.entries(budgets).reduce((sum,[name,amount])=>
    categories.has(name)&&amount!==null&&amount!==''&&
    Number.isFinite(Number(amount))&&Number(amount)>=0?
