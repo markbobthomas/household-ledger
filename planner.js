@@ -2423,6 +2423,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    (isOpen?' review-row-expanded':'')+'"'+
    (isLegacy?' data-legacy-estimate="'+escapeHTML(key)+'"':'')+
    (r?' data-recommended-repeat="'+escapeHTML(r.key)+'"':'')+
+   ' data-review-order-date="'+escapeHTML(isLegacy?(legacy?.date||r?.lastDate||''):(r?.lastDate||r?.examples?.[0]?.date||r?.nextDate||''))+'"'+
+   ' data-review-order-amount="'+escapeHTML(value||0)+'"'+
    ' data-legacy-active="'+isLegacy+'" data-recommendation-status="'+
      (isIgnored?'ignored':'pending')+'">'+
    '<div class="review-row-top recurrence-row">'+
@@ -2461,7 +2463,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    item=>item.merchant,item=>item.amount).slice(0,categoryReviewLimit),
   categoryRow=item=>{
    const label=item.isPlan?'Bill':'Transaction';
-   return '<div class="category-review-row" data-category-review-form data-category-kind="'+
+   return '<div class="category-review-row" data-category-review-form data-review-order-date="'+escapeHTML(item.date||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
     '<div class="category-review-info"><strong>'+escapeHTML(item.merchant)+'</strong>'+
     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
@@ -2518,7 +2520,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      common='<label>Payment date <input type="date" name="date" required min="'+
       escapeHTML(shiftDay(s.asOf,1))+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+
       '" value="'+escapeHTML(item.proposedDate)+'"></label>';
-    return '<article class="overdue-review-row" data-overdue-item="'+escapeHTML(item.key)+'">'+
+    return '<article class="overdue-review-row" data-review-order-date="'+escapeHTML(item.expectedDate||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-overdue-item="'+escapeHTML(item.key)+'">'+
      '<div class="overdue-review-heading"><strong>'+escapeHTML(item.merchant)+' · '+cash(item.amount)+'</strong>'+
       '<small>Expected '+escapeHTML(dayLabel(item.expectedDate))+' · Not confirmed by bank</small></div>'+
      '<div class="overdue-review-actions">'+
