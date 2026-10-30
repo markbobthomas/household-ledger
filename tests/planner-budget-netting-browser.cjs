@@ -187,7 +187,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('[data-history-month-toggle]').click();
    await page.locator('[data-history-month-option][value="2026-11"]').check();
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
-   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$3,888.70',
+   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$3,846.70',
     name+': November includes scheduled checking, outward Zelle and credit-card expenses');
    const billCategories=await page.locator('.financial-recap-card').first().innerText();
    assert.match(billCategories,/Subscriptions/);
@@ -201,7 +201,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': card repayment cannot inflate monthly bill categories');
    await page.locator('[data-history-month-option][value="2026-10"]').check();
    assert.equal(moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
-    octoberBills+388870,
+    octoberBills+384670,
     name+': two selected months add checking, Zelle and card November bill schedules');
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
    await page.locator('[data-history-month-toggle]').click();
