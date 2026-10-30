@@ -54,6 +54,26 @@ const {chromium,webkit}=require('playwright');
  }
  const selectedMonths=page=>page.locator('[data-history-month-option]:checked')
   .evaluateAll(inputs=>inputs.map(input=>input.value).sort());
+ // Every real or predicted transaction uses DATE / NAME / AMOUNT / ACTION.
+ async function verifyTransactionAnatomy(page,selector,location){
+  assert.ok(await page.locator(selector).count()>0,
+   'Missing transaction row in '+location);
+  const p=await page.locator(selector).first().evaluate(row=>{
+   const box=sel=>row.querySelector(sel)?.getBoundingClientRect();
+   const date=box('.ledger-transaction-date'),name=box('.ledger-transaction-identity'),
+    amount=box('.ledger-transaction-amount'),action=box('.ledger-transaction-action');
+   return {display:getComputedStyle(row).display,
+    date:date?.left,name:name?.left,amount:amount?.left,action:action?.left,
+    width:row.getBoundingClientRect().width,
+    scrollWidth:document.documentElement.scrollWidth,viewport:innerWidth};
+  });
+  assert.ok(p.display==='grid'&&[p.date,p.name,p.amount,p.action].every(Number.isFinite)&&
+   p.date<p.name&&p.name<p.amount&&p.amount<p.action&&p.width>180,
+   'Shared four-column transaction order in '+location+': '+JSON.stringify(p));
+  assert.ok(p.scrollWidth<=p.viewport+3,
+   'Transaction row must not overflow the viewport in '+location+': '+JSON.stringify(p));
+ }
+
  // Verify the OPEN menu, not only the closed Account/Months triggers.
  async function verifyMonthOptionsDoNotOverlap(page,label){
   await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
@@ -402,6 +422,7 @@ const {chromium,webkit}=require('playwright');
        'Analysis filters sit in aligned columns: '+JSON.stringify(field));
     }
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await verifyTransactionAnatomy(page,'.history-actual-row .ledger-transaction-row','Posted Activity');
    assert.equal(await page.locator('.history-period-controls [data-history-month-picker]').count(),1);
    assert.equal(await page.locator('[data-history-month-toggle]').count(),1);
    assert.equal(await page.locator('[data-history-months],[data-history-month]').count(),0);
@@ -1092,6 +1113,7 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await verifyTransactionAnatomy(page,'.schedule-row-main.ledger-transaction-row','Upcoming Bills');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
    const newRepeat=page.locator('[data-schedule-new]').first();
@@ -1107,10 +1129,15 @@ const {chromium,webkit}=require('playwright');
     await page.locator('.transaction-detail-close').click();
    }
 
+   await page.locator('#planner-menu>summary').click();
+   await page.locator('#planner-menu [data-view="transactions"]').click();
+   await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
    const next=page.locator('[data-calendar-day="2026-10-20"]');
    if(await next.count()){
     await next.click();
+    if(await page.locator('.calendar-day-detail .ledger-transaction-row').count())
+     await verifyTransactionAnatomy(page,'.calendar-day-detail .ledger-transaction-row','Calendar');
     await page.locator('[data-calendar-add]').first().click();
     assert.equal(await page.locator('.transaction-detail [data-calendar-quick-form="add"]').count(),1,
      'Calendar uses the shared creation panel');
@@ -1229,6 +1256,8 @@ const {chromium,webkit}=require('playwright');
 
    const categoryForms=page.locator('[data-category-review-form]');
    const categoryFormsBefore=await categoryForms.count();
+   if(categoryFormsBefore)
+    await verifyTransactionAnatomy(page,'.category-review-open.ledger-transaction-row','Category Review');
    if(categoryFormsBefore){
     const first=categoryForms.first(),categoryId=await first.getAttribute('data-category-id');
     const reviewPicker=first.locator('[name=category]');
