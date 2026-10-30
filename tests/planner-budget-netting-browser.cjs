@@ -1,6 +1,6 @@
 'use strict';
-// Fictional end-to-end UI: merchant refunds net against the original category,
-// and a bank-described ACH card payment is not counted a second time.
+// Fictional end-to-end UI: card repayments remain cash-flow forecasts but
+// Summary monthly bills count only recurring/scheduled card purchases.
 const assert=require('node:assert/strict'),path=require('node:path');
 const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwright');
 (async()=>{
@@ -49,20 +49,39 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
        account:accountId==='demo-visa'?'Visa':'Checking',pending:false,
        demo:true,source:{provider:'demo',verified:true,plaidAmount}
       });
-      // These fictional future forecasts are deliberately different:
-      // the Visa subscription is a card PURCHASE (not a checking bill),
-      // while the Visa PAYMENT is a checking withdrawal (a Summary bill).
+      // The Visa subscription and scheduled charge are monthly Summary bills.
+      // The full Visa repayment affects checking cash flow but is not an
+      // additional household expense in the monthly bill summary.
       data.predictions={
        recurringForecastMode:'approved-only',
-       futureRecurringRules:[{
-        id:'fictional-visa-sub',kind:'event',type:'expense',accountId:'demo-visa',
-        frequency:'monthly',anchorDate:'2026-11-05',date:'2026-11-05',
-        merchant:'Fictional Visa Subscription',amount:25,category:'Subscriptions'
-       }],
+       futureRecurringRules:[
+        {id:'fictional-mortgage',kind:'event',type:'expense',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-02',date:'2026-10-02',
+         merchant:'Mortgage',amount:2650,category:'Housing'},
+        {id:'fictional-daycare',kind:'event',type:'expense',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-03',date:'2026-10-03',
+         merchant:'Daycare',amount:825,category:'Kids & Family'},
+        {id:'fictional-energy',kind:'event',type:'expense',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-04',date:'2026-10-04',
+         merchant:'Puget Sound Energy',amount:106.70,category:'Utilities'},
+        {id:'fictional-zelle-childcare',kind:'event',type:'transfer',
+         cashDirection:'out',accountId:'demo-checking',
+         frequency:'monthly',anchorDate:'2026-10-08',date:'2026-10-08',
+         merchant:'Fictional Zelle Childcare',amount:125,category:'Kids & Family'},
+        {id:'fictional-visa-sub',kind:'event',type:'expense',accountId:'demo-visa',
+         frequency:'monthly',anchorDate:'2026-10-05',date:'2026-10-05',
+         merchant:'Fictional Visa Subscription',amount:25,category:'Subscriptions'}
+       ],
        futureTransactionAdds:[
         {id:'fictional-visa-pay',type:'transfer',date:'2026-11-12',
          merchant:'Fictional Visa Payment',amount:600,
          fromAccountId:'demo-checking',toAccountId:'demo-visa'},
+        {id:'fictional-scheduled-visa-charge',type:'expense',
+         date:'2026-11-18',merchant:'Fictional Scheduled Card Charge',
+         amount:15,category:'Insurance',accountId:'demo-visa'},
+        {id:'fictional-scheduled-checking-charge',type:'expense',
+         date:'2026-11-19',merchant:'Fictional Scheduled Checking Charge',
+         amount:100,category:'Health',accountId:'demo-checking'},
         {id:'fictional-savings-move',type:'transfer',date:'2026-11-13',
          merchant:'Fictional Savings Transfer',amount:500,
          fromAccountId:'demo-checking',toAccountId:'demo-savings'},
@@ -75,6 +94,14 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
        ]
       };
       data.transactions.push(
+       extra('ui-recurring-card-bill','2026-10-05',
+        'Fictional Visa Subscription',25,'Subscriptions','expense','demo-visa',25),
+       extra('ui-incidental-card-shopping','2026-10-06',
+        'Fictional Unscheduled Card Shopping',50,'Subscriptions','expense','demo-visa',50),
+       extra('ui-incidental-checking-bill','2026-10-07',
+        'Fictional Unscheduled Utility',99,'Utilities','expense','demo-checking',99),
+       {...extra('ui-confirmed-zelle','2026-10-08','Fictional Zelle Childcare',
+         125,'Kids & Family','transfer','demo-checking',125),cashDirection:'out'},
        extra('ui-card-health','2026-10-09','Fictional Clinic',100,'Health',
         'expense','demo-visa',100),
        extra('ui-card-health-refund','2026-10-13','Refund Fictional Clinic',40,'Other',
@@ -146,31 +173,40 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     paidMatch=octoberBreakdown.match(/Paid (\$[\d,.]+) · Upcoming (\$[\d,.]+)/);
    assert.ok(paidMatch,name+': October shows posted and remaining bills');
    const paidOctober=moneyCents(paidMatch[1]),upcomingOctober=moneyCents(paidMatch[2]);
-   assert.ok(paidOctober>300000,
-    name+': already-posted October mortgage and utilities remain in the month total');
+   assert.equal(paidOctober,373170,
+    name+': posted recurring cash bills, outward Zelle bill and card subscription all count');
+   assert.doesNotMatch(await page.locator('.financial-recap-card').first().innerText(),
+    /Fictional Unscheduled Utility/,
+    name+': checking purchases do not become bills solely because their category says Utilities');
    assert.equal(upcomingOctober,7500,
     name+': six future October checking bills total $75');
    assert.equal(octoberBills,paidOctober+upcomingOctober,
     name+': current calendar month includes posted plus upcoming bills without averaging');
-   // The November card settlement is included exactly once only when November
-   // is selected; the card purchase and savings transfer are never bills.
+   // Saved checking and Visa rules plus one-time schedules across both
+   // accounts are November bills. The repayment and savings transfer are not.
    await page.locator('[data-history-month-toggle]').click();
    await page.locator('[data-history-month-option][value="2026-11"]').check();
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
-   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$600.00',
-    name+': November total is the single $600 predicted card payment');
+   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$3,846.70',
+    name+': November includes scheduled checking, outward Zelle and credit-card expenses');
    const billCategories=await page.locator('.financial-recap-card').first().innerText();
-   assert.match(billCategories,/Credit card payments/);
-   assert.match(billCategories,/\$600\.00/,
-    name+': selected November settlement is not divided by twelve');
+   assert.match(billCategories,/Subscriptions/);
+   assert.match(billCategories,/\$25\.00/,
+    name+': recurring card subscription is reported at the charge amount');
+   assert.match(billCategories,/Housing|\$2,650\.00/,
+    name+': recurring checking mortgage also appears in monthly bills');
+   assert.match(billCategories,/Health|\$100\.00/,
+    name+': expressly scheduled checking charge is included');
+   assert.doesNotMatch(billCategories,/Credit card payments|\$600\.00/,
+    name+': card repayment cannot inflate monthly bill categories');
    await page.locator('[data-history-month-option][value="2026-10"]').check();
    assert.equal(moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
-    octoberBills+60000,
-    name+': two calendar months sum paid October bills, remaining October bills and $600 November payment');
+    octoberBills+384670,
+    name+': two selected months add checking, Zelle and card November bill schedules');
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
    await page.locator('[data-history-month-toggle]').click();
-   assert.doesNotMatch(billCategories,/Fictional Visa Subscription/,
-    name+': the underlying $25/month card purchases must not also count as bills');
+   assert.doesNotMatch(billCategories,/Fictional Unscheduled Card Shopping/,
+    name+': unscheduled card purchases never become monthly bills');
    assert.doesNotMatch(billCategories,/Savings Transfer/,
     name+': internal cash transfer is not a bill');
    assert.match(await page.locator('.financial-recap-upcoming').innerText(),

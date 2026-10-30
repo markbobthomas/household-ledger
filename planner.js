@@ -493,44 +493,34 @@ function forecastCashBills(bundle,s,accountId=''){
    (!accountId||String(row.accountId)===String(accountId));
  }).map(row=>({...row,cardBill:row.kind==='movement'}));
 }
-// Historical bills are a read-only report of POSTED checking debits. The
-// future cash-bill ledger only covers dates after asOf; combine the two for a
-// full selected calendar month without reclassifying shopping as a bill.
-function postedCashBills(posted,s,settlements){
+// Summary reports recurring or explicitly scheduled expenses on ALL accounts.
+// It excludes cash-to-card settlements, internal transfers, and unplanned shopping.
+// Never infer a bill from its category or merchant text alone.
+function postedScheduledBills(posted,s,settlements){
  const accounts=activeAccounts(s),byId=new Map(accounts.map(a=>[String(a.id),a])),
-  byTransaction=new Map(posted.map(r=>[String(r.id),r])),
   rules=state().predictions?.futureRecurringRules||[],
-  T=window.HouseholdPlannerTransactions,
-  knownBillCategories=new Set(['Utilities','Insurance','Subscriptions','Mortgage',
-   'Rent','Loans','Loan payments','Debt payments','Childcare','Tuition']);
+  T=window.HouseholdPlannerTransactions;
  return posted.flatMap(row=>{
-  const aid=T.accountRef(row.accountId||row.account,accounts),account=byId.get(aid),
-   amount=Number(row.amount),peer=byTransaction.get(String(row.pairedTransactionId||'')),
-   cardPeer=peer&&accountType(byId.get(T.accountRef(peer.accountId||peer.account,accounts))||{})==='credit';
-  if(!account||accountType(account)!=='cash'||row.pending||
-     !Number.isFinite(amount)||amount<=0||
-     !(['expense','transfer'].includes(row.type))||
-     row.cashDirection==='in')return [];
-  // Paired cash-to-cash movements are not household bills; only one (the
-  // checking debit) of a paired cash-to-card settlement is included.
-  if(row.pairedTransactionId&&!cardPeer)return [];
-  const cardPayment=Boolean(cardPeer||
-   row.accountingKind==='card_payment'||settlements.has(String(row.id))||
-   row.type==='transfer'&&/\bcredit[ -]?card payment\b/i.test(String(row.merchant||'')));
-  if(row.accountingKind==='internal_transfer'&&!cardPayment)return [];
-  const matches=T.historicalScheduleMatches(row,accounts,rules).filter(rule=>
-   rule.kind!=='movement'&&
-   (rule.type==='expense'||rule.type==='transfer'&&rule.cashDirection==='out')),
-   rule=matches.length===1?matches[0]:null,
-   category=model.canonicalCategory(state(),row.category)||'Other',
-   name=String(row.merchant||'')+' '+String(row.description||''),
-   namedBill=/\b(?:mortgage|rent|daycare|tuition|insurance|premium|subscription|utility|utilities|electric|water|sewer|internet|wireless|phone plan|loan payment)\b/i.test(name),
-   categoryBill=knownBillCategories.has(category)||
-    category==='Housing'&&/\b(?:mortgage|rent|loan)\b/i.test(name);
-  if(!cardPayment&&!matches.length&&!categoryBill&&!namedBill)return [];
-  const label=cardPayment?'Credit card payments':
-   model.canonicalCategory(state(),rule?.category||category)||'Other';
-  return [{row,amount,category:label,rule}];
+  const account=byId.get(T.accountRef(row.accountId||row.account,accounts)),
+   amount=Number(row.amount);
+  if(!account||row.pending||row.pairedTransactionId||
+     T.bankDirection(row)!=='expense'||settlements.has(String(row.id))||
+     row.accountingKind==='card_payment'||
+     // An outgoing, unpaired Zelle-like transfer may be a confirmed expense.
+     // Never mistake a linked transfer to another household account for one.
+     (row.accountingKind==='internal_transfer'&&
+      (row.type!=='transfer'||row.cashDirection!=='out'||
+       byId.has(String(row.toAccountId||''))))||
+     !Number.isFinite(amount)||amount<=0)return [];
+  // Only a uniquely matched saved expense schedule confirms historic bills;
+  // other posted expenses, including card purchases, remain in Spending.
+  const matches=T.historicalScheduleMatches(row,accounts,rules)
+   .filter(rule=>rule.kind!=='movement'&&
+    (rule.type==='expense'||rule.type==='transfer'&&rule.cashDirection==='out'));
+  if(matches.length!==1)return [];
+  const rule=matches[0];
+  return [{row,amount,rule,category:
+   model.canonicalCategory(state(),rule.category||row.category)||'Other'}];
  });
 }
 function cadenceOption(cadence){
@@ -1852,18 +1842,28 @@ function financialRecapPage(bundle,s){
   periodBudgetCents=budgetCents*selectedMonths.size,
   hasProjection=Boolean(bundle?.projection),
   rules=new Map((state().predictions?.futureRecurringRules||[])
-   .filter(rule=>rule.kind!=='movement'&&rule.type==='expense')
+   .filter(rule=>rule.kind!=='movement'&&
+    (rule.type==='expense'||rule.type==='transfer'&&rule.cashDirection==='out'))
    .map(rule=>[String(rule.id),rule])),
   eventCategories=new Map((bundle?.projection?.events||[])
    .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
-  // Use the exact cash-bill entries shown by Bills/Home. Card settlements
-  // count once; credit-card purchases and internal transfers are excluded.
+  // All cash and credit accounts use the same expense definition: a saved
+  // recurring rule or explicit scheduled one-time event. Full card repayments
+  // remain visible in Bills and checking forecasts, but are not expenses here.
   forecastBills=hasProjection?forecastCashBills(bundle,s):[],
-  postedBills=postedCashBills(current,s,settlements),
+  // Projection preserves each explicit addition's ID but does not retain its
+  // original source label. Use the saved one-off IDs rather than guessing.
+  scheduledOneOffIds=new Set((state().predictions?.futureTransactionAdds||[])
+   .filter(add=>add.type==='expense'||add.type==='transfer'&&add.cashDirection==='out')
+   .map(add=>String(add.id))),
+  summaryForecastBills=hasProjection?futureRows(bundle,s).filter(row=>
+   row.kind==='event'&&row.type==='expense'&&
+   (rules.has(String(row.recurringRuleId))||scheduledOneOffIds.has(String(row.id)))):[],
+  postedBills=postedScheduledBills(current,s,settlements),
   // A posted bill may arrive early. Suppress only a future occurrence of the
   // SAME confirmed rule inside its configured matching window; never drop an
   // independent twice-monthly payment or merge different payees by amount.
-  selectedBills=forecastBills.filter(r=>selectedMonths.has(r.date.slice(0,7))&&
+  selectedBills=summaryForecastBills.filter(r=>selectedMonths.has(r.date.slice(0,7))&&
    !postedBills.some(p=>p.rule&&String(r.recurringRuleId)===String(p.rule.id)&&
     window.HouseholdPlannerTransactions.postedWithinMatchWindow(
      p.rule,p.row,r.date,r.amount,(p.rule.exampleIds||[]).map(String).includes(String(p.row.id))))),
@@ -1871,7 +1871,7 @@ function financialRecapPage(bundle,s){
   upcomingCents=selectedBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
   billCents=paidCents+upcomingCents,
   selectedForecastPeriod=[...selectedMonths].some(m=>m>=month),
-  canSummarizeBills=Boolean(postedBills.length||hasProjection&&selectedForecastPeriod),
+  canSummarizeBills=Boolean(current.length||hasProjection&&selectedForecastPeriod),
   groupBills=new Map();
  for(const row of postedBills)
   groupBills.set(row.category,(groupBills.get(row.category)||0)+Math.round(row.amount*100));
@@ -1926,7 +1926,7 @@ function financialRecapPage(bundle,s){
     '<p>'+escapeHTML(periodLabel)+' · paid and upcoming</p>'+
     (canSummarizeBills?breakdown(billCategories,'No bills recorded or predicted for the selected months.'):
      '<p class="financial-recap-empty">Bill totals unavailable for the selected months.</p>')+
-    '<small class="financial-recap-note">Card payments counted once · transfers excluded</small></section>'+
+    '<small class="financial-recap-note">Scheduled payments on all accounts · transfers excluded</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
     '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
     breakdown(topSpending,'No posted purchases in selected months.')+
