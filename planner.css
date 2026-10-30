@@ -5488,3 +5488,47 @@ a:hover{color:#166e61}
   width:100%;max-width:none;flex:1 1 auto;
  }
 }
+
+/* Home: let the two balance metrics set their own height; the calendar leads. */
+.summary-page:not(.trend-page) > .summary-stage{
+  padding:13px 20px 16px!important;
+}
+.summary-page:not(.trend-page) .summary-heading.calendar-toolbar{
+  min-height:0;
+  margin-bottom:8px!important;
+  row-gap:4px;
+}
+.summary-page:not(.trend-page) .summary-numbers{
+  padding:0!important;
+  margin:0!important;
+  gap:16px!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.summary-page:not(.trend-page) .summary-numbers > :is(.summary-bank,.summary-monthly,.summary-minimum){
+  grid-template-rows:auto auto auto!important;
+  gap:2px!important;
+  align-content:start!important;
+}
+.summary-page:not(.trend-page) .summary-numbers :is(.summary-bank>small:first-child,.summary-overline){
+  align-self:start!important;
+}
+.summary-page:not(.trend-page) .summary-numbers :is(.summary-bank>strong,.summary-monthly>strong,.summary-minimum>strong){
+  align-self:start!important;
+}
+.summary-page:not(.trend-page) .summary-numbers .summary-low-date{
+  min-height:0!important;
+  padding:2px 0!important;
+  line-height:1.25!important;
+}
+.summary-page:not(.trend-page) .calendar-wrapper{margin-top:9px!important}
+@media(max-width:850px){
+  .summary-page:not(.trend-page) > .summary-stage{padding:10px 12px 12px!important}
+  .summary-page:not(.trend-page) .summary-heading.calendar-toolbar{
+    margin-bottom:6px!important;
+    row-gap:3px;
+  }
+  .summary-page:not(.trend-page) .summary-numbers{gap:10px!important}
+  .summary-page:not(.trend-page) .calendar-wrapper{margin-top:6px!important}
+}
