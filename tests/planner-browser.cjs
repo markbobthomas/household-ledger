@@ -973,6 +973,46 @@ const {chromium,webkit}=require('playwright');
    assert.ok(countAfterSort===null||Number(countAfterSort)>=0,
     'Sort changes do not break the review count action');
 
+   // Clicking a category review transaction opens the exact bank transaction
+   // editor used by Transactions; selecting its Category remains independent.
+   const bankReviewRows=page.locator('[data-category-review-form] [data-review-bank-id]');
+   if(await bankReviewRows.count()){
+    const open=bankReviewRows.first(),owner=open.locator('xpath=..'),
+     reviewId=await owner.getAttribute('data-category-id'),
+     reviewAccount=await open.getAttribute('data-review-bank-account'),
+     beforeReviewCount=await page.locator('[data-category-review-form]').count();
+    const bankName=await open.locator('strong').innerText(),
+     categoryPicker=owner.locator('[name=category]');
+    await open.click();
+    assert.equal(await page.locator('[data-transaction-overlay]').count(),1,
+     'Review opens the same shared transaction detail surface');
+    assert.equal(await page.locator('.transaction-detail h2').innerText(),bankName);
+    assert.equal(await page.locator('.transaction-detail [data-actual-transaction-category]').count(),1,
+     'Shared bank editor exposes the editable transaction category');
+    assert.equal(await page.locator('.transaction-detail [data-transaction-note-form]').count(),1,
+     'The personal note editor is available when opened from Things to check');
+    const noteKey=await page.locator('.transaction-detail [data-transaction-note-form]')
+     .getAttribute('data-transaction-note-form');
+    assert.equal(noteKey,'bank:'+JSON.stringify([reviewAccount,reviewId]),
+     'Review opens the same account-specific bank record, not another account or a prediction');
+    await page.locator('.transaction-detail-close').click();
+    assert.equal(await page.locator('[data-transaction-overlay]').count(),0);
+    assert.equal(await page.locator('[data-category-review-form]').count(),beforeReviewCount,
+     'Opening and closing a review item must not silently resolve it');
+    assert.equal(await categoryPicker.inputValue(),'',
+     'The one-click Category control still works independently of opening details');
+   }
+   const planReviewRows=page.locator('[data-category-review-form] [data-review-plan-kind]');
+   if(await planReviewRows.count()){
+    const plan=planReviewRows.first(),kind=await plan.getAttribute('data-review-plan-kind');
+    if(kind==='schedule'){
+     await plan.click();
+     assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
+      'A recurring bill category review opens the canonical schedule editor');
+     await page.locator('.transaction-detail-close').click();
+    }
+   }
+
    const categoryForms=page.locator('[data-category-review-form]');
    const categoryFormsBefore=await categoryForms.count();
    if(categoryFormsBefore){
