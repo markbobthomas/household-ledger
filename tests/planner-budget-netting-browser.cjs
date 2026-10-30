@@ -136,8 +136,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Summary is the fourth Spending subtab');
    assert.equal(await page.locator('[data-recap-spent] strong').innerText(),budgetSpend,
     name+': Summary and Budget net posted spending must agree');
-   assert.equal(await page.locator('.financial-recap-page input,.financial-recap-page button').count(),0,
-    name+': Summary may not edit any banking or planning information');
+   assert.equal(await page.locator('.financial-recap-page [data-history-month-picker]').count(),1,
+    name+': Summary shares the calendar-month picker');
+   assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page button:not([data-history-month-toggle]):not([data-history-month-current]):not([data-history-month-all])').count(),0,
+    name+': Summary can select report months but cannot edit financial information');
    const billCategories=await page.locator('.financial-recap-card').first().innerText();
    assert.match(billCategories,/Credit card payments/);
    assert.match(billCategories,/\$50\.00/,

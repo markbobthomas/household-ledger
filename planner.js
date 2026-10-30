@@ -1739,15 +1739,52 @@ function historyInsights(rows,view,options={}){
   '</div></section>';
 }
 
+// One shared checkbox picker keeps calendar-month selections consistent across reports.
+function spendingMonthPicker(records,asOf){
+ // Each checked item is one whole calendar month; selection need not be consecutive.
+ const currentMonth=asOf.slice(0,7),
+  earliestMonth=records.reduce((first,row)=>row.date.slice(0,7)<first?row.date.slice(0,7):first,currentMonth),
+  availableMonths=[];
+ for(let d=new Date(currentMonth+'-01T12:00:00Z');d.toISOString().slice(0,7)>=earliestMonth;d.setUTCMonth(d.getUTCMonth()-1))
+  availableMonths.push(d.toISOString().slice(0,7));
+ if(!historySelectedMonths)historySelectedMonths=new Set([currentMonth]);
+ const availableSet=new Set(availableMonths);
+ for(const month of historySelectedMonths)if(!availableSet.has(month))historySelectedMonths.delete(month);
+ if(!historySelectedMonths.size)historySelectedMonths.add(currentMonth);
+ const monthLabel=m=>new Date(m+'-01T12:00:00Z')
+  .toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'}),
+  monthSummary=historySelectedMonths.size===1?monthLabel([...historySelectedMonths][0]):
+   historySelectedMonths.size===availableMonths.length?'All months ('+availableMonths.length+')':
+   historySelectedMonths.size+' months selected';
+ return {label:monthSummary,markup:
+  '<div class="history-period-controls">'+
+     '<div class="history-month-picker" data-history-month-picker>'+
+      '<button type="button" class="history-month-trigger" data-history-month-toggle aria-haspopup="true" aria-expanded="'+
+       historyMonthPickerOpen+'" aria-controls="history-month-menu" aria-label="Calendar months: '+
+       escapeHTML(monthSummary)+'"><span>Months</span><strong>'+escapeHTML(monthSummary)+
+       '</strong><span aria-hidden="true" class="history-month-caret">⌄</span></button>'+
+      '<div id="history-month-menu" class="history-month-menu" data-history-month-menu'+
+       (historyMonthPickerOpen?'':' hidden')+'>'+
+       '<div class="history-month-actions">'+
+        '<button type="button" data-history-month-current>This month</button>'+
+        '<button type="button" data-history-month-all>All months</button></div>'+
+       '<div class="history-month-list" data-history-month-list role="group" aria-label="Choose calendar months">'+
+        availableMonths.map(month=>'<label class="history-month-option"><input type="checkbox" data-history-month-option value="'+
+         escapeHTML(month)+'"'+(historySelectedMonths.has(month)?' checked':'')+'><span>'+
+         escapeHTML(monthLabel(month))+'</span></label>').join('')+
+       '</div></div></div></div>'};
+}
+
 /* Read-only fourth main tab: bank history and the canonical forecast supply
    the numbers. Never persist a second financial model or change bank facts. */
 function financialRecapPage(bundle,s){
  const asOf=String(s.asOf||dateToday()),month=asOf.slice(0,7),
-  monthTitle=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',
-   {month:'long',year:'numeric',timeZone:'UTC'}),
   posted=model.records(state()).filter(r=>r.date&&r.date<=asOf),
+  picker=spendingMonthPicker(posted,asOf),
+  selectedMonths=historySelectedMonths,
+  periodLabel=picker.label,
   settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(posted),
-  current=posted.filter(r=>r.date.startsWith(month)),
+  current=posted.filter(r=>selectedMonths.has(r.date.slice(0,7))),
   spendingCents=current.reduce((total,r)=>total+categorySpendingCents(r,settlements),0),
   incomeCents=current.reduce((total,r)=>{
    if(r.pending||r.pairedTransactionId||r.type!=='income'||
@@ -1763,6 +1800,7 @@ function financialRecapPage(bundle,s){
     sum+Math.round(Number(amount)*100):sum,0),
   budgetSet=Object.entries(budgets).some(([name,amount])=>
    categories.has(name)&&amount!==null&&amount!==''&&Number.isFinite(Number(amount))&&Number(amount)>=0),
+  periodBudgetCents=budgetCents*selectedMonths.size,
   hasProjection=Boolean(bundle?.projection),
   accountsById=new Map(activeAccounts(s).map(a=>[String(a.id),a])),
   rules=new Map((state().predictions?.futureRecurringRules||[])
@@ -1832,18 +1870,17 @@ function financialRecapPage(bundle,s){
     '<strong>'+cash(cents/(average?1200:100))+'</strong></div>').join('')+'</div>':
    '<p class="financial-recap-empty">'+escapeHTML(empty)+'</p>';
  return '<div class="planner-page financial-recap-page" data-financial-recap>'+
-  '<header class="financial-recap-header"><div><h2>Summary</h2>'+
-  '<p>'+escapeHTML(monthTitle)+' · posted activity through '+escapeHTML(dateLong(asOf))+
-  '</p></div><span class="financial-recap-readonly">Read-only</span></header>'+
+  '<header class="financial-recap-header"><h2>Summary</h2>'+
+   picker.markup+'</header>'+
   '<div class="financial-recap-metrics">'+
    metric('Total monthly bills',monthlyBills===null?'Unavailable':cash(monthlyBills),
     '12-month average of predicted checking payments','bills')+
-   metric('Spent this month',cash(spendingCents/100),
-    'Posted purchases less refunds','spent')+
-   metric('Income this month',cash(incomeCents/100),
-    'Posted deposits, excluding transfers','income')+
-   metric('Monthly budget',budgetSet?cash(budgetCents/100):'Not set',
-    budgetSet?Math.round(budgetCents?spendingCents/budgetCents*100:0)+'% used this month':
+   metric('Spent',cash(spendingCents/100),
+    periodLabel+' · net purchases','spent')+
+   metric('Income',cash(incomeCents/100),
+    periodLabel+' · deposits','income')+
+   metric('Budget',budgetSet?cash(periodBudgetCents/100):'Not set',
+    budgetSet?Math.round(periodBudgetCents?spendingCents/periodBudgetCents*100:0)+'% used · '+periodLabel:
     'Targets are set on Budget','budget')+
   '</div>'+
   '<div class="financial-recap-sections">'+
@@ -1854,8 +1891,8 @@ function financialRecapPage(bundle,s){
      '<p class="financial-recap-empty">Bill forecasts are unavailable until the Calendar projection is ready.</p>')+
     '<small class="financial-recap-note">Card payments counted once · transfers excluded</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
-    '<p>This month · net of refunds</p>'+
-    breakdown(topSpending,false,'No posted purchases this month.')+
+    '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
+    breakdown(topSpending,false,'No posted purchases in selected months.')+
     '</section>'+
    '<section class="financial-recap-card financial-recap-upcoming"><h3>Next predicted bills</h3>'+
     '<p>Next 30 days</p>'+
@@ -1929,21 +1966,7 @@ function historyPage(bundle,s){
   // are not saved as duplicate registry entries.
   categories=categoryOptionsWithOther(model.categories(state(),records.map(t=>t.category))),
   filterCategories=categories;
- // Each checked item is one whole calendar month; selection need not be consecutive.
- const currentMonth=s.asOf.slice(0,7),
-  earliestMonth=records.reduce((first,row)=>row.date.slice(0,7)<first?row.date.slice(0,7):first,currentMonth),
-  availableMonths=[];
- for(let d=new Date(currentMonth+'-01T12:00:00Z');d.toISOString().slice(0,7)>=earliestMonth;d.setUTCMonth(d.getUTCMonth()-1))
-  availableMonths.push(d.toISOString().slice(0,7));
- if(!historySelectedMonths)historySelectedMonths=new Set([currentMonth]);
- const availableSet=new Set(availableMonths);
- for(const month of historySelectedMonths)if(!availableSet.has(month))historySelectedMonths.delete(month);
- if(!historySelectedMonths.size)historySelectedMonths.add(currentMonth);
- const monthLabel=m=>new Date(m+'-01T12:00:00Z')
-  .toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'}),
-  monthSummary=historySelectedMonths.size===1?monthLabel([...historySelectedMonths][0]):
-   historySelectedMonths.size===availableMonths.length?'All months ('+availableMonths.length+')':
-   historySelectedMonths.size+' months selected';
+ const picker=spendingMonthPicker(records,s.asOf);
  // Use complete posted, cross-account history to recognize a bank-coded card
  // payment even when the Budget is filtered to one account or calendar month.
  const budgetCardSettlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records);
@@ -2119,22 +2142,7 @@ function historyPage(bundle,s){
  })();
  return '<div class="planner-page history-page">'+
   '<div class="history-view-toolbar">'+(activeTab==='activity'?'':spendingTabNav(displayView))+
-   '<div class="history-period-controls">'+
-     '<div class="history-month-picker" data-history-month-picker>'+
-      '<button type="button" class="history-month-trigger" data-history-month-toggle aria-haspopup="true" aria-expanded="'+
-       historyMonthPickerOpen+'" aria-controls="history-month-menu" aria-label="Calendar months: '+
-       escapeHTML(monthSummary)+'"><span>Months</span><strong>'+escapeHTML(monthSummary)+
-       '</strong><span aria-hidden="true" class="history-month-caret">⌄</span></button>'+
-      '<div id="history-month-menu" class="history-month-menu" data-history-month-menu'+
-       (historyMonthPickerOpen?'':' hidden')+'>'+
-       '<div class="history-month-actions">'+
-        '<button type="button" data-history-month-current>This month</button>'+
-        '<button type="button" data-history-month-all>All months</button></div>'+
-       '<div class="history-month-list" data-history-month-list role="group" aria-label="Choose calendar months">'+
-        availableMonths.map(month=>'<label class="history-month-option"><input type="checkbox" data-history-month-option value="'+
-         escapeHTML(month)+'"'+(historySelectedMonths.has(month)?' checked':'')+'><span>'+
-         escapeHTML(monthLabel(month))+'</span></label>').join('')+
-       '</div></div></div></div></div>'+
+   picker.markup+'</div>'+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
