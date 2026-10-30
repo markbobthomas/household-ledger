@@ -4741,3 +4741,12 @@ a:hover{color:#166e61}
 .transaction-detail [data-actual-category-status]{
  font-size:11px;font-weight:550;color:#577a66;
 }
+
+/* Keep shared actions together and reclaim the mobile title space. */
+.topbar .topbar-undo{min-height:44px;white-space:nowrap}
+.topbar .topbar-undo:disabled{opacity:.45;cursor:default}
+@media(max-width:780px){
+ .topbar>div:first-child{display:none!important}
+ .topbar .top-actions{width:100%!important;justify-content:flex-end;gap:8px}
+ .topbar .top-actions>button,.topbar .planner-menu>summary{min-height:44px}
+}
