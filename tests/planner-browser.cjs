@@ -1465,12 +1465,23 @@ const {chromium,webkit}=require('playwright');
      const name=node.querySelector(nameSelector),value=node.querySelector(valueSelector);
      return {name:name?parseFloat(getComputedStyle(name).fontSize):null,
       value:value?parseFloat(getComputedStyle(value).fontSize):null,
+      // The visible dollar is rendered in nested glyph spans. A matching
+      // outer amount font-size alone does not guarantee visually equal text.
+      glyphSizes:value?[...value.querySelectorAll('.ledger-money-sign,.ledger-money-dollar,.ledger-money-digits')]
+       .map(el=>parseFloat(getComputedStyle(el).fontSize)):[],
       width:document.documentElement.scrollWidth,viewport:innerWidth};
     },{nameSelector,valueSelector});
    };
    const assertFontsMatch=(label,actual,expected)=>{
     assert.deepEqual([actual.name,actual.value],[expected.name,expected.value],
      label+' must match Upcoming Bills exact computed name/amount font sizes: '+
+     JSON.stringify({actual,expected}));
+    if(label.startsWith('Repeating ')||label.startsWith('Posted Activity ')){
+     assert.equal(actual.glyphSizes.length,3,
+      label+' should render sign, dollar and digits as separate real glyphs');
+    }
+    assert.ok(actual.glyphSizes.every(size=>size===expected.value),
+     label+' nested visible amount glyphs must have Upcoming Bills font size: '+
      JSON.stringify({actual,expected}));
     assert.ok(actual.width<=actual.viewport+3,
      label+' must not introduce horizontal overflow: '+JSON.stringify(actual));
