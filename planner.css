@@ -4741,3 +4741,51 @@ a:hover{color:#166e61}
 .transaction-detail [data-actual-category-status]{
  font-size:11px;font-weight:550;color:#577a66;
 }
+
+
+/* Budget category order and expanded between-label-and-amount progress tracks.
+   Preserve the spent/target columns and let the middle track absorb free space. */
+.history-page .history-category-columns,
+.history-page .history-category-item{
+ grid-template-columns:minmax(155px,24%) minmax(0,1fr) minmax(78px,94px) minmax(116px,140px);
+ column-gap:14px;
+}
+.history-page .history-category-label-cell{
+ display:flex;align-items:center;gap:8px;min-width:0;
+}
+.history-page .history-category-label-cell .history-category-drill{
+ flex:1 1 0;min-width:0;align-self:center;
+}
+.history-page .history-category-drag-handle{
+ flex:0 0 25px;display:grid;place-items:center;
+ width:25px;height:35px;min-width:25px;padding:0;border:0;
+ background:transparent;border-radius:7px;color:#97aaa0;
+ font-size:23px;line-height:1;cursor:grab;touch-action:none;
+ user-select:none;-webkit-user-select:none;
+}
+.history-page .history-category-drag-handle:hover,
+.history-page .history-category-drag-handle:focus-visible{
+ color:#366b52;background:#e9f3eb;
+ outline-offset:1px;
+}
+.history-page .history-category-drag-handle:active{cursor:grabbing}
+.history-page .history-category-item.category-dragging{
+ background:#ecf6ee!important;box-shadow:inset 0 0 0 1px #aecbb7;
+}
+.history-page .history-category-item .history-budget-track{width:100%}
+@media(max-width:650px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(91px,31%) minmax(0,1fr) 68px 104px;
+  column-gap:5px;
+ }
+ .history-page .history-category-label-cell{gap:3px}
+ .history-page .history-category-drag-handle{flex-basis:19px;min-width:19px;width:19px;font-size:19px}
+}
+@media(max-width:380px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(85px,31%) minmax(0,1fr) 62px 97px;
+  column-gap:3px;
+ }
+}
