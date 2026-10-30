@@ -1745,6 +1745,11 @@ function historyInsights(rows,view,options={}){
      '<small class="history-budget-difference">'+(set?'Household target':'Not set')+'</small>');
   };
 
+  const budgetOver=g=>{
+   const target=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN;
+   return Number.isFinite(target)&&target>=0&&
+    (g.cents+(g.expectedCents||0))>Math.round(target*100)*periodMonths;
+  };
   // Visual comparison only; use the same monthly target and selected period as
   // the adjacent budget editor. Bank transactions and forecasts are untouched.
   const budgetBar=g=>{
@@ -1752,7 +1757,7 @@ function historyInsights(rows,view,options={}){
     set=Number.isFinite(raw)&&raw>=0,
     monthly=set?Math.round(raw*100)/100:0,
     spent=(g.cents+(g.expectedCents||0))/100,totalBudget=monthly*periodMonths,
-    over=set&&spent>totalBudget,
+    over=budgetOver(g),
     percent=!set?0:totalBudget>0?Math.max(0,Math.min(100,spent/totalBudget*100)):over?100:0,
     description=set?cash(spent)+(g.expectedCount?' spent + expected of ':' spent of ')+cash(totalBudget)+' budget for '+g.name+
      (periodMonths>1?' over '+periodMonths+' months':' this month')+
@@ -1815,7 +1820,7 @@ function historyInsights(rows,view,options={}){
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
       '<small>'+g.count+' transactions'+(g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button></div>'+ 
      budgetBar(g)+
-     '<strong class="history-category-actual" title="'+escapeHTML(cash(g.cents/100)+' spent · '+cash((g.expectedCents||0)/100)+' expected')+'">'+cash((g.cents+(g.expectedCents||0))/100)+'</strong>'+
+     '<strong class="history-category-actual'+(budgetOver(g)?' over':'')+'" title="'+escapeHTML(cash(g.cents/100)+' spent · '+cash((g.expectedCents||0)/100)+' expected')+'">'+cash((g.cents+(g.expectedCents||0))/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
     '</div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
    '</section>';
@@ -2304,11 +2309,12 @@ function historyPage(bundle,s){
  })();
  return '<div class="planner-page history-page">'+
   '<div class="history-view-toolbar">'+(activeTab==='activity'?'':spendingTabNav(displayView))+
-   picker.markup+'</div>'+
-  '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
+   (displayView==='categories'?'':picker.markup)+'</div>'+
+  '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters history-budget-filters')+'" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
+   (displayView==='categories'?'<div class="history-budget-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    (displayView==='categories'?'':'<label>Sort by<select name="historySort" data-history-sort>'+
     [['newest','Newest first'],['oldest','Oldest first'],
      ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
