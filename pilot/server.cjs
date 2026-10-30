@@ -249,10 +249,44 @@ async function start(port=Number(env.PORT||8788)){
   try{
    if(accountRemovalBusy&&[
     '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
-     '/api/ledger/category-rule','/api/ledger/categories/delete','/api/exchange',
+     '/api/ledger/category-rule','/api/ledger/categories/delete','/api/ledger/categories/rename','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
+   if(requestPath==='/api/ledger/categories/rename'){
+    if(!state.items.length)return respond(409,{error:'No bank account connected'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+     Object.keys(body).sort().join(',')!=='from,to'||
+     typeof body.from!=='string'||typeof body.to!=='string'||
+     !body.from||!body.to||body.from.length>40||body.to.length>40)
+     return respond(400,{error:'Choose a category and its new name'});
+    const M=require('../ledger-data.js'),feed=require('./data-source.js'),
+     before=JSON.parse(JSON.stringify(state.ledgerAdjustments||{})),
+     accounts=new Map(state.accounts.map(a=>[String(a.id),a]));
+    // Recompute effective assignments against server-authoritative bank rows.
+    // Never trust client-supplied IDs or let this endpoint write Plaid facts.
+    const rows=Object.values(state.transactions).map(tx=>{
+     const account=accounts.get(String(tx.accountId));
+     return account?feed.record(tx,account):null;
+    }).filter(Boolean);
+    const decision=M.migrate({transactions:rows,predictions:before.predictions||{},
+     categoryOverrides:before.categoryOverrides||{},learning:before.learning||{},
+     reviews:before.reviews||{}});
+    let renamed;
+    try{renamed=M.renameCategory(decision,body.from,body.to)}
+    catch(error){return respond(400,{error:String(error.message||error)})}
+    try{
+     await saveForecast(decision.predictions);
+     state.ledgerAdjustments={...before,predictions:decision.predictions,
+      categoryOverrides:decision.categoryOverrides,learning:decision.learning};
+     await save();
+    }catch(error){
+     state.ledgerAdjustments=before;
+     try{await saveForecast(before.predictions||{})}catch{}
+     throw error;
+    }
+    return respond(200,{saved:true,scope:'category-rename',from:renamed.from,to:renamed.to});
+   }
    if(requestPath==='/api/ledger/categories/delete'){
     if(!state.items.length)return respond(409,{error:'No bank account connected'});
     if(!body||typeof body!=='object'||Array.isArray(body)||

@@ -81,4 +81,50 @@ assert.equal(M.categoryFor(displayOnly,'new-wages'),'Uncategorized',
  'Newly synced bank income cannot resurrect a deleted display category');
 assert.deepEqual(JSON.stringify(displayOnly.transactions.slice(0,3)),bankOriginal,
  'No original bank transaction data is changed by deleting displayed categories');
-console.log('PASS any category deletion, historical/forecast Unassigned review, tombstones, restart, and banking immutability');
+// Rename both built-in and custom categories without losing saved plans,
+// learned merchant classifications, displayed order, or source immutability.
+const named=M.migrate({transactions:bankRows,predictions:{
+ scheduleCategories:['Pet Care'],
+ categoryMonthlyBudgets:{Groceries:80,'Pet Care':50},
+ categoryDisplayOrder:['Pet Care','Groceries','Other'],
+ futureRecurringRules:[{id:'bill',category:'Groceries',categoryReviewed:true,
+  amount:30,merchant:'Fictional Bill',anchorDate:'2026-11-01'}],
+ futureTransactionAdds:[{id:'added',category:'Pet Care',amount:22,
+  merchant:'Fictional Pet',date:'2026-11-03'}],
+ categoryForecasts:{'2026-11|Groceries':{additional:40}}
+},categoryOverrides:{'other-1':'Pet Care'},
+ learning:{categoryRules:{fictional:{category:'Groceries',mode:'auto'}},ruleHistory:[]}});
+const initialSource=JSON.stringify(named.transactions);
+const groceryChange=M.renameCategory(named,'Groceries','Food & Pantry');
+assert.equal(groceryChange.from,'Groceries');
+assert.equal(M.categoryFor(named,'groceries-1'),'Food & Pantry');
+assert.ok(!M.categories(named,bankRows.map(x=>x.category)).includes('Groceries'));
+assert.ok(M.categories(named).includes('Food & Pantry'));
+assert.equal(named.predictions.categoryMonthlyBudgets['Food & Pantry'],80);
+assert.equal(named.predictions.categoryMonthlyBudgets.Groceries,undefined);
+assert.equal(named.predictions.futureRecurringRules[0].category,'Food & Pantry');
+assert.equal(named.predictions.futureRecurringRules[0].categoryReviewed,true);
+assert.equal(named.learning.categoryRules.fictional.category,'Food & Pantry');
+assert.equal(named.predictions.categoryForecasts['2026-11|Food & Pantry'].additional,40);
+assert.deepEqual(named.predictions.categoryDisplayOrder,['Pet Care','Food & Pantry','Other']);
+M.renameCategory(named,'Pet Care','Animals');
+assert.equal(named.categoryOverrides['other-1'],'Animals');
+assert.equal(named.predictions.futureTransactionAdds[0].category,'Animals');
+assert.equal(named.predictions.categoryMonthlyBudgets.Animals,50);
+assert.deepEqual(named.predictions.categoryDisplayOrder,['Animals','Food & Pantry','Other']);
+assert.throws(()=>M.renameCategory(named,'Animals','Food & Pantry'),/already exists/);
+assert.throws(()=>M.renameCategory(named,'Animals','bad<>'),/2–40/);
+assert.equal(JSON.stringify(named.transactions),initialSource,'Renaming never edits bank source transactions');
+const namedReloaded=M.migrate(clone(named));
+assert.equal(M.categoryFor(namedReloaded,'groceries-1'),'Food & Pantry',
+ 'Private renamed categorization wins over old imported source labels after refresh');
+assert.equal(M.categoryFor(namedReloaded,'other-1'),'Animals');
+assert.equal(namedReloaded.predictions.futureRecurringRules[0].amount,30);
+assert.ok(!M.categories(namedReloaded).includes('Pet Care'));
+const pay=M.migrate({transactions:[{id:'income-new',date:'2026-10-16',merchant:'Fictional Salary',
+ type:'income',category:'Other',accountId:'checking',amount:1000}]});
+M.renameCategory(pay,'Income','Paychecks');
+assert.equal(pay.categoryOverrides['income-new'],'Paychecks',
+ 'Renaming a displayed built-in category must preserve income type without bank edits');
+assert.equal(pay.transactions[0].type,'income');
+console.log('PASS any category deletion, historical/forecast Unassigned review, tombstones, restart, and rename, preservation, banking immutability');

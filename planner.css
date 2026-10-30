@@ -5005,3 +5005,52 @@ a:hover{color:#166e61}
  width:100%;
  max-width:100%;
 }
+
+/* Budget target input follows the same bar centerline, even though the bar
+   reserves space below itself for its attached actual-spending amount. */
+@media(min-width:651px){
+ .history-page .history-category-item .history-category-budget{
+  transform:translateY(-10.5px);
+ }
+}
+@media(max-width:650px){
+ /* On narrow screens keep category above; put the bar and target together. */
+ .history-page .history-category-item .history-category-label-cell{
+  grid-column:1/-1;grid-row:1;
+ }
+ .history-page .history-category-item .history-budget-track{
+  grid-column:1;grid-row:2;
+ }
+ .history-page .history-category-item .history-category-budget{
+  grid-column:2;grid-row:2;
+  align-self:center;
+  transform:translateY(-10px);
+ }
+}
+/* Category edits stay inline with the existing Manage list. */
+.history-page .history-custom-category{flex-wrap:wrap}
+.history-page .history-custom-category-actions{
+ display:flex;align-items:center;gap:6px;margin-left:auto;
+}
+.history-page .history-custom-category-actions [data-history-category-rename-open]{
+ color:#416d55;background:#f5faf6;border-color:#dce9df;
+}
+.history-page .history-custom-category.renaming>span,
+.history-page .history-custom-category.renaming>.history-custom-category-actions{
+ display:none;
+}
+.history-page .history-custom-category [data-history-category-rename]{
+ display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+ width:100%;min-width:0;
+}
+.history-page .history-custom-category [data-history-category-rename][hidden]{
+ display:none!important;
+}
+.history-page .history-custom-category [data-history-category-rename] input{
+ min-width:110px;flex:1 1 120px;max-width:100%;height:35px;
+ padding:6px 9px;border:1px solid #dce8df;border-radius:9px;
+ background:#fff;color:#304e3d;font:inherit;font-size:13px;
+}
+.history-page .history-custom-category [data-history-category-rename] button{
+ min-height:35px;color:#37634d;background:#f6faf7;border-color:#dce9df;
+}

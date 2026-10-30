@@ -500,15 +500,39 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-history-category-delete="Income"],[data-history-category-delete="Transfer"]').count(),2,
     'Income and Transfer remain in the category manager, not deleted from the catalog');
 
+   // Edit a custom target, then rename without losing the numeric budget,
+   // list position or any existing transaction category assignments.
+   await page.locator('[data-history-budget="Fictional Pet Care"]').fill('45.50');
+   await page.locator('[data-history-budget="Fictional Pet Care"]').press('Tab');
+   await page.waitForFunction(()=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.['Fictional Pet Care']===45.5);
    await page.locator('.history-category-manager>summary').click();
-   assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),1);
-   page.once('dialog',dialog=>dialog.accept());
-   await page.locator('[data-history-category-delete="Fictional Pet Care"]').click();
+   await page.locator('[data-history-category-rename-open="Fictional Pet Care"]').click();
+   const renameEditor=page.locator('[data-history-category-rename="Fictional Pet Care"]');
+   assert.equal(await renameEditor.isVisible(),true,'Rename editor opens inline');
+   await renameEditor.locator('[name=newCategoryName]').fill('Groceries');
+   await renameEditor.locator('[type=submit]').click();
+   assert.match(await page.locator('[data-history-category-manage-message]').innerText(),
+    /already exists/,'Duplicate category names are rejected without altering data');
+   await renameEditor.locator('[name=newCategoryName]').fill('Fictional Animal Care');
+   await renameEditor.locator('[type=submit]').click();
    assert.equal(await page.locator('.history-category-manage-status').innerText(),
-    'Deleted Fictional Pet Care. Affected items are Unassigned in Things to check.');
-   assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),0);
-   assert.equal(await page.locator('[data-history-category-row="Fictional Pet Care"]').count(),0,
-    'Deleted categories are removed from the spending list too');
+    'Renamed Fictional Pet Care to Fictional Animal Care. Assignments and budgets kept.');
+   assert.equal(await page.locator('[data-history-category-row="Fictional Pet Care"]').count(),0);
+   assert.equal(await page.locator('[data-history-budget="Fictional Animal Care"]').inputValue(),'45.50');
+   await page.reload();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(await page.locator('[data-history-budget="Fictional Animal Care"]').inputValue(),'45.50',
+    'Renamed category budget persists after reload');
+   await page.locator('.history-category-manager>summary').click();
+   assert.equal(await page.locator('[data-history-category-delete="Fictional Animal Care"]').count(),1);
+   page.once('dialog',dialog=>dialog.accept());
+   await page.locator('[data-history-category-delete="Fictional Animal Care"]').click();
+   assert.equal(await page.locator('.history-category-manage-status').innerText(),
+    'Deleted Fictional Animal Care. Affected items are Unassigned in Things to check.');
+   assert.equal(await page.locator('[data-history-category-delete="Fictional Animal Care"]').count(),0);
+   assert.equal(await page.locator('[data-history-category-row="Fictional Animal Care"]').count(),0,
+    'Deleted renamed categories are removed from the spending list too');
    const catalog=await page.evaluate(()=>JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}'));
    assert.ok(!(catalog.scheduleCategories||[]).includes('Fictional Pet Care'),
     'Deleted category stays absent from saved preferences');
@@ -824,7 +848,8 @@ const {chromium,webkit}=require('playwright');
       actualLeft:actual.left,actualRight:actual.right,
       actualTop:actual.top,barBottom:bar.bottom,
       budgetLeft:budget.left,budgetRight:budget.right,
-      inputRight:input.right,targetHeaderRight:headings[2].right,
+      inputRight:input.right,inputCenterY:(input.top+input.bottom)/2,
+      barCenterY:(bar.top+bar.bottom)/2,targetHeaderRight:headings[2].right,
       inputTextAlign:getComputedStyle(row.querySelector('.history-budget-input input')).textAlign,
       barHeight:bar.height,markerCenter,expectedCenter,
       viewport:document.documentElement.scrollWidth};
@@ -845,6 +870,9 @@ const {chromium,webkit}=require('playwright');
     assert.ok(Math.abs(dimensions.budgetRight-dimensions.inputRight)<=2&&
      Math.abs(dimensions.budgetRight-dimensions.targetHeaderRight)<=2,
      'The editable monthly target and heading align at '+width+': '+JSON.stringify(dimensions));
+    assert.ok(Math.abs(dimensions.inputCenterY-dimensions.barCenterY)<=3,
+     'Budget cap input stays vertically centered on the progress bar at '+width+': '+
+      JSON.stringify(dimensions));
     assert.equal(dimensions.inputTextAlign,'right',
      'Editable budget values remain right-aligned and easy to scan');
 
