@@ -136,6 +136,9 @@ function postedDay(date){
    action=matches.length===1?'View prediction':matches.length>1?'Choose prediction':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row"><span class="calendar-transaction-name">'+
    esc(t.merchant||'Bank transaction')+
+   (calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)]))?
+    '<small class="transaction-note-subtitle">'+
+     esc(calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)])))+'</small>':'')+
    '<small>'+(t.pending?'Pending':'Posted')+'</small></span>'+
    '<strong class="'+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
    '</strong><button type="button" class="calendar-item-edit" data-calendar-history-plan="'+
@@ -148,6 +151,10 @@ function postedDay(date){
    '<p class="calendar-empty">No bank transactions recorded on this date.</p>')+
   '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
   '<button type="button" class="calendar-edit" data-view="activity">All bank history →</button></section>';
+}
+function calendarNote(key){
+ const stored=calendarContext?.prefs?.transactionNotes;
+ return stored&&typeof stored[key]==='string'?stored[key]:'';
 }
 function paymentDetail(event){
  const id=String(event?.transferGroupId||'');
@@ -166,6 +173,9 @@ function predictionEntry(date,e,index,card,selected=false){
   esc('Edit '+(e.merchant||'predicted payment')+' on '+shortDate(date))+'">'+
   '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
   '<span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
+  (calendarNote('forecast:'+predictionIdentity(e))?
+   '<small class="transaction-note-subtitle">'+
+    esc(calendarNote('forecast:'+predictionIdentity(e)))+'</small>':'')+
   (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
   '<strong class="'+(signed(e,card)>0?'in':'out')+'">'+fullSigned(e,card)+'</strong>'+
   '<span class="calendar-monthly-view" aria-hidden="true">Edit ›</span></button>';
