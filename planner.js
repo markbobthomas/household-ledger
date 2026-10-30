@@ -2716,7 +2716,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       escapeHTML(shiftDay(s.asOf,1))+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+
       '" value="'+escapeHTML(item.proposedDate)+'"></label>';
     return '<article class="overdue-review-row" data-review-order-date="'+escapeHTML(item.expectedDate||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-overdue-item="'+escapeHTML(item.key)+'">'+
-     '<div class="overdue-review-heading"><strong>'+escapeHTML(item.merchant)+' · '+cash(item.amount)+'</strong>'+
+     '<div class="overdue-review-heading"><strong class="overdue-review-merchant">'+escapeHTML(item.merchant)+'</strong>'+
+      '<strong class="overdue-review-value">'+cash(item.amount)+'</strong>'+
       '<small>Expected '+escapeHTML(dayLabel(item.expectedDate))+' · Not confirmed by bank</small></div>'+
      '<div class="overdue-review-actions">'+
       '<button type="button" class="btn" data-edit-overdue="'+escapeHTML(item.key)+'">'+

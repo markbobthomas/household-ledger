@@ -5418,3 +5418,51 @@ a:hover{color:#166e61}
   font-size:13px!important;
  }
 }
+
+
+/* Single typography source: the Upcoming Bills list is the reference
+   everywhere an individual transaction/payment is displayed. Use the SAME
+   size for merchant/name and dollar amount in Bills, Repeating, Activity,
+   Predictions, Calendar, Home preview, and Review (including card bills).
+   Do not change Budget/merchant aggregates, balance summaries or form inputs. */
+.planner-page{
+ --ledger-transaction-name-size:15px;
+ --ledger-transaction-value-size:16px;
+}
+.planner-page .bills-upcoming-description strong,
+.planner-page .ledger-transaction-row .ledger-transaction-identity strong,
+.planner-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong,
+.planner-page .ledger-transaction-row .calendar-transaction-name,
+.planner-page .review-candidate-main>strong,
+.planner-page .overdue-review-heading .overdue-review-merchant,
+.planner-page .card-bill-row>div>strong{
+ font-size:var(--ledger-transaction-name-size)!important;
+}
+.planner-page .bills-upcoming-row>strong,
+.planner-page .ledger-transaction-row .ledger-transaction-amount,
+.planner-page .ledger-transaction-row .ledger-transaction-amount>strong,
+.planner-page .review-candidate-amount,
+.planner-page .overdue-review-heading .overdue-review-value,
+.planner-page .card-bill-row>strong{
+ font-size:var(--ledger-transaction-value-size)!important;
+ font-variant-numeric:tabular-nums;
+}
+@media(max-width:850px){
+ .planner-page{
+  --ledger-transaction-name-size:14px;
+  --ledger-transaction-value-size:14px;
+ }
+}
+@media(max-width:390px){
+ .planner-page{
+  --ledger-transaction-name-size:13px;
+  --ledger-transaction-value-size:13px;
+ }
+}
+.planner-page .overdue-review-heading .overdue-review-merchant,
+.planner-page .overdue-review-heading .overdue-review-value{
+ display:inline;
+}
+.planner-page .overdue-review-heading .overdue-review-value{
+ margin-left:6px;
+}

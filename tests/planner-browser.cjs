@@ -1456,6 +1456,62 @@ const {chromium,webkit}=require('playwright');
     'Spacious Repeating row keeps existing editor');
    await page.locator('.transaction-detail-close').click();
 
+   // All transaction name and dollar typography must EXACTLY match
+   // Upcoming Bills at every responsive width, not merely use similar sizes.
+   const transactionFonts=async (rowSelector,nameSelector,valueSelector)=>{
+    const row=page.locator(rowSelector).first();
+    assert.ok(await row.count()>0,'Expected transaction for font comparison: '+rowSelector);
+    return row.evaluate((node,{nameSelector,valueSelector})=>{
+     const name=node.querySelector(nameSelector),value=node.querySelector(valueSelector);
+     return {name:name?parseFloat(getComputedStyle(name).fontSize):null,
+      value:value?parseFloat(getComputedStyle(value).fontSize):null,
+      width:document.documentElement.scrollWidth,viewport:innerWidth};
+    },{nameSelector,valueSelector});
+   };
+   const assertFontsMatch=(label,actual,expected)=>{
+    assert.deepEqual([actual.name,actual.value],[expected.name,expected.value],
+     label+' must match Upcoming Bills exact computed name/amount font sizes: '+
+     JSON.stringify({actual,expected}));
+    assert.ok(actual.width<=actual.viewport+3,
+     label+' must not introduce horizontal overflow: '+JSON.stringify(actual));
+   };
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+    const baseline=await transactionFonts(
+     '.bills-upcoming-row','.bills-upcoming-description strong','.bills-upcoming-row>strong');
+    assert.deepEqual([baseline.name,baseline.value],width<=390?[13,13]:width<=850?[14,14]:[15,16],
+     'Upcoming Bills is the reference for desktop and phone font sizes at '+width);
+    assertFontsMatch('Repeating '+width,await transactionFonts(
+     '.schedule-row-main.ledger-transaction-row',
+     '.schedule-row-title strong','.schedule-row-amount strong'),baseline);
+    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+    assertFontsMatch('Posted Activity '+width,await transactionFonts(
+     '.history-row-open.ledger-transaction-row',
+     '.history-actual-description strong','.history-actual-amount'),baseline);
+    await page.locator('#planner-menu>summary').click();
+    await page.locator('#planner-menu [data-view="transactions"]').click();
+    assertFontsMatch('Dated Predictions '+width,await transactionFonts(
+     '.unified-payment-trigger.ledger-transaction-row',
+     '.unified-payment-name strong','.unified-payment-value'),baseline);
+    await page.locator('.planner-nav-primary [data-view="summary"]').click();
+    await page.locator('[data-calendar-day="2026-10-23"]').click();
+    assertFontsMatch('Calendar prediction '+width,await transactionFonts(
+     '.calendar-day-detail .calendar-monthly-row.ledger-transaction-row',
+     '.calendar-monthly-name strong','.ledger-transaction-amount'),baseline);
+    await page.locator('.attention-link[data-view="reviews"]').click();
+    if(await page.locator('.category-review-open.ledger-transaction-row').count()){
+     assertFontsMatch('Review categorization '+width,await transactionFonts(
+      '.category-review-open.ledger-transaction-row',
+      '.ledger-transaction-identity strong','.ledger-transaction-amount'),baseline);
+    }
+    if(await page.locator('.review-row-open.ledger-transaction-row').count()){
+     assertFontsMatch('Review recurring '+width,await transactionFonts(
+      '.review-row-open.ledger-transaction-row',
+      '.review-candidate-main strong','.review-candidate-amount'),baseline);
+    }
+   }
+
    assert.deepEqual(errors,[],'No uncaught client errors on '+(mobile?'iPhone WebKit':'desktop Chromium'));
    await context.close();
   }
