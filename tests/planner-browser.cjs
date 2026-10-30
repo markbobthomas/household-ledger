@@ -122,8 +122,41 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-calendar-today]').click();
    assert.equal(await page.locator('#planner-menu [data-view="recap"]').count(),0,
     'Summary is no longer hidden inside More');
-   // Summary is a discoverable, read-only subtab inside Spending.
+   // Bigger, readable type on desktop, with proportionate mobile type.
+   // Keep the same Budget columns and editable amount alignment.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   const budgetType=await page.evaluate(()=>{
+    const root=document.querySelector('[data-history-category-insights]'),
+     row=root?.querySelector('.history-category-item'),
+     size=el=>el?parseFloat(getComputedStyle(el).fontSize):null,
+     box=el=>el?.getBoundingClientRect(),
+     name=row?.querySelector('.history-category-name'),
+     count=name?.querySelector('small'),
+     actual=row?.querySelector('.history-category-actual'),
+     input=row?.querySelector('.history-budget-input input'),
+     cols=root?.querySelector('.history-category-columns'),
+     target=row?.querySelector('.history-budget-input');
+    return {body:size(document.body),name:size(name),count:size(count),
+     amount:size(actual),input:size(input),heading:size(cols),
+     nav:size(document.querySelector('.main-navigation .tab-link')),
+     targetLeft:box(target)?.left,amountRight:box(actual)?.right,
+     rowWidth:box(row)?.width,scrollWidth:document.documentElement.scrollWidth,
+     viewport:innerWidth};
+   });
+   assert.ok(budgetType.name>=(mobile?13:18),
+    'Budget category titles must be significantly more readable: '+JSON.stringify(budgetType));
+   assert.ok(budgetType.amount>=(mobile?12:16)&&
+    budgetType.input>=(mobile?12:15),
+    'Budget actual and editable amount type sizes must match their importance');
+   if(!mobile){
+    assert.ok(budgetType.body>=15&&budgetType.nav>=15&&budgetType.heading>=12,
+     'Desktop text and Budget table headings are enlarged');
+    assert.ok(budgetType.count>=12,'Desktop category transaction counts are readable');
+   }
+   assert.ok(budgetType.rowWidth>0&&budgetType.targetLeft>=budgetType.amountRight-1,
+    'Larger numbers must not overlap the editable monthly target');
+   assert.ok(budgetType.scrollWidth<=budgetType.viewport+1,
+    'Larger Budget type must not create horizontal page overflow');
    await page.locator('[data-history-view="summary"]').click();
    assert.equal(await page.locator('[data-history-view="summary"][aria-pressed="true"]').count(),1);
    assert.equal(await page.locator('[data-financial-recap]').count(),1);
