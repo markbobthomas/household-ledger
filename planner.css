@@ -5054,3 +5054,59 @@ a:hover{color:#166e61}
 .history-page .history-custom-category [data-history-category-rename] button{
  min-height:35px;color:#37634d;background:#f6faf7;border-color:#dce9df;
 }
+
+/* Budget month menu: checkbox rows must not inherit the filter form's
+   100%-wide, 36px-tall input fields or column-oriented label layout.
+   Those generic rules previously put checkboxes on top of the month names. */
+.history-page .history-filters .history-month-option{
+ display:grid;
+ grid-template-columns:18px minmax(0,1fr);
+ align-items:center;
+ justify-content:stretch;
+ column-gap:10px;
+ width:100%;
+ max-width:100%;
+ min-width:0;
+ flex:none;
+ box-sizing:border-box;
+ padding:9px 10px;
+ min-height:38px;
+ line-height:1.35;
+}
+.history-page .history-filters .history-month-option input[type="checkbox"]{
+ display:block;
+ appearance:checkbox;
+ -webkit-appearance:checkbox;
+ width:17px!important;
+ height:17px!important;
+ min-width:0!important;
+ min-height:0!important;
+ max-width:17px!important;
+ max-height:17px!important;
+ flex:none;
+ padding:0!important;
+ margin:0!important;
+ box-sizing:border-box;
+ border:initial;
+ border-radius:initial;
+ background:initial;
+ cursor:pointer;
+}
+.history-page .history-filters .history-month-option>span{
+ display:block;
+ min-width:0;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+}
+
+/* Narrow-screen global month-menu rules left-anchor every popup. In the
+   Budget two-column filter the Months trigger sits on the RIGHT, so left
+   anchoring pushes the popup off-screen. Anchor it to the trigger's right. */
+.history-page .history-budget-filters .history-month-menu{
+ left:auto;
+ right:0;
+ box-sizing:border-box;
+ width:min(310px,calc(100vw - 32px));
+ max-width:calc(100vw - 32px);
+}
