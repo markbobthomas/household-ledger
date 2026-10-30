@@ -2905,6 +2905,23 @@ document.addEventListener('submit',async e=>{
    if(el.dataset.noteSubtitle!==key)return;
    el.textContent=note;el.hidden=!note;
   });
+  // When saving a first note, create its subtitle immediately without
+  // rebuilding the bank list or closing an unrelated editor.
+  if(note&&key.startsWith('bank:')){
+   document.querySelectorAll('[data-edit-transaction-note]').forEach(trigger=>{
+    if(trigger.dataset.editTransactionNote!==key)return;
+    const name=trigger.closest('.history-actual-row')?.querySelector('.history-actual-description'),
+     title=name?.querySelector('strong');
+    if(name&&title&&!name.querySelector('[data-note-subtitle]')){
+     const subtitle=document.createElement('small');
+     subtitle.className='transaction-note-subtitle';
+     subtitle.dataset.noteSubtitle=key;
+     subtitle.textContent=note;
+     title.insertAdjacentElement('afterend',subtitle);
+    }
+    trigger.setAttribute('aria-label','Edit note for '+(trigger.dataset.noteName||'transaction'));
+   });
+  }
   if(status)status.textContent='Saved';
   button.disabled=false;
  }catch(err){
