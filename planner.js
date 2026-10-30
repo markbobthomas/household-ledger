@@ -1790,15 +1790,23 @@ function historyInsights(rows,view,options={}){
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<div class="history-category-panel-heading">'+    '<details class="history-category-manager" data-history-category-manager>'+
-     '<summary aria-label="Manage categories: add or delete">Manage</summary>'+
+     '<summary aria-label="Manage categories: add, rename or delete">Manage</summary>'+
      '<div class="history-category-manager-body">'+
       '<form data-history-category-add><label>New category'+
        '<input name="categoryName" maxlength="40" placeholder="e.g. Pet care" required></label>'+
        '<button type="submit" class="btn primary">Add category</button></form>'+
       '<div class="history-category-manager-list"><strong>All categories</strong>'+
-       (custom.length?custom.map(c=>'<div class="history-custom-category">'+
-        '<span>'+escapeHTML(c)+'</span><button type="button" data-history-category-delete="'+
-        escapeHTML(c)+'" aria-label="Delete category '+escapeHTML(c)+'">Delete</button></div>').join(''):
+       (custom.length?custom.map(c=>'<div class="history-custom-category" data-history-category-item="'+escapeHTML(c)+'">'+
+        '<span>'+escapeHTML(c)+'</span><div class="history-custom-category-actions">'+
+        '<button type="button" data-history-category-rename-open="'+escapeHTML(c)+
+         '" aria-label="Rename category '+escapeHTML(c)+'">Rename</button>'+
+        '<button type="button" data-history-category-delete="'+escapeHTML(c)+
+         '" aria-label="Delete category '+escapeHTML(c)+'">Delete</button></div>'+
+        '<form data-history-category-rename="'+escapeHTML(c)+'" hidden>'+
+        '<input name="newCategoryName" maxlength="40" required aria-label="New name for '+escapeHTML(c)+
+         '" value="'+escapeHTML(c)+'">'+
+        '<button type="submit">Save</button><button type="button" data-history-category-rename-cancel>Cancel</button></form>'+
+        '</div>').join(''):
         '<p>No named categories. Add one above.</p>')+
        '<small>Deleting any category moves its transactions and bills to Unassigned in Things to check. Amounts and dates stay unchanged.</small></div>'+
       '<p data-history-category-manage-message role="status"></p>'+
@@ -3939,6 +3947,57 @@ async function undoLastForecastChange(){
   render();
  }
 }
+// Inline rename avoids a second management screen and preserves all private
+// category classifications, budgets, merchant lessons and display order.
+document.addEventListener('click',e=>{
+ const open=e.target.closest?.('[data-history-category-rename-open]');
+ const cancel=e.target.closest?.('[data-history-category-rename-cancel]');
+ if(!open&&!cancel)return;
+ const row=(open||cancel).closest('[data-history-category-item]');
+ const form=row?.querySelector('[data-history-category-rename]');
+ if(!row||!form)return;
+ if(open){
+  row.classList.add('renaming');
+  form.hidden=false;
+  const field=form.querySelector('[name=newCategoryName]');
+  field?.focus();field?.select();
+ }else{
+  form.hidden=true;
+  row.classList.remove('renaming');
+ }
+});
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest?.('[data-history-category-rename]');
+ if(!form)return;
+ e.preventDefault();
+ const field=form.querySelector('[name=newCategoryName]');
+ const from=form.dataset.historyCategoryRename,to=field?.value||'';
+ const button=form.querySelector('[type=submit]');
+ if(button)button.disabled=true;
+ const current=state(),previous={
+  predictions:JSON.stringify(current.predictions||{}),
+  categoryOverrides:JSON.stringify(current.categoryOverrides||{}),
+  learning:JSON.stringify(current.learning||{})
+ };
+ try{
+  const renamed=model.renameCategory(current,from,to);
+  const saved=live()?await window.HouseholdLiveSource.renameCategory(renamed.from,renamed.to):
+   savePlanning();
+  if(live()&&(!saved||saved.saved!==true))throw Error('Category rename was not confirmed');
+  if(scheduleCategoryFilter===renamed.from)scheduleCategoryFilter=renamed.to;
+  if(historyCategoryFilter===renamed.from)historyCategoryFilter=renamed.to;
+  historyCategoryNotice='Renamed '+renamed.from+' to '+renamed.to+'. Assignments and budgets kept.';
+  forecastCache=null;
+  render();
+ }catch(error){
+  current.predictions=JSON.parse(previous.predictions);
+  current.categoryOverrides=JSON.parse(previous.categoryOverrides);
+  current.learning=JSON.parse(previous.learning);
+  if(button)button.disabled=false;
+  const notice=form.closest('[data-history-category-manager]')?.querySelector('[data-history-category-manage-message]');
+  if(notice)notice.textContent=String(error.message||error);
+ }
+});
 // Custom category management belongs in Bank History → Categories, not Bills.
 document.addEventListener('submit',async e=>{
  const form=e.target.closest?.('[data-history-category-add]');
