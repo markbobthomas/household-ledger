@@ -1734,14 +1734,25 @@ function historyInsights(rows,view,options={}){
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
     value=set?Math.round(raw*100)/100:null;
-   // The bar shows spent + expected and any overage. Only the editable
-   // monthly target remains in this column; no redundant "left" subtitle.
-   return '<label class="history-budget-input"><span aria-hidden="true">$</span>'+
-    '<input type="number" inputmode="decimal" min="0" max="999999999" step="0.01" '+
-    'data-history-budget="'+escapeHTML(g.name)+'" aria-label="Monthly budget for '+
-    escapeHTML(g.name)+'" placeholder="Set" value="'+
-    (set?escapeHTML(value.toFixed(2)):'')+'"></label>'+
+   // Budget rows are for reviewing actual + expected spending, not editing.
+   return '<span class="history-budget-target" data-history-budget-display="'+
+    escapeHTML(g.name)+'" data-budget-monthly="'+(set?value.toFixed(2):'')+
+    '" aria-label="Monthly budget for '+escapeHTML(g.name)+': '+
+    (set?escapeHTML(cash(value)):'not set')+'">'+
+    (set?cash(value):'—')+'</span>'+
     (!allAccounts&&set?'<small class="history-budget-difference">Household target</small>':'');
+  };
+  const managerBudgetField=category=>{
+   // Income and transfers remain manageable categories but are never budgets.
+   if(['Income','Transfer'].includes(category))return '';
+   const raw=Object.hasOwn(budgets,category)?Number(budgets[category]):NaN,
+    set=Number.isFinite(raw)&&raw>=0,
+    value=set?(Math.round(raw*100)/100).toFixed(2):'';
+   return '<label class="history-manager-budget"><span class="visually-hidden">Monthly budget for '+
+    escapeHTML(category)+'</span><span aria-hidden="true">$</span>'+
+    '<input type="number" inputmode="decimal" min="0" max="999999999" step="0.01" '+
+    'data-history-budget="'+escapeHTML(category)+'" aria-label="Monthly budget for '+
+    escapeHTML(category)+'" placeholder="Set" value="'+escapeHTML(value)+'"></label>';
   };
 
   const budgetOver=g=>{
@@ -1750,7 +1761,7 @@ function historyInsights(rows,view,options={}){
     (g.cents+(g.expectedCents||0))>Math.round(target*100)*periodMonths;
   };
   // Visual comparison only; use the same monthly target and selected period as
-  // the adjacent budget editor. Bank transactions and forecasts are untouched.
+  // the saved budget target. Bank transactions and forecasts are untouched.
   const budgetBar=g=>{
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
@@ -1790,14 +1801,14 @@ function historyInsights(rows,view,options={}){
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<div class="history-category-panel-heading">'+    '<details class="history-category-manager" data-history-category-manager>'+
-     '<summary aria-label="Manage categories: add, rename or delete">Manage</summary>'+
+     '<summary aria-label="Manage categories and monthly budgets">Manage</summary>'+
      '<div class="history-category-manager-body">'+
       '<form data-history-category-add><label class="minimal-control-label"><span class="visually-hidden">New category</span>'+
        '<input name="categoryName" maxlength="40" placeholder="Category name" required></label>'+
        '<button type="submit" class="btn primary">Add category</button></form>'+
       '<div class="history-category-manager-list">'+
        (custom.length?custom.map(c=>'<div class="history-custom-category" data-history-category-item="'+escapeHTML(c)+'">'+
-        '<span>'+escapeHTML(c)+'</span><div class="history-custom-category-actions">'+
+        '<span>'+escapeHTML(c)+'</span>'+managerBudgetField(c)+'<div class="history-custom-category-actions">'+
         '<button type="button" data-history-category-rename-open="'+escapeHTML(c)+
          '" aria-label="Rename category '+escapeHTML(c)+'">Rename</button>'+
         '<button type="button" data-history-category-delete="'+escapeHTML(c)+
@@ -4660,6 +4671,7 @@ document.addEventListener('change',async e=>{
   historyBudgetBusy=true;
   document.querySelectorAll('[data-history-budget]').forEach(input=>input.disabled=true);
   historyBudgetMessage='Saving budget…';
+  const managerWasOpen=!!budgetInput.closest('[data-history-category-manager]')?.open;
   try{
    // Saves private planning preferences, never bank facts or forecast entries.
    prefs.categoryMonthlyBudgets=next;
@@ -4667,6 +4679,13 @@ document.addEventListener('change',async e=>{
    if(live()&&(!result||result.saved!==true))throw Error('Budget save was not confirmed');
    historyBudgetMessage='Monthly budget saved';
    render();
+   if(managerWasOpen){
+    const manager=document.querySelector('[data-history-category-manager]');
+    if(manager)manager.open=true;
+    const refreshed=[...document.querySelectorAll('[data-history-budget]')]
+     .find(input=>input.dataset.historyBudget===category);
+    refreshed?.focus({preventScroll:true});
+   }
   }catch(err){
    prefs.categoryMonthlyBudgets=old;
    historyBudgetMessage='Could not save budget. Try again.';
@@ -4674,7 +4693,7 @@ document.addEventListener('change',async e=>{
    const alert=document.createElement('span');
    alert.className='history-budget-error';alert.setAttribute('role','alert');
    alert.textContent='Could not save: '+String(err.message||err);
-   budgetInput.closest('.history-category-budget')?.appendChild(alert);
+   budgetInput.closest('.history-manager-budget')?.appendChild(alert);
   }finally{historyBudgetBusy=false;}
   return;
  }
