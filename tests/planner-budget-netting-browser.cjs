@@ -140,10 +140,24 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Summary shares the calendar-month picker');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page button:not([data-history-month-toggle]):not([data-history-month-current]):not([data-history-month-all])').count(),0,
     name+': Summary can select report months but cannot edit financial information');
+   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$75.00',
+    name+': six October checking bills total $75, not a twelve-month average');
+   // The November card settlement is included exactly once only when November
+   // is selected; the card purchase and savings transfer are never bills.
+   await page.locator('[data-history-month-toggle]').click();
+   await page.locator('[data-history-month-option][value="2026-11"]').check();
+   await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
+   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$600.00',
+    name+': November total is the single $600 predicted card payment');
    const billCategories=await page.locator('.financial-recap-card').first().innerText();
    assert.match(billCategories,/Credit card payments/);
-   assert.match(billCategories,/\$50\.00/,
-    name+': one $600 future card payment contributes $50/month across 12 months');
+   assert.match(billCategories,/\$600\.00/,
+    name+': selected November settlement is not divided by twelve');
+   await page.locator('[data-history-month-option][value="2026-10"]').check();
+   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$675.00',
+    name+': two calendar months add $75 plus $600 without averaging');
+   await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
+   await page.locator('[data-history-month-toggle]').click();
    assert.doesNotMatch(billCategories,/Fictional Visa Subscription/,
     name+': the underlying $25/month card purchases must not also count as bills');
    assert.doesNotMatch(billCategories,/Savings Transfer/,

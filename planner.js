@@ -1740,12 +1740,21 @@ function historyInsights(rows,view,options={}){
 }
 
 // One shared checkbox picker keeps calendar-month selections consistent across reports.
-function spendingMonthPicker(records,asOf){
+function spendingMonthPicker(records,asOf,includeUpcoming=false){
  // Each checked item is one whole calendar month; selection need not be consecutive.
  const currentMonth=asOf.slice(0,7),
   earliestMonth=records.reduce((first,row)=>row.date.slice(0,7)<first?row.date.slice(0,7):first,currentMonth),
-  availableMonths=[];
- for(let d=new Date(currentMonth+'-01T12:00:00Z');d.toISOString().slice(0,7)>=earliestMonth;d.setUTCMonth(d.getUTCMonth()-1))
+  availableMonths=[],
+  monthIndex=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7)),
+  // Summary offers twelve upcoming months; other Spending views show history
+  // by default but retain future months already selected on Summary.
+  futureCount=includeUpcoming?12:Math.max(0,...[...(historySelectedMonths||[])]
+   .map(m=>monthIndex(m)-monthIndex(currentMonth)));
+ for(let i=0,d=new Date(currentMonth+'-01T12:00:00Z');i<=futureCount;i++,d.setUTCMonth(d.getUTCMonth()+1))
+  availableMonths.push(d.toISOString().slice(0,7));
+ const past=new Date(currentMonth+'-01T12:00:00Z');
+ past.setUTCMonth(past.getUTCMonth()-1);
+ for(let d=past;d.toISOString().slice(0,7)>=earliestMonth;d.setUTCMonth(d.getUTCMonth()-1))
   availableMonths.push(d.toISOString().slice(0,7));
  if(!historySelectedMonths)historySelectedMonths=new Set([currentMonth]);
  const availableSet=new Set(availableMonths);
@@ -1780,7 +1789,7 @@ function spendingMonthPicker(records,asOf){
 function financialRecapPage(bundle,s){
  const asOf=String(s.asOf||dateToday()),month=asOf.slice(0,7),
   posted=model.records(state()).filter(r=>r.date&&r.date<=asOf),
-  picker=spendingMonthPicker(posted,asOf),
+  picker=spendingMonthPicker(posted,asOf,true),
   selectedMonths=historySelectedMonths,
   periodLabel=picker.label,
   settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(posted),
@@ -1802,45 +1811,22 @@ function financialRecapPage(bundle,s){
    categories.has(name)&&amount!==null&&amount!==''&&Number.isFinite(Number(amount))&&Number(amount)>=0),
   periodBudgetCents=budgetCents*selectedMonths.size,
   hasProjection=Boolean(bundle?.projection),
-  accountsById=new Map(activeAccounts(s).map(a=>[String(a.id),a])),
   rules=new Map((state().predictions?.futureRecurringRules||[])
    .filter(rule=>rule.kind!=='movement'&&rule.type==='expense')
    .map(rule=>[String(rule.id),rule])),
-  future=hasProjection?futureRows(bundle,s):[],
-  // A card payment is one predicted withdrawal from checking, even though
-  // the canonical ledger models both cash and credit-card legs of the transfer.
-  cardPayments=new Set((bundle?.projection?.plans||[])
-   // Checking-to-card movement endpoints identify settlements even when
-   // imported plans do not carry an explicit card-payment kind label.
-   .filter(p=>accountsById.has(String(p.fromAccountId))&&
-    accountsById.has(String(p.toAccountId))&&
-    accountType(accountsById.get(String(p.fromAccountId)))==='cash'&&
-    accountType(accountsById.get(String(p.toAccountId)))==='credit')
-   .map(p=>String(p.id))),
   eventCategories=new Map((bundle?.projection?.events||[])
    .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
-  // Twelve COMPLETE upcoming calendar months avoid treating the remainder of
-  // this month as a normal monthly bill amount.
-  start=new Date(month+'-01T12:00:00Z');
- start.setUTCMonth(start.getUTCMonth()+1);
- const periodStart=start.toISOString().slice(0,10),
-  after=new Date(start);
- after.setUTCMonth(after.getUTCMonth()+12);
- const periodEnd=shiftDay(after.toISOString().slice(0,10),-1),
-  // Bill = predicted outgoing cash. Include recurring, automatic and one-off
-  // expenses, plus card payments; exclude purchases on card accounts and
-  // unrelated internal transfers, avoiding a second count of card spending.
-  forecastBills=future.filter(r=>
-   (r.kind==='event'&&r.type==='expense'&&
-    accountType(accountsById.get(String(r.accountId))||{})==='cash')||
-   (r.kind==='movement'&&cardPayments.has(String(r.id)))),
-  fullYearBills=forecastBills.filter(r=>r.date>=periodStart&&r.date<=periodEnd),
-  billCents=fullYearBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
-  monthlyBills=hasProjection?billCents/1200:null,
+  // Use the exact cash-bill entries shown by Bills/Home. Card settlements
+  // count once; credit-card purchases and internal transfers are excluded.
+  forecastBills=hasProjection?forecastCashBills(bundle,s):[],
+  selectedBills=forecastBills.filter(r=>selectedMonths.has(r.date.slice(0,7))),
+  billCents=selectedBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
+  // A historical month has no reconstructed forecast. Don't call that $0.
+  selectedForecastPeriod=[...selectedMonths].some(m=>m>=month),
   groupBills=new Map();
- for(const row of fullYearBills){
+ for(const row of selectedBills){
   const rule=rules.get(String(row.recurringRuleId)),
-   category=row.kind==='movement'?'Credit card payments':
+   category=row.cardBill?'Credit card payments':
     model.canonicalCategory(state(),rule?.category||eventCategories.get(String(row.id)))||'Other';
   groupBills.set(category,(groupBills.get(category)||0)+Math.round(Number(row.amount)*100||0));
  }
@@ -1858,23 +1844,23 @@ function financialRecapPage(bundle,s){
   upcoming=forecastBills.filter(r=>r.date<=lastDay).slice(0,5),
   // Preserve the five chronological bills, but also surface the next card
   // payment if five other withdrawals occur before it.
-  nextCard=forecastBills.find(r=>r.date<=lastDay&&r.kind==='movement'&&
-   cardPayments.has(String(r.id))),
+  nextCard=forecastBills.find(r=>r.date<=lastDay&&r.cardBill),
   cardAfterFive=nextCard&&!upcoming.some(r=>r.key===nextCard.key)?nextCard:null,
   metric=(label,value,note,attr)=>'<div class="financial-recap-metric"'+
    (attr?' data-recap-'+attr:'')+'><span>'+escapeHTML(label)+'</span>'+
    '<strong>'+escapeHTML(value)+'</strong><small>'+escapeHTML(note)+'</small></div>',
-  breakdown=(items,average,empty)=>items.length?
+  breakdown=(items,empty)=>items.length?
    '<div class="financial-recap-rows">'+items.map(([name,cents])=>
     '<div class="financial-recap-row"><span>'+escapeHTML(categoryLabel(name))+'</span>'+
-    '<strong>'+cash(cents/(average?1200:100))+'</strong></div>').join('')+'</div>':
+    '<strong>'+cash(cents/100)+'</strong></div>').join('')+'</div>':
    '<p class="financial-recap-empty">'+escapeHTML(empty)+'</p>';
  return '<div class="planner-page financial-recap-page" data-financial-recap>'+
   '<header class="financial-recap-header"><h2>Summary</h2>'+
    picker.markup+'</header>'+
   '<div class="financial-recap-metrics">'+
-   metric('Total monthly bills',monthlyBills===null?'Unavailable':cash(monthlyBills),
-    '12-month average of predicted checking payments','bills')+
+   metric(selectedMonths.size===1?'Total monthly bills':'Total bills',
+    !hasProjection?'Unavailable':!selectedForecastPeriod?'Not projected':cash(billCents/100),
+    'Predicted checking payments · '+periodLabel,'bills')+
    metric('Spent',cash(spendingCents/100),
     periodLabel+' · net purchases','spent')+
    metric('Income',cash(incomeCents/100),
@@ -1885,14 +1871,16 @@ function financialRecapPage(bundle,s){
   '</div>'+
   '<div class="financial-recap-sections">'+
    '<section class="financial-recap-card"><h3>Predicted bills by category</h3>'+
-    '<p>Monthly equivalent · next 12 months</p>'+
-    (hasProjection?breakdown(billCategories,true,
-     'No outgoing payments are forecast for the next 12 months.'):
-     '<p class="financial-recap-empty">Bill forecasts are unavailable until the Calendar projection is ready.</p>')+
+    '<p>'+escapeHTML(periodLabel)+' · cash withdrawals</p>'+
+    (hasProjection&&selectedForecastPeriod?breakdown(billCategories,
+     'No bills predicted for the selected months.'):
+     '<p class="financial-recap-empty">'+
+      (!hasProjection?'Bill forecasts are unavailable until the Calendar projection is ready.':
+       'Past months have no stored bill forecast.')+'</p>')+
     '<small class="financial-recap-note">Card payments counted once · transfers excluded</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
     '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
-    breakdown(topSpending,false,'No posted purchases in selected months.')+
+    breakdown(topSpending,'No posted purchases in selected months.')+
     '</section>'+
    '<section class="financial-recap-card financial-recap-upcoming"><h3>Next predicted bills</h3>'+
     '<p>Next 30 days</p>'+
