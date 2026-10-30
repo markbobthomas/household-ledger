@@ -724,20 +724,20 @@ function editableForecastRow(row,opts={}){
   (row.recurringRuleId?' · Repeats':row.seriesKey?' · Auto-detected':' · One time');
  return '<div class="unified-payment-row'+(opts.kind==='schedule'?' schedule-occurrence-entry':'')+
   '" data-inline-row-wrapper data-payment-key="'+escapeHTML(row.key)+'">'+
-  '<button type="button" class="unified-payment-trigger" '+
+  '<button type="button" class="unified-payment-trigger ledger-transaction-row" '+
    (opts.advanced?'data-edit-future="'+escapeHTML(row.key)+'" ':'')+
    'data-open-transaction="'+escapeHTML(row.key)+
   '" aria-expanded="false"'+(opts.kind==='schedule'?' data-schedule-occurrence-key="'+escapeHTML(row.key)+'"':'')+'>'+
-  '<span class="unified-payment-date future-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
-  '<span class="unified-payment-name"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+  '<span class="unified-payment-date future-date ledger-transaction-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+  '<span class="unified-payment-name ledger-transaction-identity"><strong>'+escapeHTML(row.merchant)+'</strong>'+
    (transactionNote(forecastNoteKey(row.key))?
     '<small class="transaction-note-subtitle" data-note-subtitle="'+
      escapeHTML(forecastNoteKey(row.key))+'">'+
      escapeHTML(transactionNote(forecastNoteKey(row.key)))+'</small>':'')+
    '<small>'+escapeHTML(subtitle)+'</small></span>'+
-  '<span class="unified-payment-value future-amount'+(inbound?' incoming':'')+'">'+
+  '<span class="unified-payment-value ledger-transaction-amount future-amount'+(inbound?' incoming':'')+'">'+
    (inbound?'+':'−')+cash(row.amount)+'</span>'+
-  '<span class="unified-payment-chevron" aria-hidden="true"><span class="payment-edit-cue">Edit</span><span class="payment-edit-arrow">⌄</span></span></button></div>';
+  '<span class="unified-payment-chevron ledger-transaction-action" aria-hidden="true"><span class="payment-edit-cue">Edit</span><span class="payment-edit-arrow">⌄</span></span></button></div>';
 }
 function scheduleOccurrencesHtml(bundle,s,rule){
  if(!rule)return '';
@@ -1408,20 +1408,20 @@ function schedulesPage(bundle,s){
    '" data-schedule-listed-kind="'+listedKind+
    '" data-schedule-listed-cents="'+(Number.isSafeInteger(listedCents)?listedCents:0)+'">'+
    '<div class="schedule-compact-row ledger-list-row recurrence-row">'+
-   '<button class="schedule-row-main ledger-row-open recurrence-row-trigger" type="button" data-schedule-edit="'+id+
+   '<button class="schedule-row-main ledger-row-open ledger-transaction-row recurrence-row-trigger" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' prediction '+number+': '+title+'">'+
-    '<span class="schedule-row-next ledger-row-date"><span>'+
+    '<span class="schedule-row-next ledger-row-date ledger-transaction-date"><span>'+
      (effectiveNext?escapeHTML(dayLabel(effectiveNext)):'Not forecast')+'</span></span>'+
-    '<span class="schedule-row-identity ledger-row-description recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
+    '<span class="schedule-row-identity ledger-row-description ledger-transaction-identity recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
       ' · '+escapeHTML(r.frequency)+' · '+(estimate.estimated?'Estimated':'Fixed')+
       '</small></span></span>'+
-    '<span class="schedule-row-amount ledger-row-amount"><strong>'+
+    '<span class="schedule-row-amount ledger-row-amount ledger-transaction-amount"><strong>'+
      ledgerMoney(shownAmount)+'</strong></span>'+
-    '<span class="schedule-row-chevron ledger-row-hint" aria-hidden="true">'+
+    '<span class="schedule-row-chevron ledger-row-hint ledger-transaction-action" aria-hidden="true">'+
      (isEditing?'⌃':'›')+'</span>'+
    '</button>'+
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-schedule-quick-category="'+id+'" '+
@@ -2267,20 +2267,20 @@ function historyPage(bundle,s){
     escapeHTML(historySelectionKey(aid,t.id))+'" data-history-signed-cents="'+historySignedCents(t)+
     '" aria-label="Select '+escapeHTML(t.merchant||'bank transaction')+' on '+
     escapeHTML(t.date)+'"'+(selected?' checked':'')+'></label>'+
-   '<button type="button" class="history-row-open ledger-row-open recurrence-row-trigger" data-historical-transaction="'+
+   '<button type="button" class="history-row-open ledger-row-open ledger-transaction-row recurrence-row-trigger" data-historical-transaction="'+
    escapeHTML(String(t.id))+'" data-historical-account="'+escapeHTML(aid)+
    '" aria-expanded="'+isExpanded+'" aria-label="'+escapeHTML((isExpanded?'Close':'Open')+
     ' repeating payment details: '+(t.merchant||'Bank transaction'))+'">'+
-   '<span class="history-actual-date ledger-row-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
-   '<span class="history-actual-description ledger-row-description recurrence-row-name"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
+   '<span class="history-actual-date ledger-row-date ledger-transaction-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
+   '<span class="history-actual-description ledger-row-description ledger-transaction-identity recurrence-row-name"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
    (transactionNote(bankNoteKey(aid,t.id))?'<small class="transaction-note-subtitle" data-note-subtitle="'+
     escapeHTML(bankNoteKey(aid,t.id))+'">'+escapeHTML(transactionNote(bankNoteKey(aid,t.id)))+'</small>':'')+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
     escapeHTML(caption)+'</span></small></span>'+
-   '<strong class="history-actual-amount ledger-row-amount '+(incoming?'incoming':'outgoing')+'">'+
+   '<strong class="history-actual-amount ledger-row-amount ledger-transaction-amount '+(incoming?'incoming':'outgoing')+'">'+
     ledgerMoney(t.amount,incoming?'+':'−')+'</strong>'+
-   '<span class="history-row-hint ledger-row-hint" aria-hidden="true">'+(isExpanded?'⌃':'›')+'</span></button>'+
+   '<span class="history-row-hint ledger-row-hint ledger-transaction-action" aria-hidden="true">'+(isExpanded?'⌃':'›')+'</span></button>'+
    '<div class="ledger-row-category-wrap"><select class="schedule-row-category ledger-row-category" data-history-category="'+
     escapeHTML(String(t.id))+'" aria-label="Category for '+escapeHTML(t.merchant||'bank transaction')+
     ' on '+escapeHTML(t.date)+'">'+
@@ -2613,20 +2613,21 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    ' data-legacy-active="'+isLegacy+'" data-recommendation-status="'+
      (isIgnored?'ignored':'pending')+'">'+
    '<div class="review-row-top recurrence-row">'+
-    (r?'<button class="review-row-open recurrence-row-trigger" type="button" data-review-recommendation="'+escapeHTML(r.key)+'"'+
+    (r?'<button class="review-row-open ledger-transaction-row recurrence-row-trigger" type="button" data-review-recommendation="'+escapeHTML(r.key)+'"'+
      (isLegacy?' data-legacy-series="'+escapeHTML(key)+'"':'')+
      ' aria-expanded="'+isOpen+'" aria-label="'+(isOpen?'Close':'Open')+
      ' repeating payment details: '+escapeHTML(title)+'">':
-     '<div class="review-row-unavailable">')+
-    '<span class="review-candidate-main recurrence-row-name"><strong>'+escapeHTML(title)+'</strong>'+
+     '<div class="review-row-unavailable ledger-transaction-row">')+
+    '<span class="ledger-transaction-date review-candidate-date">'+escapeHTML(dayLabel(date))+'</span>'+
+    '<span class="review-candidate-main ledger-transaction-identity recurrence-row-name"><strong>'+escapeHTML(title)+'</strong>'+
      '<small>'+escapeHTML(account)+' · '+escapeHTML(cadence)+
       ' · Next '+escapeHTML(dayLabel(date))+
       (kind?' · '+escapeHTML(kind):
        !isLegacy?' · '+(r.occurrences||0)+' previous payment'+
         (r.occurrences===1?'':'s'):'')+'</small>'+
      (statusText?'<small class="legacy-estimate-state">'+statusText+'</small>':'')+
-    '</span><strong class="review-candidate-amount">'+cash(value||0)+'</strong>'+
-    (r?'<span class="review-row-chevron" aria-hidden="true">'+(isOpen?'⌃':'›')+'</span></button>':
+    '</span><strong class="review-candidate-amount ledger-transaction-amount">'+cash(value||0)+'</strong>'+
+    (r?'<span class="review-row-chevron ledger-transaction-action" aria-hidden="true">'+(isOpen?'⌃':'›')+'</span></button>':
      '</div>')+
     '<div class="review-candidate-actions">'+controls(r,key)+'</div>'+
    '</div>'+
@@ -2653,13 +2654,15 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     ' data-review-bank-id="'+escapeHTML(item.id)+'" data-review-bank-account="'+escapeHTML(item.accountId||'')+'"';
    return '<div class="category-review-row" data-category-review-form data-review-order-date="'+escapeHTML(item.date||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
-    '<button type="button" class="category-review-info category-review-open"'+openAttrs+
+    '<button type="button" class="category-review-info category-review-open ledger-transaction-row"'+openAttrs+
      ' aria-label="Open '+escapeHTML(label.toLowerCase())+' details for '+escapeHTML(item.merchant)+'">'+
-     '<strong>'+escapeHTML(item.merchant)+'</strong>'+
+     '<span class="ledger-transaction-date">'+escapeHTML(item.date?dayLabel(item.date):'—')+'</span>'+
+     '<span class="ledger-transaction-identity"><strong>'+escapeHTML(item.merchant)+'</strong>'+
      (item.isPlan?'':transactionNote(bankNoteKey(item.accountId||'',item.id))?
        '<small class="transaction-note-subtitle">'+escapeHTML(transactionNote(bankNoteKey(item.accountId||'',item.id)))+'</small>':'')+
-     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
-     ' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></button>'+
+     '<small>'+label+' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
+     '<strong class="ledger-transaction-amount">'+cash(item.amount)+'</strong>'+
+     '<span class="ledger-transaction-action" aria-hidden="true">›</span></button>'+
     '<label>Category<select name="category" aria-label="Category for '+
      escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
     '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
@@ -2835,10 +2838,11 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  const notes=events.map(e=>{
   const key=e.transferGroupId?window.HouseholdPlannerTransactions.keyMovement(e.transferGroupId):
    e.predictionKey||window.HouseholdPlannerTransactions.keyEvent(e.id,e.accountId);
-  return '<button type="button" class="overview-upcoming-item overview-upcoming-open" data-open-transaction="'+
-   escapeHTML(key)+'"><span>'+escapeHTML(dayLabel(e.date))+
-   '</span><strong>'+escapeHTML(e.merchant)+'</strong><span>'+cash(e.amount)+'</span>'+
-   '<span class="overview-details-indicator">Details →</span></button>';
+  return '<button type="button" class="overview-upcoming-item overview-upcoming-open ledger-transaction-row" data-open-transaction="'+
+   escapeHTML(key)+'"><span class="ledger-transaction-date">'+escapeHTML(dayLabel(e.date))+
+   '</span><span class="ledger-transaction-identity"><strong>'+escapeHTML(e.merchant)+'</strong></span>'+
+   '<strong class="ledger-transaction-amount">'+cash(e.amount)+'</strong>'+
+   '<span class="overview-details-indicator ledger-transaction-action">›</span></button>';
  }).join('');
  return '<div class="planner-page overview-page">'+
   accountCards(s,bundle?.projection,chosen)+hero(chosen,derived,s.asOf)+
