@@ -4673,3 +4673,43 @@ a:hover{color:#166e61}
  .reviews-page .review-sort-label{width:100%;margin:0;justify-content:space-between}
  .reviews-page .review-sort-label select{flex:1 1 auto;min-width:0;max-width:235px}
 }
+
+/* Personal transaction notes: understated subtitles and a one-tap edit cue.
+   Notes are metadata; existing transaction and forecast rows stay intact. */
+.planner-page .transaction-note-subtitle{
+ display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;
+ white-space:nowrap;color:#527767!important;font-size:12px!important;
+ line-height:1.4;font-weight:570;
+}
+.planner-page .unified-payment-name .transaction-note-subtitle{
+ color:#527767!important;font-size:11px!important;
+}
+.history-page .transaction-note-trigger{
+ display:grid;place-items:center;grid-column:4;grid-row:1;
+ width:32px;height:34px;min-width:0;align-self:center;justify-self:center;
+ padding:0;border:0;border-radius:9px;background:transparent;
+ color:#739384;font-size:17px;cursor:pointer;
+}
+.history-page .transaction-note-trigger:hover,
+.history-page .transaction-note-trigger:focus-visible{
+ background:#eaf4ee;color:#245b43;
+}
+.transaction-note-form{
+ display:flex;align-items:flex-end;flex-wrap:wrap;gap:11px;
+ border:1px solid #e4ece6;border-radius:12px;padding:12px;
+ margin:0 0 14px;background:#fafcfb;
+}
+.transaction-note-form>label{
+ display:flex;flex:1 1 230px;flex-direction:column;gap:6px;
+ min-width:0;color:#688174;font-size:12px;font-weight:700;
+}
+.transaction-note-form input{
+ width:100%;min-width:0;box-sizing:border-box;padding:10px 12px;
+ border:1px solid #dbe8df;border-radius:9px;background:#fff;
+ color:#263e32;font-size:14px;
+}
+.transaction-note-actions{display:flex;align-items:center;gap:8px;min-height:40px}
+.transaction-note-actions small{color:#537961;font-size:11px;line-height:1.35}
+@media(max-width:850px){
+ .history-page .transaction-note-trigger{grid-column:3;grid-row:2;width:32px}
+}
