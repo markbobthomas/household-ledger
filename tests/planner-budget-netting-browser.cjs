@@ -143,7 +143,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    const moneyCents=text=>Math.round(Number(String(text).replace(/[^0-9.-]/g,''))*100),
     octoberBills=moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
     octoberBreakdown=await page.locator('[data-recap-bills] small').innerText(),
-    paidMatch=octoberBreakdown.match(/Paid (\\$[\\d,.]+) · Upcoming (\\$[\\d,.]+)/);
+    paidMatch=octoberBreakdown.match(/Paid (\$[\d,.]+) · Upcoming (\$[\d,.]+)/);
    assert.ok(paidMatch,name+': October shows posted and remaining bills');
    const paidOctober=moneyCents(paidMatch[1]),upcomingOctober=moneyCents(paidMatch[2]);
    assert.ok(paidOctober>300000,
