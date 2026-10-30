@@ -833,7 +833,7 @@ function detailHtml(bundle,s){
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(s))===transactionDetail.account),
    assigned=model.canonicalCategory(state(),resolved?.category||row.category)||'Other',
    selectCategories=categoryOptionsWithOther(model.categories(state())),
-   categoryEditor='<label class="transaction-actual-category">Category'+
+   categoryEditor='<label class="transaction-actual-category minimal-control-label"><span class="visually-hidden">Category</span>'+
     '<select data-actual-transaction-category="'+escapeHTML(String(row.id))+'" '+
      'aria-label="Category for '+escapeHTML(row.merchant||'Bank transaction')+'">'+
      selectCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
@@ -1483,15 +1483,15 @@ function schedulesPage(bundle,s){
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section>'+
   '<div class="bills-manage-heading"><div><h2>Manage repeating payments</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
-   '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
-    'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
+   '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
+    'autocomplete="off" placeholder="Search payments" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
-    '<label>Sort by <select data-schedule-sort>'+
+    '<label class="minimal-control-label"><span class="visually-hidden">Sort repeating payments</span><select data-schedule-sort aria-label="Sort repeating payments">'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
      '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
    '</select></label>'+
-   '<div class="schedule-category-controls"><label>Category <select data-schedule-category-filter><option value="">All categories</option>'+
+   '<div class="schedule-category-controls"><label class="minimal-control-label"><span class="visually-hidden">Filter repeating payments by category</span><select data-schedule-category-filter aria-label="Filter repeating payments by category"><option value="">All categories</option>'+
     categories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
    '</select></label>'+
@@ -1660,8 +1660,8 @@ function historyInsights(rows,view,options={}){
      showTotal(visibleCents)+'</strong></div>'+
     '<div><small>Merchants</small><strong data-history-merchant-count>'+
      matched.length+'</strong></div></div>'+
-   '<label class="history-merchant-search-label">Find a merchant'+
-    '<input type="search" data-history-merchant-search placeholder="e.g. Amazon" value="'+
+   '<label class="history-merchant-search-label minimal-control-label"><span class="visually-hidden">Find a merchant</span>'+
+    '<input type="search" data-history-merchant-search placeholder="Search merchants" value="'+
      escapeHTML(options.merchantSearch||'')+'"></label>'+
    '<div class="history-merchant-list">'+values.map(g=>
     '<button type="button" class="history-merchant-row" data-history-drill-merchant="'+
@@ -1792,10 +1792,10 @@ function historyInsights(rows,view,options={}){
    '<div class="history-category-panel-heading">'+    '<details class="history-category-manager" data-history-category-manager>'+
      '<summary aria-label="Manage categories: add, rename or delete">Manage</summary>'+
      '<div class="history-category-manager-body">'+
-      '<form data-history-category-add><label>New category'+
-       '<input name="categoryName" maxlength="40" placeholder="e.g. Pet care" required></label>'+
+      '<form data-history-category-add><label class="minimal-control-label"><span class="visually-hidden">New category</span>'+
+       '<input name="categoryName" maxlength="40" placeholder="Category name" required></label>'+
        '<button type="submit" class="btn primary">Add category</button></form>'+
-      '<div class="history-category-manager-list"><strong>All categories</strong>'+
+      '<div class="history-category-manager-list">'+
        (custom.length?custom.map(c=>'<div class="history-custom-category" data-history-category-item="'+escapeHTML(c)+'">'+
         '<span>'+escapeHTML(c)+'</span><div class="history-custom-category-actions">'+
         '<button type="button" data-history-category-rename-open="'+escapeHTML(c)+
@@ -1995,7 +1995,7 @@ function financialRecapPage(bundle,s){
     '<strong>'+cash(cents/100)+'</strong></div>').join('')+'</div>':
    '<p class="financial-recap-empty">'+escapeHTML(empty)+'</p>';
  return '<div class="planner-page financial-recap-page" data-financial-recap>'+
-  '<header class="financial-recap-header"><h2>Summary</h2>'+
+  '<header class="financial-recap-header">'+
    picker.markup+'</header>'+
   '<div class="financial-recap-metrics">'+
    metric(selectedMonths.size===1?'Total monthly bills':'Total bills',
@@ -2322,18 +2322,18 @@ function historyPage(bundle,s){
   '<div class="history-view-toolbar">'+(activeTab==='activity'?'':spendingTabNav(displayView))+
    (displayView==='categories'?'':picker.markup)+'</div>'+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters history-budget-filters')+'" data-history-filter>'+
-   '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
-    '" placeholder="Merchant, date, amount"></label>'+
+   '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
+    '" placeholder="Search transactions"></label>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    (displayView==='categories'?'<div class="history-budget-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
-   (displayView==='categories'?'':'<label>Sort by<select name="historySort" data-history-sort>'+
+   (displayView==='categories'?'':'<label class="minimal-control-label"><span class="visually-hidden">Sort transactions</span><select name="historySort" data-history-sort aria-label="Sort transactions">'+
     [['newest','Newest first'],['oldest','Oldest first'],
      ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
      ['merchant','Merchant: A to Z'],['category','Category']].map(([value,label])=>
      '<option value="'+value+'"'+(historySort===value?' selected':'')+'>'+
       label+'</option>').join('')+'</select></label>')+
    (displayView==='categories'?'':
-    '<div class="history-category-controls"><label>Category<select name="historyCategory" data-history-category-filter>'+
+    '<div class="history-category-controls"><label class="minimal-control-label"><span class="visually-hidden">Filter transactions by category</span><select name="historyCategory" data-history-category-filter aria-label="Filter transactions by category">'+
     '<option value="">All categories</option>'+
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
@@ -2660,10 +2660,10 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      '<span class="ledger-transaction-identity"><strong>'+escapeHTML(item.merchant)+'</strong>'+
      (item.isPlan?'':transactionNote(bankNoteKey(item.accountId||'',item.id))?
        '<small class="transaction-note-subtitle">'+escapeHTML(transactionNote(bankNoteKey(item.accountId||'',item.id)))+'</small>':'')+
-     '<small>'+label+' · '+escapeHTML(item.reason)+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
+     '<small>'+label+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
      '<strong class="ledger-transaction-amount">'+cash(item.amount)+'</strong>'+
      '<span class="ledger-transaction-action" aria-hidden="true">›</span></button>'+
-    '<label>Category<select name="category" aria-label="Category for '+
+    '<label class="minimal-control-label"><span class="visually-hidden">Category</span><select name="category" aria-label="Category for '+
      escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
     '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
   };
@@ -2689,7 +2689,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  return '<div class="planner-page reviews-page">'+
   '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
     '<div><h2>Things to check</h2></div>'+
-    '<label class="review-sort-label">Sort by <select data-review-sort aria-label="Sort Things to check">'+
+    '<label class="review-sort-label minimal-control-label"><span class="visually-hidden">Sort by</span><select data-review-sort aria-label="Sort Things to check">'+
      [['newest','Newest first'],['oldest','Oldest first'],
       ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
       ['merchant','Merchant A–Z']].map(([value,label])=>
