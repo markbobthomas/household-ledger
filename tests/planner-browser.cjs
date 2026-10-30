@@ -139,17 +139,16 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Total monthly bills')),
     'Single-month bills are a selected-month sum, not a 12-month average');
    assert.doesNotMatch(await page.locator('[data-recap-bills]').innerText(),/12-month average/);
-   // Summary bills combine paid checking bills and future predicted bills
-   // for entire selected calendar months, not just the days after today.
+   // Summary totals count only saved recurring or explicitly scheduled
+   // expenses across accounts, not category-based guesses from Demo history.
    const recapMoney=async key=>{
     const amount=await page.locator('[data-recap-'+key+'] strong').innerText();
     return amount==='Not set'?null:Math.round(Number(amount.replace(/[^0-9.-]/g,''))*100);
    };
    const october={spent:await recapMoney('spent'),income:await recapMoney('income'),
     budget:await recapMoney('budget'),bills:await recapMoney('bills')};
-   const paidOctober=Math.round((2650+825+106.70+79.99+186.40+67.30+17.99)*100);
-   assert.ok(october.bills>=paidOctober,
-    'Full October bill total includes already-posted mortgage, childcare, utilities, insurance and subscription');
+   assert.equal(october.bills,0,
+    'Demo has no confirmed scheduled bills, so posted mortgage-like labels alone do not count');
    assert.match(await page.locator('[data-recap-bills] small').innerText(),/Paid .*Upcoming/,
     'Summary distinguishes paid bills from future estimates without extra controls');
    assert.deepEqual(await selectedMonths(page),['2026-10'],
@@ -157,8 +156,8 @@ const {chromium,webkit}=require('playwright');
    await chooseMonths(page,['2026-09']);
    const september={spent:await recapMoney('spent'),income:await recapMoney('income'),
     budget:await recapMoney('budget'),bills:await recapMoney('bills')};
-   assert.ok(september.bills>0,
-    'A completed calendar month reports posted bills, not Not projected');
+   assert.equal(september.bills,0,
+    'A completed month with posted activity but no confirmed schedules shows zero bills');
    assert.ok(september.bills<september.spent,
     'Regular bills exclude unrelated posted groceries, shopping and restaurant purchases');
    await chooseMonths(page,['2026-11']);
