@@ -83,6 +83,83 @@ function addCategory(state,name){
  return value;
 }
 
+// Rename a category across private classification overlays and saved planning
+// preferences without changing immutable bank transactions. Source rows whose
+// imported category used the old name receive a private name override, so an
+// account refresh never resurrects the former label.
+function renameCategory(state,oldName,newName){
+ const old=canonicalCategory(state,oldName),next=normalizeCategory(newName);
+ if(!old||old==='Uncategorized')throw Error('Choose an existing named category');
+ if(!validCustomName(next)||next==='Uncategorized')
+  throw Error('New category must be 2–40 letters/numbers and ordinary punctuation');
+ if(next.toLocaleLowerCase()===old.toLocaleLowerCase())
+  throw Error('Choose a different category name');
+ if(canonicalCategory(state,next))throw Error('Category name already exists');
+ state.predictions??={};
+ const p=state.predictions,same=value=>
+  typeof value==='string'&&normalizeCategory(value).toLocaleLowerCase()===old.toLocaleLowerCase();
+ // Capture the original effective classifications BEFORE changing the
+ // registry (particularly important for fixed built-in and source labels).
+ const affected=(state.transactions||[]).filter(t=>{
+  const resolved=categoryFor(state,t.id);
+  return same(resolved)||(!state.categoryOverrides?.[t.id]&&
+   same(kindDisplayCategory(t,resolved)));
+ }).map(t=>t.id);
+ state.categoryOverrides??={};
+ for(const id of affected)state.categoryOverrides[id]=next;
+ for(const [id,value] of Object.entries(state.categoryOverrides))
+  if(same(value))state.categoryOverrides[id]=next;
+ // Every dated prediction and recurring payment stores its category under
+ // a category field. Touch only those classifications, never IDs or amounts.
+ const visit=(value,depth=0)=>{
+  if(!value||typeof value!=='object'||depth>18)return;
+  if(Array.isArray(value)){for(const item of value)visit(item,depth+1);return}
+  if(Object.prototype.hasOwnProperty.call(value,'category')&&same(value.category))
+   value.category=next;
+  for(const [key,item] of Object.entries(value)){
+   if(['categoryMonthlyBudgets','monthlyBudgets','categoryForecasts',
+    'categoryDisplayOrder','deletedCategories','scheduleCategories'].includes(key))continue;
+   if(item&&typeof item==='object')visit(item,depth+1);
+  }
+ };
+ visit(p);
+ const replaceKeys=key=>{
+  const obj=p[key];
+  if(!obj||typeof obj!=='object'||Array.isArray(obj))return;
+  for(const name of Object.keys(obj))if(same(name)){
+   if(Object.prototype.hasOwnProperty.call(obj,next))throw Error('Conflicting saved budget');
+   obj[next]=obj[name];delete obj[name];
+  }
+ };
+ replaceKeys('categoryMonthlyBudgets');
+ replaceKeys('monthlyBudgets');
+ if(p.categoryForecasts&&typeof p.categoryForecasts==='object')
+  for(const key of Object.keys(p.categoryForecasts)){
+   const i=key.indexOf('|');
+   if(i<0||!same(key.slice(i+1)))continue;
+   const replacement=key.slice(0,i+1)+next;
+   if(Object.prototype.hasOwnProperty.call(p.categoryForecasts,replacement))
+    throw Error('Conflicting saved category forecast');
+   p.categoryForecasts[replacement]=p.categoryForecasts[key];
+   delete p.categoryForecasts[key];
+  }
+ if(Array.isArray(p.categoryDisplayOrder))
+  p.categoryDisplayOrder=[...new Set(p.categoryDisplayOrder.map(name=>same(name)?next:name))];
+ p.scheduleCategories=dedupeCategoryNames([
+  ...(Array.isArray(p.scheduleCategories)?p.scheduleCategories:[]).filter(name=>!same(name)),next]);
+ p.deletedCategories=dedupeCategoryNames([
+  ...(Array.isArray(p.deletedCategories)?p.deletedCategories:[]).filter(name=>
+   normalizeCategory(name).toLocaleLowerCase()!==next.toLocaleLowerCase()),old]);
+ if(Array.isArray(state.customCategories))
+  state.customCategories=state.customCategories.map(name=>same(name)?next:name);
+ if(state.learning){
+  visit(state.learning);
+  // Learning history is a past event log, not an active category choice.
+  // Keep historical log labels untouched.
+ }
+ return {from:old,to:next,affected:affected.length};
+}
+
 // Category deletion affects only classification overlays and saved preferences;
 // never edit bank source transactions, their amounts, account links or dates.
 // Bank income and transfers are displayed under their known transaction type
@@ -694,7 +771,7 @@ function setCashCushion(state,amount){
  if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
  state.predictions.cashCushion=round(amount);
 }
-const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,removeCategory,removedCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
+const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,renameCategory,removeCategory,removedCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
