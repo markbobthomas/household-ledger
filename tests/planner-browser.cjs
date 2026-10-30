@@ -651,6 +651,54 @@ const {chromium,webkit}=require('playwright');
     await assertBudgetSorted();
     await checkOverall(3);
    }
+   // Budget: future months must use the same dated expense predictions as
+   // current months, across checking and credit, without counting transfers.
+   await chooseMonths(page,['2026-10']);
+   const budgetCategoryCents=async name=>Math.round(Number((await page.locator(
+    '[data-history-category-row="'+name+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''))*100);
+   const beforeOctober=await budgetCategoryCents('Utilities');
+   await chooseMonths(page,['2026-11']);
+   const beforeNovember=await budgetCategoryCents('Utilities');
+   await page.evaluate(()=>{
+    const key='household-planner-sample-settings-v1',
+     raw=JSON.parse(localStorage.getItem(key)||'{}');
+    raw.futureTransactionAdds=[...(raw.futureTransactionAdds||[]),
+     {id:'future-add|budget-fixture-checking',date:'2026-10-28',accountId:'demo-checking',
+      merchant:'Fictional Utility Charge',amount:91.25,type:'expense',category:'Utilities'},
+     {id:'future-add|budget-fixture-card',date:'2026-11-12',accountId:'demo-visa',
+      merchant:'Fictional Card Utility',amount:123.45,type:'expense',category:'Utilities'},
+     {id:'future-add|budget-fixture-transfer',date:'2026-11-13',
+      fromAccountId:'demo-checking',toAccountId:'demo-visa',
+      merchant:'Fictional Card Settlement',amount:123.45,type:'transfer'}];
+    localStorage.setItem(key,JSON.stringify(raw));
+   });
+   await page.reload();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await chooseMonths(page,['2026-10']);
+   assert.equal(await budgetCategoryCents('Utilities')-beforeOctober,9125,
+    'Current-month Budget combines existing posted spending with future bill estimates');
+   assert.match(await page.locator('[data-history-category-row="Utilities"] .history-category-name').innerText(),
+    /expected/, 'Budget identifies predicted purchases on their category rows');
+   await chooseMonths(page,['2026-11']);
+   assert.equal(await budgetCategoryCents('Utilities')-beforeNovember,12345,
+    'Future Budget counts credit card expected charges, not the settlement');
+   await chooseMonths(page,['2026-10','2026-11']);
+   assert.equal(await budgetCategoryCents('Utilities'),beforeOctober+beforeNovember+9125+12345,
+    'Multi-month Budget adds posted and projected expenses from every selected month');
+   await page.locator('[data-history-view="summary"]').click();
+   assert.match(await page.locator('[data-recap-budget] small').innerText(),
+    /including expected/, 'Summary Budget percentage includes expected charges');
+   await page.evaluate(()=>{
+    const key='household-planner-sample-settings-v1',
+     raw=JSON.parse(localStorage.getItem(key)||'{}');
+    raw.futureTransactionAdds=(raw.futureTransactionAdds||[]).filter(row=>
+     !String(row.id).startsWith('future-add|budget-fixture-'));
+    localStorage.setItem(key,JSON.stringify(raw));
+   });
+   await page.reload();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await chooseMonths(page,['2026-10','2026-09','2026-08']);
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     const compact=await page.evaluate(()=>{
