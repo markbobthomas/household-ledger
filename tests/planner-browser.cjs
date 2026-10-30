@@ -132,10 +132,43 @@ const {chromium,webkit}=require('playwright');
      'Summary includes '+key+' metric in '+(mobile?'iPhone':'desktop')+' mode');
    }
    assert.equal(await page.locator('.financial-recap-card').count(),3);
-   assert.equal(await page.locator('.financial-recap-page input,.financial-recap-page select,.financial-recap-page button').count(),0,
-    'Summary cannot edit budgets, bank facts, recurring plans, or saved preferences');
+   assert.equal(await page.locator('.financial-recap-page [data-history-month-picker]').count(),1,
+    'Summary reuses the Spending calendar-month checklist');
+   assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page select').count(),0,
+    'Summary contains no editable financial fields');
    assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Total monthly bills')),
-    'Bills are explicitly labeled a monthly estimate');
+    'Forward-looking bills remain explicitly labeled a twelve-month average');
+   // Posted reporting uses one shared selection; future forecast bills remain separate.
+   const recapMoney=async key=>{
+    const amount=await page.locator('[data-recap-'+key+'] strong').innerText();
+    return amount==='Not set'?null:Math.round(Number(amount.replace(/[^0-9.-]/g,''))*100);
+   };
+   const october={spent:await recapMoney('spent'),income:await recapMoney('income'),
+    budget:await recapMoney('budget'),bills:await recapMoney('bills')};
+   assert.deepEqual(await selectedMonths(page),['2026-10'],
+    'Summary initially shows the current calendar month');
+   await chooseMonths(page,['2026-09']);
+   const september={spent:await recapMoney('spent'),income:await recapMoney('income'),
+    budget:await recapMoney('budget')};
+   await chooseMonths(page,['2026-09','2026-10']);
+   assert.deepEqual(await selectedMonths(page),['2026-09','2026-10']);
+   for(const key of ['spent','income','budget']){
+    const combined=await recapMoney(key);
+    if(october[key]!==null&&september[key]!==null)
+     assert.equal(combined,october[key]+september[key],
+      'Summary '+key+' totals exactly sum selected whole calendar months');
+   }
+   assert.equal(await recapMoney('bills'),october.bills,
+    'Twelve-month forward bill average is not presented as historical totals');
+   assert.match(await page.locator('[data-recap-spent]').innerText(),/2 months selected/);
+   await page.setViewportSize({width:320,height:844});
+   const summaryWidth=await page.evaluate(()=>({content:document.documentElement.scrollWidth,viewport:innerWidth}));
+   assert.ok(summaryWidth.content<=summaryWidth.viewport+1,
+    'Summary selector never causes phone-width overflow: '+JSON.stringify(summaryWidth));
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.deepEqual(await selectedMonths(page),['2026-09','2026-10'],
+    'Selection persists when returning from Summary to Budget');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1);
 
