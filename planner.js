@@ -505,7 +505,12 @@ function postedScheduledBills(posted,s,settlements){
    amount=Number(row.amount);
   if(!account||row.pending||row.pairedTransactionId||
      T.bankDirection(row)!=='expense'||settlements.has(String(row.id))||
-     ['card_payment','internal_transfer'].includes(row.accountingKind)||
+     row.accountingKind==='card_payment'||
+     // An outgoing, unpaired Zelle-like transfer may be a confirmed expense.
+     // Never mistake a linked transfer to another household account for one.
+     (row.accountingKind==='internal_transfer'&&
+      (row.type!=='transfer'||row.cashDirection!=='out'||
+       byId.has(String(row.toAccountId||''))))||
      !Number.isFinite(amount)||amount<=0)return [];
   // Only a uniquely matched saved expense schedule confirms historic bills;
   // other posted expenses, including card purchases, remain in Spending.
