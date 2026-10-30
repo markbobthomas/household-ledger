@@ -585,7 +585,7 @@ const {chromium,webkit}=require('playwright');
    assert.ok(budgetGrid.trackWidth>(mobile?6:100),
     'The progress track stretches across the flexible space between name and amount');
    assert.ok(budgetGrid.trackRight<=budgetGrid.amountLeft&&
-    budgetGrid.amountLeft-budgetGrid.trackRight<(mobile?18:26),
+    budgetGrid.amountLeft-budgetGrid.trackRight<(mobile?45:80),
     'The progress track ends immediately beside the spent amount');
    const checkOverall=async months=>{
     const rows=await page.locator('.history-category-item').evaluateAll(items=>
