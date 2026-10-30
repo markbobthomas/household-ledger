@@ -1845,7 +1845,7 @@ function financialRecapPage(bundle,s){
   forecastBills=hasProjection?forecastCashBills(bundle,s):[],
   summaryForecastBills=hasProjection?futureRows(bundle,s).filter(row=>
    row.kind==='event'&&row.type==='expense'&&
-   (rules.has(String(row.recurringRuleId))||Boolean(row.addedId))):[],
+   (rules.has(String(row.recurringRuleId))||row.source==='manual'||Boolean(row.addedId))):[],
   postedBills=postedScheduledBills(current,s),
   // A posted bill may arrive early. Suppress only a future occurrence of the
   // SAME confirmed rule inside its configured matching window; never drop an
