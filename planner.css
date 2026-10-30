@@ -4861,3 +4861,147 @@ a:hover{color:#166e61}
  grid-column:1/2!important;
  grid-row:1!important;
 }
+
+/* Budget endpoint labels and aligned month control, 2026-10-30.
+   The label travels with actual + expected usage rather than occupying a
+   separate amount column. Targets stay editable at the far right. */
+.history-page .history-category-columns,
+.history-page .history-category-item{
+ grid-template-columns:minmax(155px,24%) minmax(0,1fr) minmax(116px,140px);
+ column-gap:14px;
+}
+.history-page .history-category-columns span:nth-child(2){text-align:center}
+.history-page .history-category-columns span:nth-child(3){text-align:right}
+.history-page .history-category-item .history-budget-track{
+ position:relative;
+ overflow:visible;
+ width:100%;
+ height:18px;
+ align-self:center;
+ margin:0 0 21px;
+}
+.history-page .history-category-item .history-budget-fill{
+ height:100%;
+ border-radius:99px;
+}
+.history-page .history-category-item .history-category-actual{
+ position:absolute;
+ top:calc(100% + 4px);
+ left:clamp(43px,var(--budget-used),calc(100% - 43px));
+ transform:translateX(-50%);
+ width:max-content;
+ max-width:none;
+ font-size:16px;
+ line-height:19px;
+ font-weight:780;
+ font-variant-numeric:tabular-nums;
+ white-space:nowrap;
+ color:#325b48;
+ pointer-events:none;
+ margin:0;
+}
+.history-page .history-category-item .history-category-actual::before{
+ content:"";
+ position:absolute;
+ left:50%;
+ top:-7px;
+ height:6px;
+ width:2px;
+ background:currentColor;
+ opacity:.65;
+}
+.history-page .history-category-item .history-category-budget{
+ align-self:center;
+}
+.history-page .history-category-item .history-budget-input{
+ height:34px;
+ min-height:34px;
+}
+/* Account and Months share identical label baselines and control boxes. */
+.history-page .history-analysis-filters.history-budget-filters{
+ align-items:stretch!important;
+}
+.history-page .history-budget-filters>label:has([name="historyAccount"]),
+.history-page .history-budget-filters .history-budget-month-field{
+ display:flex;
+ flex-direction:column;
+ gap:5px;
+ align-self:stretch;
+ min-width:0;
+ font-size:12px;
+ line-height:1.4;
+}
+.history-page .history-budget-month-field>span{
+ display:block;
+ line-height:1.4;
+}
+.history-page .history-budget-filters select[name="historyAccount"],
+.history-page .history-budget-month-field .history-month-trigger{
+ height:40px!important;
+ min-height:40px!important;
+ width:100%;
+ box-sizing:border-box;
+ padding:7px 10px!important;
+ border:1px solid #e1e9e0;
+ border-radius:8px;
+ background:#f9fbf8;
+ line-height:1.35;
+}
+.history-page .history-budget-month-field .history-month-trigger{
+ box-shadow:none;
+}
+@media(max-width:850px){
+ .history-page .history-category-item .history-category-actual{font-size:13px}
+}
+@media(max-width:650px){
+ /* A full-width bar under Category / Budget avoids crowding narrow phones. */
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(0,1fr) minmax(98px,118px);
+  column-gap:8px;
+ }
+ .history-page .history-category-columns span:nth-child(2){display:none}
+ .history-page .history-category-columns span:nth-child(3){grid-column:2;text-align:right}
+ .history-page .history-category-item{
+  grid-template-rows:auto auto;
+  row-gap:8px;
+  align-items:start;
+ }
+ .history-page .history-category-item .history-category-label-cell{grid-column:1;grid-row:1}
+ .history-page .history-category-item .history-category-budget{
+  grid-column:2;grid-row:1;align-self:start;
+ }
+ .history-page .history-category-item .history-budget-track{
+  grid-column:1/-1;
+  grid-row:2;
+  width:100%;
+  height:16px;
+  margin:0 0 20px;
+ }
+ .history-page .history-category-item .history-category-actual{
+  left:clamp(41px,var(--budget-used),calc(100% - 41px));
+  font-size:12px;
+  line-height:16px;
+ }
+ .history-page .history-category-item .history-budget-input{height:30px;min-height:30px}
+ .history-page .history-budget-month-field .history-month-trigger strong{font-size:12px}
+}
+@media(max-width:380px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(0,1fr) minmax(92px,100px);
+  column-gap:5px;
+ }
+ .history-page .history-category-item .history-budget-track{
+  height:15px;
+  margin:0 0 20px;
+ }
+ .history-page .history-budget-filters .history-budget-month-field{font-size:12px}
+}
+
+/* Prevent the legacy 160px Account min-width from overrunning a 320px month row. */
+.history-page .history-budget-filters>label:has([name="historyAccount"]){
+ min-width:0!important;
+ width:100%;
+ max-width:100%;
+}
