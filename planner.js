@@ -1733,16 +1733,15 @@ function historyInsights(rows,view,options={}){
   const budgetField=g=>{
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
-    value=set?Math.round(raw*100)/100:null,
-    remaining=set?value*periodMonths-(g.cents+(g.expectedCents||0))/100:0;
+    value=set?Math.round(raw*100)/100:null;
+   // The bar shows spent + expected and any overage. Only the editable
+   // monthly target remains in this column; no redundant "left" subtitle.
    return '<label class="history-budget-input"><span aria-hidden="true">$</span>'+
     '<input type="number" inputmode="decimal" min="0" max="999999999" step="0.01" '+
     'data-history-budget="'+escapeHTML(g.name)+'" aria-label="Monthly budget for '+
     escapeHTML(g.name)+'" placeholder="Set" value="'+
     (set?escapeHTML(value.toFixed(2)):'')+'"></label>'+
-    (set&&allAccounts?'<small class="history-budget-difference'+(remaining<0?' over':'')+'">'+
-     cash(Math.abs(remaining))+(remaining<0?' over':' left')+'</small>':
-     '<small class="history-budget-difference">'+(set?'Household target':'Not set')+'</small>');
+    (!allAccounts&&set?'<small class="history-budget-difference">Household target</small>':'');
   };
 
   const budgetOver=g=>{
@@ -1763,11 +1762,16 @@ function historyInsights(rows,view,options={}){
      (periodMonths>1?' over '+periodMonths+' months':' this month')+
      (over?' (over budget)':''):
      'No monthly budget set for '+g.name;
+   // The amount follows the fill end, with a clamped visible position at 0
+   // and 100%; the overage remains orange and the fill caps at 100%.
    return '<span class="history-budget-track'+(!set?' unset':over?' over':'')+
     '" role="img" data-history-budget-bar data-budget-status="'+
     (!set?'unset':over?'over':'within')+'" aria-label="'+escapeHTML(description)+
-    '" title="'+escapeHTML(description)+'">'+
-    '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span></span>';
+    '" title="'+escapeHTML(description)+'" style="--budget-used:'+percent.toFixed(2)+'%">'+
+    '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span>'+
+    '<strong class="history-category-actual'+(over?' over':'')+
+    '" data-budget-marker title="'+escapeHTML(cash(g.cents/100)+' spent · '+
+     cash((g.expectedCents||0)/100)+' expected')+'">'+cash(spent)+'</strong></span>';
   };
   const budgetSummary=allAccounts?
    '<div class="history-budget-summary" data-history-total-budget>'+
@@ -1807,7 +1811,7 @@ function historyInsights(rows,view,options={}){
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    budgetSummary+
    (values.length?'<div class="history-category-table"><div class="history-category-columns">'+
-     '<span>Category</span><span>Budget used</span><span>Spent + expected</span><span>Budget / month</span></div>'+
+     '<span>Category</span><span>Spent + expected</span><span>Budget / month</span></div>'+
     '<div class="history-category-legend">'+values.map(g=>
      '<div class="history-category-item" data-history-category-row="'+escapeHTML(g.name)+'">'+
      '<div class="history-category-label-cell">'+
@@ -1820,7 +1824,6 @@ function historyInsights(rows,view,options={}){
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
       '<small>'+g.count+' transactions'+(g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button></div>'+ 
      budgetBar(g)+
-     '<strong class="history-category-actual'+(budgetOver(g)?' over':'')+'" title="'+escapeHTML(cash(g.cents/100)+' spent · '+cash((g.expectedCents||0)/100)+' expected')+'">'+cash((g.cents+(g.expectedCents||0))/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
     '</div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
    '</section>';
