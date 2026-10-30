@@ -496,7 +496,7 @@ function forecastCashBills(bundle,s,accountId=''){
 // Summary reports recurring or explicitly scheduled expenses on ALL accounts.
 // It excludes cash-to-card settlements, internal transfers, and unplanned shopping.
 // Never infer a bill from its category or merchant text alone.
-function postedScheduledBills(posted,s){
+function postedScheduledBills(posted,s,settlements){
  const accounts=activeAccounts(s),byId=new Map(accounts.map(a=>[String(a.id),a])),
   rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions;
@@ -504,12 +504,14 @@ function postedScheduledBills(posted,s){
   const account=byId.get(T.accountRef(row.accountId||row.account,accounts)),
    amount=Number(row.amount);
   if(!account||row.pending||row.pairedTransactionId||
-     row.type!=='expense'||['card_payment','internal_transfer'].includes(row.accountingKind)||
+     T.bankDirection(row)!=='expense'||settlements.has(String(row.id))||
+     ['card_payment','internal_transfer'].includes(row.accountingKind)||
      !Number.isFinite(amount)||amount<=0)return [];
   // Only a uniquely matched saved expense schedule confirms historic bills;
   // other posted expenses, including card purchases, remain in Spending.
   const matches=T.historicalScheduleMatches(row,accounts,rules)
-   .filter(rule=>rule.kind!=='movement'&&rule.type==='expense');
+   .filter(rule=>rule.kind!=='movement'&&
+    (rule.type==='expense'||rule.type==='transfer'&&rule.cashDirection==='out'));
   if(matches.length!==1)return [];
   const rule=matches[0];
   return [{row,amount,rule,category:
@@ -1835,7 +1837,8 @@ function financialRecapPage(bundle,s){
   periodBudgetCents=budgetCents*selectedMonths.size,
   hasProjection=Boolean(bundle?.projection),
   rules=new Map((state().predictions?.futureRecurringRules||[])
-   .filter(rule=>rule.kind!=='movement'&&rule.type==='expense')
+   .filter(rule=>rule.kind!=='movement'&&
+    (rule.type==='expense'||rule.type==='transfer'&&rule.cashDirection==='out'))
    .map(rule=>[String(rule.id),rule])),
   eventCategories=new Map((bundle?.projection?.events||[])
    .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
@@ -1846,7 +1849,7 @@ function financialRecapPage(bundle,s){
   summaryForecastBills=hasProjection?futureRows(bundle,s).filter(row=>
    row.kind==='event'&&row.type==='expense'&&
    (rules.has(String(row.recurringRuleId))||row.source==='manual'||Boolean(row.addedId))):[],
-  postedBills=postedScheduledBills(current,s),
+  postedBills=postedScheduledBills(current,s,settlements),
   // A posted bill may arrive early. Suppress only a future occurrence of the
   // SAME confirmed rule inside its configured matching window; never drop an
   // independent twice-monthly payment or merge different payees by amount.
