@@ -30,7 +30,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','categoryDisplayOrder','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
@@ -69,7 +69,8 @@ let historyAccount='all',historySearch='',historySort='newest',historyCategoryFi
 let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40,reviewSort='newest';
-let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='',latestCategorySave=null;
+let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=false,
+ historyCategoryDrag=null,historyCategoryNotice='',latestCategorySave=null;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
@@ -86,7 +87,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,
+   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,categoryDisplayOrder:p.categoryDisplayOrder,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,overdueReviewDismissals:p.overdueReviewDismissals,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
@@ -111,7 +112,8 @@ function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  const source=state(),prefs=source.predictions||{};
  // Budgets are reporting preferences and never change forecast projections.
- const {categoryMonthlyBudgets:_reportOnly,transactionNotes:_annotations,...forecastPrefs}=prefs;
+ const {categoryMonthlyBudgets:_reportOnly,categoryDisplayOrder:_displayOrder,
+  transactionNotes:_annotations,...forecastPrefs}=prefs;
  // The live bank adapter replaces the source state on every refresh. Saved
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
@@ -1707,21 +1709,18 @@ function historyInsights(rows,view,options={}){
    if(name&&Number.isFinite(Number(value))&&!groups.has(name))
     groups.set(name,{name,cents:0,count:0});
   }
-  // Sort by the saved *monthly* budget, not spending or number of selected
-  // calendar months. Explicit $0 budgets come before unbudgeted categories.
-  const monthlyBudgetCents=name=>{
-   if(!Object.hasOwn(budgets,name))return null;
-   const amount=Number(budgets[name]);
-   return Number.isFinite(amount)&&amount>=0?Math.round(amount*100):null;
-  };
-  // Income and household transfers remain valid transaction classifications,
-  // but are not spending-budget categories or editable monthly targets.
-  // Keep their saved settings intact in case users later change their setup.
-  const values=[...groups.values()].filter(g=>!['Income','Transfer'].includes(g.name)).sort((a,b)=>{
-   const left=monthlyBudgetCents(a.name),right=monthlyBudgetCents(b.name);
-   return Number(right!==null)-Number(left!==null)||
-    (right??0)-(left??0)||a.name.localeCompare(b.name);
-  });
+  // Category display order is independent of amounts and monthly budgets.
+  // Categories not manually placed (including new ones) append alphabetically.
+  const savedOrder=Array.isArray(options.categoryOrder)?options.categoryOrder:[],
+   orderIndex=new Map(savedOrder.filter(name=>typeof name==='string')
+    .map((name,index)=>[name,index]));
+  // Income and household transfers are classifications, not spending budgets.
+  const values=[...groups.values()].filter(g=>!['Income','Transfer'].includes(g.name))
+   .sort((a,b)=>{
+    const left=orderIndex.get(a.name),right=orderIndex.get(b.name);
+    return Number(left===undefined)-Number(right===undefined)||
+     (left??0)-(right??0)||a.name.localeCompare(b.name);
+   });
   // The overall ratio counts ALL posted purchases, even in unbudgeted categories.
   // Only explicitly saved monthly targets form the budget denominator.
   const totalBudgetCents=values.reduce((sum,g)=>{
@@ -1806,10 +1805,15 @@ function historyInsights(rows,view,options={}){
      '<span>Category</span><span>Budget used</span><span>Spent + expected</span><span>Budget / month</span></div>'+
     '<div class="history-category-legend">'+values.map(g=>
      '<div class="history-category-item" data-history-category-row="'+escapeHTML(g.name)+'">'+
+     '<div class="history-category-label-cell">'+
+     '<button type="button" class="history-category-drag-handle" data-history-category-handle="'+
+      escapeHTML(g.name)+'" aria-label="Reorder '+escapeHTML(g.name)+
+      '. Drag, or use up and down arrow keys" title="Drag to reorder" aria-keyshortcuts="ArrowUp ArrowDown">'+
+      '<span aria-hidden="true">⠿</span></button>'+
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
-      '<small>'+g.count+' transactions'+(g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button>'+ 
+      '<small>'+g.count+' transactions'+(g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button></div>'+ 
      budgetBar(g)+
      '<strong class="history-category-actual" title="'+escapeHTML(cash(g.cents/100)+' spent · '+cash((g.expectedCents||0)/100)+' expected')+'">'+cash((g.cents+(g.expectedCents||0))/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
@@ -2186,6 +2190,7 @@ function historyPage(bundle,s){
   insight=displayView!=='list'?historyInsights(filtered,displayView,{
    predictedExpenses:expectedExpenses,
    budgets:state().predictions?.categoryMonthlyBudgets||{},
+   categoryOrder:state().predictions?.categoryDisplayOrder||[],
    cardSettlementIds:budgetCardSettlements,
    months:monthsInRange,allAccounts:historyAccount==='all',
    merchantSearch:historyMerchantSearch
@@ -4481,6 +4486,82 @@ document.addEventListener('input',e=>{
   '[data-future-edit-form] [name=merchant],[data-history-recurring-form] [name=merchant]')){
   const form=e.target.closest('form');updateHistoryLinks(form);
  }
+});
+// Save the Budget-specific visual order as a private planning preference.
+ // Never update source transactions, budgets, or canonical forecasts.
+function visibleBudgetCategoryOrder(){
+ return [...document.querySelectorAll('.history-category-legend > [data-history-category-row]')]
+  .map(row=>row.dataset.historyCategoryRow);
+}
+async function saveBudgetCategoryOrder(){
+ if(historyCategoryOrderBusy)return;
+ const next=visibleBudgetCategoryOrder();
+ if(!next.length||new Set(next).size!==next.length)return;
+ const prefs=state().predictions??={},
+  original=Array.isArray(prefs.categoryDisplayOrder)?[...prefs.categoryDisplayOrder]:[];
+ if(JSON.stringify(next)===JSON.stringify(original))return;
+ historyCategoryOrderBusy=true;
+ prefs.categoryDisplayOrder=next;
+ try{
+  const result=await savePlanning();
+  if(live()&&(!result||result.saved!==true))throw Error('Category order save was not confirmed');
+  historyBudgetMessage='';
+ }catch(error){
+  prefs.categoryDisplayOrder=original;
+  historyBudgetMessage='Could not save category order. Try again.';
+ }finally{
+  historyCategoryOrderBusy=false;
+  render();
+ }
+}
+document.addEventListener('pointerdown',e=>{
+ const handle=e.target.closest?.('[data-history-category-handle]');
+ if(!handle||e.button!==0||!e.isPrimary||historyBudgetBusy||historyCategoryOrderBusy)return;
+ const row=handle.closest('[data-history-category-row]');
+ if(!row)return;
+ historyCategoryDrag={handle,row,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,moved:false};
+ handle.setPointerCapture(e.pointerId);
+ handle.focus();
+ e.preventDefault();
+});
+document.addEventListener('pointermove',e=>{
+ const drag=historyCategoryDrag;
+ if(!drag||e.pointerId!==drag.pointerId)return;
+ if(!drag.moved&&Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)<5)return;
+ drag.moved=true;
+ drag.row.classList.add('category-dragging');
+ const hover=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('[data-history-category-row]');
+ if(!hover||hover===drag.row||hover.parentElement!==drag.row.parentElement)return;
+ const midpoint=hover.getBoundingClientRect();
+ if(e.clientY<midpoint.top+midpoint.height/2)hover.before(drag.row);
+ else hover.after(drag.row);
+});
+document.addEventListener('pointerup',e=>{
+ const drag=historyCategoryDrag;
+ if(!drag||e.pointerId!==drag.pointerId)return;
+ historyCategoryDrag=null;
+ drag.row.classList.remove('category-dragging');
+ if(drag.moved)void saveBudgetCategoryOrder();
+});
+document.addEventListener('pointercancel',e=>{
+ if(!historyCategoryDrag||e.pointerId!==historyCategoryDrag.pointerId)return;
+ historyCategoryDrag=null;
+ render(); // Revert any unsaved temporary DOM movement.
+});
+document.addEventListener('keydown',e=>{
+ const handle=e.target.closest?.('[data-history-category-handle]');
+ if(!handle||!['ArrowUp','ArrowDown'].includes(e.key))return;
+ e.preventDefault();
+ if(historyBudgetBusy||historyCategoryOrderBusy)return;
+ const row=handle.closest('[data-history-category-row]');
+ const other=e.key==='ArrowUp'?row?.previousElementSibling:row?.nextElementSibling;
+ if(!other?.matches('[data-history-category-row]'))return;
+ if(e.key==='ArrowUp')other.before(row);else other.after(row);
+ const name=handle.dataset.historyCategoryHandle;
+ void saveBudgetCategoryOrder().then(()=>{
+  [...document.querySelectorAll('[data-history-category-handle]')]
+   .find(el=>el.dataset.historyCategoryHandle===name)?.focus();
+ });
 });
 document.addEventListener('change',async e=>{
  const budgetInput=e.target.closest?.('[data-history-budget]');

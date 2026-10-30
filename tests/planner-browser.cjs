@@ -561,19 +561,32 @@ const {chromium,webkit}=require('playwright');
     'The average is not displayed in the budget overview');
    assert.equal(await page.locator('.history-category-layout').count(),0,
     'Budget category columns are no longer constrained by a chart layout');
+   let expectedBudgetOrder=await page.locator('.history-category-item')
+    .evaluateAll(items=>items.map(item=>item.dataset.historyCategoryRow));
+   assert.deepEqual(expectedBudgetOrder,[...expectedBudgetOrder].sort((a,b)=>a.localeCompare(b)),
+    'Before manual placement, Budget categories use stable alphabetical order, not target amounts');
    const assertBudgetSorted=async()=>{
     const actual=await page.locator('.history-category-item').evaluateAll(items=>items.map(item=>({
      name:item.dataset.historyCategoryRow,budget:item.querySelector('[data-history-budget]').value
     })));
-    const expected=[...actual].sort((a,b)=>
-     Number(b.budget!=='')-Number(a.budget!=='')||
-     Number(b.budget||0)-Number(a.budget||0)||
-     a.name.localeCompare(b.name));
-    assert.deepEqual(actual.map(row=>row.name),expected.map(row=>row.name),
-     'Budget rows are ranked by monthly target high to low, with unset categories last');
+    assert.deepEqual(actual.map(row=>row.name),expectedBudgetOrder,
+     'Changing monthly targets or months does not reorder Budget categories');
     assert.ok(actual.some(row=>row.budget===''),'Unbudgeted categories stay visible');
    };
    await assertBudgetSorted();
+   const budgetGrid=await page.locator('.history-category-item').first().evaluate(row=>{
+    const bounds=el=>el.getBoundingClientRect(),
+     track=bounds(row.querySelector('.history-budget-track')),
+     amount=bounds(row.querySelector('.history-category-actual')),
+     label=bounds(row.querySelector('.history-category-label-cell'));
+    return {trackWidth:track.width,trackRight:track.right,amountLeft:amount.left,
+     labelRight:label.right};
+   });
+   assert.ok(budgetGrid.trackWidth>(mobile?6:100),
+    'The progress track stretches across the flexible space between name and amount');
+   assert.ok(budgetGrid.trackRight<=budgetGrid.amountLeft&&
+    budgetGrid.amountLeft-budgetGrid.trackRight<(mobile?45:80),
+    'The progress track ends immediately beside the spent amount');
    const checkOverall=async months=>{
     const rows=await page.locator('.history-category-item').evaluateAll(items=>
      items.map(item=>({
@@ -617,7 +630,35 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await budgetCategory.locator('[data-history-budget]').inputValue(),'275.50');
    await assertBudgetSorted();
    await checkOverall(1);
-   assert.match(await budgetCategory.locator('[data-history-budget-bar]').getAttribute('aria-label'),/spent of .* budget/,
+   // Reorder by pointer on desktop and keyboard on WebKit (also works on touch).
+   // The saved custom order must survive a reload and later target changes.
+   assert.ok(expectedBudgetOrder.length>2,'Fixture has enough categories for manual ordering');
+   const movingName=expectedBudgetOrder[0],secondName=expectedBudgetOrder[1],
+    movingHandle=page.locator('.history-category-item').first()
+     .locator('[data-history-category-handle]');
+   if(mobile){
+    await movingHandle.focus();
+    await movingHandle.press('ArrowDown');
+   }else{
+    await movingHandle.scrollIntoViewIfNeeded();
+    const from=await movingHandle.boundingBox(),
+     to=await page.locator('.history-category-item').nth(1).boundingBox();
+    await page.mouse.move(from.x+from.width/2,from.y+from.height/2);
+    await page.mouse.down();
+    await page.mouse.move(to.x+to.width/2,to.y+to.height*.8,{steps:8});
+    await page.mouse.up();
+   }
+   expectedBudgetOrder=[secondName,movingName,...expectedBudgetOrder.slice(2)];
+   await page.waitForFunction(order=>{
+    const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return JSON.stringify(saved.categoryDisplayOrder)===JSON.stringify(order);
+   },expectedBudgetOrder);
+   await assertBudgetSorted();
+   await page.reload();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await assertBudgetSorted();
+   assert.match(await page.locator('[data-history-category-row="'+categoryName+'"] [data-history-budget-bar]')
+    .getAttribute('aria-label'),/spent of .* budget/,
     'The saved budget appears in the accessible progress description');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Category view shows its tailored chart rather than duplicating line-item history');
