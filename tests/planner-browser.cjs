@@ -152,6 +152,31 @@ const {chromium,webkit}=require('playwright');
     'No instructional cards, setup text, or long-range disclosure above the Calendar');
    assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
     'The Calendar surface is the direct Home landing view');
+   // Keep Home calendar days close to the account/month controls in desktop
+   // Chromium and iPhone WebKit without hiding either financial metric.
+   const homeGeometry=await page.evaluate(()=>{
+    const box=selector=>{
+     const r=document.querySelector(selector)?.getBoundingClientRect();
+     return r?{top:r.top,bottom:r.bottom,left:r.left,right:r.right,height:r.height}:null;
+    };
+    const stage=box('.summary-page > .summary-stage');
+    const toolbar=box('.summary-page .calendar-toolbar');
+    const metrics=box('.summary-page .summary-numbers');
+    const day=box('.summary-page .calendar-day');
+    const cards=[...document.querySelectorAll('.summary-page .summary-numbers>div')]
+     .map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,height:r.height}});
+    return {stage,toolbar,metrics,day,cards,viewport:innerWidth,
+     scrollWidth:document.documentElement.scrollWidth};
+   });
+   assert.equal(homeGeometry.cards.length,2,'Home keeps both financial metrics');
+   assert.ok(homeGeometry.cards[0].right<=homeGeometry.cards[1].left+1,
+    'Home metrics should not overlap: '+JSON.stringify(homeGeometry));
+   assert.ok(homeGeometry.day.top-homeGeometry.stage.top<=(mobile?240:205),
+    'Show the first calendar day higher on Home: '+JSON.stringify(homeGeometry));
+   assert.ok(homeGeometry.day.top-homeGeometry.toolbar.bottom<=(mobile?140:130),
+    'No unnecessary blank gap before calendar days: '+JSON.stringify(homeGeometry));
+   assert.ok(homeGeometry.scrollWidth<=homeGeometry.viewport+3,
+    'Compact Home must not introduce horizontal overflow: '+JSON.stringify(homeGeometry));
    assert.equal(await page.locator('[data-summary-next-90-low] .summary-overline').innerText(),
     'Lowest in next 90 days','The balance card explicitly says 90 calendar days');
    const rollingValue=await page.locator('[data-summary-next-90-value]').innerText(),
