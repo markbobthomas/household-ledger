@@ -5272,3 +5272,149 @@ a:hover{color:#166e61}
   width:20px;max-width:20px;
  }
 }
+
+/* 2026-10-30 — Upcoming Bills sets the visual rhythm for transaction lists.
+   Three related lists use ONE outer surface and flat, generous rows instead
+   of nested per-payment cards or compressed activity lines. */
+.schedule-page .bills-upcoming.panel,
+.schedule-page .schedule-grid,
+.history-page .history-list-surface{
+ background:#fff!important;
+ border:1px solid #e7ede6!important;
+ border-radius:16px!important;
+ box-shadow:0 4px 22px rgba(26,51,38,.035)!important;
+ box-sizing:border-box;
+}
+.schedule-page .schedule-grid,
+.history-page .history-list-surface{
+ padding:12px 16px!important;
+}
+.schedule-page .schedule-card,
+.schedule-page .schedule-category-group,
+.history-page .history-entry{
+ display:block;
+ width:100%!important;
+ min-width:0;
+ max-width:none;
+ margin:0!important;
+ padding:0!important;
+ border:0!important;
+ border-radius:0!important;
+ box-shadow:none!important;
+ background:transparent!important;
+}
+/* Maintain continuous, lightly divided lists, including category groups. */
+.schedule-page .schedule-card>.schedule-compact-row,
+.history-page .history-entry>.history-actual-row{
+ min-height:72px!important;
+ width:100%;
+ margin:0!important;
+ padding:5px 0!important;
+ border:0!important;
+ border-bottom:1px solid #e9f0e9!important;
+ border-radius:0!important;
+ background:transparent!important;
+ box-sizing:border-box;
+}
+.schedule-page .schedule-category-group:last-child .schedule-card:last-child>.schedule-compact-row,
+.schedule-page .schedule-grid>.schedule-card:last-of-type>.schedule-compact-row,
+.history-page .history-entry:last-of-type>.history-actual-row{
+ border-bottom-color:transparent!important;
+}
+/* Same readable size and vertical whitespace as the Upcoming Bills list. */
+.schedule-page .bills-upcoming-row{
+ min-height:72px;
+ padding-block:15px;
+ column-gap:12px;
+}
+.schedule-page .bills-upcoming-description strong,
+.schedule-page .ledger-transaction-row .ledger-transaction-identity strong,
+.schedule-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong,
+.history-page .ledger-transaction-row .ledger-transaction-identity strong{
+ font-size:15px!important;
+ line-height:1.45!important;
+ font-weight:730!important;
+}
+.schedule-page .bills-upcoming-row>strong,
+.schedule-page .ledger-transaction-row .ledger-transaction-amount,
+.history-page .ledger-transaction-row .ledger-transaction-amount{
+ font-size:16px!important;
+ font-weight:740!important;
+ font-variant-numeric:tabular-nums;
+}
+.schedule-page .bills-upcoming-description small,
+.schedule-page .ledger-transaction-row .ledger-transaction-identity small,
+.history-page .ledger-transaction-row .ledger-transaction-identity small{
+ font-size:12px!important;
+ line-height:1.5!important;
+ color:#849588;
+}
+.schedule-page .schedule-row-main.ledger-transaction-row,
+.history-page .history-row-open.ledger-transaction-row{
+ min-height:63px!important;
+ padding:13px 10px!important;
+}
+.schedule-page .schedule-card .ledger-row-category-wrap,
+.history-page .history-actual-row .ledger-row-category-wrap{
+ align-self:center;
+ min-height:40px;
+}
+/* Predictable, unobtrusive status and action areas accompany the larger row. */
+.schedule-page .schedule-more>summary{
+ border-left:0!important;
+ border-radius:9px;
+}
+.schedule-page .schedule-card:has(.schedule-row-main[aria-expanded="true"])>.schedule-compact-row,
+.history-page .history-entry:has(.history-row-open[aria-expanded="true"])>.history-actual-row{
+ background:#f2f8f3!important;
+}
+@media(max-width:850px){
+ .schedule-page .schedule-grid,
+ .history-page .history-list-surface{padding:10px 10px!important}
+ .schedule-page .schedule-card>.schedule-compact-row,
+ .history-page .history-entry>.history-actual-row{
+  min-height:78px!important;
+  padding:6px 0 9px!important;
+ }
+ .schedule-page .schedule-row-main.ledger-transaction-row,
+ .history-page .history-row-open.ledger-transaction-row{
+  min-height:52px!important;
+  padding:11px 6px!important;
+ }
+ .schedule-page .bills-upcoming-row{
+  min-height:70px;padding-block:13px;
+ }
+ .schedule-page .bills-upcoming-description strong,
+ .schedule-page .ledger-transaction-row .ledger-transaction-identity strong,
+ .schedule-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong,
+ .history-page .ledger-transaction-row .ledger-transaction-identity strong{
+  font-size:14px!important;
+ }
+ .schedule-page .bills-upcoming-row>strong,
+ .schedule-page .ledger-transaction-row .ledger-transaction-amount,
+ .history-page .ledger-transaction-row .ledger-transaction-amount{
+  font-size:14px!important;
+ }
+ .schedule-page .bills-upcoming-description small,
+ .schedule-page .ledger-transaction-row .ledger-transaction-identity small,
+ .history-page .ledger-transaction-row .ledger-transaction-identity small{
+  font-size:11px!important;
+ }
+}
+@media(max-width:390px){
+ .schedule-page .schedule-grid,
+ .history-page .history-list-surface{padding:8px 7px!important}
+ .schedule-page .schedule-row-main.ledger-transaction-row,
+ .history-page .history-row-open.ledger-transaction-row{padding:10px 4px!important}
+ .schedule-page .bills-upcoming-description strong,
+ .schedule-page .ledger-transaction-row .ledger-transaction-identity strong,
+ .schedule-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong,
+ .history-page .ledger-transaction-row .ledger-transaction-identity strong{
+  font-size:13px!important;
+ }
+ .schedule-page .bills-upcoming-row>strong,
+ .schedule-page .ledger-transaction-row .ledger-transaction-amount,
+ .history-page .ledger-transaction-row .ledger-transaction-amount{
+  font-size:13px!important;
+ }
+}

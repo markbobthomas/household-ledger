@@ -1388,6 +1388,74 @@ const {chromium,webkit}=require('playwright');
     .replace(/[^0-9.-]/g,''))*100),oldTargetCents+movedCents,
     'Budget reflects the saved correction without forcing a bank refresh');
 
+
+   // Compare with an actual Upcoming Bills item generated from a completely
+   // fictional repeating rule. Keep it isolated to this disposable demo test.
+   const visualAccount=await page.locator('.history-budget-filters [name="historyAccount"] option')
+    .evaluateAll(nodes=>nodes.find(n=>n.value&&n.value!=='all')?.value||'');
+   assert.ok(visualAccount,'A fictional account is available for the visual fixture');
+   await page.evaluate(accountId=>{
+    const key='household-planner-sample-settings-v1';
+    const p=JSON.parse(localStorage.getItem(key)||'{}');
+    const r={id:'fictional-bill-row-layout',kind:'event',
+     accountId,originalAccountId:accountId,
+     merchant:'Fictional Internet Bill',originalMerchant:'Fictional Internet Bill',
+     scheduleLabel:'Fictional Internet Bill',type:'expense',originalType:'expense',
+     amount:85,matchAmount:85,frequency:'monthly',sourceFrequency:'monthly',
+     anchorDate:'2026-10-23',sourceAnchorDate:'2026-10-23',
+     amountBasis:'fixed',category:'Utility',categoryReviewed:true,
+     matchNames:['fictional internet bill'],enabled:true};
+    p.futureRecurringRules=[...(p.futureRecurringRules||[])
+     .filter(x=>x.id!==r.id),r];
+    p.recurringForecastMode='approved-only';
+    localStorage.setItem(key,JSON.stringify(p));
+   },visualAccount);
+   await page.reload();
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   const upcoming=page.locator('.bills-upcoming-row')
+    .filter({hasText:'Fictional Internet Bill'}).first();
+   const repeating=page.locator('[data-schedule-card="fictional-bill-row-layout"]');
+   assert.equal(await upcoming.count(),1,
+    'Fixture appears in Upcoming Bills as a canonical forecast');
+   assert.equal(await repeating.count(),1,
+    'Fixture appears in Repeating Payments');
+   const design=(row,container,merchant,amount)=>row.evaluate(
+    (node,{container,merchant,amount})=>{
+     const outer=node.closest(container),css=getComputedStyle(outer),r=node.getBoundingClientRect();
+     return {height:r.height,merchant:parseFloat(getComputedStyle(node.querySelector(merchant)).fontSize),
+      amount:parseFloat(getComputedStyle(node.querySelector(amount)).fontSize),
+      cardBorder:css.borderTopStyle,cardShadow:css.boxShadow,
+      overflow:document.documentElement.scrollWidth-innerWidth};
+    },{container,merchant,amount});
+   const ref=await design(upcoming,'.bills-upcoming',
+    '.bills-upcoming-description strong','.bills-upcoming-row>strong');
+   const scheduled=await design(repeating.locator('.schedule-compact-row'),
+    '.schedule-card','.schedule-row-title strong','.schedule-row-amount strong');
+   assert.ok(ref.height>=60&&scheduled.height>=60&&
+    Math.abs(ref.height-scheduled.height)<=30,
+    'Repeating matches Upcoming Bills row spacing: '+JSON.stringify({ref,scheduled}));
+   assert.ok(Math.abs(ref.merchant-scheduled.merchant)<=1&&
+    Math.abs(ref.amount-scheduled.amount)<=1,
+    'Repeating text matches Upcoming Bills: '+JSON.stringify({ref,scheduled}));
+   assert.equal(scheduled.cardBorder,'none','Repeating has no individual enclosing card');
+   assert.equal(scheduled.cardShadow,'none','Repeating has no per-item shadow');
+   assert.ok(ref.overflow<=3&&scheduled.overflow<=3,'No horizontal overflow in Bills');
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   const posted=await design(page.locator('.history-entry .history-actual-row').first(),
+    '.history-entry','.history-actual-description strong','.history-actual-amount');
+   assert.ok(posted.height>=60&&Math.abs(posted.height-ref.height)<=30,
+    'Activity matches Upcoming Bills vertical rhythm: '+JSON.stringify({ref,posted}));
+   assert.ok(Math.abs(ref.merchant-posted.merchant)<=1&&
+    Math.abs(ref.amount-posted.amount)<=1,
+    'Activity text matches Upcoming Bills: '+JSON.stringify({ref,posted}));
+   assert.equal(posted.cardBorder,'none','Activity is a flat, continuous list');
+   assert.ok(posted.overflow<=3,'No horizontal overflow in Activity');
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await repeating.locator('[data-schedule-edit]').click();
+   assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
+    'Spacious Repeating row keeps existing editor');
+   await page.locator('.transaction-detail-close').click();
+
    assert.deepEqual(errors,[],'No uncaught client errors on '+(mobile?'iPhone WebKit':'desktop Chromium'));
    await context.close();
   }
