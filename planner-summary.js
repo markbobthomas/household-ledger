@@ -134,14 +134,16 @@ function postedDay(date){
    matches=root.HouseholdPlannerTransactions.historicalScheduleMatches(
     t,calendarContext.accounts,calendarContext.prefs?.futureRecurringRules||[]),
    action=matches.length===1?'View prediction':matches.length>1?'Choose prediction':'Make recurring';
-  return '<div class="calendar-detail-item calendar-actual-row"><span class="calendar-transaction-name">'+
+  return '<div class="calendar-detail-item calendar-actual-row ledger-transaction-row">'+
+   '<span class="ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
+   '<span class="calendar-transaction-name ledger-transaction-identity">'+
    esc(t.merchant||'Bank transaction')+
    (calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)]))?
     '<small class="transaction-note-subtitle">'+
      esc(calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)])))+'</small>':'')+
    '<small>'+(t.pending?'Pending':'Posted')+'</small></span>'+
-   '<strong class="'+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
-   '</strong><button type="button" class="calendar-item-edit" data-calendar-history-plan="'+
+   '<strong class="ledger-transaction-amount '+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
+   '</strong><button type="button" class="calendar-item-edit ledger-transaction-action" data-calendar-history-plan="'+
    esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">'+action+'</button></div>';
  }).join('');
  return '<section class="calendar-day-detail calendar-actual-detail" data-calendar-detail>'+
@@ -167,18 +169,18 @@ function predictionIdentity(e){
 }
 function predictionEntry(date,e,index,card,selected=false){
  const d=paymentDetail(e),key=esc(predictionIdentity(e));
- const entry='<button type="button" class="calendar-monthly-row calendar-detail-item" '+
+ const entry='<button type="button" class="calendar-monthly-row calendar-detail-item ledger-transaction-row" '+
   'data-calendar-list-date="'+date+'" data-calendar-list-index="'+index+
   '" data-open-transaction="'+key+'" aria-expanded="false" aria-label="'+
   esc('Edit '+(e.merchant||'predicted payment')+' on '+shortDate(date))+'">'+
-  '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
-  '<span class="calendar-monthly-name">'+esc(e.merchant||'Predicted payment')+
+  '<span class="calendar-monthly-date ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
+  '<span class="calendar-monthly-name ledger-transaction-identity"><strong>'+esc(e.merchant||'Predicted payment')+'</strong>'+
   (calendarNote('forecast:'+predictionIdentity(e))?
    '<small class="transaction-note-subtitle">'+
     esc(calendarNote('forecast:'+predictionIdentity(e)))+'</small>':'')+
   (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
-  '<strong class="'+(signed(e,card)>0?'in':'out')+'">'+fullSigned(e,card)+'</strong>'+
-  '<span class="calendar-monthly-view" aria-hidden="true">Edit ›</span></button>';
+  '<strong class="ledger-transaction-amount '+(signed(e,card)>0?'in':'out')+'">'+fullSigned(e,card)+'</strong>'+
+  '<span class="calendar-monthly-view ledger-transaction-action" aria-hidden="true">›</span></button>';
  return '<div class="calendar-monthly-entry calendar-detail-entry'+
   (selected?' selected-date':'')+'" data-calendar-entry-date="'+date+
   '" data-inline-row-wrapper>'+entry+
