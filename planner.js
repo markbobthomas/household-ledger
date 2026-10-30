@@ -2838,8 +2838,8 @@ function overviewPage(bundle,s,chosen,derived,fresh){
  const notes=events.map(e=>{
   const key=e.transferGroupId?window.HouseholdPlannerTransactions.keyMovement(e.transferGroupId):
    e.predictionKey||window.HouseholdPlannerTransactions.keyEvent(e.id,e.accountId);
-  return '<button type="button" class="overview-upcoming-item overview-upcoming-open" data-open-transaction="'+
-   escapeHTML(key)+' class="ledger-transaction-row"><span class="ledger-transaction-date">'+escapeHTML(dayLabel(e.date))+
+  return '<button type="button" class="overview-upcoming-item overview-upcoming-open ledger-transaction-row" data-open-transaction="'+
+   escapeHTML(key)+'"><span class="ledger-transaction-date">'+escapeHTML(dayLabel(e.date))+
    '</span><span class="ledger-transaction-identity"><strong>'+escapeHTML(e.merchant)+'</strong></span>'+
    '<strong class="ledger-transaction-amount">'+cash(e.amount)+'</strong>'+
    '<span class="overview-details-indicator ledger-transaction-action">›</span></button>';
