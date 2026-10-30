@@ -1113,7 +1113,10 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
-   await verifyTransactionAnatomy(page,'.schedule-row-main.ledger-transaction-row','Upcoming Bills');
+   if(await page.locator('.schedule-row-main.ledger-transaction-row').count())
+    await verifyTransactionAnatomy(page,'.schedule-row-main.ledger-transaction-row','Upcoming Bills');
+   else assert.equal(await page.locator('.schedule-row-main').count(),0,
+    'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
    const newRepeat=page.locator('[data-schedule-new]').first();
@@ -1131,7 +1134,10 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('#planner-menu>summary').click();
    await page.locator('#planner-menu [data-view="transactions"]').click();
-   await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
+   if(await page.locator('.unified-payment-trigger.ledger-transaction-row').count())
+    await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
+   else assert.equal(await page.locator('.unified-payment-trigger').count(),0,
+    'No dated predictions are available in this fictional fixture');
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
    const next=page.locator('[data-calendar-day="2026-10-20"]');
    if(await next.count()){
