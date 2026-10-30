@@ -1858,7 +1858,7 @@ function financialRecapPage(bundle,s){
   upcomingCents=selectedBills.reduce((sum,r)=>sum+Math.round(Number(r.amount)*100||0),0),
   billCents=paidCents+upcomingCents,
   selectedForecastPeriod=[...selectedMonths].some(m=>m>=month),
-  canSummarizeBills=Boolean(postedBills.length||hasProjection&&selectedForecastPeriod),
+  canSummarizeBills=Boolean(current.length||hasProjection&&selectedForecastPeriod),
   groupBills=new Map();
  for(const row of postedBills)
   groupBills.set(row.category,(groupBills.get(row.category)||0)+Math.round(row.amount*100));
