@@ -152,11 +152,10 @@ function renameCategory(state,oldName,newName){
    normalizeCategory(name).toLocaleLowerCase()!==next.toLocaleLowerCase()),old]);
  if(Array.isArray(state.customCategories))
   state.customCategories=state.customCategories.map(name=>same(name)?next:name);
- if(state.learning){
-  visit(state.learning);
-  // Learning history is a past event log, not an active category choice.
-  // Keep historical log labels untouched.
- }
+ if(state.learning?.categoryRules)visit(state.learning.categoryRules);
+ // Historical learning audit records remain unchanged (the event took place
+ // under the name in use at the time). Active merchant rules move to next.
+
  return {from:old,to:next,affected:affected.length};
 }
 
