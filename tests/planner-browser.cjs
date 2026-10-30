@@ -54,6 +54,35 @@ const {chromium,webkit}=require('playwright');
  }
  const selectedMonths=page=>page.locator('[data-history-month-option]:checked')
   .evaluateAll(inputs=>inputs.map(input=>input.value).sort());
+ // Verify the OPEN menu, not only the closed Account/Months triggers.
+ async function verifyMonthOptionsDoNotOverlap(page,label){
+  await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
+  const b=await page.evaluate(()=>{
+   const menu=document.querySelector('.history-budget-filters [data-history-month-menu]'),
+    option=menu.querySelector('.history-month-option'),
+    input=option.querySelector('input[type="checkbox"]'),
+    text=option.querySelector('span'),next=option.nextElementSibling,
+    rect=el=>el?.getBoundingClientRect();
+   const [m,o,c,t,n]=[menu,option,input,text,next].map(rect);
+   return {open:!menu.hidden,display:getComputedStyle(option).display,
+    checkboxWidth:c.width,checkboxHeight:c.height,
+    checkboxRight:c.right,textLeft:t.left,
+    centerDelta:Math.abs((c.top+c.bottom-t.top-t.bottom)/2),
+    gapToNext:n?.top-o.bottom??null,
+    menuLeft:m.left,menuRight:m.right,viewport:innerWidth,
+    scrollWidth:document.documentElement.scrollWidth};
+  });
+  assert.ok(b.open&&b.display==='grid'&&b.checkboxWidth>=14&&b.checkboxWidth<=20&&
+   b.checkboxHeight>=14&&b.checkboxHeight<=20,
+   'Checkbox rows must not inherit full-size form controls at '+label+': '+JSON.stringify(b));
+  assert.ok(b.checkboxRight+6<=b.textLeft&&b.centerDelta<=5&&
+   (b.gapToNext===null||b.gapToNext>=-1),
+   'Checkboxes must not overlap month names or adjacent rows at '+label+': '+JSON.stringify(b));
+  assert.ok(b.menuLeft>=-1&&b.menuRight<=b.viewport+1&&b.scrollWidth<=b.viewport+3,
+   'Opened menu stays within the viewport at '+label+': '+JSON.stringify(b));
+  await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
+ }
+
  try{
   await ready();
   chrome=await chromium.launch({headless:true});
@@ -611,6 +640,7 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('[data-history-month-option][value="2026-09"]').count()>0,
     'Earlier complete calendar months are available for historical Budget review');
    await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
+   await verifyMonthOptionsDoNotOverlap(page,mobile?'390px iPhone WebKit':'1280px desktop Chromium');
    let expectedBudgetOrder=await page.locator('.history-category-item')
     .evaluateAll(items=>items.map(item=>item.dataset.historyCategoryRow));
    assert.deepEqual(expectedBudgetOrder,[...expectedBudgetOrder].sort((a,b)=>a.localeCompare(b)),
@@ -808,6 +838,7 @@ const {chromium,webkit}=require('playwright');
    await chooseMonths(page,['2026-10','2026-09','2026-08']);
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
+    await verifyMonthOptionsDoNotOverlap(page,width+'px '+(mobile?'iPhone WebKit':'desktop Chromium'));
     const selectorAlignment=await page.evaluate(()=>{
      const account=document.querySelector('.history-budget-filters [name="historyAccount"]')?.getBoundingClientRect(),
       month=document.querySelector('.history-budget-filters .history-month-trigger')?.getBoundingClientRect(),
