@@ -60,10 +60,11 @@ let reviewCatalogSave=Promise.resolve();
 // or private recovery snapshots are stored in the browser's localStorage.
 let forecastSaveSequence=0,lastForecastUndo=null;
 function forecastSaveFeedback(message,allowUndo=false){
+ const undoButton=document.querySelector('.topbar [data-undo-forecast]');
+ if(undoButton)undoButton.disabled=!allowUndo;
  const el=$('planner-save-feedback');if(!el)return;
  el.hidden=!message;
- el.innerHTML=message?'<span>'+escapeHTML(message)+'</span>'+
-  (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
+ el.innerHTML=message?'<span>'+escapeHTML(message)+'</span>':'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
