@@ -806,7 +806,7 @@ const {chromium,webkit}=require('playwright');
        .getPropertyValue('--budget-used'))/100,
       markerCenter=(actual.left+actual.right)/2,
       expectedCenter=bar.left+Math.min(Math.max(percent*bar.width,
-       width<=650?41:43),bar.width-(width<=650?41:43));
+       innerWidth<=650?41:43),bar.width-(innerWidth<=650?41:43));
      return {nameRight:name.right,nameBottom:name.bottom,
       barLeft:bar.left,barTop:bar.top,barRight:bar.right,barWidth:bar.width,
       actualLeft:actual.left,actualRight:actual.right,
