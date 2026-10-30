@@ -5099,3 +5099,14 @@ a:hover{color:#166e61}
  text-overflow:ellipsis;
  white-space:nowrap;
 }
+
+/* Narrow-screen global month-menu rules left-anchor every popup. In the
+   Budget two-column filter the Months trigger sits on the RIGHT, so left
+   anchoring pushes the popup off-screen. Anchor it to the trigger's right. */
+.history-page .history-budget-filters .history-month-menu{
+ left:auto;
+ right:0;
+ box-sizing:border-box;
+ width:min(310px,calc(100vw - 32px));
+ max-width:calc(100vw - 32px);
+}
