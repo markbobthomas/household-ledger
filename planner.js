@@ -66,7 +66,7 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
-let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
+let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40,reviewSort='newest';
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='',latestCategorySave=null;
@@ -1841,8 +1841,12 @@ function spendingMonthPicker(records,asOf,includeUpcoming=false){
   monthIndex=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7)),
   // Summary offers twelve upcoming months; other Spending views show history
   // by default but retain future months already selected on Summary.
-  futureCount=includeUpcoming?12:Math.max(0,...[...(historySelectedMonths||[])]
-   .map(m=>monthIndex(m)-monthIndex(currentMonth)));
+  // Keep the current list of future months stable for the whole checkbox
+  // interaction. Otherwise unchecking the farthest future month removes its
+  // own input during the click and can strand keyboard/mobile selection.
+  futureCount=Math.max(includeUpcoming?12:0,historyMonthPickerOpen?historyMonthFutureExtent:0,
+   ...[...(historySelectedMonths||[])].map(m=>monthIndex(m)-monthIndex(currentMonth)));
+ historyMonthFutureExtent=futureCount;
  for(let i=0,d=new Date(currentMonth+'-01T12:00:00Z');i<=futureCount;i++,d.setUTCMonth(d.getUTCMonth()+1))
   availableMonths.push(d.toISOString().slice(0,7));
  const past=new Date(currentMonth+'-01T12:00:00Z');
