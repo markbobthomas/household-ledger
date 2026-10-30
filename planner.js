@@ -1570,7 +1570,7 @@ function historyInsights(rows,view,options={}){
    visibleCents=matched.reduce((sum,g)=>sum+g.cents,0),
    largest=Math.max(1,...values.map(g=>Math.max(0,g.cents))),
    showTotal=sum=>(sum<0?'−':'')+cash(Math.abs(sum)/100);
-  return '<section class="history-insight-panel" data-history-merchant-insights>'+
+  return '<section class="history-insight-panel" data-history-merchant-insights aria-label="Merchant spending">'+
    '<div class="history-merchant-overview">'+
     '<div><small>Net merchant spending</small><strong data-history-merchant-total>'+
      showTotal(visibleCents)+'</strong></div>'+
@@ -1729,7 +1729,7 @@ function historyInsights(rows,view,options={}){
   if(i>=0){groups[i].count++;groups[i].cents+=cardActivityCents(r);}
  }
  const largest=Math.max(1,...groups.map(g=>g.count));
- return '<section class="history-insight-panel" data-history-size-insights>'+
+ return '<section class="history-insight-panel" data-history-size-insights aria-label="Purchase sizes">'+
   header+'<div class="history-size-list">'+groups.map((g,i)=>
    '<button type="button" class="history-size-row" data-history-size-band="'+i+'">'+
    '<span class="history-size-name">'+escapeHTML(g.name)+'</span>'+
@@ -2415,10 +2415,6 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  return '<div class="planner-page reviews-page">'+
   '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
     '<div><h2>Things to check</h2></div></div>'+
-  '<div class="review-priority" aria-label="Review priorities">'+
-   '<strong>Needs action: '+(overdue.length+decisionsNeeded+categoryCount)+'</strong>'+
-   '<span>'+overdue.length+' unposted payments · '+decisionsNeeded+' earlier estimates · '+categoryCount+' categories</span>'+
-   '<strong>Suggestions: '+pending.length+'</strong></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
@@ -2426,7 +2422,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    (categoryCount?shownCategories.map(categoryRow).join('')+
     (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
      'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
-    '<p class="lead">All categories have been checked.</p>')+'</section>'+
+    '')+'</section>'+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
@@ -2495,7 +2491,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '<div class="section-title"><h2>Suggested repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
    (pending.length?pending.map(normalCard).join(''):
-    '<p class="lead">Nothing else to review.</p>')+
+    '')+
    '</section>'+
   (ignored.length?
    '<details class="ignored-repeating" data-ignored-repeating'+
