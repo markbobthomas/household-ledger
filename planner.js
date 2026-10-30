@@ -493,9 +493,31 @@ function forecastCashBills(bundle,s,accountId=''){
    (!accountId||String(row.accountId)===String(accountId));
  }).map(row=>({...row,cardBill:row.kind==='movement'}));
 }
-// Historical bills are a read-only report of POSTED checking debits. The
-// future cash-bill ledger only covers dates after asOf; combine the two for a
-// full selected calendar month without reclassifying shopping as a bill.
+// The Summary treats a credit-card repayment as a transfer, not a bill:
+// its total reflects recurring/scheduled card charges, not all card spending.
+// Keep the full repayment in Bills and checking forecasts, where cash flow matters.
+function postedScheduledCardBills(posted,s){
+ const accounts=activeAccounts(s),byId=new Map(accounts.map(a=>[String(a.id),a])),
+  rules=state().predictions?.futureRecurringRules||[],
+  T=window.HouseholdPlannerTransactions;
+ return posted.flatMap(row=>{
+  const account=byId.get(T.accountRef(row.accountId||row.account,accounts)),
+   amount=Number(row.amount);
+  if(accountType(account||{})!=='credit'||row.pending||row.pairedTransactionId||
+     row.type!=='expense'||['card_payment','internal_transfer'].includes(row.accountingKind)||
+     !Number.isFinite(amount)||amount<=0)return [];
+  // A category or merchant keyword alone cannot turn ordinary card shopping
+  // into a recurring bill. Require exactly one user-saved expense schedule.
+  const matches=T.historicalScheduleMatches(row,accounts,rules)
+   .filter(rule=>rule.kind!=='movement'&&rule.type==='expense');
+  if(matches.length!==1)return [];
+  const rule=matches[0];
+  return [{row,amount,rule,category:
+   model.canonicalCategory(state(),rule.category||row.category)||'Other'}];
+ });
+}
+// Historical cash bills are POSTED checking debits. Combine them with
+// scheduled card charges for a full selected calendar month.
 function postedCashBills(posted,s,settlements){
  const accounts=activeAccounts(s),byId=new Map(accounts.map(a=>[String(a.id),a])),
   byTransaction=new Map(posted.map(r=>[String(r.id),r])),
@@ -530,7 +552,7 @@ function postedCashBills(posted,s,settlements){
   if(!cardPayment&&!matches.length&&!categoryBill&&!namedBill)return [];
   const label=cardPayment?'Credit card payments':
    model.canonicalCategory(state(),rule?.category||category)||'Other';
-  return [{row,amount,category:label,rule}];
+  return [{row,amount,category:label,rule,cardBill:cardPayment}];
  });
 }
 function cadenceOption(cadence){
@@ -1856,14 +1878,22 @@ function financialRecapPage(bundle,s){
    .map(rule=>[String(rule.id),rule])),
   eventCategories=new Map((bundle?.projection?.events||[])
    .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
-  // Use the exact cash-bill entries shown by Bills/Home. Card settlements
-  // count once; credit-card purchases and internal transfers are excluded.
+  // Bills/Home remain cash-flow views and still show full card repayments.
+  // This monthly expense summary instead counts only saved recurring or
+  // explicitly scheduled charges on credit cards, never the settlement total.
   forecastBills=hasProjection?forecastCashBills(bundle,s):[],
-  postedBills=postedCashBills(current,s,settlements),
+  accountById=new Map(activeAccounts(s).map(a=>[String(a.id),a])),
+  scheduledCardBills=hasProjection?futureRows(bundle,s).filter(row=>
+   row.kind==='event'&&row.type==='expense'&&
+   accountType(accountById.get(String(row.accountId))||{})==='credit'&&
+   (rules.has(String(row.recurringRuleId))||Boolean(row.addedId))):[],
+  summaryForecastBills=forecastBills.filter(row=>!row.cardBill).concat(scheduledCardBills),
+  postedBills=postedCashBills(current,s,settlements).filter(row=>!row.cardBill)
+   .concat(postedScheduledCardBills(current,s)),
   // A posted bill may arrive early. Suppress only a future occurrence of the
   // SAME confirmed rule inside its configured matching window; never drop an
   // independent twice-monthly payment or merge different payees by amount.
-  selectedBills=forecastBills.filter(r=>selectedMonths.has(r.date.slice(0,7))&&
+  selectedBills=summaryForecastBills.filter(r=>selectedMonths.has(r.date.slice(0,7))&&
    !postedBills.some(p=>p.rule&&String(r.recurringRuleId)===String(p.rule.id)&&
     window.HouseholdPlannerTransactions.postedWithinMatchWindow(
      p.rule,p.row,r.date,r.amount,(p.rule.exampleIds||[]).map(String).includes(String(p.row.id))))),
@@ -1926,7 +1956,7 @@ function financialRecapPage(bundle,s){
     '<p>'+escapeHTML(periodLabel)+' · paid and upcoming</p>'+
     (canSummarizeBills?breakdown(billCategories,'No bills recorded or predicted for the selected months.'):
      '<p class="financial-recap-empty">Bill totals unavailable for the selected months.</p>')+
-    '<small class="financial-recap-note">Card payments counted once · transfers excluded</small></section>'+
+    '<small class="financial-recap-note">Scheduled card charges included · card repayments excluded</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
     '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
     breakdown(topSpending,'No posted purchases in selected months.')+
