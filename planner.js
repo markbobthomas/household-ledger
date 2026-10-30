@@ -1392,14 +1392,12 @@ function schedulesPage(bundle,s){
    '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">›</span></button>').join('');
  return '<div class="planner-page schedule-page">'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
-   '<div class="bills-heading"><div><h2>Upcoming bills</h2>'+
-    '<p>Predicted money leaving your accounts, including credit card payments. Select a bill to change it.</p></div>'+
+   '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+' predicted</span></div>'+
    (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period. Review your repeating payments below.</p>')+
    '<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section>'+
-  '<div class="bills-manage-heading"><div><h2>Manage repeating payments</h2>'+
-   '<p>Change payment schedules here. One-time payments are editable above or on Home.</p></div></div>'+
+  '<div class="bills-manage-heading"><div><h2>Manage repeating payments</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    '<label class="schedule-search-wrap">Find <input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Name, merchant, category" value="'+escapeHTML(scheduleSearch)+'"></label>'+
@@ -1548,9 +1546,8 @@ function historyInsights(rows,view,options={}){
   purchases=rows.filter(r=>view==='categories'?spendCents(r)!==0:spendCents(r)>0),
   cents=purchases.reduce((sum,r)=>sum+spendCents(r),0),
   total=cents/100,n=purchases.length;
- const header='<div class="history-insights-head"><strong>'+n+' posted purchases</strong>'+
-  '<strong>'+cash(total)+' spent</strong><span>'+cash(n?total/n:0)+' average</span></div>'+
-  '<p class="history-insight-note">Purchases only · excludes pending items, transfers and card payments</p>';
+ const header='<div class="history-insights-head"><strong>'+n+' purchases</strong>'+
+  '<strong>'+cash(total)+' spent</strong></div>';
  if(view==='merchants'){
   // Merchant spending is net posted purchases less merchant refunds. The
   // same cardActivityCents exclusion prevents transfers and card payments
@@ -1573,15 +1570,12 @@ function historyInsights(rows,view,options={}){
    visibleCents=matched.reduce((sum,g)=>sum+g.cents,0),
    largest=Math.max(1,...values.map(g=>Math.max(0,g.cents))),
    showTotal=sum=>(sum<0?'−':'')+cash(Math.abs(sum)/100);
-  return '<section class="history-insight-panel" data-history-merchant-insights>'+
-   '<h2>Spending by merchant</h2>'+
-   '<p>See how much you spent at each merchant this period. Choose one to view its transactions.</p>'+
+  return '<section class="history-insight-panel" data-history-merchant-insights aria-label="Merchant spending">'+
    '<div class="history-merchant-overview">'+
     '<div><small>Net merchant spending</small><strong data-history-merchant-total>'+
      showTotal(visibleCents)+'</strong></div>'+
     '<div><small>Merchants</small><strong data-history-merchant-count>'+
      matched.length+'</strong></div></div>'+
-   '<p class="history-insight-note">Posted purchases less merchant refunds · excludes pending items, transfers and card payments</p>'+
    '<label class="history-merchant-search-label">Find a merchant'+
     '<input type="search" data-history-merchant-search placeholder="e.g. Amazon" value="'+
      escapeHTML(options.merchantSearch||'')+'"></label>'+
@@ -1695,8 +1689,7 @@ function historyInsights(rows,view,options={}){
     '';
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   return '<section class="history-insight-panel" data-history-category-insights>'+
-   '<div class="history-category-panel-heading"><h2>Spending</h2>'+
-    '<details class="history-category-manager" data-history-category-manager>'+
+   '<div class="history-category-panel-heading">'+    '<details class="history-category-manager" data-history-category-manager>'+
      '<summary aria-label="Manage categories: add or delete">Manage</summary>'+
      '<div class="history-category-manager-body">'+
       '<form data-history-category-add><label>New category'+
@@ -1736,16 +1729,14 @@ function historyInsights(rows,view,options={}){
   if(i>=0){groups[i].count++;groups[i].cents+=cardActivityCents(r);}
  }
  const largest=Math.max(1,...groups.map(g=>g.count));
- return '<section class="history-insight-panel" data-history-size-insights>'+
-  '<h2>Purchase sizes</h2>'+
-  '<p>Many small purchases, or a few large ones? Select a price band to see its transactions.</p>'+
+ return '<section class="history-insight-panel" data-history-size-insights aria-label="Purchase sizes">'+
   header+'<div class="history-size-list">'+groups.map((g,i)=>
    '<button type="button" class="history-size-row" data-history-size-band="'+i+'">'+
    '<span class="history-size-name">'+escapeHTML(g.name)+'</span>'+
    '<span class="history-size-track"><span style="width:'+Math.round(g.count/largest*100)+'%"></span></span>'+
    '<span class="history-size-count">'+g.count+' purchases</span>'+
    '<strong>'+cash(g.cents/100)+'</strong><span class="history-size-arrow">›</span></button>').join('')+
-  '</div><p class="history-insight-footnote">Bands are based on individual posted purchase amounts, not totals per day.</p></section>';
+  '</div></section>';
 }
 
 /* Read-only fourth main tab: bank history and the canonical forecast supply
@@ -1857,17 +1848,17 @@ function financialRecapPage(bundle,s){
   '</div>'+
   '<div class="financial-recap-sections">'+
    '<section class="financial-recap-card"><h3>Predicted bills by category</h3>'+
-    '<p>Estimated monthly equivalent · next 12 complete months</p>'+
+    '<p>Monthly equivalent · next 12 months</p>'+
     (hasProjection?breakdown(billCategories,true,
      'No outgoing payments are forecast for the next 12 months.'):
      '<p class="financial-recap-empty">Bill forecasts are unavailable until the Calendar projection is ready.</p>')+
-    '<small class="financial-recap-note">Includes predicted credit-card payments and cash expenses. Excludes card purchases and other transfers to avoid double counting. Individual edits and skips are reflected.</small></section>'+
+    '<small class="financial-recap-note">Card payments counted once · transfers excluded</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
-    '<p>Posted this month · net of refunds</p>'+
+    '<p>This month · net of refunds</p>'+
     breakdown(topSpending,false,'No posted purchases this month.')+
-    '<small class="financial-recap-note">Uses the same spending rules as Budget, across all connected accounts.</small></section>'+
+    '</section>'+
    '<section class="financial-recap-card financial-recap-upcoming"><h3>Next predicted bills</h3>'+
-    '<p>Five earliest predicted payments in the next 30 days</p>'+
+    '<p>Next 30 days</p>'+
     (hasProjection?(upcoming.length?'<div class="financial-recap-rows">'+
       upcoming.map(r=>'<div class="financial-recap-row"><span><strong>'+
        escapeHTML(r.merchant)+'</strong><small>'+escapeHTML(dayLabel(r.date))+
@@ -1879,7 +1870,7 @@ function financialRecapPage(bundle,s){
      '<div class="financial-recap-row"><span><strong>'+escapeHTML(cardAfterFive.merchant)+
      '</strong><small>'+escapeHTML(dayLabel(cardAfterFive.date))+'</small></span>'+
      '<strong>'+cash(cardAfterFive.amount)+'</strong></div></div>':'')+
-    '<small class="financial-recap-note">These are predictions, not confirmed posted withdrawals. Card payments are counted once; if one falls after the first five, it appears separately.</small></section>'+
+    '</section>'+
   '</div></div>';
 }
 
@@ -2162,7 +2153,7 @@ function historyPage(bundle,s){
     '</select></label></div>')+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
-  (groupHistoryCard?'<p class="ledger-statement-intro">Statement totals show net posted purchases less refunds among displayed transactions. Payments, transfers and pending items are excluded.</p>':
+  (groupHistoryCard?'<p class="ledger-statement-intro">Statement total: purchases − refunds · excludes payments, transfers and pending</p>':
    selectedHistoryCard?'<p class="ledger-statement-help">Set this card’s billing period in Settings to group transactions by statement.</p>':'')+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   // Minimal non-browser safety harnesses cannot emulate row expansion.
@@ -2200,9 +2191,9 @@ function historyPage(bundle,s){
      (!selectedRows.length?' hidden':'')+'>Clear</button></div>'+
    (rows||'<div class="empty-visual">No bank transactions match this filter. Try another account or search.</div>')+
    (filtered.length>historyLimit?'<div class="history-more"><button type="button" class="btn" data-history-more>Show older transactions</button></div>':'')+
-   '</div><p class="page-task-hint history-explanation ledger-footer-hint">Transactions stay here. Saved repeating plans take priority. '+
-   'An unconfirmed automatic estimate may temporarily appear in balances until you finish reviewing '+
-   'older patterns in Things to check. New repeating payments require a saved prediction.</p>':'')+'</div>';
+   '</div>'+(state().predictions?.recurringForecastMode==='approved-only'?'': 
+    '<p class="page-task-hint history-explanation ledger-footer-hint">Older automatic estimates may still affect balances. '+
+    '<button type="button" data-view="reviews">Review</button></p>'):'')+'</div>';
 }
 // A cumulative, forecast-only recommendation ledger. Discovered suggestions
 // are snapshotted so later dismissals, bank refreshes and approved schedules
@@ -2423,20 +2414,15 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  };
  return '<div class="planner-page reviews-page">'+
   '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
-    '<div><h2>Things to check</h2><p>Confirm important payments and choose which suggestions belong in your plan. Your bank records stay unchanged.</p></div></div>'+
-  '<div class="review-priority" aria-label="Review priorities">'+
-   '<strong>Needs action: '+(overdue.length+decisionsNeeded+categoryCount)+'</strong>'+
-   '<span>'+overdue.length+' unposted payments · '+decisionsNeeded+' earlier estimates · '+categoryCount+' categories</span>'+
-   '<strong>Suggestions: '+pending.length+'</strong></div>'+
+    '<div><h2>Things to check</h2></div></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+' TO REVIEW</span></div>'+
-   '<p class="lead">Choose a category to save it immediately. Bank records and payment amounts stay unchanged.</p>'+
    (categoryCount?shownCategories.map(categoryRow).join('')+
     (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
      'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
-    '<p class="lead">All categories have been checked.</p>')+'</section>'+
+    '')+'</section>'+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
@@ -2505,7 +2491,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '<div class="section-title"><h2>Suggested repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
    (pending.length?pending.map(normalCard).join(''):
-    '<p class="lead">Nothing else to review.</p>')+
+    '')+
    '</section>'+
   (ignored.length?
    '<details class="ignored-repeating" data-ignored-repeating'+
@@ -2609,7 +2595,7 @@ function settingsPage(bundle,s,chosen){
  const categoryLearning=rules.length?
   '<section class="panel mini-panel" aria-label="Learned merchant categories">'+
    '<div class="section-title"><h2>Learned categories</h2></div>'+
-   '<p>When a bank category is missing or uncertain, corrections can be reused for the same merchant and account. Multi-purpose merchants need individual review. Forgetting a rule keeps existing transaction corrections.</p>'+
+   '<p>Forgetting a rule keeps existing transaction categories.</p>'+
    rules.map(([key,rule])=>'<div class="future-skip-line">'+
     '<strong>'+escapeHTML(rule.merchant||'Merchant')+'</strong> · '+
     escapeHTML(rule.category||'Category')+' · '+

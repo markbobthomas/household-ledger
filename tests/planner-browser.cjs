@@ -391,6 +391,8 @@ const {chromium,webkit}=require('playwright');
     'Categories view includes one overall budget summary');
    assert.equal(await page.locator('.history-spending-overview').count(),1,
     'Compact category view shows one spending total and purchase count');
+   assert.equal(await page.locator('.history-category-panel-heading h2').count(),0,
+    'Spending is already identified by the selected tab; the budget toolbar has no repeat title');
    assert.equal(await page.locator('.history-insight-note,.history-budget-explanation').count(),0,
     'Redundant explanatory paragraphs are removed');
    assert.equal(await page.locator('.history-spending-overview').innerText().then(x=>/average/i.test(x)),false,
@@ -490,16 +492,14 @@ const {chromium,webkit}=require('playwright');
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     const compact=await page.evaluate(()=>{
-     const title=document.querySelector('.history-category-panel-heading h2').getBoundingClientRect(),
-      manage=document.querySelector('.history-category-manager>summary').getBoundingClientRect(),
+     const manage=document.querySelector('.history-category-manager>summary').getBoundingClientRect(),
       table=document.querySelector('.history-category-table').getBoundingClientRect(),
       panel=document.querySelector('[data-history-category-insights]').getBoundingClientRect();
-     return {titleRight:title.right,manageLeft:manage.left,titleTop:title.top,manageTop:manage.top,
-      tableWidth:table.width,panelWidth:panel.width};
+     return {manageRight:manage.right,panelRight:panel.right,tableWidth:table.width,
+      panelWidth:panel.width,manageWidth:manage.width};
     });
-    assert.ok(compact.titleRight<=compact.manageLeft+2 &&
-     Math.abs(compact.titleTop-compact.manageTop)<20,
-     'Category management stays beside heading at '+width+': '+JSON.stringify(compact));
+    assert.ok(compact.manageWidth>=40&&compact.panelRight-compact.manageRight<52,
+     'Category management stays visible and right aligned at '+width+': '+JSON.stringify(compact));
     assert.ok(compact.tableWidth>compact.panelWidth*.8,
      'Budget categories use the panel width rather than a half-width chart legend at '+width);
     const dimensions=await budgetRow.evaluate(row=>{
@@ -543,6 +543,8 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
     await page.locator('[data-history-view="sizes"]').click();
    assert.equal(await page.locator('[data-history-size-insights]').count(),1);
+   assert.equal(await page.locator('[data-history-size-insights] > h2,[data-history-size-insights] > p').count(),0,
+    'Purchase size report has visual bands and totals without a duplicate title or explanatory paragraph');
    assert.equal(await page.locator('[data-history-size-band]').count(),6);
    const band=page.locator('[data-history-size-band]').filter({hasText:/[1-9][0-9]* purchases/}).first();
    if(await band.count()){
@@ -566,6 +568,9 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
     await page.locator('[data-history-view="merchants"]').click();
    assert.equal(await page.locator('[data-history-merchant-insights]').count(),1);
+   assert.equal(await page.locator('[data-history-merchant-insights] > h2,'+
+    '[data-history-merchant-insights] > .history-insight-note').count(),0,
+    'Merchant report is readable from amounts, names and bars without instructional copy');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Merchant analysis does not duplicate individual bank rows');
    await chooseMonths(page,['2026-10']);
@@ -711,6 +716,8 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
+    'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
    const newRepeat=page.locator('[data-schedule-new]').first();
    await newRepeat.click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-new-form]').count(),1,
@@ -745,7 +752,9 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.attention-link[data-view="reviews"]').click();
    assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
-   assert.equal(await page.locator('.reviews-page .review-priority').count(),1);
+   assert.equal(await page.locator('.reviews-page .review-priority,.review-intro p,'+
+    '.category-review-panel > .lead').count(),0,
+    'Review relies on section labels and actionable status rather than repeated instructional prose');
    assert.equal(await page.locator('[data-category-review]').count(),1,
     'Missing or uncertain transaction and bill categories have a persistent review section');
    const categoryForms=page.locator('[data-category-review-form]');

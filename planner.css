@@ -4585,3 +4585,12 @@ a:hover{color:#166e61}
  }
  .history-page .spending-tabs .history-subtab>span{display:none}
 }
+
+/* Text-light reporting: the active subtab and numbers replace section essays. */
+.history-page .history-category-panel-heading{
+ justify-content:flex-end!important;margin-bottom:4px!important;
+}
+.history-page .history-category-manager{margin-left:auto}
+.history-page .history-insights-head{margin-bottom:13px}
+.history-page .history-merchant-overview{margin-top:0}
+.reviews-page .review-intro{align-items:center}
