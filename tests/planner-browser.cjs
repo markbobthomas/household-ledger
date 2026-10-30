@@ -456,8 +456,13 @@ const {chromium,webkit}=require('playwright');
     '$0.00','Unused category displays zero spending');
    assert.equal(await page.locator('.history-category-glyph').count(),0,
     'Categories have no decorative logos or symbols');
-   assert.equal(await page.locator('[data-history-category-row="Income"]').count(),1,
-    'Even built-in categories with no period purchases are visible');
+   assert.equal(await page.locator('[data-history-category-row="Income"],[data-history-category-row="Transfer"]').count(),0,
+    'Income and Transfer are not spending-budget rows');
+   assert.equal(await page.locator('[data-history-budget="Income"],[data-history-budget="Transfer"]').count(),0,
+    'Non-spending categories have no monthly budget inputs');
+   assert.equal(await page.locator('[data-history-category-delete="Income"],[data-history-category-delete="Transfer"]').count(),2,
+    'Income and Transfer remain in the category manager, not deleted from the catalog');
+
    await page.locator('.history-category-manager>summary').click();
    assert.equal(await page.locator('[data-history-category-delete="Fictional Pet Care"]').count(),1);
    page.once('dialog',dialog=>dialog.accept());
@@ -485,6 +490,30 @@ const {chromium,webkit}=require('playwright');
     'Without a target, the usage bar is empty');
    assert.equal(await page.locator('[data-history-total-budget]').count(),1,
     'Categories view includes one overall budget summary');
+   // Existing non-spending budget preferences must not inflate the denominator,
+   // even though classification labels are still available elsewhere.
+   const oldIncomeTarget=await page.evaluate(()=>{
+    const raw=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    raw.categoryMonthlyBudgets={...(raw.categoryMonthlyBudgets||{}),
+     Income:9750,Transfer:8200};
+    localStorage.setItem('household-planner-sample-settings-v1',JSON.stringify(raw));
+    return raw.categoryMonthlyBudgets;
+   });
+   assert.equal(oldIncomeTarget.Income,9750);
+   await page.reload();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(await page.locator('[data-history-category-row="Income"],[data-history-category-row="Transfer"]').count(),0);
+   const budgetTotal=await page.locator('[data-history-total-budget] small').allTextContents();
+   assert.ok(budgetTotal.every(text=>!text.includes('$17,950')),
+    'Pre-existing Income and Transfer monthly targets are excluded from the spending-budget denominator');
+   await page.locator('[data-history-view="summary"]').click();
+   const summaryBudget=await page.locator('[data-recap-budget] strong').innerText();
+   assert.notEqual(summaryBudget,'$17,950.00',
+    'Summary budget also excludes previously saved Income and Transfer targets');
+   assert.equal(await page.locator('[data-recap-income]').count(),1,
+    'Income remains a separate Summary metric');
+   await page.locator('[data-history-view="categories"]').click();
+
    assert.equal(await page.locator('.history-spending-overview').count(),1,
     'Compact category view shows one spending total and purchase count');
    assert.equal(await page.locator('.history-category-panel-heading h2').count(),0,
