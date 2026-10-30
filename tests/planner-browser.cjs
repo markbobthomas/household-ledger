@@ -197,7 +197,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('#planner-menu [data-view="recap"]').count(),0,
     'Summary is no longer hidden inside More');
    // Bigger, readable type on desktop, with proportionate mobile type.
-   // Compare actual spending at the endpoint of the progress track, with one editable target.
+   // Compare actual spending at the progress-track endpoint and read-only target.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    const budgetType=await page.evaluate(()=>{
     const root=document.querySelector('[data-history-category-insights]'),
@@ -207,9 +207,9 @@ const {chromium,webkit}=require('playwright');
      name=row?.querySelector('.history-category-name'),
      count=name?.querySelector('small'),
      actual=row?.querySelector('.history-category-actual'),
-     input=row?.querySelector('.history-budget-input input'),
+     input=row?.querySelector('.history-budget-target'),
      cols=root?.querySelector('.history-category-columns'),
-     target=row?.querySelector('.history-budget-input');
+     target=row?.querySelector('.history-budget-target');
     return {body:size(document.body),name:size(name),count:size(count),
      amount:size(actual),input:size(input),heading:size(cols),
      nav:size(document.querySelector('.main-navigation .tab-link')),
@@ -221,7 +221,7 @@ const {chromium,webkit}=require('playwright');
     'Budget category titles must be significantly more readable: '+JSON.stringify(budgetType));
    assert.ok(budgetType.amount>=(mobile?12:16)&&
     budgetType.input>=(mobile?12:15),
-    'Budget actual and editable amount type sizes must match their importance');
+    'Budget actual and read-only monthly target remain readable');
    if(!mobile){
     assert.ok(budgetType.body>=15&&budgetType.nav>=15&&budgetType.heading>=12,
      'Desktop text and Budget table headings are enlarged');
@@ -585,13 +585,16 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-history-category-delete="Income"],[data-history-category-delete="Transfer"]').count(),2,
     'Income and Transfer remain in the category manager, not deleted from the catalog');
 
-   // Edit a custom target, then rename without losing the numeric budget,
-   // list position or any existing transaction category assignments.
+   // Edit the amount in Manage, then rename without losing the saved target.
+   assert.equal(await page.locator('.history-category-item [data-history-budget]').count(),0,
+    'Budget report rows must contain no editable amounts');
+   await page.locator('.history-category-manager>summary').click();
    await page.locator('[data-history-budget="Fictional Pet Care"]').fill('45.50');
    await page.locator('[data-history-budget="Fictional Pet Care"]').press('Tab');
    await page.waitForFunction(()=>JSON.parse(localStorage.getItem(
     'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.['Fictional Pet Care']===45.5);
-   await page.locator('.history-category-manager>summary').click();
+   assert.equal(await page.locator('.history-category-manager').evaluate(el=>el.open),true,
+    'Manage stays open after an amount is saved');
    await page.locator('[data-history-category-rename-open="Fictional Pet Care"]').click();
    const renameEditor=page.locator('[data-history-category-rename="Fictional Pet Care"]');
    assert.equal(await renameEditor.isVisible(),true,'Rename editor opens inline');
@@ -604,11 +607,12 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.history-category-manage-status').innerText(),
     'Renamed Fictional Pet Care to Fictional Animal Care. Assignments and budgets kept.');
    assert.equal(await page.locator('[data-history-category-row="Fictional Pet Care"]').count(),0);
-   assert.equal(await page.locator('[data-history-budget="Fictional Animal Care"]').inputValue(),'45.50');
+   assert.equal(await page.locator('[data-history-budget-display="Fictional Animal Care"]')
+    .getAttribute('data-budget-monthly'),'45.50');
    await page.reload();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-budget="Fictional Animal Care"]').inputValue(),'45.50',
-    'Renamed category budget persists after reload');
+    'Renamed category budget remains editable in Manage after reload');
    await page.locator('.history-category-manager>summary').click();
    assert.equal(await page.locator('[data-history-category-delete="Fictional Animal Care"]').count(),1);
    page.once('dialog',dialog=>dialog.accept());
@@ -703,7 +707,7 @@ const {chromium,webkit}=require('playwright');
     'Before manual placement, Budget categories use stable alphabetical order, not target amounts');
    const assertBudgetSorted=async()=>{
     const actual=await page.locator('.history-category-item').evaluateAll(items=>items.map(item=>({
-     name:item.dataset.historyCategoryRow,budget:item.querySelector('[data-history-budget]').value
+     name:item.dataset.historyCategoryRow,budget:item.querySelector('[data-history-budget-display]').dataset.budgetMonthly
     })));
     assert.deepEqual(actual.map(row=>row.name),expectedBudgetOrder,
      'Changing monthly targets or months does not reorder Budget categories');
@@ -731,7 +735,7 @@ const {chromium,webkit}=require('playwright');
     const rows=await page.locator('.history-category-item').evaluateAll(items=>
      items.map(item=>({
       spent:Number(item.querySelector('.history-category-actual').textContent.replace(/[^0-9.-]/g,'')),
-      budget:item.querySelector('[data-history-budget]').value
+      budget:item.querySelector('[data-history-budget-display]').dataset.budgetMonthly
      })));
     const totals=rows.reduce((sum,row)=>{
      sum.spentCents+=Math.round(row.spent*100);
@@ -758,8 +762,24 @@ const {chromium,webkit}=require('playwright');
    };
    const categoryName=await page.locator('.history-category-item').filter({hasText:/[1-9][0-9]* transactions/}).first().getAttribute('data-history-category-row'),
     budgetCategory=page.locator('.history-category-item[data-history-category-row="'+categoryName+'"]');
-   assert.equal(await budgetCategory.locator('[data-history-budget]').count(),1,
-    'Actual spending has an immediately adjacent editable monthly budget');
+   assert.equal(await budgetCategory.locator('[data-history-budget]').count(),0,
+    'Budget report rows are read-only; amount editing belongs exclusively in Manage');
+   assert.equal(await budgetCategory.locator('[data-history-budget-display]').count(),1,
+    'Saved monthly target stays visible beside the progress bar');
+   const editBudget=async(category,value)=>{
+    const manager=page.locator('.history-category-manager');
+    if(!await manager.evaluate(el=>el.open))await manager.locator('summary').click();
+    const input=manager.locator('[data-history-budget="'+category+'"]');
+    assert.equal(await input.count(),1,'Category amount can be edited in Manage');
+    await input.fill(value);
+    await input.press('Tab');
+    await page.waitForFunction(({category,value})=>{
+     const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+     return saved.categoryMonthlyBudgets?.[category]===(value===''?undefined:Number(value));
+    },{category,value});
+    assert.equal(await page.locator('[data-history-budget-display="'+category+'"]')
+     .getAttribute('data-budget-monthly'),value===''?'':Number(value).toFixed(2));
+   };
    assert.equal(await page.locator('.history-category-columns').innerText().then(x=>x.includes('Budget / month')),true);
    assert.equal(await page.locator('.history-category-columns span').count(),3,
     'Budget has three column headings, not separate spent and bar columns');
@@ -767,13 +787,11 @@ const {chromium,webkit}=require('playwright');
     'Actual spending is represented once, attached to the bar endpoint');
    assert.equal(await budgetCategory.locator('.history-budget-difference').count(),0,
     'Redundant per-category remaining-dollar captions do not crowd the target');
-   await budgetCategory.locator('[data-history-budget]').fill('275.50');
-   await budgetCategory.locator('[data-history-budget]').press('Tab');
-   await page.waitForFunction(category=>{
-    const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
-    return saved.categoryMonthlyBudgets?.[category]===275.5;
-   },categoryName);
-   assert.equal(await budgetCategory.locator('[data-history-budget]').inputValue(),'275.50');
+   await editBudget(categoryName,'275.50');
+   await editBudget(categoryName,'');
+   assert.equal(await budgetCategory.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'unset',
+    'Clearing a manager target unsets its budget without changing spending');
+   await editBudget(categoryName,'275.50');
    await assertBudgetSorted();
    await checkOverall(1);
    // Reorder by pointer on desktop and keyboard on WebKit (also works on touch).
@@ -811,21 +829,17 @@ const {chromium,webkit}=require('playwright');
    await chooseMonths(page,['2026-10','2026-09','2026-08']);
    assert.match(await page.locator('.history-budget-summary-track').getAttribute('aria-label'),/including unbudgeted category spending/,
     'Multi-month budget comparison retains all purchase spending');
-   assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
-    'A monthly budget carries across report periods');
+   assert.equal(await page.locator('[data-history-budget-display="'+categoryName+'"]')
+    .getAttribute('data-budget-monthly'),'275.50',
+    'Read-only target carries across report periods');
    await checkOverall(3);
-   const budgetRow=page.locator('.history-category-item').filter({
-    has:page.locator('[data-history-budget="'+categoryName+'"]')
-   });
+   const budgetRow=page.locator('[data-history-category-row="'+categoryName+'"]');
    const threeActual=Number((await budgetRow.locator('.history-category-actual').innerText()).replace(/[^0-9.]/g,''));
    const threeBar=Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width));
    assert.ok(Math.abs(threeBar-Math.min(100,threeActual/(275.5*3)*100))<.02,
     'Three months of purchases use three times the monthly budget');
    if(threeActual>.01){
-    await budgetRow.locator('[data-history-budget]').fill('0.01');
-    await budgetRow.locator('[data-history-budget]').press('Tab');
-    await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
-     'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===.01,categoryName);
+    await editBudget(categoryName,'0.01');
     await assertBudgetSorted();
     assert.equal(await budgetRow.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'over');
     const overageColor=await budgetRow.locator('.history-category-actual').evaluate(el=>({
@@ -837,10 +851,7 @@ const {chromium,webkit}=require('playwright');
     assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
      'The over-budget fill caps at its full track width');
     await checkOverall(3);
-    await budgetRow.locator('[data-history-budget]').fill('275.50');
-    await budgetRow.locator('[data-history-budget]').press('Tab');
-    await page.waitForFunction(category=>JSON.parse(localStorage.getItem(
-     'household-planner-sample-settings-v1')||'{}').categoryMonthlyBudgets?.[category]===275.5,categoryName);
+    await editBudget(categoryName,'275.50');
     await assertBudgetSorted();
     await checkOverall(3);
    }
@@ -922,7 +933,7 @@ const {chromium,webkit}=require('playwright');
      const rect=sel=>row.querySelector(sel).getBoundingClientRect(),
       name=rect('.history-category-drill'),bar=rect('[data-history-budget-bar]'),
       actual=rect('.history-category-actual'),budget=rect('.history-category-budget'),
-      input=rect('.history-budget-input'),
+      input=rect('.history-budget-target'),
       headings=[...document.querySelectorAll('.history-category-columns span')]
        .map(x=>x.getBoundingClientRect()),
       percent=Number.parseFloat(getComputedStyle(row.querySelector('[data-history-budget-bar]'))
@@ -937,7 +948,7 @@ const {chromium,webkit}=require('playwright');
       budgetLeft:budget.left,budgetRight:budget.right,
       inputRight:input.right,inputCenterY:(input.top+input.bottom)/2,
       barCenterY:(bar.top+bar.bottom)/2,targetHeaderRight:headings[2].right,
-      inputTextAlign:getComputedStyle(row.querySelector('.history-budget-input input')).textAlign,
+      inputTextAlign:getComputedStyle(row.querySelector('.history-budget-target')).textAlign,
       barHeight:bar.height,markerCenter,expectedCenter,
       viewport:document.documentElement.scrollWidth};
     });
@@ -956,12 +967,12 @@ const {chromium,webkit}=require('playwright');
      'Responsive Budget structure has uncluttered rows at '+width+': '+JSON.stringify(dimensions));
     assert.ok(Math.abs(dimensions.budgetRight-dimensions.inputRight)<=2&&
      Math.abs(dimensions.budgetRight-dimensions.targetHeaderRight)<=2,
-     'The editable monthly target and heading align at '+width+': '+JSON.stringify(dimensions));
+     'Read-only target and heading align at '+width+': '+JSON.stringify(dimensions));
     assert.ok(Math.abs(dimensions.inputCenterY-dimensions.barCenterY)<=3,
-     'Budget cap input stays vertically centered on the progress bar at '+width+': '+
+     'Read-only target stays vertically centered on the progress bar at '+width+': '+
       JSON.stringify(dimensions));
     assert.equal(dimensions.inputTextAlign,'right',
-     'Editable budget values remain right-aligned and easy to scan');
+     'Budget targets remain right-aligned and easy to scan');
 
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
@@ -1080,9 +1091,7 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(await selectedMonths(page),['2026-08','2026-10'],
     'Checked months remain selected across all four reports');
    await checkOverall(2);
-   const twoMonthRow=page.locator('.history-category-item').filter({
-    has:page.locator('[data-history-budget="'+categoryName+'"]')
-   });
+   const twoMonthRow=page.locator('[data-history-category-row="'+categoryName+'"]');
    const twoMonthSpent=Number((await twoMonthRow.locator('.history-category-actual').innerText()).replace(/[^0-9.]/g,''));
    const twoMonthWidth=Number.parseFloat(await twoMonthRow.locator('.history-budget-fill').evaluate(el=>el.style.width));
    assert.ok(Math.abs(twoMonthWidth-Math.min(100,twoMonthSpent/(275.5*2)*100))<.02,
@@ -1092,8 +1101,9 @@ const {chromium,webkit}=require('playwright');
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   assert.equal(await page.locator('[data-history-budget="'+categoryName+'"]').inputValue(),'275.50',
-    'A monthly category budget is saved across page reloads');
+   assert.equal(await page.locator('[data-history-budget-display="'+categoryName+'"]')
+    .getAttribute('data-budget-monthly'),'275.50',
+    'A monthly target remains visible after reload');
    assert.deepEqual(await selectedMonths(page),['2026-10'],
     'Reload resets the view to the current calendar month');
    const categoryAmount=async name=>Number((await page.locator(
