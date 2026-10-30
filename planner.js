@@ -1772,15 +1772,13 @@ function spendingMonthPicker(records,asOf){
         availableMonths.map(month=>'<label class="history-month-option"><input type="checkbox" data-history-month-option value="'+
          escapeHTML(month)+'"'+(historySelectedMonths.has(month)?' checked':'')+'><span>'+
          escapeHTML(monthLabel(month))+'</span></label>').join('')+
-       '</div></div></div></div></div>'};
+       '</div></div></div></div>'};
 }
 
 /* Read-only fourth main tab: bank history and the canonical forecast supply
    the numbers. Never persist a second financial model or change bank facts. */
 function financialRecapPage(bundle,s){
  const asOf=String(s.asOf||dateToday()),month=asOf.slice(0,7),
-  monthTitle=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',
-   {month:'long',year:'numeric',timeZone:'UTC'}),
   posted=model.records(state()).filter(r=>r.date&&r.date<=asOf),
   picker=spendingMonthPicker(posted,asOf),
   selectedMonths=historySelectedMonths,
@@ -2144,7 +2142,7 @@ function historyPage(bundle,s){
  })();
  return '<div class="planner-page history-page">'+
   '<div class="history-view-toolbar">'+(activeTab==='activity'?'':spendingTabNav(displayView))+
-   picker.markup+
+   picker.markup+'</div>'+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters')+'" data-history-filter>'+
    '<label class="history-search-wrap">Find a transaction<input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Merchant, date, amount"></label>'+
