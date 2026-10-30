@@ -66,7 +66,7 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
-let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
+let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40,reviewSort='newest';
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='',latestCategorySave=null;
@@ -521,6 +521,38 @@ function postedScheduledBills(posted,s,settlements){
   const rule=matches[0];
   return [{row,amount,rule,category:
    model.canonicalCategory(state(),rule.category||row.category)||'Other'}];
+ });
+}
+// Read-only Budget estimates use canonical future expense events, not
+// a separate budget forecast. Transfers and card settlements are excluded.
+function forecastBudgetExpenses(bundle,s,posted,settlements,months,accountId='all'){
+ if(!bundle?.projection)return [];
+ const T=window.HouseholdPlannerTransactions,
+  rules=new Map((state().predictions?.futureRecurringRules||[])
+   .filter(r=>r.kind!=='movement').map(r=>[String(r.id),r])),
+  additions=new Map((state().predictions?.futureTransactionAdds||[])
+   .map(a=>[String(a.id),a])),
+  eventCategories=new Map((bundle.projection.events||[])
+   .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
+  postedBills=postedScheduledBills(posted,s,settlements),seen=new Set();
+ return futureRows(bundle,s).flatMap(row=>{
+  if(row.kind!=='event'||!['expense','refund'].includes(row.type)||
+   !months.has(row.date.slice(0,7))||
+   (accountId!=='all'&&String(row.accountId)!==String(accountId))||
+   seen.has(row.key))return [];
+  seen.add(row.key);
+  const rule=rules.get(String(row.recurringRuleId));
+  if(row.type==='expense'&&rule&&postedBills.some(p=>
+   String(p.rule?.id)===String(rule.id)&&
+   T.postedWithinMatchWindow(rule,p.row,row.date,row.amount,
+    (rule.exampleIds||[]).map(String).includes(String(p.row.id)))))return [];
+  const amount=Number(row.amount);
+  if(!Number.isFinite(amount)||amount<=0)return [];
+  const sourceCategory=rule?.category||eventCategories.get(String(row.id))||
+   additions.get(String(row.id))?.category;
+  let name=model.canonicalCategory(state(),sourceCategory)||'Other';
+  if(['Income','Transfer'].includes(name))name='Other';
+  return [{name,cents:Math.round(amount*100)*(row.type==='refund'?-1:1)}];
  });
 }
 function cadenceOption(cadence){
@@ -1648,12 +1680,19 @@ function historyInsights(rows,view,options={}){
  if(view==='categories'){
   const budgets=options.budgets&&typeof options.budgets==='object'&&!Array.isArray(options.budgets)?
    options.budgets:{},periodMonths=Math.max(1,Number(options.months)||1),
-   allAccounts=options.allAccounts!==false;
+   allAccounts=options.allAccounts!==false,
+   predictions=options.predictedExpenses||[],
+   expectedCents=predictions.reduce((sum,r)=>sum+r.cents,0),
+   usedCents=cents+expectedCents;
   const groups=new Map();
   for(const r of purchases){
    const category=String(r.category||'Other');
-   const g=groups.get(category)||{name:category,cents:0,count:0};
+   const g=groups.get(category)||{name:category,cents:0,count:0,expectedCents:0,expectedCount:0};
    g.cents+=categorySpendingCents(r);g.count++;groups.set(category,g);
+  }
+  for(const r of predictions){
+   const g=groups.get(r.name)||{name:r.name,cents:0,count:0,expectedCents:0,expectedCount:0};
+   g.expectedCents+=r.cents;g.expectedCount++;groups.set(r.name,g);
   }
   // Spending is filtered by the selected calendar months, but the category
   // catalog is not: show every active named category, even when it has no
@@ -1691,12 +1730,12 @@ function historyInsights(rows,view,options={}){
    return Number.isFinite(monthly)&&monthly>=0?
     sum+Math.round(monthly*100)*periodMonths:sum;
   },0);
-  const totalBudgetPercent=totalBudgetCents>0?Math.max(0,cents/totalBudgetCents*100):null;
+  const totalBudgetPercent=totalBudgetCents>0?Math.max(0,usedCents/totalBudgetCents*100):null;
   const budgetField=g=>{
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
     value=set?Math.round(raw*100)/100:null,
-    remaining=set?value*periodMonths-g.cents/100:0;
+    remaining=set?value*periodMonths-(g.cents+(g.expectedCents||0))/100:0;
    return '<label class="history-budget-input"><span aria-hidden="true">$</span>'+
     '<input type="number" inputmode="decimal" min="0" max="999999999" step="0.01" '+
     'data-history-budget="'+escapeHTML(g.name)+'" aria-label="Monthly budget for '+
@@ -1713,10 +1752,10 @@ function historyInsights(rows,view,options={}){
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
     monthly=set?Math.round(raw*100)/100:0,
-    spent=g.cents/100,totalBudget=monthly*periodMonths,
+    spent=(g.cents+(g.expectedCents||0))/100,totalBudget=monthly*periodMonths,
     over=set&&spent>totalBudget,
     percent=!set?0:totalBudget>0?Math.max(0,Math.min(100,spent/totalBudget*100)):over?100:0,
-    description=set?cash(spent)+' spent of '+cash(totalBudget)+' budget for '+g.name+
+    description=set?cash(spent)+(g.expectedCount?' spent + expected of ':' spent of ')+cash(totalBudget)+' budget for '+g.name+
      (periodMonths>1?' over '+periodMonths+' months':' this month')+
      (over?' (over budget)':''):
      'No monthly budget set for '+g.name;
@@ -1735,8 +1774,8 @@ function historyInsights(rows,view,options={}){
       '<small>'+cash(totalBudgetCents/100)+' budget</small></div>'+
      '<div class="history-budget-summary-track'+(totalBudgetPercent>100?' over':'')+
       '" role="img" aria-label="'+escapeHTML(
-       cash(total)+' of '+cash(totalBudgetCents/100)+
-       ' budget used, including unbudgeted category spending, '+Math.round(totalBudgetPercent)+
+       cash(usedCents/100)+' of '+cash(totalBudgetCents/100)+
+       ' budget used, including unbudgeted category spending and predictions, '+Math.round(totalBudgetPercent)+
        ' percent')+'">'+
       '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>':
     '';
@@ -1758,20 +1797,21 @@ function historyInsights(rows,view,options={}){
      '</div></details></div>'+
    (historyCategoryNotice?'<p class="history-category-manage-status" role="status">'+
     escapeHTML(historyCategoryNotice)+'</p>':'')+
-   '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(total)+' spent across '+n+' spending transactions')+'">'+
-    '<strong>'+cash(total)+' spent</strong><span>'+n+' transactions</span></div>'+
+   '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(usedCents/100)+' spent and expected across '+n+' spending transactions')+'">'+
+    '<strong>'+cash(usedCents/100)+(expectedCents?' spent + expected':' spent')+'</strong>'+
+    '<span>'+n+' transactions'+(expectedCents?' · '+cash(total)+' spent · '+cash(expectedCents/100)+' expected':'')+'</span></div>'+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    budgetSummary+
    (values.length?'<div class="history-category-table"><div class="history-category-columns">'+
-     '<span>Category</span><span>Budget used</span><span>Spent</span><span>Budget / month</span></div>'+
+     '<span>Category</span><span>Budget used</span><span>Spent + expected</span><span>Budget / month</span></div>'+
     '<div class="history-category-legend">'+values.map(g=>
      '<div class="history-category-item" data-history-category-row="'+escapeHTML(g.name)+'">'+
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
-      '<small>'+g.count+' transactions</small></span></button>'+ 
+      '<small>'+g.count+' transactions'+(g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button>'+ 
      budgetBar(g)+
-     '<strong class="history-category-actual">'+cash(g.cents/100)+'</strong>'+
+     '<strong class="history-category-actual" title="'+escapeHTML(cash(g.cents/100)+' spent · '+cash((g.expectedCents||0)/100)+' expected')+'">'+cash((g.cents+(g.expectedCents||0))/100)+'</strong>'+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
     '</div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
    '</section>';
@@ -1801,8 +1841,12 @@ function spendingMonthPicker(records,asOf,includeUpcoming=false){
   monthIndex=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7)),
   // Summary offers twelve upcoming months; other Spending views show history
   // by default but retain future months already selected on Summary.
-  futureCount=includeUpcoming?12:Math.max(0,...[...(historySelectedMonths||[])]
-   .map(m=>monthIndex(m)-monthIndex(currentMonth)));
+  // Keep the current list of future months stable for the whole checkbox
+  // interaction. Otherwise unchecking the farthest future month removes its
+  // own input during the click and can strand keyboard/mobile selection.
+  futureCount=Math.max(includeUpcoming?12:0,historyMonthPickerOpen?historyMonthFutureExtent:0,
+   ...[...(historySelectedMonths||[])].map(m=>monthIndex(m)-monthIndex(currentMonth)));
+ historyMonthFutureExtent=futureCount;
  for(let i=0,d=new Date(currentMonth+'-01T12:00:00Z');i<=futureCount;i++,d.setUTCMonth(d.getUTCMonth()+1))
   availableMonths.push(d.toISOString().slice(0,7));
  const past=new Date(currentMonth+'-01T12:00:00Z');
@@ -1863,6 +1907,8 @@ function financialRecapPage(bundle,s){
   budgetSet=Object.entries(budgets).some(([name,amount])=>
    categories.has(name)&&amount!==null&&amount!==''&&Number.isFinite(Number(amount))&&Number(amount)>=0),
   periodBudgetCents=budgetCents*selectedMonths.size,
+  budgetExpectedCents=forecastBudgetExpenses(bundle,s,posted,settlements,selectedMonths)
+   .reduce((sum,row)=>sum+row.cents,0),
   hasProjection=Boolean(bundle?.projection),
   rules=new Map((state().predictions?.futureRecurringRules||[])
    .filter(rule=>rule.kind!=='movement'&&
@@ -1941,7 +1987,7 @@ function financialRecapPage(bundle,s){
    metric('Income',cash(incomeCents/100),
     periodLabel+' · deposits','income')+
    metric('Budget',budgetSet?cash(periodBudgetCents/100):'Not set',
-    budgetSet?Math.round(periodBudgetCents?spendingCents/periodBudgetCents*100:0)+'% used · '+periodLabel:
+    budgetSet?Math.round(periodBudgetCents?(spendingCents+budgetExpectedCents)/periodBudgetCents*100:0)+'% used'+(budgetExpectedCents?' including expected':'')+' · '+periodLabel:
     'Targets are set on Budget','budget')+
   '</div>'+
   '<div class="financial-recap-sections">'+
@@ -2068,7 +2114,7 @@ function historyPage(bundle,s){
   // are not saved as duplicate registry entries.
   categories=categoryOptionsWithOther(model.categories(state(),records.map(t=>t.category))),
   filterCategories=categories;
- const picker=spendingMonthPicker(records,s.asOf);
+ const picker=spendingMonthPicker(records,s.asOf,displayView==='categories');
  // Use complete posted, cross-account history to recognize a bank-coded card
  // payment even when the Budget is filtered to one account or calendar month.
  const budgetCardSettlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records);
@@ -2135,7 +2181,10 @@ function historyPage(bundle,s){
     'Show that month</button>':'')+'</p>';
  })():'';
  const monthsInRange=historySelectedMonths.size,
+  expectedExpenses=displayView==='categories'?
+   forecastBudgetExpenses(bundle,s,records,budgetCardSettlements,historySelectedMonths,historyAccount):[],
   insight=displayView!=='list'?historyInsights(filtered,displayView,{
+   predictedExpenses:expectedExpenses,
    budgets:state().predictions?.categoryMonthlyBudgets||{},
    cardSettlementIds:budgetCardSettlements,
    months:monthsInRange,allAccounts:historyAccount==='all',

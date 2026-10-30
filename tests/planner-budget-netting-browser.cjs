@@ -154,15 +154,23 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': refunds never produce a negative or invalid progress width');
    assert.equal(await page.locator('.history-donut,.history-legend-dot').count(),0,
     name+': Budget omits the unused pie chart and color legend');
-   // The separate, read-only Summary must match Budget's complete monthly
-   // spending, including cross-account card-payment suppression and refunds.
-   const budgetSpend=(await page.locator('.history-spending-overview strong').innerText()).replace(/ spent$/,'');
+   // Summary Spent is posted-only. Budget uses the same posted amount PLUS
+   // remaining canonical expenses; linked card repayments are not purchases.
+   const overview=await page.locator('.history-spending-overview').innerText(),
+    parts=overview.match(/(\$[\d,.]+) spent · (\$[\d,.]+) expected/),
+    budgetUsed=await page.locator('.history-spending-overview strong').innerText(),
+    centsOf=value=>Math.round(Number(String(value).replace(/[^0-9.-]/g,''))*100);
+   assert.ok(parts,name+': Budget distinguishes actual and forecast amounts');
+   assert.equal(parts[2],'$75.00',
+    name+': October Budget includes six remaining dated bills without guessing shopping');
+   assert.equal(centsOf(budgetUsed),centsOf(parts[1])+centsOf(parts[2]),
+    name+': Budget combines actual and remaining predictions only once');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('[data-history-view="summary"]').click();
    assert.equal(await page.locator('[data-history-view="summary"][aria-pressed="true"]').count(),1,
     name+': Summary is the fourth Spending subtab');
-   assert.equal(await page.locator('[data-recap-spent] strong').innerText(),budgetSpend,
-    name+': Summary and Budget net posted spending must agree');
+   assert.equal(await page.locator('[data-recap-spent] strong').innerText(),parts[1],
+    name+': Summary Spent is posted-only, equal to the actual portion of Budget');
    assert.equal(await page.locator('.financial-recap-page [data-history-month-picker]').count(),1,
     name+': Summary shares the calendar-month picker');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page button:not([data-history-month-toggle]):not([data-history-month-current]):not([data-history-month-all])').count(),0,
