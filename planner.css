@@ -2496,7 +2496,7 @@ html{scrollbar-gutter:stable}
  grid-template-columns:12px 10px minmax(0,1fr);
  align-items:center;
  white-space:nowrap;
- font-family:inherit;font-size:13px;font-weight:700;line-height:1.4;
+ font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;
  font-variant-numeric:tabular-nums;
 }
 .schedule-page .ledger-money-sign,.history-page .ledger-money-sign{
@@ -2526,7 +2526,7 @@ html{scrollbar-gutter:stable}
  .history-page .ledger-toolbar>.ledger-history-search-button{grid-column:1;grid-row:3}
  .schedule-page .ledger-toolbar>.ledger-add-repeating,
  .history-page .ledger-toolbar>.ledger-history-clear-button{grid-column:2;grid-row:3}
- .schedule-page .ledger-money,.history-page .ledger-money{font-size:12px}
+ .schedule-page .ledger-money,.history-page .ledger-money{font-size:inherit}
 }
 
 /* Both ledger tabs use the same count strip, immediately after the search
