@@ -660,7 +660,6 @@ const {chromium,webkit}=require('playwright');
    assert.match(await page.locator('[data-history-category-row="'+categoryName+'"] [data-history-budget-bar]')
     .getAttribute('aria-label'),/spent of .* budget/,
     'The saved budget appears in the accessible progress description');
-    'The saved budget appears in the accessible progress description');
    assert.equal(await page.locator('.history-list-surface').count(),0,
     'Category view shows its tailored chart rather than duplicating line-item history');
    await chooseMonths(page,['2026-10','2026-09','2026-08']);
