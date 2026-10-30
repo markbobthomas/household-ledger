@@ -415,14 +415,18 @@ const {chromium,webkit}=require('playwright');
        select=label?.querySelector('select'),
        account=document.querySelector('.history-page select[name="historyAccount"]');
       if(!label||!select||!account)return null;
-      const lineHeight=parseFloat(getComputedStyle(label).lineHeight),
-       selectRect=select.getBoundingClientRect(),labelRect=label.getBoundingClientRect(),
-       accountRect=account.getBoundingClientRect();
-      return {lineHeight,labelTop:labelRect.top,selectTop:selectRect.top,
-       categoryLeft:selectRect.left,accountRight:accountRect.right};
-     });
-     assert.ok(field&&field.lineHeight>=12&&field.selectTop>=field.labelTop+12,
-      'Category label must clear dropdown on '+report+': '+JSON.stringify(field));
+      const caption=label.querySelector('.visually-hidden'),
+        selectRect=select.getBoundingClientRect(),labelRect=label.getBoundingClientRect(),
+        accountRect=account.getBoundingClientRect(),
+        captionRect=caption?.getBoundingClientRect();
+       return {labelTop:labelRect.top,selectTop:selectRect.top,
+        height:selectRect.height,captionWidth:captionRect?.width,
+        accessible:select.getAttribute('aria-label'),
+        categoryLeft:selectRect.left,accountRight:accountRect.right};
+      });
+      assert.ok(field&&field.captionWidth<=1&&field.height>=30&&
+       field.selectTop>=field.labelTop&&field.accessible==='Filter transactions by category',
+       'Category dropdown has no redundant visible label and stays aligned on '+report+': '+JSON.stringify(field));
      if(report!=='list'&&mobile)
       assert.ok(field.categoryLeft>=field.accountRight-2,
        'Analysis filters sit in aligned columns: '+JSON.stringify(field));
