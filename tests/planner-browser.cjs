@@ -424,8 +424,9 @@ const {chromium,webkit}=require('playwright');
     'Saved note becomes a visible subtitle directly beneath the transaction name');
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
-   const persistedRow=page.locator('[data-edit-transaction-note="'+noteKey+'"]').first();
-   assert.equal(await persistedRow.count(),1,'Account and transaction ID survive reload');
+   const persistedRow=page.locator('[data-edit-transaction-note]').first();
+   assert.equal(await persistedRow.getAttribute('data-edit-transaction-note'),noteKey,
+    'Account and transaction ID survive reload');
    assert.equal(await persistedRow.locator('xpath=..').locator('.transaction-note-subtitle').innerText(),noteText,
     'Note subtitle survives reloading the transaction list');
    await persistedRow.click();
