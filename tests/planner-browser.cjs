@@ -326,25 +326,31 @@ const {chromium,webkit}=require('playwright');
       assert.ok(geometry.descriptionWidth>=40,
        'Merchant description must have usable horizontal space: '+JSON.stringify(geometry));
       assert.ok(Math.abs(geometry.rowLeft-geometry.frameLeft)<26,
-       'History row must stay aligned with its list container: '+JSON.stringify(geometry));
+        'History row must stay aligned with its list container: '+JSON.stringify(geometry));
+       assert.equal(await page.locator('.history-search-wrap .visually-hidden').count(),1);
+       assert.equal(await page.locator('[data-history-category-filter]').getAttribute('aria-label'),
+        'Filter transactions by category');
      }
      if(tab==='schedules'){
        const layout=await page.evaluate(()=>{
         const label=document.querySelector('.schedule-page .schedule-category-controls>label'),
          control=label?.querySelector('[data-schedule-category-filter]');
         if(!label||!control)return null;
-        const range=document.createRange();
-        range.selectNodeContents(label.firstChild);
-        const caption=range.getBoundingClientRect(),select=control.getBoundingClientRect(),
-         computed=getComputedStyle(label);
-        return {captionBottom:caption.bottom,selectTop:select.top,
-         lineHeight:parseFloat(computed.lineHeight),fontSize:parseFloat(computed.fontSize),
+        const caption=label.querySelector('.visually-hidden'),labelBox=label.getBoundingClientRect(),
+         select=control.getBoundingClientRect(),captionBox=caption?.getBoundingClientRect();
+        return {captionWidth:captionBox?.width,captionHeight:captionBox?.height,
+         selectTop:select.top,selectBottom:select.bottom,labelTop:labelBox.top,
+         accessible:control.getAttribute('aria-label'),
+         overflow:document.documentElement.scrollWidth-innerWidth,
          options:[...control.options].map(o=>o.value)};
        });
-       assert.ok(layout&&layout.fontSize>=10&&layout.lineHeight>=12&&
-        layout.selectTop>=layout.captionBottom+3,
-        'Bills Category caption must not overlap its dropdown at '+width+': '+JSON.stringify(layout));
+       assert.ok(layout&&layout.captionWidth<=1&&layout.captionHeight<=1&&
+        layout.selectTop>=layout.labelTop&&layout.selectBottom>layout.selectTop&&
+        layout.accessible==='Filter repeating payments by category'&&layout.overflow<=3,
+        'Bills Category control must be self-explanatory, accessible and aligned at '+width+': '+JSON.stringify(layout));
        assert.equal(layout.options[1],'Other','Other is the first named category in Bills');
+       assert.equal(await page.locator('.schedule-search-wrap .visually-hidden').count(),1);
+       assert.equal(await page.locator('[data-schedule-search]').getAttribute('placeholder'),'Search payments');
        assert.equal(await page.locator('.schedule-page [data-schedule-category-add],.schedule-page .schedule-category-manager').count(),0,
         'Category creation is no longer part of the Bills toolbar');
       }
@@ -409,14 +415,18 @@ const {chromium,webkit}=require('playwright');
        select=label?.querySelector('select'),
        account=document.querySelector('.history-page select[name="historyAccount"]');
       if(!label||!select||!account)return null;
-      const lineHeight=parseFloat(getComputedStyle(label).lineHeight),
-       selectRect=select.getBoundingClientRect(),labelRect=label.getBoundingClientRect(),
-       accountRect=account.getBoundingClientRect();
-      return {lineHeight,labelTop:labelRect.top,selectTop:selectRect.top,
-       categoryLeft:selectRect.left,accountRight:accountRect.right};
-     });
-     assert.ok(field&&field.lineHeight>=12&&field.selectTop>=field.labelTop+12,
-      'Category label must clear dropdown on '+report+': '+JSON.stringify(field));
+      const caption=label.querySelector('.visually-hidden'),
+        selectRect=select.getBoundingClientRect(),labelRect=label.getBoundingClientRect(),
+        accountRect=account.getBoundingClientRect(),
+        captionRect=caption?.getBoundingClientRect();
+       return {labelTop:labelRect.top,selectTop:selectRect.top,
+        height:selectRect.height,captionWidth:captionRect?.width,
+        accessible:select.getAttribute('aria-label'),
+        categoryLeft:selectRect.left,accountRight:accountRect.right};
+      });
+      assert.ok(field&&field.captionWidth<=1&&field.height>=30&&
+       field.selectTop>=field.labelTop&&field.accessible==='Filter transactions by category',
+       'Category dropdown has no redundant visible label and stays aligned on '+report+': '+JSON.stringify(field));
      if(report!=='list'&&mobile)
       assert.ok(field.categoryLeft>=field.accountRight-2,
        'Analysis filters sit in aligned columns: '+JSON.stringify(field));
@@ -990,6 +1000,8 @@ const {chromium,webkit}=require('playwright');
     (allCents<0?'−':'')+currency(allCents),
     'Period total equals sum of the individually grouped merchant net spends');
 
+   assert.equal(await page.locator('.history-merchant-search-label .visually-hidden').count(),1);
+   assert.equal(await page.locator('[data-history-merchant-search]').getAttribute('placeholder'),'Search merchants');
    await page.locator('[data-history-merchant-search]').fill('Ama');
    assert.equal(await page.locator('[data-history-drill-merchant]:visible').count(),1,
     'Merchant search narrows visible rows');
@@ -1166,6 +1178,21 @@ const {chromium,webkit}=require('playwright');
     'Review relies on section labels and actionable status rather than repeated instructional prose');
    assert.equal(await page.locator('[data-category-review]').count(),1,
     'Missing or uncertain transaction and bill categories have a persistent review section');
+   assert.equal(await page.locator('.reviews-page .review-sort-label .visually-hidden').count(),1,
+    'Review sorter selected value needs no second visible caption');
+   const categoryPickers=page.locator('[data-category-review-form] > label');
+   if(await categoryPickers.count()){
+    assert.ok(await categoryPickers.evaluateAll(labels=>labels.every(label=>{
+     const caption=label.querySelector('.visually-hidden'),
+      picker=label.querySelector('select[name="category"]');
+     return caption&&caption.getBoundingClientRect().width<=1&&
+      picker?.getAttribute('aria-label')?.startsWith('Category for ')&&
+      picker?.options[0]?.textContent==='Choose a category';
+    })), 'Review rows display only the category choice but retain accessible names');
+    assert.ok(await page.locator('[data-category-review-form] .ledger-transaction-identity small')
+     .evaluateAll(notes=>notes.every(note=>!/Missing category|Unassigned category/i.test(note.textContent))),
+     'Review category context must not repeat in every transaction subtitle');
+   }
    // One selector sorts each review group without altering approvals, review
    // counts, bank records, or the three distinct review sections.
    const reviewSort=page.locator('.reviews-page [data-review-sort]');
