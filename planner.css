@@ -4713,3 +4713,31 @@ a:hover{color:#166e61}
 @media(max-width:850px){
  .history-page .transaction-note-trigger{grid-column:3;grid-row:2;width:32px}
 }
+
+/* Review row names open the same accessible editor as Transactions.
+   Keep the quick category selector independent of the row's click target. */
+.reviews-page .category-review-open{
+ display:flex;flex-direction:column;align-items:flex-start;
+ min-width:0;width:100%;min-height:42px;text-align:left;
+ padding:3px 5px;margin:-3px -5px;
+ border:0;border-radius:9px;background:transparent;
+ font:inherit;cursor:pointer;
+}
+.reviews-page .category-review-open:hover,
+.reviews-page .category-review-open:focus-visible{
+ background:#edf6ef;outline-offset:2px;
+}
+.reviews-page .category-review-open strong{color:#315a45}
+.reviews-page .category-review-open:hover strong{text-decoration:underline;text-underline-offset:3px}
+.transaction-detail .transaction-actual-category{
+ display:flex;flex-direction:column;align-items:stretch;gap:7px;
+ margin:0 0 14px;color:#587765;font-size:12px;font-weight:720;
+}
+.transaction-detail .transaction-actual-category select{
+ padding:11px 12px;min-height:42px;max-width:100%;
+ background:#fff;color:#253d31;border:1px solid #d6e6dc;
+ border-radius:10px;font:inherit;font-size:14px;
+}
+.transaction-detail [data-actual-category-status]{
+ font-size:11px;font-weight:550;color:#577a66;
+}
