@@ -68,7 +68,7 @@ function forecastSaveFeedback(message,allowUndo=false){
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
-let categoryReviewLimit=40;
+let categoryReviewLimit=40,reviewSort='newest';
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryNotice='',latestCategorySave=null;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
@@ -2373,6 +2373,30 @@ function updateReviewTabCount(queue){
  const tab=badge.closest('[data-view="reviews"]');
  if(tab)tab.classList.toggle('has-review-items',count>0);
 }
+// Sort review presentation only; never touch bank records or predictions.
+function sortedReviewRows(items,dateOf,nameOf,amountOf){
+ const date=row=>String(dateOf(row)||''),
+  name=row=>String(nameOf(row)||'').toLocaleLowerCase('en-US'),
+  value=row=>Math.abs(Number(amountOf(row))||0),
+  newest=(a,b)=>{
+   const da=date(a),db=date(b);
+   if(!da)return db?1:0;
+   if(!db)return -1;
+   return db.localeCompare(da);
+  };
+ return [...items].sort((a,b)=>{
+  let primary=0;
+  if(reviewSort==='oldest'){
+   const da=date(a),db=date(b);
+   primary=!da?(db?1:0):!db?-1:da.localeCompare(db);
+  }else if(reviewSort==='amount-desc')primary=value(b)-value(a);
+  else if(reviewSort==='amount-asc')primary=value(a)-value(b);
+  else if(reviewSort==='merchant')primary=name(a).localeCompare(name(b));
+  else primary=newest(a,b);
+  return primary||newest(a,b)||name(a).localeCompare(name(b))||
+   String(a.id||a.key||'').localeCompare(String(b.id||b.key||''));
+ });
+}
 function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  // Reuse the count's exact queue, including distinct unsaved legacy streams.
  const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,categoryIssues,categoryCount}=queue;
@@ -2399,6 +2423,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    (isOpen?' review-row-expanded':'')+'"'+
    (isLegacy?' data-legacy-estimate="'+escapeHTML(key)+'"':'')+
    (r?' data-recommended-repeat="'+escapeHTML(r.key)+'"':'')+
+   ' data-review-order-date="'+escapeHTML(isLegacy?(legacy?.date||r?.lastDate||''):(r?.lastDate||r?.examples?.[0]?.date||r?.nextDate||''))+'"'+
+   ' data-review-order-amount="'+escapeHTML(value||0)+'"'+
    ' data-legacy-active="'+isLegacy+'" data-recommendation-status="'+
      (isIgnored?'ignored':'pending')+'">'+
    '<div class="review-row-top recurrence-row">'+
@@ -2433,10 +2459,11 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   categoryRows=[
    ...categoryIssues.plans.map(item=>({...item,isPlan:true})),
    ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
-  ],shownCategories=categoryRows.slice(0,categoryReviewLimit),
+  ],shownCategories=sortedReviewRows(categoryRows,item=>item.date,
+   item=>item.merchant,item=>item.amount).slice(0,categoryReviewLimit),
   categoryRow=item=>{
    const label=item.isPlan?'Bill':'Transaction';
-   return '<div class="category-review-row" data-category-review-form data-category-kind="'+
+   return '<div class="category-review-row" data-category-review-form data-review-order-date="'+escapeHTML(item.date||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
     '<div class="category-review-info"><strong>'+escapeHTML(item.merchant)+'</strong>'+
     '<small>'+label+' · '+escapeHTML(item.date||'No date')+' · '+cash(item.amount)+
@@ -2445,6 +2472,13 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
     '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
   };
+ const reviewRecommendations=items=>sortedReviewRows(items,
+  r=>r.lastDate||r.examples?.[0]?.date||r.nextDate,r=>r.merchant,r=>r.amount),
+  reviewOverdue=items=>sortedReviewRows(items,
+   item=>item.expectedDate,item=>item.merchant,item=>item.amount),
+  reviewLegacy=items=>sortedReviewRows(items,
+   ({auto,owner})=>owner?.lastDate||auto.date,
+   ({auto})=>auto.merchant,({auto})=>auto.amount);
  const normalCard=r=>row(r);
  const legacyCard=({auto,owner})=>{
   const account=activeAccounts(s).find(a=>String(a.id)===String(auto.accountId)),
@@ -2459,7 +2493,13 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  };
  return '<div class="planner-page reviews-page">'+
   '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
-    '<div><h2>Things to check</h2></div></div>'+
+    '<div><h2>Things to check</h2></div>'+
+    '<label class="review-sort-label">Sort by <select data-review-sort aria-label="Sort Things to check">'+
+     [['newest','Newest first'],['oldest','Oldest first'],
+      ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
+      ['merchant','Merchant A–Z']].map(([value,label])=>
+      '<option value="'+value+'"'+(reviewSort===value?' selected':'')+'>'+label+'</option>').join('')+
+    '</select></label></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
@@ -2474,13 +2514,13 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '<p class="lead">The bank has not confirmed these payments. '+
     'Each unpaid payment remains reserved once in the forecast until it posts, is moved, or is skipped. '+
     'Ignoring an alert hides it from Review but keeps the withdrawal in your projected balance.</p>'+
-   overdue.map(item=>{
+   reviewOverdue(overdue).map(item=>{
     const expanded=overdueEditKey===item.key,
      cashAccounts=activeAccounts(s).filter(a=>accountType(a)!=='credit'),
      common='<label>Payment date <input type="date" name="date" required min="'+
       escapeHTML(shiftDay(s.asOf,1))+'" max="'+escapeHTML(shiftDay(s.asOf,horizon))+
       '" value="'+escapeHTML(item.proposedDate)+'"></label>';
-    return '<article class="overdue-review-row" data-overdue-item="'+escapeHTML(item.key)+'">'+
+    return '<article class="overdue-review-row" data-review-order-date="'+escapeHTML(item.expectedDate||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-overdue-item="'+escapeHTML(item.key)+'">'+
      '<div class="overdue-review-heading"><strong>'+escapeHTML(item.merchant)+' · '+cash(item.amount)+'</strong>'+
       '<small>Expected '+escapeHTML(dayLabel(item.expectedDate))+' · Not confirmed by bank</small></div>'+
      '<div class="overdue-review-actions">'+
@@ -2506,7 +2546,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    (ignoredOverdue.length?
     '<details class="overdue-ignored" data-ignored-overdue><summary>Dismissed payment alerts ('+
       ignoredOverdue.length+')</summary>'+
-     ignoredOverdue.map(item=>'<div class="overdue-ignored-row" data-ignored-overdue-item="'+
+     reviewOverdue(ignoredOverdue).map(item=>'<div class="overdue-ignored-row" data-ignored-overdue-item="'+
        escapeHTML(item.key)+'"><span><strong>'+escapeHTML(item.merchant)+' · '+cash(item.amount)+
        '</strong><small>Expected '+escapeHTML(dayLabel(item.expectedDate))+
        ' · Still included in the forecast</small></span>'+
@@ -2524,7 +2564,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       (decisionsNeeded?decisionsNeeded+' still need'+(decisionsNeeded===1?'s':'')+' a decision. ':
        'All have review decisions. ')+
       'Ignoring one does not remove it from the forecast until the final switch below.</p>'+
-    '<div class="legacy-estimate-list">'+legacyItems.map(legacyCard).join('')+'</div>'+
+    '<div class="legacy-estimate-list">'+reviewLegacy(legacyItems).map(legacyCard).join('')+'</div>'+
     '<div class="recurrence-transition"><p class="lead">'+
       (decisionsNeeded?'Review or ignore the highlighted payment'+(decisionsNeeded===1?'':'s')+
        ' before switching.':'You can now turn off the older automatic estimates.')+
@@ -2535,14 +2575,14 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Suggested repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
-   (pending.length?pending.map(normalCard).join(''):
+   (pending.length?reviewRecommendations(pending).map(normalCard).join(''):
     '')+
    '</section>'+
   (ignored.length?
    '<details class="ignored-repeating" data-ignored-repeating'+
     (ignored.some(r=>expanded(r))?' open':'')+'><summary>Dismissed suggestions ('+
      ignored.length+')</summary><div class="ignored-repeating-items">'+
-      ignored.map(normalCard).join('')+'</div></details>':'')+
+      reviewRecommendations(ignored).map(normalCard).join('')+'</div></details>':'')+
   '</div>';
 }
 
@@ -4297,6 +4337,21 @@ document.addEventListener('change',async e=>{
     escapeHTML(scheduleNotice)+'</span>');}
   }
   return;
+ }
+ if(e.target.matches?.('[data-review-sort]')){
+  const next=e.target.value;
+  if(!['newest','oldest','amount-desc','amount-asc','merchant'].includes(next))return;
+  const overdueDirty=[...document.querySelectorAll('.reviews-page [data-overdue-date]')]
+   .some(form=>[...form.querySelectorAll('input,select,textarea')].some(field=>{
+    if(field.type==='hidden')return false;
+    return field.value!==field.defaultValue;
+   }));
+  if((reviewFormDirty()||overdueDirty)&&
+   !window.confirm('Discard unsaved review edits to sort Things to check?')){
+   e.target.value=reviewSort;return;
+  }
+  reviewSort=next;categoryReviewLimit=40;
+  render();return;
  }
  const sorter=e.target.closest?.('[data-schedule-sort]'),
   filter=e.target.closest?.('[data-schedule-category-filter]'),

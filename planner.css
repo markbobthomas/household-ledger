@@ -4655,3 +4655,21 @@ a:hover{color:#166e61}
  .history-page .history-category-name small{font-size:10px}
  .history-page .history-budget-input input{font-size:11px}
 }
+
+/* One compact sorter applies within each Things to check section. */
+.reviews-page .review-intro{flex-wrap:wrap}
+.reviews-page .review-sort-label{
+ display:flex;align-items:center;gap:9px;margin-left:auto;
+ color:#637e6d;font-size:13px;font-weight:710;white-space:nowrap;
+}
+.reviews-page .review-sort-label select{
+ min-width:168px;max-width:100%;min-height:39px;
+ padding:8px 30px 8px 11px;border:1px solid #dce9e0;border-radius:11px;
+ background:#fff;color:#294b3b;font:inherit;font-weight:720;
+}
+@media(max-width:650px){
+ .reviews-page .review-intro{gap:10px!important;padding:14px!important}
+ .reviews-page .review-intro h2{font-size:19px}
+ .reviews-page .review-sort-label{width:100%;margin:0;justify-content:space-between}
+ .reviews-page .review-sort-label select{flex:1 1 auto;min-width:0;max-width:235px}
+}
