@@ -136,8 +136,8 @@ function postedDay(date){
    action=matches.length===1?'View prediction':matches.length>1?'Choose prediction':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row ledger-transaction-row">'+
    '<span class="ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
-   '<span class="calendar-transaction-name ledger-transaction-identity">'+
-   esc(t.merchant||'Bank transaction')+
+   '<span class="calendar-transaction-name ledger-transaction-identity"><strong>'+
+   esc(t.merchant||'Bank transaction')+'</strong>'+
    (calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)]))?
     '<small class="transaction-note-subtitle">'+
      esc(calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)])))+'</small>':'')+
