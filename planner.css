@@ -4998,3 +4998,10 @@ a:hover{color:#166e61}
  }
  .history-page .history-budget-filters .history-budget-month-field{font-size:12px}
 }
+
+/* Prevent the legacy 160px Account min-width from overrunning a 320px month row. */
+.history-page .history-budget-filters>label:has([name="historyAccount"]){
+ min-width:0!important;
+ width:100%;
+ max-width:100%;
+}
