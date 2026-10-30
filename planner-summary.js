@@ -207,8 +207,7 @@ function dayDetail(point,card){
     (previousIndex<0?'Reported starting balance':'Yesterday')+
     '</span><strong>'+money(previous)+'</strong></div>'+
    '<div class="calendar-day-transactions" aria-label="Predictions for selected date">'+
-    '<div class="calendar-day-transactions-head"><strong>Transactions ('+events.length+
-    ')</strong></div>'+
+    
     events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join('')+
    '</div>'+
    '<div class="calendar-day-net" data-calendar-net-change data-net-cents="'+netCents+'">'+
@@ -216,7 +215,7 @@ function dayDetail(point,card){
    '</div>':
   '<p class="calendar-empty">No transactions predicted for this day.</p>';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
-  '<div class="calendar-detail-heading"><div><span>SELECTED DAY</span><strong>'+
+  '<div class="calendar-detail-heading"><div><strong>'+
    esc(dateLabel(point.date))+'</strong></div>'+
    '<button type="button" class="calendar-add" data-calendar-add'+
    (point.date===first.date?' disabled':'')+'>+ Add prediction</button></div>'+
