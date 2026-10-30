@@ -4855,3 +4855,9 @@ a:hover{color:#166e61}
  .history-page .history-category-label-cell{gap:2px}
  .history-page .history-budget-month-field .history-month-trigger{padding-inline:7px}
 }
+
+/* Override the legacy full-row Account rule used when Category controls are absent. */
+.history-page .history-analysis-filters.history-budget-filters:not(:has(.history-category-controls))>label:has([name="historyAccount"]){
+ grid-column:1/2!important;
+ grid-row:1!important;
+}
