@@ -5431,6 +5431,7 @@ a:hover{color:#166e61}
 }
 .planner-page .bills-upcoming-description strong,
 .planner-page .ledger-transaction-row .ledger-transaction-identity strong,
+.planner-page .ledger-transaction-row .ledger-transaction-identity .schedule-row-title>strong,
 .planner-page .ledger-transaction-row .calendar-transaction-name,
 .planner-page .review-candidate-main>strong,
 .planner-page .overdue-review-heading .overdue-review-merchant,
