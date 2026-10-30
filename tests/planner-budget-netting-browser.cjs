@@ -140,8 +140,18 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Summary shares the calendar-month picker');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page button:not([data-history-month-toggle]):not([data-history-month-current]):not([data-history-month-all])').count(),0,
     name+': Summary can select report months but cannot edit financial information');
-   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$75.00',
-    name+': six October checking bills total $75, not a twelve-month average');
+   const moneyCents=text=>Math.round(Number(String(text).replace(/[^0-9.-]/g,''))*100),
+    octoberBills=moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
+    octoberBreakdown=await page.locator('[data-recap-bills] small').innerText(),
+    paidMatch=octoberBreakdown.match(/Paid (\\$[\\d,.]+) · Upcoming (\\$[\\d,.]+)/);
+   assert.ok(paidMatch,name+': October shows posted and remaining bills');
+   const paidOctober=moneyCents(paidMatch[1]),upcomingOctober=moneyCents(paidMatch[2]);
+   assert.ok(paidOctober>300000,
+    name+': already-posted October mortgage and utilities remain in the month total');
+   assert.equal(upcomingOctober,7500,
+    name+': six future October checking bills total $75');
+   assert.equal(octoberBills,paidOctober+upcomingOctober,
+    name+': current calendar month includes posted plus upcoming bills without averaging');
    // The November card settlement is included exactly once only when November
    // is selected; the card purchase and savings transfer are never bills.
    await page.locator('[data-history-month-toggle]').click();
@@ -154,8 +164,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.match(billCategories,/\$600\.00/,
     name+': selected November settlement is not divided by twelve');
    await page.locator('[data-history-month-option][value="2026-10"]').check();
-   assert.equal(await page.locator('[data-recap-bills] strong').innerText(),'$675.00',
-    name+': two calendar months add $75 plus $600 without averaging');
+   assert.equal(moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
+    octoberBills+60000,
+    name+': two calendar months sum paid October bills, remaining October bills and $600 November payment');
    await page.locator('[data-history-month-option][value="2026-10"]').uncheck();
    await page.locator('[data-history-month-toggle]').click();
    assert.doesNotMatch(billCategories,/Fictional Visa Subscription/,
