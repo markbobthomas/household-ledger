@@ -1471,17 +1471,16 @@ function schedulesPage(bundle,s){
  const groupedBills=upcomingBills.map(row=>'<button type="button" class="bills-upcoming-row" data-open-transaction="'+
   escapeHTML(row.key)+'"><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
   '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-  '<small>'+(row.cardBill?'Credit card payment':'Expected withdrawal')+
-   ' · '+escapeHTML((accounts.find(a=>String(a.id)===String(row.fromAccountId||row.accountId))||{}).name||'Account')+
+  '<small>'+(row.cardBill?'Credit card payment · ':'')+escapeHTML((accounts.find(a=>String(a.id)===String(row.fromAccountId||row.accountId))||{}).name||'Account')+
    '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">›</span></button>').join('');
  return '<div class="planner-page schedule-page">'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
-    '<span class="bills-upcoming-total">'+upcomingBills.length+' predicted</span></div>'+
+    '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div>'+
    (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period. Review your repeating payments below.</p>')+
    '<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section>'+
-  '<div class="bills-manage-heading"><div><h2>Manage repeating payments</h2></div></div>'+
+  '<div class="bills-manage-heading"><div><h2>Repeating payments</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Search payments" value="'+escapeHTML(scheduleSearch)+'"></label>'+
@@ -1496,12 +1495,12 @@ function schedulesPage(bundle,s){
      (scheduleCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
    '</select></label>'+
    '</div>'+
-   '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Repeating payment</button></div>'+
+   '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Add payment</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+'<div class="schedule-grid">'+
    '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
     'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
-    ' of '+rules.length+' repeating transaction'+(rules.length===1?'':'s')+'</p>'+
+    ' of '+rules.length+' payments</p>'+
    (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
       repeatingStatementPeriods(bundle,s,scheduleAccount,visible):'')+
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
@@ -2129,10 +2128,10 @@ function updateHistorySelectionSummary(){
 // The existing Summary stays read-only and uses the unchanged canonical totals.
 function spendingTabNav(active){
  return '<nav class="history-subtabs spending-tabs" aria-label="Spending views">'+
-  [['categories','Budget','◔'],['merchants','Merchants','◉'],['sizes','Purchase sizes','▥'],['summary','Summary','▤']]
-   .map(([id,name,icon])=>'<button type="button" class="history-subtab'+
+  [['categories','Budget'],['merchants','Merchants'],['sizes','Purchase sizes'],['summary','Summary']]
+   .map(([id,name])=>'<button type="button" class="history-subtab'+
     (active===id?' active':'')+'" data-history-view="'+id+
-    '" aria-pressed="'+(active===id)+'"><span aria-hidden="true">'+icon+'</span>'+name+'</button>')
+    '" aria-pressed="'+(active===id)+'">'+name+'</button>')
    .join('')+'</nav>';
 }
 function historyPage(bundle,s){
@@ -2384,9 +2383,9 @@ function historyPage(bundle,s){
     ' <button type="button" data-history-clear-merchant>Back to Merchants</button></div>':'')+
   (displayView==='list'&&historySizeFilter>=0?'<div class="history-active-filter">Purchase size: '+
     escapeHTML(historyBands[historySizeFilter]?.name||'')+' <button type="button" data-history-clear-size>Clear</button></div>':'')+
-  (displayView==='list'?'<div class="history-list-surface"><p class="history-count ledger-list-count">Showing '+visible.length+' of '+filtered.length+
-    ' matching transaction'+(filtered.length===1?'':'s')+
-    (filtered.length>historyLimit?' · More available below':'')+'</p>'+
+  (displayView==='list'?'<div class="history-list-surface"><p class="history-count ledger-list-count">'+visible.length+' of '+filtered.length+
+    ' transactions'+
+    (filtered.length>historyLimit?' · More below':'')+'</p>'+
    '<div class="history-selection-summary" data-history-selection-summary>'+
     '<label class="history-select-all"><input type="checkbox" data-history-select-all aria-label="Select all shown transactions"'+
      (visible.length&&selectedRows.length===visible.length?' checked':'')+
@@ -2707,7 +2706,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     'Needs a decision — currently included in your forecast'});
  };
  return '<div class="planner-page reviews-page">'+
-  '<div class="review-intro"><span class="review-intro-icon" aria-hidden="true">!</span>'+
+  '<div class="review-intro">'+
     '<div><h2>Things to check</h2></div>'+
     '<label class="review-sort-label minimal-control-label"><span class="visually-hidden">Sort by</span><select data-review-sort aria-label="Sort Things to check">'+
      [['newest','Newest first'],['oldest','Oldest first'],
@@ -2718,14 +2717,14 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
-    '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+' TO REVIEW</span></div>'+
+    '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
    (categoryCount?shownCategories.map(categoryRow).join('')+
     (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
      'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
     '')+'</section>'+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
-    '<span class="status-tag warn">'+overdue.length+' TO REVIEW</span></div>'+
+    '<span class="status-tag warn">'+overdue.length+'</span></div>'+
    '<p class="lead">The bank has not confirmed these payments. '+
     'Each unpaid payment remains reserved once in the forecast until it posts, is moved, or is skipped. '+
     'Ignoring an alert hides it from Review but keeps the withdrawal in your projected balance.</p>'+
@@ -2790,7 +2789,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    '</section>':'')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Suggested repeating payments</h2>'+
-   '<span class="status-tag">'+pending.length+' TO REVIEW</span></div>'+
+   '<span class="status-tag">'+pending.length+'</span></div>'+
    (pending.length?reviewRecommendations(pending).map(normalCard).join(''):
     '')+
    '</section>'+
