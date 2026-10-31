@@ -1513,12 +1513,51 @@ const {chromium,webkit}=require('playwright');
    await newRepeat.click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-new-form]').count(),1,
     'Create repeating payment in the shared editor');
+   // Check actual forms and controls, not just the page scroll width: a
+   // fixed-position editor can overrun the device without widening the page.
+   const assertPhoneEditorFits=async context=>{
+    for(const width of [320,390]){
+     await page.setViewportSize({width,height:600});
+     const geometry=await page.evaluate(()=>{
+      const outer=document.querySelector('.transaction-overlay'),
+       dialog=document.querySelector('.transaction-detail'),
+       body=dialog?.querySelector('.transaction-detail-body'),
+       close=dialog?.querySelector('.transaction-detail-close');
+      const dr=dialog?.getBoundingClientRect(),
+       br=body?.getBoundingClientRect(),cr=close?.getBoundingClientRect(),
+       vr={width:innerWidth,height:innerHeight},outside=[];
+      for(const node of dialog?.querySelectorAll('input,select,textarea,button')||[]){
+       if(node.getClientRects().length===0)continue;
+       const rect=node.getBoundingClientRect();
+       if(rect.left<br.left-2||rect.right>br.right+2)
+        outside.push({tag:node.tagName,name:node.name||node.textContent.trim().slice(0,25),
+         left:rect.left,right:rect.right,bodyLeft:br.left,bodyRight:br.right});
+      }
+      // The header close button is intentionally outside the scrollable body.
+      return {viewport:vr,outerWidth:outer?.getBoundingClientRect().width,
+       dialogLeft:dr?.left,dialogRight:dr?.right,dialogTop:dr?.top,dialogBottom:dr?.bottom,
+       bodyWidth:body?.clientWidth,bodyScrollWidth:body?.scrollWidth,
+       closeRight:cr?.right,closeTop:cr?.top,closeBottom:cr?.bottom,
+       inputWidths:outside,docScrollWidth:document.documentElement.scrollWidth};
+     });
+     assert.ok(geometry.dialogLeft>=-1&&geometry.dialogRight<=width+1&&
+       geometry.outerWidth<=width+1&&geometry.inputWidths.length===0&&
+       geometry.bodyScrollWidth<=geometry.bodyWidth+2&&
+       geometry.docScrollWidth<=width+2&&geometry.dialogTop>=-1&&
+       geometry.dialogBottom<=600+1&&geometry.closeRight<=width+1&&
+       geometry.closeTop>=0&&geometry.closeBottom<=600+1,
+       context+' dialog and controls must fit iPhone '+width+'x600: '+JSON.stringify(geometry));
+    }
+    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   };
+   await assertPhoneEditorFits('Add repeating');
    await page.locator('.transaction-detail-close').click();
    const editRepeat=page.locator('[data-schedule-edit]').first();
    if(await editRepeat.count()){
     await editRepeat.click();
     assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
      'Edit saved schedule without a second inline form');
+    await assertPhoneEditorFits('Edit repeating');
     await page.locator('.transaction-detail-close').click();
    }
 
@@ -1537,6 +1576,7 @@ const {chromium,webkit}=require('playwright');
     await page.locator('[data-calendar-add]').first().click();
     assert.equal(await page.locator('.transaction-detail [data-calendar-quick-form="add"]').count(),1,
      'Calendar uses the shared creation panel');
+    await assertPhoneEditorFits('Calendar add payment');
     const create=page.locator('.transaction-detail [data-calendar-quick-form="add"]');
     await create.locator('[name=merchant]').fill('Fictional interface test expense');
     await create.locator('[name=amount]').fill('15.50');

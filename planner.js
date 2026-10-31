@@ -927,12 +927,31 @@ function detailHtml(bundle,s){
  }
  return '';
 }
+// On iPhone Safari the keyboard shrinks the *visual* viewport, but CSS vh
+// can still describe the taller layout viewport. Keep modal controls inside
+// what the user can actually see; no bank/planning state is involved.
+function syncTransactionViewport(){
+ const overlay=document.querySelector('[data-transaction-overlay]');
+ if(!overlay)return;
+ const viewport=window.visualViewport;
+ if(!viewport||window.innerWidth>740){
+  overlay.style.removeProperty('--ledger-visible-height');
+  overlay.style.removeProperty('--ledger-visible-top');
+  return;
+ }
+ overlay.style.setProperty('--ledger-visible-height',Math.max(1,viewport.height)+'px');
+ overlay.style.setProperty('--ledger-visible-top',viewport.offsetTop+'px');
+}
+window.visualViewport?.addEventListener('resize',syncTransactionViewport);
+window.visualViewport?.addEventListener('scroll',syncTransactionViewport);
+window.addEventListener?.('resize',syncTransactionViewport);
 function drawTransactionDetail(bundle,s){
  const root=$('planner-main');
  if(!transactionDetail||!root||typeof root.insertAdjacentHTML!=='function')return;
  const prior=root.querySelector('[data-transaction-overlay]');
  if(prior&&typeof prior.remove==='function')prior.remove();
  root.insertAdjacentHTML('beforeend',detailHtml(bundle,s));
+ syncTransactionViewport();
  const form=root.querySelector('.transaction-overlay form[data-history-recurring-form]');
  if(form&&recurringDraft?.examples){
   form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
