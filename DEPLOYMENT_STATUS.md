@@ -62,3 +62,45 @@ to the private banking service.
 - If Render isn't connected to ChatGPT or the service URL is unknown,
   explicitly report deployment as **unverified**. Never silently claim a merge
   triggered a successful private deploy.
+
+## Household sharing readiness checks (October 31, 2026)
+
+**Source-side safeguards:** The authenticated private Ledger now supports a
+deterministic, keyed preference revision returned in the `X-Ledger-Revision`
+response header. Current browsers submit that revision with writes, and stale
+updates are rejected with HTTP 409 rather than overwriting a newer household
+edit. Repeated identical forecast requests remain safe after a dropped reply.
+This is not per-user authentication; the same private password still governs
+both devices. Upgrade all household browsers to the current page before
+concurrent editing; older cached clients without the header retain legacy
+compatibility and cannot be guaranteed conflict-safe.
+
+**Mobile sharing:** The existing private Render URL is the only live household
+link. The Settings page can use the device share sheet to send its clean root
+URL, and Safari Add to Home Screen can install it with an icon. It requires
+network access and the existing password. GitHub Pages is a fictional demo
+only. No new hosting, public banking endpoint, domain registration, or
+authentication changes are included.
+
+**What still requires the owner-authenticated Render dashboard:**
+1. Select the **existing** live service, not a new service or the fictional
+   `render.yaml` Blueprint. Verify its connected repo and branch, start
+   command, compute plan, successful live deployment and currently running SHA
+   from `/healthz`.
+2. On the existing service Disk page, verify a paid persistent disk mounted
+   over `PILOT_STATE_PATH` (typically `/var/data/pilot.enc`) and check that
+   daily snapshots are present. A restore would replace the entire disk and
+   discard edits made since the selected snapshot; never use Restore to
+   test backups on live household data.
+3. On Settings, prefer **After CI Checks Pass**, after confirming the existing
+   Git integration and relevant required checks. Do not replace the encryption
+   key, move state files, change Plaid configuration, detach or resize disks,
+   or import the fictional Blueprint to accomplish this.
+4. If desired, add a custom domain to that **same service** only after the
+   domain owner provides the name and controls DNS. The onrender.com URL works
+   without one.
+
+**Verification boundary:** GitHub source/tests can be checked from this repo.
+The private Render dashboard, disk snapshot inventory, service plan and live
+deployed revision cannot be certified solely from GitHub or a successful
+public GitHub Pages action. Mark them *unverified* until inspected directly.

@@ -3205,7 +3205,11 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  categoryLearning+auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
+  categoryLearning+auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+
+   (available()?'<section class="panel" aria-label="Share Ledger"><div class="section-title"><h2>Share Ledger</h2></div>'+
+    '<p>Use this same private website on both phones to see the same household data. Send the link privately; the password must be shared separately.</p>'+
+    '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
+    '<p>To make it an iPhone app: open the link in Safari, tap Share, then Add to Home Screen. An internet connection is required.</p></section>':'')+'</div>';
 }
 function render(){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
@@ -3364,6 +3368,15 @@ document.addEventListener('submit',async e=>{
   button.disabled=false;
   if(status){status.textContent='Not saved: '+String(err.message||err);status.setAttribute('role','alert')}
  }
+});
+document.addEventListener('click',async e=>{
+ if(!e.target.closest?.('[data-share-ledger]'))return;
+ const url=window.location.origin+'/';
+ try{
+  if(navigator.share)await navigator.share({title:'Household Ledger',url});
+  else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url);setNotice('Private Ledger link copied. Share the password separately.');}
+  else window.prompt('Copy the private Ledger link',url);
+ }catch(error){if(error?.name!=='AbortError')setNotice('Could not share automatically. Copy the Ledger URL from Safari instead.');}
 });
 document.addEventListener('click',async e=>{
  const trigger=e.target.closest?.('[data-edit-transaction-note]');

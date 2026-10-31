@@ -38,6 +38,14 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   assert.equal((await get('/api/ledger?source=browser',false)).status,401,'Query parameters do not bypass authentication');
   const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect accounts/,'Plaid authorization available on same website');
   assert.equal((await get('/pilot/data-source.js',true)).status,200);
+  assert.match(ledger.body,/manifest[.]webmanifest/,'Private app exposes install manifest');
+  assert.match(ledger.body,/apple-touch-icon/,'iPhone gets an app icon');
+  assert.equal((await get('/manifest.webmanifest',false)).status,401,
+    'Install manifest is never exposed without private authentication');
+  assert.equal((await get('/ledger-icon.png',false)).status,401,
+    'The private icon follows the same authentication boundary');
+  assert.equal((await get('/manifest.webmanifest',true)).status,200);
+  assert.equal((await get('/ledger-icon.png',true)).status,200);
   assert.equal((await get('/planner-transactions.js',true)).status,200,'Protected server serves forecast-only editing module');
   // Retired Phase 4 accuracy/readiness research was not part of the site.
   // The authenticated server must no longer expose those obsolete scripts.
