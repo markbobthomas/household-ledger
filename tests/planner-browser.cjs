@@ -1679,6 +1679,7 @@ const {chromium,webkit}=require('playwright');
     },{container,merchant,amount});
    const ref=await design(upcoming,'.bills-upcoming',
     '.bills-upcoming-description strong','.bills-upcoming-row>strong');
+   await page.locator('[data-bills-tab="repeating"]').click();
    const scheduled=await design(repeating.locator('.schedule-compact-row'),
     '.schedule-card','.schedule-row-title strong','.schedule-row-amount strong');
    assert.ok(ref.height>=60&&scheduled.height>=60&&
@@ -1701,6 +1702,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(posted.cardBorder,'none','Activity is a flat, continuous list');
    assert.ok(posted.overflow<=3,'No horizontal overflow in Activity');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.locator('[data-bills-tab="repeating"]').click();
    await repeating.locator('[data-schedule-edit]').click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
     'Spacious Repeating row keeps existing editor');
@@ -1739,10 +1741,12 @@ const {chromium,webkit}=require('playwright');
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+    await page.locator('[data-bills-tab="upcoming"]').click();
     const baseline=await transactionFonts(
      '.bills-upcoming-row','.bills-upcoming-description strong','.bills-upcoming-row>strong');
     assert.deepEqual([baseline.name,baseline.value],width<=390?[13,13]:width<=850?[14,14]:[15,16],
      'Upcoming Bills is the reference for desktop and phone font sizes at '+width);
+    await page.locator('[data-bills-tab="repeating"]').click();
     assertFontsMatch('Repeating '+width,await transactionFonts(
      '.schedule-row-main.ledger-transaction-row',
      '.schedule-row-title strong','.schedule-row-amount strong'),baseline);
@@ -1766,9 +1770,13 @@ const {chromium,webkit}=require('playwright');
       '.category-review-open.ledger-transaction-row',
       '.ledger-transaction-identity strong','.ledger-transaction-amount'),baseline);
     }
-    if(await page.locator('.review-row-open.ledger-transaction-row').count()){
+    if(await page.locator('[data-review-pane="suggestions"] .review-row-open.ledger-transaction-row').count()||
+     await page.locator('[data-review-pane="earlier"] .review-row-open.ledger-transaction-row').count()){
+     const where=await page.locator('[data-review-pane="suggestions"] .review-row-open.ledger-transaction-row').count()?
+      'suggestions':'earlier';
+     await page.locator('[data-review-tab="'+where+'"]').click();
      assertFontsMatch('Review recurring '+width,await transactionFonts(
-      '.review-row-open.ledger-transaction-row',
+      '[data-review-pane="'+where+'"] .review-row-open.ledger-transaction-row',
       '.review-candidate-main strong','.review-candidate-amount'),baseline);
     }
    }
