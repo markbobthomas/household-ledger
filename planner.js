@@ -76,7 +76,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1234,7 +1234,7 @@ function statementHeading(period,total,count,kind){
   (count===1?'':'s')+'</small>'+
   '<span class="ledger-statement-total">Net charges '+cash(total/100)+'</span></div>';
 }
-function repeatingStatementPeriods(bundle,s,accountId,shownRules){
+function repeatingStatementPeriods(bundle,s,accountId,shownRules,month=''){
  const rule=state().predictions?.paymentRules?.[accountId];
  if(!rule?.billingEndDate&&!rule?.lastStatementClose)
   return '<p class="ledger-statement-help">Set this card’s billing period in Settings to see statement totals.</p>';
@@ -1243,10 +1243,11 @@ function repeatingStatementPeriods(bundle,s,accountId,shownRules){
   const saved=shownRules.find(x=>String(x.rule.id)===String(row.recurringRuleId))?.rule;
   return [row.merchant,saved?.scheduleLabel,saved?.category].filter(Boolean).join(' ').toLowerCase();
  };
- const end=shiftDay(s.asOf,90),groups=new Map();
+ const end=shiftDay(s.asOf,month?horizon:90),groups=new Map();
  const rows=futureRows(bundle,s).filter(row=>row.kind==='event'&&
   String(row.accountId)===String(accountId)&&ids.has(String(row.recurringRuleId||''))&&
-  row.date>s.asOf&&row.date<=end&&['expense','refund'].includes(row.type));
+  row.date>s.asOf&&row.date<=end&&(!month||row.date.slice(0,7)===month)&&
+  ['expense','refund'].includes(row.type));
  for(const row of rows){
   const period=cardStatementPeriod(accountId,row.date);if(!period)continue;
   if(!groups.has(period.end))groups.set(period.end,{period,rows:[]});
@@ -1265,8 +1266,9 @@ function repeatingStatementPeriods(bundle,s,accountId,shownRules){
      '<span>'+cash(row.amount)+'</span><span aria-hidden="true">›</span></button></div>').join('')+'</section>';
   }).join('');
  return '<section class="ledger-statement-periods schedule-statement-periods" data-repeating-statement-periods>'+
-  '<p class="ledger-statement-intro">Next 90 days · repeating card charges only · estimates, not issued statements</p>'+
-  (content||'<p class="ledger-statement-help">No repeating charges are forecast for this card in the next 90 days.</p>')+
+  '<p class="ledger-statement-intro">'+(month?'Selected month':'Next 90 days')+
+   ' · repeating card charges only · estimates, not issued statements</p>'+
+  (content||'<p class="ledger-statement-help">No repeating charges are forecast for this card in the selected period.</p>')+
   '</section>';
 }
 // Diagnose a saved schedule locally against the same private snapshot used by
@@ -1339,6 +1341,25 @@ function schedulePaymentCheck(rule,bundle,s){
  return result('not-forecast','No upcoming or recent withdrawal is included for this saved schedule. Check the account, start date, direction, and individual skips.');
 }
 
+// One shared selection across both Bills tabs; filtered rows always come from
+// the canonical modeled ledger rather than approximated schedule dates.
+function billsMonthSelect(asOf,scope){
+ const first=String(asOf||dateToday()).slice(0,7),
+  start=new Date(first+'-01T12:00:00Z'),months=[];
+ for(let i=0;i<=12;i++){
+  const d=new Date(start);d.setUTCMonth(start.getUTCMonth()+i);
+  const value=d.toISOString().slice(0,7);
+  const name=d.toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'});
+  months.push('<option value="'+value+'"'+(billsSelectedMonth===value?' selected':'')+'>'+
+   escapeHTML(name)+'</option>');
+ }
+ return '<label class="bills-month-field minimal-control-label">'+
+  '<span class="visually-hidden">Month</span>'+
+  '<select data-bills-month aria-label="Select Bills month">'+
+  '<option value=""'+(!billsSelectedMonth?' selected':'')+'>'+
+   (scope==='upcoming'?(billsExpanded?'Next 90 days':'Next 30 days'):'All repeating payments')+
+  '</option>'+months.join('')+'</select></label>';
+}
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
@@ -1348,18 +1369,23 @@ function schedulesPage(bundle,s){
  // Canonical prediction rows already include weekend-to-Friday posting,
  // individual date overrides and skipped occurrences. Show their actual dates
  // here; keep raw recurrence dates solely in the prediction-default editor.
- const upcomingByRule=new Map();
+ const upcomingByRule=new Map(),monthByRule=new Map();
  for(const row of futureRows(bundle,s)){
-  if(row.recurringRuleId&&!upcomingByRule.has(String(row.recurringRuleId)))
-   upcomingByRule.set(String(row.recurringRuleId),row);
+  if(!row.recurringRuleId)continue;
+  const id=String(row.recurringRuleId);
+  if(!upcomingByRule.has(id))upcomingByRule.set(id,row);
+  if(billsSelectedMonth&&row.date.slice(0,7)===billsSelectedMonth&&
+     !monthByRule.has(id))monthByRule.set(id,row);
  }
+ const displayedByRule=billsSelectedMonth?monthByRule:upcomingByRule;
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>
+  (!billsSelectedMonth||displayedByRule.has(String(rule.id)))&&
   (scheduleAccount==='all'||[rule.accountId,rule.fromAccountId,rule.toAccountId]
    .some(id=>String(id||'')===scheduleAccount))&&
   (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter));
  const nextAmount=rule=>{
-  const forecast=upcomingByRule.get(String(rule.id));
+  const forecast=displayedByRule.get(String(rule.id));
   if(forecast)return Number(forecast.amount);
   const next=T.recurrenceDates(rule,s.asOf,end)[0];
   return next?Number(T.scheduleAmount(rule,next).amount):Number(rule.amount)||0;
@@ -1386,7 +1412,7 @@ function schedulesPage(bundle,s){
    transactionDetail.id===r.id,
    isEditing=scheduleMode==='edit'&&!transactionDetail&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
-   occurrence=upcomingByRule.get(String(r.id)),
+   occurrence=displayedByRule.get(String(r.id)),
    effectiveNext=occurrence?.date||null,
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
    shownAmount=nextAmount(r),
@@ -1465,11 +1491,13 @@ function schedulesPage(bundle,s){
    return '<section class="schedule-category-group" data-schedule-category-group="'+escapeHTML(category)+'">'+
     '<div class="schedule-category-heading"><strong>'+escapeHTML(categoryLabel(category))+
     ' <small data-schedule-group-count>('+items.length+')</small></strong><span data-schedule-group-total>'+
-    scheduleCategorySummary(items,nextAmount,rule=>upcomingByRule.get(String(rule.id)))+'</span></div>'+
+    scheduleCategorySummary(items,nextAmount,rule=>displayedByRule.get(String(rule.id)))+'</span></div>'+
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- const upcomingBills=forecastCashBills(bundle,s).filter(row=>row.date<=shiftDay(s.asOf,billsExpanded?90:30));
+ const upcomingBills=forecastCashBills(bundle,s).filter(row=>billsSelectedMonth?
+  row.date.slice(0,7)===billsSelectedMonth:
+  row.date<=shiftDay(s.asOf,billsExpanded?90:30));
  const groupedBills=upcomingBills.map(row=>'<button type="button" class="bills-upcoming-row" data-open-transaction="'+
   escapeHTML(row.key)+'"><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
   '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
@@ -1484,13 +1512,15 @@ function schedulesPage(bundle,s){
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
-    '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div>'+
-   (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period. Review your repeating payments below.</p>')+
-   '<button type="button" class="bills-range-toggle" data-bills-more>'+
-    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section></div>'+
+    '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
+    '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
+   (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period.</p>')+
+   (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
+    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
   '<div class="bills-manage-heading"><div><h2>Repeating payments</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
+   billsMonthSelect(s.asOf,'repeating')+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Search payments" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
@@ -1511,7 +1541,7 @@ function schedulesPage(bundle,s){
     'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
     ' of '+rules.length+' payments</p>'+
    (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
-      repeatingStatementPeriods(bundle,s,scheduleAccount,visible):'')+
+      repeatingStatementPeriods(bundle,s,scheduleAccount,visible,billsSelectedMonth):'')+
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching predictions. Try a different search.</p>'+
@@ -4823,6 +4853,23 @@ document.addEventListener('change',async e=>{
    e.target.value=reviewSort;return;
   }
   reviewSort=next;categoryReviewLimit=40;
+  render();return;
+ }
+ const billsMonth=e.target.closest?.('[data-bills-month]');
+ if(billsMonth){
+  const selected=billsMonth.value,first=snapshot().asOf.slice(0,7),
+   available=new Set(Array.from({length:13},(_,i)=>{
+    const d=new Date(first+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+i);
+    return d.toISOString().slice(0,7);
+   }));
+  if(selected&&!available.has(selected)){billsMonth.value=billsSelectedMonth;return}
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+      recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+      !window.confirm('Discard unsaved prediction changes?')){
+   billsMonth.value=billsSelectedMonth;return;
+  }
+  billsSelectedMonth=selected;
+  scheduleMode='';scheduleTarget='';scheduleRemoveTarget='';
   render();return;
  }
  const sorter=e.target.closest?.('[data-schedule-sort]'),
