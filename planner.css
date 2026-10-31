@@ -5814,3 +5814,23 @@ a:hover{color:#166e61}
  .reviews-page .review-sort-label{width:min(100%,220px);margin-left:auto;min-width:0}
  .reviews-page .review-sort-label select{max-width:none}
 }
+
+/* Repeating rows should match the Bills list's compact vertical rhythm on
+   phones. Keep the category control actionable without a tall extra row. */
+@media(max-width:390px){
+ .schedule-page .schedule-card>.schedule-compact-row{
+  padding:3px 0!important;
+  row-gap:0!important;
+ }
+ .schedule-page .schedule-row-main.ledger-transaction-row{
+  padding:6px 4px!important;
+  min-height:44px!important;
+ }
+ .schedule-page .schedule-card .ledger-row-category-wrap{
+  min-height:29px!important;
+ }
+ .schedule-page .schedule-card .ledger-row-category{
+  height:29px;
+  min-height:29px;
+ }
+}
