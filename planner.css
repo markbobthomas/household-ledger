@@ -6338,3 +6338,12 @@ a:hover{color:#166e61}
 .history-page .history-category-panel-heading>.history-category-manager[open]{
  flex:1 0 100%;width:100%;
 }
+@media(max-width:380px){
+ .history-page .history-category-panel-heading{column-gap:6px}
+ .history-page .history-category-panel-heading>.history-spending-overview strong{
+  font-size:clamp(14px,4.5vw,21px);
+ }
+ .history-page .history-category-panel-heading>.history-category-manager>summary{
+  padding-inline:7px;
+ }
+}
