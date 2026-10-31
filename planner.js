@@ -1645,8 +1645,8 @@ function schedulesPage(bundle,s){
    '<button class="schedule-row-main ledger-row-open ledger-transaction-row recurrence-row-trigger" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' prediction '+number+': '+title+'">'+
-    '<span class="schedule-row-next ledger-row-date ledger-transaction-date"><span>'+
-     (effectiveNext?escapeHTML(dayLabel(effectiveNext)):'Not forecast')+'</span></span>'+
+    // This is a catalog of recurring rules, not the dated Upcoming ledger.
+
     '<span class="schedule-row-identity ledger-row-description ledger-transaction-identity recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
