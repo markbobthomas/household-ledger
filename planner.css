@@ -5834,3 +5834,29 @@ a:hover{color:#166e61}
   min-height:29px;
  }
 }
+
+/* The same two-line mobile row rhythm applies to posted Activity. The
+   category picker remains in its own tappable row rather than overlapping
+   the actual bank transaction. */
+.schedule-page .bills-upcoming.panel,
+.schedule-page .schedule-grid,
+.history-page .history-list-surface{
+ box-shadow:none!important;
+}
+@media(max-width:390px){
+ .history-page .history-entry>.history-actual-row{
+  padding:3px 0!important;
+  row-gap:0!important;
+ }
+ .history-page .history-row-open.ledger-transaction-row{
+  padding:6px 4px!important;
+  min-height:44px!important;
+ }
+ .history-page .history-actual-row .ledger-row-category-wrap{
+  min-height:29px!important;
+ }
+ .history-page .history-actual-row .ledger-row-category{
+  height:29px;
+  min-height:29px;
+ }
+}
