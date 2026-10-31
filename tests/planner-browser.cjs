@@ -299,6 +299,8 @@ const {chromium,webkit}=require('playwright');
    assert.ok(navReads.reviews<=1,
     'Review recommendations/categories are reused across unchanged navigation: '+
      JSON.stringify(navReads));
+   // Clear the synthetic click's hover state before the original theme check.
+   await page.mouse.move(0,0);
 
    assert.equal(await page.locator('h1').innerText(),'Ledger');
    // The refresh is presentation-only, with the same routes and inputs.
