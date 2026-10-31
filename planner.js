@@ -2790,7 +2790,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
        ' · Still included in the forecast</small></span>'+
        '<button type="button" class="btn" data-unignore-overdue="'+escapeHTML(item.key)+'">Undo ignore</button></div>').join('')+
      '</details>':'')+
-   '</section>':'')+
+   '</section>':'<p class="review-tab-empty">No payments to check.</p>')+
   '</div>'+pane('earlier')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
@@ -2810,7 +2810,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      '</p><button type="button" class="btn" data-activate-saved-schedules '+
       (decisionsNeeded?'disabled title="Review remaining automatic estimates first"':'')+
       '>Use saved predictions only</button></div>'+
-   '</section>':'')+
+   '</section>':'<p class="review-tab-empty">No earlier estimates to confirm.</p>')+
   '</div>'+pane('suggestions')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Suggested repeating payments</h2>'+
