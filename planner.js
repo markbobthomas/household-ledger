@@ -3190,15 +3190,15 @@ function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
 function settingsPage(bundle,s,chosen){
  const rules=Object.entries(state().learning?.categoryRules||{});
  const categoryLearning=rules.length?
-  '<section class="panel mini-panel" aria-label="Learned merchant categories">'+
-   '<div class="section-title"><h2>Learned categories</h2></div>'+
+  '<details class="panel mini-panel planner-settings" data-settings-learned-rules>'+
+   '<summary>Learned categories</summary>'+
    '<p>Forgetting a rule keeps existing transaction categories.</p>'+
    rules.map(([key,rule])=>'<div class="future-skip-line">'+
     '<strong>'+escapeHTML(rule.merchant||'Merchant')+'</strong> · '+
     escapeHTML(rule.category||'Category')+' · '+
     escapeHTML(rule.mode==='auto'?'Automatic when safe':'Review first')+
     ' <button type="button" class="btn" data-forget-category-rule="'+escapeHTML(key)+
-    '">Forget rule</button></div>').join('')+'</section>':'';
+    '">Forget rule</button></div>').join('')+'</details>':'';
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
   '<h2>Settings</h2></div></div>'+
   '<section class="panel ledger-opening-page-settings">'+
