@@ -6385,6 +6385,9 @@ a:hover{color:#166e61}
   select,textarea,button){box-sizing:border-box;max-width:100%}
  .transaction-detail :is(input:not([type="checkbox"]):not([type="radio"]),
   select,textarea){min-width:0;width:100%}
+ /* iOS zooms the entire viewport when an editable field uses text below 16px. */
+ .transaction-detail :is(input:not([type="checkbox"]):not([type="radio"]),
+  select,textarea){font-size:16px!important}
  .transaction-detail :is(label,.future-fields>div,.future-form-actions,
   .future-form-actions>.btn,.transaction-note-actions, .transaction-related>div){
   min-width:0;max-width:100%;
