@@ -199,7 +199,7 @@ async function start(port=Number(env.PORT||8788)){
   if(origin&&new URL(origin).host!==host)return respond(403,{error:'Origin rejected'});
   if(req.method==='GET'&&requestPath==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
   const staticPath=requestPath.slice(1);
-  const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js)$/;
+  const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js|manifest[.]webmanifest|ledger-icon[.]png)$/;
   if(req.method==='GET'&&(requestPath==='/'||allowed.test(staticPath))){
    const name=staticPath||'index.html';
    let body;
@@ -232,7 +232,7 @@ async function start(port=Number(env.PORT||8788)){
      '<script src="/pilot/data-source.js"></script>');
     body=Buffer.from(page);
    }
-   res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
+   res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.png')?'image/png':name.endsWith('.webmanifest')?'application/manifest+json':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
    return res.end(body);
   }
   if(req.method==='GET'&&requestPath==='/api/ledger'){
