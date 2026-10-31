@@ -2346,11 +2346,11 @@ function historyPage(bundle,s){
    ungrouped.join('');
  })();
  return '<div class="planner-page history-page">'+
-  '<div class="history-view-toolbar">'+(activeTab==='activity'?'':spendingTabNav(displayView))+
-   (displayView==='categories'||displayView==='merchants'||displayView==='sizes'?'':picker.markup)+'</div>'+
-  '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
+  (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
+  '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Search transactions"></label>'+
+   (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    (displayView==='categories'||displayView==='merchants'||displayView==='sizes'?
     '<div class="history-budget-month-field'+(displayView==='categories'?'':' history-report-month-field')+'"><span>Months</span>'+picker.markup+'</div>':'')+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
