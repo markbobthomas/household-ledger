@@ -5,7 +5,7 @@
 const MODE='household-ledger-view-mode';
 const Accounting=root.HouseholdAccounting||(typeof require==='function'?require('../accounting.js'):null);
 const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('../categorization.js'):null);
-let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank';
+let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank',serverRevision='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
 const BankFeed=root.HouseholdBankFeed||(typeof require==='function'?require('../bank-feed.js'):null);
 const today=()=>{
@@ -29,7 +29,8 @@ const selection=()=>live?'real':'demo';
 async function request(path,body){
  const url='/api/ledger'+path,options={cache:'no-store',credentials:'same-origin',
   method:body===undefined?'GET':'POST',
-  headers:body===undefined?{}:{'Content-Type':'application/json','X-Pilot-Action':'1'},
+  headers:body===undefined?{}:{'Content-Type':'application/json','X-Pilot-Action':'1',
+   ...(serverRevision?{'X-Ledger-Revision':serverRevision}:{})},
   ...(body===undefined?{}:{body:JSON.stringify(body)})};
  let response;
  try{response=await fetch(url,options)}
@@ -49,6 +50,8 @@ async function request(path,body){
  if(!ct.includes('application/json'))throw Error('The private bank server is temporarily unavailable or updating. Try saving again after reopening the page.');
  let result;try{result=await response.json()}catch{throw Error('Bank server response could not be read')}
  if(!response.ok)throw Error(result.error||'Bank server request failed');
+ const nextRevision=response.headers.get('x-ledger-revision');
+ if(typeof nextRevision==='string'&&/^[a-f0-9]{64}$/i.test(nextRevision))serverRevision=nextRevision;
  return result;
 }
 function record(t,account){
@@ -109,7 +112,7 @@ function prepare(payload){
   reconnectAccounts:Array.isArray(payload.reconnectAccounts)?payload.reconnectAccounts:[]};
 }
 async function enter(){
- if(loading)return;loading=true;lastError='';lastErrorKind='bank';localStorage.setItem(MODE,'real');
+ if(loading)return;serverRevision='';loading=true;lastError='';lastErrorKind='bank';localStorage.setItem(MODE,'real');
  // The last preference is Real: do not briefly show fictional balances or
  // "bank not connected" while the authenticated bank snapshot loads.
  host.render();
