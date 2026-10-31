@@ -20,6 +20,8 @@ const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 const stamp=()=>new Date().toISOString();
 const freshState=()=>({items:[],transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}});
 let state=freshState(),forecastWrites=Promise.resolve(),accountRemovalBusy=false;
+const settingsRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify(state.ledgerAdjustments||{})).digest('hex');
+const staleMessage='Ledger was updated on another device. This edit was not saved. Reload the page to review the latest changes.';
 function normalizeState(){
  if(!Array.isArray(state.items))state.items=[];
  if(state.item?.token&&state.accountId&&!state.items.some(i=>i.id===state.item.id))
@@ -64,13 +66,18 @@ async function save(){
 }
 // One small encrypted write per forecast edit. The full encrypted bank ledger
 // is neither touched nor read, and concurrent browser saves are serialized.
-async function saveForecast(predictions){
+async function saveForecast(predictions,expectedRevision){
  // All writes share this serialized encrypted boundary. Compare against the
  // last saved snapshot INSIDE the queue, so repeated client submissions are
  // idempotent and can never create a new duplicate. Existing legacy duplicate
  // records may remain until the user decides what to do with them; they must
  // not block Ignore, category edits, or other unrelated review decisions.
  const write=forecastWrites.catch(()=>{}).then(async()=>{
+  // Check inside the write queue. Identical repeat requests remain idempotent.
+  if(expectedRevision&&expectedRevision!==settingsRevision()){
+   if(JSON.stringify(state.ledgerAdjustments?.predictions||{})===JSON.stringify(predictions))return;
+   const error=new Error(staleMessage);error.httpStatus=409;throw error;
+  }
   require('../planner-transactions.js').assertNoNewForecastDuplicates(
    state.ledgerAdjustments?.predictions||{},predictions);
   await atomicEncryptedWrite(forecastFile,predictions);
@@ -175,7 +182,9 @@ async function start(port=Number(env.PORT||8788)){
  const server=http.createServer(async(req,res)=>{
   // Route on the URL pathname; tracking/query parameters are not bank actions.
   const requestPath=new URL(req.url,'http://localhost').pathname;
-  const respond=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data))};
+  const respond=(status,data)=>{const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
+    if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
+    res.writeHead(status,headers);res.end(JSON.stringify(data))};
   // Render provides the deployed Git SHA at runtime. Health exposes only
   // this public source identifier, never credentials, banking records or disk paths.
   if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{
@@ -247,6 +256,12 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   try{
+   // Prevent an outdated device from overwriting newer household settings.
+   const expected=req.headers['x-ledger-revision'];
+   if(requestPath.startsWith('/api/ledger/')&&expected&&expected!==settingsRevision()&&
+      !(requestPath==='/api/ledger/forecasts'&&body?.predictions&&
+        JSON.stringify(body.predictions)===JSON.stringify(state.ledgerAdjustments?.predictions||{})))
+    return respond(409,{error:staleMessage,code:'STALE_LEDGER'});
    if(accountRemovalBusy&&[
     '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
      '/api/ledger/category-rule','/api/ledger/categories/delete','/api/ledger/categories/rename','/api/exchange',
@@ -393,7 +408,7 @@ async function start(port=Number(env.PORT||8788)){
        Array.isArray(body.predictions))
      return respond(400,{error:'Invalid forecast preferences'});
     // All bank facts are untouched. A retry of this snapshot is idempotent.
-    await saveForecast(body.predictions);
+    await saveForecast(body.predictions,req.headers['x-ledger-revision']);
     return respond(200,{saved:true,scope:'predictions'});
    }
    if(requestPath==='/api/ledger/adjustments'){
@@ -506,7 +521,8 @@ async function start(port=Number(env.PORT||8788)){
    if(e.plaidCode==='ITEM_LOGIN_REQUIRED')
     return respond(409,{error:'Your bank needs you to sign in again before new transactions can be fetched.',
      code:'ITEM_LOGIN_REQUIRED',reconnectAccountId:e.reconnectAccountId||null});
-   return respond(400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140)})
+   return respond(e.httpStatus||400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140),
+    ...(e.httpStatus===409?{code:'STALE_LEDGER'}:{})})
   }
  });
  return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>resolve(server))});
