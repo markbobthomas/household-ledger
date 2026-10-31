@@ -1360,9 +1360,23 @@ const {chromium,webkit}=require('playwright');
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
     await page.locator('#planner-menu summary').click();
     await page.locator('#planner-menu [data-view="settings"]').click();
-    assert.equal(await page.locator('[data-forget-category-rule]').count(),1,
-     'Learned merchant rules are reviewable in Settings');
-    await page.locator('[data-forget-category-rule]').click();
+    const learnedRules=page.locator('[data-settings-learned-rules]');
+    assert.equal(await learnedRules.count(),1,'Learned categories is a collapsible section');
+    assert.equal(await learnedRules.evaluate(el=>el.open),false,
+     'Learned categories is collapsed by default on both desktop and iPhone');
+    assert.equal(await learnedRules.locator('[data-forget-category-rule]').count(),1,
+     'Collapsing rules retains the existing Forget control');
+    assert.equal(await learnedRules.locator('[data-forget-category-rule]').isVisible(),false,
+     'Forget control is not displayed while the section is collapsed');
+    await learnedRules.locator('summary').click();
+    assert.equal(await learnedRules.evaluate(el=>el.open),true,
+     'Clicking the heading expands existing merchant rules');
+    assert.equal(await learnedRules.locator('[data-forget-category-rule]').isVisible(),true);
+    await learnedRules.locator('summary').click();
+    assert.equal(await learnedRules.evaluate(el=>el.open),false,
+     'Clicking the heading again collapses rules without deleting them');
+    await learnedRules.locator('summary').click();
+    await learnedRules.locator('[data-forget-category-rule]').click();
     await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem(
      'household-planner-sample-settings-v1')||'{}').learning?.categoryRules||{}).length===0);
     const afterForget=await page.evaluate(()=>JSON.parse(localStorage.getItem(
