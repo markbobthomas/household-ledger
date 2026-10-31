@@ -113,12 +113,12 @@ function summary(bundle,scenario,context){
  const cardHTML=Summary.render({...options,chosen:snap.accounts[2],derived:card});
  const noneHTML=Summary.render({...options,chosen:snap.accounts[3],
   derived:projection.accounts.find(a=>a.id==='other-card')});
- assert.match(checkingHTML,/Lowest in next 90 days/);
+ assert.match(checkingHTML,/Lowest in shown month/);
  assert.doesNotMatch(checkingHTML,/Long-term outlook|3-year low/,
   'Distant predictions stay in Balance Trend, not above the daily calendar');
  assert.match(cardHTML,/Next statement estimate/);
  assert.doesNotMatch(cardHTML,/3-month estimated low/);
- assert.doesNotMatch(cardHTML,/Lowest in next 90 days/);
+ assert.doesNotMatch(cardHTML,/Lowest in shown month/);
  // Preserve the frozen numeric architecture contract independently of how
  // far-future estimates are presented in the interface.
  const threeYear=new Intl.NumberFormat('en-US',
@@ -143,14 +143,17 @@ function summary(bundle,scenario,context){
  const through90=plus(AS_OF,90),prior90=card.series.filter(p=>
   p.date>=AS_OF&&p.date<=through90&&Number.isFinite(p.balance));
  const originalLow=prior90.length?formatCard(Math.min(...prior90.map(p=>p.balance))):'Unverified';
- // Contract: the visible 90-day checking minimum uses the SAME canonical
- // series (calendar days 0..90) and stays independent of the viewed month.
- const visible90=Summary.getPoints(current,snap.asOf,DAYS).filter(p=>
-  p.date>=AS_OF&&p.date<=through90&&Number.isFinite(p.balance)&&
-  ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
- const expected90=visible90.length?formatCard(Math.min(...visible90.map(p=>p.balance))):'Not projected';
- assert.equal(metric(checkingHTML,'summary-next-90-value'),expected90,
-  'Home 90-day checking minimum must match the canonical cash forecast');
+ // The Home metric uses only the canonical projected cash balances for
+ // the shown calendar month. Retain the prior frozen banking goldens below.
+ const selectedMonth=AS_OF.slice(0,7);
+ const projectedMonth=Summary.getPoints(current,snap.asOf,DAYS).filter(p=>
+  p.date.startsWith(selectedMonth)&&Number.isFinite(p.balance));
+ const monthEnd=selectedMonth+'-'+String(new Date(
+  Number(selectedMonth.slice(0,4)),Number(selectedMonth.slice(5,7)),0).getDate()).padStart(2,'0');
+ const expectedMonth=Summary.getPoints(current,snap.asOf,DAYS).at(-1)?.date>=monthEnd&&
+  projectedMonth.length?formatCard(Math.min(...projectedMonth.map(p=>p.balance))):'Not projected';
+ assert.equal(metric(checkingHTML,'summary-month-low-value'),expectedMonth,
+  'Shown-month checking minimum must match the canonical cash forecast');
  // Preserve the original frozen architecture snapshot for the FIRST CALENDAR
  // MONTH; it is still valuable as a regression contract, but is no longer UI.
  const historicalMonth=Summary.getPoints(current,snap.asOf,DAYS).filter(p=>

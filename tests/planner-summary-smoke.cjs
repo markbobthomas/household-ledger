@@ -28,17 +28,17 @@ for(const days of [1095]){
  assert.doesNotMatch(html,/data-summary-plot|summary-extras/,
   'Calendar no longer embeds the Balance Trend chart or disclosure');
  assert.match(html,/data-calendar-stage/);
- assert.match(html,/data-summary-next-90-low/);
- assert.match(html,/data-summary-next-90-value/);
- assert.match(html,/data-calendar-next-90-low/);
- assert.match(html,/next-90-minimum/);
- assert.match(html,/Lowest in next 90 days/);
- assert.match(html,/data-summary-next-90-value>\$5,000\.00<\/strong>/,
-  'The next 90 days include the initial $5,000 balance, the lowest in this fixture');
- assert.match(html,/data-calendar-next-90-low="2026-10-21"/,
-  'The next-90-day low links to the true forecast minimum date');
- assert.match(html,/data-calendar-day="2026-10-21"[^>]*next-90-minimum|next-90-minimum[^>]*data-calendar-day="2026-10-21"/,
-  'The calendar highlights the 90-day low instead of unrelated monthly lows');
+ assert.match(html,/data-summary-month-low/);
+ assert.match(html,/data-summary-month-low-value/);
+ assert.match(html,/data-calendar-month-low/);
+ assert.match(html,/month-minimum/);
+ assert.match(html,/Lowest in shown month/);
+ assert.match(html,/data-summary-month-low-value>\$5,000\.00<\/strong>/,
+  'The shown October includes its starting $5,000 projected balance');
+ assert.match(html,/data-calendar-month-low="2026-10-21"/,
+  'The selected-month minimum links to its forecast date');
+ assert.match(html,/data-calendar-day="2026-10-21"[^>]*month-minimum|month-minimum[^>]*data-calendar-day="2026-10-21"/,
+  'The calendar highlights the low in the displayed month');
  assert.match(html,/data-calendar-day="2026-10-21"/);
  assert.match(html,/class="summary-heading calendar-toolbar"/,
   'Account and month controls share the same compact Calendar header');
@@ -70,21 +70,30 @@ for(const days of [1095]){
  assert.match(html,/data-calendar-nav="1"/);
  assert.match(html,/End-of-day balance/);
 }
-// An outside-this-month low within the rolling 90 days must win. A still
-// lower day just beyond day 90 must NOT be included.
+// Lower future-month or day-91 balances must never replace October's low.
 const rolling=series.map((p,i)=>({...p,balance:i===65?1200:i===91?100:p.balance}));
 const rollingView=tool.render({...opts,days:1095,derived:{...derived,series:rolling}});
-assert.match(rollingView,/data-summary-next-90-value>\$1,200\.00<\/strong>/,
- 'A November/December low inside 90 days replaces the current-month low');
-assert.match(rollingView,new RegExp('data-calendar-next-90-low="'+iso(65)+'"'),
- 'The displayed date must be the actual lowest day within day 0 through day 90');
-assert.doesNotMatch(rollingView,/data-summary-next-90-value>\$100\.00<\/strong>/,
- 'Day 91 is outside the next 90 days');
-assert.doesNotMatch(rollingView,/next-90-minimum/,
- 'A future low from another month is not falsely highlighted in October');
-const incomplete=tool.render({...opts,days:30,derived:{...derived,series:rolling}});
-assert.match(incomplete,/data-summary-next-90-value>Not projected<\/strong>/,
- 'Never present a partial 30-day forecast as a complete 90-day minimum');
+assert.match(rollingView,/data-summary-month-low-value>\$5,000\.00<\/strong>/,
+ 'Future-month balances do not replace the displayed October low');
+assert.match(rollingView,/data-calendar-month-low="2026-10-21"/,
+ 'The low date belongs to the selected October');
+assert.match(rollingView,/month-minimum/,
+ 'The minimum of the shown month is highlighted in its own calendar grid');
+assert.doesNotMatch(rollingView,/data-summary-month-low-value>\$1,200\.00<\/strong>/,
+ 'The old 90-day low must no longer appear in the selected-month card');
+const shortForecast=tool.render({...opts,days:5,derived:{...derived,series:rolling}});
+assert.match(shortForecast,/data-summary-month-low-value>Not projected<\/strong>/,
+ 'Do not claim a complete-month low if the projection ends before month end');
+const completeCurrentMonth=tool.render({...opts,days:30,derived:{...derived,series:rolling}});
+assert.match(completeCurrentMonth,/data-summary-month-low-value>\$5,000\.00<\/strong>/,
+ 'A completed current-month forecast does not need 90 days of future data');
+// A Saturday low counts even though the grid is Monday–Friday. The date link
+// must still target the actual selected-month date rather than a weekday.
+const saturday=series.map((p,i)=>({...p,balance:i===10?250:p.balance}));
+const saturdayView=tool.render({...opts,days:1095,derived:{...derived,series:saturday}});
+assert.match(saturdayView,/data-summary-month-low-value>\$250\.00<\/strong>/);
+assert.match(saturdayView,/data-calendar-month-low="2026-10-31"/);
+
 const long=tool.render({...opts,days:1095});
 assert.doesNotMatch(long,/data-summary-plot|data-trend-days/,
  'Calendar excludes detailed trend inspection');
@@ -161,4 +170,4 @@ assert.match(unavailableTrend,/A verified starting balance is needed for the tre
 assert.doesNotMatch(unavailableTrend,/data-summary-plot|data-calendar-stage/);
 const noCurrent=tool.render({...opts,days:1095,chosen:{...opts.chosen,current:null,available:5000}});
 assert.ok(noCurrent.includes('data-bank-available-value>$5,000.00<'));
-console.log('PASS three-year lowest-balance Summary: single minimum, no major-payments checklist, warnings and unverified suppression');
+console.log('PASS shown-month lowest balance Summary: correct month range, weekend low, and unverified suppression');

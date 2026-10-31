@@ -325,23 +325,38 @@ const {chromium,webkit}=require('playwright');
     'No unnecessary blank gap before calendar days: '+JSON.stringify(homeGeometry));
    assert.ok(homeGeometry.scrollWidth<=homeGeometry.viewport+3,
     'Compact Home must not introduce horizontal overflow: '+JSON.stringify(homeGeometry));
-   assert.equal(await page.locator('[data-summary-next-90-low] .summary-overline').innerText(),
-    'Lowest in next 90 days','The balance card explicitly says 90 calendar days');
-   const rollingValue=await page.locator('[data-summary-next-90-value]').innerText(),
-    rollingDate=await page.locator('[data-calendar-next-90-low]').getAttribute('data-calendar-next-90-low');
-   assert.ok(rollingDate,'The 90-day card names a navigable forecast date');
-   const initialMonth=await page.locator('.calendar-month-title').innerText();
+   assert.equal(await page.locator('[data-summary-month-low] .summary-overline').innerText(),
+    'Lowest in shown month','The low balance card refers to the visible calendar month');
+   const monthLowValue=()=>page.locator('[data-summary-month-low-value]').innerText(),
+    monthLowDate=()=>page.locator('[data-calendar-month-low]').getAttribute('data-calendar-month-low');
+   const originalValue=await monthLowValue(),originalDate=await monthLowDate(),
+    originalMonth=await page.locator('.calendar-month-title').innerText();
+   assert.ok(originalDate,'Shown-month low has a navigable forecast date');
+   assert.equal(new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric',timeZone:'UTC'})
+    .format(new Date(originalDate+'T12:00:00Z')),originalMonth,
+    'Initial low date belongs to shown calendar month');
    await page.locator('[data-calendar-nav="1"]').click();
-   assert.notEqual(await page.locator('.calendar-month-title').innerText(),initialMonth,
+   assert.notEqual(await page.locator('.calendar-month-title').innerText(),originalMonth,
     'Month navigation changes the calendar grid');
-   assert.equal(await page.locator('[data-summary-next-90-value]').innerText(),rollingValue,
-    'The rolling 90-day low remains anchored to the as-of date while browsing other months');
-   assert.equal(await page.locator('[data-calendar-next-90-low]').getAttribute('data-calendar-next-90-low'),
-    rollingDate,'Changing calendar months must not change the 90-day low date');
-   await page.locator('[data-calendar-next-90-low]').click();
-   assert.equal(await page.locator('[data-calendar-day="'+rollingDate+'"][aria-pressed="true"]').count(),1,
-    'Selecting the lowest date jumps to its correct month and opens the day');
+   const nextDate=await monthLowDate(),nextValue=await monthLowValue();
+   assert.ok(nextDate&&nextDate.slice(0,7)!==originalDate.slice(0,7),
+    'Changing month recalculates the month-low date');
+   await page.locator('[data-calendar-month-low]').click();
+   assert.equal(await page.evaluate(()=>window.HouseholdPlannerSummary.currentDay()),nextDate,
+    'Month-low date opens the exact lowest balance day');
+   assert.equal(await monthLowValue(),nextValue,
+    'Selecting the lowest day preserves the month low card');
+   await page.locator('[data-calendar-nav="-1"]').click();
+   assert.equal(await page.locator('.calendar-month-title').innerText(),originalMonth,
+    'Previous month returns to the original month');
+   assert.equal(await monthLowValue(),originalValue,
+    'Month-low amount recalculates when returning');
+   assert.equal(await monthLowDate(),originalDate,
+    'Month-low date recalculates when returning');
+   await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-today]').click();
+   assert.equal(await monthLowDate(),originalDate,
+    'Today returns the low card to its original month');
    assert.equal(await page.locator('#planner-menu [data-view="recap"]').count(),0,
     'Summary is no longer hidden inside More');
    // Bigger, readable type on desktop, with proportionate mobile type.
