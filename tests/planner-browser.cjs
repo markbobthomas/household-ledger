@@ -785,8 +785,8 @@ const {chromium,webkit}=require('playwright');
     'Budget has three column headings, not separate spent and bar columns');
    assert.equal(await budgetCategory.locator('[data-budget-marker]').count(),1,
     'Actual spending is represented once, attached to the bar endpoint');
-   assert.equal(await budgetCategory.locator('.history-budget-difference').count(),0,
-    'Redundant per-category remaining-dollar captions do not crowd the target');
+   assert.equal(await budgetCategory.locator('.history-budget-difference.over').count(),0,
+    'Within-budget rows do not add an overage caption');
    await editBudget(categoryName,'275.50');
    await editBudget(categoryName,'');
    assert.equal(await budgetCategory.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'unset',
@@ -842,6 +842,23 @@ const {chromium,webkit}=require('playwright');
     await editBudget(categoryName,'0.01');
     await assertBudgetSorted();
     assert.equal(await budgetRow.locator('[data-history-budget-bar]').getAttribute('data-budget-status'),'over');
+    const overage=budgetRow.locator('.history-budget-difference.over');
+    assert.equal(await overage.count(),1,'Over-budget rows show an explicit dollar overage beside the cap');
+    assert.equal(Number(await overage.getAttribute('data-budget-overage-cents')),
+     Math.round(threeActual*100)-3,'Overage compares spent + expected against three monthly targets');
+    assert.match(await overage.innerText(),/Over \$.*3 mo/,
+     'Multi-month overspending is labeled as an overage for the selected period');
+    const overageBounds=await overage.evaluate(el=>{
+     const r=el.getBoundingClientRect(),budget=el.closest('.history-category-budget').getBoundingClientRect();
+     return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,
+      budgetRight:budget.right,screen:document.documentElement.scrollWidth,viewport:innerWidth,
+      color:getComputedStyle(el).color};
+    });
+    assert.ok(overageBounds.left>=-1&&overageBounds.right<=overageBounds.budgetRight+1&&
+     overageBounds.screen<=overageBounds.viewport+3,
+     'The overage fits under the target with no horizontal spill: '+JSON.stringify(overageBounds));
+    assert.equal(overageBounds.color,'rgb(196, 123, 49)',
+     'The overage dollar figure uses the same orange emphasis as overspending');
     const overageColor=await budgetRow.locator('.history-category-actual').evaluate(el=>({
      over:el.classList.contains('over'),color:getComputedStyle(el).color
     }));

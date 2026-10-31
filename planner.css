@@ -5581,3 +5581,55 @@ a:hover{color:#166e61}
  .history-page .history-manager-budget input{width:88px}
  .history-page .history-custom-category{gap:8px}
 }
+
+/* Budget read-only targets: use the freed-up right column for a clear dollar
+   cap and an orange overage. Position the secondary figure below the target
+   without shifting its baseline away from the progress bar. */
+.history-page .history-category-columns,
+.history-page .history-category-item{
+ grid-template-columns:minmax(155px,24%) minmax(0,1fr) minmax(142px,164px);
+}
+.history-page .history-category-item .history-category-budget{
+ position:relative;
+ min-width:0;
+}
+.history-page .history-category-item .history-budget-target{
+ font-size:18px;
+}
+.history-page .history-category-item .history-budget-difference{
+ position:absolute;
+ top:calc(100% - 4px);
+ right:9px;
+ max-width:100%;
+ margin:0;
+ text-align:right;
+ font-size:12px;
+ line-height:1.25;
+ white-space:normal;
+ overflow-wrap:anywhere;
+}
+.history-page .history-category-item .history-budget-difference.over{
+ color:#c47b31;
+ font-weight:800;
+}
+@media(max-width:850px){
+ .history-page .history-category-item .history-budget-target{font-size:16px}
+}
+@media(max-width:650px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(0,1fr) minmax(110px,124px);
+ }
+ .history-page .history-category-item .history-budget-target{font-size:15px}
+ .history-page .history-category-item .history-budget-difference{
+  right:4px;
+  font-size:11px;
+ }
+}
+@media(max-width:380px){
+ .history-page .history-category-columns,
+ .history-page .history-category-item{
+  grid-template-columns:minmax(0,1fr) minmax(104px,110px);
+ }
+ .history-page .history-category-item .history-budget-target{font-size:14px}
+}
