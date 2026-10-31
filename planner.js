@@ -23,6 +23,19 @@ const categoryOptionsWithOther=list=>(list||[]).includes('Other')?
  ['Other',...(list||[]).filter(c=>c!=='Other')]:list||[];
 const categoryLabel=name=>name==='Uncategorized'?'Unassigned':name;
 const available=()=>Boolean(window.HouseholdLiveSource);
+// Device-specific navigation only: never sync this preference to the private
+// household forecast store, so each person's phone may open to a different page.
+const OPENING_PAGE_KEY='household-ledger-opening-page-v1';
+const OPENING_PAGES=[
+ ['summary','Home'],['history','Spending'],['schedules','Bills'],
+ ['activity','Activity'],['reviews','Things to check'],
+ ['trend','Balance Trend'],['transactions','All upcoming predictions'],
+ ['settings','Settings']
+];
+const preferredOpeningPage=()=>{
+ const saved=localStorage.getItem(OPENING_PAGE_KEY);
+ return OPENING_PAGES.some(([id])=>id===saved)?saved:'summary';
+};
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
 const demoState=model.migrate(rawDemo);
 const DEMO_SETTINGS='household-planner-sample-settings-v1';
@@ -52,7 +65,7 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 // Derived data only. Source bank records and persisted predictions remain the
 // authorities; this cache cannot be written to the bank or planning store.
 let forecastCache=null;
-let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
+let activeTab=window.HouseholdPlannerSummary?.render?preferredOpeningPage():'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
 // The latest successful prediction edit may be undone only while the same
@@ -67,7 +80,7 @@ function forecastSaveFeedback(message,allowUndo=false){
   (allowUndo?'<button type="button" class="btn" data-undo-forecast aria-label="Undo last change">Undo</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
-let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
+let historyView=activeTab==='activity'?'list':'categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40,reviewSort='newest',reviewPane='';
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=false,
@@ -3186,6 +3199,12 @@ function settingsPage(bundle,s,chosen){
     '">Forget rule</button></div>').join('')+'</section>':'';
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
   '<h2>Settings</h2></div></div>'+
+  '<section class="panel ledger-opening-page-settings">'+
+   '<label for="ledger-opening-page">Default opening page</label>'+
+   '<select id="ledger-opening-page" aria-label="Default opening page">'+
+    OPENING_PAGES.map(([id,name])=>'<option value="'+id+'"'+
+     (preferredOpeningPage()===id?' selected':'')+'>'+escapeHTML(name)+'</option>').join('')+
+   '</select><small>Saved on this device. Used next time Ledger opens.</small></section>'+
   '<section class="panel"><div class="section-title"><h2>Balance safety</h2></div>'+
    '<form data-warning-form><label class="cash-cushion-label">Warn below ($)'+
     '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
@@ -5256,6 +5275,12 @@ document.addEventListener('change',async e=>{
  if(e.target.id==='summary-account'){
   selectedAccount=e.target.value;render();return;
  }
+});
+document.addEventListener('change',e=>{
+ if(e.target?.id!=='ledger-opening-page')return;
+ const selected=e.target.value;
+ if(OPENING_PAGES.some(([id])=>id===selected))
+  localStorage.setItem(OPENING_PAGE_KEY,selected);
 });
 if(available()){
  window.HouseholdLiveSource.bind({
