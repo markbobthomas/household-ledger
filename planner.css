@@ -6141,3 +6141,21 @@ a:hover{color:#166e61}
  .schedule-page .bills-heading-actions .bills-month-field{flex:1 1 auto;width:auto}
  .schedule-page .schedule-toolbar>.bills-month-field{flex:1 1 140px;min-width:0}
 }
+
+/* Compact, read-only totals follow the exact rows shown in each Bills tab. */
+.schedule-page .bills-heading-actions{flex-wrap:wrap}
+.schedule-page .bills-upcoming-sum,
+.schedule-page .bills-repeating-sum{
+ font-size:15px;font-weight:750;font-variant-numeric:tabular-nums;
+ color:#2d4c3b;white-space:nowrap;
+}
+.schedule-page .schedule-list-summary{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:8px 16px;flex-wrap:wrap;padding:0 8px;
+}
+.schedule-page .schedule-list-summary .schedule-list-count{padding-inline:0}
+@media(max-width:650px){
+ .schedule-page .bills-heading{flex-wrap:wrap}
+ .schedule-page .bills-heading-actions{gap:8px}
+ .schedule-page .bills-upcoming-sum,.schedule-page .bills-repeating-sum{font-size:14px}
+}
