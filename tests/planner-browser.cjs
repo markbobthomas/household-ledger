@@ -427,8 +427,19 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('.history-subtab').count(),4);
    assert.deepEqual((await page.locator('.history-subtab').allTextContents()).map(s=>s.trim()),
-    ['◔Budget','◉Merchants','▥Purchase sizes','▤Summary'],
+    ['Budget','Merchants','Purchase sizes','Summary'],
     'Budget is the first named Bank History view');
+   const tabGeometry=await page.locator('.spending-tabs .history-subtab').evaluateAll(tabs=>{
+    const boxes=tabs.map(tab=>tab.getBoundingClientRect());
+    return {widths:boxes.map(b=>b.width),rows:[...new Set(boxes.map(b=>Math.round(b.top)))],
+     scrollWidth:document.documentElement.scrollWidth,viewport:innerWidth};
+   });
+   assert.ok(Math.max(...tabGeometry.widths)-Math.min(...tabGeometry.widths)<=2&&
+    tabGeometry.rows.length===(mobile?2:1)&&
+    tabGeometry.scrollWidth<=tabGeometry.viewport+3,
+    'Spending tabs remain equal-width and symmetric: '+JSON.stringify(tabGeometry));
+   assert.equal(await page.locator('.spending-tabs .history-subtab>span').count(),0,
+    'No decorative glyphs repeat the Spending tab names');
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     'Budget opens by default rather than Transactions');
    assert.equal(await page.locator('[data-history-sort]').count(),0,
@@ -1183,6 +1194,16 @@ const {chromium,webkit}=require('playwright');
     'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
+   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
+    'Bills names the recurring section without repeating an action');
+   const billHeader=await page.locator('.bills-heading').evaluate(el=>{
+    const heading=el.querySelector('h2').getBoundingClientRect(),
+     count=el.querySelector('.bills-upcoming-total').getBoundingClientRect();
+    return {headingRight:heading.right,countLeft:count.left,
+     value:el.querySelector('.bills-upcoming-total').textContent.trim()};
+   });
+   assert.ok(billHeader.headingRight<=billHeader.countLeft+2&&/^\d+$/.test(billHeader.value),
+    'Upcoming Bills count is small, numeric and aligned with the header');
    const newRepeat=page.locator('[data-schedule-new]').first();
    await newRepeat.click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-new-form]').count(),1,
@@ -1230,6 +1251,21 @@ const {chromium,webkit}=require('playwright');
     'Review relies on section labels and actionable status rather than repeated instructional prose');
    assert.equal(await page.locator('[data-category-review]').count(),1,
     'Missing or uncertain transaction and bill categories have a persistent review section');
+   assert.equal(await page.locator('.review-intro-icon').count(),0,
+    'Review has one clear heading without a second alert symbol');
+   const reviewBadges=await page.locator('.reviews-page .section-title .status-tag').allTextContents();
+   assert.ok(reviewBadges.every(text=>/^\d+$/.test(text.trim())),
+    'Section labels and counts replace repeated TO REVIEW words');
+   const reviewTitleLayout=await page.evaluate(()=>{
+    const title=document.querySelector('.review-intro h2').getBoundingClientRect(),
+     sort=document.querySelector('.review-intro [data-review-sort]').getBoundingClientRect();
+    return {titleRight:title.right,sortLeft:sort.left,
+     titleTop:title.top,sortTop:sort.top,scroll:document.documentElement.scrollWidth,viewport:innerWidth};
+   });
+   assert.ok(reviewTitleLayout.scroll<=reviewTitleLayout.viewport+3&&
+    (reviewTitleLayout.titleRight<=reviewTitleLayout.sortLeft+2||
+     reviewTitleLayout.sortTop>reviewTitleLayout.titleTop),
+    'Review header keeps its title and sort from overlapping: '+JSON.stringify(reviewTitleLayout));
    assert.equal(await page.locator('.reviews-page .review-sort-label .visually-hidden').count(),1,
     'Review sorter selected value needs no second visible caption');
    const categoryPickers=page.locator('[data-category-review-form] > label');
