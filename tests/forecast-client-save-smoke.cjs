@@ -10,10 +10,11 @@ const data={
  adjustments:{categoryOverrides:{'old-deleted-id':'Housing'},predictions:{}}
 };
 let mode='demo',errorOnce=true,networkFailureOnce=false,networkFailureAlways=false;
+let serverRevision='a'.repeat(64),successfulSaves=0;
 const requests=[];
 function response(status,body){
  return {status,ok:status>=200&&status<300,
-  headers:{get:()=> 'application/json'},json:async()=>body};
+  headers:{get:name=>name==='x-ledger-revision'?serverRevision:'application/json'},json:async()=>body};
 }
 const fetch=async(uri,options={})=>{
  requests.push({uri,options});
@@ -23,6 +24,8 @@ const fetch=async(uri,options={})=>{
  if(networkFailureAlways)throw new TypeError('Load failed');
  if(networkFailureOnce){networkFailureOnce=false;throw new TypeError('Load failed')}
  if(errorOnce){errorOnce=false;return response(503,{error:'Forecast settings temporarily unavailable'})}
+ successfulSaves++;
+ serverRevision=String.fromCharCode(97+successfulSaves).repeat(64);
  return response(200,{saved:true,scope:'predictions'});
 };
 const root={HouseholdLedgerData:{migrate:x=>x},
@@ -48,6 +51,8 @@ vm.runInNewContext(script,{window:root,globalThis:root,document,localStorage,
  assert.deepEqual(Object.keys(JSON.parse(first.options.body)),['predictions'],
   'A forecast confirmation must not resubmit bank classification rules');
  assert.equal(first.options.headers['X-Pilot-Action'],'1');
+ assert.equal(first.options.headers['X-Ledger-Revision'],'a'.repeat(64),
+  'Browser sends the actual revision retrieved with the private bank snapshot');
  const one=root.HouseholdLiveSource.persistForecast(pending);
  pending.cashCushion=250;
  const two=root.HouseholdLiveSource.persistForecast(pending);
@@ -55,6 +60,9 @@ vm.runInNewContext(script,{window:root,globalThis:root,document,localStorage,
  assert.ok(results.every(x=>x.saved===true));
  const saves=requests.filter(x=>x.uri==='/api/ledger/forecasts');
  assert.equal(saves.length,3,'Failure and both retried edits are sent individually');
+ assert.equal(saves[1].options.headers['X-Ledger-Revision'],'a'.repeat(64));
+ assert.equal(saves[2].options.headers['X-Ledger-Revision'],'b'.repeat(64),
+  'Second queued save uses the previous acknowledgement revision, not a stale one');
  assert.equal(JSON.parse(saves[1].options.body).predictions.cashCushion,500,
   'A queued save captures its state before later user edits');
  assert.equal(JSON.parse(saves[2].options.body).predictions.cashCushion,250,
