@@ -18,10 +18,7 @@ const plotWidth=920,plotLeft=20,plotRight=900,top=18,bottom=274;
 const balanceRiskClass=(balance,prefs)=>
  !Number.isFinite(balance)?'':balance<0?' summary-low-negative':
  balance<alertThreshold(prefs)?' summary-low-alert':'';
-const currencyFormatter=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
-const compactCurrencyFormatter=new Intl.NumberFormat('en-US',{
- style:'currency',currency:'USD',notation:'compact',maximumFractionDigits:1});
-const money=n=>Number.isFinite(n)?currencyFormatter.format(n):'Unverified';
+const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unverified';
 const dateLabel=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 const shortDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
@@ -45,7 +42,8 @@ const signed=(e,card)=>card?
  (['card_purchase','transfer_out'].includes(e.kind)?1:-1):
  (['income','refund','transfer_in'].includes(e.kind)?1:-1);
 const fullSigned=(e,card)=>(signed(e,card)>0?'+':'−')+money(Number(e.amount));
-const shortMoney=n=>compactCurrencyFormatter.format(n);
+const shortMoney=n=>new Intl.NumberFormat('en-US',{
+ style:'currency',currency:'USD',notation:'compact',maximumFractionDigits:1}).format(n);
 const dayShort=d=>String(Number(d.slice(-2)));
 
 const norm=s=>String(s??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
