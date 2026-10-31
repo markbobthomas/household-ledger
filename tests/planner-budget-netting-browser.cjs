@@ -320,7 +320,20 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.match(await statement.innerText(),/Oct 18, 2026/);
    assert.equal(await page.locator('.bills-statement-line').count()>0,true,
     name+': prior billing cycle retains its transaction rows');
+   const pastDates=(await page.locator('.bills-statement-line > span:first-child')
+    .allTextContents()).map(text=>Date.parse(text.trim()+', 2026'));
+   assert.ok(pastDates.length>=3&&new Set(pastDates).size>1&&
+    pastDates.every((date,index)=>Number.isFinite(date)&&
+     date>=Date.parse('2026-09-19')&&date<=Date.parse('2026-10-18')&&
+     (!index||pastDates[index-1]>=date)),
+    name+': historical statement shows multiple dated charges newest to oldest');
    await periodSelect.selectOption(currentChoice);
+   const currentDates=(await page.locator('.bills-statement-line > span:first-child')
+    .allTextContents()).map(text=>Date.parse(text.trim()+', 2026'));
+   assert.ok(currentDates.every((date,index)=>Number.isFinite(date)&&
+    date>=Date.parse('2026-10-19')&&date<=Date.parse('2026-11-18')&&
+    (!index||currentDates[index-1]>=date)),
+    name+': current statement also keeps predicted and posted charges newest first');
    assert.equal(await statement.count(),1);
    assert.match(await statement.innerText(),/Current · open/);
    await cardSelect.selectOption('demo-mastercard');
