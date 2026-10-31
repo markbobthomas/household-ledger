@@ -52,15 +52,31 @@ const dateDelta=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:
 function knownGaps(prefs,asOf,through,accountId,points){
  const dates=new Map(),tools=root.HouseholdPlannerTransactions;
  if(!tools?.recurrenceDates)return dates;
- for(const r of prefs?.futureRecurringRules||[]){
-  if(r.kind==='movement'||!['income','expense'].includes(r.type)||
-   String(r.accountId)!==String(accountId)||!r.id)continue;
+ const rules=(prefs?.futureRecurringRules||[]).filter(r=>
+  r.kind!=='movement'&&['income','expense'].includes(r.type)&&
+  String(r.accountId)===String(accountId)&&r.id);
+ if(!rules.length)return dates;
+ // Index only eventful forecast days once. The old implementation scanned
+ // all 1,096 daily points separately for every recurrence due date.
+ // A payment counts as present within exactly the same +/-6 day window.
+ const byDay=new Map(),dayNumber=d=>Date.parse(d+'T12:00:00Z')/86400000;
+ for(const point of points||[]){
+  if(!point.events?.length)continue;
+  const day=dayNumber(point.date);
+  if(!byDay.has(day))byDay.set(day,[]);
+  byDay.get(day).push(...point.events);
+ }
+ for(const r of rules){
+  const id=String(r.id),merchant=norm(r.originalMerchant||r.merchant);
   for(const due of tools.recurrenceDates(r,asOf,through)){
    if(dateDelta(due,asOf)<=7)continue;
-   const exists=points.some(p=>Math.abs(dateDelta(p.date,due))<=6&&
-    (p.events||[]).some(e=>e.kind===r.type&&
-     (String(e.recurringRuleId||'')===String(r.id)||
-      norm(e.sourceMerchant||e.merchant)===norm(r.originalMerchant||r.merchant))));
+   const day=dayNumber(due);
+   let exists=false;
+   for(let offset=-6;offset<=6&&!exists;offset++){
+    exists=Boolean(byDay.get(day+offset)?.some(e=>e.kind===r.type&&
+     (String(e.recurringRuleId||'')===id||
+      norm(e.sourceMerchant||e.merchant)===merchant)));
+   }
    const skipped=Boolean(prefs?.futureTransactionEdits?.[
     tools.keyEvent('user|'+r.id+'|'+due,accountId)]?.skipped);
    if(exists||skipped)continue;
@@ -804,7 +820,7 @@ document.addEventListener('keydown',e=>{
   document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
 });
 
-root.HouseholdPlannerSummary={render,getPoints,
+root.HouseholdPlannerSummary={render,getPoints,knownGaps,
  navigate:date=>showCalendar(date),
  currentDay:()=>calendarDate,
  currentEvent:index=>{
