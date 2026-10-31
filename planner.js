@@ -1452,6 +1452,78 @@ function billsMonthSelect(asOf,scope){
    (scope==='upcoming'?(billsExpanded?'Next 90 days':'Next 30 days'):'All repeating payments')+
   '</option>'+months.join('')+'</select></label>';
 }
+// Statement estimates are the same card-cycle calculations used in Settings.
+// Card purchases belong here; payment transfers belong in Upcoming Bills.
+// Never derive an issued statement from card balance or spending averages.
+function billsStatementsPage(bundle,s){
+ const cards=activeAccounts(s).filter(a=>accountType(a)==='credit'),
+  estimates=bundle?.payments?.statements||[],
+  history=bundle?.payments?.historyStatements||[],
+  fmt=p=>escapeHTML(dayLabel(p.periodStart))+' – '+escapeHTML(dayLabel(p.periodEnd)),
+  eachCard=card=>{
+   const projected=estimates.filter(p=>String(p.cardId)===String(card.id))
+    .sort((a,b)=>a.periodEnd.localeCompare(b.periodEnd)).slice(0,12),
+    past=history.filter(p=>String(p.cardId)===String(card.id))
+    .sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd)).slice(0,6);
+   if(!projected.length&&!past.length)return '<section class="panel bills-card-statements" data-bills-card="'+
+    escapeHTML(card.id)+'"><div class="bills-card-heading"><h3>'+
+    escapeHTML(card.name)+'</h3><span>Not configured</span></div>'+
+    '<p class="bills-card-empty">Set statement dates in Settings to see estimates.</p></section>';
+   const cycles=projected.map((p,i)=>{
+    const open=p.periodStart<=s.asOf&&p.periodEnd>s.asOf,
+     status=p.confirmed?'Issued amount':open?'Current · open':p.periodComplete?'Closed · estimated':'Future · estimated',
+     posted=Number(p.actualPeriodNet)||0,
+     forecast=Number(p.estimatedCharges)||0,
+     transactionRows=[
+      ...(p.postedTransactions||[]).map(t=>({...t,source:'Posted'})),
+      ...(p.predictedTransactions||[]).map(t=>({...t,source:'Predicted'}))
+     ].sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
+    return '<details class="bills-statement-cycle" data-bills-statement="'+
+     escapeHTML(p.cardId)+'|'+escapeHTML(p.periodEnd)+'"'+
+     (open?' open':'')+'>'+
+     '<summary><span class="bills-statement-label">'+
+      '<strong>'+fmt(p)+'</strong><small>'+status+'</small></span>'+
+      '<strong class="bills-statement-amount">'+cash(p.statementBalance)+'</strong>'+
+      '<span class="bills-statement-caret" aria-hidden="true">⌄</span></summary>'+
+     '<div class="bills-statement-detail">'+
+      '<div><span>Posted net charges</span><strong>'+cash(posted)+'</strong></div>'+
+      '<div><span>Predicted net charges</span><strong>'+cash(forecast)+'</strong></div>'+
+      '<div><span>Estimated statement</span><strong>'+cash(p.statementBalance)+'</strong></div>'+
+      '<div><span>Payment due</span><strong>'+escapeHTML(dayLabel(p.dueDate))+'</strong></div>'+
+      '<div><span>Expected card payment</span><strong>'+
+       (p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>'+
+      '<div><span>Payment status</span><strong>'+
+       (p.alreadyPaid?'Posted':'Not confirmed')+'</strong></div>'+
+     '</div>'+
+     '<div class="bills-statement-lines">'+
+      (transactionRows.length?transactionRows.map(t=>
+        '<div class="bills-statement-line"><span>'+escapeHTML(dayLabel(t.date))+
+         '</span><span><strong>'+escapeHTML(t.merchant)+'</strong>'+
+         '<small>'+escapeHTML(t.source)+'</small></span><strong>'+
+         (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
+       '<p class="bills-card-empty">No posted or predicted card charges for this cycle.</p>')+
+     '</div>'+
+     (p.pendingExcluded?'<p class="bills-card-empty">'+p.pendingExcluded+
+       ' pending charge(s) excluded until posted.</p>':'')+
+     '</details>';
+   }).join('');
+   const earlier=past.length?'<details class="bills-statement-history">'+
+    '<summary>Earlier periods ('+past.length+')</summary>'+
+    past.map(p=>'<div class="bills-statement-past"><span>'+
+      fmt(p)+'</span><strong>'+cash(p.netActivity)+'</strong></div>').join('')+
+    '<p class="bills-card-empty">Past amounts reflect available posted activity, not verified issued statements.</p>'+
+    '</details>':'';
+   return '<section class="panel bills-card-statements" data-bills-card="'+
+    escapeHTML(card.id)+'"><div class="bills-card-heading"><h3>'+
+     escapeHTML(card.name)+'</h3><span>'+projected.length+
+     ' forecast cycle'+(projected.length===1?'':'s')+'</span></div>'+
+    cycles+earlier+'</section>';
+  };
+ return '<div class="bills-statements-page">'+
+  (cards.length?cards.map(eachCard).join(''):
+   '<section class="panel bills-card-empty">No credit-card accounts connected.</section>')+
+  '</div>';
+}
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
@@ -1658,12 +1730,12 @@ function schedulesPage(bundle,s){
      'data-schedule-total-count="'+expenseRules.length+'">Showing '+visible.length+
      ' of '+expenseRules.length+' expenses</p>'+
     '<strong class="bills-repeating-sum" data-bills-repeating-total></strong></div>'+
-   (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
-      repeatingStatementPeriods(bundle,s,scheduleAccount,visible,billsSelectedMonth):'')+
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching predictions. Try a different search.</p>'+
-   '</div></div>';
+   '</div>'+
+  '<div data-bills-pane="statements"'+(billsPane==='statements'?'':' hidden')+'>'+
+   billsStatementsPage(bundle,s)+'</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
