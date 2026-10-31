@@ -5951,3 +5951,76 @@ a:hover{color:#166e61}
 }
 
 .reviews-page .review-tab-empty{margin:0;padding:18px 12px;color:var(--muted);font-size:13px}
+
+/* Activity: keep Months inside the same filter surface as search and selects. */
+.history-page .ledger-toolbar.history-activity-filters{
+ display:grid!important;
+ grid-template-columns:minmax(0,1.7fr) repeat(4,minmax(0,1fr))!important;
+ grid-auto-flow:row;
+ align-items:end!important;
+ gap:9px!important;
+}
+.history-page .ledger-toolbar.history-activity-filters>.history-search-wrap{
+ grid-column:1!important;grid-row:1!important;
+}
+.history-page .ledger-toolbar.history-activity-filters>.history-activity-month-field{
+ grid-column:2!important;grid-row:1!important;
+}
+.history-page .ledger-toolbar.history-activity-filters>label:has([name="historyAccount"]){
+ grid-column:3!important;grid-row:1!important;
+}
+.history-page .ledger-toolbar.history-activity-filters>label:has([name="historySort"]){
+ grid-column:4!important;grid-row:1!important;
+}
+.history-page .ledger-toolbar.history-activity-filters>.history-category-controls{
+ grid-column:5!important;grid-row:1!important;min-width:0;
+}
+.history-page .ledger-toolbar.history-activity-filters>.ledger-history-clear-button{
+ grid-column:5!important;grid-row:2!important;
+}
+.history-page .history-activity-filters .history-month-menu{
+ left:0;right:auto;width:min(310px,calc(100vw - 48px));
+}
+@media(max-width:1100px){
+ .history-page .ledger-toolbar.history-activity-filters{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-search-wrap{
+  grid-column:1/-1!important;grid-row:1!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-activity-month-field{
+  grid-column:1!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historyAccount"]){
+  grid-column:2!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historySort"]){
+  grid-column:3!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-category-controls{
+  grid-column:4!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.ledger-history-clear-button{
+  grid-column:4!important;grid-row:3!important;
+ }
+}
+@media(max-width:650px){
+ .history-page .ledger-toolbar.history-activity-filters{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-activity-month-field{
+  grid-column:1!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historyAccount"]){
+  grid-column:2!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historySort"]){
+  grid-column:1!important;grid-row:3!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-category-controls{
+  grid-column:2!important;grid-row:3!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.ledger-history-clear-button{
+  grid-column:2!important;grid-row:4!important;
+ }
+}
