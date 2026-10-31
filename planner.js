@@ -944,7 +944,7 @@ function syncTransactionViewport(){
 }
 window.visualViewport?.addEventListener('resize',syncTransactionViewport);
 window.visualViewport?.addEventListener('scroll',syncTransactionViewport);
-window.addEventListener('resize',syncTransactionViewport);
+window.addEventListener?.('resize',syncTransactionViewport);
 function drawTransactionDetail(bundle,s){
  const root=$('planner-main');
  if(!transactionDetail||!root||typeof root.insertAdjacentHTML!=='function')return;
