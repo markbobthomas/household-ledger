@@ -500,14 +500,16 @@ const {chromium,webkit}=require('playwright');
        return {labelTop:labelRect.top,selectTop:selectRect.top,
         height:selectRect.height,captionWidth:captionRect?.width,
         accessible:select.getAttribute('aria-label'),
-        categoryLeft:selectRect.left,accountRight:accountRect.right};
+        categoryLeft:selectRect.left,categoryTop:selectRect.top,categoryRight:selectRect.right,
+        accountLeft:accountRect.left,accountRight:accountRect.right,accountBottom:accountRect.bottom};
       });
       assert.ok(field&&field.captionWidth<=1&&field.height>=30&&
        field.selectTop>=field.labelTop&&field.accessible==='Filter transactions by category',
        'Category dropdown has no redundant visible label and stays aligned on '+report+': '+JSON.stringify(field));
      if(report!=='list'&&mobile)
-      assert.ok(field.categoryLeft>=field.accountRight-2,
-       'Analysis filters sit in aligned columns: '+JSON.stringify(field));
+      assert.ok(field.categoryTop>=field.accountBottom+3&&
+       field.categoryLeft<=field.accountLeft+1&&field.categoryRight>=field.accountRight-1,
+       'Category wraps below Months and Account on phone: '+JSON.stringify(field));
     }
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
    await verifyTransactionAnatomy(page,'.history-actual-row .ledger-transaction-row','Posted Activity');
