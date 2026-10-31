@@ -5949,3 +5949,5 @@ a:hover{color:#166e61}
  .schedule-page .ledger-section-tabs .history-subtab,
  .reviews-page .ledger-section-tabs .history-subtab{min-height:37px;font-size:12px!important;padding:7px 5px!important}
 }
+
+.reviews-page .review-tab-empty{margin:0;padding:18px 12px;color:var(--muted);font-size:13px}
