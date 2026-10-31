@@ -2021,5 +2021,3 @@ const {chromium,webkit}=require('playwright');
   await chrome?.close();await iphone?.close();server.kill();
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
-),
-    'Repeating shows a live total beside the filtered list count');
