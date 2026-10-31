@@ -1734,13 +1734,22 @@ function historyInsights(rows,view,options={}){
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
     value=set?Math.round(raw*100)/100:null;
-   // Budget rows are for reviewing actual + expected spending, not editing.
+   // Budget rows are for comparing spent + expected against the selected
+   // calendar months, not editing. The cap remains monthly; the overage is
+   // measured against that cap multiplied by the selected month count.
+   const overCents=set?Math.max(0,g.cents+(g.expectedCents||0)-
+    Math.round(value*100)*periodMonths):0;
    return '<span class="history-budget-target" data-history-budget-display="'+
     escapeHTML(g.name)+'" data-budget-monthly="'+(set?value.toFixed(2):'')+
     '" aria-label="Monthly budget for '+escapeHTML(g.name)+': '+
     (set?escapeHTML(cash(value)):'not set')+'">'+
     (set?cash(value):'—')+'</span>'+
-    (!allAccounts&&set?'<small class="history-budget-difference">Household target</small>':'');
+    (overCents>0?'<small class="history-budget-difference over" data-budget-overage-cents="'+
+     overCents+'" title="'+escapeHTML('Over by '+cash(overCents/100)+
+      (periodMonths>1?' across '+periodMonths+' selected months':' this month')+
+      (!allAccounts?' against the household budget target':''))+'">'+
+     'Over '+cash(overCents/100)+(periodMonths>1?' · '+periodMonths+' mo':'')+'</small>':
+     !allAccounts&&set?'<small class="history-budget-difference">Household target</small>':'');
   };
   const managerBudgetField=category=>{
    // Income and transfers remain manageable categories but are never budgets.
