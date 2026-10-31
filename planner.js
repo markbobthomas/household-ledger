@@ -2720,13 +2720,6 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     'Needs a decision — currently included in your forecast'});
  };
  return '<div class="planner-page reviews-page">'+
-  '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
-   [['categories','Categories'],['payments','Payments'],['earlier','Earlier'],['suggestions','Suggestions']]
-    .map(([id,name])=>'<button type="button" class="history-subtab'+
-     (reviewPane===id?' active':'')+'" data-review-tab="'+id+'" aria-pressed="'+
-     (reviewPane===id)+'">'+name+
-     (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
-     '</button>').join('')+'</nav>'+
   '<div class="review-intro">'+
     '<div><h2>Things to check</h2></div>'+
     '<label class="review-sort-label minimal-control-label"><span class="visually-hidden">Sort by</span><select data-review-sort aria-label="Sort Things to check">'+
@@ -2735,6 +2728,13 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       ['merchant','Merchant A–Z']].map(([value,label])=>
       '<option value="'+value+'"'+(reviewSort===value?' selected':'')+'>'+label+'</option>').join('')+
     '</select></label></div>'+
+  '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
+   [['categories','Categories'],['payments','Payments'],['earlier','Earlier'],['suggestions','Suggestions']]
+    .map(([id,name])=>'<button type="button" class="history-subtab'+
+     (reviewPane===id?' active':'')+'" data-review-tab="'+id+'" aria-pressed="'+
+     (reviewPane===id)+'">'+name+
+     (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
+     '</button>').join('')+'</nav>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   pane('categories')+
   '<section class="panel category-review-panel" data-category-review>'+
