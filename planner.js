@@ -2731,7 +2731,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
    [['categories','Categories'],['payments','Payments'],['earlier','Earlier'],['suggestions','Suggestions']]
     .map(([id,name])=>'<button type="button" class="history-subtab'+
-     (reviewPane===id?' active':'')+'" data-review-tab="'+id+'" aria-pressed="'+
+     (reviewPane===id?' active':'')+(paneCounts[id]>0?' review-tab-pending':'')+
+     '" data-review-tab="'+id+'" aria-pressed="'+
      (reviewPane===id)+'">'+name+
      (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
      '</button>').join('')+'</nav>'+
