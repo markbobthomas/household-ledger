@@ -2343,8 +2343,9 @@ function historyPage(bundle,s){
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Search transactions"></label>'+
+   (displayView==='categories'||displayView==='merchants'||displayView==='sizes'?
+    '<div class="history-budget-month-field'+(displayView==='categories'?'':' history-report-month-field')+'"><span>Months</span>'+picker.markup+'</div>':'')+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
-   (displayView==='categories'?'<div class="history-budget-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    (displayView==='categories'?'':'<label class="minimal-control-label"><span class="visually-hidden">Sort transactions</span><select name="historySort" data-history-sort aria-label="Sort transactions">'+
     [['newest','Newest first'],['oldest','Oldest first'],
      ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
@@ -2357,7 +2358,6 @@ function historyPage(bundle,s){
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select></label></div>')+
-   (displayView==='merchants'||displayView==='sizes'?'<div class="history-budget-month-field history-report-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement total: purchases − refunds · excludes payments, transfers and pending</p>':
