@@ -1432,7 +1432,7 @@ function billsMonthSelect(asOf,scope){
   start=new Date(first+'-01T12:00:00Z'),months=[],
   records=model.records(state()),
   oldest=records.reduce((m,r)=>r.date&&r.date.slice(0,7)<m?r.date.slice(0,7):m,first),
-  monthsPast=Math.min(120,Math.max(0,
+  monthsPast=Math.min(120,Math.max(24,
    (Number(first.slice(0,4))-Number(oldest.slice(0,4)))*12+
     Number(first.slice(5,7))-Number(oldest.slice(5,7))));
  for(const i of [...Array.from({length:13},(_,n)=>n),
@@ -1606,7 +1606,7 @@ function schedulesPage(bundle,s){
     row.bankId?' data-open-bill-actual="'+escapeHTML(row.bankId)+
      '" data-bill-actual-account="'+escapeHTML(row.accountId)+'"':
     row.ruleId?' data-open-bill-rule="'+escapeHTML(row.ruleId)+'"':'';
-  return '<'+tag+(clickable?' type="button"':'')+' class="bills-upcoming-row"'+action+
+  return '<'+tag+(clickable?' type="button"':'')+' class="bills-upcoming-row" data-bills-source="'+escapeHTML(row.source||'prediction')+'"'+action+
    '><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
    '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
    '<small>'+escapeHTML(row.status)+' · '+escapeHTML(account?.name||'Account')+
@@ -1615,7 +1615,7 @@ function schedulesPage(bundle,s){
  }).join('');
  return '<div class="planner-page schedule-page">'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
-   [['upcoming','Upcoming'],['repeating','Repeating']].map(([id,name])=>
+   [['upcoming','Expenses'],['repeating','Repeating']].map(([id,name])=>
     '<button type="button" class="history-subtab'+(billsPane===id?' active':'')+
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
