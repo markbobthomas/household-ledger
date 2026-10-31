@@ -1418,7 +1418,7 @@ const {chromium,webkit}=require('playwright');
     [...el.children].map(n=>{
      const r=n.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};
     }));
-   assert.equal(new Set(positions.map(p=>Math.round(p.top))).size,mobile?2:width>=850?1:2,
+   assert.equal(new Set(positions.map(p=>Math.round(p.top))).size,mobile?2:1,
     'Repeating toolbar aligns in one desktop row or two narrow-screen rows');
    assert.ok(positions.every(p=>p.right<=
     Math.max(...positions.map(x=>x.right))+1));
