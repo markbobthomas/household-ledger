@@ -2083,8 +2083,12 @@ function historyInsights(rows,view,options={}){
       '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>':
     '';
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
+  const spendingOverview='<div class="history-spending-overview" aria-label="'+escapeHTML(cash(usedCents/100)+' spent and expected across '+n+' spending transactions')+'">'+
+    '<strong>'+cash(usedCents/100)+(expectedCents?' spent + expected':' spent')+'</strong>'+
+    '<span>'+n+' transactions'+(expectedCents?' · '+cash(total)+' spent · '+cash(expectedCents/100)+' expected':'')+'</span></div>';
   return '<section class="history-insight-panel" data-history-category-insights>'+
-   '<div class="history-category-panel-heading">'+    '<details class="history-category-manager" data-history-category-manager>'+
+   '<div class="history-category-panel-heading">'+spendingOverview+
+    '<details class="history-category-manager" data-history-category-manager>'+
      '<summary aria-label="Manage categories and monthly budgets">Manage</summary>'+
      '<div class="history-category-manager-body">'+
       '<form data-history-category-add><label class="minimal-control-label"><span class="visually-hidden">New category</span>'+
@@ -2108,9 +2112,7 @@ function historyInsights(rows,view,options={}){
      '</div></details></div>'+
    (historyCategoryNotice?'<p class="history-category-manage-status" role="status">'+
     escapeHTML(historyCategoryNotice)+'</p>':'')+
-   '<div class="history-spending-overview" aria-label="'+escapeHTML(cash(usedCents/100)+' spent and expected across '+n+' spending transactions')+'">'+
-    '<strong>'+cash(usedCents/100)+(expectedCents?' spent + expected':' spent')+'</strong>'+
-    '<span>'+n+' transactions'+(expectedCents?' · '+cash(total)+' spent · '+cash(expectedCents/100)+' expected':'')+'</span></div>'+
+
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    budgetSummary+
    (values.length?'<div class="history-category-table"><div class="history-category-columns">'+
