@@ -1107,12 +1107,18 @@ function applyScheduleSearch(root=document){
  const input=root.querySelector('[data-schedule-search]');
  if(!input)return;
  const q=String(scheduleSearch||'').trim().toLowerCase();
- let shown=0;
+ let shown=0,shownCents=0;
  for(const row of root.querySelectorAll('[data-schedule-card]')){
   const matches=!q||String(row.dataset.scheduleSearchText||'').includes(q);
   row.hidden=!matches;
-  if(matches)shown++;
+  if(matches){
+   shown++;
+   const cents=Number(row.dataset.scheduleListedCents);
+   if(Number.isSafeInteger(cents))shownCents+=cents;
+  }
  }
+ const billTotal=root.querySelector('[data-bills-repeating-total]');
+ if(billTotal)billTotal.textContent='Total '+cash(shownCents/100);
  for(const group of root.querySelectorAll('[data-schedule-category-group]')){
   const rows=[...group.querySelectorAll('[data-schedule-card]')].filter(row=>!row.hidden);
   group.hidden=rows.length===0;
@@ -1498,6 +1504,8 @@ function schedulesPage(bundle,s){
  const upcomingBills=forecastCashBills(bundle,s).filter(row=>billsSelectedMonth?
   row.date.slice(0,7)===billsSelectedMonth:
   row.date<=shiftDay(s.asOf,billsExpanded?90:30));
+ const upcomingCents=upcomingBills.reduce((total,row)=>
+  total+Math.round(Number(row.amount||0)*100),0);
  const groupedBills=upcomingBills.map(row=>'<button type="button" class="bills-upcoming-row" data-open-transaction="'+
   escapeHTML(row.key)+'"><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
   '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
@@ -1513,6 +1521,8 @@ function schedulesPage(bundle,s){
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
+    '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Total '+
+      cash(upcomingCents/100)+'</strong>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
    (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period.</p>')+
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
@@ -1537,9 +1547,11 @@ function schedulesPage(bundle,s){
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Add payment</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
   create+'<div class="schedule-grid">'+
-   '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
-    'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
-    ' of '+rules.length+' payments</p>'+
+   '<div class="schedule-list-summary">'+
+    '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
+     'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
+     ' of '+rules.length+' payments</p>'+
+    '<strong class="bills-repeating-sum" data-bills-repeating-total></strong></div>'+
    (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
       repeatingStatementPeriods(bundle,s,scheduleAccount,visible,billsSelectedMonth):'')+
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
