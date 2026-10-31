@@ -104,23 +104,23 @@ const {chromium,webkit}=require('playwright');
  }
 
 
- // Activity keeps Search, Months, Account, Sort and Category in one filter surface.
+ // Activity shows Months first without changing its shared calendar selection behavior.
  async function verifyActivityFilterLayout(page,mobile){
   assert.equal(await page.locator('.history-page .history-view-toolbar').count(),0,
-   'Activity has no detached month toolbar or empty title row');
+   'Activity has no detached Months toolbar');
   const form=page.locator('.history-page .history-activity-filters');
   assert.equal(await form.count(),1);
   assert.equal(await form.locator('[data-history-month-picker]').count(),1);
   const order=await form.evaluate(node=>[...node.children].map(el=>{
-   if(el.matches('.history-search-wrap'))return 'Search';
    if(el.matches('.history-activity-month-field'))return 'Months';
+   if(el.matches('.history-search-wrap'))return 'Search';
    if(el.querySelector('[name="historyAccount"]'))return 'Account';
    if(el.querySelector('[name="historySort"]'))return 'Sort';
    if(el.querySelector('[name="historyCategory"]'))return 'Category';
    return null;
   }).filter(Boolean));
-  assert.deepEqual(order,['Search','Months','Account','Sort','Category'],
-   'Activity Month is between Search and Account in document and keyboard order');
+  assert.deepEqual(order,['Months','Search','Account','Sort','Category'],
+   'Activity begins with Months in visual, DOM and keyboard order');
   for(const width of (mobile?[320,390]:[768,1024,1280])){
    await page.setViewportSize({width,height:mobile?844:900});
    const geo=await form.evaluate(node=>{
@@ -130,32 +130,35 @@ const {chromium,webkit}=require('playwright');
       bottom:box.bottom,width:box.width,height:box.height}:null;
     };
     const bar=node.getBoundingClientRect();
-    return {search:rect('[name="search"]'),months:rect('.history-month-trigger'),
+    return {months:rect('.history-month-trigger'),search:rect('[name="search"]'),
      account:rect('[name="historyAccount"]'),sort:rect('[name="historySort"]'),
      category:rect('[name="historyCategory"]'),left:bar.left,right:bar.right,
      scroll:document.documentElement.scrollWidth,viewport:innerWidth};
    });
    assert.ok(geo.scroll<=width+3&&
-    [geo.search,geo.months,geo.account,geo.sort,geo.category].every(v=>
+    [geo.months,geo.search,geo.account,geo.sort,geo.category].every(v=>
      v&&v.width>=65&&v.left>=geo.left-2&&v.right<=geo.right+2),
-    'All Activity filters stay within one surface at '+width+': '+JSON.stringify(geo));
-   assert.ok(geo.months.right<=geo.account.left+2&&
-    Math.abs(geo.months.top-geo.account.top)<=3&&
-    Math.abs(geo.months.height-geo.account.height)<=3,
-    'Months and Account are aligned and in order at '+width+': '+JSON.stringify(geo));
+    'Activity controls stay within one surface at '+width+': '+JSON.stringify(geo));
    if(width>1100){
-    assert.ok(geo.search.right<=geo.months.left+2&&
+    assert.ok(geo.months.right<=geo.search.left+2&&
+     geo.search.right<=geo.account.left+2&&
      geo.account.right<=geo.sort.left+2&&geo.sort.right<=geo.category.left+2&&
-     Math.abs(geo.search.top-geo.months.top)<=3,
-     'All five Activity controls share one desktop row at '+width);
+     Math.abs(geo.months.top-geo.search.top)<=3&&
+     Math.abs(geo.months.height-geo.account.height)<=3,
+     'Months leads the five-control desktop row at '+width+': '+JSON.stringify(geo));
    }else if(width>650){
-    assert.ok(geo.search.bottom<=geo.months.top-3&&
-     geo.account.right<=geo.sort.left+2&&geo.sort.right<=geo.category.left+2,
-     'Search above one four-filter row at '+width);
+    assert.ok(geo.months.right<=geo.search.left+2&&
+     Math.abs(geo.months.top-geo.search.top)<=3&&
+     geo.months.bottom<=geo.account.top-3&&
+     geo.account.right<=geo.sort.left+2&&geo.sort.right<=geo.category.left+2&&
+     Math.abs(geo.account.top-geo.category.top)<=3,
+     'Tablet shows Months then Search, with the remaining filters beneath at '+width+': '+JSON.stringify(geo));
    }else{
-    assert.ok(geo.search.bottom<=geo.months.top-3&&
-     geo.sort.top>=geo.months.bottom+3&&geo.sort.right<=geo.category.left+2,
-     'Search above two compact filter rows at '+width);
+    assert.ok(geo.months.bottom<=geo.search.top-3&&
+     geo.search.bottom<=geo.account.top-3&&
+     geo.account.right<=geo.sort.left+2&&
+     geo.sort.bottom<=geo.category.top-3,
+     'Phone stacks Months, Search, Account/Sort and Category in order at '+width+': '+JSON.stringify(geo));
    }
    await verifyMonthOptionsDoNotOverlap(page,'Activity '+width+'px');
   }
