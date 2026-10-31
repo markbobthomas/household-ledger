@@ -62,8 +62,9 @@ let forecastSaveSequence=0,lastForecastUndo=null;
 function forecastSaveFeedback(message,allowUndo=false){
  const el=$('planner-save-feedback');if(!el)return;
  el.hidden=!message;
+ el.classList.toggle('is-saved',message==='Saved');
  el.innerHTML=message?'<span>'+escapeHTML(message)+'</span>'+
-  (allowUndo?'<button type="button" class="btn" data-undo-forecast>Undo last change</button>':''):'';
+  (allowUndo?'<button type="button" class="btn" data-undo-forecast aria-label="Undo last change">Undo</button>':''):'';
 }
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;

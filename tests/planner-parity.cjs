@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const html=read('index.html'),script=read('planner.js'),
  privateServer=read('pilot/server.cjs'),sandbox=read('sandbox/server.cjs');
-assert.ok(html.includes('Household Ledger'));
+assert.ok(html.includes('<h1>Ledger</h1>'));
 assert.ok(html.includes('id="ledger-mode-switch"'));
 assert.ok(html.includes('id="planner-main"'));
 assert.ok(html.includes('planner-core.js'),'Only one forecasting engine is loaded');

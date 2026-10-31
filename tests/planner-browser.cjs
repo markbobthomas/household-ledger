@@ -258,7 +258,7 @@ const {chromium,webkit}=require('playwright');
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(url,{waitUntil:'load'});
    await page.locator('#planner-main .planner-page').first().waitFor();
-   assert.equal(await page.locator('h1').innerText(),'Household Ledger');
+   assert.equal(await page.locator('h1').innerText(),'Ledger');
    // The refresh is presentation-only, with the same routes and inputs.
    // Verify that the new visual theme actually loads instead of silently
    // falling back to the industrial stylesheet after a cached deployment.
@@ -285,6 +285,10 @@ const {chromium,webkit}=require('playwright');
     ['Home','Spending','Bills','Activity']);
    assert.equal(await page.locator('.topbar [data-view="reviews"]').count(),1,
     'Things to check is a visible action outside three main destinations');
+   assert.equal(await page.locator('.topbar .top-actions > #planner-save-feedback').count(),1,
+    'Save/Undo is attached to the header beside Review');
+   assert.equal(await page.locator('.content > #planner-save-feedback').count(),0,
+    'Save/Undo no longer occupies a row below navigation');
    assert.equal(await page.locator('.main-navigation [data-view="reviews"]').count(),0,
      'Things to check no longer consumes a second navigation row');
     assert.equal(await page.locator('.planner-nav-primary svg').count(),4,
@@ -1419,6 +1423,33 @@ const {chromium,webkit}=require('playwright');
      'household-planner-sample-settings-v1')||'{}'));
     assert.ok(Object.keys(saved.futureTransactionAdds||{}).length>0,
      'A planned payment persists only in fictional forecast preferences');
+    const saveFeedback=page.locator('.topbar #planner-save-feedback');
+    await saveFeedback.waitFor({state:'visible'});
+    assert.equal(await saveFeedback.locator('span').innerText(),'Saved');
+    const undo=saveFeedback.locator('[data-undo-forecast]');
+    assert.equal(await undo.count(),1,'Saved forecast has one header Undo action');
+    assert.equal(await undo.innerText(),'Undo','Undo uses the compact header label');
+    assert.equal(await undo.getAttribute('aria-label'),'Undo last change');
+    for(const width of (mobile?[320,390]:[768,1280])){
+     await page.setViewportSize({width,height:mobile?844:900});
+     const geometry=await page.evaluate(()=>{
+      const rect=selector=>document.querySelector(selector).getBoundingClientRect();
+      const title=rect('.topbar h1'),review=rect('.topbar .attention-link'),
+       feedback=rect('.topbar #planner-save-feedback'),
+       undo=rect('.topbar [data-undo-forecast]'),
+       menu=rect('.topbar .planner-menu>summary');
+      return {titleRight:title.right,reviewLeft:review.left,reviewRight:review.right,
+       feedbackLeft:feedback.left,feedbackRight:feedback.right,undoLeft:undo.left,
+       undoRight:undo.right,menuLeft:menu.left,overflow:document.documentElement.scrollWidth-innerWidth};
+     });
+     assert.ok(geometry.titleRight<=geometry.reviewLeft+2&&
+      geometry.reviewRight<=geometry.feedbackLeft+2&&
+      geometry.undoLeft>=geometry.feedbackLeft-1&&
+      geometry.feedbackRight<=geometry.menuLeft+2&&geometry.undoRight<=geometry.menuLeft+2&&
+      geometry.overflow<=3,
+      'Save/Undo stays beside Review without clipping at '+width+': '+JSON.stringify(geometry));
+    }
+    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    }
 
    await page.locator('.attention-link[data-view="reviews"]').click();

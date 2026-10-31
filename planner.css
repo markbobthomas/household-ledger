@@ -6091,3 +6091,30 @@ a:hover{color:#166e61}
 .reviews-page .ledger-section-tabs .review-tab-pending .review-tab-count{
  color:inherit;
 }
+
+/* Forecast save/undo lives alongside Review in the global header, not below navigation. */
+.topbar .top-actions .planner-save-feedback:not([hidden]){
+ display:inline-flex;align-items:center;justify-content:flex-end;gap:7px;
+ margin:0;min-height:40px;max-width:min(45vw,420px);min-width:0;
+ flex:0 1 auto;flex-wrap:nowrap;white-space:nowrap;font-size:12px;
+}
+.topbar .planner-save-feedback>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.topbar .planner-save-feedback .btn{
+ flex:0 0 auto;min-height:40px;padding:8px 12px;
+ border:1px solid #e7ece8;border-radius:13px;background:#fff;
+ color:#315044;font-size:12px;box-shadow:none;
+}
+@media(max-width:650px){
+ .topbar .top-actions .planner-save-feedback:not([hidden]){max-width:112px;gap:4px}
+ .topbar .planner-save-feedback .btn{min-height:36px;padding:7px 9px;font-size:11px}
+ .topbar .planner-save-feedback:not(.is-saved)>span{
+  white-space:normal;overflow-wrap:anywhere;line-height:1.15;
+ }
+}
+@media(max-width:390px){
+ .topbar .planner-save-feedback.is-saved>span{
+  position:absolute;width:1px;height:1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;
+ }
+ .topbar .top-actions .planner-save-feedback:not([hidden]){max-width:100px}
+}
