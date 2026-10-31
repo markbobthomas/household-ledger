@@ -5910,3 +5910,14 @@ a:hover{color:#166e61}
     grid-row:2!important;
   }
 }
+
+/* Keep Budget's two controls the same width and x-position as the first two
+   columns of Merchants and Purchase Sizes. The third desktop track stays empty. */
+.history-page .history-analysis-filters.history-budget-filters:not(.history-report-filters){
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+@media(max-width:650px){
+  .history-page .history-analysis-filters.history-budget-filters:not(.history-report-filters){
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}

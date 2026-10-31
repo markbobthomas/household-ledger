@@ -104,6 +104,47 @@ const {chromium,webkit}=require('playwright');
  }
 
 
+ // Filter controls should not resize or shift horizontally as Spending tabs change.
+ async function verifySpendingFilterWidthParity(page,mobile){
+  const widths=mobile?[320,390]:[768,1280];
+  for(const width of widths){
+   await page.setViewportSize({width,height:mobile?844:900});
+   let budget=null;
+   for(const view of ['categories','merchants','sizes']){
+    await page.locator('[data-history-view="'+view+'"]').click();
+    const layout=await page.evaluate(()=>{
+     const form=document.querySelector('.history-page .history-budget-filters');
+     if(!form)return null;
+     const rect=selector=>{
+      const box=form.querySelector(selector)?.getBoundingClientRect();
+      return box?{left:box.left,width:box.width,height:box.height}:null;
+     };
+     return {month:rect('.history-month-trigger'),
+      account:rect('[name="historyAccount"]'),
+      surface:form.getBoundingClientRect().toJSON(),
+      pageWidth:document.documentElement.scrollWidth};
+    });
+    assert.ok(layout&&layout.month&&layout.account,
+     view+' reports Months/Account selectors at '+width+'px');
+    assert.ok(layout.pageWidth<=width+3,
+     view+' toolbar must not cause horizontal scrolling at '+width+'px: '+JSON.stringify(layout));
+    if(!budget){budget=layout;continue;}
+    for(const key of ['month','account']){
+     for(const measure of ['left','width','height']){
+      assert.ok(Math.abs(layout[key][measure]-budget[key][measure])<=1.5,
+       view+' '+key+' '+measure+' must match Budget at '+width+'px: '+
+        JSON.stringify({budget,report:layout}));
+     }
+    }
+    assert.ok(Math.abs(layout.surface.left-budget.surface.left)<=1.5&&
+     Math.abs(layout.surface.width-budget.surface.width)<=1.5,
+     view+' toolbar surface must match Budget at '+width+'px');
+   }
+  }
+  await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+  await page.locator('[data-history-view="categories"]').click();
+ }
+
  // Merchants and Purchase Sizes: month first, then account, then category.
  async function verifyReportFilters(page,view,mobile){
   assert.equal(await page.locator('.history-view-toolbar [data-history-month-toggle]').count(),0,
@@ -480,6 +521,7 @@ const {chromium,webkit}=require('playwright');
     tabGeometry.rows.length===(mobile?2:1)&&
     tabGeometry.scrollWidth<=tabGeometry.viewport+3,
     'Spending tabs remain equal-width and symmetric: '+JSON.stringify(tabGeometry));
+   await verifySpendingFilterWidthParity(page,mobile);
    assert.equal(await page.locator('.spending-tabs .history-subtab>span').count(),0,
     'No decorative glyphs repeat the Spending tab names');
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
