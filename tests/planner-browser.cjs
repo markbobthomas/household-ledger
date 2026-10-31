@@ -1282,6 +1282,23 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   assert.equal(await page.locator('[data-bills-tab]').count(),2,
+    'Bills uses the shared Spending segmented navigation');
+   assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),true);
+   assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),false);
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const grid=await page.locator('.schedule-page .ledger-section-tabs .history-subtab')
+     .evaluateAll(items=>items.map(x=>x.getBoundingClientRect().toJSON()));
+    assert.ok(grid.length===2&&Math.abs(grid[0].width-grid[1].width)<=2&&
+     Math.abs(grid[0].top-grid[1].top)<=2&&
+     await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
+     'Bills tabs stay symmetrical at '+width+'px');
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   await page.locator('[data-bills-tab="repeating"]').click();
+   assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),false);
+   assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),true);
    if(await page.locator('.schedule-row-main.ledger-transaction-row').count())
     await verifyTransactionAnatomy(page,'.schedule-row-main.ledger-transaction-row','Upcoming Bills');
    else assert.equal(await page.locator('.schedule-row-main').count(),0,
@@ -1290,6 +1307,7 @@ const {chromium,webkit}=require('playwright');
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
    assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
     'Bills names the recurring section without repeating an action');
+   await page.locator('[data-bills-tab="upcoming"]').click();
    const billHeader=await page.locator('.bills-heading').evaluate(el=>{
     const heading=el.querySelector('h2').getBoundingClientRect(),
      count=el.querySelector('.bills-upcoming-total').getBoundingClientRect();
@@ -1298,6 +1316,7 @@ const {chromium,webkit}=require('playwright');
    });
    assert.ok(billHeader.headingRight<=billHeader.countLeft+2&&/^\d+$/.test(billHeader.value),
     'Upcoming Bills count is small, numeric and aligned with the header');
+   await page.locator('[data-bills-tab="repeating"]').click();
    const newRepeat=page.locator('[data-schedule-new]').first();
    await newRepeat.click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-new-form]').count(),1,
@@ -1340,6 +1359,28 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.attention-link[data-view="reviews"]').click();
    assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
+   assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(items=>
+    items.map(x=>x.dataset.reviewTab)),['categories','payments','earlier','suggestions'],
+    'Review preserves four distinct sections as tabs');
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const grid=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
+     .evaluateAll(items=>items.map(el=>el.getBoundingClientRect().toJSON()));
+    assert.ok(grid.length===4&&Math.abs(grid[0].width-grid[1].width)<=2&&
+     (width>650?grid.every(x=>Math.abs(x.top-grid[0].top)<=2):
+      grid[2].top>grid[0].bottom+1)&&
+     await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
+     'Review tabs use Spending responsive grid at '+width+'px');
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   const reviewSections=['categories','payments','earlier','suggestions'];
+   for(const section of reviewSections){
+    await page.locator('[data-review-tab="'+section+'"]').click();
+    assert.equal(await page.locator('[data-review-pane="'+section+'"]').isVisible(),true);
+    for(const other of reviewSections.filter(x=>x!==section))
+     assert.equal(await page.locator('[data-review-pane="'+other+'"]').isVisible(),false);
+   }
+   await page.locator('[data-review-tab="categories"]').click();
    assert.equal(await page.locator('.reviews-page .review-priority,.review-intro p,'+
     '.category-review-panel > .lead').count(),0,
     'Review relies on section labels and actionable status rather than repeated instructional prose');
