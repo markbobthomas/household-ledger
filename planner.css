@@ -4251,7 +4251,7 @@ a:hover{color:#166e61}
 .reviews-page .category-review-panel>.lead{margin:6px 0 12px}
 .reviews-page .category-review-row{
  display:grid;grid-template-columns:minmax(0,1fr) minmax(155px,240px);
- align-items:end;gap:12px;padding:11px 3px;
+ align-items:center;gap:12px;padding:11px 3px;
  border-bottom:1px solid #edf1ed;min-width:0
 }
 .reviews-page .category-review-info{min-width:0;align-self:center}

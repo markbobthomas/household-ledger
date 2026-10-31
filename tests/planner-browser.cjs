@@ -1524,8 +1524,34 @@ const {chromium,webkit}=require('playwright');
     'Review header keeps its title and sort from overlapping: '+JSON.stringify(reviewTitleLayout));
    assert.equal(await page.locator('.reviews-page .review-sort-label .visually-hidden').count(),1,
     'Review sorter selected value needs no second visible caption');
+   // Category choice must share the amount's vertical center on full-width
+   // rows; on phones it stays beneath the transaction without clipping.
    const categoryPickers=page.locator('[data-category-review-form] > label');
    if(await categoryPickers.count()){
+    for(const width of (mobile?[320,390]:[768,1280])){
+     await page.setViewportSize({width,height:mobile?844:900});
+     const layout=await page.locator('[data-category-review-form]').first().evaluate(row=>{
+      const box=el=>el.getBoundingClientRect();
+      const action=box(row.querySelector('.category-review-open')),
+       amount=box(row.querySelector('.ledger-transaction-amount')),
+       picker=box(row.querySelector('select[name="category"]')),
+       container=box(row);
+      return {amountMid:(amount.top+amount.bottom)/2,
+       pickerMid:(picker.top+picker.bottom)/2,
+       actionBottom:action.bottom,pickerTop:picker.top,
+       pickerLeft:picker.left,pickerRight:picker.right,
+       rowLeft:container.left,rowRight:container.right,
+       overflow:document.documentElement.scrollWidth-innerWidth};
+     });
+     if(width>650)assert.ok(Math.abs(layout.amountMid-layout.pickerMid)<=3,
+      'Category picker centers beside dollar amount at '+width+'px: '+JSON.stringify(layout));
+     else assert.ok(layout.pickerTop>=layout.actionBottom-2,
+      'Category picker stacks below transaction on phone at '+width+'px: '+JSON.stringify(layout));
+     assert.ok(layout.pickerLeft>=layout.rowLeft-2&&
+      layout.pickerRight<=layout.rowRight+2&&layout.overflow<=3,
+      'Category control fits without clipping at '+width+'px: '+JSON.stringify(layout));
+    }
+    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
     assert.ok(await categoryPickers.evaluateAll(labels=>labels.every(label=>{
      const caption=label.querySelector('.visually-hidden'),
       picker=label.querySelector('select[name="category"]');
