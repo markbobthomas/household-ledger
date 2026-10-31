@@ -78,7 +78,7 @@ const {chromium,webkit}=require('playwright');
  async function verifyMonthOptionsDoNotOverlap(page,label){
   await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
   const b=await page.evaluate(()=>{
-   const menu=document.querySelector('.history-budget-filters [data-history-month-menu]'),
+   const menu=document.querySelector('.history-filters [data-history-month-menu]'),
     option=menu.querySelector('.history-month-option'),
     input=option.querySelector('input[type="checkbox"]'),
     text=option.querySelector('span'),next=option.nextElementSibling,
@@ -103,6 +103,64 @@ const {chromium,webkit}=require('playwright');
   await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
  }
 
+
+ // Activity keeps Search, Months, Account, Sort and Category in one filter surface.
+ async function verifyActivityFilterLayout(page,mobile){
+  assert.equal(await page.locator('.history-page .history-view-toolbar').count(),0,
+   'Activity has no detached month toolbar or empty title row');
+  const form=page.locator('.history-page .history-activity-filters');
+  assert.equal(await form.count(),1);
+  assert.equal(await form.locator('[data-history-month-picker]').count(),1);
+  const order=await form.evaluate(node=>[...node.children].map(el=>{
+   if(el.matches('.history-search-wrap'))return 'Search';
+   if(el.matches('.history-activity-month-field'))return 'Months';
+   if(el.querySelector('[name="historyAccount"]'))return 'Account';
+   if(el.querySelector('[name="historySort"]'))return 'Sort';
+   if(el.querySelector('[name="historyCategory"]'))return 'Category';
+   return null;
+  }).filter(Boolean));
+  assert.deepEqual(order,['Search','Months','Account','Sort','Category'],
+   'Activity Month is between Search and Account in document and keyboard order');
+  for(const width of (mobile?[320,390]:[768,1024,1280])){
+   await page.setViewportSize({width,height:mobile?844:900});
+   const geo=await form.evaluate(node=>{
+    const rect=sel=>{
+     const box=node.querySelector(sel)?.getBoundingClientRect();
+     return box?{left:box.left,top:box.top,right:box.right,
+      bottom:box.bottom,width:box.width,height:box.height}:null;
+    };
+    const bar=node.getBoundingClientRect();
+    return {search:rect('[name="search"]'),months:rect('.history-month-trigger'),
+     account:rect('[name="historyAccount"]'),sort:rect('[name="historySort"]'),
+     category:rect('[name="historyCategory"]'),left:bar.left,right:bar.right,
+     scroll:document.documentElement.scrollWidth,viewport:innerWidth};
+   });
+   assert.ok(geo.scroll<=width+3&&
+    [geo.search,geo.months,geo.account,geo.sort,geo.category].every(v=>
+     v&&v.width>=65&&v.left>=geo.left-2&&v.right<=geo.right+2),
+    'All Activity filters stay within one surface at '+width+': '+JSON.stringify(geo));
+   assert.ok(geo.months.right<=geo.account.left+2&&
+    Math.abs(geo.months.top-geo.account.top)<=3&&
+    Math.abs(geo.months.height-geo.account.height)<=3,
+    'Months and Account are aligned and in order at '+width+': '+JSON.stringify(geo));
+   if(width>1100){
+    assert.ok(geo.search.right<=geo.months.left+2&&
+     geo.account.right<=geo.sort.left+2&&geo.sort.right<=geo.category.left+2&&
+     Math.abs(geo.search.top-geo.months.top)<=3,
+     'All five Activity controls share one desktop row at '+width);
+   }else if(width>650){
+    assert.ok(geo.search.bottom<=geo.months.top-3&&
+     geo.account.right<=geo.sort.left+2&&geo.sort.right<=geo.category.left+2,
+     'Search above one four-filter row at '+width);
+   }else{
+    assert.ok(geo.search.bottom<=geo.months.top-3&&
+     geo.sort.top>=geo.months.bottom+3&&geo.sort.right<=geo.category.left+2,
+     'Search above two compact filter rows at '+width);
+   }
+   await verifyMonthOptionsDoNotOverlap(page,'Activity '+width+'px');
+  }
+  await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+ }
 
  // Filter controls should not resize or shift horizontally as Spending tabs change.
  async function verifySpendingFilterWidthParity(page,mobile){
@@ -555,6 +613,7 @@ const {chromium,webkit}=require('playwright');
        'Category wraps below Months and Account on phone: '+JSON.stringify(field));
     }
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await verifyActivityFilterLayout(page,mobile);
    await verifyTransactionAnatomy(page,'.history-actual-row .ledger-transaction-row','Posted Activity');
    assert.equal(await page.locator('.history-period-controls [data-history-month-picker]').count(),1);
    assert.equal(await page.locator('[data-history-month-toggle]').count(),1);
