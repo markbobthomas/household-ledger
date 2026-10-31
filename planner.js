@@ -3322,9 +3322,6 @@ function render(){
  if(!selectedSource){root.innerHTML='<section class="panel"><h2>No connected accounts</h2><p>Add a bank account to start planning.</p>'+
   (available()?'<a class="btn primary" href="/bank-connect">Connect a bank</a>':'')+'</section>';return}
  const fresh=derived&&freshness(derived);
- const cashProjection=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
- let important=(derived?.events||[]).filter(e=>['expense','transfer_out'].includes(e.kind));
- const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
   (activeTab==='history'||activeTab==='activity')?historyPage(bundle,s):
   activeTab==='recap'?financialRecapPage(bundle,s):
