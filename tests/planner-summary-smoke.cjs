@@ -73,25 +73,25 @@ for(const days of [1095]){
 // Lower future-month or day-91 balances must never replace October's low.
 const rolling=series.map((p,i)=>({...p,balance:i===65?1200:i===91?100:p.balance}));
 const rollingView=tool.render({...opts,days:1095,derived:{...derived,series:rolling}});
-assert.match(rollingView,/data-summary-month-low-value>\\$5,000\\.00<\\/strong>/,
+assert.match(rollingView,/data-summary-month-low-value>\$5,000\.00<\/strong>/,
  'Future-month balances do not replace the displayed October low');
 assert.match(rollingView,/data-calendar-month-low="2026-10-21"/,
  'The low date belongs to the selected October');
 assert.match(rollingView,/month-minimum/,
  'The minimum of the shown month is highlighted in its own calendar grid');
-assert.doesNotMatch(rollingView,/data-summary-month-low-value>\\$1,200\\.00<\\/strong>/,
+assert.doesNotMatch(rollingView,/data-summary-month-low-value>\$1,200\.00<\/strong>/,
  'The old 90-day low must no longer appear in the selected-month card');
 const shortForecast=tool.render({...opts,days:5,derived:{...derived,series:rolling}});
-assert.match(shortForecast,/data-summary-month-low-value>Not projected<\\/strong>/,
+assert.match(shortForecast,/data-summary-month-low-value>Not projected<\/strong>/,
  'Do not claim a complete-month low if the projection ends before month end');
 const completeCurrentMonth=tool.render({...opts,days:30,derived:{...derived,series:rolling}});
-assert.match(completeCurrentMonth,/data-summary-month-low-value>\\$5,000\\.00<\\/strong>/,
+assert.match(completeCurrentMonth,/data-summary-month-low-value>\$5,000\.00<\/strong>/,
  'A completed current-month forecast does not need 90 days of future data');
 // A Saturday low counts even though the grid is Monday–Friday. The date link
 // must still target the actual selected-month date rather than a weekday.
 const saturday=series.map((p,i)=>({...p,balance:i===10?250:p.balance}));
 const saturdayView=tool.render({...opts,days:1095,derived:{...derived,series:saturday}});
-assert.match(saturdayView,/data-summary-month-low-value>\\$250\\.00<\\/strong>/);
+assert.match(saturdayView,/data-summary-month-low-value>\$250\.00<\/strong>/);
 assert.match(saturdayView,/data-calendar-month-low="2026-10-31"/);
 
 const long=tool.render({...opts,days:1095});
