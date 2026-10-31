@@ -1619,7 +1619,6 @@ function schedulesPage(bundle,s){
    isEditing=scheduleMode==='edit'&&!transactionDetail&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    occurrence=displayedByRule.get(String(r.id)),
-   effectiveNext=occurrence?.date||null,
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
    shownAmount=nextAmount(r),
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
