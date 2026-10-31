@@ -1438,8 +1438,34 @@ const {chromium,webkit}=require('playwright');
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    const reviewSections=['categories','payments','earlier','suggestions'];
+   const verifyPendingTabColors=async activeSection=>{
+    const states=await page.locator('.reviews-page [data-review-tab]').evaluateAll(tabs=>
+     tabs.map(tab=>({
+      id:tab.dataset.reviewTab,
+      count:Number(tab.querySelector('.review-tab-count')?.textContent||0),
+      pending:tab.classList.contains('review-tab-pending'),
+      active:tab.classList.contains('active'),
+      color:getComputedStyle(tab).color,
+      countColor:tab.querySelector('.review-tab-count')?
+       getComputedStyle(tab.querySelector('.review-tab-count')).color:null
+     })));
+    assert.deepEqual(states.map(x=>x.id),reviewSections);
+    for(const item of states){
+     assert.equal(item.pending,item.count>0,
+      'Only Review sections with unresolved work are red: '+JSON.stringify(item));
+     assert.equal(item.active,item.id===activeSection);
+     assert.equal(item.color==='rgb(180, 35, 53)',item.count>0,
+      'Selected and unselected Review labels have the right attention color: '+
+       JSON.stringify(item));
+     if(item.count>0)assert.equal(item.countColor,item.color,
+      'Pending section count and label use the same red text');
+    }
+   };
+   await verifyPendingTabColors(
+    await page.locator('[data-review-tab].active').getAttribute('data-review-tab'));
    for(const section of reviewSections){
     await page.locator('[data-review-tab="'+section+'"]').click();
+    await verifyPendingTabColors(section);
     assert.equal(await page.locator('[data-review-pane="'+section+'"]').isVisible(),true);
     for(const other of reviewSections.filter(x=>x!==section))
      assert.equal(await page.locator('[data-review-pane="'+other+'"]').isVisible(),false);

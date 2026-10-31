@@ -6081,3 +6081,13 @@ a:hover{color:#166e61}
   grid-column:2!important;grid-row:5!important;
  }
 }
+
+/* Flag only Review tabs with outstanding decisions; preserve active/idle surfaces. */
+.reviews-page .ledger-section-tabs .history-subtab.review-tab-pending,
+.reviews-page .ledger-section-tabs .history-subtab.review-tab-pending.active,
+.reviews-page .ledger-section-tabs .history-subtab.review-tab-pending:hover{
+ color:#b42335!important;
+}
+.reviews-page .ledger-section-tabs .review-tab-pending .review-tab-count{
+ color:inherit;
+}
