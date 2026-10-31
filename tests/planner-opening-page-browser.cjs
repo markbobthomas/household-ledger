@@ -73,7 +73,7 @@ const {chromium,webkit}=require('playwright');
    await other.goto(url,{waitUntil:'load'});
    await other.locator('#planner-main .summary-page').waitFor();
    assert.equal(await other.evaluate(()=>localStorage.getItem('household-ledger-opening-page-v1')),null,
-    'Another device does not inherit this user's chosen opening page');
+    "Another device does not inherit this user\'s chosen opening page");
    await second.close();
    assert.deepEqual(errors,[],'No page errors on '+label);
   }
