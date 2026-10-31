@@ -1521,7 +1521,8 @@ function billsStatementsPage(bundle,s){
     ...(p.postedTransactions||[]).map(t=>({...t,source:'Posted'})),
     ...(p.predictedTransactions||[]).map(t=>({...t,source:'Predicted'}))
    ],
-  transactionRows=records.sort((a,b)=>a.date.localeCompare(b.date)||
+  // Within the selected billing cycle, display the newest charges first.
+  transactionRows=records.sort((a,b)=>b.date.localeCompare(a.date)||
    a.merchant.localeCompare(b.merchant)),
   details='<div class="bills-statement-detail">'+
    '<div><span>Posted net charges</span><strong>'+cash(posted)+'</strong></div>'+
