@@ -6312,3 +6312,10 @@ a:hover{color:#166e61}
   grid-template-columns:minmax(0,1fr) minmax(62px,max-content) 20px!important;
  }
 }
+
+/* Per-device opening view preference: a single compact Settings control. */
+.ledger-opening-page-settings{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px}
+.ledger-opening-page-settings label{font-weight:650}
+.ledger-opening-page-settings select{width:min(100%,240px);min-width:165px;min-height:36px;padding:7px 10px;border:1px solid #ccd5dc;border-radius:7px;background:#fff;color:inherit}
+.ledger-opening-page-settings small{flex-basis:100%;color:var(--muted)}
+@media(max-width:480px){.ledger-opening-page-settings select{flex:1;min-width:130px}}
