@@ -76,7 +76,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth=null;
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1347,12 +1347,95 @@ function schedulePaymentCheck(rule,bundle,s){
  return result('not-forecast','No upcoming or recent withdrawal is included for this saved schedule. Check the account, start date, direction, and individual skips.');
 }
 
+// Read-only monthly presentation over confirmed bank postings and canonical
+// future predictions. Never infer ordinary shopping from a bill category.
+function monthlyExpenseRows(bundle,s,month){
+ const T=window.HouseholdPlannerTransactions,accounts=activeAccounts(s),
+  records=model.records(state()),rules=(state().predictions?.futureRecurringRules||[])
+   .filter(r=>r.kind!=='movement'&&r.type==='expense'),
+  ruleIds=new Set(rules.map(r=>String(r.id))),
+  settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records),
+  actual=postedScheduledBills(records,s,settlements)
+   .filter(p=>ruleIds.has(String(p.rule.id))),
+  first=month+'-01',last=new Date(Date.UTC(Number(month.slice(0,4)),
+   Number(month.slice(5,7)),0,12)).toISOString().slice(0,10),
+  lower=T.shift(first,-45),upper=T.shift(last,45),
+  matchedDates=new Set(),postedByRule=new Map();
+ for(const p of actual){
+  const id=String(p.rule.id);
+  if(!postedByRule.has(id))postedByRule.set(id,[]);
+  postedByRule.get(id).push(p);
+ }
+ // Assign each actual at most once to a historical occurrence of its own rule.
+ for(const rule of rules){
+  const id=String(rule.id),candidates=T.recurrenceDates(rule,T.shift(lower,-1),upper),
+   claimed=new Set();
+  for(const p of postedByRule.get(id)||[]){
+   const explicit=(rule.exampleIds||[]).some(v=>String(v)===String(p.row.id));
+   const matching=candidates.filter(d=>!claimed.has(d)&&
+    T.postedWithinMatchWindow(rule,p.row,d,T.scheduleAmount(rule,d).amount,explicit));
+   if(!matching.length)continue;
+   matching.sort((a,b)=>Math.abs(T.daysBetween(a,p.row.date))-
+    Math.abs(T.daysBetween(b,p.row.date))||a.localeCompare(b));
+   const date=matching[0];
+   claimed.add(date);matchedDates.add(id+'|'+date);
+  }
+ }
+ const rows=actual.filter(p=>p.row.date.slice(0,7)===month).map(p=>({
+  source:'actual',date:p.row.date,amount:p.amount,
+  merchant:p.row.merchant||p.rule.scheduleLabel||p.rule.merchant,
+  accountId:T.accountRef(p.row.accountId||p.row.account,accounts),
+  ruleId:String(p.rule.id),bankId:String(p.row.id),status:'Posted'
+ }));
+ // Only the currently saved recurrence is reconstructable for old months.
+ // Unmatched historical due dates are estimates, not asserted bank facts.
+ if(first<=s.asOf){
+  const through=last<s.asOf?last:s.asOf;
+  for(const rule of rules){
+   for(const due of T.recurrenceDates(rule,T.shift(first,-9),T.shift(through,9))){
+    const posting=T.forecastBusinessDate(due,T.shift(due,-15)),
+     key=T.keyEvent('user|'+rule.id+'|'+due,String(rule.accountId)),
+     edit=state().predictions?.futureTransactionEdits?.[key],
+     date=edit?.date||posting;
+    if(date>through||date.slice(0,7)!==month||edit?.skipped||
+       matchedDates.has(String(rule.id)+'|'+due)||
+       (bundle?.overduePayments||[]).some(item=>
+        String(item.ruleId||'')===String(rule.id)&&item.expectedDate===due))continue;
+    const amount=Number(edit?.amount??T.scheduleAmount(rule,due).amount);
+    if(!Number.isFinite(amount)||amount<=0)continue;
+    rows.push({source:'unconfirmed',date,amount,merchant:edit?.merchant||
+     rule.scheduleLabel||rule.merchant,accountId:String(rule.accountId),
+     ruleId:String(rule.id),status:'Not confirmed'});
+   }
+  }
+ }
+ // Preserve posted replacement and existing future adjustments without
+ // modifying bank data, saved plans or the canonical projection.
+ for(const row of futureRows(bundle,s)){
+  if(row.kind!=='event'||row.type!=='expense'||row.date.slice(0,7)!==month)continue;
+  const rule=rules.find(r=>String(r.id)===String(row.recurringRuleId));
+  if(rule&&actual.some(p=>String(p.rule.id)===String(rule.id)&&
+    T.postedWithinMatchWindow(rule,p.row,row.date,row.amount,
+     (rule.exampleIds||[]).some(v=>String(v)===String(p.row.id)))))continue;
+  rows.push({source:'prediction',date:row.date,amount:Number(row.amount),
+   merchant:row.merchant,accountId:String(row.accountId),
+   ruleId:rule?String(rule.id):null,key:row.key,status:'Predicted'});
+ }
+ return rows.filter(r=>Number.isFinite(r.amount)&&r.amount>0)
+  .sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant)||
+   String(a.bankId||a.key||a.ruleId||'').localeCompare(String(b.bankId||b.key||b.ruleId||'')));
+}
 // One shared selection across both Bills tabs; filtered rows always come from
 // the canonical modeled ledger rather than approximated schedule dates.
 function billsMonthSelect(asOf,scope){
  const first=String(asOf||dateToday()).slice(0,7),
-  start=new Date(first+'-01T12:00:00Z'),months=[];
- for(let i=0;i<=12;i++){
+  start=new Date(first+'-01T12:00:00Z'),months=[],
+  records=model.records(state()),
+  oldest=records.reduce((m,r)=>r.date&&r.date.slice(0,7)<m?r.date.slice(0,7):m,first),
+  monthsPast=Math.min(120,Math.max(0,
+   (Number(first.slice(0,4))-Number(oldest.slice(0,4)))*12+
+    Number(first.slice(5,7))-Number(oldest.slice(5,7))));
+ for(let i=12;i>=-monthsPast;i--){
   const d=new Date(start);d.setUTCMonth(start.getUTCMonth()+i);
   const value=d.toISOString().slice(0,7);
   const name=d.toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'});
@@ -1367,31 +1450,39 @@ function billsMonthSelect(asOf,scope){
   '</option>'+months.join('')+'</select></label>';
 }
 function schedulesPage(bundle,s){
+ if(billsSelectedMonth===null)billsSelectedMonth=String(s.asOf).slice(0,7);
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
   tomorrow=shiftDay(s.asOf,1),
   categories=categoryOptionsWithOther(T.scheduleCategories(state())),
-  categoryOf=r=>model.canonicalCategory(state(),r.category)||'Uncategorized';
+  categoryOf=r=>model.canonicalCategory(state(),r.category)||'Uncategorized',
+  monthlyRows=billsSelectedMonth?monthlyExpenseRows(bundle,s,billsSelectedMonth):[];
  // Canonical prediction rows already include weekend-to-Friday posting,
  // individual date overrides and skipped occurrences. Show their actual dates
  // here; keep raw recurrence dates solely in the prediction-default editor.
- const upcomingByRule=new Map(),monthByRule=new Map();
+ const upcomingByRule=new Map(),monthByRule=new Map(),monthlyByRule=new Map();
  for(const row of futureRows(bundle,s)){
-  if(!row.recurringRuleId)continue;
-  const id=String(row.recurringRuleId);
-  if(!upcomingByRule.has(id))upcomingByRule.set(id,row);
-  if(billsSelectedMonth&&row.date.slice(0,7)===billsSelectedMonth&&
-     !monthByRule.has(id))monthByRule.set(id,row);
+  if(row.recurringRuleId&&!upcomingByRule.has(String(row.recurringRuleId)))
+   upcomingByRule.set(String(row.recurringRuleId),row);
+ }
+ for(const row of monthlyRows){
+  if(!row.ruleId)continue;
+  if(!monthByRule.has(row.ruleId))monthByRule.set(row.ruleId,row);
+  if(!monthlyByRule.has(row.ruleId))monthlyByRule.set(row.ruleId,[]);
+  monthlyByRule.get(row.ruleId).push(row);
  }
  const displayedByRule=billsSelectedMonth?monthByRule:upcomingByRule;
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>
+  rule.kind!=='movement'&&rule.type==='expense'&&
   (!billsSelectedMonth||displayedByRule.has(String(rule.id)))&&
   (scheduleAccount==='all'||[rule.accountId,rule.fromAccountId,rule.toAccountId]
    .some(id=>String(id||'')===scheduleAccount))&&
   (!scheduleCategoryFilter||categoryOf(rule)===scheduleCategoryFilter));
  const nextAmount=rule=>{
   const forecast=displayedByRule.get(String(rule.id));
+  if(billsSelectedMonth)return (monthlyByRule.get(String(rule.id))||[])
+   .reduce((sum,row)=>sum+Number(row.amount||0),0);
   if(forecast)return Number(forecast.amount);
   const next=T.recurrenceDates(rule,s.asOf,end)[0];
   return next?Number(T.scheduleAmount(rule,next).amount):Number(rule.amount)||0;
@@ -1466,7 +1557,7 @@ function schedulesPage(bundle,s){
    '<details class="schedule-more"'+(pendingRemove?' open':'')+'>'+
     '<summary aria-label="More actions for prediction '+number+'" title="More actions">⋯</summary>'+
     '<div class="schedule-more-menu">'+
-     (occurrence&&!isEditing?'<button type="button" data-schedule-view-calendar="'+id+'">Open next in Calendar</button>':'')+
+     (occurrence?.key&&!isEditing?'<button type="button" data-schedule-view-calendar="'+id+'">Open next in Calendar</button>':'')+
      '<button type="button" data-schedule-remove="'+id+'"'+
       (pendingRemove?' class="danger"':'')+'>'+
       (pendingRemove?'Confirm remove':'Remove prediction')+'</button>'+
@@ -1485,7 +1576,7 @@ function schedulesPage(bundle,s){
       return '<div class="schedule-payment-check" data-payment-check="'+
        escapeHTML(check.code)+'" role="status"><strong>Payment check</strong>'+
        '<p>'+escapeHTML(check.message)+'</p></div>'})()+
-     (occurrence?'<button class="btn schedule-calendar-jump" type="button" data-schedule-view-calendar="'+id+
+     (occurrence?.key?'<button class="btn schedule-calendar-jump" type="button" data-schedule-view-calendar="'+id+
        '">View '+escapeHTML(dayLabel(occurrence.date))+' in Calendar</button>':
       '<p class="schedule-no-forecast" role="status">This payment is not in the forecast. Check the account, transfer direction, or skipped payments.</p>')+
      '<details class="schedule-occurrence-disclosure"><summary>Upcoming payments</summary>'+
@@ -1501,16 +1592,26 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- const upcomingBills=forecastCashBills(bundle,s).filter(row=>billsSelectedMonth?
-  row.date.slice(0,7)===billsSelectedMonth:
-  row.date<=shiftDay(s.asOf,billsExpanded?90:30));
+ const upcomingBills=billsSelectedMonth?monthlyRows:
+  futureRows(bundle,s).filter(row=>row.kind==='event'&&row.type==='expense'&&
+   row.date<=shiftDay(s.asOf,billsExpanded?90:30))
+   .map(row=>({...row,source:'prediction',status:'Predicted',ruleId:row.recurringRuleId||null}));
  const upcomingCents=upcomingBills.reduce((total,row)=>
   total+Math.round(Number(row.amount||0)*100),0);
- const groupedBills=upcomingBills.map(row=>'<button type="button" class="bills-upcoming-row" data-open-transaction="'+
-  escapeHTML(row.key)+'"><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
-  '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-  '<small>'+(row.cardBill?'Credit card payment · ':'')+escapeHTML((accounts.find(a=>String(a.id)===String(row.fromAccountId||row.accountId))||{}).name||'Account')+
-   '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">›</span></button>').join('');
+ const groupedBills=upcomingBills.map(row=>{
+  const account=accounts.find(a=>String(a.id)===String(row.accountId)),
+   clickable=Boolean(row.key||row.bankId||row.ruleId),tag=clickable?'button':'div',
+   action=row.key?' data-open-transaction="'+escapeHTML(row.key)+'"':
+    row.bankId?' data-open-bill-actual="'+escapeHTML(row.bankId)+
+     '" data-bill-actual-account="'+escapeHTML(row.accountId)+'"':
+    row.ruleId?' data-open-bill-rule="'+escapeHTML(row.ruleId)+'"':'';
+  return '<'+tag+(clickable?' type="button"':'')+' class="bills-upcoming-row"'+action+
+   '><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+   '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
+   '<small>'+escapeHTML(row.status)+' · '+escapeHTML(account?.name||'Account')+
+   '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">'+
+   (clickable?'›':'')+'</span></'+tag+'>';
+ }).join('');
  return '<div class="planner-page schedule-page">'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
    [['upcoming','Upcoming'],['repeating','Repeating']].map(([id,name])=>
@@ -1519,12 +1620,12 @@ function schedulesPage(bundle,s){
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
-   '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
+   '<div class="bills-heading"><div><h2>Monthly expenses</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
     '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Total '+
       cash(upcomingCents/100)+'</strong>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
-   (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period.</p>')+
+   (groupedBills||'<p class="bills-upcoming-empty">No recorded or predicted expenses in this period.</p>')+
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
@@ -3553,6 +3654,17 @@ document.addEventListener('click',async e=>{
   activeTab='history';historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
   render();return;
  }
+ const postedBill=e.target.closest?.('[data-open-bill-actual]');
+ if(postedBill){
+  transactionDetail={kind:'actual',id:postedBill.dataset.openBillActual,
+   account:postedBill.dataset.billActualAccount};
+  detailReturnFocus=postedBill;
+  drawTransactionDetail(forecastFor(snapshot()),snapshot());return;
+ }
+ const historicalBill=e.target.closest?.('[data-open-bill-rule]');
+ if(historicalBill){
+  openSchedulePlan(historicalBill.dataset.openBillRule,'',historicalBill);return;
+ }
  const billsTab=e.target.closest?.('[data-bills-tab]');
  if(billsTab){
   const next=billsTab.dataset.billsTab;
@@ -4869,11 +4981,8 @@ document.addEventListener('change',async e=>{
  }
  const billsMonth=e.target.closest?.('[data-bills-month]');
  if(billsMonth){
-  const selected=billsMonth.value,first=snapshot().asOf.slice(0,7),
-   available=new Set(Array.from({length:13},(_,i)=>{
-    const d=new Date(first+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+i);
-    return d.toISOString().slice(0,7);
-   }));
+  const selected=billsMonth.value,
+   available=new Set([...billsMonth.options].map(opt=>opt.value));
   if(selected&&!available.has(selected)){billsMonth.value=billsSelectedMonth;return}
   if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
       recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
