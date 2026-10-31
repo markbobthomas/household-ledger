@@ -5879,3 +5879,34 @@ a:hover{color:#166e61}
     grid-column:1/-1!important;grid-row:2!important;
   }
 }
+
+/* Spending reports: Months -> Account -> Category in layout and keyboard order. */
+.history-page .history-budget-filters>.history-budget-month-field,
+.history-page .history-report-filters>.history-report-month-field{
+  grid-column:1!important;
+  grid-row:1!important;
+}
+.history-page .history-analysis-filters.history-budget-filters:not(:has(.history-category-controls))>label:has([name="historyAccount"]),
+.history-page .history-report-filters>label:has([name="historyAccount"]){
+  grid-column:2!important;
+  grid-row:1!important;
+}
+.history-page .history-report-filters>.history-category-controls{
+  grid-column:3!important;
+  grid-row:1!important;
+}
+/* The Months trigger is now leftmost; open toward the page rather than beyond its edge. */
+.history-page .history-budget-filters .history-month-menu{
+  left:0;
+  right:auto;
+}
+@media(max-width:650px){
+  .history-page .history-report-filters>.history-report-month-field{
+    grid-column:1!important;
+    grid-row:1!important;
+  }
+  .history-page .history-report-filters>.history-category-controls{
+    grid-column:1/-1!important;
+    grid-row:2!important;
+  }
+}
