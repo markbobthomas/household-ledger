@@ -1901,8 +1901,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-schedule-visible-count]').innerText(),
     'Showing 2 of 2 recurring expenses',
     'The denominator excludes income and transfers rather than claiming 2 of 4');
-   assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Mortgage'}).count(),0,
-    'Past posted mortgage is no longer mixed into the upcoming cash forecast');
+   assert.equal(await page.locator('.bills-upcoming-row[data-bills-source="actual"]').count(),0,
+    'Upcoming shows forecasted cash bills, not already posted bank rows');
    assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Paycheck'}).count(),0);
    assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Transfer'}).count(),0);
    await page.locator('[data-bills-tab="repeating"]').click();
