@@ -1417,7 +1417,7 @@ function schedulesPage(bundle,s){
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
       escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
-      ' · '+escapeHTML(r.frequency)+' · '+(estimate.estimated?'Estimated':'Fixed')+
+      ' · '+escapeHTML(r.frequency)+(estimate.estimated?' · Estimated':'')+
       '</small></span></span>'+
     '<span class="schedule-row-amount ledger-row-amount ledger-transaction-amount"><strong>'+
      ledgerMoney(shownAmount)+'</strong></span>'+
