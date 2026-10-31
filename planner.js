@@ -2339,8 +2339,8 @@ function historyPage(bundle,s){
  })();
  return '<div class="planner-page history-page">'+
   '<div class="history-view-toolbar">'+(activeTab==='activity'?'':spendingTabNav(displayView))+
-   (displayView==='categories'?'':picker.markup)+'</div>'+
-  '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters history-budget-filters')+'" data-history-filter>'+
+   (displayView==='categories'||displayView==='merchants'||displayView==='sizes'?'':picker.markup)+'</div>'+
+  '<form class="history-filters ledger-toolbar'+(displayView==='list'?'':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Search transactions"></label>'+
    '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
@@ -2357,6 +2357,7 @@ function historyPage(bundle,s){
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select></label></div>')+
+   (displayView==='merchants'||displayView==='sizes'?'<div class="history-budget-month-field history-report-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement total: purchases − refunds · excludes payments, transfers and pending</p>':
