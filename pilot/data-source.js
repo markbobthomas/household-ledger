@@ -7,7 +7,8 @@ const Accounting=root.HouseholdAccounting||(typeof require==='function'?require(
 const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('../categorization.js'):null);
 let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
-const today=()=>new Date().toLocaleDateString('en-CA');
+const BankFeed=root.HouseholdBankFeed||(typeof require==='function'?require('../bank-feed.js'):null);
+const today=()=>BankFeed.localDate();
 const statusText=()=>lastError?'<p role="alert">'+esc(lastError)+'</p>':''; 
 const reconnectMessage='Your bank connection needs attention. Plaid requires you to sign in again or renew permission. Previously imported transactions and saved predictions are preserved; refresh results may be out of date.';
 const warningBanner=()=>live&&lastError?
