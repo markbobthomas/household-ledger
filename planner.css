@@ -6118,3 +6118,26 @@ a:hover{color:#166e61}
  }
  .topbar .top-actions .planner-save-feedback:not([hidden]){max-width:100px}
 }
+
+/* Bills month selection: the same compact dropdown in either subtab.
+   Keep Upcoming in its existing heading to avoid another tall toolbar. */
+.schedule-page .bills-heading-actions{
+ display:flex;align-items:center;justify-content:flex-end;gap:12px;min-width:0;
+}
+.schedule-page .bills-heading-actions .bills-month-field{
+ display:block;min-width:0;width:min(248px,45vw);
+}
+.schedule-page .bills-heading-actions .bills-month-field select{
+ display:block;width:100%;height:40px;min-height:40px;
+ padding:7px 10px;box-sizing:border-box;
+ border:1px solid #e1e9e0;border-radius:9px;
+ background:#f9fbf8;color:#304b40;font-size:13px;
+}
+.schedule-page .schedule-toolbar>.bills-month-field{
+ flex:0 1 230px;min-width:180px;
+}
+@media(max-width:650px){
+ .schedule-page .bills-heading-actions{flex:1 1 100%;width:100%;justify-content:space-between}
+ .schedule-page .bills-heading-actions .bills-month-field{flex:1 1 auto;width:auto}
+ .schedule-page .schedule-toolbar>.bills-month-field{flex:1 1 140px;min-width:0}
+}
