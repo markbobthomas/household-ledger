@@ -1704,9 +1704,9 @@ html{scrollbar-gutter:stable}
 .summary-page .summary-bank strong,.summary-page .summary-low{font-family:inherit;font-size:var(--type-metric)!important;font-weight:750!important;line-height:1.08!important;letter-spacing:-1.1px!important;font-variant-numeric:tabular-nums;white-space:nowrap;overflow-wrap:normal}
 .summary-page .summary-overline,.summary-page .summary-bank small{font-size:11px!important;line-height:20px!important;font-weight:600;color:var(--muted);min-height:20px}
 .summary-page .summary-low-date,.summary-page .summary-bank small:last-child{line-height:22px;min-height:22px;margin:0}
-.summary-page .calendar-day.next-90-minimum{border-color:#b48236!important;background:#fff9ee!important;box-shadow:inset 0 0 0 1px #b48236}
-.summary-page .calendar-day.next-90-minimum .calendar-day-number:after{content:" · low";font-size:9px;font-weight:700;color:#8b6129}
-.summary-page .calendar-day.next-90-minimum.selected{outline:2px solid #b48236;outline-offset:1px}
+.summary-page .calendar-day.month-minimum{border-color:#b48236!important;background:#fff9ee!important;box-shadow:inset 0 0 0 1px #b48236}
+.summary-page .calendar-day.month-minimum .calendar-day-number:after{content:" · low";font-size:9px;font-weight:700;color:#8b6129}
+.summary-page .calendar-day.month-minimum.selected{outline:2px solid #b48236;outline-offset:1px}
 @media(max-width:780px){
  :root{--type-metric:clamp(16px,4.5vw,30px)}
  .summary-page .summary-numbers{gap:8px!important}
@@ -3011,7 +3011,7 @@ body{background:#edf0f2;color:var(--ink)}
  border-color:#2b5066!important;
  background:#eaf1f5;box-shadow:inset 0 0 0 1px #2b5066;
 }
-.summary-page .calendar-day.next-90-minimum{background:#fff7e7!important}
+.summary-page .calendar-day.month-minimum{background:#fff7e7!important}
 .summary-page .calendar-day-number{color:#45596b;font-family:var(--mono);font-weight:760}
 .summary-page .calendar-weekday{
  color:#334c5e;font-family:var(--mono);font-weight:760;
@@ -3022,7 +3022,7 @@ body{background:#edf0f2;color:var(--ink)}
    must not override per-day severity after setting the default text color. */
 .summary-page .calendar-day.low:not(.negative) .calendar-day-balance{color:#a55d0c}
 .summary-page .calendar-day.negative .calendar-day-balance{color:#b43b36}
-.summary-page .calendar-day.negative.next-90-minimum{background:#fdf0f0!important}
+.summary-page .calendar-day.negative.month-minimum{background:#fdf0f0!important}
 .summary-page .calendar-day-detail{
  border:1px solid #8799a7;border-radius:4px;
  background:#fff;
@@ -3718,11 +3718,11 @@ a:hover{color:#166e61}
  box-shadow:0 0 0 2px #cce6d5!important;
 }
 .summary-page .calendar-day.today:not(.selected){border-color:#9fcdb8!important}
-.summary-page .calendar-day.next-90-minimum{
+.summary-page .calendar-day.month-minimum{
  background:#fcf5e8!important;border-color:#f1e1c3!important;
 }
 .summary-page .calendar-day.negative,
-.summary-page .calendar-day.negative.next-90-minimum{
+.summary-page .calendar-day.negative.month-minimum{
  background:#fdf0ef!important;border-color:#f5dbd9!important;
 }
 .summary-page .calendar-day-number{color:#4e6557!important;font-family:inherit;font-weight:730!important}
