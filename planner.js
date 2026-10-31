@@ -1435,7 +1435,8 @@ function billsMonthSelect(asOf,scope){
   monthsPast=Math.min(120,Math.max(0,
    (Number(first.slice(0,4))-Number(oldest.slice(0,4)))*12+
     Number(first.slice(5,7))-Number(oldest.slice(5,7))));
- for(let i=12;i>=-monthsPast;i--){
+ for(const i of [...Array.from({length:13},(_,n)=>n),
+   ...Array.from({length:monthsPast},(_,n)=>-n-1)]){
   const d=new Date(start);d.setUTCMonth(start.getUTCMonth()+i);
   const value=d.toISOString().slice(0,7);
   const name=d.toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'});
