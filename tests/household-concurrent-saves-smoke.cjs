@@ -82,8 +82,8 @@ const {start}=require('../pilot/server.cjs');
   await new Promise(resolve=>server.close(resolve));server=null;
   server=await start(0);
   const restored=await send('/api/ledger');
-  assert.equal(restored.revision,last.revision,'Revision is stable after a restart');
-  assert.deepEqual(restored.body.adjustments.predictions,last.body.adjustments.predictions);
+  assert.equal(restored.revision,newest.revision,'Revision is stable after a restart');
+  assert.deepEqual(restored.body.adjustments.predictions,newest.body.adjustments.predictions);
   console.log('PASS: stale-device protection, idempotent retries, serialized races and restart-safe revisions');
  }finally{if(server)await new Promise(resolve=>server.close(resolve));fs.rmSync(temp,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1});
