@@ -1398,9 +1398,7 @@ function monthlyExpenseRows(bundle,s,month){
      edit=state().predictions?.futureTransactionEdits?.[key],
      date=edit?.date||posting;
     if(date>through||date.slice(0,7)!==month||edit?.skipped||
-       matchedDates.has(String(rule.id)+'|'+due)||
-       (bundle?.overduePayments||[]).some(item=>
-        String(item.ruleId||'')===String(rule.id)&&item.expectedDate===due))continue;
+       matchedDates.has(String(rule.id)+'|'+due))continue;
     const amount=Number(edit?.amount??T.scheduleAmount(rule,due).amount);
     if(!Number.isFinite(amount)||amount<=0)continue;
     rows.push({source:'unconfirmed',date,amount,merchant:edit?.merchant||
