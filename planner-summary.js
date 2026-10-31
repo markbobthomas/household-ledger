@@ -237,10 +237,8 @@ function monthlyPredictions(state){
   (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i})));
  const futureDays=state.points.filter(p=>p.date>state.asOf&&p.date.startsWith(calendarMonth)),
   from=futureDays[0]?.date,to=futureDays.at(-1)?.date,
-  account=state.accounts.find(a=>String(a.id)===String(state.chosen)),
   period=from?(shortDate(from)+(from===to?'':' – '+shortDate(to))):
-   'No remaining forecast days',
-  contextLabel=period+' · '+esc(account?.name||'Selected account')+' · posted bank history excluded';
+   'No remaining forecast days';
  const credit=state.card;
  const deposits=rows.filter(r=>signed(r.event,credit)>0)
   .reduce((sum,r)=>sum+Number(r.event.amount||0),0),
@@ -254,7 +252,7 @@ function monthlyPredictions(state){
  return '<details class="calendar-monthly-list" data-calendar-monthly'+(calendarMonthExpanded?' open':'')+'>'+
   '<summary>See all '+esc(monthName(calendarMonth))+' predictions ('+rows.length+')'+
    '</summary>'+
-  '<p class="calendar-monthly-context">'+contextLabel+'</p>'+
+  '<p class="calendar-monthly-context">'+period+'</p>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+

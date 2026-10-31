@@ -5633,3 +5633,230 @@ a:hover{color:#166e61}
  }
  .history-page .history-category-item .history-budget-target{font-size:14px}
 }
+
+
+/* App-wide quiet UI, October 2026. One geometric rhythm across Home,
+   Spending, Bills, Activity, Review, Settings and Predictions. This layer
+   changes presentation only: selection, warning semantics and finance stay. */
+.planner-page{
+ --ledger-surface-radius:16px;
+ --ledger-section-gap:14px;
+ --ledger-hairline:#e4ebe6;
+}
+.planner-page :is(.panel,.history-insight-panel,.transaction-panel,
+ .history-list-surface,.schedule-grid,.financial-recap-card){
+ box-shadow:none!important;
+}
+.planner-page :is(.panel,.history-insight-panel,.transaction-panel,
+ .history-list-surface,.schedule-grid,.financial-recap-card){
+ border-radius:var(--ledger-surface-radius)!important;
+ border-color:var(--ledger-hairline)!important;
+}
+.planner-page .ledger-toolbar{
+ box-shadow:none!important;
+ border-color:var(--ledger-hairline)!important;
+ border-radius:12px!important;
+ padding:10px 12px!important;
+ gap:9px!important;
+}
+.planner-page .ledger-toolbar :is(input[type="search"],input[type="text"],select),
+.planner-page .future-toolbar select,
+.reviews-page .review-sort-label select{
+ min-height:40px;
+ height:40px;
+ border-radius:9px!important;
+ box-sizing:border-box;
+}
+.planner-page .ledger-toolbar :is(.schedule-search-wrap,.history-search-wrap),
+.planner-page .ledger-toolbar :is(.schedule-category-controls,.history-category-controls){
+ min-width:0;
+}
+.planner-page :is(.section-title,.bills-heading,.bills-manage-heading,.page-heading){
+ align-items:center;
+}
+.planner-page :is(.section-title h2,.bills-heading h2,.bills-manage-heading h2){
+ line-height:1.28;
+ letter-spacing:-.3px;
+}
+.schedule-page .bills-upcoming.panel{
+ padding:16px 19px!important;
+}
+.schedule-page .bills-heading,
+.schedule-page .bills-manage-heading{
+ padding-inline:0;
+ margin-bottom:9px;
+}
+.schedule-page .bills-upcoming-total{
+ border:0;
+ background:transparent;
+ padding:2px 0;
+ border-radius:0;
+ font-size:12px;
+ font-variant-numeric:tabular-nums;
+ color:#6a8174;
+}
+.schedule-page .bills-manage-heading{
+ margin-top:15px;
+}
+.schedule-page .schedule-list-count,
+.history-page .history-count.ledger-list-count{
+ margin:0;
+ padding:7px 8px 9px;
+ font-size:11px;
+ font-weight:650;
+ color:#7d8d83;
+}
+.history-page .history-subtabs.spending-tabs{
+ display:grid!important;
+ grid-template-columns:repeat(4,minmax(0,1fr));
+ align-items:stretch;
+ gap:4px!important;
+ border:1px solid var(--ledger-hairline)!important;
+ border-radius:12px!important;
+ background:#f2f6f2!important;
+ padding:4px!important;
+ width:100%;
+}
+.history-page .spending-tabs .history-subtab{
+ display:flex!important;
+ flex-direction:row!important;
+ justify-content:center;
+ align-items:center;
+ min-height:40px;
+ padding:9px 5px!important;
+ gap:0!important;
+ font-size:13px!important;
+ white-space:normal;
+ text-align:center;
+ line-height:1.3;
+ border-radius:8px!important;
+ box-shadow:none!important;
+}
+.history-page .history-subtabs.spending-tabs .history-subtab.active{
+ border-color:#d9e5dc!important;
+ background:#fff!important;
+ font-weight:760;
+}
+.history-page .history-merchant-overview{
+ background:#f6f9f6;
+ border:1px solid var(--ledger-hairline);
+ border-radius:12px;
+ margin:9px 0 4px;
+ padding:12px 15px;
+ gap:10px 24px;
+}
+.history-page .history-merchant-search-label{
+ margin:11px 0;
+}
+.reviews-page .review-intro{
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ flex-wrap:wrap;
+ gap:9px 16px;
+ border:0!important;
+ border-bottom:1px solid var(--ledger-hairline)!important;
+ border-radius:0!important;
+ background:transparent!important;
+ box-shadow:none!important;
+ padding:3px 2px 12px!important;
+ margin:0 0 var(--ledger-section-gap)!important;
+}
+.reviews-page .review-intro h2{
+ margin:0;
+ font-size:20px;
+ line-height:1.25;
+}
+.reviews-page .review-sort-label{margin:0 0 0 auto;min-width:160px}
+.reviews-page .review-sort-label select{width:100%;max-width:220px}
+.reviews-page .section-title{
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ gap:10px;
+}
+.reviews-page .section-title .status-tag{
+ display:inline-grid;
+ place-items:center;
+ min-width:25px;
+ padding:4px 8px;
+ font-size:12px;
+ line-height:1.3;
+ font-variant-numeric:tabular-nums;
+ background:#f1f5f1;
+ color:#607568;
+ border:1px solid var(--ledger-hairline);
+ border-radius:8px;
+}
+.reviews-page .section-title .status-tag.warn{
+ background:#fff5eb;
+ color:#aa671d;
+ border-color:#efdfcb;
+}
+.settings-page .panel + .panel,
+.reviews-page .panel + .panel,
+.transactions-page .panel + .panel{
+ margin-top:var(--ledger-section-gap);
+}
+@media(max-width:650px){
+ .planner-page{--ledger-section-gap:11px}
+ .planner-page .ledger-toolbar{padding:8px 9px!important;gap:7px!important}
+ .schedule-page .bills-upcoming.panel{padding:13px 12px!important}
+ .history-page .history-subtabs.spending-tabs{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+ }
+ .history-page .spending-tabs .history-subtab{
+  min-height:37px;
+  font-size:12px!important;
+  padding:7px 5px!important;
+ }
+ .reviews-page .review-intro{padding:0 1px 10px!important}
+ .reviews-page .review-sort-label{width:min(100%,220px);margin-left:auto;min-width:0}
+ .reviews-page .review-sort-label select{max-width:none}
+}
+
+/* Repeating rows should match the Bills list's compact vertical rhythm on
+   phones. Keep the category control actionable without a tall extra row. */
+@media(max-width:390px){
+ .schedule-page .schedule-card>.schedule-compact-row{
+  padding:3px 0!important;
+  row-gap:0!important;
+ }
+ .schedule-page .schedule-row-main.ledger-transaction-row{
+  padding:6px 4px!important;
+  min-height:44px!important;
+ }
+ .schedule-page .schedule-card .ledger-row-category-wrap{
+  min-height:29px!important;
+ }
+ .schedule-page .schedule-card .ledger-row-category{
+  height:29px;
+  min-height:29px;
+ }
+}
+
+/* The same two-line mobile row rhythm applies to posted Activity. The
+   category picker remains in its own tappable row rather than overlapping
+   the actual bank transaction. */
+.schedule-page .bills-upcoming.panel,
+.schedule-page .schedule-grid,
+.history-page .history-list-surface{
+ box-shadow:none!important;
+}
+@media(max-width:390px){
+ .history-page .history-entry>.history-actual-row{
+  padding:3px 0!important;
+  row-gap:0!important;
+ }
+ .history-page .history-row-open.ledger-transaction-row{
+  padding:6px 4px!important;
+  min-height:44px!important;
+ }
+ .history-page .history-actual-row .ledger-row-category-wrap{
+  min-height:29px!important;
+ }
+ .history-page .history-actual-row .ledger-row-category{
+  height:29px;
+  min-height:29px;
+ }
+}
