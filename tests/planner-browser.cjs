@@ -104,33 +104,42 @@ const {chromium,webkit}=require('playwright');
  }
 
 
- // Merchants and Purchase Sizes share one responsive Account/Category/Months row.
+ // Merchants and Purchase Sizes: month first, then account, then category.
  async function verifyReportFilters(page,view,mobile){
   assert.equal(await page.locator('.history-view-toolbar [data-history-month-toggle]').count(),0,
    view+' has no detached Months control');
   assert.equal(await page.locator('.history-report-filters [name="historyAccount"]').count(),1);
   assert.equal(await page.locator('.history-report-filters [name="historyCategory"]').count(),1);
   assert.equal(await page.locator('.history-report-filters [data-history-month-toggle]').count(),1);
+  const domOrder=await page.locator('.history-report-filters').evaluate(form=>
+   [...form.children].filter(el=>el.matches('.history-report-month-field')||
+    el.querySelector('[name="historyAccount"]')||
+    el.querySelector('[name="historyCategory"]'))
+    .map(el=>el.matches('.history-report-month-field')?'Months':
+     el.querySelector('[name="historyAccount"]')?'Account':'Category'));
+  assert.deepEqual(domOrder,['Months','Account','Category'],
+   view+' keyboard and document order follows the visible controls');
   for(const width of (mobile?[320,390]:[768,1280])){
    await page.setViewportSize({width,height:mobile?844:900});
    const g=await page.evaluate(()=>{
     const toolbar=document.querySelector('.history-report-filters');
     const rect=q=>toolbar.querySelector(q).getBoundingClientRect().toJSON();
-    return {a:rect('[name="historyAccount"]'),c:rect('[name="historyCategory"]'),
-     m:rect('.history-month-trigger'),f:toolbar.getBoundingClientRect().toJSON(),
+    return {m:rect('.history-month-trigger'),a:rect('[name="historyAccount"]'),
+     c:rect('[name="historyCategory"]'),f:toolbar.getBoundingClientRect().toJSON(),
      scroll:document.documentElement.scrollWidth};
    });
-   const {a,c,m,f,scroll}=g;
-   assert.ok(Math.abs(a.top-c.top)<=3&&a.right<=c.left+1&&
-    Math.abs(a.height-c.height)<=3&&a.width>75&&c.width>75,
-    view+' Account/Category geometry '+width+': '+JSON.stringify(g));
-   assert.ok(Math.abs(a.height-m.height)<=3&&m.left>=f.left-1&&m.right<=f.right+1&&
-    scroll<=width+3,
-    view+' Months inside filter container '+width+': '+JSON.stringify(g));
-   if(width>650)assert.ok(Math.abs(a.top-m.top)<=3&&c.right<=m.left+1,
-    view+' has three inline filters '+width+': '+JSON.stringify(g));
-   else assert.ok(m.top>=a.bottom+3&&m.width>=a.width+c.width,
-    view+' wraps Months on phone '+width+': '+JSON.stringify(g));
+   const {m,a,c,f,scroll}=g;
+   assert.ok(Math.abs(a.top-m.top)<=3&&m.right<=a.left+1&&
+    Math.abs(a.height-m.height)<=3&&a.width>75&&m.width>75,
+    view+' Months/Account order and alignment '+width+': '+JSON.stringify(g));
+   assert.ok(m.left>=f.left-1&&a.right<=f.right+1&&scroll<=width+3,
+    view+' filter controls inside surface '+width+': '+JSON.stringify(g));
+   if(width>650)assert.ok(Math.abs(a.top-c.top)<=3&&a.right<=c.left+1&&
+    Math.abs(a.height-c.height)<=3&&c.width>75,
+    view+' has three aligned desktop columns '+width+': '+JSON.stringify(g));
+   else assert.ok(c.top>=a.bottom+3&&c.left>=f.left-1&&
+    c.right<=f.right+1&&c.width>=m.width+a.width,
+    view+' Category wraps below Months and Account '+width+': '+JSON.stringify(g));
    await verifyMonthOptionsDoNotOverlap(page,view+' '+width+'px');
   }
   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
@@ -722,6 +731,12 @@ const {chromium,webkit}=require('playwright');
     'Budget month picker no longer occupies the navigation row');
    assert.equal(await page.locator('.history-budget-month-field [data-history-month-toggle]').count(),1,
     'Budget month picker shares the account filter row');
+   const budgetFilterOrder=await page.locator('.history-budget-filters').evaluate(form=>
+    [...form.children].filter(el=>el.matches('.history-budget-month-field')||
+     el.querySelector('[name="historyAccount"]'))
+     .map(el=>el.matches('.history-budget-month-field')?'Months':'Account'));
+   assert.deepEqual(budgetFilterOrder,['Months','Account'],
+    'Budget month selection precedes Account in document and keyboard order');
    const accountAndMonths=await page.evaluate(()=>{
     const account=document.querySelector('.history-budget-filters [name="historyAccount"]').getBoundingClientRect(),
      month=document.querySelector('.history-budget-filters .history-month-trigger').getBoundingClientRect(),
@@ -731,14 +746,14 @@ const {chromium,webkit}=require('playwright');
     return {accountTop:account.top,monthTop:month.top,accountBottom:account.bottom,
      monthBottom:month.bottom,accountHeight:account.height,monthHeight:month.height,
      accountLabelTop:accountLabel.top,monthLabelTop:monthLabel.top,
-     accountRight:account.right,monthLeft:month.left,monthRight:month.right,formRight:form.right};
+     accountLeft:account.left,accountRight:account.right,monthLeft:month.left,monthRight:month.right,formRight:form.right};
    });
    assert.ok(Math.abs(accountAndMonths.accountTop-accountAndMonths.monthTop)<=2&&
     Math.abs(accountAndMonths.accountBottom-accountAndMonths.monthBottom)<=2&&
     Math.abs(accountAndMonths.accountLabelTop-accountAndMonths.monthLabelTop)<=2&&
     Math.abs(accountAndMonths.accountHeight-accountAndMonths.monthHeight)<=1&&
-    accountAndMonths.accountRight<=accountAndMonths.monthLeft&&
-    accountAndMonths.monthRight<=accountAndMonths.formRight,
+    accountAndMonths.monthRight<=accountAndMonths.accountLeft+1&&
+    accountAndMonths.accountRight<=accountAndMonths.formRight,
     'Account and Months labels/dropdowns must align precisely in one row: '+JSON.stringify(accountAndMonths));
    await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
    assert.ok(await page.locator('[data-history-month-option][value="2026-09"]').count()>0,
@@ -971,12 +986,12 @@ const {chromium,webkit}=require('playwright');
      const account=document.querySelector('.history-budget-filters [name="historyAccount"]')?.getBoundingClientRect(),
       month=document.querySelector('.history-budget-filters .history-month-trigger')?.getBoundingClientRect(),
       scrollWidth=document.documentElement.scrollWidth;
-     return {accountTop:account.top,monthTop:month.top,accountRight:account.right,
-      monthLeft:month.left,accountHeight:account.height,monthHeight:month.height,scrollWidth};
+     return {accountTop:account.top,monthTop:month.top,accountLeft:account.left,
+      monthRight:month.right,accountHeight:account.height,monthHeight:month.height,scrollWidth};
     });
     assert.ok(Math.abs(selectorAlignment.accountTop-selectorAlignment.monthTop)<=2&&
      Math.abs(selectorAlignment.accountHeight-selectorAlignment.monthHeight)<=1&&
-     selectorAlignment.accountRight<=selectorAlignment.monthLeft+1&&
+     selectorAlignment.monthRight<=selectorAlignment.accountLeft+1&&
      selectorAlignment.scrollWidth<=width+3,
      'Account and Months dropdowns stay precisely aligned at '+width+': '+JSON.stringify(selectorAlignment));
     const compact=await page.evaluate(()=>{
