@@ -440,6 +440,7 @@ const {chromium,webkit}=require('playwright');
         'Filter transactions by category');
      }
      if(tab==='schedules'){
+       await page.locator('[data-bills-tab="repeating"]').click();
        const layout=await page.evaluate(()=>{
         const label=document.querySelector('.schedule-page .schedule-category-controls>label'),
          control=label?.querySelector('[data-schedule-category-filter]');
@@ -1282,6 +1283,7 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.locator('[data-bills-tab="upcoming"]').click();
    assert.equal(await page.locator('[data-bills-tab]').count(),2,
     'Bills uses the shared Spending segmented navigation');
    assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),true);
