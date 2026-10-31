@@ -1354,14 +1354,54 @@ const {chromium,webkit}=require('playwright');
     'Bills uses the shared Spending segmented navigation');
    assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),true);
    assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),false);
+   const upcomingBillsMonth=page.locator('[data-bills-pane="upcoming"] [data-bills-month]'),
+    repeatingBillsMonth=page.locator('[data-bills-pane="repeating"] [data-bills-month]');
+   assert.equal(await upcomingBillsMonth.count(),1);
+   assert.equal(await repeatingBillsMonth.count(),1);
+   assert.equal(await upcomingBillsMonth.inputValue(),'');
+   assert.equal(await upcomingBillsMonth.locator('option').first().innerText(),'Next 30 days');
+   const offeredBillMonths=await upcomingBillsMonth.locator('option').evaluateAll(nodes=>
+    nodes.map(node=>node.value));
+   assert.deepEqual(offeredBillMonths,['','2026-10','2026-11','2026-12',
+    '2027-01','2027-02','2027-03','2027-04','2027-05','2027-06',
+    '2027-07','2027-08','2027-09','2027-10'],
+    'Both Bills tabs provide the current month and twelve future calendar months');
+   await upcomingBillsMonth.selectOption('2026-11');
+   assert.equal(await page.locator('[data-bills-more]').count(),0,
+    'Choosing a calendar month replaces the old 30/90 day range toggle');
+   assert.ok(await page.locator('.bills-upcoming-row').evaluateAll(rows=>
+    rows.every(el=>/Nov /.test(el.querySelector('.bills-upcoming-date')?.textContent||''))),
+    'Upcoming shows only dated payments in the selected calendar month');
+   await page.locator('[data-bills-tab="repeating"]').click();
+   assert.equal(await repeatingBillsMonth.inputValue(),'2026-11',
+    'Selected month is retained when switching to Repeating');
+   assert.equal(await page.locator('.schedule-toolbar').evaluate(el=>
+    el.firstElementChild?.matches('.bills-month-field')),true,
+    'Month selection is first in Repeating controls');
+   await repeatingBillsMonth.selectOption('2026-12');
+   await page.locator('[data-bills-tab="upcoming"]').click();
+   assert.equal(await upcomingBillsMonth.inputValue(),'2026-12',
+    'Choosing month in Repeating also controls Upcoming');
+   await upcomingBillsMonth.selectOption('');
+   assert.equal(await page.locator('[data-bills-more]').count(),1,
+    'Unfiltered Upcoming retains the original 30/90-day toggle');
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     const grid=await page.locator('.schedule-page .ledger-section-tabs .history-subtab')
      .evaluateAll(items=>items.map(x=>x.getBoundingClientRect().toJSON()));
+    const filter=await upcomingBillsMonth.evaluate(el=>{
+     const container=el.closest('.bills-heading-actions').getBoundingClientRect(),
+      select=el.getBoundingClientRect();
+     return {left:select.left,right:select.right,top:select.top,bottom:select.bottom,
+      containerLeft:container.left,containerRight:container.right};
+    });
     assert.ok(grid.length===2&&Math.abs(grid[0].width-grid[1].width)<=2&&
      Math.abs(grid[0].top-grid[1].top)<=2&&
+     filter.right<=filter.containerRight+2&&filter.left>=filter.containerLeft-2&&
+     filter.bottom>filter.top&&
      await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
-     'Bills tabs stay symmetrical at '+width+'px');
+     'Bills month selector and tabs fit without clipping at '+width+'px: '+
+      JSON.stringify(filter));
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await page.locator('[data-bills-tab="repeating"]').click();
@@ -1820,6 +1860,23 @@ const {chromium,webkit}=require('playwright');
     'Fixture appears in Upcoming Bills as a canonical forecast');
    assert.equal(await repeating.count(),1,
     'Fixture appears in Repeating Payments');
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
+   assert.equal(await page.locator('[data-bills-more]').count(),0);
+   assert.equal(await upcoming.count(),1,
+    'November Upcoming contains the saved recurring bill from its real November occurrence');
+   assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Nov 23/);
+   await page.locator('[data-bills-tab="repeating"]').click();
+   assert.equal(await page.locator('[data-bills-pane="repeating"] [data-bills-month]').inputValue(),'2026-11');
+   assert.equal(await repeating.count(),1);
+   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Nov 23/,
+    'Repeating shows the first actual scheduled payment inside the selected month');
+   await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-12');
+   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Dec 23/,
+    'Changing the month changes which canonical repeating occurrence is shown');
+   await page.locator('[data-bills-tab="upcoming"]').click();
+   assert.equal(await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').inputValue(),'2026-12');
+   assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Dec 23/);
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
    const design=(row,container,merchant,amount)=>row.evaluate(
     (node,{container,merchant,amount})=>{
      const outer=node.closest(container),css=getComputedStyle(outer),r=node.getBoundingClientRect();
