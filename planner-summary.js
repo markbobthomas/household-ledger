@@ -277,27 +277,28 @@ function monthlyPredictions(state){
    '</div>':'<p class="calendar-empty">No upcoming predicted deposits or withdrawals for this account during the remaining forecast days this month.</p>')+
    '</details>'+unplanned;
 }
-// Rolling 90 calendar days from the observation date, independent of the
-// displayed month. Only include days shown in our five-day calendar.
-function next90Low(){
- const context=calendarContext,points=context?.points||[];
- if(!context?.asOf||!points.length||dateDelta(points.at(-1).date,context.asOf)<90)return null;
- const matching=points.filter(p=>dateDelta(p.date,context.asOf)>=0&&
-  dateDelta(p.date,context.asOf)<=90&&Number.isFinite(p.balance)&&
-  ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
+// The balance card follows the displayed Calendar month, not a rolling window.
+// A historical month or an incomplete final forecast month is not projected.
+function displayedMonthLow(){
+ const state=calendarContext,points=state?.points||[];
+ if(!state?.asOf||!calendarMonth||!points.length)return null;
+ const [year,month]=calendarMonth.split('-').map(Number);
+ const lastDay=calendarMonth+'-'+String(new Date(year,month,0).getDate()).padStart(2,'0');
+ if(lastDay<state.asOf||points.at(-1).date<lastDay)return null;
+ const matching=points.filter(p=>p.date.startsWith(calendarMonth)&&Number.isFinite(p.balance));
  return matching.length?matching.reduce((a,b)=>b.balance<a.balance?b:a):null;
 }
-function updateNext90Low(){
- const el=document.querySelector('[data-summary-next-90-low]');
+function updateDisplayedMonthLow(){
+ const el=document.querySelector('[data-summary-month-low]');
  if(!el)return;
- const point=next90Low(),value=el.querySelector('[data-summary-next-90-value]'),
-  button=el.querySelector('[data-calendar-next-90-low]');
+ const point=displayedMonthLow(),value=el.querySelector('[data-summary-month-low-value]'),
+  button=el.querySelector('[data-calendar-month-low]');
  if(value){value.textContent=point?money(point.balance):'Not projected';
   value.classList.toggle('summary-low-alert',Boolean(point&&point.balance>=0&&
    point.balance<alertThreshold(calendarContext?.prefs)));
   value.classList.toggle('summary-low-negative',Boolean(point&&point.balance<0));}
  if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
-  button.disabled=!point;button.dataset.calendarNext90Low=point?.date||'';}
+  button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
 }
 
 // One compact Calendar toolbar: account | centered month | month actions.
@@ -332,7 +333,7 @@ function calendarGrid(){
   ...[...state.actual.keys()].map(d=>d.slice(0,7))])].sort();
  if(!keys.includes(calendarMonth))calendarMonth=keys[0];
  const currentPoints=state.points.filter(p=>p.date.startsWith(calendarMonth));
- const rollingMinimum=next90Low();
+ const monthMinimum=displayedMonthLow();
  if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
  const weekday=iso=>iso&&![0,6].includes(new Date(iso+'T12:00:00Z').getUTCDay());
  // Even on a five-day grid, preserve a selected weekend as-of date in the day detail.
@@ -386,7 +387,7 @@ function calendarGrid(){
     ', no predicted transactions')+
    (negative?', below zero':low?', below cash cushion':'');
   return '<button type="button" class="calendar-day'+
-   (calendarDate===iso?' selected':'')+(rollingMinimum?.date===iso?' next-90-minimum':'')+(iso===state.asOf?' today':'')+
+   (calendarDate===iso?' selected':'')+(monthMinimum?.date===iso?' month-minimum':'')+(iso===state.asOf?' today':'')+
    (calendarFocus?.dates?.includes(iso)?' coverage-highlight':'')+
    (negative?' negative':low?' low':'')+
    '" data-calendar-day="'+iso+'" aria-pressed="'+(calendarDate===iso)+
@@ -432,7 +433,7 @@ function showCalendar(date,keepWeekend=false){
  const stage=document.querySelector('[data-calendar-stage]');
  if(stage)stage.outerHTML=calendarGrid();
  updateCalendarNavigation();
- updateNext90Low();
+ updateDisplayedMonthLow();
  return true;
 }
 
@@ -602,16 +603,16 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  const listed=lowDay.events||[];
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
- const ninetyDayMinimum=credit?null:next90Low();
+ const monthMinimum=credit?null:displayedMonthLow();
  const calendarHtml='<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
-   '<div class="summary-monthly" data-summary-next-90-low>'+
-    '<div class="summary-overline">Lowest in next 90 days</div>'+
-    '<strong class="summary-low'+balanceRiskClass(ninetyDayMinimum?.balance,prefs)+'" data-summary-next-90-value>'+
-     (ninetyDayMinimum?money(ninetyDayMinimum.balance):'Not projected')+'</strong>'+
-    '<button type="button" class="summary-low-date" data-calendar-next-90-low="'+esc(ninetyDayMinimum?.date||'')+'"'+
-     (ninetyDayMinimum?'':' disabled')+'>'+
-     (ninetyDayMinimum?esc(dateLabel(ninetyDayMinimum.date))+' →':'No projected date')+'</button>'+
+   '<div class="summary-monthly" data-summary-month-low>'+
+    '<div class="summary-overline">Lowest in shown month</div>'+
+    '<strong class="summary-low'+balanceRiskClass(monthMinimum?.balance,prefs)+'" data-summary-month-low-value>'+
+     (monthMinimum?money(monthMinimum.balance):'Not projected')+'</strong>'+
+    '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthMinimum?.date||'')+'"'+
+     (monthMinimum?'':' disabled')+'>'+
+     (monthMinimum?esc(dateLabel(monthMinimum.date))+' →':'No projected date')+'</button>'+
     '</div>')+'</div>'+
     calendarGrid()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
@@ -788,9 +789,9 @@ document.addEventListener('click',e=>{
  if(actual){showCalendar(actual.dataset.calendarActualDay,true);return;}
  const day=e.target.closest?.('[data-calendar-day]');
  if(day){showCalendar(day.dataset.calendarDay);return;}
- const ninetyDayLowButton=e.target.closest?.('[data-calendar-next-90-low]');
- if(ninetyDayLowButton?.dataset.calendarNext90Low){
-  showCalendar(ninetyDayLowButton.dataset.calendarNext90Low,true);return;
+ const monthLowButton=e.target.closest?.('[data-calendar-month-low]');
+ if(monthLowButton?.dataset.calendarMonthLow){
+  showCalendar(monthLowButton.dataset.calendarMonthLow,true);return;
  }
  const cardStatement=e.target.closest?.('[data-calendar-card-statement-date]');
  if(cardStatement?.dataset.calendarCardStatementDate){
