@@ -19,7 +19,7 @@ if(!HOST)throw Error('PLAID_ENV must be production or sandbox');
 const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const stamp=()=>new Date().toISOString();
 const freshState=()=>({items:[],transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}});
-let state=freshState(),forecastWrites=Promise.resolve(),accountRemovalBusy=false;
+let state=freshState(),forecastWrites=Promise.resolve(),householdEditQueue=Promise.resolve(),accountRemovalBusy=false;
 const settingsRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify(state.ledgerAdjustments||{})).digest('hex');
 const staleMessage='Ledger was updated on another device. This edit was not saved. Reload the page to review the latest changes.';
 function normalizeState(){
@@ -255,6 +255,14 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  // Serialize every household preference mutation, including category renames,
+  // so a stale version is checked only AFTER the prior edit has committed.
+  let releaseEdit=null;
+  if(requestPath.startsWith('/api/ledger/')){
+   const previousEdit=householdEditQueue;
+   householdEditQueue=new Promise(resolve=>{releaseEdit=resolve});
+   await previousEdit;
+  }
   try{
    // Prevent an outdated device from overwriting newer household settings.
    const expected=req.headers['x-ledger-revision'];
@@ -523,6 +531,8 @@ async function start(port=Number(env.PORT||8788)){
      code:'ITEM_LOGIN_REQUIRED',reconnectAccountId:e.reconnectAccountId||null});
    return respond(e.httpStatus||400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140),
     ...(e.httpStatus===409?{code:'STALE_LEDGER'}:{})})
+  }finally{
+   if(releaseEdit)releaseEdit();
   }
  });
  return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>resolve(server))});
