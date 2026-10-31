@@ -8,7 +8,8 @@ const shared=root.HouseholdPlannerTransactions||
 if(!shared)throw Error('Planner scheduling helpers are required');
 const asId=x=>String(x??'');
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
-const dollars=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
+const currencyFormatter=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
+const dollars=n=>currencyFormatter.format(Number(n)||0);
 const date=s=>/^\d{4}-\d{2}-\d{2}$/.test(asId(s));
 const day=shared.shift;
 const monthPlus=(iso,n)=>{const [y,m,d]=iso.split('-').map(Number);

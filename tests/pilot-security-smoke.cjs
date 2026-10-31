@@ -4,7 +4,7 @@ const {spawn}=require('node:child_process');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-pilot-'));
 const port=19845,pass='test-'+crypto.randomBytes(24).toString('hex');
 const env={...process.env,PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test-placeholder',PLAID_SECRET:'test-placeholder',PLAID_ENV:'sandbox',PILOT_STATE_PATH:path.join(dir,'pilot.enc'),RENDER_GIT_COMMIT:'a'.repeat(40)};
-function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostname:'127.0.0.1',port,path:route,headers:auth?{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}:{}},r=>{let body='';r.on('data',c=>body+=c);r.on('end',()=>resolve({status:r.statusCode,body}))}).on('error',reject)})}
+function get(route,auth,extraHeaders={}){return new Promise((resolve,reject)=>{http.get({hostname:'127.0.0.1',port,path:route,headers:{...(auth?{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}:{}) ,...extraHeaders}},r=>{let body='';r.on('data',c=>body+=c);r.on('end',()=>resolve({status:r.statusCode,body,headers:r.headers}))}).on('error',reject)})}
 (async()=>{
  const child=spawn(process.execPath,['pilot/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:['ignore','pipe','pipe']});
  try{
@@ -39,6 +39,19 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect accounts/,'Plaid authorization available on same website');
   assert.equal((await get('/pilot/data-source.js',true)).status,200);
   assert.equal((await get('/planner-transactions.js',true)).status,200,'Protected server serves forecast-only editing module');
+  const staticJs=await get('/planner.js',true);
+  assert.equal(staticJs.status,200);
+  assert.match(staticJs.headers.etag||'',/^"[a-f0-9]{64}"$/,
+   'Authenticated static JavaScript has a content-addressed validator');
+  assert.equal(staticJs.headers['cache-control'],'private, no-cache');
+  const unchanged=await get('/planner.js',true,{'If-None-Match':staticJs.headers.etag});
+  assert.equal(unchanged.status,304,'Identical JavaScript revalidates without resending the file');
+  assert.equal(unchanged.body,'');
+  assert.equal((await get('/planner.js',false,{'If-None-Match':staticJs.headers.etag})).status,401,
+   'Cache validation must not bypass private authentication');
+  assert.equal(ledger.headers['cache-control'],'no-store','Private HTML stays non-cacheable');
+  assert.equal((await get('/api/ledger',true)).headers['cache-control'],'no-store',
+   'Private bank snapshots must never be cached');
   // Retired Phase 4 accuracy/readiness research was not part of the site.
   // The authenticated server must no longer expose those obsolete scripts.
   for(const asset of ['feed-health.js','accuracy-fixture.js','accuracy-fixture-holdout.js',
