@@ -6159,3 +6159,11 @@ a:hover{color:#166e61}
  .schedule-page .bills-heading-actions{gap:8px}
  .schedule-page .bills-upcoming-sum,.schedule-page .bills-repeating-sum{font-size:14px}
 }
+
+/* Monthly bill evidence is visible without extra prose or controls. */
+.schedule-page .bills-upcoming-row[data-bills-source="actual"] .bills-upcoming-description small{
+ color:#37714e;
+}
+.schedule-page .bills-upcoming-row[data-bills-source="unconfirmed"] .bills-upcoming-description small{
+ color:#946a32;
+}

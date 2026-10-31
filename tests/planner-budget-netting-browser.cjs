@@ -127,14 +127,22 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
     name+': forecast metrics and calendar are the first surface');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
-   const upcoming=await page.locator('.bills-upcoming').innerText();
-   assert.match(upcoming,/Fictional Visa Payment/,
-    name+': Bills shows a linked checking-to-card payment in the same forecast');
-   assert.doesNotMatch(upcoming,/Fictional Savings Transfer/,
-    name+': savings transfer is not incorrectly presented as a bill');
-   assert.doesNotMatch(upcoming,/Fictional Visa Subscription/,
-    name+': a credit-card purchase is not a second cash bill');
-   assert.match(upcoming,/Fictional Earlier Bill/);
+   const currentExpenses=await page.locator('.bills-upcoming').innerText();
+   assert.match(currentExpenses,/Fictional Earlier Bill/,
+    name+': Current-month planned expenses remain listed');
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
+   const novemberExpenses=await page.locator('.bills-upcoming').innerText();
+   assert.doesNotMatch(novemberExpenses,/Fictional Visa Payment/,
+    name+': Credit-card settlement is a balance transfer, not a new expense');
+   assert.doesNotMatch(novemberExpenses,/Fictional Savings Transfer/,
+    name+': Savings transfer is not an expense');
+   assert.match(novemberExpenses,/Fictional Visa Subscription/,
+    name+': A scheduled card charge counts as an expense on its card account');
+   assert.match(novemberExpenses,/Fictional Scheduled Card Charge/,
+    name+': Scheduled card charges are expenses regardless of payment account');
+   assert.match(novemberExpenses,/Fictional Scheduled Checking Charge/,
+    name+': Scheduled checking expenses appear alongside card charges');
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
    await page.locator('[data-bills-more]').click();
    assert.match(await page.locator('.bills-range-toggle').innerText(),/30 days/,
     name+': Bills can expand to a 90-day view without modifying forecasts');
@@ -233,9 +241,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.doesNotMatch(await page.locator('.financial-recap-upcoming').innerText(),/Fictional Savings Transfer/,
     name+': internal savings transfer must not appear as a bill');
 
-   // A saved recurring checking-to-card bill (the Bills page, not a
-   // one-time Payments add) must be in Summary's NEXT FIVE when due before
-   // the other projected withdrawals. Store only fictional demo preferences.
+   // A saved recurring checking-to-card repayment must still appear in
+   // Summary's NEXT FIVE cash outflows, but not in expense-only Bills.
+   // Store only fictional demo preferences.
    await page.evaluate(()=>{
     const key='household-planner-sample-settings-v1',
      saved=JSON.parse(localStorage.getItem(key)||'{}');
@@ -250,14 +258,13 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    const recurring=page.locator('[data-schedule-card="fictional-recurring-card-pay"]');
-   assert.equal(await recurring.count(),1,name+': recurring card payment is listed in Bills');
-   assert.match(await recurring.innerText(),/Oct 22/,
-    name+': Bills presents a next-week dated card payment, not an unforecasted placeholder');
+   assert.equal(await recurring.count(),0,
+    name+': card repayment remains in the checking forecast but is excluded from repeating expenses');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('[data-history-view="summary"]').click();
    const firstFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
    assert.match(firstFive,/Fictional Recurring Card Repayment/,
-    name+': a next-week card payment shown in Bills must also be among Summary next five');
+    name+': next-week card repayment remains in Summary cash forecasts despite Bills exclusion');
    assert.equal(await page.locator('[data-recap-next-card-payment]').count(),0,
     name+': the card payment within first five must not require an extra row');
 

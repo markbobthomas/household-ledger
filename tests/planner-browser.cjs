@@ -1358,14 +1358,15 @@ const {chromium,webkit}=require('playwright');
     repeatingBillsMonth=page.locator('[data-bills-pane="repeating"] [data-bills-month]');
    assert.equal(await upcomingBillsMonth.count(),1);
    assert.equal(await repeatingBillsMonth.count(),1);
-   assert.equal(await upcomingBillsMonth.inputValue(),'');
+   assert.equal(await upcomingBillsMonth.inputValue(),'2026-10',
+    'Bills defaults to the full current calendar month, not a partial forward-only range');
    assert.equal(await upcomingBillsMonth.locator('option').first().innerText(),'Next 30 days');
    const offeredBillMonths=await upcomingBillsMonth.locator('option').evaluateAll(nodes=>
     nodes.map(node=>node.value));
-   assert.deepEqual(offeredBillMonths,['','2026-10','2026-11','2026-12',
-    '2027-01','2027-02','2027-03','2027-04','2027-05','2027-06',
-    '2027-07','2027-08','2027-09','2027-10'],
-    'Both Bills tabs provide the current month and twelve future calendar months');
+   assert.deepEqual(offeredBillMonths.slice(0,4),['','2026-10','2026-11','2026-12']);
+   assert.ok(offeredBillMonths.includes('2026-09')&&offeredBillMonths.includes('2026-07')&&
+    offeredBillMonths.includes('2027-10'),
+    'Bills offers historical bank months as well as the current and upcoming year');
    await upcomingBillsMonth.selectOption('2026-11');
    const billTotalText=await page.locator('[data-bills-upcoming-sum]').innerText();
    const expectedUpcoming=await page.locator('.bills-upcoming-row>strong').evaluateAll(nodes=>
@@ -1420,6 +1421,7 @@ const {chromium,webkit}=require('playwright');
     'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
+   assert.equal(await page.locator('.bills-heading h2').innerText(),'Monthly expenses');
    assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
@@ -1845,16 +1847,29 @@ const {chromium,webkit}=require('playwright');
    await page.evaluate(accountId=>{
     const key='household-planner-sample-settings-v1';
     const p=JSON.parse(localStorage.getItem(key)||'{}');
+    const bank=window.createHouseholdLedgerDemo().transactions.find(x=>
+     x.date==='2026-10-02'&&x.merchant==='Mortgage');
+    if(!bank)throw Error('Fictional October mortgage source missing');
     const r={id:'fictional-bill-row-layout',kind:'event',
      accountId,originalAccountId:accountId,
      merchant:'Fictional Internet Bill',originalMerchant:'Fictional Internet Bill',
      scheduleLabel:'Fictional Internet Bill',type:'expense',originalType:'expense',
      amount:85,matchAmount:85,frequency:'monthly',sourceFrequency:'monthly',
-     anchorDate:'2026-10-23',sourceAnchorDate:'2026-10-23',
+     anchorDate:'2026-09-23',sourceAnchorDate:'2026-09-23',
      amountBasis:'fixed',category:'Utility',categoryReviewed:true,
      matchNames:['fictional internet bill'],enabled:true};
-    p.futureRecurringRules=[...(p.futureRecurringRules||[])
-     .filter(x=>x.id!==r.id),r];
+    const mortgage={...r,id:'fictional-mortgage-posted',
+     merchant:'Mortgage',originalMerchant:'Mortgage',scheduleLabel:'Mortgage',
+     amount:2650,matchAmount:2650,anchorDate:'2026-07-02',
+     sourceAnchorDate:'2026-07-02',category:'Housing',
+     matchNames:['mortgage'],exampleIds:[bank.id]};
+    const income={...r,id:'fictional-income-excluded',type:'income',
+     originalType:'income',merchant:'Fictional Paycheck',
+     originalMerchant:'Fictional Paycheck',scheduleLabel:'Fictional Paycheck',amount:4100};
+    const transfer={...r,id:'fictional-transfer-excluded',type:'transfer',
+     originalType:'transfer',cashDirection:'out',merchant:'Fictional Transfer',
+     originalMerchant:'Fictional Transfer',scheduleLabel:'Fictional Transfer',amount:700};
+    p.futureRecurringRules=[r,mortgage,income,transfer];
     p.recurringForecastMode='approved-only';
     localStorage.setItem(key,JSON.stringify(p));
    },visualAccount);
@@ -1868,6 +1883,35 @@ const {chromium,webkit}=require('playwright');
     'Fixture appears in Upcoming Bills as a canonical forecast');
    assert.equal(await repeating.count(),1,
     'Fixture appears in Repeating Payments');
+   const monthPicker=page.locator('[data-bills-pane="upcoming"] [data-bills-month]');
+   assert.equal(await monthPicker.inputValue(),'2026-10');
+   const postedMortgage=page.locator('.bills-upcoming-row').filter({hasText:'Mortgage'});
+   assert.equal(await postedMortgage.count(),1,
+    'October posted mortgage replaces its expected schedule rather than duplicating it');
+   assert.match(await postedMortgage.innerText(),/Posted/);
+   assert.match(await postedMortgage.innerText(),/2,650/);
+   assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Paycheck'}).count(),0);
+   assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Transfer'}).count(),0);
+   const verifyMonthlyTotal=async()=>{const shown=await page.locator('.bills-upcoming-row>strong')
+    .evaluateAll(nodes=>nodes.reduce((sum,node)=>
+     sum+Math.round(Number(node.textContent.replace(/[^0-9.-]/g,''))*100),0));
+    const total=Number((await page.locator('[data-bills-upcoming-sum]').innerText())
+     .replace(/[^0-9.-]/g,''));
+    assert.equal(Math.round(total*100),shown,'Monthly sum equals actual+expected expenses only');
+   };
+   await verifyMonthlyTotal();
+   await postedMortgage.click();
+   assert.match(await page.locator('.transaction-detail').innerText(),/Bank history/,
+    'Posted expenses open the read-only bank transaction detail');
+   await page.locator('.transaction-detail-close').click();
+   await monthPicker.selectOption('2026-09');
+   assert.equal(await page.locator('.bills-upcoming-row')
+    .filter({hasText:'Fictional Internet Bill'}).count(),1,
+    'Prior month retains historical unconfirmed expected expenses');
+   assert.match(await upcoming.innerText(),/Not confirmed/);
+   assert.equal(await postedMortgage.count(),1,'Previous month includes its linked actual mortgage');
+   await verifyMonthlyTotal();
+   await monthPicker.selectOption('2026-10');
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
    assert.equal(await page.locator('[data-bills-more]').count(),0);
    assert.equal(await upcoming.count(),1,
@@ -1876,6 +1920,10 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await page.locator('[data-bills-pane="repeating"] [data-bills-month]').inputValue(),'2026-11');
    assert.equal(await repeating.count(),1);
+   assert.equal(await page.locator('[data-schedule-card="fictional-income-excluded"]').count(),0,
+    'Repeating excludes income');
+   assert.equal(await page.locator('[data-schedule-card="fictional-transfer-excluded"]').count(),0,
+    'Repeating excludes transfers');
    assert.match(await repeating.locator('.schedule-row-next').innerText(),/Nov 23/,
     'Repeating shows the first actual scheduled payment inside the selected month');
    await page.locator('[data-schedule-search]').fill('Fictional Internet Bill');
