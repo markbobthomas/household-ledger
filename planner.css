@@ -5860,3 +5860,22 @@ a:hover{color:#166e61}
   min-height:29px;
  }
 }
+
+/* Merchants/Purchase Sizes: Account, Category and Months share the filter surface. */
+.history-page .history-analysis-filters.history-report-filters{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+.history-page .history-report-filters>.history-category-controls{
+  grid-column:2!important;grid-row:1!important;
+}
+.history-page .history-report-filters>.history-report-month-field{
+  grid-column:3!important;grid-row:1!important;
+}
+@media(max-width:650px){
+  .history-page .history-analysis-filters.history-report-filters{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  .history-page .history-report-filters>.history-report-month-field{
+    grid-column:1/-1!important;grid-row:2!important;
+  }
+}
