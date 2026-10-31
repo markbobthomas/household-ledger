@@ -2613,6 +2613,11 @@ function sortedReviewRows(items,dateOf,nameOf,amountOf){
 function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  // Reuse the count's exact queue, including distinct unsaved legacy streams.
  const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,categoryIssues,categoryCount}=queue;
+ const paneCounts={categories:categoryCount,payments:overdue.length,
+  earlier:decisionsNeeded,suggestions:pending.length};
+ if(!reviewPane)reviewPane=Object.keys(paneCounts).find(key=>paneCounts[key]>0)||'categories';
+ const pane=id=>'<div class="review-tab-pane" data-review-pane="'+id+
+  '"'+(reviewPane===id?'':' hidden')+'>';
  lastRecommendedRepeating=recommendations;
  const
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
@@ -2715,6 +2720,13 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     'Needs a decision — currently included in your forecast'});
  };
  return '<div class="planner-page reviews-page">'+
+  '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
+   [['categories','Categories'],['payments','Payments'],['earlier','Earlier'],['suggestions','Suggestions']]
+    .map(([id,name])=>'<button type="button" class="history-subtab'+
+     (reviewPane===id?' active':'')+'" data-review-tab="'+id+'" aria-pressed="'+
+     (reviewPane===id)+'">'+name+
+     (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
+     '</button>').join('')+'</nav>'+
   '<div class="review-intro">'+
     '<div><h2>Things to check</h2></div>'+
     '<label class="review-sort-label minimal-control-label"><span class="visually-hidden">Sort by</span><select data-review-sort aria-label="Sort Things to check">'+
@@ -2724,13 +2736,15 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       '<option value="'+value+'"'+(reviewSort===value?' selected':'')+'>'+label+'</option>').join('')+
     '</select></label></div>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
+  pane('categories')+
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
    (categoryCount?shownCategories.map(categoryRow).join('')+
     (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
      'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
-    '')+'</section>'+
+    '')+'</section></div>'+
+  pane('payments')+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+'</span></div>'+
@@ -2777,6 +2791,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
        '<button type="button" class="btn" data-unignore-overdue="'+escapeHTML(item.key)+'">Undo ignore</button></div>').join('')+
      '</details>':'')+
    '</section>':'')+
+  '</div>'+pane('earlier')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
     '<div class="section-title"><h2>Earlier estimates to confirm</h2>'+
@@ -2796,6 +2811,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       (decisionsNeeded?'disabled title="Review remaining automatic estimates first"':'')+
       '>Use saved predictions only</button></div>'+
    '</section>':'')+
+  '</div>'+pane('suggestions')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Suggested repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+'</span></div>'+
@@ -2807,7 +2823,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     (ignored.some(r=>expanded(r))?' open':'')+'><summary>Dismissed suggestions ('+
      ignored.length+')</summary><div class="ignored-repeating-items">'+
       reviewRecommendations(ignored).map(normalCard).join('')+'</div></details>':'')+
-  '</div>';
+  '</div></div>';
 }
 
 function incomeStatus(bundle,s,chosen,derived){
