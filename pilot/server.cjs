@@ -20,6 +20,18 @@ const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 const stamp=()=>new Date().toISOString();
 const freshState=()=>({items:[],transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}});
 let state=freshState(),forecastWrites=Promise.resolve(),accountRemovalBusy=false;
+// Cache only static application JS and CSS. Never cache the private snapshot,
+// API responses, credentials or the dynamically assembled HTML document.
+const staticAssets=new Map();
+async function readStaticAsset(name){
+ let pending=staticAssets.get(name);
+ if(!pending){
+  pending=fs.readFile(path.resolve(__dirname,'..',name)).then(body=>({body,
+   etag:'"'+crypto.createHash('sha256').update(body).digest('hex')+'"'}));
+  staticAssets.set(name,pending);
+ }
+ try{return await pending}catch(error){staticAssets.delete(name);throw error}
+}
 function normalizeState(){
  if(!Array.isArray(state.items))state.items=[];
  if(state.item?.token&&state.accountId&&!state.items.some(i=>i.id===state.item.id))
@@ -193,14 +205,16 @@ async function start(port=Number(env.PORT||8788)){
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js)$/;
   if(req.method==='GET'&&(requestPath==='/'||allowed.test(staticPath))){
    const name=staticPath||'index.html';
-   let body;
-   try{body=await fs.readFile(path.resolve(__dirname,'..',name))}
+   let asset;
+   try{asset=name==='index.html'?{body:await fs.readFile(path.resolve(__dirname,'..',name))}:
+    await readStaticAsset(name)}
    catch(error){
     // Never crash the bank server on a browser request for a missing asset.
     if(error.code==='ENOENT')return respond(404,{error:'Static asset not found'});
     process.stderr.write('Static read failed: '+String(error.code||'unknown').slice(0,30)+'\n');
     return respond(500,{error:'Static asset temporarily unavailable'});
    }
+   let body=asset.body;
    if(name==='index.html'){
     // Ship the required classifier atomically with the private page. If Safari
     // drops a separate script request, the data model used to crash when it
@@ -223,7 +237,17 @@ async function start(port=Number(env.PORT||8788)){
      '<script src="/pilot/data-source.js"></script>');
     body=Buffer.from(page);
    }
-   res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
+   const headers={'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8',
+    'Cache-Control':name==='index.html'?'no-store':'private, no-cache',
+    'X-Content-Type-Options':'nosniff',
+    'Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"};
+   if(asset.etag){
+    headers.ETag=asset.etag;
+    if(String(req.headers['if-none-match']||'').split(',').some(tag=>tag.trim()===asset.etag)){
+     res.writeHead(304,headers);return res.end();
+    }
+   }
+   res.writeHead(200,headers);
    return res.end(body);
   }
   if(req.method==='GET'&&requestPath==='/api/ledger'){
