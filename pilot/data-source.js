@@ -7,7 +7,16 @@ const Accounting=root.HouseholdAccounting||(typeof require==='function'?require(
 const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('../categorization.js'):null);
 let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
-const today=()=>new Date().toLocaleDateString('en-CA');
+const BankFeed=root.HouseholdBankFeed||(typeof require==='function'?require('../bank-feed.js'):null);
+const today=()=>{
+ if(typeof BankFeed?.localDate==='function')return BankFeed.localDate();
+ // The adapter can be loaded independently by an isolated private-save test.
+ // Keep its fallback ISO/local even without the normal browser bank-feed module.
+ const d=new Date();
+ return [String(d.getFullYear()).padStart(4,'0'),
+  String(d.getMonth()+1).padStart(2,'0'),
+  String(d.getDate()).padStart(2,'0')].join('-');
+};
 const statusText=()=>lastError?'<p role="alert">'+esc(lastError)+'</p>':''; 
 const reconnectMessage='Your bank connection needs attention. Plaid requires you to sign in again or renew permission. Previously imported transactions and saved predictions are preserved; refresh results may be out of date.';
 const warningBanner=()=>live&&lastError?

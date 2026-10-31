@@ -9,7 +9,7 @@ const $=id=>document.getElementById(id);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 const cash=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable':
  new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n));
-const dateToday=()=>new Date().toLocaleDateString('en-CA');
+const dateToday=()=>window.HouseholdBankFeed.localDate();
 const dayLabel=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
  const warningThreshold=prefs=>{
