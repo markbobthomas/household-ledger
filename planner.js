@@ -1668,6 +1668,7 @@ function schedulesPage(bundle,s){
   }).join(''):
   visible.map(cardHtml).join(''); 
  const upcomingBills=forecastCashBills(bundle,s).filter(row=>
+  (row.cardBill||!['transfer','income','refund'].includes(row.sourceType))&&
   (!billsSelectedMonth||row.date.slice(0,7)===billsSelectedMonth)&&
   (billsSelectedMonth||row.date<=shiftDay(s.asOf,billsExpanded?90:30)))
   .map(row=>({...row,source:'prediction',status:row.cardBill?'Card payment':'Predicted',
