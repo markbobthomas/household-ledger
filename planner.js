@@ -76,7 +76,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth=null;
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1140,7 +1140,7 @@ function applyScheduleSearch(root=document){
  const count=root.querySelector('[data-schedule-visible-count]');
  if(count){
   const total=Number(count.dataset.scheduleTotalCount)||0;
-  count.textContent='Showing '+shown+' of '+total+' repeating transaction'+
+  count.textContent='Showing '+shown+' of '+total+' recurring expense'+
    (total===1?'':'s');
  }
  for(const row of root.querySelectorAll('[data-statement-occurrence]')){
@@ -1452,8 +1452,79 @@ function billsMonthSelect(asOf,scope){
    (scope==='upcoming'?(billsExpanded?'Next 90 days':'Next 30 days'):'All repeating payments')+
   '</option>'+months.join('')+'</select></label>';
 }
+// Statement estimates are the same card-cycle calculations used in Settings.
+// Card purchases belong here; payment transfers belong in Upcoming Bills.
+// Never derive an issued statement from card balance or spending averages.
+function billsStatementsPage(bundle,s){
+ const cards=activeAccounts(s).filter(a=>accountType(a)==='credit'),
+  estimates=bundle?.payments?.statements||[],
+  history=bundle?.payments?.historyStatements||[],
+  fmt=p=>escapeHTML(dayLabel(p.periodStart))+' – '+escapeHTML(dayLabel(p.periodEnd)),
+  eachCard=card=>{
+   const projected=estimates.filter(p=>String(p.cardId)===String(card.id))
+    .sort((a,b)=>a.periodEnd.localeCompare(b.periodEnd)).slice(0,12),
+    past=history.filter(p=>String(p.cardId)===String(card.id))
+    .sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd)).slice(0,6);
+   if(!projected.length&&!past.length)return '<section class="panel bills-card-statements" data-bills-card="'+
+    escapeHTML(card.id)+'"><div class="bills-card-heading"><h3>'+
+    escapeHTML(card.name)+'</h3><span>Not configured</span></div>'+
+    '<p class="bills-card-empty">Set statement dates in Settings to see estimates.</p></section>';
+   const cycles=projected.map((p,i)=>{
+    const open=p.periodStart<=s.asOf&&p.periodEnd>s.asOf,
+     status=p.confirmed?'Issued amount':open?'Current · open':p.periodComplete?'Closed · estimated':'Future · estimated',
+     posted=Number(p.actualPeriodNet)||0,
+     forecast=Number(p.estimatedCharges)||0,
+     transactionRows=[
+      ...(p.postedTransactions||[]).map(t=>({...t,source:'Posted'})),
+      ...(p.predictedTransactions||[]).map(t=>({...t,source:'Predicted'}))
+     ].sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
+    return '<details class="bills-statement-cycle" data-bills-statement="'+
+     escapeHTML(p.cardId)+'|'+escapeHTML(p.periodEnd)+'"'+
+     (open?' open':'')+'>'+
+     '<summary><span class="bills-statement-label">'+
+      '<strong>'+fmt(p)+'</strong><small>'+status+'</small></span>'+
+      '<strong class="bills-statement-amount">'+cash(p.statementBalance)+'</strong>'+
+      '<span class="bills-statement-caret" aria-hidden="true">⌄</span></summary>'+
+     '<div class="bills-statement-detail">'+
+      '<div><span>Posted net charges</span><strong>'+cash(posted)+'</strong></div>'+
+      '<div><span>Predicted net charges</span><strong>'+cash(forecast)+'</strong></div>'+
+      '<div><span>Estimated statement</span><strong>'+cash(p.statementBalance)+'</strong></div>'+
+      '<div><span>Payment due</span><strong>'+escapeHTML(dayLabel(p.dueDate))+'</strong></div>'+
+      '<div><span>Expected card payment</span><strong>'+
+       (p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>'+
+      '<div><span>Payment status</span><strong>'+
+       (p.alreadyPaid?'Posted':'Not confirmed')+'</strong></div>'+
+     '</div>'+
+     '<div class="bills-statement-lines">'+
+      (transactionRows.length?transactionRows.map(t=>
+        '<div class="bills-statement-line"><span>'+escapeHTML(dayLabel(t.date))+
+         '</span><span><strong>'+escapeHTML(t.merchant)+'</strong>'+
+         '<small>'+escapeHTML(t.source)+'</small></span><strong>'+
+         (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
+       '<p class="bills-card-empty">No posted or predicted card charges for this cycle.</p>')+
+     '</div>'+
+     (p.pendingExcluded?'<p class="bills-card-empty">'+p.pendingExcluded+
+       ' pending charge(s) excluded until posted.</p>':'')+
+     '</details>';
+   }).join('');
+   const earlier=past.length?'<details class="bills-statement-history">'+
+    '<summary>Earlier periods ('+past.length+')</summary>'+
+    past.map(p=>'<div class="bills-statement-past"><span>'+
+      fmt(p)+'</span><strong>'+cash(p.netActivity)+'</strong></div>').join('')+
+    '<p class="bills-card-empty">Past amounts reflect available posted activity, not verified issued statements.</p>'+
+    '</details>':'';
+   return '<section class="panel bills-card-statements" data-bills-card="'+
+    escapeHTML(card.id)+'"><div class="bills-card-heading"><h3>'+
+     escapeHTML(card.name)+'</h3><span>'+projected.length+
+     ' forecast cycle'+(projected.length===1?'':'s')+'</span></div>'+
+    cycles+earlier+'</section>';
+  };
+ return '<div class="bills-statements-page">'+
+  (cards.length?cards.map(eachCard).join(''):
+   '<section class="panel bills-card-empty">No credit-card accounts connected.</section>')+
+  '</div>';
+}
 function schedulesPage(bundle,s){
- if(billsSelectedMonth===null)billsSelectedMonth=String(s.asOf).slice(0,7);
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
   tomorrow=shiftDay(s.asOf,1),
@@ -1475,6 +1546,7 @@ function schedulesPage(bundle,s){
   monthlyByRule.get(row.ruleId).push(row);
  }
  const displayedByRule=billsSelectedMonth?monthByRule:upcomingByRule;
+ const expenseRules=rules.filter(rule=>rule.kind!=='movement'&&rule.type==='expense');
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>
   rule.kind!=='movement'&&rule.type==='expense'&&
@@ -1595,13 +1667,13 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- const upcomingBills=billsSelectedMonth?monthlyRows:
-  futureRows(bundle,s).filter(row=>row.kind==='event'&&row.type==='expense'&&
-   !['transfer','income','refund'].includes(row.sourceType)&&
-   (!row.recurringRuleId||(rules.some(r=>String(r.id)===String(row.recurringRuleId)&&
-    r.kind!=='movement'&&r.type==='expense')))&&
-   row.date<=shiftDay(s.asOf,billsExpanded?90:30))
-   .map(row=>({...row,source:'prediction',status:'Predicted',ruleId:row.recurringRuleId||null}));
+ const upcomingBills=forecastCashBills(bundle,s).filter(row=>
+  (row.cardBill||!['transfer','income','refund'].includes(row.sourceType))&&
+  (!billsSelectedMonth||row.date.slice(0,7)===billsSelectedMonth)&&
+  (billsSelectedMonth||row.date<=shiftDay(s.asOf,billsExpanded?90:30)))
+  .map(row=>({...row,source:'prediction',status:row.cardBill?'Card payment':'Predicted',
+   ruleId:row.recurringRuleId||null,
+   accountId:row.kind==='movement'?row.fromAccountId:row.accountId}));
  const upcomingCents=upcomingBills.reduce((total,row)=>
   total+Math.round(Number(row.amount||0)*100),0);
  const groupedBills=upcomingBills.map(row=>{
@@ -1620,18 +1692,18 @@ function schedulesPage(bundle,s){
  }).join('');
  return '<div class="planner-page schedule-page">'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
-   [['upcoming','Expenses'],['repeating','Repeating']].map(([id,name])=>
+   [['upcoming','Upcoming'],['repeating','Repeating'],['statements','Statements']].map(([id,name])=>
     '<button type="button" class="history-subtab'+(billsPane===id?' active':'')+
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
-   '<div class="bills-heading"><div><h2>Monthly expenses</h2></div>'+
+   '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
     '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Total '+
       cash(upcomingCents/100)+'</strong>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
-   (groupedBills||'<p class="bills-upcoming-empty">No recorded or predicted expenses in this period.</p>')+
+   (groupedBills||'<p class="bills-upcoming-empty">No upcoming bills in this period.</p>')+
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
@@ -1656,15 +1728,15 @@ function schedulesPage(bundle,s){
   create+'<div class="schedule-grid">'+
    '<div class="schedule-list-summary">'+
     '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
-     'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
-     ' of '+rules.length+' payments</p>'+
+     'data-schedule-total-count="'+expenseRules.length+'">Showing '+visible.length+
+     ' of '+expenseRules.length+' expenses</p>'+
     '<strong class="bills-repeating-sum" data-bills-repeating-total></strong></div>'+
-   (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
-      repeatingStatementPeriods(bundle,s,scheduleAccount,visible,billsSelectedMonth):'')+
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching predictions. Try a different search.</p>'+
-   '</div></div>';
+   '</div>'+
+  '<div data-bills-pane="statements"'+(billsPane==='statements'?'':' hidden')+'>'+
+   billsStatementsPage(bundle,s)+'</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -3674,7 +3746,7 @@ document.addEventListener('click',async e=>{
  const billsTab=e.target.closest?.('[data-bills-tab]');
  if(billsTab){
   const next=billsTab.dataset.billsTab;
-  if(!['upcoming','repeating'].includes(next)||next===billsPane)return;
+  if(!['upcoming','repeating','statements'].includes(next)||next===billsPane)return;
   if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
       recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
       !window.confirm('Discard unsaved prediction changes?'))return;

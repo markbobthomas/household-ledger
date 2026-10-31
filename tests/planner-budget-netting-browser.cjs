@@ -127,21 +127,21 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
     name+': forecast metrics and calendar are the first surface');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
-   const currentExpenses=await page.locator('.bills-upcoming').innerText();
-   assert.match(currentExpenses,/Fictional Earlier Bill/,
-    name+': Current-month planned expenses remain listed');
+   const currentBills=await page.locator('.bills-upcoming').innerText();
+   assert.match(currentBills,/Fictional Earlier Bill/,
+    name+': Upcoming lists the next checking withdrawals');
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
-   const novemberExpenses=await page.locator('.bills-upcoming').innerText();
-   assert.doesNotMatch(novemberExpenses,/Fictional Visa Payment/,
-    name+': Credit-card settlement is a balance transfer, not a new expense');
-   assert.doesNotMatch(novemberExpenses,/Fictional Savings Transfer/,
-    name+': Savings transfer is not an expense');
-   assert.match(novemberExpenses,/Fictional Visa Subscription/,
-    name+': A scheduled card charge counts as an expense on its card account');
-   assert.match(novemberExpenses,/Fictional Scheduled Card Charge/,
-    name+': Scheduled card charges are expenses regardless of payment account');
-   assert.match(novemberExpenses,/Fictional Scheduled Checking Charge/,
-    name+': Scheduled checking expenses appear alongside card charges');
+   const novemberBills=await page.locator('.bills-upcoming').innerText();
+   assert.match(novemberBills,/Fictional Visa Payment/,
+    name+': Upcoming includes the cash-to-card payment once');
+   assert.doesNotMatch(novemberBills,/Fictional Savings Transfer/,
+    name+': Savings movement is not a bill');
+   assert.doesNotMatch(novemberBills,/Fictional Visa Subscription/,
+    name+': Card purchases are listed in Statements, not cash Upcoming');
+   assert.doesNotMatch(novemberBills,/Fictional Scheduled Card Charge/,
+    name+': Scheduled credit-card purchase is not another checking withdrawal');
+   assert.match(novemberBills,/Fictional Scheduled Checking Charge/,
+    name+': Checking charge remains in Upcoming');
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
    await page.locator('[data-bills-more]').click();
    assert.match(await page.locator('.bills-range-toggle').innerText(),/30 days/,
@@ -259,7 +259,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    const recurring=page.locator('[data-schedule-card="fictional-recurring-card-pay"]');
    assert.equal(await recurring.count(),0,
-    name+': card repayment remains in the checking forecast but is excluded from repeating expenses');
+    name+': card repayment is excluded from Repeating expense plans');
+   assert.match(await page.locator('.bills-upcoming').innerText(),/Fictional Recurring Card Repayment/,
+    name+': recurring card repayment is visible in Upcoming cash bills');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('[data-history-view="summary"]').click();
    const firstFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
@@ -285,6 +287,16 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     localStorage.setItem(key,JSON.stringify(saved));
    });
    await page.reload({waitUntil:'load'});
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.locator('[data-bills-tab="statements"]').click();
+   const statement=page.locator('[data-bills-card="demo-visa"] [data-bills-statement]').first();
+   assert.ok(await statement.count()>=1,
+    name+': configured Visa has a dedicated projected statement cycle');
+   await statement.evaluate(el=>el.open=true);
+   assert.match(await statement.innerText(),/Posted net charges/);
+   assert.match(await statement.innerText(),/Predicted net charges/);
+   assert.match(await statement.innerText(),/Expected card payment/);
+   assert.equal(await page.locator('[data-bills-tab]').count(),3);
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('[data-history-view="summary"]').click();
    const autopayFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
