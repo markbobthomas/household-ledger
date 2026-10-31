@@ -2,12 +2,20 @@
 (function (root) {
   'use strict';
   let localSandboxSnapshot=null;
+  // Browser locale formatting is not a reliable ISO date source on every
+  // iPhone/WebKit locale. Read LOCAL calendar components, never UTC slicing.
+  const localDate=(now=new Date())=>[
+    String(now.getFullYear()).padStart(4,'0'),
+    String(now.getMonth()+1).padStart(2,'0'),
+    String(now.getDate()).padStart(2,'0')
+  ].join('-');
   const provider = {
+    localDate,
     mode: 'demo',
     setSandboxSnapshot(snapshot){localSandboxSnapshot=snapshot||null},
     getSnapshot(today) {
       if(localSandboxSnapshot)return {...localSandboxSnapshot,asOf:/^\d{4}-\d{2}-\d{2}$/.test(String(today||''))?today:localSandboxSnapshot.asOf};
-      const asOf = /^\d{4}-\d{2}-\d{2}$/.test(String(today || '')) ? today : new Date().toLocaleDateString('en-CA');
+      const asOf = /^\d{4}-\d{2}-\d{2}$/.test(String(today || '')) ? today : localDate();
       return {
         source: 'Simulated bank feed — not connected to any institution',
         mode: 'demo',
