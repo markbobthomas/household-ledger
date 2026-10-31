@@ -1461,7 +1461,8 @@ const {chromium,webkit}=require('playwright');
       'Pending section count and label use the same red text');
     }
    };
-   await verifyPendingTabColors('categories');
+   await verifyPendingTabColors(
+    await page.locator('[data-review-tab].active').getAttribute('data-review-tab'));
    for(const section of reviewSections){
     await page.locator('[data-review-tab="'+section+'"]').click();
     await verifyPendingTabColors(section);
