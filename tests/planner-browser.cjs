@@ -353,7 +353,10 @@ const {chromium,webkit}=require('playwright');
     'Month-low amount recalculates when returning');
    assert.equal(await monthLowDate(),originalDate,
     'Month-low date recalculates when returning');
+   await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-today]').click();
+   assert.equal(await monthLowDate(),originalDate,
+    'Today returns the low card to its original month');
    assert.equal(await page.locator('#planner-menu [data-view="recap"]').count(),0,
     'Summary is no longer hidden inside More');
    // Bigger, readable type on desktop, with proportionate mobile type.
