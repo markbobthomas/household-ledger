@@ -28,6 +28,8 @@ const s=M.migrate({accounts:[{id:'checking',name:'Fictional Checking',type:'chec
  }});
 const source=JSON.stringify(s.transactions);
 let issues=M.categoryReviewQueue(s);
+assert.deepEqual(M.categoryReviewQueue(s,M.records(s)),issues,
+ 'Sharing pre-reconciled bank history with the Review badge preserves every issue');
 const flagged=new Set(issues.transactions.map(x=>x.id));
 assert.deepEqual([...flagged].sort(),['low','missing','suggested']);
 assert.equal(issues.plans.length,4,'Missing and uncertain recurring, one-off and legacy bills need review');
