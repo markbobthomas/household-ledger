@@ -315,7 +315,7 @@ function calendarNavigation(){
   '<div class="calendar-nav-actions"><button type="button" data-calendar-nav="-1"'+
    (index===0?' disabled':'')+' aria-label="Previous forecast month">‹</button>'+
    '<button type="button" class="calendar-today" data-calendar-today'+
-   (calendarMonth===keys[0]&&calendarDate===state.asOf?' disabled':'')+
+   (calendarMonth===state.asOf.slice(0,7)&&calendarDate===state.asOf?' disabled':'')+
    '>Today</button>'+
    '<button type="button" data-calendar-nav="1"'+
    (index===keys.length-1?' disabled':'')+' aria-label="Next forecast month">›</button></div>'+
@@ -335,7 +335,8 @@ function calendarGrid(){
  const rollingMinimum=next90Low();
  if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
  const weekday=iso=>iso&&![0,6].includes(new Date(iso+'T12:00:00Z').getUTCDay());
- if(!weekday(calendarDate)||!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
+ // Even on a five-day grid, preserve a selected weekend as-of date in the day detail.
+ if(!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
   calendarDate=currentPoints.find(p=>weekday(p.date))?.date||
    [...state.actual.keys()].find(d=>d.startsWith(calendarMonth)&&weekday(d));
  const start=calendarMonth+'-01',
@@ -407,9 +408,10 @@ function calendarGrid(){
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
 }
-function showCalendar(date){
- // Weekend date links select the next day actually present in the 5-day grid.
- if(date&&[0,6].includes(new Date(date+'T12:00:00Z').getUTCDay())){
+function showCalendar(date,keepWeekend=false){
+ // Only business-day grid navigation advances weekends. Direct month/date and
+ // Today jumps must preserve genuine Saturday/Sunday observations.
+ if(!keepWeekend&&date&&[0,6].includes(new Date(date+'T12:00:00Z').getUTCDay())){
   const next=calendarContext?.points?.find(p=>p.date>=date&&
    ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
   if(next)date=next.date;
@@ -763,7 +765,7 @@ document.addEventListener('click',e=>{
  const monthly=e.target.closest?.('[data-calendar-list-date]');
  if(monthly){
   if(monthly.hasAttribute('data-open-transaction'))return; // Open the SAME transaction panel everywhere.
-  showCalendar(monthly.dataset.calendarListDate);
+  showCalendar(monthly.dataset.calendarListDate,true);
   document.querySelector('[data-calendar-detail]')?.scrollIntoView({block:'nearest',behavior:'smooth'});
   return;
  }
@@ -783,16 +785,16 @@ document.addEventListener('click',e=>{
   return;
  }
  const actual=e.target.closest?.('[data-calendar-actual-day]');
- if(actual){showCalendar(actual.dataset.calendarActualDay);return;}
+ if(actual){showCalendar(actual.dataset.calendarActualDay,true);return;}
  const day=e.target.closest?.('[data-calendar-day]');
  if(day){showCalendar(day.dataset.calendarDay);return;}
  const ninetyDayLowButton=e.target.closest?.('[data-calendar-next-90-low]');
  if(ninetyDayLowButton?.dataset.calendarNext90Low){
-  showCalendar(ninetyDayLowButton.dataset.calendarNext90Low);return;
+  showCalendar(ninetyDayLowButton.dataset.calendarNext90Low,true);return;
  }
  const cardStatement=e.target.closest?.('[data-calendar-card-statement-date]');
  if(cardStatement?.dataset.calendarCardStatementDate){
-  showCalendar(cardStatement.dataset.calendarCardStatementDate);return;
+  showCalendar(cardStatement.dataset.calendarCardStatementDate,true);return;
  }
  const nav=e.target.closest?.('[data-calendar-nav]');
  if(nav&&calendarContext?.points?.length){
@@ -800,12 +802,12 @@ document.addEventListener('click',e=>{
   ...[...calendarContext.actual.keys()].map(d=>d.slice(0,7))])].sort(),
    index=keys.indexOf(calendarMonth),next=keys[index+Number(nav.dataset.calendarNav)];
   if(next)showCalendar(calendarContext.points.find(p=>p.date.startsWith(next))?.date||
-   [...calendarContext.actual.keys()].find(d=>d.startsWith(next)));
+   [...calendarContext.actual.keys()].find(d=>d.startsWith(next)),true);
 
   return;
  }
  if(e.target.closest?.('[data-calendar-today]')&&calendarContext?.points?.length)
-  showCalendar(calendarContext.points[0].date);
+  showCalendar(calendarContext.asOf,true);
 });
 document.addEventListener('keydown',e=>{
  const target=e.target.closest?.('[data-calendar-day]');
@@ -821,7 +823,7 @@ document.addEventListener('keydown',e=>{
 });
 
 root.HouseholdPlannerSummary={render,getPoints,knownGaps,
- navigate:date=>showCalendar(date),
+ navigate:date=>showCalendar(date,true),
  currentDay:()=>calendarDate,
  currentEvent:index=>{
   const point=calendarContext?.points.find(p=>p.date===calendarDate);
