@@ -5929,7 +5929,7 @@ a:hover{color:#166e61}
  border:1px solid var(--ledger-hairline)!important;border-radius:12px!important;
  background:#f2f6f2!important;padding:4px!important;width:100%;margin-bottom:12px;
 }
-.schedule-page .ledger-section-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+.schedule-page .ledger-section-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
 .schedule-page .ledger-section-tabs .history-subtab,
 .reviews-page .ledger-section-tabs .history-subtab{
  display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;
@@ -6270,4 +6270,29 @@ a:hover{color:#166e61}
  .schedule-page .bills-statement-label strong{font-size:12px}
  .schedule-page .bills-statement-amount{font-size:13px}
  .schedule-page .schedule-toolbar.ledger-toolbar :is(input,select){padding:5px!important;font-size:11px!important}
+}
+
+/* Bills' three destinations remain a single equally sized row, even on phones. */
+.schedule-page .ledger-section-tabs .history-subtab{
+ white-space:nowrap!important;min-width:0;overflow:hidden;text-overflow:ellipsis;
+}
+.schedule-page .bills-statement-filters{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:9px;padding:10px;margin:0 0 12px;
+ border:1px solid #e7ede5;border-radius:10px;background:#fff;
+}
+.schedule-page .bills-statement-filters>label{display:block;min-width:0;margin:0}
+.schedule-page .bills-statement-filters select{
+ display:block;box-sizing:border-box;width:100%;min-width:0;
+ height:36px;min-height:36px;padding:7px 10px;
+ border:1px solid #e1e9e0;border-radius:7px;
+ background:#f9fbf8;color:var(--ink);font-family:inherit;font-size:12px;
+}
+@media(max-width:650px){
+ .schedule-page .ledger-section-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .schedule-page .ledger-section-tabs .history-subtab{
+  font-size:12px!important;padding:8px 3px!important;
+ }
+ .schedule-page .bills-statement-filters{gap:7px;padding:8px}
+ .schedule-page .bills-statement-filters select{font-size:11px;padding:6px}
 }

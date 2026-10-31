@@ -76,7 +76,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1456,73 +1456,106 @@ function billsMonthSelect(asOf,scope){
 // Card purchases belong here; payment transfers belong in Upcoming Bills.
 // Never derive an issued statement from card balance or spending averages.
 function billsStatementsPage(bundle,s){
+ // One card and one selected statement, without scrolling past other accounts.
+ // The source engine calculates both posted and predicted charges; this is
+ // display-only and never treats a repayment as a second purchase.
  const cards=activeAccounts(s).filter(a=>accountType(a)==='credit'),
   estimates=bundle?.payments?.statements||[],
   history=bundle?.payments?.historyStatements||[],
-  fmt=p=>escapeHTML(dayLabel(p.periodStart))+' – '+escapeHTML(dayLabel(p.periodEnd)),
-  eachCard=card=>{
-   const projected=estimates.filter(p=>String(p.cardId)===String(card.id))
-    .sort((a,b)=>a.periodEnd.localeCompare(b.periodEnd)).slice(0,12),
-    past=history.filter(p=>String(p.cardId)===String(card.id))
-    .sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd)).slice(0,6);
-   if(!projected.length&&!past.length)return '<section class="panel bills-card-statements" data-bills-card="'+
-    escapeHTML(card.id)+'"><div class="bills-card-heading"><h3>'+
-    escapeHTML(card.name)+'</h3><span>Not configured</span></div>'+
-    '<p class="bills-card-empty">Set statement dates in Settings to see estimates.</p></section>';
-   const cycles=projected.map((p,i)=>{
-    const open=p.periodStart<=s.asOf&&p.periodEnd>s.asOf,
-     status=p.confirmed?'Issued amount':open?'Current · open':p.periodComplete?'Closed · estimated':'Future · estimated',
-     posted=Number(p.actualPeriodNet)||0,
-     forecast=Number(p.estimatedCharges)||0,
-     transactionRows=[
-      ...(p.postedTransactions||[]).map(t=>({...t,source:'Posted'})),
-      ...(p.predictedTransactions||[]).map(t=>({...t,source:'Predicted'}))
-     ].sort((a,b)=>a.date.localeCompare(b.date)||a.merchant.localeCompare(b.merchant));
-    return '<details class="bills-statement-cycle" data-bills-statement="'+
-     escapeHTML(p.cardId)+'|'+escapeHTML(p.periodEnd)+'"'+
-     (open?' open':'')+'>'+
-     '<summary><span class="bills-statement-label">'+
-      '<strong>'+fmt(p)+'</strong><small>'+status+'</small></span>'+
-      '<strong class="bills-statement-amount">'+cash(p.statementBalance)+'</strong>'+
-      '<span class="bills-statement-caret" aria-hidden="true">⌄</span></summary>'+
-     '<div class="bills-statement-detail">'+
-      '<div><span>Posted net charges</span><strong>'+cash(posted)+'</strong></div>'+
-      '<div><span>Predicted net charges</span><strong>'+cash(forecast)+'</strong></div>'+
-      '<div><span>Estimated statement</span><strong>'+cash(p.statementBalance)+'</strong></div>'+
-      '<div><span>Payment due</span><strong>'+escapeHTML(dayLabel(p.dueDate))+'</strong></div>'+
-      '<div><span>Expected card payment</span><strong>'+
-       (p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>'+
-      '<div><span>Payment status</span><strong>'+
-       (p.alreadyPaid?'Posted':'Not confirmed')+'</strong></div>'+
-     '</div>'+
-     '<div class="bills-statement-lines">'+
-      (transactionRows.length?transactionRows.map(t=>
-        '<div class="bills-statement-line"><span>'+escapeHTML(dayLabel(t.date))+
-         '</span><span><strong>'+escapeHTML(t.merchant)+'</strong>'+
-         '<small>'+escapeHTML(t.source)+'</small></span><strong>'+
-         (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
-       '<p class="bills-card-empty">No posted or predicted card charges for this cycle.</p>')+
-     '</div>'+
-     (p.pendingExcluded?'<p class="bills-card-empty">'+p.pendingExcluded+
-       ' pending charge(s) excluded until posted.</p>':'')+
-     '</details>';
-   }).join('');
-   const earlier=past.length?'<details class="bills-statement-history">'+
-    '<summary>Earlier periods ('+past.length+')</summary>'+
-    past.map(p=>'<div class="bills-statement-past"><span>'+
-      fmt(p)+'</span><strong>'+cash(p.netActivity)+'</strong></div>').join('')+
-    '<p class="bills-card-empty">Past amounts reflect available posted activity, not verified issued statements.</p>'+
-    '</details>':'';
-   return '<section class="panel bills-card-statements" data-bills-card="'+
-    escapeHTML(card.id)+'"><div class="bills-card-heading"><h3>'+
-     escapeHTML(card.name)+'</h3><span>'+projected.length+
-     ' forecast cycle'+(projected.length===1?'':'s')+'</span></div>'+
-    cycles+earlier+'</section>';
-  };
- return '<div class="bills-statements-page">'+
-  (cards.length?cards.map(eachCard).join(''):
-   '<section class="panel bills-card-empty">No credit-card accounts connected.</section>')+
-  '</div>';
+  T=window.HouseholdPlannerTransactions,
+  fmtDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{
+   month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}),
+  fmt=p=>escapeHTML(fmtDate(p.periodStart)+' – '+fmtDate(p.periodEnd));
+ if(!cards.length)return '<div class="bills-statements-page">'+
+  '<section class="panel bills-card-statements"><p class="bills-card-empty">'+
+  'No credit-card accounts connected.</p></section></div>';
+ const card=cards.find(a=>String(a.id)===billsStatementAccount)||
+  cards.find(a=>estimates.some(p=>String(p.cardId)===String(a.id)))||cards[0],
+  accountId=String(card.id),
+  projected=estimates.filter(p=>String(p.cardId)===accountId)
+   .sort((a,b)=>a.periodEnd.localeCompare(b.periodEnd)).slice(0,12),
+  past=history.filter(p=>String(p.cardId)===accountId)
+   .sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd)).slice(0,6),
+  periods=[...projected.map(p=>({period:p,historical:false})),
+   ...past.filter(p=>!projected.some(q=>q.periodEnd===p.periodEnd))
+    .map(p=>({period:p,historical:true}))],
+  current=periods.find(x=>!x.historical&&x.period.periodStart<=s.asOf&&
+   x.period.periodEnd>s.asOf),
+  selected=periods.find(x=>x.period.periodEnd===billsStatementPeriod)||
+   current||periods[0]||null,
+  controls='<div class="bills-statement-filters" aria-label="Statement selection">'+
+   '<label><span class="visually-hidden">Credit-card account</span>'+
+   '<select data-bills-statement-account aria-label="Credit-card account">'+
+    cards.map(a=>'<option value="'+escapeHTML(a.id)+'"'+
+     (String(a.id)===accountId?' selected':'')+'>'+escapeHTML(a.name)+'</option>').join('')+
+   '</select></label>'+
+   '<label><span class="visually-hidden">Billing statement</span>'+
+   '<select data-bills-statement-period aria-label="Billing statement"'+
+    (periods.length?'':' disabled')+'>'+
+    (periods.length?periods.map(({period:p,historical})=>
+     '<option value="'+escapeHTML(p.periodEnd)+'"'+
+      (selected?.period.periodEnd===p.periodEnd?' selected':'')+'>'+
+      escapeHTML(fmtDate(p.periodStart)+' – '+fmtDate(p.periodEnd))+
+      (historical?' · Past':p.periodStart<=s.asOf&&p.periodEnd>s.asOf?
+       ' · Current':p.periodComplete?' · Closed':' · Estimate')+'</option>').join(''):
+     '<option value="">No statements available</option>')+
+   '</select></label></div>';
+ if(!selected)return '<div class="bills-statements-page">'+controls+
+  '<section class="panel bills-card-statements" data-bills-card="'+
+   escapeHTML(accountId)+'"><p class="bills-card-empty">'+
+   'Set billing dates in Settings to see statement estimates.</p></section></div>';
+ const p=selected.period,historical=selected.historical,
+  open=!historical&&p.periodStart<=s.asOf&&p.periodEnd>s.asOf,
+  status=historical?'Past · posted activity':p.confirmed?'Issued amount':
+   open?'Current · open':p.periodComplete?'Closed · estimated':'Future · estimated',
+  posted=historical?Number(p.netActivity)||0:Number(p.actualPeriodNet)||0,
+  forecast=historical?0:Number(p.estimatedCharges)||0,
+  statementAmount=historical?posted:Number(p.statementBalance)||0,
+  records=historical?model.records(state()).filter(row=>
+   !row.pending&&row.date>=p.periodStart&&row.date<=p.periodEnd&&
+   String(T.accountRef(row.accountId||row.account,activeAccounts(s)))===accountId&&
+   cardActivityCents(row)!==0).map(row=>({
+    id:String(row.id),date:row.date,merchant:String(row.merchant||row.name||'Card purchase'),
+    type:row.type,amount:Math.abs(Number(row.amount)),source:'Posted'
+   })):[
+    ...(p.postedTransactions||[]).map(t=>({...t,source:'Posted'})),
+    ...(p.predictedTransactions||[]).map(t=>({...t,source:'Predicted'}))
+   ],
+  transactionRows=records.sort((a,b)=>a.date.localeCompare(b.date)||
+   a.merchant.localeCompare(b.merchant)),
+  details='<div class="bills-statement-detail">'+
+   '<div><span>Posted net charges</span><strong>'+cash(posted)+'</strong></div>'+
+   (historical?'<div><span>Past period</span><strong>Posted activity only</strong></div>':
+    '<div><span>Predicted net charges</span><strong>'+cash(forecast)+'</strong></div>'+
+    '<div><span>Estimated statement</span><strong>'+cash(statementAmount)+'</strong></div>'+
+    '<div><span>Payment due</span><strong>'+escapeHTML(dayLabel(p.dueDate))+'</strong></div>'+
+    '<div><span>Expected card payment</span><strong>'+
+     (p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>'+
+    '<div><span>Payment status</span><strong>'+
+     (p.alreadyPaid?'Posted':'Not confirmed')+'</strong></div>')+
+  '</div>',
+  cycle='<details class="bills-statement-cycle" data-bills-statement="'+
+   escapeHTML(accountId)+'|'+escapeHTML(p.periodEnd)+'" open>'+
+   '<summary><span class="bills-statement-label">'+
+    '<strong>'+fmt(p)+'</strong><small>'+status+'</small></span>'+
+    '<strong class="bills-statement-amount">'+cash(statementAmount)+'</strong>'+
+    '<span class="bills-statement-caret" aria-hidden="true">⌄</span></summary>'+
+   details+
+   '<div class="bills-statement-lines">'+
+    (transactionRows.length?transactionRows.map(t=>
+     '<div class="bills-statement-line"><span>'+escapeHTML(dayLabel(t.date))+
+      '</span><span><strong>'+escapeHTML(t.merchant)+'</strong>'+
+      '<small>'+escapeHTML(t.source)+'</small></span><strong>'+
+      (t.type==='refund'?'−':'')+cash(t.amount)+'</strong></div>').join(''):
+     '<p class="bills-card-empty">No posted or predicted card charges for this cycle.</p>')+
+   '</div>'+
+   (p.pendingExcluded?'<p class="bills-card-empty">'+p.pendingExcluded+
+    ' pending charge(s) excluded until posted.</p>':'')+
+   (historical?'<p class="bills-card-empty">Reconstructed from available posted transactions; not a verified issued statement.</p>':'')+
+   '</details>';
+ return '<div class="bills-statements-page">'+controls+
+  '<section class="panel bills-card-statements" data-bills-card="'+escapeHTML(accountId)+'">'+
+   cycle+'</section></div>';
 }
 function schedulesPage(bundle,s){
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
@@ -5055,6 +5088,17 @@ document.addEventListener('change',async e=>{
    e.target.value=reviewSort;return;
   }
   reviewSort=next;categoryReviewLimit=40;
+  render();return;
+ }
+ const statementAccount=e.target.closest?.('[data-bills-statement-account]');
+ if(statementAccount){
+  billsStatementAccount=statementAccount.value;
+  billsStatementPeriod=''; // New card selects its current/open or nearest cycle.
+  render();return;
+ }
+ const statementPeriod=e.target.closest?.('[data-bills-statement-period]');
+ if(statementPeriod){
+  billsStatementPeriod=statementPeriod.value;
   render();return;
  }
  const billsMonth=e.target.closest?.('[data-bills-month]');
