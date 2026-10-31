@@ -1129,6 +1129,27 @@ const {chromium,webkit}=require('playwright');
     });
     assert.ok(compact.manageWidth>=40&&compact.panelRight-compact.manageRight<52,
      'Category management stays visible and right aligned at '+width+': '+JSON.stringify(compact));
+    const budgetHeading=await page.evaluate(()=>{
+     const rect=selector=>document.querySelector(selector)?.getBoundingClientRect();
+     const heading=document.querySelector('.history-category-panel-heading');
+     const spent=rect('.history-category-panel-heading .history-spending-overview strong');
+     const manage=rect('.history-category-panel-heading .history-category-manager>summary');
+     const total=rect('.history-category-panel-heading .history-spending-overview');
+     const headingRect=heading?.getBoundingClientRect();
+     return {children:heading?.children.length,spentTop:spent?.top,
+      spentBottom:spent?.bottom,spentRight:spent?.right,manageTop:manage?.top,
+      manageBottom:manage?.bottom,manageLeft:manage?.left,
+      headingBottom:headingRect?.bottom,totalBottom:total?.bottom,
+      scrollWidth:document.documentElement.scrollWidth,viewport:innerWidth};
+    });
+    assert.ok(budgetHeading.children===2&&
+      Math.abs(budgetHeading.spentTop-budgetHeading.manageTop)<=8&&
+      budgetHeading.manageTop<=budgetHeading.spentBottom&&
+      budgetHeading.spentRight<=budgetHeading.manageLeft+1&&
+      budgetHeading.headingBottom<=Math.max(budgetHeading.totalBottom,budgetHeading.manageBottom)+12&&
+      budgetHeading.scrollWidth<=width+3,
+      'Spent total and Manage must share a compact header row at '+width+
+      ': '+JSON.stringify(budgetHeading));
     assert.ok(compact.tableWidth>compact.panelWidth*.8,
      'Budget categories use the panel width rather than a half-width chart legend at '+width);
     const dimensions=await budgetRow.evaluate(row=>{
