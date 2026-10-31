@@ -1428,9 +1428,21 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),false);
    assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),true);
-   if(await page.locator('.schedule-row-main.ledger-transaction-row').count())
-    await verifyTransactionAnatomy(page,'.schedule-row-main.ledger-transaction-row','Upcoming Bills');
-   else assert.equal(await page.locator('.schedule-row-main').count(),0,
+   if(await page.locator('.schedule-row-main.ledger-transaction-row').count()){
+    const dimensions=await page.locator('.schedule-row-main.ledger-transaction-row').first()
+     .evaluate(row=>{
+      const identity=row.querySelector('.ledger-transaction-identity').getBoundingClientRect(),
+       amount=row.querySelector('.ledger-transaction-amount').getBoundingClientRect(),
+       action=row.querySelector('.ledger-transaction-action').getBoundingClientRect();
+      return {identity:identity.left,amount:amount.left,action:action.left,
+       width:row.getBoundingClientRect().width,overflow:document.documentElement.scrollWidth-innerWidth};
+     });
+    assert.ok(dimensions.identity<dimensions.amount&&dimensions.amount<dimensions.action&&
+     dimensions.width>180&&dimensions.overflow<=3,
+     'Repeating uses a date-free three-column catalog layout: '+JSON.stringify(dimensions));
+    assert.equal(await page.locator('.schedule-row-main .schedule-row-next').count(),0,
+     'Repeating rule rows never show occurrence dates');
+   }else assert.equal(await page.locator('.schedule-row-main').count(),0,
     'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
@@ -1909,7 +1921,8 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-09');
    assert.equal(await repeating.count(),1,
     'Historical month can still show the prior expected recurring Internet bill');
-   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Sep 23/);
+   assert.equal(await repeating.locator('.schedule-row-next').count(),0,
+    'Historical month does not turn a repeating rule into a dated transaction row');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('');
    assert.equal(await repeating.count(),1);
    await page.locator('[data-bills-tab="upcoming"]').click();
@@ -1925,8 +1938,8 @@ const {chromium,webkit}=require('playwright');
     'Repeating excludes income');
    assert.equal(await page.locator('[data-schedule-card="fictional-transfer-excluded"]').count(),0,
     'Repeating excludes transfers');
-   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Nov 23/,
-    'Repeating shows the first actual scheduled payment inside the selected month');
+   assert.equal(await repeating.locator('.schedule-row-next').count(),0,
+    'Repeating remains an undated rule list even with a month filter');
    await page.locator('[data-schedule-search]').fill('Fictional Internet Bill');
    assert.equal(await repeatingSum.innerText(),'Total $85.00',
     'Search sums the visible fictional matching schedule only');
@@ -1944,8 +1957,8 @@ const {chromium,webkit}=require('playwright');
     Math.round(listedCents)/100,
     'Unsearched Repeating total equals the sum of every visible displayed row');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-12');
-   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Dec 23/,
-    'Changing the month changes which canonical repeating occurrence is shown');
+   assert.equal(await repeating.locator('.schedule-row-next').count(),0,
+    'Changing month recalculates amount without adding an upcoming date');
    await page.locator('[data-bills-tab="upcoming"]').click();
    assert.equal(await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').inputValue(),'2026-12');
    assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Dec 23/);

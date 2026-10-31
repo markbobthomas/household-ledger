@@ -1521,7 +1521,8 @@ function billsStatementsPage(bundle,s){
     ...(p.postedTransactions||[]).map(t=>({...t,source:'Posted'})),
     ...(p.predictedTransactions||[]).map(t=>({...t,source:'Predicted'}))
    ],
-  transactionRows=records.sort((a,b)=>a.date.localeCompare(b.date)||
+  // Within the selected billing cycle, display the newest charges first.
+  transactionRows=records.sort((a,b)=>b.date.localeCompare(a.date)||
    a.merchant.localeCompare(b.merchant)),
   details='<div class="bills-statement-detail">'+
    '<div><span>Posted net charges</span><strong>'+cash(posted)+'</strong></div>'+
@@ -1618,7 +1619,6 @@ function schedulesPage(bundle,s){
    isEditing=scheduleMode==='edit'&&!transactionDetail&&scheduleTarget===r.id,
    dates=T.recurrenceDates(r,s.asOf,end),next=dates[0],
    occurrence=displayedByRule.get(String(r.id)),
-   effectiveNext=occurrence?.date||null,
    estimate=next?T.scheduleAmount(r,next):{amount:r.amount,estimated:r.amountBasis==='estimate'},
    shownAmount=nextAmount(r),
    account=accounts.find(a=>String(a.id)===String(r.accountId||r.fromAccountId)),
@@ -1644,8 +1644,8 @@ function schedulesPage(bundle,s){
    '<button class="schedule-row-main ledger-row-open ledger-transaction-row recurrence-row-trigger" type="button" data-schedule-edit="'+id+
     '" aria-expanded="'+isEditing+'" aria-label="'+(isEditing?'Close':'Open')+
     ' prediction '+number+': '+title+'">'+
-    '<span class="schedule-row-next ledger-row-date ledger-transaction-date"><span>'+
-     (effectiveNext?escapeHTML(dayLabel(effectiveNext)):'Not forecast')+'</span></span>'+
+    // This is a catalog of recurring rules, not the dated Upcoming ledger.
+
     '<span class="schedule-row-identity ledger-row-description ledger-transaction-identity recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':

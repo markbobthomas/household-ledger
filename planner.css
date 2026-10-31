@@ -6296,3 +6296,19 @@ a:hover{color:#166e61}
  .schedule-page .bills-statement-filters{gap:7px;padding:8px}
  .schedule-page .bills-statement-filters select{font-size:11px;padding:6px}
 }
+
+/* Repeating is a catalog of saved expense rules, not a list of dated
+   Upcoming bills. Leave the calendar dates in the opened rule detail. */
+.planner-page.schedule-page .schedule-row-main.ledger-transaction-row{
+ grid-template-columns:minmax(0,1fr) minmax(86px,max-content) 28px!important;
+}
+@media(max-width:850px){
+ .planner-page.schedule-page .schedule-row-main.ledger-transaction-row{
+  grid-template-columns:minmax(0,1fr) minmax(70px,max-content) 24px!important;
+ }
+}
+@media(max-width:390px){
+ .planner-page.schedule-page .schedule-row-main.ledger-transaction-row{
+  grid-template-columns:minmax(0,1fr) minmax(62px,max-content) 20px!important;
+ }
+}
