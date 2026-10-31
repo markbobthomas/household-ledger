@@ -302,8 +302,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': only one card detail is rendered');
    const options=await periodSelect.locator('option').evaluateAll(nodes=>
     nodes.map(n=>({value:n.value,label:n.textContent})));
-   assert.ok(options.length>=2&&options.every(x=>/2026/.test(x.label)),
-    name+': statement dropdown contains explicit billing years');
+   assert.ok(options.length>=2&&options.every(x=>/\b20\d{2}\b.*\b20\d{2}\b/.test(x.label))&&
+    options.some(x=>x.label.includes('2026')),
+    name+': every billing range shows full years, including future-year cycles');
    const currentChoice=await periodSelect.inputValue();
    assert.equal(currentChoice,'2026-11-18',
     name+': the open billing period is the initial selection');
