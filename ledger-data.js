@@ -346,8 +346,10 @@ const confidenceScore=t=>{
  const level=String(p.confidence_level||p.confidenceLevel||'').toUpperCase();
  return ({VERY_HIGH:.99,HIGH:.93,MEDIUM:.75,LOW:.4,UNKNOWN:0})[level]??null;
 };
-function categoryReviewQueue(state){
- const tx=records(state).filter(t=>!t.pending&&t.id!==null&&t.id!==undefined)
+function categoryReviewQueue(state,resolvedRows){
+ // Reuse the reconciled rows from the active paint instead of repeating
+ // accounting/category resolution only to determine the Review count.
+ const tx=(resolvedRows||records(state)).filter(t=>!t.pending&&t.id!==null&&t.id!==undefined)
   .map(t=>{
    // Known income/transfer kinds are safe to label in reporting without
    // changing the authoritative bank-derived record used for forecasting.
