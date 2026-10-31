@@ -1367,6 +1367,11 @@ const {chromium,webkit}=require('playwright');
     '2027-07','2027-08','2027-09','2027-10'],
     'Both Bills tabs provide the current month and twelve future calendar months');
    await upcomingBillsMonth.selectOption('2026-11');
+   const billTotalText=await page.locator('[data-bills-upcoming-sum]').innerText();
+   const expectedUpcoming=await page.locator('.bills-upcoming-row>strong').evaluateAll(nodes=>
+    nodes.reduce((sum,node)=>sum+Number(node.textContent.replace(/[^0-9.-]/g,'')),0));
+   assert.equal(Number(billTotalText.replace(/[^0-9.-]/g,'')),Math.round(expectedUpcoming*100)/100,
+    'Upcoming total adds exactly the displayed bills for the selected month');
    assert.equal(await page.locator('[data-bills-more]').count(),0,
     'Choosing a calendar month replaces the old 30/90 day range toggle');
    assert.ok(await page.locator('.bills-upcoming-row').evaluateAll(rows=>
@@ -1375,6 +1380,631 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await repeatingBillsMonth.inputValue(),'2026-11',
     'Selected month is retained when switching to Repeating');
+   assert.ok((await page.locator('[data-bills-repeating-total]').innerText()).startsWith('Total 
+   assert.equal(await page.locator('.schedule-toolbar').evaluate(el=>
+    el.firstElementChild?.matches('.bills-month-field')),true,
+    'Month selection is first in Repeating controls');
+   await repeatingBillsMonth.selectOption('2026-12');
+   await page.locator('[data-bills-tab="upcoming"]').click();
+   assert.equal(await upcomingBillsMonth.inputValue(),'2026-12',
+    'Choosing month in Repeating also controls Upcoming');
+   await upcomingBillsMonth.selectOption('');
+   assert.equal(await page.locator('[data-bills-more]').count(),1,
+    'Unfiltered Upcoming retains the original 30/90-day toggle');
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const grid=await page.locator('.schedule-page .ledger-section-tabs .history-subtab')
+     .evaluateAll(items=>items.map(x=>x.getBoundingClientRect().toJSON()));
+    const filter=await upcomingBillsMonth.evaluate(el=>{
+     const container=el.closest('.bills-heading-actions').getBoundingClientRect(),
+      select=el.getBoundingClientRect();
+     return {left:select.left,right:select.right,top:select.top,bottom:select.bottom,
+      containerLeft:container.left,containerRight:container.right};
+    });
+    assert.ok(grid.length===2&&Math.abs(grid[0].width-grid[1].width)<=2&&
+     Math.abs(grid[0].top-grid[1].top)<=2&&
+     filter.right<=filter.containerRight+2&&filter.left>=filter.containerLeft-2&&
+     filter.bottom>filter.top&&
+     await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
+     'Bills month selector and tabs fit without clipping at '+width+'px: '+
+      JSON.stringify(filter));
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   await page.locator('[data-bills-tab="repeating"]').click();
+   assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),false);
+   assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),true);
+   if(await page.locator('.schedule-row-main.ledger-transaction-row').count())
+    await verifyTransactionAnatomy(page,'.schedule-row-main.ledger-transaction-row','Upcoming Bills');
+   else assert.equal(await page.locator('.schedule-row-main').count(),0,
+    'Empty Bills test fixtures have no saved schedule rows to compare');
+   assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
+    'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
+   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
+    'Bills names the recurring section without repeating an action');
+   await page.locator('[data-bills-tab="upcoming"]').click();
+   const billHeader=await page.locator('.bills-heading').evaluate(el=>{
+    const heading=el.querySelector('h2').getBoundingClientRect(),
+     count=el.querySelector('.bills-upcoming-total').getBoundingClientRect();
+    return {headingRight:heading.right,countLeft:count.left,
+     value:el.querySelector('.bills-upcoming-total').textContent.trim()};
+   });
+   assert.ok(billHeader.headingRight<=billHeader.countLeft+2&&/^\d+$/.test(billHeader.value),
+    'Upcoming Bills count is small, numeric and aligned with the header');
+   await page.locator('[data-bills-tab="repeating"]').click();
+   const newRepeat=page.locator('[data-schedule-new]').first();
+   await newRepeat.click();
+   assert.equal(await page.locator('.transaction-detail [data-schedule-new-form]').count(),1,
+    'Create repeating payment in the shared editor');
+   await page.locator('.transaction-detail-close').click();
+   const editRepeat=page.locator('[data-schedule-edit]').first();
+   if(await editRepeat.count()){
+    await editRepeat.click();
+    assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
+     'Edit saved schedule without a second inline form');
+    await page.locator('.transaction-detail-close').click();
+   }
+
+   await page.locator('#planner-menu>summary').click();
+   await page.locator('#planner-menu [data-view="transactions"]').click();
+   if(await page.locator('.unified-payment-trigger.ledger-transaction-row').count())
+    await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
+   else assert.equal(await page.locator('.unified-payment-trigger').count(),0,
+    'No dated predictions are available in this fictional fixture');
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   const next=page.locator('[data-calendar-day="2026-10-20"]');
+   if(await next.count()){
+    await next.click();
+    if(await page.locator('.calendar-day-detail .ledger-transaction-row').count())
+     await verifyTransactionAnatomy(page,'.calendar-day-detail .ledger-transaction-row','Calendar');
+    await page.locator('[data-calendar-add]').first().click();
+    assert.equal(await page.locator('.transaction-detail [data-calendar-quick-form="add"]').count(),1,
+     'Calendar uses the shared creation panel');
+    const create=page.locator('.transaction-detail [data-calendar-quick-form="add"]');
+    await create.locator('[name=merchant]').fill('Fictional interface test expense');
+    await create.locator('[name=amount]').fill('15.50');
+    await create.locator('[name=frequency]').selectOption('once');
+    await create.locator('button[type=submit]').click();
+    await page.locator('[data-transaction-overlay]').waitFor({state:'detached'});
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}'));
+    assert.ok(Object.keys(saved.futureTransactionAdds||{}).length>0,
+     'A planned payment persists only in fictional forecast preferences');
+    const saveFeedback=page.locator('.topbar #planner-save-feedback');
+    await saveFeedback.waitFor({state:'visible'});
+    assert.equal(await saveFeedback.locator('span').innerText(),'Saved');
+    const undo=saveFeedback.locator('[data-undo-forecast]');
+    assert.equal(await undo.count(),1,'Saved forecast has one header Undo action');
+    assert.equal(await undo.innerText(),'Undo','Undo uses the compact header label');
+    assert.equal(await undo.getAttribute('aria-label'),'Undo last change');
+    for(const width of (mobile?[320,390]:[768,1280])){
+     await page.setViewportSize({width,height:mobile?844:900});
+     const geometry=await page.evaluate(()=>{
+      const rect=selector=>document.querySelector(selector).getBoundingClientRect();
+      const title=rect('.topbar h1'),review=rect('.topbar .attention-link'),
+       feedback=rect('.topbar #planner-save-feedback'),
+       undo=rect('.topbar [data-undo-forecast]'),
+       menu=rect('.topbar .planner-menu>summary');
+      return {titleRight:title.right,reviewLeft:review.left,reviewRight:review.right,
+       feedbackLeft:feedback.left,feedbackRight:feedback.right,undoLeft:undo.left,
+       undoRight:undo.right,menuLeft:menu.left,overflow:document.documentElement.scrollWidth-innerWidth};
+     });
+     assert.ok(geometry.titleRight<=geometry.reviewLeft+2&&
+      geometry.reviewRight<=geometry.feedbackLeft+2&&
+      geometry.undoLeft>=geometry.feedbackLeft-1&&
+      geometry.feedbackRight<=geometry.menuLeft+2&&geometry.undoRight<=geometry.menuLeft+2&&
+      geometry.overflow<=3,
+      'Save/Undo stays beside Review without clipping at '+width+': '+JSON.stringify(geometry));
+    }
+    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   }
+
+   await page.locator('.attention-link[data-view="reviews"]').click();
+   assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
+   assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(items=>
+    items.map(x=>x.dataset.reviewTab)),['categories','payments','earlier','suggestions'],
+    'Review preserves four distinct sections as tabs');
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const grid=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
+     .evaluateAll(items=>items.map(el=>el.getBoundingClientRect().toJSON()));
+    assert.ok(grid.length===4&&Math.abs(grid[0].width-grid[1].width)<=2&&
+     (width>650?grid.every(x=>Math.abs(x.top-grid[0].top)<=2):
+      grid[2].top>grid[0].bottom+1)&&
+     await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
+     'Review tabs use Spending responsive grid at '+width+'px');
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   const reviewSections=['categories','payments','earlier','suggestions'];
+   const verifyPendingTabColors=async activeSection=>{
+    const states=await page.locator('.reviews-page [data-review-tab]').evaluateAll(tabs=>
+     tabs.map(tab=>({
+      id:tab.dataset.reviewTab,
+      count:Number(tab.querySelector('.review-tab-count')?.textContent||0),
+      pending:tab.classList.contains('review-tab-pending'),
+      active:tab.classList.contains('active'),
+      color:getComputedStyle(tab).color,
+      countColor:tab.querySelector('.review-tab-count')?
+       getComputedStyle(tab.querySelector('.review-tab-count')).color:null
+     })));
+    assert.deepEqual(states.map(x=>x.id),reviewSections);
+    for(const item of states){
+     assert.equal(item.pending,item.count>0,
+      'Only Review sections with unresolved work are red: '+JSON.stringify(item));
+     assert.equal(item.active,item.id===activeSection);
+     assert.equal(item.color==='rgb(180, 35, 53)',item.count>0,
+      'Selected and unselected Review labels have the right attention color: '+
+       JSON.stringify(item));
+     if(item.count>0)assert.equal(item.countColor,item.color,
+      'Pending section count and label use the same red text');
+    }
+   };
+   await verifyPendingTabColors(
+    await page.locator('[data-review-tab].active').getAttribute('data-review-tab'));
+   for(const section of reviewSections){
+    await page.locator('[data-review-tab="'+section+'"]').click();
+    await verifyPendingTabColors(section);
+    assert.equal(await page.locator('[data-review-pane="'+section+'"]').isVisible(),true);
+    for(const other of reviewSections.filter(x=>x!==section))
+     assert.equal(await page.locator('[data-review-pane="'+other+'"]').isVisible(),false);
+   }
+   await page.locator('[data-review-tab="categories"]').click();
+   assert.equal(await page.locator('.reviews-page .review-priority,.review-intro p,'+
+    '.category-review-panel > .lead').count(),0,
+    'Review relies on section labels and actionable status rather than repeated instructional prose');
+   assert.equal(await page.locator('[data-category-review]').count(),1,
+    'Missing or uncertain transaction and bill categories have a persistent review section');
+   assert.equal(await page.locator('.review-intro-icon').count(),0,
+    'Review has one clear heading without a second alert symbol');
+   const reviewBadges=await page.locator('.reviews-page .section-title .status-tag').allTextContents();
+   assert.ok(reviewBadges.every(text=>/^\d+$/.test(text.trim())),
+    'Section labels and counts replace repeated TO REVIEW words');
+   const reviewTitleLayout=await page.evaluate(()=>{
+    const title=document.querySelector('.review-intro h2').getBoundingClientRect(),
+     sort=document.querySelector('.review-intro [data-review-sort]').getBoundingClientRect();
+    return {titleRight:title.right,sortLeft:sort.left,
+     titleTop:title.top,sortTop:sort.top,scroll:document.documentElement.scrollWidth,viewport:innerWidth};
+   });
+   assert.ok(reviewTitleLayout.scroll<=reviewTitleLayout.viewport+3&&
+    (reviewTitleLayout.titleRight<=reviewTitleLayout.sortLeft+2||
+     reviewTitleLayout.sortTop>reviewTitleLayout.titleTop),
+    'Review header keeps its title and sort from overlapping: '+JSON.stringify(reviewTitleLayout));
+   assert.equal(await page.locator('.reviews-page .review-sort-label .visually-hidden').count(),1,
+    'Review sorter selected value needs no second visible caption');
+   // Category choice must share the amount's vertical center on full-width
+   // rows; on phones it stays beneath the transaction without clipping.
+   const categoryPickers=page.locator('[data-category-review-form] > label');
+   if(await categoryPickers.count()){
+    for(const width of (mobile?[320,390]:[768,1280])){
+     await page.setViewportSize({width,height:mobile?844:900});
+     const layout=await page.locator('[data-category-review-form]').first().evaluate(row=>{
+      const box=el=>el.getBoundingClientRect();
+      const action=box(row.querySelector('.category-review-open')),
+       amount=box(row.querySelector('.ledger-transaction-amount')),
+       picker=box(row.querySelector('select[name="category"]')),
+       container=box(row);
+      return {amountMid:(amount.top+amount.bottom)/2,
+       pickerMid:(picker.top+picker.bottom)/2,
+       actionBottom:action.bottom,pickerTop:picker.top,
+       pickerLeft:picker.left,pickerRight:picker.right,
+       rowLeft:container.left,rowRight:container.right,
+       overflow:document.documentElement.scrollWidth-innerWidth};
+     });
+     if(width>650)assert.ok(Math.abs(layout.amountMid-layout.pickerMid)<=3,
+      'Category picker centers beside dollar amount at '+width+'px: '+JSON.stringify(layout));
+     else assert.ok(layout.pickerTop>=layout.actionBottom-2,
+      'Category picker stacks below transaction on phone at '+width+'px: '+JSON.stringify(layout));
+     assert.ok(layout.pickerLeft>=layout.rowLeft-2&&
+      layout.pickerRight<=layout.rowRight+2&&layout.overflow<=3,
+      'Category control fits without clipping at '+width+'px: '+JSON.stringify(layout));
+    }
+    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+    assert.ok(await categoryPickers.evaluateAll(labels=>labels.every(label=>{
+     const caption=label.querySelector('.visually-hidden'),
+      picker=label.querySelector('select[name="category"]');
+     return caption&&caption.getBoundingClientRect().width<=1&&
+      picker?.getAttribute('aria-label')?.startsWith('Category for ')&&
+      picker?.options[0]?.textContent==='Choose a category';
+    })), 'Review rows display only the category choice but retain accessible names');
+    assert.ok(await page.locator('[data-category-review-form] .ledger-transaction-identity small')
+     .evaluateAll(notes=>notes.every(note=>!/Missing category|Unassigned category/i.test(note.textContent))),
+     'Review category context must not repeat in every transaction subtitle');
+   }
+   // One selector sorts each review group without altering approvals, review
+   // counts, bank records, or the three distinct review sections.
+   const reviewSort=page.locator('.reviews-page [data-review-sort]');
+   assert.equal(await reviewSort.count(),1,'Things to check has one Sort by control');
+   assert.deepEqual(await reviewSort.locator('option').evaluateAll(options=>
+    options.map(option=>option.value)),
+    ['newest','oldest','amount-desc','amount-asc','merchant']);
+   assert.equal(await reviewSort.inputValue(),'newest');
+   const reviewGroupData=async selector=>page.locator(selector).evaluateAll(rows=>rows.map(row=>({
+    id:row.getAttribute('data-category-id')||
+     row.getAttribute('data-overdue-item')||row.getAttribute('data-recommended-repeat'),
+    date:row.getAttribute('data-review-order-date')||'',
+    amount:Math.abs(Number(row.getAttribute('data-review-order-amount'))||0),
+    name:row.querySelector('.category-review-info strong,.review-candidate-main strong,.overdue-review-heading strong')?.textContent||''
+   })));
+   const visibleGroups=[
+    '[data-category-review] [data-category-review-form]',
+    '[data-overdue-review] [data-overdue-item]',
+    '[data-recommended-repeating] [data-recommended-repeat]'
+   ];
+   const beforeSort=await Promise.all(visibleGroups.map(reviewGroupData));
+   const rowIds=groups=>groups.map(rows=>rows.map(row=>row.id).sort());
+   const assertDateOrder=(groups,ascending)=>{
+    for(const rows of groups){
+     const dates=rows.map(r=>r.date).filter(Boolean);
+     assert.deepEqual(dates,[...dates].sort((a,b)=>
+      ascending?a.localeCompare(b):b.localeCompare(a)),
+      'Review dates must follow the selected direction');
+    }
+   };
+   assertDateOrder(beforeSort,false);
+   await reviewSort.selectOption('oldest');
+   const oldestGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   assertDateOrder(oldestGroups,true);
+   assert.deepEqual(rowIds(oldestGroups),rowIds(beforeSort),
+    'Sorting must not add, drop or alter review items');
+   await page.locator('[data-review-sort]').selectOption('amount-desc');
+   const amountGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   for(const rows of amountGroups)assert.deepEqual(rows.map(r=>r.amount),
+    [...rows.map(r=>r.amount)].sort((a,b)=>b-a),
+    'Amount high-to-low sorts values within each review group');
+   await page.locator('[data-review-sort]').selectOption('merchant');
+   const alphabeticalGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   for(const rows of alphabeticalGroups)assert.deepEqual(rows.map(r=>r.name.toLowerCase()),
+    [...rows.map(r=>r.name.toLowerCase())].sort((a,b)=>a.localeCompare(b)),
+    'Merchant name sorting works within each review group');
+   await page.locator('[data-review-sort]').selectOption('newest');
+   const restoredGroups=await Promise.all(visibleGroups.map(reviewGroupData));
+   assert.deepEqual(rowIds(restoredGroups),rowIds(beforeSort),
+    'Returning to newest retains the same review records');
+   const countAfterSort=await page.locator('.topbar [data-review-tab-count]').innerText().catch(()=>null);
+   assert.ok(countAfterSort===null||Number(countAfterSort)>=0,
+    'Sort changes do not break the review count action');
+
+   // Clicking a category review transaction opens the exact bank transaction
+   // editor used by Transactions; selecting its Category remains independent.
+   const bankReviewRows=page.locator('[data-category-review-form] [data-review-bank-id]');
+   if(await bankReviewRows.count()){
+    const open=bankReviewRows.first(),owner=open.locator('xpath=..'),
+     reviewId=await owner.getAttribute('data-category-id'),
+     reviewAccount=await open.getAttribute('data-review-bank-account'),
+     beforeReviewCount=await page.locator('[data-category-review-form]').count();
+    const bankName=await open.locator('strong').innerText(),
+     categoryPicker=owner.locator('[name=category]');
+    await open.click();
+    assert.equal(await page.locator('[data-transaction-overlay]').count(),1,
+     'Review opens the same shared transaction detail surface');
+    assert.equal(await page.locator('.transaction-detail h2').innerText(),bankName);
+    assert.equal(await page.locator('.transaction-detail [data-actual-transaction-category]').count(),1,
+     'Shared bank editor exposes the editable transaction category');
+    assert.equal(await page.locator('.transaction-detail [data-transaction-note-form]').count(),1,
+     'The personal note editor is available when opened from Things to check');
+    const noteKey=await page.locator('.transaction-detail [data-transaction-note-form]')
+     .getAttribute('data-transaction-note-form');
+    assert.equal(noteKey,'bank:'+JSON.stringify([reviewAccount,reviewId]),
+     'Review opens the same account-specific bank record, not another account or a prediction');
+    await page.locator('.transaction-detail-close').click();
+    assert.equal(await page.locator('[data-transaction-overlay]').count(),0);
+    assert.equal(await page.locator('[data-category-review-form]').count(),beforeReviewCount,
+     'Opening and closing a review item must not silently resolve it');
+    assert.equal(await categoryPicker.inputValue(),'',
+     'The one-click Category control still works independently of opening details');
+   }
+   const planReviewRows=page.locator('[data-category-review-form] [data-review-plan-kind]');
+   if(await planReviewRows.count()){
+    const plan=planReviewRows.first(),kind=await plan.getAttribute('data-review-plan-kind');
+    if(kind==='schedule'){
+     await plan.click();
+     assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
+      'A recurring bill category review opens the canonical schedule editor');
+     await page.locator('.transaction-detail-close').click();
+    }
+   }
+
+   const categoryForms=page.locator('[data-category-review-form]');
+   const categoryFormsBefore=await categoryForms.count();
+   if(categoryFormsBefore)
+    await verifyTransactionAnatomy(page,'.category-review-open.ledger-transaction-row','Category Review');
+   if(categoryFormsBefore){
+    const first=categoryForms.first(),categoryId=await first.getAttribute('data-category-id');
+    const reviewPicker=first.locator('[name=category]');
+    assert.equal(await first.locator('[type=submit]').count(),0,
+     'Category Review no longer requires a separate Confirm button');
+    assert.equal(await reviewPicker.inputValue(),'',
+     'Every review dropdown starts with Choose a category, including low-confidence existing values');
+    assert.ok((await reviewPicker.locator('option').allTextContents()).includes('Other'),
+     'Other remains a deliberate catch-all option');
+    // Simulate one failed private-preference save in fictional Demo mode.
+    // Failure must not dismiss the item or prevent choosing the same value again.
+    await page.evaluate(()=>{
+     const original=Storage.prototype.setItem;
+     window.__ledgerReviewOriginalSet=original;
+     Storage.prototype.setItem=function(key,value){
+      if(key==='household-planner-sample-settings-v1')
+       throw new Error('Fictional save rejected');
+      return original.call(this,key,value);
+     };
+    });
+    await reviewPicker.selectOption('Other');
+    const reviewError=first.locator('[data-category-review-error]');
+    await reviewError.waitFor({state:'visible'});
+    assert.match(await reviewError.innerText(),/Fictional save rejected/,
+     'On a failed save the category review remains visible with an error');
+    assert.equal(await reviewPicker.isEnabled(),true);
+    assert.equal(await reviewPicker.inputValue(),'',
+     'Failure resets the placeholder to allow retrying the same selection');
+    await page.evaluate(()=>{
+     Storage.prototype.setItem=window.__ledgerReviewOriginalSet;
+     delete window.__ledgerReviewOriginalSet;
+    });
+    await reviewPicker.selectOption('Other');
+    await page.locator('[data-category-review-form][data-category-id="'+categoryId+'"]').waitFor({state:'detached'});
+    assert.equal(await page.locator('[data-category-review-form]').count(),categoryFormsBefore-1,
+     'One category selection auto-saves and clears the corresponding review issue');
+    const afterOther=page.locator('[data-category-review-form]');
+    if(await afterOther.count()){
+     const second=afterOther.first(),id=await second.getAttribute('data-category-id');
+     assert.equal(await second.locator('[name=category]').inputValue(),'');
+     await second.locator('[name=category]').selectOption('Shopping');
+     await page.locator('[data-category-review-form][data-category-id="'+id+'"]').waitFor({state:'detached'});
+     assert.equal(await page.locator('[data-category-review-form][data-category-id="'+id+'"]').count(),0,
+      'A specific category also saves on selection with no extra tap');
+    }
+   }
+
+   const suggestion=page.locator(
+    '[data-review-pane="earlier"] [data-review-recommendation],'+
+    '[data-review-pane="suggestions"] .recommended-repeating [data-review-recommendation]').first();
+   if(await suggestion.count()){
+    const section=await suggestion.evaluate(node=>node.closest('[data-review-pane]').dataset.reviewPane);
+    await page.locator('[data-review-tab="'+section+'"]').click();
+    await suggestion.click();
+    assert.equal(await page.locator('.transaction-detail [data-history-recurring-form]').count(),1,
+     'Review suggestions open the same shared editor');
+    await page.locator('.transaction-detail-close').click();
+   }
+   // Deleting an assigned built-in category should not require reassignment.
+   // An existing fictional merchant correction is already Subscriptions.
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('.history-category-manager>summary').click();
+   assert.equal(await page.locator('[data-history-category-delete="Subscriptions"]').count(),1);
+   page.once('dialog',dialog=>dialog.accept());
+   await page.locator('[data-history-category-delete="Subscriptions"]').click();
+   assert.equal(await page.locator('.history-category-manage-status').innerText(),
+    'Deleted Subscriptions. Affected items are Unassigned in Things to check.');
+   const deletedPrefs=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+    'household-planner-sample-settings-v1')||'{}'));
+   assert.ok((deletedPrefs.deletedCategories||[]).includes('Subscriptions'),
+    'Built-in category deletion survives reload');
+   assert.equal(deletedPrefs.categoryOverrides[
+    Object.keys(deletedPrefs.categoryOverrides||{}).find(k=>
+     deletedPrefs.categoryOverrides[k]==='Uncategorized')]||'','Uncategorized',
+    'Historical corrections are reset to Unassigned without bank source edits');
+   await page.locator('.attention-link[data-view="reviews"]').click();
+   assert.ok(await page.locator('[data-category-review-form]').count()>0,
+    'Deleted categories push affected transactions back into Things to check');
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   assert.equal(await page.locator('[data-history-category-filter] option[value="Subscriptions"]').count(),0,
+    'Deleted categories must not reappear in History filters');
+
+   // Recategorizing a posted purchase must immediately update Budget from the
+   // saved overlay without a browser reload. Budget also explains when its
+   // current month/account filter hides the changed historical transaction.
+   await chooseMonths(page,['2026-09']);
+   const spendRow=page.locator('.history-entry')
+    .filter({has:page.locator('.history-actual-row[data-history-kind="expense"]')}).first();
+   assert.equal(await spendRow.count(),1,'September contains a posted fictional expense');
+   const oldCategory=await spendRow.locator('[data-history-category]').inputValue(),
+    targetCategory=oldCategory==='Health'?'Dining':'Health',
+    movedCents=Math.round(Number(await spendRow.locator('[data-history-sort-amount]')
+     .getAttribute('data-history-sort-amount'))*100);
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   const oldTargetCents=Math.round(Number((await page.locator(
+    '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''))*100);
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   const rowAgain=page.locator('.history-entry')
+    .filter({has:page.locator('.history-actual-row[data-history-kind="expense"]')}).first();
+   const chosenId=await rowAgain.getAttribute('data-history-entry');
+   await rowAgain.locator('[data-history-category]').selectOption(targetCategory);
+   await page.waitForFunction(([id,category])=>{
+    const saved=JSON.parse(localStorage.getItem('household-planner-sample-settings-v1')||'{}');
+    return saved.categoryOverrides?.[id]===category;
+   },[chosenId,targetCategory]);
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(Math.round(Number((await page.locator(
+    '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''))*100),oldTargetCents+movedCents,
+    'A just-saved correction updates Budget in place, without refresh');
+   assert.match(await page.locator('.history-budget-feedback').last().innerText(),
+    /Updated .* Budget for September 2026/,
+    'Budget explicitly acknowledges a saved category change');
+   await chooseMonths(page,['2026-10']);
+   assert.match(await page.locator('.history-budget-feedback').last().innerText(),
+    /outside the selected Budget months/,
+    'A correct category save explains why an older purchase is not in this month');
+   await page.locator('[data-show-saved-budget]').click();
+   assert.deepEqual(await selectedMonths(page),['2026-09'],
+    'Show that month opens the changed category’s transaction month');
+   assert.equal(Math.round(Number((await page.locator(
+    '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
+    .replace(/[^0-9.-]/g,''))*100),oldTargetCents+movedCents,
+    'Budget reflects the saved correction without forcing a bank refresh');
+
+
+   // Compare with an actual Upcoming Bills item generated from a completely
+   // fictional repeating rule. Keep it isolated to this disposable demo test.
+   const visualAccount=await page.locator('.history-budget-filters [name="historyAccount"] option')
+    .evaluateAll(nodes=>nodes.find(n=>n.value&&n.value!=='all')?.value||'');
+   assert.ok(visualAccount,'A fictional account is available for the visual fixture');
+   await page.evaluate(accountId=>{
+    const key='household-planner-sample-settings-v1';
+    const p=JSON.parse(localStorage.getItem(key)||'{}');
+    const r={id:'fictional-bill-row-layout',kind:'event',
+     accountId,originalAccountId:accountId,
+     merchant:'Fictional Internet Bill',originalMerchant:'Fictional Internet Bill',
+     scheduleLabel:'Fictional Internet Bill',type:'expense',originalType:'expense',
+     amount:85,matchAmount:85,frequency:'monthly',sourceFrequency:'monthly',
+     anchorDate:'2026-10-23',sourceAnchorDate:'2026-10-23',
+     amountBasis:'fixed',category:'Utility',categoryReviewed:true,
+     matchNames:['fictional internet bill'],enabled:true};
+    p.futureRecurringRules=[...(p.futureRecurringRules||[])
+     .filter(x=>x.id!==r.id),r];
+    p.recurringForecastMode='approved-only';
+    localStorage.setItem(key,JSON.stringify(p));
+   },visualAccount);
+   await page.reload();
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   const upcoming=page.locator('.bills-upcoming-row')
+    .filter({hasText:'Fictional Internet Bill'}).first();
+   const repeating=page.locator('[data-schedule-card="fictional-bill-row-layout"]');
+   assert.equal(await upcoming.count(),1,
+    'Fixture appears in Upcoming Bills as a canonical forecast');
+   assert.equal(await repeating.count(),1,
+    'Fixture appears in Repeating Payments');
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
+   assert.equal(await page.locator('[data-bills-more]').count(),0);
+   assert.equal(await upcoming.count(),1,
+    'November Upcoming contains the saved recurring bill from its real November occurrence');
+   assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Nov 23/);
+   await page.locator('[data-bills-tab="repeating"]').click();
+   assert.equal(await page.locator('[data-bills-pane="repeating"] [data-bills-month]').inputValue(),'2026-11');
+   assert.equal(await repeating.count(),1);
+   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Nov 23/,
+    'Repeating shows the first actual scheduled payment inside the selected month');
+   await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-12');
+   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Dec 23/,
+    'Changing the month changes which canonical repeating occurrence is shown');
+   await page.locator('[data-bills-tab="upcoming"]').click();
+   assert.equal(await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').inputValue(),'2026-12');
+   assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Dec 23/);
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
+   const design=(row,container,merchant,amount)=>row.evaluate(
+    (node,{container,merchant,amount})=>{
+     const outer=node.closest(container),css=getComputedStyle(outer),r=node.getBoundingClientRect();
+     return {height:r.height,merchant:parseFloat(getComputedStyle(node.querySelector(merchant)).fontSize),
+      amount:parseFloat(getComputedStyle(node.querySelector(amount)).fontSize),
+      cardBorder:css.borderTopStyle,cardShadow:css.boxShadow,
+      overflow:document.documentElement.scrollWidth-innerWidth};
+    },{container,merchant,amount});
+   const ref=await design(upcoming,'.bills-upcoming',
+    '.bills-upcoming-description strong','.bills-upcoming-row>strong');
+   await page.locator('[data-bills-tab="repeating"]').click();
+   const scheduled=await design(repeating.locator('.schedule-compact-row'),
+    '.schedule-card','.schedule-row-title strong','.schedule-row-amount strong');
+   assert.ok(ref.height>=60&&scheduled.height>=60&&
+    Math.abs(ref.height-scheduled.height)<=30,
+    'Repeating matches Upcoming Bills row spacing: '+JSON.stringify({ref,scheduled}));
+   assert.ok(Math.abs(ref.merchant-scheduled.merchant)<=1&&
+    Math.abs(ref.amount-scheduled.amount)<=1,
+    'Repeating text matches Upcoming Bills: '+JSON.stringify({ref,scheduled}));
+   assert.equal(scheduled.cardBorder,'none','Repeating has no individual enclosing card');
+   assert.equal(scheduled.cardShadow,'none','Repeating has no per-item shadow');
+   assert.ok(ref.overflow<=3&&scheduled.overflow<=3,'No horizontal overflow in Bills');
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   const posted=await design(page.locator('.history-entry .history-actual-row').first(),
+    '.history-entry','.history-actual-description strong','.history-actual-amount');
+   assert.ok(posted.height>=60&&Math.abs(posted.height-ref.height)<=30,
+    'Activity matches Upcoming Bills vertical rhythm: '+JSON.stringify({ref,posted}));
+   assert.ok(Math.abs(ref.merchant-posted.merchant)<=1&&
+    Math.abs(ref.amount-posted.amount)<=1,
+    'Activity text matches Upcoming Bills: '+JSON.stringify({ref,posted}));
+   assert.equal(posted.cardBorder,'none','Activity is a flat, continuous list');
+   assert.ok(posted.overflow<=3,'No horizontal overflow in Activity');
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.locator('[data-bills-tab="repeating"]').click();
+   await repeating.locator('[data-schedule-edit]').click();
+   assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
+    'Spacious Repeating row keeps existing editor');
+   await page.locator('.transaction-detail-close').click();
+
+   // All transaction name and dollar typography must EXACTLY match
+   // Upcoming Bills at every responsive width, not merely use similar sizes.
+   const transactionFonts=async (rowSelector,nameSelector,valueSelector)=>{
+    const row=page.locator(rowSelector).first();
+    assert.ok(await row.count()>0,'Expected transaction for font comparison: '+rowSelector);
+    return row.evaluate((node,{nameSelector,valueSelector})=>{
+     const name=node.querySelector(nameSelector),value=node.querySelector(valueSelector);
+     return {name:name?parseFloat(getComputedStyle(name).fontSize):null,
+      value:value?parseFloat(getComputedStyle(value).fontSize):null,
+      // The visible dollar is rendered in nested glyph spans. A matching
+      // outer amount font-size alone does not guarantee visually equal text.
+      glyphSizes:value?[...value.querySelectorAll('.ledger-money-sign,.ledger-money-dollar,.ledger-money-digits')]
+       .map(el=>parseFloat(getComputedStyle(el).fontSize)):[],
+      width:document.documentElement.scrollWidth,viewport:innerWidth};
+    },{nameSelector,valueSelector});
+   };
+   const assertFontsMatch=(label,actual,expected)=>{
+    assert.deepEqual([actual.name,actual.value],[expected.name,expected.value],
+     label+' must match Upcoming Bills exact computed name/amount font sizes: '+
+     JSON.stringify({actual,expected}));
+    if(label.startsWith('Repeating ')||label.startsWith('Posted Activity ')){
+     assert.equal(actual.glyphSizes.length,3,
+      label+' should render sign, dollar and digits as separate real glyphs');
+    }
+    assert.ok(actual.glyphSizes.every(size=>size===expected.value),
+     label+' nested visible amount glyphs must have Upcoming Bills font size: '+
+     JSON.stringify({actual,expected}));
+    assert.ok(actual.width<=actual.viewport+3,
+     label+' must not introduce horizontal overflow: '+JSON.stringify(actual));
+   };
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+    await page.locator('[data-bills-tab="upcoming"]').click();
+    const baseline=await transactionFonts(
+     '.bills-upcoming-row','.bills-upcoming-description strong','.bills-upcoming-row>strong');
+    assert.deepEqual([baseline.name,baseline.value],width<=390?[13,13]:width<=850?[14,14]:[15,16],
+     'Upcoming Bills is the reference for desktop and phone font sizes at '+width);
+    await page.locator('[data-bills-tab="repeating"]').click();
+    assertFontsMatch('Repeating '+width,await transactionFonts(
+     '.schedule-row-main.ledger-transaction-row',
+     '.schedule-row-title strong','.schedule-row-amount strong'),baseline);
+    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+    assertFontsMatch('Posted Activity '+width,await transactionFonts(
+     '.history-row-open.ledger-transaction-row',
+     '.history-actual-description strong','.history-actual-amount'),baseline);
+    await page.locator('#planner-menu>summary').click();
+    await page.locator('#planner-menu [data-view="transactions"]').click();
+    assertFontsMatch('Dated Predictions '+width,await transactionFonts(
+     '.unified-payment-trigger.ledger-transaction-row',
+     '.unified-payment-name strong','.unified-payment-value'),baseline);
+    await page.locator('.planner-nav-primary [data-view="summary"]').click();
+    await page.locator('[data-calendar-day="2026-10-23"]').click();
+    assertFontsMatch('Calendar prediction '+width,await transactionFonts(
+     '.calendar-day-detail .calendar-monthly-row.ledger-transaction-row',
+     '.calendar-monthly-name strong','.ledger-transaction-amount'),baseline);
+    await page.locator('.attention-link[data-view="reviews"]').click();
+    if(await page.locator('.category-review-open.ledger-transaction-row').count()){
+     assertFontsMatch('Review categorization '+width,await transactionFonts(
+      '.category-review-open.ledger-transaction-row',
+      '.ledger-transaction-identity strong','.ledger-transaction-amount'),baseline);
+    }
+    if(await page.locator('[data-review-pane="suggestions"] .review-row-open.ledger-transaction-row').count()||
+     await page.locator('[data-review-pane="earlier"] .review-row-open.ledger-transaction-row').count()){
+     const where=await page.locator('[data-review-pane="suggestions"] .review-row-open.ledger-transaction-row').count()?
+      'suggestions':'earlier';
+     await page.locator('[data-review-tab="'+where+'"]').click();
+     assertFontsMatch('Review recurring '+width,await transactionFonts(
+      '[data-review-pane="'+where+'"] .review-row-open.ledger-transaction-row',
+      '.review-candidate-main strong','.review-candidate-amount'),baseline);
+    }
+   }
+
+   assert.deepEqual(errors,[],'No uncaught client errors on '+(mobile?'iPhone WebKit':'desktop Chromium'));
+   await context.close();
+  }
+  console.log('PASS novice Ledger browser interactions in desktop Chromium and iPhone WebKit');
+ }finally{
+  await chrome?.close();await iphone?.close();server.kill();
+ }
+})().catch(e=>{console.error(e);process.exitCode=1});
+),
+    'Repeating shows a live total beside the filtered list count');
    assert.equal(await page.locator('.schedule-toolbar').evaluate(el=>
     el.firstElementChild?.matches('.bills-month-field')),true,
     'Month selection is first in Repeating controls');
