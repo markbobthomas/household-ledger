@@ -6024,3 +6024,60 @@ a:hover{color:#166e61}
   grid-column:2!important;grid-row:4!important;
  }
 }
+
+/* Activity keeps Months first, matching the Spending selector convention. */
+.history-page .ledger-toolbar.history-activity-filters{
+ grid-template-columns:minmax(0,1.1fr) minmax(0,1.7fr) repeat(3,minmax(0,1fr))!important;
+}
+.history-page .ledger-toolbar.history-activity-filters>.history-activity-month-field{
+ grid-column:1!important;grid-row:1!important;
+}
+.history-page .ledger-toolbar.history-activity-filters>.history-search-wrap{
+ grid-column:2!important;grid-row:1!important;
+}
+@media(max-width:1100px){
+ .history-page .ledger-toolbar.history-activity-filters{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-activity-month-field{
+  grid-column:1!important;grid-row:1!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-search-wrap{
+  grid-column:2/-1!important;grid-row:1!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historyAccount"]){
+  grid-column:1!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historySort"]){
+  grid-column:2!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-category-controls{
+  grid-column:3/-1!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.ledger-history-clear-button{
+  grid-column:4!important;grid-row:3!important;
+ }
+}
+@media(max-width:650px){
+ .history-page .ledger-toolbar.history-activity-filters{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-activity-month-field{
+  grid-column:1/-1!important;grid-row:1!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-search-wrap{
+  grid-column:1/-1!important;grid-row:2!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historyAccount"]){
+  grid-column:1!important;grid-row:3!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>label:has([name="historySort"]){
+  grid-column:2!important;grid-row:3!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.history-category-controls{
+  grid-column:1/-1!important;grid-row:4!important;
+ }
+ .history-page .ledger-toolbar.history-activity-filters>.ledger-history-clear-button{
+  grid-column:2!important;grid-row:5!important;
+ }
+}
