@@ -3509,6 +3509,27 @@ document.addEventListener('click',async e=>{
   activeTab='history';historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
   render();return;
  }
+ const billsTab=e.target.closest?.('[data-bills-tab]');
+ if(billsTab){
+  const next=billsTab.dataset.billsTab;
+  if(!['upcoming','repeating'].includes(next)||next===billsPane)return;
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+      recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+      !window.confirm('Discard unsaved prediction changes?'))return;
+  scheduleMode='';scheduleTarget='';scheduleRemoveTarget='';
+  billsPane=next;render();return;
+ }
+ const reviewTab=e.target.closest?.('[data-review-tab]');
+ if(reviewTab){
+  const next=reviewTab.dataset.reviewTab;
+  if(!['categories','payments','earlier','suggestions'].includes(next)||next===reviewPane)return;
+  const overdueDirty=[...document.querySelectorAll('.reviews-page [data-overdue-date]')]
+   .some(form=>[...form.querySelectorAll('input,select,textarea')].some(field=>
+    field.type!=='hidden'&&field.value!==field.defaultValue));
+  if((reviewFormDirty()||overdueDirty)&&
+     !window.confirm('Discard unsaved review changes?'))return;
+  recurringDraft=null;overdueEditKey='';reviewPane=next;render();return;
+ }
  if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;render();return;}
  const view=e.target.closest('[data-view]');
  if(view){
