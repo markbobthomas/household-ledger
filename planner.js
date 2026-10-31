@@ -1412,7 +1412,11 @@ function monthlyExpenseRows(bundle,s,month){
  // Preserve posted replacement and existing future adjustments without
  // modifying bank data, saved plans or the canonical projection.
  for(const row of futureRows(bundle,s)){
-  if(row.kind!=='event'||row.type!=='expense'||row.date.slice(0,7)!==month)continue;
+  if(row.kind!=='event'||row.type!=='expense'||row.date.slice(0,7)!==month||
+    row.sourceType==='transfer'||row.sourceType==='income'||row.sourceType==='refund')continue;
+  // A modeled external transfer can normalize to an outgoing expense event.
+  // Preserve its saved source type instead of accidentally billing it.
+  if(row.recurringRuleId&&!ruleIds.has(String(row.recurringRuleId)))continue;
   const rule=rules.find(r=>String(r.id)===String(row.recurringRuleId));
   if(rule&&actual.some(p=>String(p.rule.id)===String(rule.id)&&
     T.postedWithinMatchWindow(rule,p.row,row.date,row.amount,
@@ -1595,6 +1599,9 @@ function schedulesPage(bundle,s){
   visible.map(cardHtml).join(''); 
  const upcomingBills=billsSelectedMonth?monthlyRows:
   futureRows(bundle,s).filter(row=>row.kind==='event'&&row.type==='expense'&&
+   !['transfer','income','refund'].includes(row.sourceType)&&
+   (!row.recurringRuleId||(rules.some(r=>String(r.id)===String(row.recurringRuleId)&&
+    r.kind!=='movement'&&r.type==='expense')))&&
    row.date<=shiftDay(s.asOf,billsExpanded?90:30))
    .map(row=>({...row,source:'prediction',status:'Predicted',ruleId:row.recurringRuleId||null}));
  const upcomingCents=upcomingBills.reduce((total,row)=>
