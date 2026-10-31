@@ -68,14 +68,14 @@ function forecastSaveFeedback(message,allowUndo=false){
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
-let categoryReviewLimit=40,reviewSort='newest';
+let categoryReviewLimit=40,reviewSort='newest',reviewPane='';
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=false,
  historyCategoryDrag=null,historyCategoryNotice='',latestCategorySave=null;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false;
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -957,6 +957,7 @@ function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===id);
  if(!rule)return false;
  detailReturnFocus=origin||null;
+ if(activeTab==='schedules')billsPane='repeating';
  scheduleMode=mode;scheduleTarget=id;detailParentSchedule=null;
  transactionDetail={kind:'schedule',id,mode,selectedKey:String(selectedKey||'')};
  render();
@@ -1474,12 +1475,19 @@ function schedulesPage(bundle,s){
   '<small>'+(row.cardBill?'Credit card payment · ':'')+escapeHTML((accounts.find(a=>String(a.id)===String(row.fromAccountId||row.accountId))||{}).name||'Account')+
    '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">›</span></button>').join('');
  return '<div class="planner-page schedule-page">'+
+  '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
+   [['upcoming','Upcoming'],['repeating','Repeating']].map(([id,name])=>
+    '<button type="button" class="history-subtab'+(billsPane===id?' active':'')+
+    '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
+  '</nav>'+
+  '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div>'+
    (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period. Review your repeating payments below.</p>')+
    '<button type="button" class="bills-range-toggle" data-bills-more>'+
-    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section>'+
+    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section></div>'+
+  '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
   '<div class="bills-manage-heading"><div><h2>Repeating payments</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
@@ -1506,7 +1514,7 @@ function schedulesPage(bundle,s){
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching predictions. Try a different search.</p>'+
-   '</div>';
+   '</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -3247,7 +3255,7 @@ document.addEventListener('click',async e=>{
   const id=linkedSchedule.dataset.openLinkedSchedule;
   if(!(state().predictions?.futureRecurringRules||[]).some(r=>r.id===id))return;
   detailOriginTab=activeTab;
-  activeTab='schedules';scheduleTarget=id;
+  activeTab='schedules';billsPane='repeating';scheduleTarget=id;
   scheduleMode=linkedSchedule.dataset.schedulePanel==='estimate'?'estimate':'edit';
   transactionDetail={kind:'schedule',id,mode:scheduleMode};
   render();return;
