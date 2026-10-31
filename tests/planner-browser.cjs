@@ -103,6 +103,39 @@ const {chromium,webkit}=require('playwright');
   await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
  }
 
+
+ // Merchants and Purchase Sizes share one responsive Account/Category/Months row.
+ async function verifyReportFilters(page,view,mobile){
+  assert.equal(await page.locator('.history-view-toolbar [data-history-month-toggle]').count(),0,
+   view+' has no detached Months control');
+  assert.equal(await page.locator('.history-report-filters [name="historyAccount"]').count(),1);
+  assert.equal(await page.locator('.history-report-filters [name="historyCategory"]').count(),1);
+  assert.equal(await page.locator('.history-report-filters [data-history-month-toggle]').count(),1);
+  for(const width of (mobile?[320,390]:[768,1280])){
+   await page.setViewportSize({width,height:mobile?844:900});
+   const g=await page.evaluate(()=>{
+    const toolbar=document.querySelector('.history-report-filters');
+    const rect=q=>toolbar.querySelector(q).getBoundingClientRect().toJSON();
+    return {a:rect('[name="historyAccount"]'),c:rect('[name="historyCategory"]'),
+     m:rect('.history-month-trigger'),f:toolbar.getBoundingClientRect().toJSON(),
+     scroll:document.documentElement.scrollWidth};
+   });
+   const {a,c,m,f,scroll}=g;
+   assert.ok(Math.abs(a.top-c.top)<=3&&a.right<=c.left+1&&
+    Math.abs(a.height-c.height)<=3&&a.width>75&&c.width>75,
+    view+' Account/Category geometry '+width+': '+JSON.stringify(g));
+   assert.ok(Math.abs(a.height-m.height)<=3&&m.left>=f.left-1&&m.right<=f.right+1&&
+    scroll<=width+3,
+    view+' Months inside filter container '+width+': '+JSON.stringify(g));
+   if(width>650)assert.ok(Math.abs(a.top-m.top)<=3&&c.right<=m.left+1,
+    view+' has three inline filters '+width+': '+JSON.stringify(g));
+   else assert.ok(m.top>=a.bottom+3&&m.width>=a.width+c.width,
+    view+' wraps Months on phone '+width+': '+JSON.stringify(g));
+   await verifyMonthOptionsDoNotOverlap(page,view+' '+width+'px');
+  }
+  await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+ }
+
  try{
   await ready();
   chrome=await chromium.launch({headless:true});
@@ -1013,6 +1046,7 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
     await page.locator('[data-history-view="sizes"]').click();
+   await verifyReportFilters(page,'Purchase sizes',mobile);
    assert.equal(await page.locator('[data-history-size-insights]').count(),1);
    assert.equal(await page.locator('[data-history-size-insights] > h2,[data-history-size-insights] > p').count(),0,
     'Purchase size report has visual bands and totals without a duplicate title or explanatory paragraph');
@@ -1038,6 +1072,7 @@ const {chromium,webkit}=require('playwright');
    // independent of the existing Category and Purchase Sizes analysis.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
     await page.locator('[data-history-view="merchants"]').click();
+   await verifyReportFilters(page,'Merchants',mobile);
    assert.equal(await page.locator('[data-history-merchant-insights]').count(),1);
    assert.equal(await page.locator('[data-history-merchant-insights] > h2,'+
     '[data-history-merchant-insights] > .history-insight-note').count(),0,
