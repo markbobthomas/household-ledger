@@ -332,10 +332,9 @@ const {chromium,webkit}=require('playwright');
    const originalValue=await monthLowValue(),originalDate=await monthLowDate(),
     originalMonth=await page.locator('.calendar-month-title').innerText();
    assert.ok(originalDate,'Shown-month low has a navigable forecast date');
-   assert.equal(originalDate.slice(0,7),await page.evaluate(()=>{
-    const d=new Date(document.querySelector('.calendar-month-title').textContent+' 1, 12:00:00 GMT');
-    return d.toISOString().slice(0,7);
-   }),'Initial low date belongs to shown calendar month');
+   assert.equal(new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric',timeZone:'UTC'})
+    .format(new Date(originalDate+'T12:00:00Z')),originalMonth,
+    'Initial low date belongs to shown calendar month');
    await page.locator('[data-calendar-nav="1"]').click();
    assert.notEqual(await page.locator('.calendar-month-title').innerText(),originalMonth,
     'Month navigation changes the calendar grid');
