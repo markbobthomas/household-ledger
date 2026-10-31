@@ -1350,7 +1350,7 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.locator('[data-bills-tab="upcoming"]').click();
-   assert.equal(await page.locator('[data-bills-tab]').count(),2,
+   assert.equal(await page.locator('[data-bills-tab]').count(),3,
     'Bills uses the shared Spending segmented navigation');
    assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),true);
    assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),false);
@@ -1358,8 +1358,8 @@ const {chromium,webkit}=require('playwright');
     repeatingBillsMonth=page.locator('[data-bills-pane="repeating"] [data-bills-month]');
    assert.equal(await upcomingBillsMonth.count(),1);
    assert.equal(await repeatingBillsMonth.count(),1);
-   assert.equal(await upcomingBillsMonth.inputValue(),'2026-10',
-    'Bills defaults to the full current calendar month, not a partial forward-only range');
+   assert.equal(await upcomingBillsMonth.inputValue(),'',
+    'Upcoming defaults to next 30 days and Repeating opens all expenses');
    assert.equal(await upcomingBillsMonth.locator('option').first().innerText(),'Next 30 days');
    const offeredBillMonths=await upcomingBillsMonth.locator('option').evaluateAll(nodes=>
     nodes.map(node=>node.value));
@@ -1403,7 +1403,8 @@ const {chromium,webkit}=require('playwright');
      return {left:select.left,right:select.right,top:select.top,bottom:select.bottom,
       containerLeft:container.left,containerRight:container.right};
     });
-    assert.ok(grid.length===2&&Math.abs(grid[0].width-grid[1].width)<=2&&
+    assert.ok(grid.length===3&&Math.abs(grid[0].width-grid[1].width)<=2&&
+    Math.abs(grid[1].width-grid[2].width)<=2&&
      Math.abs(grid[0].top-grid[1].top)<=2&&
      filter.right<=filter.containerRight+2&&filter.left>=filter.containerLeft-2&&
      filter.bottom>filter.top&&
@@ -1413,6 +1414,18 @@ const {chromium,webkit}=require('playwright');
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await page.locator('[data-bills-tab="repeating"]').click();
+   const positions=await page.locator('.schedule-toolbar.ledger-toolbar').evaluate(el=>
+    [...el.children].map(n=>{
+     const r=n.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};
+    }));
+   assert.equal(new Set(positions.map(p=>Math.round(p.top))).size,mobile?2:width>=850?1:2,
+    'Repeating toolbar aligns in one desktop row or two narrow-screen rows');
+   assert.ok(positions.every(p=>p.right<=
+    Math.max(...positions.map(x=>x.right))+1));
+   await page.locator('[data-bills-tab="statements"]').click();
+   assert.equal(await page.locator('[data-bills-pane="statements"]').isVisible(),true,
+    'Statements is a dedicated third Bills subtab');
+   await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),false);
    assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),true);
    if(await page.locator('.schedule-row-main.ledger-transaction-row').count())
@@ -1421,7 +1434,7 @@ const {chromium,webkit}=require('playwright');
     'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
-   assert.equal(await page.locator('.bills-heading h2').innerText(),'Monthly expenses');
+   assert.equal(await page.locator('.bills-heading h2').innerText(),'Upcoming bills');
    assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
@@ -1884,34 +1897,22 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await repeating.count(),1,
     'Fixture appears in Repeating Payments');
    const monthPicker=page.locator('[data-bills-pane="upcoming"] [data-bills-month]');
-   assert.equal(await monthPicker.inputValue(),'2026-10');
-   const postedMortgage=page.locator('.bills-upcoming-row').filter({hasText:'Mortgage'});
-   assert.equal(await postedMortgage.count(),1,
-    'October posted mortgage replaces its expected schedule rather than duplicating it');
-   assert.match(await postedMortgage.innerText(),/Posted/);
-   assert.match(await postedMortgage.innerText(),/2,650/);
+   assert.equal(await monthPicker.inputValue(),'');
+   assert.equal(await page.locator('[data-schedule-visible-count]').innerText(),
+    'Showing 2 of 2 recurring expenses',
+    'The denominator excludes income and transfers rather than claiming 2 of 4');
+   assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Mortgage'}).count(),0,
+    'Past posted mortgage is no longer mixed into the upcoming cash forecast');
    assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Paycheck'}).count(),0);
    assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Transfer'}).count(),0);
-   const verifyMonthlyTotal=async()=>{const shown=await page.locator('.bills-upcoming-row>strong')
-    .evaluateAll(nodes=>nodes.reduce((sum,node)=>
-     sum+Math.round(Number(node.textContent.replace(/[^0-9.-]/g,''))*100),0));
-    const total=Number((await page.locator('[data-bills-upcoming-sum]').innerText())
-     .replace(/[^0-9.-]/g,''));
-    assert.equal(Math.round(total*100),shown,'Monthly sum equals actual+expected expenses only');
-   };
-   await verifyMonthlyTotal();
-   await postedMortgage.click();
-   assert.match(await page.locator('.transaction-detail').innerText(),/Bank history/,
-    'Posted expenses open the read-only bank transaction detail');
-   await page.locator('.transaction-detail-close').click();
-   await monthPicker.selectOption('2026-09');
-   assert.equal(await page.locator('.bills-upcoming-row')
-    .filter({hasText:'Fictional Internet Bill'}).count(),1,
-    'Prior month retains historical unconfirmed expected expenses');
-   assert.match(await upcoming.innerText(),/Not confirmed/);
-   assert.equal(await postedMortgage.count(),1,'Previous month includes its linked actual mortgage');
-   await verifyMonthlyTotal();
-   await monthPicker.selectOption('2026-10');
+   await page.locator('[data-bills-tab="repeating"]').click();
+   await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-09');
+   assert.equal(await repeating.count(),1,
+    'Historical month can still show the prior expected recurring Internet bill');
+   assert.match(await repeating.locator('.schedule-row-next').innerText(),/Sep 23/);
+   await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('');
+   assert.equal(await repeating.count(),1);
+   await page.locator('[data-bills-tab="upcoming"]').click();
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
    assert.equal(await page.locator('[data-bills-more]').count(),0);
    assert.equal(await upcoming.count(),1,
