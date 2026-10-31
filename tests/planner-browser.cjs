@@ -258,6 +258,48 @@ const {chromium,webkit}=require('playwright');
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(url,{waitUntil:'load'});
    await page.locator('#planner-main .planner-page').first().waitFor();
+   // A plain tab change must reuse the same forecast and Review analysis.
+   // Instrument real render calls rather than relying on unstable timing
+   // thresholds on the CI runner; bank/forecast changes are tested elsewhere.
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   await page.evaluate(()=>{
+    const model=window.HouseholdLedgerData,originalRecords=model.records,
+     originalReview=model.categoryReviewQueue;
+    window.__navigationDataReads={records:0,reviews:0,restore(){
+     model.records=originalRecords;model.categoryReviewQueue=originalReview;
+    }};
+    model.records=function(...args){
+     window.__navigationDataReads.records++;
+     return originalRecords.apply(this,args);
+    };
+    model.categoryReviewQueue=function(...args){
+     window.__navigationDataReads.reviews++;
+     return originalReview.apply(this,args);
+    };
+   });
+   for(const target of ['history','schedules','activity','summary','reviews','summary']){
+    const countBefore=await page.evaluate(()=>window.__navigationDataReads.records);
+    const navigation=target==='reviews'?'.attention-link[data-view="reviews"]':
+     '.planner-nav-primary [data-view="'+target+'"]';
+    await page.locator(navigation).click();
+    assert.ok(await page.locator('#planner-main .planner-page').count()>0,
+     target+' retains rendered content after page change');
+    const countAfter=await page.evaluate(()=>window.__navigationDataReads.records);
+    assert.ok(countAfter-countBefore<=1,
+     'At most one reconciled source-history read per navigation: '+target+
+      ' had '+(countAfter-countBefore));
+   }
+   const navReads=await page.evaluate(()=>{
+    const result={records:window.__navigationDataReads.records,
+     reviews:window.__navigationDataReads.reviews};
+    window.__navigationDataReads.restore();
+    delete window.__navigationDataReads;
+    return result;
+   });
+   assert.ok(navReads.reviews<=1,
+    'Review recommendations/categories are reused across unchanged navigation: '+
+     JSON.stringify(navReads));
+
    assert.equal(await page.locator('h1').innerText(),'Ledger');
    // The refresh is presentation-only, with the same routes and inputs.
    // Verify that the new visual theme actually loads instead of silently
