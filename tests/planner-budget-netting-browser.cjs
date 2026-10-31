@@ -289,13 +289,70 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.locator('[data-bills-tab="statements"]').click();
-   const statement=page.locator('[data-bills-card="demo-visa"] [data-bills-statement]').first();
-   assert.ok(await statement.count()>=1,
-    name+': configured Visa has a dedicated projected statement cycle');
-   await statement.evaluate(el=>el.open=true);
+   const cardSelect=page.locator('[data-bills-statement-account]'),
+    periodSelect=page.locator('[data-bills-statement-period]'),
+    statement=page.locator('[data-bills-pane="statements"] [data-bills-statement]');
+   assert.equal(await cardSelect.count(),1,name+': select exactly one card');
+   assert.equal(await periodSelect.count(),1,name+': select exactly one statement');
+   assert.equal(await cardSelect.inputValue(),'demo-visa',
+    name+': configured card is initially selected');
+   assert.equal(await statement.count(),1,
+    name+': only the selected statement is rendered');
+   assert.equal(await page.locator('.bills-card-statements').count(),1,
+    name+': only one card detail is rendered');
+   const options=await periodSelect.locator('option').evaluateAll(nodes=>
+    nodes.map(n=>({value:n.value,label:n.textContent})));
+   assert.ok(options.length>=2&&options.every(x=>/2026/.test(x.label)),
+    name+': statement dropdown contains explicit billing years');
+   const currentChoice=await periodSelect.inputValue();
+   assert.equal(currentChoice,'2026-11-18',
+    name+': the open billing period is the initial selection');
+   assert.match(await statement.innerText(),/Current · open/);
    assert.match(await statement.innerText(),/Posted net charges/);
    assert.match(await statement.innerText(),/Predicted net charges/);
    assert.match(await statement.innerText(),/Expected card payment/);
+   assert.match(await statement.innerText(),/2026/,
+    name+': rendered statement period includes the year');
+   await periodSelect.selectOption('2026-10-18');
+   assert.equal(await statement.count(),1);
+   assert.match(await statement.innerText(),/Sep 19, 2026/);
+   assert.match(await statement.innerText(),/Oct 18, 2026/);
+   assert.equal(await page.locator('.bills-statement-line').count()>0,true,
+    name+': prior billing cycle retains its transaction rows');
+   await periodSelect.selectOption(currentChoice);
+   assert.equal(await statement.count(),1);
+   assert.match(await statement.innerText(),/Current · open/);
+   await cardSelect.selectOption('demo-mastercard');
+   assert.equal(await page.locator('.bills-card-statements').count(),1,
+    name+': changing cards does not add more card sections');
+   assert.equal(await page.locator('[data-bills-card="demo-visa"]').count(),0);
+   assert.equal(await page.locator('[data-bills-card="demo-mastercard"]').count(),1);
+   assert.equal(await periodSelect.inputValue(),'',
+    name+': unconfigured card does not inherit Visa statement choice');
+   await cardSelect.selectOption('demo-visa');
+   assert.equal(await periodSelect.inputValue(),currentChoice,
+    name+': returning to configured card restores its current statement');
+   for(const width of [320,390,768,1280]){
+    await page.setViewportSize({width,height:844});
+    const geometry=await page.locator('.schedule-page').evaluate(root=>{
+     const tabs=[...root.querySelectorAll('.ledger-section-tabs [data-bills-tab]')]
+      .map(el=>el.getBoundingClientRect()),
+      controls=[...root.querySelectorAll('.bills-statement-filters select')]
+       .map(el=>el.getBoundingClientRect());
+     return {tabs:tabs.map(r=>({top:r.top,width:r.width,right:r.right})),
+      controls:controls.map(r=>({top:r.top,right:r.right,width:r.width})),
+      viewport:innerWidth,overflow:document.documentElement.scrollWidth-innerWidth};
+    });
+    assert.ok(geometry.tabs.length===3&&
+     geometry.tabs.every(r=>Math.abs(r.top-geometry.tabs[0].top)<=2)&&
+     geometry.tabs.every(r=>Math.abs(r.width-geometry.tabs[0].width)<=2)&&
+     geometry.controls.length===2&&
+     geometry.controls.every(r=>r.width>65&&r.right<=width+2)&&
+     geometry.overflow<=3,
+     name+': three tabs on one row and two statement selectors fit at '+width+
+     'px: '+JSON.stringify(geometry));
+   }
+   await page.setViewportSize({width:name==='Chromium'?1280:390,height:name==='Chromium'?900:844});
    assert.equal(await page.locator('[data-bills-tab]').count(),3);
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.locator('[data-history-view="summary"]').click();
