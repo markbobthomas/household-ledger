@@ -1563,8 +1563,12 @@ const {chromium,webkit}=require('playwright');
     }
    }
 
-   const suggestion=page.locator('[data-review-recommendation]').first();
+   const suggestion=page.locator(
+    '[data-review-pane="earlier"] [data-review-recommendation],'+
+    '[data-review-pane="suggestions"] .recommended-repeating [data-review-recommendation]').first();
    if(await suggestion.count()){
+    const section=await suggestion.evaluate(node=>node.closest('[data-review-pane]').dataset.reviewPane);
+    await page.locator('[data-review-tab="'+section+'"]').click();
     await suggestion.click();
     assert.equal(await page.locator('.transaction-detail [data-history-recurring-form]').count(),1,
      'Review suggestions open the same shared editor');
