@@ -53,8 +53,8 @@ const {chromium,webkit}=require('playwright');
     await waitForPage();
     if(value==='activity'){
      assert.equal(await page.locator('.history-page').count(),1,'Activity opens on History list surface');
-     assert.equal(await page.locator('.history-page [data-history-view="list"]').count()>0,true,
-      'Activity shows the actual transaction list, not Spending categories');
+     assert.equal(await page.locator('.history-page .history-activity-filters').count(),1,
+      'Activity opens on the transaction-list filters, not the Spending category summary');
     }
     if(value==='summary')assert.equal(await page.locator('.summary-page').count(),1);
     if(value==='settings')assert.equal(await page.locator('.settings-page').count(),1);
