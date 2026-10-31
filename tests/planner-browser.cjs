@@ -440,6 +440,7 @@ const {chromium,webkit}=require('playwright');
         'Filter transactions by category');
      }
      if(tab==='schedules'){
+       await page.locator('[data-bills-tab="repeating"]').click();
        const layout=await page.evaluate(()=>{
         const label=document.querySelector('.schedule-page .schedule-category-controls>label'),
          control=label?.querySelector('[data-schedule-category-filter]');
@@ -1282,6 +1283,24 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.locator('[data-bills-tab="upcoming"]').click();
+   assert.equal(await page.locator('[data-bills-tab]').count(),2,
+    'Bills uses the shared Spending segmented navigation');
+   assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),true);
+   assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),false);
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const grid=await page.locator('.schedule-page .ledger-section-tabs .history-subtab')
+     .evaluateAll(items=>items.map(x=>x.getBoundingClientRect().toJSON()));
+    assert.ok(grid.length===2&&Math.abs(grid[0].width-grid[1].width)<=2&&
+     Math.abs(grid[0].top-grid[1].top)<=2&&
+     await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
+     'Bills tabs stay symmetrical at '+width+'px');
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   await page.locator('[data-bills-tab="repeating"]').click();
+   assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),false);
+   assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),true);
    if(await page.locator('.schedule-row-main.ledger-transaction-row').count())
     await verifyTransactionAnatomy(page,'.schedule-row-main.ledger-transaction-row','Upcoming Bills');
    else assert.equal(await page.locator('.schedule-row-main').count(),0,
@@ -1290,6 +1309,7 @@ const {chromium,webkit}=require('playwright');
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
    assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
     'Bills names the recurring section without repeating an action');
+   await page.locator('[data-bills-tab="upcoming"]').click();
    const billHeader=await page.locator('.bills-heading').evaluate(el=>{
     const heading=el.querySelector('h2').getBoundingClientRect(),
      count=el.querySelector('.bills-upcoming-total').getBoundingClientRect();
@@ -1298,6 +1318,7 @@ const {chromium,webkit}=require('playwright');
    });
    assert.ok(billHeader.headingRight<=billHeader.countLeft+2&&/^\d+$/.test(billHeader.value),
     'Upcoming Bills count is small, numeric and aligned with the header');
+   await page.locator('[data-bills-tab="repeating"]').click();
    const newRepeat=page.locator('[data-schedule-new]').first();
    await newRepeat.click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-new-form]').count(),1,
@@ -1340,6 +1361,28 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('.attention-link[data-view="reviews"]').click();
    assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
+   assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(items=>
+    items.map(x=>x.dataset.reviewTab)),['categories','payments','earlier','suggestions'],
+    'Review preserves four distinct sections as tabs');
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const grid=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
+     .evaluateAll(items=>items.map(el=>el.getBoundingClientRect().toJSON()));
+    assert.ok(grid.length===4&&Math.abs(grid[0].width-grid[1].width)<=2&&
+     (width>650?grid.every(x=>Math.abs(x.top-grid[0].top)<=2):
+      grid[2].top>grid[0].bottom+1)&&
+     await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
+     'Review tabs use Spending responsive grid at '+width+'px');
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
+   const reviewSections=['categories','payments','earlier','suggestions'];
+   for(const section of reviewSections){
+    await page.locator('[data-review-tab="'+section+'"]').click();
+    assert.equal(await page.locator('[data-review-pane="'+section+'"]').isVisible(),true);
+    for(const other of reviewSections.filter(x=>x!==section))
+     assert.equal(await page.locator('[data-review-pane="'+other+'"]').isVisible(),false);
+   }
+   await page.locator('[data-review-tab="categories"]').click();
    assert.equal(await page.locator('.reviews-page .review-priority,.review-intro p,'+
     '.category-review-panel > .lead').count(),0,
     'Review relies on section labels and actionable status rather than repeated instructional prose');
@@ -1520,8 +1563,12 @@ const {chromium,webkit}=require('playwright');
     }
    }
 
-   const suggestion=page.locator('[data-review-recommendation]').first();
+   const suggestion=page.locator(
+    '[data-review-pane="earlier"] [data-review-recommendation],'+
+    '[data-review-pane="suggestions"] .recommended-repeating [data-review-recommendation]').first();
    if(await suggestion.count()){
+    const section=await suggestion.evaluate(node=>node.closest('[data-review-pane]').dataset.reviewPane);
+    await page.locator('[data-review-tab="'+section+'"]').click();
     await suggestion.click();
     assert.equal(await page.locator('.transaction-detail [data-history-recurring-form]').count(),1,
      'Review suggestions open the same shared editor');
@@ -1638,6 +1685,7 @@ const {chromium,webkit}=require('playwright');
     },{container,merchant,amount});
    const ref=await design(upcoming,'.bills-upcoming',
     '.bills-upcoming-description strong','.bills-upcoming-row>strong');
+   await page.locator('[data-bills-tab="repeating"]').click();
    const scheduled=await design(repeating.locator('.schedule-compact-row'),
     '.schedule-card','.schedule-row-title strong','.schedule-row-amount strong');
    assert.ok(ref.height>=60&&scheduled.height>=60&&
@@ -1660,6 +1708,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(posted.cardBorder,'none','Activity is a flat, continuous list');
    assert.ok(posted.overflow<=3,'No horizontal overflow in Activity');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.locator('[data-bills-tab="repeating"]').click();
    await repeating.locator('[data-schedule-edit]').click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
     'Spacious Repeating row keeps existing editor');
@@ -1698,10 +1747,12 @@ const {chromium,webkit}=require('playwright');
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+    await page.locator('[data-bills-tab="upcoming"]').click();
     const baseline=await transactionFonts(
      '.bills-upcoming-row','.bills-upcoming-description strong','.bills-upcoming-row>strong');
     assert.deepEqual([baseline.name,baseline.value],width<=390?[13,13]:width<=850?[14,14]:[15,16],
      'Upcoming Bills is the reference for desktop and phone font sizes at '+width);
+    await page.locator('[data-bills-tab="repeating"]').click();
     assertFontsMatch('Repeating '+width,await transactionFonts(
      '.schedule-row-main.ledger-transaction-row',
      '.schedule-row-title strong','.schedule-row-amount strong'),baseline);
@@ -1725,9 +1776,13 @@ const {chromium,webkit}=require('playwright');
       '.category-review-open.ledger-transaction-row',
       '.ledger-transaction-identity strong','.ledger-transaction-amount'),baseline);
     }
-    if(await page.locator('.review-row-open.ledger-transaction-row').count()){
+    if(await page.locator('[data-review-pane="suggestions"] .review-row-open.ledger-transaction-row').count()||
+     await page.locator('[data-review-pane="earlier"] .review-row-open.ledger-transaction-row').count()){
+     const where=await page.locator('[data-review-pane="suggestions"] .review-row-open.ledger-transaction-row').count()?
+      'suggestions':'earlier';
+     await page.locator('[data-review-tab="'+where+'"]').click();
      assertFontsMatch('Review recurring '+width,await transactionFonts(
-      '.review-row-open.ledger-transaction-row',
+      '[data-review-pane="'+where+'"] .review-row-open.ledger-transaction-row',
       '.review-candidate-main strong','.review-candidate-amount'),baseline);
     }
    }

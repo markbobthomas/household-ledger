@@ -68,14 +68,14 @@ function forecastSaveFeedback(message,allowUndo=false){
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView='categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
-let categoryReviewLimit=40,reviewSort='newest';
+let categoryReviewLimit=40,reviewSort='newest',reviewPane='';
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=false,
  historyCategoryDrag=null,historyCategoryNotice='',latestCategorySave=null;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false;
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -957,6 +957,7 @@ function openSchedulePlan(id,selectedKey='',origin=null,mode='edit'){
  const rule=(state().predictions?.futureRecurringRules||[]).find(r=>r.id===id);
  if(!rule)return false;
  detailReturnFocus=origin||null;
+ if(activeTab==='schedules')billsPane='repeating';
  scheduleMode=mode;scheduleTarget=id;detailParentSchedule=null;
  transactionDetail={kind:'schedule',id,mode,selectedKey:String(selectedKey||'')};
  render();
@@ -1474,12 +1475,19 @@ function schedulesPage(bundle,s){
   '<small>'+(row.cardBill?'Credit card payment · ':'')+escapeHTML((accounts.find(a=>String(a.id)===String(row.fromAccountId||row.accountId))||{}).name||'Account')+
    '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">›</span></button>').join('');
  return '<div class="planner-page schedule-page">'+
+  '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
+   [['upcoming','Upcoming'],['repeating','Repeating']].map(([id,name])=>
+    '<button type="button" class="history-subtab'+(billsPane===id?' active':'')+
+    '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
+  '</nav>'+
+  '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div>'+
    (groupedBills||'<p class="bills-upcoming-empty">No predicted withdrawals in this period. Review your repeating payments below.</p>')+
    '<button type="button" class="bills-range-toggle" data-bills-more>'+
-    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section>'+
+    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button></section></div>'+
+  '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
   '<div class="bills-manage-heading"><div><h2>Repeating payments</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
@@ -1506,7 +1514,7 @@ function schedulesPage(bundle,s){
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
    'No matching predictions. Try a different search.</p>'+
-   '</div>';
+   '</div></div>';
 }
 function transactionsPage(bundle,s){
  const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
@@ -2605,6 +2613,11 @@ function sortedReviewRows(items,dateOf,nameOf,amountOf){
 function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  // Reuse the count's exact queue, including distinct unsaved legacy streams.
  const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,categoryIssues,categoryCount}=queue;
+ const paneCounts={categories:categoryCount,payments:overdue.length,
+  earlier:decisionsNeeded,suggestions:pending.length};
+ if(!reviewPane)reviewPane=Object.keys(paneCounts).find(key=>paneCounts[key]>0)||'categories';
+ const pane=id=>'<div class="review-tab-pane" data-review-pane="'+id+
+  '"'+(reviewPane===id?'':' hidden')+'>';
  lastRecommendedRepeating=recommendations;
  const
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
@@ -2715,14 +2728,23 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       ['merchant','Merchant A–Z']].map(([value,label])=>
       '<option value="'+value+'"'+(reviewSort===value?' selected':'')+'>'+label+'</option>').join('')+
     '</select></label></div>'+
+  '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
+   [['categories','Categories'],['payments','Payments'],['earlier','Earlier'],['suggestions','Suggestions']]
+    .map(([id,name])=>'<button type="button" class="history-subtab'+
+     (reviewPane===id?' active':'')+'" data-review-tab="'+id+'" aria-pressed="'+
+     (reviewPane===id)+'">'+name+
+     (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
+     '</button>').join('')+'</nav>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
+  pane('categories')+
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
    (categoryCount?shownCategories.map(categoryRow).join('')+
     (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
      'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
-    '')+'</section>'+
+    '')+'</section></div>'+
+  pane('payments')+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+'</span></div>'+
@@ -2768,7 +2790,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
        ' · Still included in the forecast</small></span>'+
        '<button type="button" class="btn" data-unignore-overdue="'+escapeHTML(item.key)+'">Undo ignore</button></div>').join('')+
      '</details>':'')+
-   '</section>':'')+
+   '</section>':'<p class="review-tab-empty">No payments to check.</p>')+
+  '</div>'+pane('earlier')+
   (legacyItems.length?
    '<section class="panel legacy-repeating-panel" data-active-legacy-estimates>'+
     '<div class="section-title"><h2>Earlier estimates to confirm</h2>'+
@@ -2787,7 +2810,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      '</p><button type="button" class="btn" data-activate-saved-schedules '+
       (decisionsNeeded?'disabled title="Review remaining automatic estimates first"':'')+
       '>Use saved predictions only</button></div>'+
-   '</section>':'')+
+   '</section>':'<p class="review-tab-empty">No earlier estimates to confirm.</p>')+
+  '</div>'+pane('suggestions')+
   '<section class="panel recommended-repeating" data-recommended-repeating>'+
    '<div class="section-title"><h2>Suggested repeating payments</h2>'+
    '<span class="status-tag">'+pending.length+'</span></div>'+
@@ -2799,7 +2823,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     (ignored.some(r=>expanded(r))?' open':'')+'><summary>Dismissed suggestions ('+
      ignored.length+')</summary><div class="ignored-repeating-items">'+
       reviewRecommendations(ignored).map(normalCard).join('')+'</div></details>':'')+
-  '</div>';
+  '</div></div>';
 }
 
 function incomeStatus(bundle,s,chosen,derived){
@@ -3247,7 +3271,7 @@ document.addEventListener('click',async e=>{
   const id=linkedSchedule.dataset.openLinkedSchedule;
   if(!(state().predictions?.futureRecurringRules||[]).some(r=>r.id===id))return;
   detailOriginTab=activeTab;
-  activeTab='schedules';scheduleTarget=id;
+  activeTab='schedules';billsPane='repeating';scheduleTarget=id;
   scheduleMode=linkedSchedule.dataset.schedulePanel==='estimate'?'estimate':'edit';
   transactionDetail={kind:'schedule',id,mode:scheduleMode};
   render();return;
@@ -3484,6 +3508,27 @@ document.addEventListener('click',async e=>{
   historySelectedMonths=new Set([latestCategorySave.date.slice(0,7)]);
   activeTab='history';historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
   render();return;
+ }
+ const billsTab=e.target.closest?.('[data-bills-tab]');
+ if(billsTab){
+  const next=billsTab.dataset.billsTab;
+  if(!['upcoming','repeating'].includes(next)||next===billsPane)return;
+  if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
+      recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
+      !window.confirm('Discard unsaved prediction changes?'))return;
+  scheduleMode='';scheduleTarget='';scheduleRemoveTarget='';
+  billsPane=next;render();return;
+ }
+ const reviewTab=e.target.closest?.('[data-review-tab]');
+ if(reviewTab){
+  const next=reviewTab.dataset.reviewTab;
+  if(!['categories','payments','earlier','suggestions'].includes(next)||next===reviewPane)return;
+  const overdueDirty=[...document.querySelectorAll('.reviews-page [data-overdue-date]')]
+   .some(form=>[...form.querySelectorAll('input,select,textarea')].some(field=>
+    field.type!=='hidden'&&field.value!==field.defaultValue));
+  if((reviewFormDirty()||overdueDirty)&&
+     !window.confirm('Discard unsaved review changes?'))return;
+  recurringDraft=null;overdueEditKey='';reviewPane=next;render();return;
  }
  if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;render();return;}
  const view=e.target.closest('[data-view]');
