@@ -127,14 +127,22 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
     name+': forecast metrics and calendar are the first surface');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
-   const upcoming=await page.locator('.bills-upcoming').innerText();
-   assert.match(upcoming,/Fictional Visa Payment/,
-    name+': Bills shows a linked checking-to-card payment in the same forecast');
-   assert.doesNotMatch(upcoming,/Fictional Savings Transfer/,
-    name+': savings transfer is not incorrectly presented as a bill');
-   assert.doesNotMatch(upcoming,/Fictional Visa Subscription/,
-    name+': a credit-card purchase is not a second cash bill');
-   assert.match(upcoming,/Fictional Earlier Bill/);
+   const currentExpenses=await page.locator('.bills-upcoming').innerText();
+   assert.match(currentExpenses,/Fictional Earlier Bill/,
+    name+': Current-month planned expenses remain listed');
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
+   const novemberExpenses=await page.locator('.bills-upcoming').innerText();
+   assert.doesNotMatch(novemberExpenses,/Fictional Visa Payment/,
+    name+': Credit-card settlement is a balance transfer, not a new expense');
+   assert.doesNotMatch(novemberExpenses,/Fictional Savings Transfer/,
+    name+': Savings transfer is not an expense');
+   assert.match(novemberExpenses,/Fictional Visa Subscription/,
+    name+': A scheduled card charge counts as an expense on its card account');
+   assert.match(novemberExpenses,/Fictional Scheduled Card Charge/,
+    name+': Scheduled card charges are expenses regardless of payment account');
+   assert.match(novemberExpenses,/Fictional Scheduled Checking Charge/,
+    name+': Scheduled checking expenses appear alongside card charges');
+   await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
    await page.locator('[data-bills-more]').click();
    assert.match(await page.locator('.bills-range-toggle').innerText(),/30 days/,
     name+': Bills can expand to a 90-day view without modifying forecasts');
