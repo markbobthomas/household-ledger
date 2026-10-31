@@ -7,9 +7,8 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-const currencyFormatter=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
 const cash=n=>n===null||n===undefined||!Number.isFinite(Number(n))?'Unavailable':
- currencyFormatter.format(Number(n));
+ new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n));
 const dateToday=()=>new Date().toLocaleDateString('en-CA');
 const dayLabel=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const dateLong=date=>new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
@@ -53,18 +52,6 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 // Derived data only. Source bank records and persisted predictions remain the
 // authorities; this cache cannot be written to the bank or planning store.
 let forecastCache=null;
-// Scope reconciliation to one synchronous UI paint. Between paints the
-// source bank rows and owner overrides may have changed, so nothing stale is
-// held across edit actions or bank refreshes.
-let renderRecords=null,reviewCache=null;
-function resolvedRecords(source=state()){
- if(!renderRecords)return model.records(source);
- if(renderRecords.source!==source){
-  renderRecords.source=source;
-  renderRecords.rows=model.records(source);
- }
- return renderRecords.rows;
-}
 let activeTab=window.HouseholdPlannerSummary?.render?'summary':'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 let reviewCatalogSave=Promise.resolve();
@@ -143,7 +130,7 @@ function forecastFor(s){
  // editable future ledger, then calculate all balances from those entries.
  // Older inference and category forecast engines do not feed balances.
  const bundle=window.HouseholdFutureLedger.materialize(
-  s,resolvedRecords(source),prefs,
+  s,model.records(source),prefs,
   window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon,
   {weekendPolicy:'friday'});
  forecastCache={source,transactions:source.transactions,signature,bundle};
@@ -609,10 +596,10 @@ function updateHistoryLinks(form){
   accountId=String(form.querySelector('[name='+ (transfer?'fromAccountId':'accountId')+']')?.value||''),
   merchant=form.querySelector('[name=merchant]')?.value||'',
   kind=transfer?'movement':'event',type=transfer?'transfer':form.querySelector('[name=type]')?.value||'expense',
-  chosen=checkedHistoryIds(form),matches=tools.findExamples(resolvedRecords(state()),
+  chosen=checkedHistoryIds(form),matches=tools.findExamples(model.records(state()),
    {kind,accountId,fromAccountId:accountId,type,merchant},accounts,search),
   shown=new Map([...matches].map(t=>[String(t.id),t])),
-  original=resolvedRecords(state());
+  original=model.records(state());
  // Don't discard user-selected aliases when searching for more bank names.
  for(const id of chosen){
   if(!shown.has(id)){
@@ -843,7 +830,7 @@ function detailHtml(bundle,s){
   if(!row)return detailShell('Bank transaction unavailable','This bank record could not be found.',
    '<p>No changes were made.</p>','BANK HISTORY');
   const account=activeAccounts(s).find(a=>String(a.id)===transactionDetail.account);
-  const resolved=resolvedRecords(state()).find(t=>String(t.id)===String(row.id)&&
+  const resolved=model.records(state()).find(t=>String(t.id)===String(row.id)&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(s))===transactionDetail.account),
    assigned=model.canonicalCategory(state(),resolved?.category||row.category)||'Other',
    selectCategories=categoryOptionsWithOther(model.categories(state())),
@@ -1298,7 +1285,7 @@ function schedulePaymentCheck(rule,bundle,s){
   account=String(rule.accountId||rule.fromAccountId||''),
   future=futureRows(bundle,s).filter(row=>String(row.recurringRuleId||'')===id),
   unpaid=(bundle?.overduePayments||[]).filter(item=>String(item.ruleId||'')===id),
-  auditAnchor=T.reconciliationAnchor(rule,resolvedRecords(state()),accounts,asOf),
+  auditAnchor=T.reconciliationAnchor(rule,model.records(state()),accounts,asOf),
   auditRule=auditAnchor&&auditAnchor<rule.anchorDate?
    {...rule,anchorDate:auditAnchor}:rule,
   last90=T.recurrenceDates(auditRule,shiftDay(asOf,-91),asOf),
@@ -1310,7 +1297,7 @@ function schedulePaymentCheck(rule,bundle,s){
   return result('transfer','This is a linked-account transfer. Check the funding account and its payment in Calendar; it is not checked as an external debit.');
  if(rule.type!=='expense'&&!(rule.type==='transfer'&&rule.cashDirection==='out'))
   return result('not-debit','This is not an outgoing checking withdrawal, so the unpaid-withdrawal check does not apply.');
- const bankRows=resolvedRecords(state()).filter(t=>!t.pending&&
+ const bankRows=model.records(state()).filter(t=>!t.pending&&
   t.date<=asOf&&Number(t.amount)>0&&
   String(T.accountRef(t.accountId||t.account,accounts))===account&&
   T.bankDirection(t)==='expense');
@@ -1364,7 +1351,7 @@ function schedulePaymentCheck(rule,bundle,s){
 // future predictions. Never infer ordinary shopping from a bill category.
 function monthlyExpenseRows(bundle,s,month){
  const T=window.HouseholdPlannerTransactions,accounts=activeAccounts(s),
-  records=resolvedRecords(state()),rules=(state().predictions?.futureRecurringRules||[])
+  records=model.records(state()),rules=(state().predictions?.futureRecurringRules||[])
    .filter(r=>r.kind!=='movement'&&r.type==='expense'),
   ruleIds=new Set(rules.map(r=>String(r.id))),
   settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records),
@@ -1445,7 +1432,7 @@ function monthlyExpenseRows(bundle,s,month){
 function billsMonthSelect(asOf,scope){
  const first=String(asOf||dateToday()).slice(0,7),
   start=new Date(first+'-01T12:00:00Z'),months=[],
-  records=resolvedRecords(state()),
+  records=model.records(state()),
   oldest=records.reduce((m,r)=>r.date&&r.date.slice(0,7)<m?r.date.slice(0,7):m,first),
   monthsPast=Math.min(120,Math.max(24,
    (Number(first.slice(0,4))-Number(oldest.slice(0,4)))*12+
@@ -1524,7 +1511,7 @@ function billsStatementsPage(bundle,s){
   posted=historical?Number(p.netActivity)||0:Number(p.actualPeriodNet)||0,
   forecast=historical?0:Number(p.estimatedCharges)||0,
   statementAmount=historical?posted:Number(p.statementBalance)||0,
-  records=historical?resolvedRecords(state()).filter(row=>
+  records=historical?model.records(state()).filter(row=>
    !row.pending&&row.date>=p.periodStart&&row.date<=p.periodEnd&&
    String(T.accountRef(row.accountId||row.account,activeAccounts(s)))===accountId&&
    cardActivityCents(row)!==0).map(row=>({
@@ -2200,7 +2187,7 @@ function spendingMonthPicker(records,asOf,includeUpcoming=false){
    the numbers. Never persist a second financial model or change bank facts. */
 function financialRecapPage(bundle,s){
  const asOf=String(s.asOf||dateToday()),month=asOf.slice(0,7),
-  posted=resolvedRecords(state()).filter(r=>r.date&&r.date<=asOf),
+  posted=model.records(state()).filter(r=>r.date&&r.date<=asOf),
   picker=spendingMonthPicker(posted,asOf,true),
   selectedMonths=historySelectedMonths,
   periodLabel=picker.label,
@@ -2418,7 +2405,7 @@ function historyPage(bundle,s){
  const accounts=activeAccounts(s),
   // Read the current category overrides directly. The derived forecast is
   // independently cached and must never be the authority for Budget totals.
-  records=resolvedRecords(state()).filter(x=>x.date&&x.date<=s.asOf)
+  records=model.records(state()).filter(x=>x.date&&x.date<=s.asOf)
   .map(t=>({...t,category:
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
@@ -2780,9 +2767,6 @@ function repeatedRecommendations(bundle,s){
  // A legacy estimate may remain visible after Ignore but is no longer an
  // undecided action; count its decision only while still pending.
 function reviewQueue(bundle,s){
- // Navigation does not change the underlying bank history or preferences.
- // Share the expensive recommendation/category review pass with the badge.
- if(reviewCache?.bundle===bundle)return reviewCache.queue;
  const recommendations=repeatedRecommendations(bundle,s),
   allOverdue=(bundle?.overduePayments||[]).filter(item=>
    !state().predictions?.futureTransactionEdits?.[item.key]?.skipped),
@@ -2792,7 +2776,7 @@ function reviewQueue(bundle,s){
   // suppressing a different billing cycle if a key is ever reused.
   overdue=allOverdue.filter(item=>dismissals[item.key]!==item.expectedDate),
   ignoredOverdue=allOverdue.filter(item=>dismissals[item.key]===item.expectedDate);
- const categoryIssues=model.categoryReviewQueue(state(),resolvedRecords(state())),
+ const categoryIssues=model.categoryReviewQueue(state()),
   categoryCount=categoryIssues.transactions.length+categoryIssues.plans.length,
   migration=bundle?.recurrenceMigration||{approvedOnly:false,legacySeries:[]},
   legacySeries=migration.approvedOnly?[]:migration.legacySeries||[],
@@ -2801,11 +2785,9 @@ function reviewQueue(bundle,s){
   decisionsNeeded=legacyItems.filter(({owner})=>!owner||owner.status==='pending').length,
   pending=recommendations.filter(r=>r.status==='pending'&&!r.activeLegacyStreams?.length),
   ignored=recommendations.filter(r=>r.status==='ignored'&&!r.activeLegacyStreams?.length);
- const queue={recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,
+ return {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,
   categoryIssues,categoryCount,
   outstanding:decisionsNeeded+pending.length+overdue.length+categoryCount};
- reviewCache={bundle,queue};
- return queue;
 }
 function updateReviewTabCount(queue){
  const badge=document.querySelector('.topbar [data-review-tab-count]');
@@ -2819,7 +2801,7 @@ function updateReviewTabCount(queue){
 function openReviewCategoryTransaction(button){
  const s=snapshot(),accounts=activeAccounts(s),bundle=forecastFor(s),
   id=String(button.dataset.reviewBankId||''),requested=String(button.dataset.reviewBankAccount||''),
-  records=lastHistoryRows.length?lastHistoryRows:resolvedRecords(state()),
+  records=lastHistoryRows.length?lastHistoryRows:model.records(state()),
   matches=records.filter(row=>String(row.id)===id),
   bank=matches.find(row=>window.HouseholdPlannerHistory.accountOf(row,accounts)===requested)||
    (matches.length===1?matches[0]:null);
@@ -3226,9 +3208,6 @@ function settingsPage(bundle,s,chosen){
   categoryLearning+auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+'</div>';
 }
 function render(){
- const priorRecords=renderRecords;
- renderRecords={source:null,rows:null};
- try{
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
  if(!root)return;
  const s=busy?{asOf:dateToday(),accounts:[]}:snapshot();
@@ -3253,7 +3232,7 @@ function render(){
  // balance projection cannot be calculated or needs a repaired account.
  if(!bundle&&['history','activity','reviews','recap'].includes(activeTab)){
   try{
-   const rows=resolvedRecords(state()),accounts=activeAccounts(s),asOf=s.asOf||dateToday();
+   const rows=model.records(state()),accounts=activeAccounts(s),asOf=s.asOf||dateToday();
    const candidates=window.HouseholdFutureLedger.analyze(
     rows,accounts,asOf,state().predictions||{},90);
    bundle={rows,historyCandidates:candidates.review,
@@ -3322,6 +3301,9 @@ function render(){
  if(!selectedSource){root.innerHTML='<section class="panel"><h2>No connected accounts</h2><p>Add a bank account to start planning.</p>'+
   (available()?'<a class="btn primary" href="/bank-connect">Connect a bank</a>':'')+'</section>';return}
  const fresh=derived&&freshness(derived);
+ const cashProjection=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
+ let important=(derived?.events||[]).filter(e=>['expense','transfer_out'].includes(e.kind));
+ const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
  root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
   (activeTab==='history'||activeTab==='activity')?historyPage(bundle,s):
   activeTab==='recap'?financialRecapPage(bundle,s):
@@ -3343,7 +3325,6 @@ function render(){
  drawTransactionDetail(bundle,s);
  if(activeTab==='schedules')applyScheduleSearch(root);
  if(activeTab==='history'||activeTab==='activity')updateHistorySelectionSummary();
- }finally{renderRecords=priorRecords}
 }
 document.addEventListener('submit',async e=>{
  const form=e.target.closest?.('[data-transaction-note-form]');
@@ -3534,7 +3515,7 @@ document.addEventListener('click',async e=>{
      item.candidates.some(c=>c.ruleId===ruleId));
    if(!candidate)throw Error('This bank payment has changed. Refresh Review.');
    await commitForecastChange(()=>window.HouseholdPlannerTransactions.linkPostedToSchedule(
-    state(),bankId,ruleId,resolvedRecords(state()),activeAccounts(snapshot())));
+    state(),bankId,ruleId,model.records(state()),activeAccounts(snapshot())));
    reviewNotice='Linked the posted payment to prediction #'+
     (scheduleListNumber(ruleId)||'?')+'. The forecast has been recalculated.';
    render();
@@ -4190,7 +4171,7 @@ document.addEventListener('click',async e=>{
   auditAccount=accountId;
   try{
    const updated=window.HouseholdFutureLedger.backtest(
-    resolvedRecords(state()),activeAccounts(s),s.asOf||dateToday(),accountId,6);
+    model.records(state()),activeAccounts(s),s.asOf||dateToday(),accountId,6);
    auditMeta={number:previousNumber+1,checkedAt:new Date().toLocaleString('en-US'),
     unchanged:prior!==null&&JSON.stringify(prior)===JSON.stringify(updated)};
    audit=updated;auditError='';
@@ -4523,7 +4504,7 @@ document.addEventListener('submit',async e=>{
   let savedPlanId='';
   if(form.hasAttribute('data-schedule-new-form')){
    const saved=await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,null,
-    resolvedRecords(state()),fields.historyExampleId?[fields.historyExampleId]:[]));
+    model.records(state()),fields.historyExampleId?[fields.historyExampleId]:[]));
    savedPlanId=saved.id;
    scheduleNotice='Plan created. All its upcoming payments are shown below.';
   }else if(form.hasAttribute('data-schedule-edit-form')){
@@ -4534,7 +4515,7 @@ document.addEventListener('submit',async e=>{
     fromAccountId:r.fromAccountId,toAccountId:r.toAccountId,
     accountId:r.accountId,originalMerchant:r.originalMerchant||r.merchant,
     originalType:r.originalType||r.type,sourceAmount:r.matchAmount||r.amount,date:r.sourceAnchorDate||r.anchorDate};
-   await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,reference,resolvedRecords(state()),[]));
+   await commitForecastChange(()=>T.defineRecurring(state(),fields,accounts,s.asOf,reference,model.records(state()),[]));
    savedPlanId=id;
    scheduleNotice='Saved — repeating prediction updated. Individual payment edits remain separate.';
   }
@@ -4610,7 +4591,7 @@ document.addEventListener('submit',async e=>{
   };
   await commitForecastChange(()=>window.HouseholdPlannerTransactions.defineRecurring(
    state(),fields,activeAccounts(snapshot()),snapshot().asOf,candidate,
-   resolvedRecords(state()),linked?[]:linkedHistoryIds(form)));
+   model.records(state()),linked?[]:linkedHistoryIds(form)));
   const origin=draft.merchant;
   if(activeTab==='history'||activeTab==='activity'){
    historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
@@ -4658,7 +4639,7 @@ document.addEventListener('submit',async e=>{
   }else if(mode==='add'){
    if(fields.frequency&&fields.frequency!=='once')
     await commitForecastChange(()=>planner.defineRecurring(
-     state(),fields,accounts,asOf,null,resolvedRecords(state()),[]));
+     state(),fields,accounts,asOf,null,model.records(state()),[]));
    else await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
   }else throw Error('Unknown calendar action.');
   latestError='';transactionDetail=null;render();
@@ -4817,7 +4798,7 @@ document.addEventListener('submit',async e=>{
      const result=useSeries?
       planner.saveSeriesEdit(state(),row.seriesKey,row.baseDate,fields,accounts,asOf,saveCadence,row.kind):
       planner.defineRecurring(state(),{...fields,resetAmountWindows:'on'},
-       accounts,asOf,row,resolvedRecords(state()),examples);
+       accounts,asOf,row,model.records(state()),examples);
      const edits=state().predictions.futureTransactionEdits||{};
      for(const other of existingRows){
       // A confirmed plan's individually edited dates are independent.
@@ -4842,7 +4823,7 @@ document.addEventListener('submit',async e=>{
   }else if(form.hasAttribute('data-future-new-form')){
    if(fields.frequency&&fields.frequency!=='once'){
     await commitForecastChange(()=>planner.defineRecurring(state(),fields,accounts,asOf,
-     null,resolvedRecords(state()),linkedHistoryIds(form)));
+     null,model.records(state()),linkedHistoryIds(form)));
     transactionNotice='Recurring payment created. Future occurrences were added to the forecast.';
    }else{
     await commitForecastChange(()=>planner.add(state(),fields,accounts,asOf));
