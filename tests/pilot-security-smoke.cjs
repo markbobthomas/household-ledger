@@ -18,7 +18,7 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   assert.equal((await get('/',false)).status,401,'Pilot UI requires authentication');
   assert.equal((await get('/api/status',true)).status,200);
   assert.equal(JSON.parse((await get('/api/status',true)).body).connected,false);
-  const ledger=await get('/',true);assert.equal(ledger.status,200);assert.match(ledger.body,/Household Ledger/,'Existing Ledger is served in live mode');
+  const ledger=await get('/',true);assert.equal(ledger.status,200);assert.match(ledger.body,/<h1>Ledger<\/h1>/,'Ledger brand is served in live mode');
   assert.match(ledger.body,/<script>\s*[\s\S]*HouseholdCategorization=api;/,
    'The required classifier ships inside the authenticated private page');
   assert.doesNotMatch(ledger.body,/<script src="categorization\.js"><\/script>/,
