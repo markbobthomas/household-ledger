@@ -76,7 +76,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth=null;
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1140,7 +1140,7 @@ function applyScheduleSearch(root=document){
  const count=root.querySelector('[data-schedule-visible-count]');
  if(count){
   const total=Number(count.dataset.scheduleTotalCount)||0;
-  count.textContent='Showing '+shown+' of '+total+' repeating transaction'+
+  count.textContent='Showing '+shown+' of '+total+' recurring expense'+
    (total===1?'':'s');
  }
  for(const row of root.querySelectorAll('[data-statement-occurrence]')){
@@ -1453,7 +1453,6 @@ function billsMonthSelect(asOf,scope){
   '</option>'+months.join('')+'</select></label>';
 }
 function schedulesPage(bundle,s){
- if(billsSelectedMonth===null)billsSelectedMonth=String(s.asOf).slice(0,7);
  const accounts=activeAccounts(s),rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions,end=shiftDay(s.asOf,horizon),
   tomorrow=shiftDay(s.asOf,1),
@@ -1475,6 +1474,7 @@ function schedulesPage(bundle,s){
   monthlyByRule.get(row.ruleId).push(row);
  }
  const displayedByRule=billsSelectedMonth?monthByRule:upcomingByRule;
+ const expenseRules=rules.filter(rule=>rule.kind!=='movement'&&rule.type==='expense');
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>
   rule.kind!=='movement'&&rule.type==='expense'&&
@@ -1595,13 +1595,12 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- const upcomingBills=billsSelectedMonth?monthlyRows:
-  futureRows(bundle,s).filter(row=>row.kind==='event'&&row.type==='expense'&&
-   !['transfer','income','refund'].includes(row.sourceType)&&
-   (!row.recurringRuleId||(rules.some(r=>String(r.id)===String(row.recurringRuleId)&&
-    r.kind!=='movement'&&r.type==='expense')))&&
-   row.date<=shiftDay(s.asOf,billsExpanded?90:30))
-   .map(row=>({...row,source:'prediction',status:'Predicted',ruleId:row.recurringRuleId||null}));
+ const upcomingBills=forecastCashBills(bundle,s).filter(row=>
+  (!billsSelectedMonth||row.date.slice(0,7)===billsSelectedMonth)&&
+  (billsSelectedMonth||row.date<=shiftDay(s.asOf,billsExpanded?90:30)))
+  .map(row=>({...row,source:'prediction',status:row.cardBill?'Card payment':'Predicted',
+   ruleId:row.recurringRuleId||null,
+   accountId:row.kind==='movement'?row.fromAccountId:row.accountId}));
  const upcomingCents=upcomingBills.reduce((total,row)=>
   total+Math.round(Number(row.amount||0)*100),0);
  const groupedBills=upcomingBills.map(row=>{
@@ -1620,18 +1619,18 @@ function schedulesPage(bundle,s){
  }).join('');
  return '<div class="planner-page schedule-page">'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
-   [['upcoming','Expenses'],['repeating','Repeating']].map(([id,name])=>
+   [['upcoming','Upcoming'],['repeating','Repeating'],['statements','Statements']].map(([id,name])=>
     '<button type="button" class="history-subtab'+(billsPane===id?' active':'')+
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
-   '<div class="bills-heading"><div><h2>Monthly expenses</h2></div>'+
+   '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
     '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Total '+
       cash(upcomingCents/100)+'</strong>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
-   (groupedBills||'<p class="bills-upcoming-empty">No recorded or predicted expenses in this period.</p>')+
+   (groupedBills||'<p class="bills-upcoming-empty">No upcoming bills in this period.</p>')+
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
@@ -1656,8 +1655,8 @@ function schedulesPage(bundle,s){
   create+'<div class="schedule-grid">'+
    '<div class="schedule-list-summary">'+
     '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
-     'data-schedule-total-count="'+rules.length+'">Showing '+visible.length+
-     ' of '+rules.length+' payments</p>'+
+     'data-schedule-total-count="'+expenseRules.length+'">Showing '+visible.length+
+     ' of '+expenseRules.length+' expenses</p>'+
     '<strong class="bills-repeating-sum" data-bills-repeating-total></strong></div>'+
    (scheduleAccount!=='all'&&accountType(accounts.find(a=>String(a.id)===scheduleAccount)||{})==='credit'?
       repeatingStatementPeriods(bundle,s,scheduleAccount,visible,billsSelectedMonth):'')+
@@ -3674,7 +3673,7 @@ document.addEventListener('click',async e=>{
  const billsTab=e.target.closest?.('[data-bills-tab]');
  if(billsTab){
   const next=billsTab.dataset.billsTab;
-  if(!['upcoming','repeating'].includes(next)||next===billsPane)return;
+  if(!['upcoming','repeating','statements'].includes(next)||next===billsPane)return;
   if((recurrenceFormDirty('.schedule-page [data-schedule-edit-form]')||
       recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
       !window.confirm('Discard unsaved prediction changes?'))return;
