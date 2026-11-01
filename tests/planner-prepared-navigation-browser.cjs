@@ -88,7 +88,10 @@ const {chromium,webkit}=require('playwright');
    assert.notEqual(future,before,'Next month still advances');
    await page.locator('[data-calendar-nav="-1"]').click();
    assert.equal(await page.locator('.calendar-month-title').innerText(),before);
+   await page.locator('[data-calendar-nav="1"]').click();
    await page.locator('[data-calendar-today]').click();
+   assert.equal(await page.locator('.calendar-month-title').innerText(),before,
+    'Today returns from a future month');
    await context.close();
    assert.deepEqual(errors,[],device+' console errors');
   }
