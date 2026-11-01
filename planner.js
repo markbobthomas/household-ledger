@@ -3544,12 +3544,10 @@ document.addEventListener('submit',async e=>{
   }
   // This editor updates visible subtitles without a full render; discard
   // any prebuilt views so they never display the previous note.
-  const currentContext=preparedContext;
-  invalidatePreparedViews();
-  // Notes are saved without rebuilding the active editor. Refresh only
-  // inactive pages using the new in-memory note state.
-  if(currentContext){preparedContext=currentContext;warmPreparedViews(currentContext)}
-  else finishPreparation(preparedEpoch);
+  // Transaction notes do not alter forecasts, balances or bill statements.
+  // Only the two history views can contain their previous note text.
+  preparedViews.delete('history');
+  preparedViews.delete('activity');
   button.disabled=false;
   if(status)status.textContent='Saved';
  }catch(err){
