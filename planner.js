@@ -2526,7 +2526,7 @@ function historyPage(bundle,s){
  // user's calendar-month/account filters or count transfers as purchases.
  const savedRow=latestCategorySave&&records.find(t=>
   String(t.id)===latestCategorySave.id);
- const budgetSaveFeedback=displayView==='categories'&&savedRow?(()=>{
+ const budgetSaveFeedback=(displayView==='categories'||displayView==='list')&&savedRow?(()=>{
   const amount=categorySpendingCents(savedRow,budgetCardSettlements),
    month=savedRow.date.slice(0,7),
    monthText=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',{
@@ -2534,18 +2534,27 @@ function historyPage(bundle,s){
    inMonth=historySelectedMonths.has(month),
    inAccount=historyAccount==='all'||String(window.HouseholdPlannerHistory.accountOf(savedRow,accounts))===historyAccount,
    category=escapeHTML(categoryLabel(savedRow.category));
-  let message='';
-  if(!inMonth||!inAccount)message='Saved to '+category+' · '+monthText+
-   '. This transaction is outside the selected Budget '+(!inMonth?'months':'account')+'.';
-  else if(!amount)message='Saved to '+category+', but this '+
-   (savedRow.pending?'pending transaction':savedRow.type==='income'?'deposit':
+  const eligible=amount!==0,
+   nonSpending=savedRow.pending?'pending transaction':savedRow.type==='income'?'deposit':
     ['card_payment','internal_transfer'].includes(savedRow.accountingKind)||
-     budgetCardSettlements.has(String(savedRow.id))?'card payment or internal transfer':'transaction')+
-   ' does not count as posted Budget spending.';
+     budgetCardSettlements.has(String(savedRow.id))?'card payment or internal transfer':'transaction';
+  let message='';
+  if(displayView==='list'){
+   // Show the result at the moment the category is saved, not only after
+   // navigating to Budget. A prior-month or account-filtered transaction
+   // cannot silently appear in the currently selected month's totals.
+   message='Saved to '+category+' · '+monthText+'. '+
+    (eligible?'View the updated spending in Budget.':
+     'This '+nonSpending+' does not count as posted Budget spending.');
+  }else if(!eligible)message='Saved to '+category+', but this '+
+   nonSpending+' does not count as posted Budget spending.';
+  else if(!inMonth||!inAccount)message='Saved to '+category+' · '+monthText+
+   '. This transaction is outside the selected Budget '+(!inMonth?'months':'account')+'.';
   else message='Updated '+category+' Budget for '+monthText+'.';
   return '<p class="history-budget-feedback" role="status">'+message+
-   ((!inMonth||!inAccount)?' <button type="button" class="btn" data-show-saved-budget>'+
-    'Show that month</button>':'')+'</p>';
+   (displayView==='list'||!inMonth||!inAccount?
+    ' <button type="button" class="btn" data-show-saved-budget>'+
+    (displayView==='list'?'View in Budget':'Show that month')+'</button>':'')+'</p>';
  })():'';
  const monthsInRange=historySelectedMonths.size,
   expectedExpenses=displayView==='categories'?
@@ -4111,7 +4120,13 @@ document.addEventListener('click',async e=>{
  if(savedBudget&&latestCategorySave){
   historySelectedMonths=new Set([latestCategorySave.date.slice(0,7)]);
   activeTab='history';historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
-  render();return;
+  render();
+  // The action explicitly selects the transaction's posting month and all
+  // accounts; it never edits a saved budget or changes source transactions.
+  const categoryRow=[...document.querySelectorAll('[data-history-category-row]')]
+   .find(row=>row.dataset.historyCategoryRow===latestCategorySave.category);
+  categoryRow?.scrollIntoView?.({block:'center'});
+  return;
  }
  const postedBill=e.target.closest?.('[data-open-bill-actual]');
  if(postedBill){
@@ -4788,6 +4803,9 @@ async function saveTransactionCategory(id,category,confirm=false){
   }
   const posted=(current.transactions||[]).find(row=>String(row.id)===String(id));
   latestCategorySave=posted?{id:String(id),date:String(posted.date||''),category}:null;
+  // Once the edit is committed, close the month overlay so its floating
+  // options cannot cover the Activity confirmation / View in Budget action.
+  historyMonthPickerOpen=false;
   // A category correction changes historical reporting. Refresh only this
   // in-memory projection cache; do not refetch or mutate bank transactions.
   forecastCache=null;

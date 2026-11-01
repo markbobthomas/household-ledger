@@ -366,6 +366,35 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.history-activity-filters [data-history-category-filter] option').evaluateAll(
     (options,category)=>options.some(option=>option.value===category),categoryName),
     'The edited category is present in Activity after a cold navigation');
+   // A posted expense recategorized in Activity must immediately explain
+   // where its Budget amount went; following the link selects its posted
+   // month, not the current calendar month or an unrelated account.
+   await page.locator('.history-activity-filters [data-history-month-toggle]').click();
+   await page.locator('.history-activity-filters [data-history-month-all]').click();
+   const octoberSample=await page.evaluate(()=>{
+    const found=[...document.querySelectorAll('.history-entry')].find(row=>
+     row.querySelector('[data-history-sort-date="2026-10-06"]')&&
+     row.querySelector('.history-actual-description')?.textContent?.includes('Costco Warehouse'));
+    return found?.querySelector('[data-history-category]')?.getAttribute('data-history-category')||null;
+   });
+   assert.ok(octoberSample,device+': fictional October purchase exists in Activity');
+   await page.locator('[data-history-category="'+octoberSample+'"]').selectOption(categoryName);
+   await page.waitForFunction(()=>
+    document.querySelector('.history-budget-feedback')?.textContent?.includes('Saved to Fictional Navigation Test Category'),null,{timeout:20000});
+   assert.match(await page.locator('.history-budget-feedback').innerText(),/October 2026/,
+    'Activity save explains the bank posting month rather than the current Budget month');
+   await page.locator('[data-show-saved-budget]').click();
+   assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1);
+   assert.match(await page.locator('[data-history-month-toggle]').getAttribute('aria-label'),
+    /October 2026/,'Budget shortcut selects the original transaction month');
+   assert.equal(await page.locator('.history-page select[name="historyAccount"]').inputValue(),'all',
+    'Budget shortcut clears account mismatch only when explicitly requested');
+   const updated=await page.locator('[data-history-category-row="'+categoryName+'"] [data-budget-marker]').innerText();
+   assert.match(updated,/205\.44/,
+    device+': saved category shows October Budget spending exactly once');
+   const groceries=await page.locator('[data-history-category-row="Groceries"] [data-budget-marker]').innerText();
+   assert.match(groceries,/200\.40/,
+    device+': original October Groceries category no longer includes recategorized purchase');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
     'Returning to Spending keeps the saved category');
