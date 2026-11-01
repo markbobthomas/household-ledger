@@ -3392,6 +3392,29 @@ function activatePreparedView(view,from,fromHistoryView){
  if(view==='history'||view==='activity')updateHistorySelectionSummary();
  return true;
 }
+// Spending's four presentation tabs change no bank data. Render only that
+// current pane; keep all other main destinations ready for an instant tap.
+function renderHistorySubview(){
+ const root=$('planner-main'),context=preparedContext;
+ if(!preparedReady||!context||!root){render();return}
+ if(root.querySelector('[data-history-view="categories"][aria-pressed="true"]')&&
+    historyView!=='categories'&&root.firstElementChild)
+  preparedViews.set('history',{element:root.firstElementChild,epoch:preparedEpoch});
+ else if(historyView==='categories')preparedViews.delete('history');
+ root.innerHTML=pageMarkup(context.bundle,context.s,context.selectedSource,
+  context.derived,context.fresh,context.reviewData);
+ updateHistorySelectionSummary();
+}
+function switchExistingPane(buttonAttr,paneAttr,newValue){
+ const root=$('planner-main');
+ for(const button of root?.querySelectorAll('['+buttonAttr+']')||[]){
+  const current=button.getAttribute(buttonAttr)===newValue;
+  button.classList.toggle('active',current);
+  button.setAttribute('aria-pressed',String(current));
+ }
+ for(const pane of root?.querySelectorAll('['+paneAttr+']')||[])
+  pane.hidden=pane.getAttribute(paneAttr)!==newValue;
+}
 function render({navigationOnly=false}={}){
  // Any full render, even an uncached navigation, gets a fresh coherent set.
  // Prepared-page activations bypass render() altogether.
@@ -3943,7 +3966,7 @@ document.addEventListener('click',async e=>{
     !window.confirm('Discard unsaved payment changes?'))return;
   historyView=historyTab.dataset.historyView;historyMonthPickerOpen=false;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
-  recurringDraft=null;transactionDetail=null;render();return;
+  recurringDraft=null;transactionDetail=null;renderHistorySubview();return;
  }
  const merchant=e.target.closest?.('[data-history-drill-merchant]');
  if(merchant){
@@ -3996,7 +4019,7 @@ document.addEventListener('click',async e=>{
       recurrenceFormDirty('.schedule-page [data-schedule-new-form]'))&&
       !window.confirm('Discard unsaved prediction changes?'))return;
   scheduleMode='';scheduleTarget='';scheduleRemoveTarget='';
-  billsPane=next;render();return;
+  billsPane=next;switchExistingPane('data-bills-tab','data-bills-pane',next);return;
  }
  const reviewTab=e.target.closest?.('[data-review-tab]');
  if(reviewTab){
@@ -4007,7 +4030,8 @@ document.addEventListener('click',async e=>{
     field.type!=='hidden'&&field.value!==field.defaultValue));
   if((reviewFormDirty()||overdueDirty)&&
      !window.confirm('Discard unsaved review changes?'))return;
-  recurringDraft=null;overdueEditKey='';reviewPane=next;render();return;
+  recurringDraft=null;overdueEditKey='';reviewPane=next;
+  switchExistingPane('data-review-tab','data-review-pane',next);return;
  }
  if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;render();return;}
  const view=e.target.closest('[data-view]');
