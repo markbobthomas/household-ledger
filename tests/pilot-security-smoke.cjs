@@ -159,6 +159,27 @@ function post(route,body={},cookie='',extra={}){
     await new Promise(resolve=>setTimeout(resolve,50));
    }
    assert.equal(await status(),200,'Encrypted private sessions survive Render restarts');
+   // Rotating the private password should invalidate previously issued cookies.
+   const rotatedPort=port+3;
+   const rotated=spawn(process.execPath,['pilot/server.cjs'],{
+    cwd:path.resolve(__dirname,'..'),
+    env:{...env,PORT:String(rotatedPort),PILOT_PASSWORD:pass+'-rotated'},
+    stdio:'ignore'
+   });
+   try{
+    const rotatedStatus=()=>new Promise((resolve,reject)=>{
+     http.get({hostname:'127.0.0.1',port:rotatedPort,path:'/api/status',
+      headers:{Cookie:persistentCookie}},r=>{
+      r.resume();r.on('end',()=>resolve(r.statusCode));
+     }).on('error',reject);
+    });
+    for(let attempt=0;attempt<100;attempt++){
+     try{if(await rotatedStatus()===401)break}catch{}
+     await new Promise(resolve=>setTimeout(resolve,50));
+    }
+    assert.equal(await rotatedStatus(),401,
+     'Changing the private password revokes every older 90-day session');
+   }finally{rotated.kill()}
   }finally{restarted.kill()}
   console.log('PASS private 90-day login, per-device logout, encrypted persistence, health and crash protection');
  }finally{child.kill();fs.rmSync(dir,{recursive:true,force:true})}
