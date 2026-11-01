@@ -77,17 +77,26 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),beforeRepeatedNav,
     'Repeated navigation reuses prepared nodes without invalidating or regenerating them');
 
-   // A real re-render rebuilds every prepared page behind the loading gate.
+   // Pure internal pane changes must not restart the expensive preparation
+   // cycle or stall an unrelated main tab.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    const priorGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
    await page.locator('[data-history-view="merchants"]').click();
-   const currentGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
-   assert.ok(currentGeneration>priorGeneration,
-    'Non-navigation edits increment cache generation and discard previous prepared views');
-   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.()&&
-    window.HouseholdPreparedViewStatus()?.includes('schedules'),null,{timeout:35000});
+   assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),priorGeneration,
+    'Spending subtabs only redraw the active pane');
+   assert.equal(await page.evaluate(()=>window.HouseholdAllViewsReady()),true);
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.locator('[data-bills-tab="repeating"]').click();
+   assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),true);
+   assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),priorGeneration,
+    'Bills panes reuse the existing page');
+   await page.locator('.top-actions [data-view="reviews"]').click();
+   await page.locator('[data-review-tab="payments"]').click();
+   assert.equal(await page.locator('[data-review-pane="payments"]').isVisible(),true);
+   assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),priorGeneration,
+    'Review panes reuse the existing page');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
-   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.(),null,{timeout:35000});
+   assert.equal(await page.evaluate(()=>window.HouseholdAllViewsReady()),true);
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     'Opening Spending always returns to Budget');
    assert.equal(await page.locator('.history-spending-overview strong').innerText(),budget,
