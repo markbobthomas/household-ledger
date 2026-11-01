@@ -204,7 +204,8 @@ function preparedFor(payload){
  // cannot change mid-computation. A failed optional compute never prevents
  // displaying the original authoritative source and browser fallback.
  const generation=preparedGeneration;
- const result=worker.prepare(payload,today);
+ const projection=worker.prepare(payload,today);
+ const result=projection?{...projection,generation}:null;
  if(generation===preparedGeneration)
   preparedCache={generation,asOf:today,result};
  return result;
