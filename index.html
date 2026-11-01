@@ -90,7 +90,7 @@
  const splash=document.getElementById('planner-loading');
  let wanted=null,sequence=0;
  function unlockVisiblePage(){
-  if(!root.querySelector('.planner-page'))return;
+  // Unblock navigation even if the source is reloading or a page is empty.
   if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
   if(splash)splash.style.display='none';
  }
@@ -126,7 +126,6 @@
   };
   setTimeout(replay,35);
  },true);
- unlockVisiblePage();
 })();
 </script>
 <script src="planner.js?v=server-prepared-forecast-20261031-v1"></script>
