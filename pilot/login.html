@@ -16,7 +16,7 @@ small{display:block;margin-top:15px;color:#66786b;line-height:1.45}
 #error{color:#a32525;font-weight:600;min-height:20px;margin:0 0 10px}
 </style></head><body><main><h1>Household Ledger</h1>
 <p>Sign in to your private household finances.</p>
-<form id="login-form" autocomplete="on"><label for="password">Password</label>
+<form id="login-form" method="post" action="/auth/login" autocomplete="on"><label for="password">Password</label>
 <input id="password" type="password" name="password" autocomplete="current-password" required autofocus>
 <div id="error" role="alert" aria-live="polite"></div>
 <button type="submit">Sign in</button></form>
