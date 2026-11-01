@@ -4913,7 +4913,7 @@ document.addEventListener('submit',async e=>{
  historySort=['newest','oldest','amount-desc','amount-asc','merchant','category']
   .includes(fields.historySort)?fields.historySort:historySort;
  historyLimit=90;
- render();
+ renderHistoryFilters();
 });
 document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-history-recurring-form]');
@@ -5539,7 +5539,7 @@ document.addEventListener('change',async e=>{
   }
   historyCategoryFilter=next;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
-  render();return;
+  renderHistoryFilters();return;
  }
  if(e.target.matches?.('[data-history-sort]')){
   const next=e.target.value;
@@ -5550,10 +5550,10 @@ document.addEventListener('change',async e=>{
   }
   historySort=next;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
-  render();return;
+  renderHistoryFilters();return;
  }
  if(e.target.name==='historyAccount'){
-  historyAccount=e.target.value;historyLimit=90;render();return;
+  historyAccount=e.target.value;historyLimit=90;renderHistoryFilters();return;
  }
  if(e.target.name==='scope'){
   const form=e.target.closest('[data-future-edit-form]');
