@@ -362,10 +362,12 @@ const {chromium,webkit}=require('playwright');
    // Bigger, readable type on desktop, with proportionate mobile type.
    // Compare actual spending at the progress-track endpoint and read-only target.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const firstBudgetTotal=await page.locator('[data-history-category-insights] .history-spending-overview strong').innerText();
    const firstBudgetPercent=await page.locator('[data-history-total-budget-percent]').allTextContents();
    const priorReviewCount=await page.locator('.topbar [data-review-tab-count]').textContent();
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    // Spend-only navigation must not rebuild invisible Activity rows or re-run
    // Review recommendations. Banking history, forecasts, budgets and badges
    // must remain unchanged when returning to Spending.
@@ -383,6 +385,7 @@ const {chromium,webkit}=require('playwright');
     };
    });
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const navWork=await page.evaluate(()=>{
     const work=window.__spendingNavWork;
     work.restore();
@@ -497,6 +500,7 @@ const {chromium,webkit}=require('playwright');
     'Summary selector never causes phone-width overflow: '+JSON.stringify(summaryWidth));
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.deepEqual(await selectedMonths(page),['2026-09','2026-10'],
     'Selection persists when returning from Summary to Budget');
    // Restore the default period for the independent existing view regressions.
@@ -504,6 +508,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-history-month-current]').click();
    await page.locator('[data-history-month-toggle]').click();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1);
 
 
@@ -512,6 +517,14 @@ const {chromium,webkit}=require('playwright');
     await page.setViewportSize({width,height:mobile?844:900});
     for(const tab of ['summary','schedules','history','activity']){
      await page.locator('.planner-nav-primary [data-view="'+tab+'"]').click();
+     // Uncached pages acknowledge the tab immediately and finish rendering
+     // after a paint opportunity. Verify geometry only after that transition.
+     await page.waitForFunction(tab=>{
+      const expected={summary:'summary-page',schedules:'schedule-page',
+       history:'history-page',activity:'history-page'}[tab];
+      return document.querySelector('#planner-main>.planner-page')?.classList.contains(expected)&&
+       !document.querySelector('#planner-main .ledger-page-wait');
+     },tab,{timeout:30000});
      assert.equal(await page.locator('.planner-nav-primary .tab-link.active').count(),1);
      if(tab==='history'){
        assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
@@ -623,6 +636,7 @@ const {chromium,webkit}=require('playwright');
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('.history-subtab').count(),4);
    assert.deepEqual((await page.locator('.history-subtab').allTextContents()).map(s=>s.trim()),
     ['Budget','Merchants','Purchase sizes','Summary'],
@@ -669,6 +683,7 @@ const {chromium,webkit}=require('playwright');
        'Category wraps below Months and Account on phone: '+JSON.stringify(field));
     }
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await verifyActivityFilterLayout(page,mobile);
    await verifyTransactionAnatomy(page,'.history-actual-row .ledger-transaction-row','Posted Activity');
    assert.equal(await page.locator('.history-period-controls [data-history-month-picker]').count(),1);
@@ -722,6 +737,7 @@ const {chromium,webkit}=require('playwright');
     'Saved note becomes a visible subtitle directly beneath the transaction name');
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const persistedRow=page.locator('[data-edit-transaction-note]').first();
    assert.equal(await persistedRow.getAttribute('data-edit-transaction-note'),noteKey,
     'Account and transaction ID survive reload');
@@ -772,9 +788,11 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await count.innerText(),'1 selected',
     'Increasing the visible transaction range retains checked displayed rows');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-selection-summary]').count(),0,
     'The multi-selection UI belongs only to Transactions view');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-category-insights]').count(),1);
    // Create and delete categories in Bank History → Categories only.
    assert.equal(await page.locator('[data-history-category-manager]').count(),1);
@@ -824,6 +842,7 @@ const {chromium,webkit}=require('playwright');
     .getAttribute('data-budget-monthly'),'45.50');
    await page.reload();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-budget="Fictional Animal Care"]').inputValue(),'45.50',
     'Renamed category budget remains editable in Manage after reload');
    await page.locator('.history-category-manager>summary').click();
@@ -865,6 +884,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(oldIncomeTarget.Income,9750);
    await page.reload();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-category-row="Income"],[data-history-category-row="Transfer"]').count(),0);
    const budgetTotal=await page.locator('[data-history-total-budget] small').allTextContents();
    assert.ok(budgetTotal.every(text=>!text.includes('$17,950')),
@@ -1039,6 +1059,7 @@ const {chromium,webkit}=require('playwright');
    await assertBudgetSorted();
    await page.reload();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await assertBudgetSorted();
    assert.match(await page.locator('[data-history-category-row="'+categoryName+'"] [data-history-budget-bar]')
     .getAttribute('aria-label'),/spent of .* budget/,
@@ -1115,6 +1136,7 @@ const {chromium,webkit}=require('playwright');
    },categoryName);
    await page.reload();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await chooseMonths(page,['2026-10']);
    assert.equal(await budgetCategoryCents(categoryName)-beforeOctober,9125,
     'Current-month Budget combines existing posted spending with future bill estimates');
@@ -1138,6 +1160,7 @@ const {chromium,webkit}=require('playwright');
    });
    await page.reload();
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await chooseMonths(page,['2026-10','2026-09','2026-08']);
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
@@ -1241,6 +1264,7 @@ const {chromium,webkit}=require('playwright');
    assert.ok(await page.locator('.history-actual-row').count()>0);
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-history-view="sizes"]').click();
    await verifyReportFilters(page,'Purchase sizes',mobile);
    assert.equal(await page.locator('[data-history-size-insights]').count(),1);
@@ -1267,6 +1291,7 @@ const {chromium,webkit}=require('playwright');
    // Merchant view: one intuitive calendar-month spend total per merchant,
    // independent of the existing Category and Purchase Sizes analysis.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-history-view="merchants"]').click();
    await verifyReportFilters(page,'Merchants',mobile);
    assert.equal(await page.locator('[data-history-merchant-insights]').count(),1);
@@ -1330,6 +1355,7 @@ const {chromium,webkit}=require('playwright');
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
 
    await chooseMonths(page,['2026-09']);
    assert.deepEqual(await selectedMonths(page),['2026-09']);
@@ -1347,6 +1373,7 @@ const {chromium,webkit}=require('playwright');
     nonadjacent.every(month=>month==='2026-08'||month==='2026-10'),
     'August and October selected, but September excluded');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.deepEqual(await selectedMonths(page),['2026-08','2026-10'],
     'Checked months remain selected across all four reports');
    await checkOverall(2);
@@ -1356,10 +1383,13 @@ const {chromium,webkit}=require('playwright');
    assert.ok(Math.abs(twoMonthWidth-Math.min(100,twoMonthSpent/(275.5*2)*100))<.02,
     'Nonadjacent calendar months compare against exactly two monthly budgets');
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await chooseAllMonths(page);
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-budget-display="'+categoryName+'"]')
     .getAttribute('data-budget-monthly'),'275.50',
     'A monthly target remains visible after reload');
@@ -1374,6 +1404,7 @@ const {chromium,webkit}=require('playwright');
    // A category edit teaches a merchant lesson, which Settings can forget
     // without reverting the transaction's individual saved correction.
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     const lessonRow=page.locator('.history-entry').filter({hasText:'Xfinity Internet'}).first();
     assert.equal(await lessonRow.count(),1,'Fictional merchant exists for category learning');
     await lessonRow.locator('[data-history-category]').selectOption('Subscriptions');
@@ -1385,6 +1416,7 @@ const {chromium,webkit}=require('playwright');
      rule.merchant==='Xfinity Internet'&&rule.category==='Subscriptions'),
      'A category correction stores its merchant lesson');
     await page.locator('.planner-nav-primary [data-view="history"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     assert.equal(Math.round(await categoryAmount('Subscriptions')*100),
      Math.round(subscriptionsBefore*100)+7999,
      'A saved posted purchase immediately moves into the selected budget category');
@@ -1392,8 +1424,10 @@ const {chromium,webkit}=require('playwright');
      Math.round(utilitiesBefore*100)-7999,
      'The old budget category no longer counts that same purchase');
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('#planner-menu summary').click();
     await page.locator('#planner-menu [data-view="settings"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     const learnedRules=page.locator('[data-settings-learned-rules]');
     assert.equal(await learnedRules.count(),1,'Learned categories is a collapsible section');
     assert.equal(await learnedRules.evaluate(el=>el.open),false,
@@ -1418,9 +1452,11 @@ const {chromium,webkit}=require('playwright');
     assert.ok(Object.values(afterForget.categoryOverrides||{}).includes('Subscriptions'),
      'Forgetting a merchant rule leaves the individual correction intact');
     await page.locator('.planner-nav-primary [data-view="history"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     'Reopening Bank History from Settings also defaults to Budget');
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
 
     // Actual bank records are inspectable through the shared panel, never editable.
    const bankRow=page.locator('.history-row-open').first();
@@ -1433,6 +1469,7 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="upcoming"]').click();
    assert.equal(await page.locator('[data-bills-tab]').count(),3,
     'Bills uses the shared Spending segmented navigation');
@@ -1597,11 +1634,13 @@ const {chromium,webkit}=require('playwright');
 
    await page.locator('#planner-menu>summary').click();
    await page.locator('#planner-menu [data-view="transactions"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    if(await page.locator('.unified-payment-trigger.ledger-transaction-row').count())
     await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
    else assert.equal(await page.locator('.unified-payment-trigger').count(),0,
     'No dated predictions are available in this fictional fixture');
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const next=page.locator('[data-calendar-day="2026-10-20"]');
    if(await next.count()){
     await next.click();
@@ -1651,6 +1690,7 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.attention-link[data-view="reviews"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
    assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(items=>
     items.map(x=>x.dataset.reviewTab)),['categories','payments','earlier','suggestions'],
@@ -1920,7 +1960,9 @@ const {chromium,webkit}=require('playwright');
    // Deleting an assigned built-in category should not require reassignment.
    // An existing fictional merchant correction is already Subscriptions.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('.history-category-manager>summary').click();
    assert.equal(await page.locator('[data-history-category-delete="Subscriptions"]').count(),1);
    page.once('dialog',dialog=>dialog.accept());
@@ -1936,10 +1978,13 @@ const {chromium,webkit}=require('playwright');
      deletedPrefs.categoryOverrides[k]==='Uncategorized')]||'','Uncategorized',
     'Historical corrections are reset to Unassigned without bank source edits');
    await page.locator('.attention-link[data-view="reviews"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.ok(await page.locator('[data-category-review-form]').count()>0,
     'Deleted categories push affected transactions back into Things to check');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-category-filter] option[value="Subscriptions"]').count(),0,
     'Deleted categories must not reappear in History filters');
 
@@ -1955,10 +2000,12 @@ const {chromium,webkit}=require('playwright');
     movedCents=Math.round(Number(await spendRow.locator('[data-history-sort-amount]')
      .getAttribute('data-history-sort-amount'))*100);
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const oldTargetCents=Math.round(Number((await page.locator(
     '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
     .replace(/[^0-9.-]/g,''))*100);
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const rowAgain=page.locator('.history-entry')
     .filter({has:page.locator('.history-actual-row[data-history-kind="expense"]')}).first();
    const chosenId=await rowAgain.getAttribute('data-history-entry');
@@ -1968,6 +2015,7 @@ const {chromium,webkit}=require('playwright');
     return saved.categoryOverrides?.[id]===category;
    },[chosenId,targetCategory]);
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(Math.round(Number((await page.locator(
     '[data-history-category-row="'+targetCategory+'"] .history-category-actual').innerText())
     .replace(/[^0-9.-]/g,''))*100),oldTargetCents+movedCents,
@@ -2024,6 +2072,7 @@ const {chromium,webkit}=require('playwright');
    },visualAccount);
    await page.reload();
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const upcoming=page.locator('.bills-upcoming-row')
     .filter({hasText:'Fictional Internet Bill'}).first();
    const repeating=page.locator('[data-schedule-card="fictional-bill-row-layout"]');
@@ -2110,6 +2159,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(scheduled.cardShadow,'none','Repeating has no per-item shadow');
    assert.ok(ref.overflow<=3&&scheduled.overflow<=3,'No horizontal overflow in Bills');
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const posted=await design(page.locator('.history-entry .history-actual-row').first(),
     '.history-entry','.history-actual-description strong','.history-actual-amount');
    assert.ok(posted.height>=60&&Math.abs(posted.height-ref.height)<=30,
@@ -2120,6 +2170,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(posted.cardBorder,'none','Activity is a flat, continuous list');
    assert.ok(posted.overflow<=3,'No horizontal overflow in Activity');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="repeating"]').click();
    await repeating.locator('[data-schedule-edit]').click();
    assert.equal(await page.locator('.transaction-detail [data-schedule-edit-form]').count(),1,
@@ -2159,6 +2210,7 @@ const {chromium,webkit}=require('playwright');
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-bills-tab="upcoming"]').click();
     const baseline=await transactionFonts(
      '.bills-upcoming-row','.bills-upcoming-description strong','.bills-upcoming-row>strong');
@@ -2169,20 +2221,24 @@ const {chromium,webkit}=require('playwright');
      '.schedule-row-main.ledger-transaction-row',
      '.schedule-row-title strong','.schedule-row-amount strong'),baseline);
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     assertFontsMatch('Posted Activity '+width,await transactionFonts(
      '.history-row-open.ledger-transaction-row',
      '.history-actual-description strong','.history-actual-amount'),baseline);
     await page.locator('#planner-menu>summary').click();
     await page.locator('#planner-menu [data-view="transactions"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     assertFontsMatch('Dated Predictions '+width,await transactionFonts(
      '.unified-payment-trigger.ledger-transaction-row',
      '.unified-payment-name strong','.unified-payment-value'),baseline);
     await page.locator('.planner-nav-primary [data-view="summary"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-calendar-day="2026-10-23"]').click();
     assertFontsMatch('Calendar prediction '+width,await transactionFonts(
      '.calendar-day-detail .calendar-monthly-row.ledger-transaction-row',
      '.calendar-monthly-name strong','.ledger-transaction-amount'),baseline);
     await page.locator('.attention-link[data-view="reviews"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     if(await page.locator('.category-review-open.ledger-transaction-row').count()){
      assertFontsMatch('Review categorization '+width,await transactionFonts(
       '.category-review-open.ledger-transaction-row',

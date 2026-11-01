@@ -58,7 +58,9 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await page.locator('[data-calendar-today]').isDisabled(),true,
      'Today is inactive only when the actual as-of date is selected');
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+    await page.locator('.history-page').waitFor({state:'attached'});
     await page.locator('.planner-nav-primary [data-view="summary"]').click();
+    await page.locator('.calendar-month-title').waitFor({state:'attached'});
     assert.equal(await month(),expectedMonth,'Switching pages must preserve current calendar month');
     assert.equal(await selectedDay(),localToday,'Switching pages must not replace today');
     assert.deepEqual(errors,[],device+' must have no runtime errors at '+instant);

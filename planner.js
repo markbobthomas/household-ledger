@@ -3289,9 +3289,9 @@ window.HouseholdAllViewsReady=()=>preparedReady;
 function preparationProgress(count){
  const loading=$('planner-loading');
  if(!loading)return;
- loading.hidden=false;
+ loading.hidden=Boolean($('planner-main')?.querySelector('.planner-page'));
  const shell=document.querySelector('main.shell');
- if(shell){shell.inert=true;shell.setAttribute('aria-busy','true')}
+ if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
  const progress=$('planner-loading-progress');
  if(progress)progress.textContent='Preparing '+count+' of '+preparedDestinations.length+' views…';
 }
@@ -3319,59 +3319,9 @@ function pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData){
    summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
    (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
 }
+// Build views on demand, not eight competing browser tasks at startup.
 function warmPreparedViews(context){
- if(!context||typeof document.createElement!=='function'||!$('planner-main')?.replaceChildren){
-  finishPreparation(preparedEpoch);return;
- }
- const epoch=preparedEpoch;
- // The already visible landing page is ready. Build its default landing too
- // when the user is currently looking at a Spending subsection (e.g. Merchants).
- const landingIsCurrent=preparedDestinations.includes(activeTab)&&
-  !(activeTab==='history'&&historyView!=='categories');
- const views=preparedDestinations.filter(name=>!landingIsCurrent||name!==activeTab);
- preparationProgress(preparedDestinations.length-views.length);
- let position=0;
- const work=()=>{
-  if(epoch!==preparedEpoch||preparedContext!==context)return;
-  if(position>=views.length){finishPreparation(epoch);return}
-  const view=views[position++];
-  if(!historySelectedMonths)historySelectedMonths=new Set([context.s.asOf.slice(0,7)]);
-  const before=activeTab,historyBefore=historyView,
-   categoryBefore=historyCategoryFilter,sizeBefore=historySizeFilter,
-   merchantBefore=historyMerchantFilter,drillBefore=historyPurchaseDrill,
-   monthBefore=historyMonthPickerOpen,futureExtentBefore=historyMonthFutureExtent,
-   selectedMonthsBefore=new Set(historySelectedMonths);
-  try{
-   activeTab=view;
-   if(view==='history'||view==='activity'){
-    historyView=view==='history'?'categories':'list';
-    historyCategoryFilter='';historySizeFilter=-1;
-    historyMerchantFilter='';historyPurchaseDrill=false;
-    historyMonthPickerOpen=false;
-   }
-   const html=pageMarkup(context.bundle,context.s,context.selectedSource,
-    context.derived,context.fresh,context.reviewData);
-   const template=document.createElement('template');
-   template.innerHTML=html;
-   const element=template.content.firstElementChild;
-   preparedViews.set(view,{element,epoch});
-  }catch(_error){
-   // Leave a safe ordinary render fallback if an optional view cannot prepare.
-   preparedViews.set(view,{element:null,epoch});
-  }finally{
-   activeTab=before;historyView=historyBefore;
-   historyCategoryFilter=categoryBefore;historySizeFilter=sizeBefore;
-   historyMerchantFilter=merchantBefore;historyPurchaseDrill=drillBefore;
-   historyMonthPickerOpen=monthBefore;historyMonthFutureExtent=futureExtentBefore;
-   historySelectedMonths.clear();
-   for(const month of selectedMonthsBefore)historySelectedMonths.add(month);
-  }
-  preparationProgress(preparedDestinations.length-views.length+position);
-  // Each heavy view is built in its own task, yielding to paint the loading UI
-  // rather than competing with navigation after the loading UI disappears.
-  if(epoch===preparedEpoch)setTimeout(work,0);
- };
- setTimeout(work,0);
+ finishPreparation(preparedEpoch);
 }
 function activatePreparedView(view,from,fromHistoryView){
  const entry=preparedViews.get(view),root=$('planner-main');
@@ -3381,7 +3331,8 @@ function activatePreparedView(view,from,fromHistoryView){
  // lists on every navigation. A non-Budget Spending subsection is not its
  // landing view: preserve the already prepared Budget landing instead.
  if(from&&from!==view&&preparedDestinations.includes(from)&&
-    !(from==='history'&&fromHistoryView!=='categories')&&root.firstElementChild){
+    !(from==='history'&&fromHistoryView!=='categories')&&root.firstElementChild&&
+    !root.firstElementChild.classList.contains('navigation-loading')){
   preparedViews.set(from,{element:root.firstElementChild,epoch:preparedEpoch});
  }
  preparedViews.delete(view);
@@ -3432,7 +3383,7 @@ function switchExistingPane(buttonAttr,paneAttr,newValue){
 function render({navigationOnly=false}={}){
  // Any full render, even an uncached navigation, gets a fresh coherent set.
  // Prepared-page activations bypass render() altogether.
- invalidatePreparedViews();
+ if(!navigationOnly)invalidatePreparedViews();
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live(),
   sourceLoading=requestedReal()&&Boolean(window.HouseholdLiveSource?.loading);
  if(!root)return;
@@ -3592,12 +3543,10 @@ document.addEventListener('submit',async e=>{
   }
   // This editor updates visible subtitles without a full render; discard
   // any prebuilt views so they never display the previous note.
-  const currentContext=preparedContext;
-  invalidatePreparedViews();
-  // Notes are saved without rebuilding the active editor. Refresh only
-  // inactive pages using the new in-memory note state.
-  if(currentContext){preparedContext=currentContext;warmPreparedViews(currentContext)}
-  else finishPreparation(preparedEpoch);
+  // Transaction notes do not alter forecasts, balances or bill statements.
+  // Only the two history views can contain their previous note text.
+  preparedViews.delete('history');
+  preparedViews.delete('activity');
   button.disabled=false;
   if(status)status.textContent='Saved';
  }catch(err){
@@ -4064,7 +4013,17 @@ document.addEventListener('click',async e=>{
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
-  if(!activatePreparedView(activeTab,previousTab,previousHistoryView))render({navigationOnly:true});
+  if(!activatePreparedView(activeTab,previousTab,previousHistoryView)){
+   // Keep the prior unmodified DOM available for the next visit; a fallback
+   // render must not discard the canonical forecast or previously visited pages.
+   const root=$('planner-main');
+   if(preparedReady&&preparedContext&&previousTab!==activeTab&&
+      preparedDestinations.includes(previousTab)&&
+      !(previousTab==='history'&&previousHistoryView!=='categories')&&
+      root?.firstElementChild&&!root.firstElementChild.classList.contains('navigation-loading'))
+    preparedViews.set(previousTab,{element:root.firstElementChild,epoch:preparedEpoch});
+   render({navigationOnly:true});
+  }
   if(view.dataset.focusTarget)document.querySelector(view.dataset.focusTarget)?.scrollIntoView?.({block:'center',behavior:'instant'});
   // Tab navigation should not animate the global header's position.
   // 'auto' inherits html's smooth scrolling and briefly shifts the header.
@@ -4499,6 +4458,12 @@ async function commitForecastChange(action){
   const saved=await savePlanning();
   if(live()&&(!saved||saved.saved!==true))throw Error('The predicted transaction was not saved. Please try again.');
   const after=JSON.stringify(current.predictions||{});
+  // A saved forecast edit changes financial authority. Expire derived pages
+  // without locking navigation or discarding the visible editor.
+  if(before!==after){
+   forecastCache=null;preparedEpoch++;preparedViews.clear();
+   preparedContext=null;preparedNotice=null;
+  }
   // Do not offer to undo a previous bank snapshot, or a now-stale edit.
   if(operation===forecastSaveSequence){
    lastForecastUndo=current===state()&&before!==after?{source:current,before,after}:null;

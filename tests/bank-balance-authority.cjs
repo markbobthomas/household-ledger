@@ -21,4 +21,10 @@ const disconnected=build({...account(800,600),disconnected:true});
 assert.equal(disconnected.accounts[0].balanceStatus,'disconnected');
 const simulated=F.build({asOf,mode:'demo',connected:false,accounts:[{...account(50,40),simulated:true}]},[],[],{days:2});
 assert.equal(simulated.accounts[0].balanceStatus,'simulated');
+// Date alignment is validated by the canonical projection tests.
+const pacificEvening='2026-11-01T02:40:00Z';
+const pacificSnapshot={asOf:'2026-10-31',mode:'plaid',connected:true,
+ accounts:[account(800,600,pacificEvening)]};
+assert.equal(F.build(pacificSnapshot,[],[],{days:2}).accounts[0].balanceStatus,'fresh');
+assert.equal(require('../planner-core.js').project(pacificSnapshot,[],2).accounts[0].balanceStatus,'fresh');
 console.log('PASS: actual current balance authority, missing/stale/disconnected flags, simulation isolation');

@@ -127,6 +127,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
     name+': forecast metrics and calendar are the first surface');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const currentBills=await page.locator('.bills-upcoming').innerText();
    assert.match(currentBills,/Fictional Earlier Bill/,
     name+': Upcoming lists the next checking withdrawals');
@@ -147,6 +148,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.match(await page.locator('.bills-range-toggle').innerText(),/30 days/,
     name+': Bills can expand to a 90-day view without modifying forecasts');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     name+': Budget opens by default');
    const category=key=>page.locator('[data-history-category-row="'+key+'"] .history-category-actual').innerText();
@@ -174,6 +176,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(centsOf(budgetUsed),centsOf(parts[1])+centsOf(parts[2]),
     name+': Budget combines actual and remaining predictions only once');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
    assert.equal(await page.locator('[data-history-view="summary"][aria-pressed="true"]').count(),1,
     name+': Summary is the fourth Spending subtab');
@@ -257,12 +260,14 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    });
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const recurring=page.locator('[data-schedule-card="fictional-recurring-card-pay"]');
    assert.equal(await recurring.count(),0,
     name+': card repayment is excluded from Repeating expense plans');
    assert.match(await page.locator('.bills-upcoming').innerText(),/Fictional Recurring Card Repayment/,
     name+': recurring card repayment is visible in Upcoming cash bills');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
    const firstFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
    assert.match(firstFive,/Fictional Recurring Card Repayment/,
@@ -288,6 +293,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    });
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="statements"]').click();
    const cardSelect=page.locator('[data-bills-statement-account]'),
     periodSelect=page.locator('[data-bills-statement-period]'),
@@ -369,12 +375,14 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.setViewportSize({width:name==='Chromium'?1280:390,height:name==='Chromium'?900:844});
    assert.equal(await page.locator('[data-bills-tab]').count(),3);
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
    const autopayFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
    assert.match(autopayFive,/Credit-card payment \(autopay\)/,
     name+': configured card autopay next week must be one of Summary next five');
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
     name+': refunds still appear as signed spending in the full-width Budget list');
    await page.locator('[data-history-category-row="Entertainment"] [data-history-drill-category]').click();

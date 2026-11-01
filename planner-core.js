@@ -684,7 +684,10 @@ function project(snapshot,ledger,days=90){
    // The server records observations as UTC instants, but the forecast's
    // asOf date is the browser's local calendar day.
    observationDate=observation.includes('T')&&Number.isFinite(Date.parse(observation))?
-    new Date(observation).toLocaleDateString('en-CA'):observation.slice(0,10),
+    (()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',
+     year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(observation));
+     const part=type=>parts.find(p=>p.type===type)?.value||'';
+     return part('year')+'-'+part('month')+'-'+part('day')})():observation.slice(0,10),
    age=valid(observationDate)?diff(asOf,observationDate):null,
    status=!validBalance?'unavailable':a.simulated||snapshot.mode==='demo'?'simulated':
     !live?'unverified':age===null?'unknown-age':age>2?'stale':age<0?'future-dated':'fresh',
