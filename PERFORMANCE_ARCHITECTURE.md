@@ -30,7 +30,7 @@ For UI changes that touch navigation, rendering, filtering, data invalidation, o
 A change passes only if the fictional browser tests demonstrate:
 
 1. Startup completes all required prepared pages; cached navigation and Spending/Bills/Review subtabs do not advance the global preparation epoch.
-2. Repeated Activity filters (sort, category, account, month, search and clearing search) update the report **without increasing** `forecastBuilds`, `historyNormalizations`, or `HouseholdPreparedViewGeneration()`; unrelated prepared Home/Bills pages remain available.
+2. Repeated Activity filters (sort, category, account, month, search and clearing search) and Spending Merchants/Purchase Sizes month/account filters update only the selected report **without increasing** `forecastBuilds`, `historyNormalizations`, or `HouseholdPreparedViewGeneration()`; unrelated prepared Home/Bills pages remain available. Check `historyPageBuilds`: each display filter should build one report, not several unrelated views.
 3. Filtered results and selected controls reflect the requested filter. Returning to another page preserves calendar state, forecast totals, and Review counts.
 4. A saved data-changing edit still invalidates stale derived history and returns the updated category/data on a cold destination, with immediate selection feedback and local loader; financial safety tests still prove no duplicate predictions or unauthorized source edits.
 
