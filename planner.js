@@ -67,6 +67,9 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 let forecastCache=null;
 let activeTab=window.HouseholdPlannerSummary?.render?preferredOpeningPage():'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
+// A tab switch does not alter bank history or review decisions. Keep the
+// previous Review badge until a genuine state/render update, never persist it.
+let lastReviewQueue=null,lastReviewBundle=null;
 let reviewCatalogSave=Promise.resolve();
 // The latest successful prediction edit may be undone only while the same
 // in-memory source and exact saved snapshot are still current. No bank facts
@@ -2532,6 +2535,11 @@ function historyPage(bundle,s){
  const groupHistoryCard=Boolean(selectedHistoryCard&&
   (state().predictions?.paymentRules?.[historyAccount]?.billingEndDate||
    state().predictions?.paymentRules?.[historyAccount]?.lastStatementClose));
+ // A Budget, Merchants or Purchase Sizes view never displays Activity rows.
+ // Building those hidden rows used to run schedule matching and forecast
+ // identity scans for every transaction before Spending could appear.
+ let rows='';
+ if(displayView==='list'){
  const savedRules=state().predictions?.futureRecurringRules||[];
  const projections=futureRows(bundle,s);
  const rowMarkup=visible.map(t=>{
@@ -2615,7 +2623,7 @@ function historyPage(bundle,s){
  // Preserve each user's chosen sort order inside each statement, and present
  // statement boundaries in chronological order. Never count pending activity,
  // transfers, or card settlements as card purchases.
- const rows=!groupHistoryCard?rowMarkup.join(''):(()=>{
+ rows=!groupHistoryCard?rowMarkup.join(''):(()=>{
   const groups=new Map(),ungrouped=[];
   visible.forEach((t,i)=>{
    const period=cardStatementPeriod(historyAccount,t.date);
@@ -2634,6 +2642,7 @@ function historyPage(bundle,s){
    entries.map(e=>e.html).join('')+'</section>').join('')+
    ungrouped.join('');
  })();
+ }
  return '<div class="planner-page history-page">'+
   (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
@@ -3251,7 +3260,7 @@ function settingsPage(bundle,s,chosen){
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
     '<p>To make it an iPhone app: open the link in Safari, tap Share, then Add to Home Screen. An internet connection is required.</p></section>':'')+'</div>';
 }
-function render(){
+function render({navigationOnly=false}={}){
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
  if(!root)return;
  const s=busy?{asOf:dateToday(),accounts:[]}:snapshot();
@@ -3293,7 +3302,10 @@ function render(){
  if(selectedSource)selectedAccount=selectedSource.id;
  // Derive the navigation count on every page, using the same unresolved
  // recommendations and legacy decisions shown inside Review.
- const reviewData=selectedSource&&Array.isArray(bundle?.rows)?reviewQueue(bundle,s):null;
+ const reuseReview=navigationOnly&&bundle===lastReviewBundle&&lastReviewQueue;
+ const reviewData=selectedSource&&Array.isArray(bundle?.rows)?
+  (reuseReview?lastReviewQueue:reviewQueue(bundle,s)):null;
+ lastReviewQueue=reviewData;lastReviewBundle=bundle;
  updateReviewTabCount(reviewData);
  const derived=projection?.accounts.find(x=>x.id===String(selectedAccount));
  const statuses=projection?.diagnostics||{};
@@ -3865,7 +3877,7 @@ document.addEventListener('click',async e=>{
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
-  render();
+  render({navigationOnly:true});
   if(view.dataset.focusTarget)document.querySelector(view.dataset.focusTarget)?.scrollIntoView?.({block:'center',behavior:'instant'});
   // Tab navigation should not animate the global header's position.
   // 'auto' inherits html's smooth scrolling and briefly shifts the header.
