@@ -62,6 +62,10 @@ function post(route,body={},cookie='',extra={}){
   const third=await post('/auth/login',{password:pass});
   const persistentCookie=third.headers['set-cookie'].find(c=>c.startsWith('__Host-ledger_session='));
   assert.equal((await get('/api/status',false,persistentCookie)).status,200);
+  const upgradedMarker=third.headers['set-cookie']
+    .find(c=>c.startsWith('__Host-ledger_upgraded='));
+  assert.equal((await get('/api/status',true,upgradedMarker)).status,401,
+   'After cookie expiry, cached Basic credentials cannot silently renew access');
   assert.equal((await get('/api/status',true)).status,200);
   assert.equal(JSON.parse((await get('/api/status',true)).body).connected,false);
   const ledger=await get('/',true);assert.equal(ledger.status,200);assert.match(ledger.body,/<h1>Ledger<\/h1>/,'Ledger brand is served in live mode');
