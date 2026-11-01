@@ -88,7 +88,7 @@
  const shell=document.querySelector('main.shell');
  const root=document.getElementById('planner-main');
  const splash=document.getElementById('planner-loading');
- let wanted=null,sequence=0;
+ let wanted=null,sequence=0,replaying=false;
  function unlockVisiblePage(){
   // Unblock navigation even if the source is reloading or a page is empty.
   if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
@@ -97,7 +97,10 @@
  new MutationObserver(unlockVisiblePage).observe(root,{childList:true,subtree:false});
  document.addEventListener('click',function(event){
   const button=event.target.closest?.('[data-view]');
-  if(!button||window.HouseholdAllViewsReady?.()!==false)return;
+  if(!button||replaying)return;
+  const ready=window.HouseholdAllViewsReady?.()===true;
+  const cached=window.HouseholdPreparedViewStatus?.()?.includes(button.dataset.view);
+  if(ready&&cached)return;
   // Until the existing warmup finishes, keep the tab interactive and visible.
   event.preventDefault();event.stopImmediatePropagation();
   const view=button.dataset.view,id=++sequence;
@@ -121,7 +124,8 @@
    if(window.HouseholdAllViewsReady?.()){
     wanted=null;placeholder.remove();
     // Original listener owns actual rendering and financial state.
-    button.click();
+    replaying=true;
+    try{button.click()}finally{replaying=false}
    }else setTimeout(replay,35);
   };
   setTimeout(replay,35);
