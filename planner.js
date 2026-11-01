@@ -4803,6 +4803,9 @@ async function saveTransactionCategory(id,category,confirm=false){
   }
   const posted=(current.transactions||[]).find(row=>String(row.id)===String(id));
   latestCategorySave=posted?{id:String(id),date:String(posted.date||''),category}:null;
+  // Once the edit is committed, close the month overlay so its floating
+  // options cannot cover the Activity confirmation / View in Budget action.
+  historyMonthPickerOpen=false;
   // A category correction changes historical reporting. Refresh only this
   // in-memory projection cache; do not refetch or mutate bank transactions.
   forecastCache=null;
