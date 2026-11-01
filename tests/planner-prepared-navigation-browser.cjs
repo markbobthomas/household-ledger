@@ -112,7 +112,7 @@ const {chromium,webkit}=require('playwright');
      const begin=performance.now();
      button.click();
      return {elapsed:performance.now()-begin,
-      selected:button.getAttribute('aria-pressed'),
+      selected:document.querySelector('[data-history-view="'+pane+'"]')?.getAttribute('aria-pressed'),
       active:document.querySelector('.history-page')?.className,
       prepared:window.HouseholdPreparedSpendingStatus()};
     },pane);

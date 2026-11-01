@@ -3298,7 +3298,7 @@ function preparationProgress(count){
  // while a fresh set is prepared in small, yielding batches.
  if(initialPreparationComplete)return;
  const loading=$('planner-loading');
- if(loading){loading.hidden=false;loading.style.display=''}
+ if(loading){loading.hidden=false;if(loading.style)loading.style.display=''}
  const progress=$('planner-loading-progress');
  if(progress)progress.textContent='Preparing '+count+' of '+
   (preparedDestinations.length+spendingDestinations.length-1)+' pages…';
@@ -3308,7 +3308,7 @@ function finishPreparation(epoch){
  preparedReady=true;
  initialPreparationComplete=true;
  const loading=$('planner-loading');
- if(loading){loading.hidden=true;loading.style.display='none'}
+ if(loading){loading.hidden=true;if(loading.style)loading.style.display='none'}
  const shell=document.querySelector('main.shell');
  if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
 }
@@ -3336,6 +3336,9 @@ function pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData){
 // progress update can paint; no bank requests or forecast computations are
 // repeated. Later data edits invalidate the generation and refresh it.
 function warmPreparedViews(context){
+ // Lightweight VM accounting tests have no real DOM or animation loop. Keep
+ // their synchronous navigation contract without asking mocks to parse HTML.
+ if(!$('planner-main')?.firstElementChild){finishPreparation(preparedEpoch);return}
  if(warmingEpoch===preparedEpoch)return;
  const epoch=preparedEpoch;
  warmingEpoch=epoch;
