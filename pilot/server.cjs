@@ -264,7 +264,9 @@ async function start(port=Number(env.PORT||8788)){
    catch{return respond(403,{error:'Origin rejected'})}
   }
   if(req.method==='GET'&&requestPath==='/login'){
-   const loginPage=await fs.readFile(path.join(__dirname,'login.html'),'utf8');
+   let loginPage;
+   try{loginPage=await fs.readFile(path.join(__dirname,'login.html'),'utf8')}
+   catch{return respond(503,{error:'Private sign-in page is temporarily unavailable'})}
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
     'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
@@ -284,7 +286,9 @@ async function start(port=Number(env.PORT||8788)){
    if(!data||typeof data.password!=='string'||Object.keys(data).length!==1||!auth.checkPassword(data.password)){
     auth.failed(ip);return respond(401,{error:'Invalid password'});
    }
-   const token=await auth.issue();
+   let token;
+   try{token=await auth.issue()}
+   catch{return respond(503,{error:'Could not start a secure session. Try signing in again.'})}
    auth.successful(ip);
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff','Set-Cookie':[auth.cookie(token),auth.clearSignedOut(),auth.upgradedCookie()]});
@@ -292,7 +296,8 @@ async function start(port=Number(env.PORT||8788)){
   }
   if(req.method==='POST'&&requestPath==='/auth/logout'){
    if(req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
-   await auth.revoke(req);
+   try{await auth.revoke(req)}
+   catch{return respond(503,{error:'Could not confirm sign out. Try again.'})}
    // A signed-out browser may still hold its former Basic credentials in
    // browser memory. The tombstone prevents silent Basic reauthentication.
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
@@ -314,9 +319,12 @@ async function start(port=Number(env.PORT||8788)){
   }
   // Upgrade an existing password-authenticated browser automatically on
   // its next page load; do not force the household to enter a new password.
-  const upgradeCookie=!cookieSession&&basicAuthorized&&req.method==='GET'&&
-   (requestPath==='/'||requestPath==='/index.html')?
-    [auth.cookie(await auth.issue()),auth.clearSignedOut(),auth.upgradedCookie()]:null;
+  let upgradeCookie=null;
+  if(!cookieSession&&basicAuthorized&&req.method==='GET'&&
+     (requestPath==='/'||requestPath==='/index.html')){
+   try{upgradeCookie=[auth.cookie(await auth.issue()),auth.clearSignedOut(),auth.upgradedCookie()]}
+   catch{ /* A transient session-disk failure must not take down the bank UI. */ }
+  }
   if(req.method==='GET'&&requestPath==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
   const staticPath=requestPath.slice(1);
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js|manifest[.]webmanifest|ledger-icon[.]png)$/;
