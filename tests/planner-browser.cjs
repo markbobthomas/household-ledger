@@ -362,6 +362,40 @@ const {chromium,webkit}=require('playwright');
    // Bigger, readable type on desktop, with proportionate mobile type.
    // Compare actual spending at the progress-track endpoint and read-only target.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   const firstBudgetTotal=await page.locator('[data-history-category-insights] .history-spending-overview strong').innerText();
+   const firstBudgetPercent=await page.locator('[data-history-total-budget-percent]').allTextContents();
+   const priorReviewCount=await page.locator('.topbar [data-review-tab-count]').textContent();
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   // Spend-only navigation must not rebuild invisible Activity rows or re-run
+   // Review recommendations. Banking history, forecasts, budgets and badges
+   // must remain unchanged when returning to Spending.
+   await page.evaluate(()=>{
+    const h=window.HouseholdPlannerHistory,counts={matches:0,recommendations:0};
+    const match=h.historicalScheduleMatches,recommend=h.recommendedRepeating;
+    window.__spendingNavWork={counts,restore(){
+     h.historicalScheduleMatches=match;h.recommendedRepeating=recommend;
+    }};
+    h.historicalScheduleMatches=function(...args){
+     counts.matches++;return match.apply(this,args);
+    };
+    h.recommendedRepeating=function(...args){
+     counts.recommendations++;return recommend.apply(this,args);
+    };
+   });
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   const navWork=await page.evaluate(()=>{
+    const work=window.__spendingNavWork;
+    work.restore();
+    return {...work.counts};
+   });
+   assert.deepEqual(navWork,{matches:0,recommendations:0},
+    'Returning to Budget does not build hidden Activity editors or recalculate Review suggestions');
+   assert.equal(await page.locator('[data-history-category-insights] .history-spending-overview strong').innerText(),
+    firstBudgetTotal,'Fast Budget navigation preserves posted + predicted spending');
+   assert.deepEqual(await page.locator('[data-history-total-budget-percent]').allTextContents(),
+    firstBudgetPercent,'Fast Budget navigation preserves saved budget percentage');
+   assert.equal(await page.locator('.topbar [data-review-tab-count]').textContent(),priorReviewCount,
+    'Fast navigation keeps the same pending Review badge');
    const budgetType=await page.evaluate(()=>{
     const root=document.querySelector('[data-history-category-insights]'),
      row=root?.querySelector('.history-category-item'),
