@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Sign in · Household Ledger</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#253b35;background:#f3f6f3}
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:22px}
+main{width:min(100%,390px);background:white;border:1px solid #dce6df;border-radius:12px;padding:28px;box-shadow:0 8px 32px #142c2110}
+h1{font-size:22px;margin:0 0 6px}p{color:#65746b;font-size:14px;line-height:1.5;margin:0 0 24px}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:7px}
+input,button{width:100%;font:inherit;border-radius:8px;min-height:46px}
+input{border:1px solid #c7d3ca;padding:10px 12px;margin-bottom:17px}
+input:focus-visible,button:focus-visible{outline:3px solid #7cb69e;outline-offset:2px}
+button{border:0;background:#285b45;color:white;font-weight:700;cursor:pointer}
+button:disabled{opacity:.7;cursor:wait}
+small{display:block;margin-top:15px;color:#66786b;line-height:1.45}
+#error{color:#a32525;font-weight:600;min-height:20px;margin:0 0 10px}
+</style></head><body><main><h1>Household Ledger</h1>
+<p>Sign in to your private household finances.</p>
+<form id="login-form" method="post" action="/auth/login" autocomplete="on"><label for="password">Password</label>
+<input id="password" type="password" name="password" autocomplete="current-password" required autofocus>
+<div id="error" role="alert" aria-live="polite"></div>
+<button type="submit">Sign in</button></form>
+<small>This device stays signed in for up to 90 days. You can sign out in Settings.</small>
+</main>
+<script>
+document.getElementById('login-form').addEventListener('submit',async(event)=>{
+ event.preventDefault();
+ const form=event.currentTarget,button=form.querySelector('button'),error=document.getElementById('error');
+ button.disabled=true;button.textContent='Signing in…';error.textContent='';
+ try{
+  const response=await fetch('/auth/login',{method:'POST',credentials:'same-origin',cache:'no-store',
+   headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
+   body:JSON.stringify({password:form.elements.password.value})});
+  if(!response.ok){error.textContent=response.status===429?'Too many attempts. Try again later.':
+   'Sign in failed. Check your password.';return}
+  form.elements.password.value='';
+  window.location.replace('/');
+ }catch{error.textContent='Connection unavailable. Try again.'}
+ finally{button.disabled=false;button.textContent='Sign in'}
+});
+</script></body></html>

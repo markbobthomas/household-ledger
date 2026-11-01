@@ -4,7 +4,24 @@ const {spawn}=require('node:child_process');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-pilot-'));
 const port=19845,pass='test-'+crypto.randomBytes(24).toString('hex');
 const env={...process.env,PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test-placeholder',PLAID_SECRET:'test-placeholder',PLAID_ENV:'sandbox',PILOT_STATE_PATH:path.join(dir,'pilot.enc'),RENDER_GIT_COMMIT:'a'.repeat(40)};
-function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostname:'127.0.0.1',port,path:route,headers:auth?{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}:{}},r=>{let body='';r.on('data',c=>body+=c);r.on('end',()=>resolve({status:r.statusCode,body}))}).on('error',reject)})}
+function get(route,auth,cookie=''){return new Promise((resolve,reject)=>{
+ const headers={...(auth?{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}:{}),
+  ...(cookie?{Cookie:cookie}:{})};
+ http.get({hostname:'127.0.0.1',port,path:route,headers},r=>{
+  let body='';r.on('data',c=>body+=c);
+  r.on('end',()=>resolve({status:r.statusCode,body,headers:r.headers}));
+ }).on('error',reject);
+})}
+function post(route,body={},cookie='',extra={}){
+ return new Promise((resolve,reject)=>{
+  const req=http.request({hostname:'127.0.0.1',port,path:route,method:'POST',
+   headers:{'X-Pilot-Action':'1','Content-Type':'application/json',
+    ...(cookie?{Cookie:cookie}:{}),...extra}},r=>{
+   let response='';r.on('data',c=>response+=c);
+   r.on('end',()=>resolve({status:r.statusCode,body:response,headers:r.headers}));
+  });req.on('error',reject);req.end(JSON.stringify(body));
+ });
+}
 (async()=>{
  const child=spawn(process.execPath,['pilot/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:['ignore','pipe','pipe']});
  try{
@@ -15,7 +32,40 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
    'Only the public deployed source commit is available without bank authentication');
   assert.ok(!health.body.includes(pass),'Private password never appears in deployment check');
   assert.equal((await get('/api/status',false)).status,401,'Bank metadata must not be accessible anonymously');
-  assert.equal((await get('/',false)).status,401,'Pilot UI requires authentication');
+  assert.equal((await get('/',false)).status,303,'Unsigned browser navigates to private login screen');
+  const loginPage=await get('/login',false);
+  assert.equal(loginPage.status,200,'Sign-in screen is accessible without exposing protected bank data');
+  assert.match(loginPage.body,/Household Ledger/);
+  assert.equal((await post('/auth/login',{password:'wrong'})).status,401,'Incorrect password never creates a session');
+  const first=await post('/auth/login',{password:pass});
+  assert.equal(first.status,200,'Correct existing password grants a private session');
+  const firstCookie=first.headers['set-cookie'].find(c=>c.startsWith('__Host-ledger_session='));
+  assert.match(firstCookie,/Secure; HttpOnly; SameSite=Lax/);
+  assert.match(firstCookie,/Max-Age=7776000/,'Exactly 90 days until absolute cookie expiration');
+  assert.equal((await get('/api/status',false,firstCookie)).status,200,
+   'The signed session accesses bank metadata without Basic Authorization');
+  assert.ok(!fs.readFileSync(path.join(dir,'pilot.enc.sessions'),'utf8').includes(firstCookie.split('=')[1].split(';')[0]),
+   'Raw session IDs never persist to disk');
+  const second=await post('/auth/login',{password:pass});
+  const secondCookie=second.headers['set-cookie'].find(c=>c.startsWith('__Host-ledger_session='));
+  assert.equal((await get('/api/status',false,secondCookie)).status,200);
+  assert.equal((await post('/auth/logout',{},firstCookie)).status,200,
+   'Device can explicitly revoke its 90-day session');
+  assert.equal((await get('/api/status',false,firstCookie)).status,401,
+   'Revoked cookies cannot access bank data');
+  assert.equal((await get('/api/status',false,secondCookie)).status,200,
+   'Signing out one household device does not sign out the other');
+  const tombstone=(await post('/auth/logout',{},secondCookie)).headers['set-cookie']
+    .find(c=>c.startsWith('__Host-ledger_signed_out='));
+  assert.equal((await get('/api/status',true,tombstone)).status,401,
+   'Signing out cannot silently fall back to browser-cached legacy Basic credentials');
+  const third=await post('/auth/login',{password:pass});
+  const persistentCookie=third.headers['set-cookie'].find(c=>c.startsWith('__Host-ledger_session='));
+  assert.equal((await get('/api/status',false,persistentCookie)).status,200);
+  const upgradedMarker=third.headers['set-cookie']
+    .find(c=>c.startsWith('__Host-ledger_upgraded='));
+  assert.equal((await get('/api/status',true,upgradedMarker)).status,401,
+   'After cookie expiry, cached Basic credentials cannot silently renew access');
   assert.equal((await get('/api/status',true)).status,200);
   assert.equal(JSON.parse((await get('/api/status',true)).body).connected,false);
   const ledger=await get('/',true);assert.equal(ledger.status,200);assert.match(ledger.body,/<h1>Ledger<\/h1>/,'Ledger brand is served in live mode');
@@ -40,9 +90,9 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   assert.equal((await get('/pilot/data-source.js',true)).status,200);
   assert.match(ledger.body,/manifest[.]webmanifest/,'Private app exposes install manifest');
   assert.match(ledger.body,/apple-touch-icon/,'iPhone gets an app icon');
-  assert.equal((await get('/manifest.webmanifest',false)).status,401,
+  assert.equal((await get('/manifest.webmanifest',false)).status,303,
     'Install manifest is never exposed without private authentication');
-  assert.equal((await get('/ledger-icon.png',false)).status,401,
+  assert.equal((await get('/ledger-icon.png',false)).status,303,
     'The private icon follows the same authentication boundary');
   assert.equal((await get('/manifest.webmanifest',true)).status,200);
   assert.equal((await get('/ledger-icon.png',true)).status,200);
@@ -69,6 +119,10 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
   fs.copyFileSync(path.join(__dirname,'../pilot/server.cjs'),path.join(partial,'pilot/server.cjs'));
   fs.copyFileSync(path.join(__dirname,'../pilot/account-forecast-links.cjs'),
    path.join(partial,'pilot/account-forecast-links.cjs'));
+  fs.copyFileSync(path.join(__dirname,'../pilot/session-auth.cjs'),
+   path.join(partial,'pilot/session-auth.cjs'));
+  fs.copyFileSync(path.join(__dirname,'../pilot/login.html'),
+   path.join(partial,'pilot/login.html'));
   fs.writeFileSync(path.join(partial,'index.html'),'<html><head></head><body>partial deployment</body></html>');
   const altPort=port+1;
   const partialChild=spawn(process.execPath,['pilot/server.cjs'],{
@@ -89,6 +143,44 @@ function get(route,auth){return new Promise((resolve,reject)=>{http.get({hostnam
    assert.equal(await alternate('/'),503,
     'Partial deployments fail visibly instead of serving a broken forecast page');
   }finally{partialChild.kill()}
-  console.log('PASS pilot auth, health, missing-asset crash protection and no leaked credentials');
+  // A fresh Render process must load the encrypted session file, not force
+  // the household to sign in on every restart.
+  const restartPort=port+2;
+  const restarted=spawn(process.execPath,['pilot/server.cjs'],{
+   cwd:path.resolve(__dirname,'..'),env:{...env,PORT:String(restartPort)},stdio:'ignore'
+  });
+  try{
+   const status=()=>new Promise((resolve,reject)=>{
+    http.get({hostname:'127.0.0.1',port:restartPort,path:'/api/status',
+     headers:{Cookie:persistentCookie}},r=>{r.resume();r.on('end',()=>resolve(r.statusCode))}).on('error',reject);
+   });
+   for(let attempt=0;attempt<100;attempt++){
+    try{if(await status()===200)break}catch{}
+    await new Promise(resolve=>setTimeout(resolve,50));
+   }
+   assert.equal(await status(),200,'Encrypted private sessions survive Render restarts');
+   // Rotating the private password should invalidate previously issued cookies.
+   const rotatedPort=port+3;
+   const rotated=spawn(process.execPath,['pilot/server.cjs'],{
+    cwd:path.resolve(__dirname,'..'),
+    env:{...env,PORT:String(rotatedPort),PILOT_PASSWORD:pass+'-rotated'},
+    stdio:'ignore'
+   });
+   try{
+    const rotatedStatus=()=>new Promise((resolve,reject)=>{
+     http.get({hostname:'127.0.0.1',port:rotatedPort,path:'/api/status',
+      headers:{Cookie:persistentCookie}},r=>{
+      r.resume();r.on('end',()=>resolve(r.statusCode));
+     }).on('error',reject);
+    });
+    for(let attempt=0;attempt<100;attempt++){
+     try{if(await rotatedStatus()===401)break}catch{}
+     await new Promise(resolve=>setTimeout(resolve,50));
+    }
+    assert.equal(await rotatedStatus(),401,
+     'Changing the private password revokes every older 90-day session');
+   }finally{rotated.kill()}
+  }finally{restarted.kill()}
+  console.log('PASS private 90-day login, per-device logout, encrypted persistence, health and crash protection');
  }finally{child.kill();fs.rmSync(dir,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});

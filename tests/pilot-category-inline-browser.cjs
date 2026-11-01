@@ -29,6 +29,12 @@ let desktop,iphone;
    viewport:name==='Chromium'?{width:1280,height:900}:{width:390,height:844},
    httpCredentials:{username:'pilot',password:pass}
   });
+  // Since the private site now has a first-party sign-in page instead of
+  // issuing a Basic challenge, send the existing fictional Basic credentials
+  // proactively to the LOCAL test server only. Never forward auth to CDNs.
+  await context.route('http://127.0.0.1:'+port+'/**',route=>
+   route.continue({headers:{...route.request().headers(),
+    authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}}));
   const page=await context.newPage(),errors=[];
   let classifierRequests=0;
   page.on('pageerror',error=>errors.push(error.message));

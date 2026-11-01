@@ -64,6 +64,12 @@ async function atomicEncryptedWrite(filename,value){
 async function save(){
  await atomicEncryptedWrite(file,state);
 }
+// Session records are separately encrypted and persisted on the existing
+// private disk. Never store passwords, bank data or raw bearer IDs there.
+const auth=require('./session-auth.cjs')({
+ password:env.PILOT_PASSWORD,secret:key,sessionFile:file+'.sessions',
+ decrypted,atomicEncryptedWrite
+});
 // One small encrypted write per forecast edit. The full encrypted bank ledger
 // is neither touched nor read, and concurrent browser saves are serialized.
 async function saveForecast(predictions,expectedRevision){
@@ -221,6 +227,7 @@ function schedulePrepared(){
 }
 async function start(port=Number(env.PORT||8788)){
  await load();
+ await auth.load();
  const server=http.createServer(async(req,res)=>{
   // Route on the URL pathname; tracking/query parameters are not bank actions.
   const requestPath=new URL(req.url,'http://localhost').pathname;
@@ -249,12 +256,75 @@ async function start(port=Number(env.PORT||8788)){
    ok:true,mode:'multi-account-private',
    commit:/^[a-f0-9]{40}$/i.test(String(env.RENDER_GIT_COMMIT||''))?env.RENDER_GIT_COMMIT:null
   });
-  const expected=Buffer.from('pilot:'+env.PILOT_PASSWORD).toString('base64');
-  const provided=String(req.headers.authorization||'').replace(/^Basic /,'');
-  const equal=provided.length===expected.length&&crypto.timingSafeEqual(Buffer.from(provided),Buffer.from(expected));
-  if(!equal){res.writeHead(401,{'WWW-Authenticate':'Basic realm="Private bank pilot"','Cache-Control':'no-store'});return res.end('Authentication required')}
   const origin=req.headers.origin,host=req.headers.host;
-  if(origin&&new URL(origin).host!==host)return respond(403,{error:'Origin rejected'});
+  // Reject cross-origin writes including sign in/out. Other mutations also
+  // require the existing non-simple X-Pilot-Action header.
+  if(origin){
+   try{if(new URL(origin).host!==host)return respond(403,{error:'Origin rejected'})}
+   catch{return respond(403,{error:'Origin rejected'})}
+  }
+  if(req.method==='GET'&&requestPath==='/login'){
+   let loginPage;
+   try{loginPage=await fs.readFile(path.join(__dirname,'login.html'),'utf8')}
+   catch{return respond(503,{error:'Private sign-in page is temporarily unavailable'})}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
+    'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
+    'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+   return res.end(loginPage);
+  }
+  if(req.method==='POST'&&requestPath==='/auth/login'){
+   if(req.headers['x-pilot-action']!=='1'||!String(req.headers['content-type']||'').startsWith('application/json'))
+    return respond(403,{error:'Invalid sign-in request'});
+   const ip=String(req.socket.remoteAddress||'unknown');
+   if(auth.blocked(ip))return respond(429,{error:'Too many attempts. Try again later.'});
+   let data;
+   try{
+    let length=0,parts=[];
+    for await(const part of req){length+=part.length;if(length>4096)return respond(413,{error:'Sign-in request too large'});parts.push(part)}
+    data=JSON.parse(Buffer.concat(parts).toString());
+   }catch{return respond(400,{error:'Invalid sign-in request'})}
+   if(!data||typeof data.password!=='string'||Object.keys(data).length!==1||!auth.checkPassword(data.password)){
+    auth.failed(ip);return respond(401,{error:'Invalid password'});
+   }
+   let token;
+   try{token=await auth.issue()}
+   catch{return respond(503,{error:'Could not start a secure session. Try signing in again.'})}
+   auth.successful(ip);
+   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
+    'X-Content-Type-Options':'nosniff','Set-Cookie':[auth.cookie(token),auth.clearSignedOut(),auth.upgradedCookie()]});
+   return res.end(JSON.stringify({signedIn:true,expiresInDays:90}));
+  }
+  if(req.method==='POST'&&requestPath==='/auth/logout'){
+   if(req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
+   try{await auth.revoke(req)}
+   catch{return respond(503,{error:'Could not confirm sign out. Try again.'})}
+   // A signed-out browser may still hold its former Basic credentials in
+   // browser memory. The tombstone prevents silent Basic reauthentication.
+   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
+    'X-Content-Type-Options':'nosniff','Set-Cookie':[auth.clearCookie(),auth.signedOutCookie()]});
+   return res.end(JSON.stringify({signedOut:true}));
+  }
+  const expected=Buffer.from('pilot:'+env.PILOT_PASSWORD).toString('base64');
+  const supplied=String(req.headers.authorization||'').replace(/^Basic /,'');
+  const basic=supplied.length===expected.length&&crypto.timingSafeEqual(Buffer.from(supplied),Buffer.from(expected));
+  // Compatibility with previously cached browser HTTP Basic credentials and
+  // existing API clients. Only a first-party session gives 90-day persistence.
+  const cookieSession=auth.authenticated(req);
+  const basicAuthorized=basic&&!auth.isSignedOut(req)&&!auth.wasUpgraded(req);
+  if(!cookieSession&&!basicAuthorized){
+   if(req.method==='GET'&&!requestPath.startsWith('/api/')){
+    res.writeHead(303,{'Location':'/login','Cache-Control':'no-store'});return res.end();
+   }
+   return respond(401,{error:'Sign in to your private Ledger to continue'});
+  }
+  // Upgrade an existing password-authenticated browser automatically on
+  // its next page load; do not force the household to enter a new password.
+  let upgradeCookie=null;
+  if(!cookieSession&&basicAuthorized&&req.method==='GET'&&
+     (requestPath==='/'||requestPath==='/index.html')){
+   try{upgradeCookie=[auth.cookie(await auth.issue()),auth.clearSignedOut(),auth.upgradedCookie()]}
+   catch{ /* A transient session-disk failure must not take down the bank UI. */ }
+  }
   if(req.method==='GET'&&requestPath==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
   const staticPath=requestPath.slice(1);
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js|manifest[.]webmanifest|ledger-icon[.]png)$/;
@@ -290,7 +360,8 @@ async function start(port=Number(env.PORT||8788)){
      '<script src="/pilot/data-source.js"></script>');
     body=Buffer.from(page);
    }
-   res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.png')?'image/png':name.endsWith('.webmanifest')?'application/manifest+json':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com"});
+   res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.png')?'image/png':name.endsWith('.webmanifest')?'application/manifest+json':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com",
+   ...(upgradeCookie?{'Set-Cookie':upgradeCookie}:{})});
    return res.end(body);
   }
   if(req.method==='GET'&&requestPath==='/api/ledger'){
