@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-10-31 (Pacific)  
+**Updated:** 2026-11-01 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -23,7 +23,9 @@ Product priorities:
 
 **Banking safety:** Preserve the current GitHub, Plaid and private Render architecture. Actual source transactions/balances remain authoritative and unchanged by editable predictions. Do not use public fictional Demo data as if it were real bank data. This repository is public: do not put actual financial records, private amounts, authentication details, or private user messages in this ledger.
 
-## Current state (reviewed October 31, 2026)
+## Current state (reviewed November 1, 2026)
+
+- **2026-11-01 selected-day iPhone row layout — CODE READY; PR/CI PENDING:** Corrected a conflict between the universal four-column transaction grid and the calendar's hidden date cell: selected-day predictions now use merchant, amount, action columns, remove the redundant row date, and permit two-line payee names at narrow widths. Scoped CSS plus stylesheet cache revision and fictional 320px/390px Chromium/iPhone WebKit assertions; no prediction/accounting changes. Release and live private Render revision remain unverified until independent checks.
 
 - **2026-10-31 90-day private sign-in — MERGED; BANKING/BROWSER CI PASSED; PRIVATE RENDER UNVERIFIED:** [PR #447](https://github.com/markbobthomas/household-ledger/pull/447) merged into `main` as `668cac83c97d4e68e9f84b1f7e33cf265e73cd22`. The existing private password now issues fixed 90-day, host-only Secure/HttpOnly/SameSite=Lax cookies, backed by revocable encrypted per-device session hashes on the existing Render disk. Sign out revokes just that device; password rotation invalidates old sessions; cached Basic cannot bypass expiry; legacy Basic clients upgrade on private homepage GET. New login form and Settings Sign out do not touch bank facts or forecasts. Fictional [banking safety #41280266109](https://github.com/markbobthomas/household-ledger/actions/runs/41280266109) and [desktop Chromium/iPhone WebKit #41280266105](https://github.com/markbobthomas/household-ledger/actions/runs/41280266105) passed. The browser fixtures were updated to send legacy Basic test credentials only to the private localhost origin, not external Plaid CDN. No private Render revision or iPhone production cookie persistence is independently verified here. This supersedes the earlier pending implementation entry.
 
@@ -2529,3 +2531,11 @@ User approved recommendations #2–#5 (not #1). Feature PR #263 merged into main
 - [PR #447](https://github.com/markbobthomas/household-ledger/pull/447) was squash merged at `668cac83c97d4e68e9f84b1f7e33cf265e73cd22`, including `pilot/session-auth.cjs`, `pilot/login.html`, private server authentication endpoints, Settings sign-out and regression fixtures. Final fictional banking/forecast CI [#41280266109](https://github.com/markbobthomas/household-ledger/actions/runs/41280266109) and full Chromium/iPhone WebKit interaction CI [#41280266105](https://github.com/markbobthomas/household-ledger/actions/runs/41280266105) passed at tested head `fb7416504a07ec31716be700da2b0aa5425740da`.
 - Bank/account facts, Plaid authorization, encryption keys, persisted source transactions, forecast math, and live infrastructure are unchanged. Sign-in session records use a separate encrypted file on the existing private disk. Origin/action-header protections remain; SameSite=Lax permits ordinary external bank-OAuth return navigation. Expired/revoked sessions and browsers with upgraded legacy Basic credentials must reauthenticate.
 - **Deployment:** GitHub source merge is confirmed. Public Pages and the existing private Render live deployed SHA are distinct statuses, not proven by these PR checks. Verify `/healthz` on the existing live Render deployment and compare its commit to current main; do not recreate the live service or change its secrets/disk.
+
+## 2026-11-01 — Prevent overlapping selected-day predictions on narrow iPhones
+
+- **Observed defect:** On the selected calendar day, merchant labels and signed amounts ran into one another at phone width; the row date was repeated even though the date is already in the selected-day heading.
+- **Root cause:** A later universal `.ledger-transaction-row` style enforced four grid tracks and set the hidden date back to `display:block`, overriding older calendar-specific two/three-track declarations. Long payees and currency values were compressed into the same visible space.
+- **Implementation:** `planner.css` adds highly scoped selected-day grid overrides with exactly three visible tracks (merchant, signed amount, edit chevron), hides the duplicate row date, reserves a full-width, nonwrapping signed amount, and allows up to two lines for long merchant names on phones. `index.html` changes the stylesheet revision to make updated CSS visible on cached phones. `tests/planner-prepared-navigation-browser.cjs` adds synthetic long-name/amount geometry assertions for 320px and 390px viewports in Chromium and iPhone WebKit. Other transaction tables retain their original four columns.
+- **Banking/privacy safety:** Visual-only CSS and layout regression; no bank facts, forecast math, scheduled payments, duplicate detection, credentials, persistent settings, or private Render configuration changed. No sensitive user balances/transactions placed in repository.
+- **Release:** Branch `fix/calendar-selected-day-mobile-columns-20261101`; automated checks, PR merge and separately verified private deployment pending. Record test run IDs, PR/commit and release evidence in a follow-up entry after verification.
