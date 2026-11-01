@@ -2582,10 +2582,8 @@ function historyPage(bundle,s){
   const tools=window.HouseholdPlannerTransactions,
    matches=tools.historicalScheduleMatches(t,accounts,savedRules),
    ambiguous=matches.length>1,kind=tools.bankDirection(t),
-   predicted=projections.some(r=>r.kind==='event'&&String(r.id||'').startsWith('auto|')&&
-    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
-    tools.recurrenceKey(aid,kind,r.sourceMerchant)===
-     tools.recurrenceKey(aid,kind,t.merchant||t.name)),
+   predicted=autoKeys.has(JSON.stringify([aid,kind,
+    tools.recurrenceKey(aid,kind,t.merchant||t.name)])),
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
    status=matches.length?'confirmed':predicted?'automatic':'unplanned',
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
