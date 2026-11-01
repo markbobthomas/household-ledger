@@ -45,6 +45,13 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     httpCredentials:{username:'pilot',password:pass}});
    await ctx.route('https://cdn.plaid.com/**',route=>route.fulfill({
     status:200,contentType:'application/javascript',body:'window.Plaid={create(){return {open(){}}}};'}));
+   // The private service now shows a password page rather than emitting a
+   // Basic challenge. Proactively send the EXISTING test credentials only to
+   // the local private server to cover legacy-client migration safely.
+   // Do not send Authorization headers to Plaid CDN or other origins.
+   await ctx.route('http://127.0.0.1:'+port+'/**',route=>
+    route.continue({headers:{...route.request().headers(),
+     authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}}));
    const page=await ctx.newPage();
    page.on('dialog',d=>d.accept());
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
