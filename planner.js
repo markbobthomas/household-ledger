@@ -3716,7 +3716,7 @@ document.addEventListener('click',async e=>{
    historySelectedMonths=new Set([snapshot().asOf.slice(0,7)]);
   else historySelectedMonths=new Set([...document.querySelectorAll('[data-history-month-option]')]
    .map(input=>input.value));
-  historyLimit=90;render();
+  historyLimit=90;renderHistoryFilters();
   document.querySelector(monthShortcut.hasAttribute('data-history-month-current')?
    '[data-history-month-current]':'[data-history-month-all]')?.focus({preventScroll:true});
   return;
@@ -5071,7 +5071,7 @@ document.addEventListener('change',e=>{
   else if(historySelectedMonths.size>1)historySelectedMonths.delete(month);
   else{monthCheckbox.checked=true;return}
   const scroll=monthCheckbox.closest('[data-history-month-list]')?.scrollTop||0;
-  historyLimit=90;render();
+  historyLimit=90;renderHistoryFilters();
   const monthList=document.querySelector('[data-history-month-list]');
   if(monthList)monthList.scrollTop=scroll;
   document.querySelector('[data-history-month-option][value="'+month+'"]')?.focus({preventScroll:true});
@@ -5269,7 +5269,7 @@ async function saveBudgetCategoryOrder(){
   historyBudgetMessage='Could not save category order. Try again.';
  }finally{
   historyCategoryOrderBusy=false;
-  render();
+  renderHistoryFilters();
  }
 }
 document.addEventListener('pointerdown',e=>{
@@ -5352,7 +5352,7 @@ document.addEventListener('change',async e=>{
    const result=await savePlanning();
    if(live()&&(!result||result.saved!==true))throw Error('Budget save was not confirmed');
    historyBudgetMessage='Monthly budget saved';
-   render();
+   renderHistoryFilters();
    if(managerWasOpen){
     const manager=document.querySelector('[data-history-category-manager]');
     if(manager)manager.open=true;
