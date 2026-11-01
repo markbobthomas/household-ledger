@@ -2112,8 +2112,7 @@ function historyInsights(rows,view,options={}){
     spent=budgetUsedCents(g)/100,totalBudget=monthly*periodMonths,
     over=budgetOver(g),
     percent=!set?0:totalBudget>0?Math.max(0,Math.min(100,spent/totalBudget*100)):over?100:0,
-    description=set?cash(spent)+((g.pendingCount||0)?' including pending of ':
-     g.expectedCount?' spent + expected of ':' spent of ')+cash(totalBudget)+' budget for '+g.name+
+    description=set?cash(spent)+(g.expectedCount?' spent + expected of ':' spent of ')+cash(totalBudget)+' budget for '+g.name+
      (periodMonths>1?' over '+periodMonths+' months':' this month')+
      (over?' (over budget)':''):
      'No monthly budget set for '+g.name;
@@ -2125,8 +2124,7 @@ function historyInsights(rows,view,options={}){
     '" title="'+escapeHTML(description)+'" style="--budget-used:'+percent.toFixed(2)+'%">'+
     '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span>'+
     '<strong class="history-category-actual'+(over?' over':'')+
-    '" data-budget-marker title="'+escapeHTML(cash(g.cents/100)+' posted · '+
-     cash((g.pendingCents||0)/100)+' pending · '+
+    '" data-budget-marker title="'+escapeHTML(cash((g.cents+(g.pendingCents||0))/100)+' spent · '+
      cash((g.expectedCents||0)/100)+' expected')+'">'+cash(spent)+'</strong></span>';
   };
   const budgetSummary=allAccounts?
@@ -2139,19 +2137,18 @@ function historyInsights(rows,view,options={}){
      '<div class="history-budget-summary-track'+(totalBudgetPercent>100?' over':'')+
       '" role="img" aria-label="'+escapeHTML(
        cash(usedCents/100)+' of '+cash(totalBudgetCents/100)+
-       ' budget used, including unbudgeted category spending, posted and pending purchases and predictions, '+Math.round(totalBudgetPercent)+
+       ' budget used, including unbudgeted category spending and predictions, '+Math.round(totalBudgetPercent)+
        ' percent')+'">'+
       '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>':
     '';
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   const spendingOverview='<div class="history-spending-overview" aria-label="'+
-   escapeHTML(cash(usedCents/100)+' budget usage: '+cash(postedCents/100)+' posted, '+
-    cash(pendingCents/100)+' pending, '+cash(expectedCents/100)+' expected')+'">'+
+   escapeHTML(cash(usedCents/100)+' budget usage: '+cash((postedCents+pendingCents)/100)+
+    ' spent, '+cash(expectedCents/100)+' expected')+'">'+
     '<strong>'+cash(usedCents/100)+
-     (pendingCents?' spent + pending + expected':expectedCents?' spent + expected':' spent')+'</strong>'+
-    '<span>'+n+' transactions'+(pendingCount?' ('+(n-pendingCount)+' posted · '+pendingCount+' pending)':'')+
-     ((expectedCents||pendingCents)?' · '+cash(postedCents/100)+' spent'+
-      (pendingCents?' · '+cash(pendingCents/100)+' pending':'')+
+     (expectedCents?' spent + expected':' spent')+'</strong>'+
+    '<span>'+n+' transaction'+(n===1?'':'s')+
+     ((expectedCents||pendingCents)?' · '+cash((postedCents+pendingCents)/100)+' spent'+
       (expectedCents?' · '+cash(expectedCents/100)+' expected':''):'')+'</span></div>';
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<div class="history-category-panel-heading">'+spendingOverview+
@@ -2194,8 +2191,8 @@ function historyInsights(rows,view,options={}){
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
-      '<small>'+(g.count+(g.pendingCount||0))+' transactions'+
-       (g.pendingCount?' · '+g.pendingCount+' pending':'')+
+      '<small>'+(g.count+(g.pendingCount||0))+' transaction'+
+       (g.count+(g.pendingCount||0)===1?'':'s')+
        (g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button></div>'+ 
      budgetBar(g)+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+

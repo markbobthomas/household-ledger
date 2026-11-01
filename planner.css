@@ -6330,7 +6330,7 @@ a:hover{color:#166e61}
  gap:3px 10px;margin:0!important;
 }
 .history-page .history-category-panel-heading>.history-spending-overview>strong{
- white-space:nowrap;
+ white-space:normal;
 }
 .history-page .history-category-panel-heading>.history-category-manager{
  flex:0 0 auto;margin-left:auto;
