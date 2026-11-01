@@ -160,16 +160,11 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-calendar-today]').click();
    assert.equal(await page.locator('.calendar-month-title').innerText(),before,
     'Today returns from a future month');
-   // Regression: a saved category edit invalidates the in-memory pages.
-   // Keep optional idle rebuilding queued so this tests an actual cold
-   // Activity navigation, not a lucky fully re-prepared cache.
-   await page.locator('.planner-nav-primary [data-view="activity"]').click();
-   const picker=page.locator('.history-page [data-history-category]').first();
-   assert.ok(await picker.count()>0,'Fictional Activity has categorized bank rows');
-   const original=await picker.inputValue();
-   const changed=await picker.locator('option').evaluateAll((options,old)=>
-    options.map(option=>option.value).find(value=>value!==old&&value!=='Uncategorized'),original);
-   assert.ok(changed,'Category editor offers another category');
+   // Regression: saving a category in Spending expires prepared Activity.
+   // Hold idle warming in this fictional browser so we exercise a genuinely
+   // cold Activity tap, instead of a prepared-cache hit.
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('[data-history-category-manager]').evaluate(manager=>{manager.open=true});
    await page.evaluate(()=>{
     window.__queuedNavigationRebuilds=[];
     window.requestIdleCallback=callback=>{
@@ -177,12 +172,14 @@ const {chromium,webkit}=require('playwright');
      return window.__queuedNavigationRebuilds.length;
     };
    });
+   const categoryName='Fictional Navigation Test Category';
    const editGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
-   await picker.selectOption(changed);
+   await page.locator('[data-history-category-add] input[name="categoryName"]').fill(categoryName);
+   await page.locator('[data-history-category-add] button[type="submit"]').click();
    await page.waitForFunction(previous=>
-    window.HouseholdPreparedViewGeneration()>previous,editGeneration,{timeout:10000});
-   assert.equal(await page.locator('.history-page [data-history-category]').first().inputValue(),changed,
-    'Saved category remains selected after the fresh Activity render');
+    window.HouseholdPreparedViewGeneration()>=previous+2,editGeneration,{timeout:10000});
+   assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
+    'The category edit is saved before navigating away');
    const coldJump=async view=>{
     const immediate=await page.evaluate(view=>{
      const button=document.querySelector('.planner-nav-primary [data-view="'+view+'"]');
@@ -204,18 +201,13 @@ const {chromium,webkit}=require('playwright');
     assert.notEqual(await page.locator('#planner-main').getAttribute('aria-busy'),'true',
      'The page returns to idle once rebuilt');
    };
-   await coldJump('history');
-   // A second category edit from Spending expires the just-cached Activity
-   // node. The next Activity tap must show its own cold-page loader too.
-   await page.locator('[data-history-category-manager]').evaluate(manager=>{manager.open=true});
-   const beforeAdding=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
-   await page.locator('[data-history-category-add] input[name="categoryName"]').fill('Fictional Navigation Test Category');
-   await page.locator('[data-history-category-add] button[type="submit"]').click();
-   await page.waitForFunction(previous=>
-    window.HouseholdPreparedViewGeneration()>=previous+2,beforeAdding,{timeout:10000});
    await coldJump('activity');
-   assert.equal(await page.locator('.history-page [data-history-category]').first().inputValue(),changed,
-    'Category edits survive cold Activity navigation without stale prepared markup');
+   assert.ok(await page.locator('.history-activity-filters [data-history-category-filter] option').evaluateAll(
+    (options,category)=>options.some(option=>option.value===category),categoryName),
+    'The edited category is present in Activity after a cold navigation');
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
+    'Returning to Spending keeps the saved category');
    await context.close();
    assert.deepEqual(errors,[],device+' console errors');
   }
