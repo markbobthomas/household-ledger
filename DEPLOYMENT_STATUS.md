@@ -104,3 +104,10 @@ authentication changes are included.
 The private Render dashboard, disk snapshot inventory, service plan and live
 deployed revision cannot be certified solely from GitHub or a successful
 public GitHub Pages action. Mark them *unverified* until inspected directly.
+
+## Private 90-day session rollout (implementation pending verification)
+
+- The private backend has a new password-based sign-in screen at `/login`. On successful sign in, the existing long password is exchanged for a per-device 90-day, Secure, HttpOnly, SameSite=Strict, host-only cookie. Only a hashed session identifier and expiration are kept on the existing encrypted private disk beside the bank state; the browser holds no bank data or password in localStorage.
+- Settings provides Sign out. It revokes only that device's session, including across server restarts. Other household devices stay signed in. A prior Basic-authenticated browser is offered a session cookie on its next Ledger page load; a signed-out marker prevents cached Basic credentials from silently reopening the app. Existing Basic authorization remains temporarily accepted when no signed-out marker is present, to avoid breaking old clients.
+- A fixed absolute 90-day expiration applies even if Ledger is used daily. The server rejects expired/revoked cookies. Password attempts are rate limited; all existing protected API/asset routes remain guarded.
+- **Rollout boundary:** This source change requires the existing private Render service to deploy the new revision before browsers can use it. Do not alter the existing Render disk, encryption key, Plaid setup, or server configuration. Independently check the live `/healthz` commit against the merged GitHub SHA; a source merge or published demo alone is not proof of live private deployment.
