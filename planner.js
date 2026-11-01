@@ -3268,6 +3268,7 @@ const preparedDestinations=['history','schedules','activity','reviews','settings
 window.HouseholdPreparedViewStatus=()=>[...preparedViews.keys()]
  .filter(name=>Boolean(preparedViews.get(name)?.element));
 let preparedEpoch=0,preparedContext=null,preparedNotice=null;
+window.HouseholdPreparedViewGeneration=()=>preparedEpoch;
 function invalidatePreparedViews(){
  preparedEpoch++;preparedViews.clear();preparedContext=null;preparedNotice=null;
 }
