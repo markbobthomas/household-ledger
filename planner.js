@@ -4459,6 +4459,12 @@ async function commitForecastChange(action){
   const saved=await savePlanning();
   if(live()&&(!saved||saved.saved!==true))throw Error('The predicted transaction was not saved. Please try again.');
   const after=JSON.stringify(current.predictions||{});
+  // A saved forecast edit changes financial authority. Expire derived pages
+  // without locking navigation or discarding the visible editor.
+  if(before!==after){
+   forecastCache=null;preparedEpoch++;preparedViews.clear();
+   preparedContext=null;preparedNotice=null;
+  }
   // Do not offer to undo a previous bank snapshot, or a now-stale edit.
   if(operation===forecastSaveSequence){
    lastForecastUndo=current===state()&&before!==after?{source:current,before,after}:null;
