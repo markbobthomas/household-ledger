@@ -149,7 +149,7 @@ async function refresh(){
    error.code=result?.code||'';throw error;
   }
   const updated=prepare(await request(''));
-  host.enterReal(updated.state,updated.snapshot);
+  host.enterReal(updated.state,updated.snapshot,updated.preparedForecast);
   loadedAccount=updated.account;
   lastError=updated.reconnectAccounts.length?reconnectMessage:'';
  }catch(e){
