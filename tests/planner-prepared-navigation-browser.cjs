@@ -205,6 +205,14 @@ const {chromium,webkit}=require('playwright');
      'The page returns to idle once rebuilt');
    };
    await coldJump('history');
+   // A second category edit from Spending expires the just-cached Activity
+   // node. The next Activity tap must show its own cold-page loader too.
+   await page.locator('[data-history-category-manager]').evaluate(manager=>{manager.open=true});
+   const beforeAdding=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
+   await page.locator('[data-history-category-add] input[name="categoryName"]').fill('Fictional Navigation Test Category');
+   await page.locator('[data-history-category-add] button[type="submit"]').click();
+   await page.waitForFunction(previous=>
+    window.HouseholdPreparedViewGeneration()>=previous+2,beforeAdding,{timeout:10000});
    await coldJump('activity');
    assert.equal(await page.locator('.history-page [data-history-category]').first().inputValue(),changed,
     'Category edits survive cold Activity navigation without stale prepared markup');
