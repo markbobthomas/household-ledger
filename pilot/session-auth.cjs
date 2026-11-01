@@ -7,6 +7,7 @@ const fs=require('node:fs/promises');
 const TTL=90*24*60*60*1000;
 const COOKIE='__Host-ledger_session';
 const SIGNED_OUT='__Host-ledger_signed_out';
+const UPGRADED='__Host-ledger_upgraded';
 const expiryHeader='Path=/; Secure; HttpOnly; SameSite=Strict';
 module.exports=function createSessionAuth({password,secret,sessionFile,decrypted,atomicEncryptedWrite}){
  const hmacKey=crypto.createHmac('sha256',secret).update('ledger-session-id-v1').digest();
@@ -28,6 +29,10 @@ module.exports=function createSessionAuth({password,secret,sessionFile,decrypted
   return !!(id&&entries.get(id)>Date.now());
  }
  function isSignedOut(req){return cookieValue(req,SIGNED_OUT)==='1'}
+ function wasUpgraded(req){return cookieValue(req,UPGRADED)==='1'}
+ // This marker outlives the session. A browser with previously cached Basic
+ // credentials must still re-enter its password when its 90-day cookie expires.
+ function upgradedCookie(){return UPGRADED+'=1; Max-Age=31536000; '+expiryHeader}
  function cookie(token){return COOKIE+'='+token+'; Max-Age='+String(TTL/1000)+'; '+expiryHeader}
  function clearCookie(){return COOKIE+'=; Max-Age=0; '+expiryHeader}
  function signedOutCookie(){return SIGNED_OUT+'=1; Max-Age='+String(TTL/1000)+'; '+expiryHeader}
@@ -89,5 +94,6 @@ module.exports=function createSessionAuth({password,secret,sessionFile,decrypted
   if(id&&entries.has(id))await mutate(()=>entries.delete(id));
  }
  return {TTL,COOKIE,authenticated,isSignedOut,cookie,clearCookie,
-  signedOutCookie,clearSignedOut,checkPassword,blocked,failed,successful,issue,revoke,load};
+  signedOutCookie,clearSignedOut,upgradedCookie,wasUpgraded,
+  checkPassword,blocked,failed,successful,issue,revoke,load};
 };
