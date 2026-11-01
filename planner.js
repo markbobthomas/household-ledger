@@ -3291,7 +3291,10 @@ function settingsPage(bundle,s,chosen){
    (available()?'<section class="panel" aria-label="Share Ledger"><div class="section-title"><h2>Share Ledger</h2></div>'+
     '<p>Use this same private website on both phones to see the same household data. Send the link privately; the password must be shared separately.</p>'+
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
-    '<p>To make it an iPhone app: open the link in Safari, tap Share, then Add to Home Screen. An internet connection is required.</p></section>':'')+'</div>';
+    '<p>To make it an iPhone app: open the link in Safari, tap Share, then Add to Home Screen. An internet connection is required.</p></section>':'')+
+   (available()?'<section class="panel" aria-label="Private sign-in"><div class="section-title"><h2>Sign-in</h2></div>'+
+    '<p>This device stays signed in for up to 90 days. Signing out only ends this device’s session.</p>'+
+    '<button type="button" class="btn" data-ledger-signout>Sign out</button></section>':'')+'</div>';
 }
 // Prepared views live only in this tab's memory. Never put real account data,
 // markup or forecasts into localStorage, Cache Storage or a service worker.
@@ -3682,6 +3685,20 @@ document.addEventListener('submit',async e=>{
  }catch(err){
   button.disabled=false;
   if(status){status.textContent='Not saved: '+String(err.message||err);status.setAttribute('role','alert')}
+ }
+});
+document.addEventListener('click',async e=>{
+ const button=e.target.closest?.('[data-ledger-signout]');
+ if(!button)return;
+ button.disabled=true;
+ try{
+  const response=await fetch('/auth/logout',{method:'POST',credentials:'same-origin',
+   cache:'no-store',headers:{'X-Pilot-Action':'1'}});
+  if(!response.ok)throw Error('Sign out could not be confirmed');
+  window.location.replace('/login');
+ }catch(error){
+  button.disabled=false;
+  setNotice('Could not sign out. Check your connection and try again.');
  }
 });
 document.addEventListener('click',async e=>{
