@@ -2568,6 +2568,13 @@ function historyPage(bundle,s){
  if(displayView==='list'){
  const savedRules=state().predictions?.futureRecurringRules||[];
  const projections=futureRows(bundle,s);
+ // Build the automatic forecast lookup once instead of scanning every
+ // three-year prediction for each visible bank transaction.
+ const autoKeys=new Set(projections.filter(r=>
+  r.kind==='event'&&String(r.id||'').startsWith('auto|')).map(r=>
+   JSON.stringify([String(r.sourceAccountId||r.accountId),r.sourceType,
+    window.HouseholdPlannerTransactions.recurrenceKey(
+     r.sourceAccountId||r.accountId,r.sourceType,r.sourceMerchant)])));
  const rowMarkup=visible.map(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
