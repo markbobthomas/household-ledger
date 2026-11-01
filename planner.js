@@ -3331,7 +3331,8 @@ function activatePreparedView(view,from,fromHistoryView){
  // lists on every navigation. A non-Budget Spending subsection is not its
  // landing view: preserve the already prepared Budget landing instead.
  if(from&&from!==view&&preparedDestinations.includes(from)&&
-    !(from==='history'&&fromHistoryView!=='categories')&&root.firstElementChild){
+    !(from==='history'&&fromHistoryView!=='categories')&&root.firstElementChild&&
+    !root.firstElementChild.classList.contains('navigation-loading')){
   preparedViews.set(from,{element:root.firstElementChild,epoch:preparedEpoch});
  }
  preparedViews.delete(view);
