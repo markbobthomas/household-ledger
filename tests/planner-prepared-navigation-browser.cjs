@@ -152,6 +152,8 @@ const {chromium,webkit}=require('playwright');
    await assertCheapFilter('This-month selection');
    await page.locator('.history-activity-filters input[name="search"]').fill('fictional-never-match-987654');
    await page.locator('.history-activity-filters input[name="search"]').press('Enter');
+   assert.equal(await page.locator('.history-activity-filters [data-history-month-menu]').isHidden(),true,
+    'Submitting Activity search closes the month overlay so Clear is clickable');
    assert.equal(await page.locator('.history-entry').count(),0,'Search must filter visible records');
    await assertCheapFilter('Search submit');
    await page.locator('[data-clear-history-search]').click();
