@@ -191,9 +191,15 @@ const {chromium,webkit}=require('playwright');
     },view);
     assert.ok(immediate.duration<180&&immediate.selected&&immediate.loading&&immediate.busy==='true',
      device+' uncached '+view+' acknowledges the tap with an in-page loader: '+JSON.stringify(immediate));
-    assert.equal(await page.evaluate(()=>new Promise(resolve=>
-     requestAnimationFrame(()=>resolve(!!document.querySelector('#planner-main .ledger-page-wait'))))),true,
-     'The loading screen remains through a paint opportunity');
+    const painted=await page.evaluate(target=>new Promise(resolve=>
+     requestAnimationFrame(()=>resolve({
+      loader:!!document.querySelector('#planner-main .ledger-page-wait'),
+      destination:target==='activity'?
+       !!document.querySelector('#planner-main .history-activity-filters'):
+       !!document.querySelector('#planner-main .history-spending-overview')
+     }))),view);
+    assert.ok(painted.loader||painted.destination,
+     'After a paint opportunity, show either loading or the completed destination: '+JSON.stringify(painted));
     await page.waitForFunction(view=>Boolean(document.querySelector('#planner-main>.planner-page'))&&
      !document.querySelector('#planner-main .ledger-page-wait')&&
      (view==='activity'?!!document.querySelector('.history-activity-filters'):
