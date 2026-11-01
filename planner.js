@@ -3289,7 +3289,7 @@ window.HouseholdAllViewsReady=()=>preparedReady;
 function preparationProgress(count){
  const loading=$('planner-loading');
  if(!loading)return;
- loading.hidden=false;
+ loading.hidden=Boolean($('planner-main')?.querySelector('.planner-page'));
  const shell=document.querySelector('main.shell');
  if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
  const progress=$('planner-loading-progress');
