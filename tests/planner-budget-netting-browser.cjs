@@ -89,7 +89,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
          id:'fictional-early-bill-'+i,type:'expense',
          date:'2026-10-'+String(20+i).padStart(2,'0'),
          merchant:'Fictional Earlier Bill '+i,amount:10+i,
-         accountId:'demo-checking'
+         accountId:'demo-checking',...(i===0?{category:'Uncategorized'}:{})
         }))
        ]
       };
@@ -105,7 +105,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
        // An October Sunday pending Visa purchase still belongs to October
        // Budget, not Friday's shifted forecast or the later posting date.
        {...extra('ui-weekend-pending-card','2026-10-18','Fictional Weekend Hardware',90,
-        'House & Maintenance','expense','demo-visa',90),pending:true},
+        'Uncategorized','expense','demo-visa',90),pending:true},
        {...extra('ui-pending-card-payment','2026-10-18','Credit card payment',220,
         'Shopping','expense','demo-checking',220),pending:true},
        extra('ui-card-health','2026-10-09','Fictional Clinic',100,'Health',
@@ -164,9 +164,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': refund this month reduces Budget even when purchase was last month');
    assert.equal(await category('Shopping'),'$141.73',
     name+': disguised $100 repayment does not add to checking-side category spending');
-   assert.equal(await category('House & Maintenance'),'$90.00',
-    name+': a Sunday pending card purchase appears in its bank-date month as provisional Budget usage');
-   const provisional=await page.locator('[data-history-category-row="House & Maintenance"]').innerText();
+   assert.equal(await category('Uncategorized'),'$100.00',
+    name+': Unassigned includes the provisional bank purchase and expected forecast');
+   const provisional=await page.locator('[data-history-category-row="Uncategorized"]').innerText();
    assert.match(provisional,/1 transaction\b/,
     name+': A provisional purchase remains counted as a Budget transaction');
    assert.doesNotMatch(provisional,/\bpending\b/i,
@@ -190,6 +190,27 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': October Budget includes six remaining dated bills without guessing shopping');
    assert.equal(centsOf(budgetUsed),centsOf(parts[1])+centsOf(parts[2]),
     name+': Budget totals remain the sum of spent (posted plus pending) and expected');
+   const unassigned=page.locator('[data-history-category-row="Uncategorized"]');
+   assert.match(await unassigned.locator('.history-category-name').innerText(),/Unassigned/,
+    name+': internal Uncategorized is shown as Unassigned');
+   await unassigned.locator('[data-history-drill-category]').click();
+   const details=unassigned.locator('[data-history-budget-details]');
+   assert.equal(await details.isVisible(),true,
+    name+': clicking Unassigned expands its own matching Budget transactions');
+   assert.equal(await details.locator('[data-budget-source="spent"]').count(),1,
+    name+': bank purchase appears even while provisional');
+   assert.equal(await details.locator('[data-budget-source="expected"]').count(),1,
+    name+': future predicted expense appears without pretending to be posted');
+   assert.match(await details.innerText(),/Fictional Weekend Hardware/);
+   assert.match(await details.innerText(),/Fictional Earlier Bill 0/);
+   const itemizedCents=await details.locator('[data-budget-cents]').evaluateAll(rows=>
+    rows.reduce((sum,row)=>sum+Number(row.dataset.budgetCents),0));
+   assert.equal(itemizedCents,centsOf(await category('Uncategorized')),
+    name+': itemized Unassigned amounts reconcile exactly to the Budget total');
+   assert.equal(await page.locator('[data-history-category-insights]').count(),1,
+    name+': Budget category expansion does not switch to posted-only Activity');
+   await unassigned.locator('[data-history-drill-category]').click();
+   assert.equal(await details.isHidden(),true,name+': category details can be collapsed');
    assert.doesNotMatch(await page.locator('[data-history-category-insights]').evaluate(el=>
     el.innerText+' '+[...el.querySelectorAll('[aria-label],[title]')].map(node=>
      (node.getAttribute('aria-label')||'')+' '+(node.getAttribute('title')||'')).join(' ')),
@@ -406,8 +427,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.ok(await page.locator('[data-history-category-row="Entertainment"]').isVisible(),
     name+': refunds still appear as signed spending in the full-width Budget list');
    await page.locator('[data-history-category-row="Entertainment"] [data-history-drill-category]').click();
-   assert.equal(await page.locator('[data-history-entry="ui-later-refund"]').count(),1,
-    name+': drilling into net-negative category finds the posted refund');
+   assert.equal(await page.locator('[data-history-category-row="Entertainment"] [data-budget-cents="-2500"]').isVisible(),true,
+    name+': drilling into net-negative category reveals the posted refund');
    assert.deepEqual(errors,[],name+': no browser exceptions in Budget');
    await context.close();
   }
