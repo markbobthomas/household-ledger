@@ -1,5 +1,5 @@
 'use strict';
-// All fixtures are fictional. Prepared DOM never persists outside this browser tab.
+// All fixtures are fictional. Visited DOM never persists outside this browser tab.
 const assert=require('node:assert/strict'),path=require('node:path');
 const {spawn}=require('node:child_process');
 const {chromium,webkit}=require('playwright');
@@ -30,11 +30,11 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('#planner-loading').count(),1,
     'Initial load has a full-screen preparation gate');
    const initialMonth=await page.locator('.calendar-month-title').innerText();
-   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.()&&
-    ['summary','history','schedules','activity','reviews','settings','transactions','trend']
-    .every(name=>window.HouseholdPreparedViewStatus().includes(name)),null,{timeout:35000});
+   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.(),null,{timeout:35000});
    assert.equal(await page.locator('#planner-loading').isHidden(),true,
-    'Navigation is enabled only after all eight main pages have been prepared');
+    'Main navigation is unlocked after only the visible page is ready');
+   assert.deepEqual(await page.evaluate(()=>window.HouseholdPreparedViewStatus()),['summary'],
+    'Do not eagerly construct seven unvisited financial pages');
    assert.equal(await page.locator('.summary-page').count(),1,
     'Preparation never replaces the visible Home calendar');
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
@@ -45,15 +45,22 @@ const {chromium,webkit}=require('playwright');
      const begin=performance.now();
      button.click();
      return {elapsed:performance.now()-begin,
+      selected:button.classList.contains('active'),
+      waiting:Boolean(document.querySelector('#planner-main .ledger-page-wait')),
       visible:document.querySelector('#planner-main>.planner-page')?.className,
       ready:window.HouseholdAllViewsReady(),
       generation:window.HouseholdPreparedViewGeneration()};
     },view);
-    assert.ok(result.visible?.includes(expected),
-     'Prepared '+view+' is displayed synchronously: '+JSON.stringify(result));
-    assert.equal(result.ready,true,'Ready gate stays released during pure navigation');
+    assert.ok(result.selected,'A tab must acknowledge its click synchronously: '+view);
     assert.ok(result.elapsed<180,
-     device+' prepared '+view+' should switch without full data processing: '+JSON.stringify(result));
+     device+' acknowledgment must not run forecast or heavy view rendering: '+JSON.stringify(result));
+    if(!result.visible?.includes(expected))
+     assert.equal(result.waiting,true,'Uncached '+view+' shows a loading state on the selected page');
+    await page.waitForFunction(expected=>
+     Boolean(document.querySelector('#planner-main>.planner-page')?.className.includes(expected))&&
+     !document.querySelector('#planner-main .ledger-page-wait'),expected,{timeout:30000});
+    assert.equal(await page.locator('.ledger-page-wait').count(),0,
+     'The page-local loader is removed once destination appears');
    };
    await jump('history','history-page');
    const budget=await page.locator('.history-spending-overview strong').innerText();
