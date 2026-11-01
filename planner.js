@@ -4010,7 +4010,9 @@ document.addEventListener('click',async e=>{
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
     !window.confirm('Discard unsaved payment changes?'))return;
   const previousHistoryView=historyView;
-  historyView=historyTab.dataset.historyView;historyMonthPickerOpen=false;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
+  historyView=historyTab.dataset.historyView;historyMonthPickerOpen=false;
+  if(previousHistoryView==='summary'&&historyView!=='summary')
+   historyMonthFutureExtent=0;historySizeFilter=-1;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=false;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
   recurringDraft=null;transactionDetail=null;renderHistorySubview(previousHistoryView);return;
  }
@@ -4084,6 +4086,10 @@ document.addEventListener('click',async e=>{
  if(view){
   if(!preparedReady)return;
   const previousTab=activeTab,previousHistoryView=historyView;
+  // The Summary can offer twelve future months; those optional unchecked
+  // choices must not remain in the Activity/Budget month picker afterward.
+  if(previousTab==='history'&&previousHistoryView==='summary')
+   historyMonthFutureExtent=0;
   // Budget is the Bank History landing view when the main destination opens.
   // Keep the user's selected calendar months and account.
   if(['history','activity','recap'].includes(view.dataset.view)){
