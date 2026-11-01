@@ -2442,6 +2442,14 @@ function updateHistorySelectionSummary(){
  if(total)total.textContent='Net total: '+(cents<0?'−':cents>0?'+':'')+cash(Math.abs(cents)/100);
  if(clear)clear.hidden=checked.length===0;
 }
+function historyRecords(s){
+ if(historyDataCache&&historyDataCache.source===state()&&historyDataCache.asOf===s.asOf)
+  return historyDataCache.records;
+ const records=model.records(state()).filter(t=>t.date&&t.date<=s.asOf);
+ historyDataCache={source:state(),asOf:s.asOf,records};
+ workStats.historyNormalizations++;
+ return records;
+}
 // Spending navigation reflects the user's questions, not implementation modules.
 // The existing Summary stays read-only and uses the unchanged canonical totals.
 function spendingTabNav(active){
