@@ -2461,6 +2461,7 @@ function spendingTabNav(active){
    .join('')+'</nav>';
 }
 function historyPage(bundle,s){
+ workStats.historyPageBuilds++;
  if(activeTab==='history'&&historyView==='summary')return '<div class="planner-page history-page spending-summary-page">'+
   '<div class="history-view-toolbar">'+spendingTabNav('summary')+'</div>'+
   financialRecapPage(bundle,s)+'</div>';
