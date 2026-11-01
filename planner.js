@@ -2468,7 +2468,7 @@ function historyPage(bundle,s){
  const accounts=activeAccounts(s),
   // Read the current category overrides directly. The derived forecast is
   // independently cached and must never be the authority for Budget totals.
-  records=model.records(state()).filter(x=>x.date&&x.date<=s.asOf)
+  records=historyRecords(s)
   .map(t=>({...t,category:
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
