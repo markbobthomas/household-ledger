@@ -88,7 +88,7 @@ let desktop,iphone;
   await page.reload({waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK'||
    document.querySelector('#planner-notice')?.textContent?.includes('Real bank information is not available yet'),null,{timeout:30000});
-  assert.equal(await page.locator('#source-type').innerText(),'REAL BANK',
+  assert.equal(await page.locator('#source-type').textContent(),'REAL BANK',
    name+': real mode loads bank data after its model is available');
   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.(),null,{timeout:35000});
   assert.equal(await page.locator('.summary-page').count(),1,
