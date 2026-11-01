@@ -2467,14 +2467,15 @@ function historyPage(bundle,s){
   financialRecapPage(bundle,s)+'</div>';
  const displayView=activeTab==='activity'?'list':historyView;
  const accounts=activeAccounts(s),
+  rawRecords=historyRecords(s),
   // Read the current category overrides directly. The derived forecast is
   // independently cached and must never be the authority for Budget totals.
-  records=historyRecords(s)
+  records=historyDataCache.displayRecords||(historyDataCache.displayRecords=rawRecords
   .map(t=>({...t,category:
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
     model.canonicalCategory(state(),t.category)||t.category||'Other'}))
-  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),
+  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)))),
   // Both filters and row editors consult the same canonical category registry.
   // Effective provider labels are included as read-only observed names; they
   // are not saved as duplicate registry entries.
