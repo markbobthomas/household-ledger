@@ -4919,6 +4919,9 @@ document.addEventListener('submit',async e=>{
  e.preventDefault();
  const fields=Object.fromEntries(new FormData(form));
  historySearch=String(fields.search||'').trim().slice(0,100);
+ // Submitting a search should dismiss the month popover: otherwise it can
+ // overlay the Clear button and trap subsequent taps on narrow screens.
+ historyMonthPickerOpen=false;
  historyAccount=String(fields.historyAccount||'all');
  historyCategoryFilter=String(fields.historyCategory||'');
  historySort=['newest','oldest','amount-desc','amount-asc','merchant','category']
