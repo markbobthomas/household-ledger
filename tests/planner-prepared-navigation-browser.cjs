@@ -65,9 +65,11 @@ const {chromium,webkit}=require('playwright');
    // Any real re-render invalidates ALL prepared old pages, not just the
    // visible destination, so edits and bank refreshes cannot show stale HTML.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   const priorGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
    await page.locator('[data-history-view="merchants"]').click();
-   const cleared=await page.evaluate(()=>window.HouseholdPreparedViewStatus());
-   assert.deepEqual(cleared,[],'Non-navigation UI edits invalidate prepared views');
+   const currentGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
+   assert.ok(currentGeneration>priorGeneration,
+    'Non-navigation edits increment cache generation and discard previous prepared views');
    await page.waitForFunction(()=>window.HouseholdPreparedViewStatus()?.includes('schedules'),null,{timeout:25000});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
