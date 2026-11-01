@@ -390,10 +390,10 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.history-page select[name="historyAccount"]').inputValue(),'all',
     'Budget shortcut clears account mismatch only when explicitly requested');
    const updated=await page.locator('[data-history-category-row="Utilities"] [data-budget-marker]').innerText();
-   assert.match(updated,/459\\.43/,
+   assert.match(updated,/459\.43/,
     device+': saved category increases October Utilities posted spending exactly once');
    const groceries=await page.locator('[data-history-category-row="Groceries"] [data-budget-marker]').innerText();
-   assert.match(groceries,/200\\.40/,
+   assert.match(groceries,/200\.40/,
     device+': original October Groceries category no longer includes recategorized purchase');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
