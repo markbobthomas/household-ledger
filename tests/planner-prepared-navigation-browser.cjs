@@ -181,25 +181,22 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
     'The category edit is saved before navigating away');
    const coldJump=async view=>{
-    const immediate=await page.evaluate(view=>{
+    const immediate=await page.evaluate(async view=>{
      const button=document.querySelector('.planner-nav-primary [data-view="'+view+'"]');
      const start=performance.now();button.click();
-     return {duration:performance.now()-start,
+     const instant={duration:performance.now()-start,
       selected:button.classList.contains('active'),
       busy:document.querySelector('#planner-main')?.getAttribute('aria-busy'),
       loading:!!document.querySelector('#planner-main .ledger-page-wait')};
+     // Observe the first frame in the same click task, so the driver cannot
+     // check a later frame after the destination has already finished.
+     instant.frameLoading=await new Promise(resolve=>
+      requestAnimationFrame(()=>resolve(!!document.querySelector('#planner-main .ledger-page-wait'))));
+     return instant;
     },view);
-    assert.ok(immediate.duration<180&&immediate.selected&&immediate.loading&&immediate.busy==='true',
-     device+' uncached '+view+' acknowledges the tap with an in-page loader: '+JSON.stringify(immediate));
-    const painted=await page.evaluate(target=>new Promise(resolve=>
-     requestAnimationFrame(()=>resolve({
-      loader:!!document.querySelector('#planner-main .ledger-page-wait'),
-      destination:target==='activity'?
-       !!document.querySelector('#planner-main .history-activity-filters'):
-       !!document.querySelector('#planner-main .history-spending-overview')
-     }))),view);
-    assert.ok(painted.loader||painted.destination,
-     'After a paint opportunity, show either loading or the completed destination: '+JSON.stringify(painted));
+    assert.ok(immediate.duration<180&&immediate.selected&&immediate.loading&&
+     immediate.busy==='true'&&immediate.frameLoading,
+     device+' uncached '+view+' selects and paints a local loader: '+JSON.stringify(immediate));
     await page.waitForFunction(view=>Boolean(document.querySelector('#planner-main>.planner-page'))&&
      !document.querySelector('#planner-main .ledger-page-wait')&&
      (view==='activity'?!!document.querySelector('.history-activity-filters'):
