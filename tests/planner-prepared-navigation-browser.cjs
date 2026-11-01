@@ -160,6 +160,57 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-calendar-today]').click();
    assert.equal(await page.locator('.calendar-month-title').innerText(),before,
     'Today returns from a future month');
+   // Regression: saving a category in Spending expires prepared Activity.
+   // Hold idle warming in this fictional browser so we exercise a genuinely
+   // cold Activity tap, instead of a prepared-cache hit.
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.locator('[data-history-category-manager]').evaluate(manager=>{manager.open=true});
+   await page.evaluate(()=>{
+    window.__queuedNavigationRebuilds=[];
+    window.requestIdleCallback=callback=>{
+     window.__queuedNavigationRebuilds.push(callback);
+     return window.__queuedNavigationRebuilds.length;
+    };
+   });
+   const categoryName='Fictional Navigation Test Category';
+   const editGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
+   await page.locator('[data-history-category-add] input[name="categoryName"]').fill(categoryName);
+   await page.locator('[data-history-category-add] button[type="submit"]').click();
+   await page.waitForFunction(previous=>
+    window.HouseholdPreparedViewGeneration()>=previous+2,editGeneration,{timeout:10000});
+   assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
+    'The category edit is saved before navigating away');
+   const coldJump=async view=>{
+    const immediate=await page.evaluate(async view=>{
+     const button=document.querySelector('.planner-nav-primary [data-view="'+view+'"]');
+     const start=performance.now();button.click();
+     const instant={duration:performance.now()-start,
+      selected:button.classList.contains('active'),
+      busy:document.querySelector('#planner-main')?.getAttribute('aria-busy'),
+      loading:!!document.querySelector('#planner-main .ledger-page-wait')};
+     // Observe the first frame in the same click task, so the driver cannot
+     // check a later frame after the destination has already finished.
+     instant.frameLoading=await new Promise(resolve=>
+      requestAnimationFrame(()=>resolve(!!document.querySelector('#planner-main .ledger-page-wait'))));
+     return instant;
+    },view);
+    assert.ok(immediate.duration<180&&immediate.selected&&immediate.loading&&
+     immediate.busy==='true'&&immediate.frameLoading,
+     device+' uncached '+view+' selects and paints a local loader: '+JSON.stringify(immediate));
+    await page.waitForFunction(view=>Boolean(document.querySelector('#planner-main>.planner-page'))&&
+     !document.querySelector('#planner-main .ledger-page-wait')&&
+     (view==='activity'?!!document.querySelector('.history-activity-filters'):
+      !!document.querySelector('.history-spending-overview')),view,{timeout:30000});
+    assert.notEqual(await page.locator('#planner-main').getAttribute('aria-busy'),'true',
+     'The page returns to idle once rebuilt');
+   };
+   await coldJump('activity');
+   assert.ok(await page.locator('.history-activity-filters [data-history-category-filter] option').evaluateAll(
+    (options,category)=>options.some(option=>option.value===category),categoryName),
+    'The edited category is present in Activity after a cold navigation');
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
+    'Returning to Spending keeps the saved category');
    await context.close();
    assert.deepEqual(errors,[],device+' console errors');
   }

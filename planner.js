@@ -3286,7 +3286,8 @@ let preparedEpoch=0,preparedContext=null,preparedNotice=null,preparedReady=false
 let initialPreparationComplete=false,warmingEpoch=-1;
 window.HouseholdPreparedViewStatus=()=>[
  ...preparedViews.keys()].filter(name=>Boolean(preparedViews.get(name)?.element))
- .concat(preparedReady&&preparedDestinations.includes(activeTab)?[activeTab]:[]);
+ .concat(preparedReady&&preparedDestinations.includes(activeTab)&&
+  $('planner-main')?.firstElementChild?.classList?.contains('planner-page')?[activeTab]:[]);
 window.HouseholdPreparedViewGeneration=()=>preparedEpoch;
 window.HouseholdPreparedSpendingStatus=()=>[
  ...preparedHistoryViews.keys()].filter(name=>Boolean(preparedHistoryViews.get(name)?.element))
@@ -3330,6 +3331,16 @@ function pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData){
   activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
    summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
    (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
+}
+// After initial startup, run offscreen rebuilds only in idle opportunities.
+// Building a long Activity list is synchronous, so a chain of zero-delay
+// timers could otherwise compete with the next tap after category edits.
+function queuePreparationStep(next){
+ if(initialPreparationComplete){
+  if(typeof window.requestIdleCallback==='function'){
+   window.requestIdleCallback(next,{timeout:400});
+  }else setTimeout(next,50);
+ }else setTimeout(next,0);
 }
 // Prepare every top-level page and every Spending subsection behind the
 // opening curtain. Each step yields to the browser so the spinner and
@@ -3394,9 +3405,9 @@ function warmPreparedViews(context){
   }
   completed++;
   preparationProgress(completed);
-  setTimeout(next,0);
+  queuePreparationStep(next);
  };
- setTimeout(next,0);
+ queuePreparationStep(next);
 }
 function activatePreparedView(view,from,fromHistoryView){
  const entry=preparedViews.get(view),root=$('planner-main');
