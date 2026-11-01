@@ -6470,3 +6470,27 @@ a:hover{color:#166e61}
   text-align:left!important;
  }
 }
+
+/* Itemized Budget drilldown: reuses visible posted/provisional and expected totals. */
+.history-page .history-budget-details{
+ grid-column:1/-1;display:flex;flex-direction:column;min-width:0;
+ border-top:1px solid #e5ece8;padding:3px 3px 2px 28px;
+}
+.history-page .history-budget-details[hidden]{display:none}
+.history-page .history-budget-detail-row{
+ display:grid;grid-template-columns:62px minmax(0,1fr) max-content;
+ align-items:center;gap:9px;padding:9px 5px;
+ border-bottom:1px solid #eef2ef;font-size:12px;
+}
+.history-page .history-budget-detail-row:last-child{border-bottom:0}
+.history-page .history-budget-detail-date{color:#697c72;white-space:nowrap}
+.history-page .history-budget-detail-name{min-width:0;overflow-wrap:anywhere}
+.history-page .history-budget-detail-name strong{font-weight:600}
+.history-page .history-budget-detail-name small{display:block;color:#718477;font-size:10px}
+.history-page .history-budget-detail-amount{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.history-page .history-category-drill[aria-expanded="true"] .history-category-name{text-decoration:underline;text-underline-offset:2px}
+.history-page .history-category-drill:disabled{cursor:default}
+@media(max-width:650px){
+ .history-page .history-budget-details{grid-row:3;padding-left:3px}
+ .history-page .history-budget-detail-row{grid-template-columns:49px minmax(0,1fr) max-content;gap:6px;font-size:11px}
+}
