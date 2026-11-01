@@ -70,6 +70,65 @@
 <script src="planner-core.js?v=prediction-review-labels-v1"></script>
 <script src="planner-coverage.js?v=retired-renderers-20261028-v1"></script>
 <script src="planner-summary.js?v=shown-month-low-20261031-v1"></script>
+<style>
+/* A tab click is visible even while a fresh set of views is rebuilding. */
+#planner-main{position:relative}
+.ledger-page-wait{position:absolute;inset:0;z-index:5;min-height:220px;background:#fff;
+ display:flex;justify-content:center;align-items:center;gap:12px;color:#344b43;font-weight:650}
+.ledger-page-wait:before{content:"";width:20px;height:20px;border-radius:50%;
+ border:3px solid #dce7df;border-top-color:#238b74;animation:ledger-wait .7s linear infinite}
+@keyframes ledger-wait{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ledger-page-wait:before{animation:none}}
+</style>
+<script>
+/* Acknowledge navigation before the app's optional eight-view warmup finishes.
+   No financial data is duplicated or stored; the original nav handler remains
+   the only authority that renders a prepared page. */
+(function(){
+ const shell=document.querySelector('main.shell');
+ const root=document.getElementById('planner-main');
+ const splash=document.getElementById('planner-loading');
+ let wanted=null,sequence=0;
+ function unlockVisiblePage(){
+  if(!root.querySelector('.planner-page'))return;
+  if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
+  if(splash)splash.style.display='none';
+ }
+ new MutationObserver(unlockVisiblePage).observe(root,{childList:true,subtree:false});
+ document.addEventListener('click',function(event){
+  const button=event.target.closest?.('[data-view]');
+  if(!button||window.HouseholdAllViewsReady?.()!==false)return;
+  // Until the existing warmup finishes, keep the tab interactive and visible.
+  event.preventDefault();event.stopImmediatePropagation();
+  const view=button.dataset.view,id=++sequence;
+  wanted={view,button};
+  document.querySelectorAll('[data-view]').forEach(tab=>{
+   const selected=tab.dataset.view===view;
+   tab.classList.toggle('active',selected);
+   if(selected)tab.setAttribute('aria-current','page');
+   else tab.removeAttribute('aria-current');
+  });
+  root.querySelector('.ledger-page-wait')?.remove();
+  const placeholder=document.createElement('div');
+  placeholder.className='ledger-page-wait';
+  placeholder.setAttribute('role','status');
+  placeholder.textContent='Loading '+(button.textContent.trim()||'page')+'…';
+  root.appendChild(placeholder);
+  if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
+  if(splash)splash.style.display='none';
+  const replay=()=>{
+   if(id!==sequence||!wanted)return;
+   if(window.HouseholdAllViewsReady?.()){
+    wanted=null;placeholder.remove();
+    // Original listener owns actual rendering and financial state.
+    button.click();
+   }else setTimeout(replay,35);
+  };
+  setTimeout(replay,35);
+ },true);
+ unlockVisiblePage();
+})();
+</script>
 <script src="planner.js?v=server-prepared-forecast-20261031-v1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
