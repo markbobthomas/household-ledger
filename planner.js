@@ -3291,7 +3291,7 @@ function preparationProgress(count){
  if(!loading)return;
  loading.hidden=false;
  const shell=document.querySelector('main.shell');
- if(shell){shell.inert=true;shell.setAttribute('aria-busy','true')}
+ if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
  const progress=$('planner-loading-progress');
  if(progress)progress.textContent='Preparing '+count+' of '+preparedDestinations.length+' views…';
 }
