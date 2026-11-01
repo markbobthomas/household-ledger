@@ -3260,7 +3260,116 @@ function settingsPage(bundle,s,chosen){
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
     '<p>To make it an iPhone app: open the link in Safari, tap Share, then Add to Home Screen. An internet connection is required.</p></section>':'')+'</div>';
 }
+// Prepared views live only in this tab's memory. Never put real account data,
+// markup or forecasts into localStorage, Cache Storage or a service worker.
+const preparedViews=new Map();
+const preparedDestinations=['history','schedules','activity','reviews','settings','transactions'];
+// Safe diagnostic: page names only; never expose account data or snapshots.
+window.HouseholdPreparedViewStatus=()=>[...preparedViews.keys()]
+ .filter(name=>Boolean(preparedViews.get(name)?.element));
+let preparedEpoch=0,preparedContext=null,preparedNotice=null;
+window.HouseholdPreparedViewGeneration=()=>preparedEpoch;
+function invalidatePreparedViews(){
+ preparedEpoch++;preparedViews.clear();preparedContext=null;preparedNotice=null;
+}
+function pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData){
+ return activeTab==='settings'?settingsPage(bundle,s,selectedSource):
+  (activeTab==='history'||activeTab==='activity')?historyPage(bundle,s):
+  activeTab==='recap'?financialRecapPage(bundle,s):
+  activeTab==='schedules'?schedulesPage(bundle,s):
+  activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
+  activeTab==='transactions'?transactionsPage(bundle,s):
+  activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
+   summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
+   (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
+}
+function warmPreparedViews(context){
+ if(!context||typeof document.createElement!=='function'||!$('planner-main')?.replaceChildren)return;
+ const epoch=preparedEpoch;
+ const work=()=>{
+  if(epoch!==preparedEpoch||preparedContext!==context)return;
+  const view=preparedDestinations.find(name=>name!==activeTab&&!preparedViews.has(name));
+  if(!view)return;
+  // Run only one destination per idle period, preserving responsive calendar
+  // taps and keeping preloading entirely off the current visible DOM.
+  // Preload the same initial month the first normal Spending visit uses,
+  // but never allow offscreen month-picker rendering to mutate a live menu.
+  if(!historySelectedMonths)historySelectedMonths=new Set([context.s.asOf.slice(0,7)]);
+  const before=activeTab,historyBefore=historyView,
+   categoryBefore=historyCategoryFilter,sizeBefore=historySizeFilter,
+   merchantBefore=historyMerchantFilter,drillBefore=historyPurchaseDrill,
+   monthBefore=historyMonthPickerOpen,futureExtentBefore=historyMonthFutureExtent,
+   selectedMonthsBefore=new Set(historySelectedMonths);
+  try{
+   activeTab=view;
+   if(view==='history'||view==='activity'){
+    historyView=view==='history'?'categories':'list';
+    historyCategoryFilter='';historySizeFilter=-1;
+    historyMerchantFilter='';historyPurchaseDrill=false;
+    historyMonthPickerOpen=false;
+   }
+   const html=pageMarkup(context.bundle,context.s,context.selectedSource,
+    context.derived,context.fresh,context.reviewData);
+   const template=document.createElement('template');
+   template.innerHTML=html;
+   const element=template.content.firstElementChild;
+   if(element&&epoch===preparedEpoch)preparedViews.set(view,{element,epoch});
+  }catch(_error){
+   // A failed preload must never interfere with a normally rendered page.
+   // Normal navigation remains the reliable fallback.
+   preparedViews.set(view,{element:null,epoch});
+  }finally{
+   activeTab=before;historyView=historyBefore;
+   historyCategoryFilter=categoryBefore;historySizeFilter=sizeBefore;
+   historyMerchantFilter=merchantBefore;historyPurchaseDrill=drillBefore;
+   historyMonthPickerOpen=monthBefore;
+   historyMonthFutureExtent=futureExtentBefore;
+   // The picker can remove unavailable months while building HTML. Its
+   // offscreen copy must never alter actual month selections mid-interaction.
+   historySelectedMonths.clear();
+   for(const month of selectedMonthsBefore)historySelectedMonths.add(month);
+  }
+  if(epoch===preparedEpoch)enqueue();
+ };
+ const enqueue=()=>{
+  if(epoch!==preparedEpoch)return;
+  if(typeof window.requestIdleCallback==='function')
+   window.requestIdleCallback(work,{timeout:1600});
+  else if(typeof setTimeout==='function')setTimeout(work,80);
+ };
+ enqueue();
+}
+function activatePreparedView(view){
+ const entry=preparedViews.get(view),root=$('planner-main');
+ if(!entry?.element||entry.epoch!==preparedEpoch||!root?.replaceChildren||
+    !preparedNotice||requestedReal()&&!live())return false;
+ preparedViews.delete(view);
+ root.replaceChildren(entry.element);
+ document.querySelectorAll('[data-view]').forEach(button=>{
+  const current=button.dataset.view===view;
+  button.classList.toggle('active',current);
+  if(current)button.setAttribute('aria-current','page');
+  else button.removeAttribute('aria-current');
+ });
+ $('audit-launch').hidden=view!=='settings';
+ const n=preparedNotice;
+ $('planner-notice').innerHTML=n.bankWarning||
+  (n.informational||view==='summary'&&!n.error&&!n.latestError?'':n.note);
+ for(const form of root.querySelectorAll('form:has([data-history-link])')){
+  if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples)
+   form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
+  updateHistoryLinks(form);
+ }
+ for(const form of root.querySelectorAll('[data-card-rule]'))configureCardFields(form);
+ if(view==='schedules')applyScheduleSearch(root);
+ if(view==='history'||view==='activity')updateHistorySelectionSummary();
+ if(preparedContext)warmPreparedViews(preparedContext);
+ return true;
+}
 function render({navigationOnly=false}={}){
+ // Any full render, even an uncached navigation, gets a fresh coherent set.
+ // Prepared-page activations bypass render() altogether.
+ invalidatePreparedViews();
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
  if(!root)return;
  const s=busy?{asOf:dateToday(),accounts:[]}:snapshot();
@@ -3360,15 +3469,7 @@ function render({navigationOnly=false}={}){
  const cashProjection=(derived?.series||[]).filter(x=>x.date<=shiftDay(s.asOf,horizon));
  let important=(derived?.events||[]).filter(e=>['expense','transfer_out'].includes(e.kind));
  const income=(derived?.events||[]).filter(e=>['income','transfer_in'].includes(e.kind));
- root.innerHTML=activeTab==='settings'?settingsPage(bundle,s,selectedSource):
-  (activeTab==='history'||activeTab==='activity')?historyPage(bundle,s):
-  activeTab==='recap'?financialRecapPage(bundle,s):
-  activeTab==='schedules'?schedulesPage(bundle,s):
-  activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
-  activeTab==='transactions'?transactionsPage(bundle,s):
-  activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
-   summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
-   (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
+ root.innerHTML=pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData);
  for(const form of (typeof root.querySelectorAll==='function'?
   root.querySelectorAll('form:has([data-history-link])'):[])){
   if(form.hasAttribute('data-history-recurring-form')&&recurringDraft?.examples){
@@ -3381,6 +3482,11 @@ function render({navigationOnly=false}={}){
  drawTransactionDetail(bundle,s);
  if(activeTab==='schedules')applyScheduleSearch(root);
  if(activeTab==='history'||activeTab==='activity')updateHistorySelectionSummary();
+ preparedNotice={bankWarning,note,informational,error,latestError};
+ if(bundle?.projection&&selectedSource&&!transactionDetail){
+  preparedContext={bundle,s,selectedSource,derived,fresh,reviewData};
+  warmPreparedViews(preparedContext);
+ }
 }
 document.addEventListener('submit',async e=>{
  const form=e.target.closest?.('[data-transaction-note-form]');
@@ -3414,8 +3520,15 @@ document.addEventListener('submit',async e=>{
     trigger.setAttribute('aria-label','Edit note for '+(trigger.dataset.noteName||'transaction'));
    });
   }
-  if(status)status.textContent='Saved';
+  // This editor updates visible subtitles without a full render; discard
+  // any prebuilt views so they never display the previous note.
+  const currentContext=preparedContext;
+  invalidatePreparedViews();
+  // Notes are saved without rebuilding the active editor. Refresh only
+  // inactive pages using the new in-memory note state.
+  if(currentContext){preparedContext=currentContext;warmPreparedViews(currentContext)}
   button.disabled=false;
+  if(status)status.textContent='Saved';
  }catch(err){
   button.disabled=false;
   if(status){status.textContent='Not saved: '+String(err.message||err);status.setAttribute('role','alert')}
@@ -3877,7 +3990,7 @@ document.addEventListener('click',async e=>{
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
-  render({navigationOnly:true});
+  if(!activatePreparedView(activeTab))render({navigationOnly:true});
   if(view.dataset.focusTarget)document.querySelector(view.dataset.focusTarget)?.scrollIntoView?.({block:'center',behavior:'instant'});
   // Tab navigation should not animate the global header's position.
   // 'auto' inherits html's smooth scrolling and briefly shifts the header.
