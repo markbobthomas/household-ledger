@@ -73,7 +73,7 @@ const request=(route,body,authorized=true)=>new Promise((resolve,reject)=>{
   const first=await request('/api/ledger');
   assert.equal(first.status,200);
   assert.equal(first.headers['cache-control'],'no-store','No bank data browser disk cache');
-  assert.deepEqual(first.data.preparedForecast.bundle,browser);
+  assert.deepEqual(first.data.preparedForecast.bundle,JSON.parse(JSON.stringify(browser)));
   assert.equal(first.data.preparedForecast.asOf,asOf);
   assert.equal(first.data.preparedForecast.version,worker.VERSION);
   const same=await request('/api/ledger');
