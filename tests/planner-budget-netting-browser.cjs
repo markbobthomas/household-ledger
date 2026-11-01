@@ -165,7 +165,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await category('Shopping'),'$141.73',
     name+': disguised $100 repayment does not add to checking-side category spending');
    assert.equal(await category('House & Maintenance'),'$90.00',
-    name+': Sunday's pending card purchase appears in its bank-date month as provisional Budget usage');
+    name+': a Sunday pending card purchase appears in its bank-date month as provisional Budget usage');
    const provisional=await page.locator('[data-history-category-row="House & Maintenance"]').innerText();
    assert.match(provisional,/1 pending/,
     name+': Budget labels the bank transaction pending rather than posted');
