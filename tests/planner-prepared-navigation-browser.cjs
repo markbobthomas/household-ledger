@@ -32,26 +32,30 @@ const {chromium,webkit}=require('playwright');
    const initialMonth=await page.locator('.calendar-month-title').innerText();
    await page.waitForFunction(()=>window.HouseholdAllViewsReady?.(),null,{timeout:35000});
    assert.equal(await page.locator('#planner-loading').isHidden(),true,
-    'Main navigation is unlocked after only the visible page is ready');
-   assert.deepEqual(await page.evaluate(()=>window.HouseholdPreparedViewStatus()),['summary'],
-    'Do not eagerly construct seven unvisited financial pages');
+    'The opening curtain is removed after all financial pages are prepared');
+   assert.deepEqual(await page.evaluate(()=>window.HouseholdPreparedViewStatus().sort()),
+    ['activity','history','reviews','schedules','settings','summary','transactions','trend'],
+    'All eight destinations must be ready before the opening curtain closes');
+   assert.deepEqual(await page.evaluate(()=>window.HouseholdPreparedSpendingStatus().sort()),
+    ['merchants','sizes','summary'],
+    'Merchants, Purchase Sizes and Spending Summary must also be prepared at startup');
    assert.equal(await page.locator('.summary-page').count(),1,
     'Preparation never replaces the visible Home calendar');
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
     'Background preparation never changes the selected calendar month');
-   // A second tap during the first page's loading state must cancel the
-   // older destination. The latest user choice always wins.
+   // Every destination is already prepared. Rapid repeated taps should
+   // swap cached DOM without a page loader; the latest selection wins.
    const rapid=await page.evaluate(()=>{
     document.querySelector('.planner-nav-primary [data-view="activity"]').click();
     const loader=Boolean(document.querySelector('#planner-main .ledger-page-wait'));
     document.querySelector('.planner-nav-primary [data-view="summary"]').click();
     return {loader,summarySelected:document.querySelector('.planner-nav-primary [data-view="summary"]').classList.contains('active')};
    });
-   assert.equal(rapid.loader,true,'Uncached Activity shows loading immediately');
+   assert.equal(rapid.loader,false,'Prepared Activity must switch without a loading indicator');
    assert.equal(rapid.summarySelected,true,'Second Home tap is acknowledged immediately');
    await page.waitForTimeout(100);
    assert.equal(await page.locator('.summary-page').count(),1,
-    'A canceled earlier Activity load must not replace the last selected Home page');
+    'Rapid cached Activity/Home switches must leave the latest selected page visible');
    assert.equal(await page.locator('.ledger-page-wait').count(),0);
    const jump=async (view,expected)=>{
     const result=await page.evaluate(view=>{
@@ -98,6 +102,24 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),beforeRepeatedNav,
     'Repeated navigation reuses prepared nodes without invalidating or regenerating them');
 
+   // Pure internal pane changes must be instant after the opening warmup.
+   // All three are rendered before the first tap, not rebuilt on selection.
+   await page.locator('.planner-nav-primary [data-view="history"]').click();
+   const spendingEpoch=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
+   for(const pane of ['merchants','sizes','summary','categories']){
+    const result=await page.evaluate(pane=>{
+     const button=document.querySelector('[data-history-view="'+pane+'"]');
+     const begin=performance.now();
+     button.click();
+     return {elapsed:performance.now()-begin,
+      selected:document.querySelector('[data-history-view="'+pane+'"]')?.getAttribute('aria-pressed'),
+      active:document.querySelector('.history-page')?.className,
+      prepared:window.HouseholdPreparedSpendingStatus()};
+    },pane);
+    assert.ok(result.elapsed<180,device+' Spending switch should reuse cached DOM: '+JSON.stringify(result));
+    assert.equal(result.selected,'true','The selected Spending pane is acknowledged: '+pane);
+    assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),spendingEpoch);
+   }
    // Pure internal pane changes must not restart the expensive preparation
    // cycle or stall an unrelated main tab.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
