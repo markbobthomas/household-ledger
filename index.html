@@ -140,12 +140,12 @@
   // A task immediately after a paint frame lets Safari/Chromium paint the
   // newly selected tab and spinner BEFORE any expensive Activity markup.
   if(typeof requestAnimationFrame==='function'&&document.visibilityState!=='hidden')
-   requestAnimationFrame(()=>setTimeout(replay,0));
+   requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(replay,0)));
   else setTimeout(replay,35);
  },true);
 })();
 </script>
-<script src="planner.js?v=activity-loading-after-edit-20261031-v1"></script>
+<script src="planner.js?v=activity-loading-after-edit-20261031-v2"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>
