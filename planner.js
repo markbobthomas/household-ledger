@@ -3292,10 +3292,14 @@ function warmPreparedViews(context){
   if(!view)return;
   // Run only one destination per idle period, preserving responsive calendar
   // taps and keeping preloading entirely off the current visible DOM.
+  // Preload the same initial month the first normal Spending visit uses,
+  // but never allow offscreen month-picker rendering to mutate a live menu.
+  if(!historySelectedMonths)historySelectedMonths=new Set([context.s.asOf.slice(0,7)]);
   const before=activeTab,historyBefore=historyView,
    categoryBefore=historyCategoryFilter,sizeBefore=historySizeFilter,
    merchantBefore=historyMerchantFilter,drillBefore=historyPurchaseDrill,
-   monthBefore=historyMonthPickerOpen;
+   monthBefore=historyMonthPickerOpen,futureExtentBefore=historyMonthFutureExtent,
+   selectedMonthsBefore=new Set(historySelectedMonths);
   try{
    activeTab=view;
    if(view==='history'||view==='activity'){
@@ -3319,6 +3323,11 @@ function warmPreparedViews(context){
    historyCategoryFilter=categoryBefore;historySizeFilter=sizeBefore;
    historyMerchantFilter=merchantBefore;historyPurchaseDrill=drillBefore;
    historyMonthPickerOpen=monthBefore;
+   historyMonthFutureExtent=futureExtentBefore;
+   // The picker can remove unavailable months while building HTML. Its
+   // offscreen copy must never alter actual month selections mid-interaction.
+   historySelectedMonths.clear();
+   for(const month of selectedMonthsBefore)historySelectedMonths.add(month);
   }
   if(epoch===preparedEpoch)enqueue();
  };
