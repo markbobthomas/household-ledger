@@ -100,7 +100,12 @@
   if(!button||replaying)return;
   const ready=window.HouseholdAllViewsReady?.()===true;
   const cached=window.HouseholdPreparedViewStatus?.()?.includes(button.dataset.view);
-  if(ready&&cached)return;
+  if(ready&&cached){
+   // Cancel an older uncached destination so a rapid subsequent tap wins.
+   sequence++;wanted=null;
+   root.querySelector('.ledger-page-wait')?.remove();
+   return;
+  }
   // Until the existing warmup finishes, keep the tab interactive and visible.
   event.preventDefault();event.stopImmediatePropagation();
   const view=button.dataset.view,id=++sequence;
