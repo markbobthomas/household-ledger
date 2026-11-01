@@ -3512,7 +3512,11 @@ document.addEventListener('submit',async e=>{
   }
   // This editor updates visible subtitles without a full render; discard
   // any prebuilt views so they never display the previous note.
+  const currentContext=preparedContext;
   invalidatePreparedViews();
+  // Notes are saved without rebuilding the active editor. Refresh only
+  // inactive pages using the new in-memory note state.
+  if(currentContext){preparedContext=currentContext;warmPreparedViews(currentContext)}
   button.disabled=false;
   if(status)status.textContent='Saved';
  }catch(err){
