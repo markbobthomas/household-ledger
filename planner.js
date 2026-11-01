@@ -65,6 +65,9 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 // Derived data only. Source bank records and persisted predictions remain the
 // authorities; this cache cannot be written to the bank or planning store.
 let forecastCache=null,serverPreparedForecast=null;
+let historyDataCache=null;
+const workStats={forecastBuilds:0,historyNormalizations:0,historyPageBuilds:0,filterRefreshes:0};
+window.HouseholdPlannerWorkStats=()=>({...workStats});
 let activeTab=window.HouseholdPlannerSummary?.render?preferredOpeningPage():'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 // A tab switch does not alter bank history or review decisions. Keep the
