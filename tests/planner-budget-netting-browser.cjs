@@ -167,8 +167,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(await category('House & Maintenance'),'$90.00',
     name+': a Sunday pending card purchase appears in its bank-date month as provisional Budget usage');
    const provisional=await page.locator('[data-history-category-row="House & Maintenance"]').innerText();
-   assert.match(provisional,/1 pending/,
-    name+': Budget labels the bank transaction pending rather than posted');
+   assert.match(provisional,/1 transaction\b/,
+    name+': A provisional purchase remains counted as a Budget transaction');
+   assert.doesNotMatch(provisional,/\bpending\b/i,
+    name+': Budget no longer labels purchases as pending');
    assert.doesNotMatch(await page.locator('[data-history-category-row="Shopping"]').innerText(),
     /pending/,'A pending card repayment must not be mistaken for provisional shopping');
    const widths=await page.locator('.history-budget-fill').evaluateAll(rows=>
@@ -180,23 +182,26 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    // Summary Spent remains posted-only. Budget also reserves pending card
    // purchases, while card repayments and cash transfers remain excluded.
    const overview=await page.locator('.history-spending-overview').innerText(),
-    parts=overview.match(/(\$[\d,.]+) spent · (\$[\d,.]+) pending · (\$[\d,.]+) expected/),
+    parts=overview.match(/(\$[\d,.]+) spent · (\$[\d,.]+) expected/),
     budgetUsed=await page.locator('.history-spending-overview strong').innerText(),
     centsOf=value=>Math.round(Number(String(value).replace(/[^0-9.-]/g,''))*100);
-   assert.ok(parts,name+': Budget distinguishes posted, pending, and predicted amounts');
-   assert.equal(parts[2],'$90.00',
-    name+': only the pending weekend purchase enters provisional Budget usage');
-   assert.equal(parts[3],'$75.00',
+   assert.ok(parts,name+': Budget displays pending purchases within spent, distinct from predicted expenses');
+   assert.equal(parts[2],'$75.00',
     name+': October Budget includes six remaining dated bills without guessing shopping');
-   assert.equal(centsOf(budgetUsed),centsOf(parts[1])+centsOf(parts[2])+centsOf(parts[3]),
-    name+': Budget combines posted, pending and scheduled expenses once');
+   assert.equal(centsOf(budgetUsed),centsOf(parts[1])+centsOf(parts[2]),
+    name+': Budget totals remain the sum of spent (posted plus pending) and expected');
+   assert.doesNotMatch(await page.locator('[data-history-category-insights]').evaluate(el=>
+    el.innerText+' '+[...el.querySelectorAll('[aria-label],[title]')].map(node=>
+     (node.getAttribute('aria-label')||'')+' '+(node.getAttribute('title')||'')).join(' ')),
+    /\bpending\b/i,name+': No visible, tooltip or accessible Budget labels mention pending');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
    assert.equal(await page.locator('[data-history-view="summary"][aria-pressed="true"]').count(),1,
     name+': Summary is the fourth Spending subtab');
-   assert.equal(await page.locator('[data-recap-spent] strong').innerText(),parts[1],
-    name+': Summary Spent is posted-only, equal to the actual portion of Budget');
+   assert.equal(centsOf(await page.locator('[data-recap-spent] strong').innerText()),
+    centsOf(parts[1])-9000,
+    name+': Summary remains posted-only; Budget includes the fictional $90 pending purchase');
    assert.equal(await page.locator('.financial-recap-page [data-history-month-picker]').count(),1,
     name+': Summary shares the calendar-month picker');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page button:not([data-history-month-toggle]):not([data-history-month-current]):not([data-history-month-all])').count(),0,
