@@ -3475,6 +3475,16 @@ function renderHistorySubview(previousView){
  if(historyView==='categories')preparedViews.delete('history');
  updateHistorySelectionSummary();
 }
+function renderHistoryFilters(){
+ if(!preparedContext||!preparedReady){render();return}
+ preparedViews.delete('history');
+ preparedViews.delete('activity');
+ preparedHistoryViews.clear();
+ const c=preparedContext;
+ $('planner-main').innerHTML=pageMarkup(c.bundle,c.s,c.selectedSource,c.derived,c.fresh,c.reviewData);
+ updateHistorySelectionSummary();
+ workStats.filterRefreshes++;
+}
 function switchExistingPane(buttonAttr,paneAttr,newValue){
  const root=$('planner-main');
  for(const button of root?.querySelectorAll('['+buttonAttr+']')||[]){
