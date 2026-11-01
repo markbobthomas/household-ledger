@@ -378,9 +378,9 @@ const {chromium,webkit}=require('playwright');
     return found?.querySelector('[data-history-category]')?.getAttribute('data-history-category')||null;
    });
    assert.ok(octoberSample,device+': fictional October purchase exists in Activity');
-   await page.locator('[data-history-category="'+octoberSample+'"]').selectOption('Utilities');
+   await page.locator('[data-history-category="'+octoberSample+'"]').selectOption(categoryName);
    await page.waitForFunction(()=>
-    document.querySelector('.history-budget-feedback')?.textContent?.includes('Saved to Utilities'),null,{timeout:20000});
+    document.querySelector('.history-budget-feedback')?.textContent?.includes('Saved to Fictional Navigation Test Category'),null,{timeout:20000});
    assert.match(await page.locator('.history-budget-feedback').innerText(),/October 2026/,
     'Activity save explains the bank posting month rather than the current Budget month');
    await page.locator('[data-show-saved-budget]').click();
@@ -389,9 +389,9 @@ const {chromium,webkit}=require('playwright');
     /October 2026/,'Budget shortcut selects the original transaction month');
    assert.equal(await page.locator('.history-page select[name="historyAccount"]').inputValue(),'all',
     'Budget shortcut clears account mismatch only when explicitly requested');
-   const updated=await page.locator('[data-history-category-row="Utilities"] [data-budget-marker]').innerText();
-   assert.match(updated,/459\.43/,
-    device+': saved category increases October Utilities posted spending exactly once');
+   const updated=await page.locator('[data-history-category-row="'+categoryName+'"] [data-budget-marker]').innerText();
+   assert.match(updated,/205\.44/,
+    device+': saved category shows October Budget spending exactly once');
    const groceries=await page.locator('[data-history-category-row="Groceries"] [data-budget-marker]').innerText();
    assert.match(groceries,/200\.40/,
     device+': original October Groceries category no longer includes recategorized purchase');
