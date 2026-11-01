@@ -162,6 +162,7 @@ function forecastFor(s){
  // The only planning entry point: normalize Plaid history, materialize one
  // editable future ledger, then calculate all balances from those entries.
  // Older inference and category forecast engines do not feed balances.
+ workStats.forecastBuilds++;
  const bundle=window.HouseholdFutureLedger.materialize(
   s,model.records(source),prefs,
   window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon,
@@ -3317,6 +3318,7 @@ function finishPreparation(epoch){
  if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
 }
 function invalidatePreparedViews(){
+ historyDataCache=null;
  preparedEpoch++;warmingEpoch=-1;preparedViews.clear();preparedHistoryViews.clear();
  preparedContext=null;preparedNotice=null;
  // After an edit, keep navigation responsive even while the next generation
