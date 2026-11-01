@@ -81,7 +81,7 @@
 @media(prefers-reduced-motion:reduce){.ledger-page-wait:before{animation:none}}
 </style>
 <script>
-/* Acknowledge navigation before the app's optional eight-view warmup finishes.
+/* Acknowledge navigation after startup or while edited views are refreshing.
    No financial data is duplicated or stored; the original nav handler remains
    the only authority that renders a prepared page. */
 (function(){
@@ -89,12 +89,8 @@
  const root=document.getElementById('planner-main');
  const splash=document.getElementById('planner-loading');
  let wanted=null,sequence=0,replaying=false;
- function unlockVisiblePage(){
-  // Unblock navigation even if the source is reloading or a page is empty.
-  if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
-  if(splash)splash.style.display='none';
- }
- new MutationObserver(unlockVisiblePage).observe(root,{childList:true,subtree:false});
+ // The opening overlay is owned by the planner readiness signal, not by the
+ // first DOM mutation. It stays visible until all destinations are prepared.
  document.addEventListener('click',function(event){
   const button=event.target.closest?.('[data-view]');
   if(!button||replaying)return;
@@ -123,7 +119,7 @@
   placeholder.textContent='Loading '+(button.textContent.trim()||'page')+'…';
   root.appendChild(placeholder);
   if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
-  if(splash)splash.style.display='none';
+  if(splash&&window.HouseholdAllViewsReady?.())splash.style.display='none';
   const replay=()=>{
    if(id!==sequence||!wanted)return;
    if(window.HouseholdAllViewsReady?.()){
@@ -137,7 +133,7 @@
  },true);
 })();
 </script>
-<script src="planner.js?v=server-prepared-forecast-20261031-v1"></script>
+<script src="planner.js?v=all-pages-prepared-20261031-v1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>
