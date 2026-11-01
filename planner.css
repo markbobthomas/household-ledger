@@ -6432,3 +6432,41 @@ a:hover{color:#166e61}
 }
 @keyframes planner-loading-turn{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.planner-loading-spinner{animation:none}}
+
+/* Selected-day prediction rows already have their date in the panel heading.
+   The shared four-column transaction layout previously reintroduced a date
+   track (and forced hidden dates visible), crowding and overlapping amounts on
+   iPhones. Scope this fix to the selected-day arithmetic trail only. */
+.planner-page.summary-page .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-row.calendar-detail-item.ledger-transaction-row{
+ grid-template-columns:minmax(0,1fr) max-content 22px!important;
+ gap:9px!important;
+ width:100%;
+}
+.planner-page.summary-page .calendar-day-reconciliation .calendar-day-transactions .ledger-transaction-date{
+ display:none!important;
+}
+.planner-page.summary-page .calendar-day-reconciliation .calendar-day-transactions .ledger-transaction-identity{
+ grid-column:1;min-width:0;overflow:hidden;
+}
+.planner-page.summary-page .calendar-day-reconciliation .calendar-day-transactions .ledger-transaction-amount{
+ grid-column:2;min-width:max-content;white-space:nowrap;
+}
+.planner-page.summary-page .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-view{
+ grid-column:3;justify-self:end;
+}
+@media(max-width:600px){
+ .planner-page.summary-page .calendar-day-reconciliation .calendar-day-transactions .calendar-monthly-row.calendar-detail-item.ledger-transaction-row{
+  grid-template-columns:minmax(0,1fr) max-content 16px!important;
+  gap:6px!important;
+  padding:10px 8px!important;
+ }
+ .planner-page.summary-page .calendar-day-reconciliation .calendar-day-transactions .ledger-transaction-identity strong{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  white-space:normal!important;
+  overflow:hidden;
+  overflow-wrap:anywhere;
+  text-align:left!important;
+ }
+}
