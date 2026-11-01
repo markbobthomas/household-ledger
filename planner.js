@@ -2479,12 +2479,12 @@ function historyPage(bundle,s){
   // Both filters and row editors consult the same canonical category registry.
   // Effective provider labels are included as read-only observed names; they
   // are not saved as duplicate registry entries.
-  categories=categoryOptionsWithOther(model.categories(state(),records.map(t=>t.category))),
+  categories=historyDataCache.displayCategories||(historyDataCache.displayCategories=categoryOptionsWithOther(model.categories(state(),records.map(t=>t.category))),)
   filterCategories=categories;
  const picker=spendingMonthPicker(records,s.asOf,displayView==='categories');
  // Use complete posted, cross-account history to recognize a bank-coded card
  // payment even when the Budget is filtered to one account or calendar month.
- const budgetCardSettlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records);
+ const budgetCardSettlements=historyDataCache.settlements||(historyDataCache.settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records));
  const filtered=records.filter(t=>{
   if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
   if(displayView==='list'&&historyPurchaseDrill&&
