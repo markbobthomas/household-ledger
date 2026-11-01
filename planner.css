@@ -6411,3 +6411,24 @@ a:hover{color:#166e61}
  .calendar-repair-dialog :is(input,select,textarea){box-sizing:border-box;min-width:0;max-width:100%}
  .schedule-more-menu,.planner-menu-content{max-width:calc(100vw - 18px);box-sizing:border-box}
 }
+
+
+/* Initial preparation and coherent post-edit re-preparation run behind one
+   small blocking screen. Inactive DOM remains ephemeral in this browser tab. */
+.planner-loading{
+ position:fixed;inset:0;z-index:4000;display:grid;place-items:center;
+ padding:24px;background:#f7f9f6;color:#243229;
+}
+.planner-loading[hidden]{display:none!important}
+.planner-loading-inner{
+ display:flex;flex-direction:column;align-items:center;gap:14px;
+ width:100%;max-width:320px;text-align:center;
+}
+.planner-loading-inner strong{font-size:1.15rem;font-weight:650;letter-spacing:-.02em}
+.planner-loading-inner p{margin:0;color:#657167;font-size:.9rem}
+.planner-loading-spinner{
+ display:block;width:28px;height:28px;border:3px solid #d8dfd8;
+ border-top-color:#304438;border-radius:50%;animation:planner-loading-turn .85s linear infinite
+}
+@keyframes planner-loading-turn{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.planner-loading-spinner{animation:none}}
