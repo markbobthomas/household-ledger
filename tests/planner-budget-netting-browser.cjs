@@ -102,6 +102,12 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
         'Fictional Unscheduled Utility',99,'Utilities','expense','demo-checking',99),
        {...extra('ui-confirmed-zelle','2026-10-08','Fictional Zelle Childcare',
          125,'Kids & Family','transfer','demo-checking',125),cashDirection:'out'},
+       // An October Sunday pending Visa purchase still belongs to October
+       // Budget, not Friday's shifted forecast or the later posting date.
+       {...extra('ui-weekend-pending-card','2026-10-18','Fictional Weekend Hardware',90,
+        'House & Maintenance','expense','demo-visa',90),pending:true},
+       {...extra('ui-pending-card-payment','2026-10-18','Credit card payment',220,
+        'Shopping','expense','demo-checking',220),pending:true},
        extra('ui-card-health','2026-10-09','Fictional Clinic',100,'Health',
         'expense','demo-visa',100),
        extra('ui-card-health-refund','2026-10-13','Refund Fictional Clinic',40,'Other',
@@ -158,23 +164,32 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': refund this month reduces Budget even when purchase was last month');
    assert.equal(await category('Shopping'),'$141.73',
     name+': disguised $100 repayment does not add to checking-side category spending');
+   assert.equal(await category('House & Maintenance'),'$90.00',
+    name+': a Sunday pending card purchase appears in its bank-date month as provisional Budget usage');
+   const provisional=await page.locator('[data-history-category-row="House & Maintenance"]').innerText();
+   assert.match(provisional,/1 pending/,
+    name+': Budget labels the bank transaction pending rather than posted');
+   assert.doesNotMatch(await page.locator('[data-history-category-row="Shopping"]').innerText(),
+    /pending/,'A pending card repayment must not be mistaken for provisional shopping');
    const widths=await page.locator('.history-budget-fill').evaluateAll(rows=>
     rows.map(x=>parseFloat(x.style.width)));
    assert.ok(widths.every(n=>Number.isFinite(n)&&n>=0&&n<=100),
     name+': refunds never produce a negative or invalid progress width');
    assert.equal(await page.locator('.history-donut,.history-legend-dot').count(),0,
     name+': Budget omits the unused pie chart and color legend');
-   // Summary Spent is posted-only. Budget uses the same posted amount PLUS
-   // remaining canonical expenses; linked card repayments are not purchases.
+   // Summary Spent remains posted-only. Budget also reserves pending card
+   // purchases, while card repayments and cash transfers remain excluded.
    const overview=await page.locator('.history-spending-overview').innerText(),
-    parts=overview.match(/(\$[\d,.]+) spent · (\$[\d,.]+) expected/),
+    parts=overview.match(/(\$[\d,.]+) spent · (\$[\d,.]+) pending · (\$[\d,.]+) expected/),
     budgetUsed=await page.locator('.history-spending-overview strong').innerText(),
     centsOf=value=>Math.round(Number(String(value).replace(/[^0-9.-]/g,''))*100);
-   assert.ok(parts,name+': Budget distinguishes actual and forecast amounts');
-   assert.equal(parts[2],'$75.00',
+   assert.ok(parts,name+': Budget distinguishes posted, pending, and predicted amounts');
+   assert.equal(parts[2],'$90.00',
+    name+': only the pending weekend purchase enters provisional Budget usage');
+   assert.equal(parts[3],'$75.00',
     name+': October Budget includes six remaining dated bills without guessing shopping');
-   assert.equal(centsOf(budgetUsed),centsOf(parts[1])+centsOf(parts[2]),
-    name+': Budget combines actual and remaining predictions only once');
+   assert.equal(centsOf(budgetUsed),centsOf(parts[1])+centsOf(parts[2])+centsOf(parts[3]),
+    name+': Budget combines posted, pending and scheduled expenses once');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
