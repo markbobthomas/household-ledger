@@ -192,6 +192,53 @@ const {chromium,webkit}=require('playwright');
     assert.equal(result.selected,'true','The selected Spending pane is acknowledged: '+pane);
     assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),spendingEpoch);
    }
+   // Merchants and Purchase Sizes use the same lightweight filter path as
+   // Activity. A regression in either report must fail on both device engines.
+   for(const pane of ['merchants','sizes']){
+    await page.locator('[data-history-view="'+pane+'"]').click();
+    const baseline=await page.evaluate(()=>({
+     epoch:window.HouseholdPreparedViewGeneration(),
+     work:window.HouseholdPlannerWorkStats()
+    }));
+    const assertReportOnly=async (operation,prior,expectOneReport=true)=>{
+     const next=await page.evaluate(()=>({
+      epoch:window.HouseholdPreparedViewGeneration(),
+      work:window.HouseholdPlannerWorkStats(),
+      cached:window.HouseholdPreparedViewStatus()
+     }));
+     assert.equal(next.epoch,baseline.epoch,pane+' '+operation+' preserves prepared pages');
+     assert.equal(next.work.forecastBuilds,baseline.work.forecastBuilds,
+      pane+' '+operation+' never recalculates balance projections');
+     assert.equal(next.work.historyNormalizations,baseline.work.historyNormalizations,
+      pane+' '+operation+' reuses historical transaction data');
+     assert.ok(next.cached.includes('summary')&&next.cached.includes('schedules'),
+      pane+' '+operation+' keeps Home and Bills prepared');
+     if(expectOneReport)assert.equal(next.work.historyPageBuilds,prior.work.historyPageBuilds+1,
+      pane+' '+operation+' renders only one report');
+     return next;
+    };
+    await page.locator('.history-page [data-history-month-toggle]').click();
+    await page.locator('.history-page [data-history-month-all]').click();
+    let after=await assertReportOnly('all months',baseline);
+    assert.equal(await page.locator('[data-history-view="'+pane+'"][aria-pressed="true"]').count(),1,
+     'Month filter keeps the selected Spending view');
+    const accountSelect=page.locator('.history-page select[name="historyAccount"]');
+    const accountValues=await accountSelect.locator('option').evaluateAll(options=>
+     options.map(option=>option.value).filter(value=>value&&value!=='all'));
+    if(accountValues.length){
+     await accountSelect.selectOption(accountValues[0]);
+     after=await assertReportOnly('account',after);
+     assert.equal(await page.locator('.history-page select[name="historyAccount"]').inputValue(),accountValues[0],
+      'Filtered account remains visibly selected');
+     await page.locator('.history-page select[name="historyAccount"]').selectOption('all');
+     after=await assertReportOnly('all accounts',after);
+    }
+    const monthTrigger=page.locator('.history-page [data-history-month-toggle]');
+    if(await monthTrigger.getAttribute('aria-expanded')==='true')await monthTrigger.click();
+    await monthTrigger.click();
+    await page.locator('.history-page [data-history-month-current]').click();
+    await assertReportOnly('this month',after);
+   }
    // Pure internal pane changes must not restart the expensive preparation
    // cycle or stall an unrelated main tab.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
