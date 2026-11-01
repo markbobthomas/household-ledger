@@ -3354,7 +3354,9 @@ function warmPreparedViews(context){
   const job=jobs.shift();
   if(!job){finishPreparation(epoch);return}
   const previousTab=activeTab,previousHistory=historyView,
-   previousFutureExtent=historyMonthFutureExtent;
+   previousFutureExtent=historyMonthFutureExtent,
+   previousMonths=historySelectedMonths?new Set(historySelectedMonths):null,
+   previousSelection=[...historySelected];
   try{
    // The visible page is already rendered. Do not replace it or change the
    // calendar month, Spending filters, selected tab, or review count.
@@ -3379,6 +3381,9 @@ function warmPreparedViews(context){
    // not let an offscreen prepared Summary lengthen Activity/Budget pickers.
    activeTab=previousTab;historyView=previousHistory;
    historyMonthFutureExtent=previousFutureExtent;
+   if(previousMonths)historySelectedMonths=previousMonths;
+   historySelected.clear();
+   for(const key of previousSelection)historySelected.add(key);
   }
   completed++;
   preparationProgress(completed);
