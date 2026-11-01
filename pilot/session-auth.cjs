@@ -10,8 +10,11 @@ const SIGNED_OUT='__Host-ledger_signed_out';
 const UPGRADED='__Host-ledger_upgraded';
 const expiryHeader='Path=/; Secure; HttpOnly; SameSite=Strict';
 module.exports=function createSessionAuth({password,secret,sessionFile,decrypted,atomicEncryptedWrite}){
- const hmacKey=crypto.createHmac('sha256',secret).update('ledger-session-id-v1').digest();
  const passwordHash=crypto.createHash('sha256').update(password).digest();
+ // Rotating the existing private password invalidates all prior sessions,
+ // without touching or decrypting the separately stored bank transactions.
+ const hmacKey=crypto.createHmac('sha256',secret)
+  .update('ledger-session-id-v1').update(passwordHash).digest();
  let entries=new Map(),writes=Promise.resolve();
  const failures=new Map();
  const idHash=value=>crypto.createHmac('sha256',hmacKey).update(value).digest('hex');
