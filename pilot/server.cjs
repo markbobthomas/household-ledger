@@ -1,6 +1,6 @@
 'use strict';
 // Isolated one-account pilot. No access to the static Ledger or fictional Sandbox.
-const http=require('node:http'),crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path');
+const http=require('node:http'),crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path'),zlib=require('node:zlib');
 const env=process.env;
 const {inspect:accountForecastLinks}=require('./account-forecast-links.cjs');
 // Load optional UI modules only inside their relevant edit endpoints.
@@ -232,7 +232,17 @@ async function start(port=Number(env.PORT||8788)){
      invalidatePrepared();
      schedulePrepared();
     }
-    res.writeHead(status,headers);res.end(JSON.stringify(data))};
+    const encoded=JSON.stringify(data);
+    // The authenticated forecast can be larger than the raw bank response.
+    // Compress only when supported by the browser; never allow shared caches.
+    if(requestPath==='/api/ledger'&&req.method==='GET'&&status===200&&
+       encoded.length>4096&&/\\bgzip\\b/i.test(String(req.headers['accept-encoding']||''))){
+     headers['Content-Encoding']='gzip';
+     headers.Vary='Accept-Encoding';
+     res.writeHead(status,headers);
+     return res.end(zlib.gzipSync(encoded,{level:3}));
+    }
+    res.writeHead(status,headers);res.end(encoded)};
   // Render provides the deployed Git SHA at runtime. Health exposes only
   // this public source identifier, never credentials, banking records or disk paths.
   if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{
