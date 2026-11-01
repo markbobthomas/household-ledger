@@ -589,7 +589,8 @@ function forecastBudgetExpenses(bundle,s,posted,settlements,months,accountId='al
    additions.get(String(row.id))?.category;
   let name=model.canonicalCategory(state(),sourceCategory)||'Other';
   if(['Income','Transfer'].includes(name))name='Other';
-  return [{name,cents:Math.round(amount*100)*(row.type==='refund'?-1:1)}];
+  return [{name,cents:Math.round(amount*100)*(row.type==='refund'?-1:1),
+   date:row.date,merchant:row.merchant,key:row.key}];
  });
 }
 function cadenceOption(cadence){
@@ -2019,15 +2020,20 @@ function historyInsights(rows,view,options={}){
     posted=categorySpendingCents(r,options.cardSettlementIds),
     provisional=pendingBudgetCents(r,options.cardSettlementIds);
    const g=groups.get(category)||{name:category,cents:0,count:0,pendingCents:0,pendingCount:0,
-    expectedCents:0,expectedCount:0};
+    expectedCents:0,expectedCount:0,items:[]};
    g.cents+=posted;g.pendingCents+=provisional;
    if(posted)g.count++;
    if(provisional)g.pendingCount++;
+   if(posted||provisional)g.items.push({date:r.date,merchant:historyMerchantName(r),
+    cents:posted+provisional,source:'spent'});
    groups.set(category,g);
   }
   for(const r of predictions){
-   const g=groups.get(r.name)||{name:r.name,cents:0,count:0,expectedCents:0,expectedCount:0};
-   g.expectedCents+=r.cents;g.expectedCount++;groups.set(r.name,g);
+   const g=groups.get(r.name)||{name:r.name,cents:0,count:0,expectedCents:0,expectedCount:0,items:[]};
+   g.expectedCents+=r.cents;g.expectedCount++;
+   g.items.push({date:r.date,merchant:r.merchant||'Expected expense',
+    cents:r.cents,source:'expected'});
+   groups.set(r.name,g);
   }
   // Spending is filtered by the selected calendar months, but the category
   // catalog is not: show every active named category, even when it has no
@@ -2127,6 +2133,22 @@ function historyInsights(rows,view,options={}){
     '" data-budget-marker title="'+escapeHTML(cash((g.cents+(g.pendingCents||0))/100)+' spent · '+
      cash((g.expectedCents||0)/100)+' expected')+'">'+cash(spent)+'</strong></span>';
   };
+  // Display exactly the bank and projected items behind a Budget amount.
+  // No separate Activity-only filter, financial recompute, or saved data copy.
+  const budgetDetails=g=>{
+   const items=(g.items||[]).slice().sort((a,b)=>
+    b.date.localeCompare(a.date)||a.merchant.localeCompare(b.merchant));
+   if(!items.length)return '';
+   return '<div class="history-budget-details" data-history-budget-details="'+
+    escapeHTML(g.name)+'" hidden>'+items.map(item=>
+     '<div class="history-budget-detail-row" data-budget-source="'+item.source+
+     '" data-budget-cents="'+item.cents+'">'+
+     '<span class="history-budget-detail-date">'+escapeHTML(dayLabel(item.date))+'</span>'+
+     '<span class="history-budget-detail-name"><strong>'+escapeHTML(item.merchant)+
+     '</strong>'+(item.source==='expected'?'<small>Expected</small>':'')+'</span>'+
+     '<strong class="history-budget-detail-amount">'+(item.cents<0?'−':'')+
+      cash(Math.abs(item.cents)/100)+'</strong></div>').join('')+'</div>';
+  };
   const budgetSummary=allAccounts?
    '<div class="history-budget-summary" data-history-total-budget>'+
     (totalBudgetPercent===null?
@@ -2189,13 +2211,14 @@ function historyInsights(rows,view,options={}){
       '. Drag, or use up and down arrow keys" title="Drag to reorder" aria-keyshortcuts="ArrowUp ArrowDown">'+
       '<span aria-hidden="true">⠿</span></button>'+
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
-      escapeHTML(g.name)+'" title="See category transactions">'+
+      escapeHTML(g.name)+'" title="Show category expenses" aria-expanded="false"'+
+      ((g.items||[]).length?'':' disabled')+'>',
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
       '<small>'+(g.count+(g.pendingCount||0))+' transaction'+
        (g.count+(g.pendingCount||0)===1?'':'s')+
        (g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button></div>'+ 
      budgetBar(g)+
-     '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
+     '<div class="history-category-budget">'+budgetField(g)+'</div>'+budgetDetails(g)+'</div>').join('')+
     '</div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
    '</section>';
  }
@@ -4142,9 +4165,11 @@ document.addEventListener('click',async e=>{
  }
  const categoryDrill=e.target.closest?.('[data-history-drill-category]');
  if(categoryDrill){
-  activeTab='activity';historyView='list';historySizeFilter=-1;historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';
-  historyCategoryFilter=categoryDrill.dataset.historyDrillCategory||'';
-  historyLimit=90;render();return;
+  const details=categoryDrill.closest('[data-history-category-row]')?.querySelector('[data-history-budget-details]');
+  if(!details)return;
+  details.hidden=!details.hidden;
+  categoryDrill.setAttribute('aria-expanded',String(!details.hidden));
+  return;
  }
  const savedBudget=e.target.closest?.('[data-show-saved-budget]');
  if(savedBudget&&latestCategorySave){
