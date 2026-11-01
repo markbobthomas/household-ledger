@@ -3410,8 +3410,7 @@ function render({navigationOnly=false}={}){
   ' You can manage connections without switching to fictional balances.</div><a class="btn" href="/bank-connect">Bank connections</a></div>';
   root.innerHTML='<section class="panel"><div class="empty-visual">No bank balance forecast is being displayed until the Real connection is verified.</div></section>';finishPreparation(preparedEpoch);return}
  let bundle=null,error=null;
- try{bundle=navigationOnly&&preparedContext?.bundle?
-  preparedContext.bundle:forecastFor(s)}catch(e){error=String(e.message||e)}
+ try{bundle=forecastFor(s)}catch(e){error=String(e.message||e)}
  // Actual bank history must remain usable even if the separate future
  // balance projection cannot be calculated or needs a repaired account.
  if(!bundle&&['history','activity','reviews','recap'].includes(activeTab)){
