@@ -65,7 +65,7 @@ const {chromium,webkit}=require('playwright');
      const amount=row.querySelector('.ledger-transaction-amount').getBoundingClientRect();
      const action=row.querySelector('.ledger-transaction-action').getBoundingClientRect();
      const bounds=row.getBoundingClientRect();
-     const result={columns:getComputedStyle(row).gridTemplateColumns.split(/\\s+/).length,
+     const result={columns:getComputedStyle(row).gridTemplateColumns.split(/\s+/).length,
       dateHidden:getComputedStyle(row.querySelector('.ledger-transaction-date')).display==='none',
       nameRight:name.right,amountLeft:amount.left,amountRight:amount.right,
       actionLeft:action.left,actionRight:action.right,rowRight:bounds.right,
