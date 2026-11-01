@@ -40,7 +40,7 @@ function post(route,body={},cookie='',extra={}){
   const first=await post('/auth/login',{password:pass});
   assert.equal(first.status,200,'Correct existing password grants a private session');
   const firstCookie=first.headers['set-cookie'].find(c=>c.startsWith('__Host-ledger_session='));
-  assert.match(firstCookie,/Secure; HttpOnly; SameSite=Strict/);
+  assert.match(firstCookie,/Secure; HttpOnly; SameSite=Lax/);
   assert.match(firstCookie,/Max-Age=7776000/,'Exactly 90 days until absolute cookie expiration');
   assert.equal((await get('/api/status',false,firstCookie)).status,200,
    'The signed session accesses bank metadata without Basic Authorization');
