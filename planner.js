@@ -2526,7 +2526,7 @@ function historyPage(bundle,s){
  // user's calendar-month/account filters or count transfers as purchases.
  const savedRow=latestCategorySave&&records.find(t=>
   String(t.id)===latestCategorySave.id);
- const budgetSaveFeedback=savedRow?(()=>{
+ const budgetSaveFeedback=(displayView==='categories'||displayView==='list')&&savedRow?(()=>{
   const amount=categorySpendingCents(savedRow,budgetCardSettlements),
    month=savedRow.date.slice(0,7),
    monthText=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',{
