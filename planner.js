@@ -4417,10 +4417,10 @@ document.addEventListener('click',async e=>{
  }
  if(e.target.closest('[data-more-category-review]')){categoryReviewLimit+=40;render();return}
  if(e.target.closest('[data-history-more]')){
-  historyLimit+=90;render();return;
+  historyLimit+=90;renderHistoryFilters();return;
  }
  if(e.target.closest('[data-clear-history-search]')){
-  historySearch='';historyLimit=90;render();return;
+  historySearch='';historyLimit=90;renderHistoryFilters();return;
  }
  const mortgageReview=e.target.closest('[data-review-mortgage]');
  if(mortgageReview){
