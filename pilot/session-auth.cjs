@@ -8,7 +8,7 @@ const TTL=90*24*60*60*1000;
 const COOKIE='__Host-ledger_session';
 const SIGNED_OUT='__Host-ledger_signed_out';
 const UPGRADED='__Host-ledger_upgraded';
-const expiryHeader='Path=/; Secure; HttpOnly; SameSite=Strict';
+const expiryHeader='Path=/; Secure; HttpOnly; SameSite=Lax';
 module.exports=function createSessionAuth({password,secret,sessionFile,decrypted,atomicEncryptedWrite}){
  const passwordHash=crypto.createHash('sha256').update(password).digest();
  // Rotating the existing private password invalidates all prior sessions,
