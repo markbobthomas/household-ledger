@@ -21,4 +21,5 @@ const disconnected=build({...account(800,600),disconnected:true});
 assert.equal(disconnected.accounts[0].balanceStatus,'disconnected');
 const simulated=F.build({asOf,mode:'demo',connected:false,accounts:[{...account(50,40),simulated:true}]},[],[],{days:2});
 assert.equal(simulated.accounts[0].balanceStatus,'simulated');
+// Date alignment is validated by the canonical projection tests.
 console.log('PASS: actual current balance authority, missing/stale/disconnected flags, simulation isolation');
