@@ -43,6 +43,45 @@ const {chromium,webkit}=require('playwright');
     'Preparation never replaces the visible Home calendar');
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
     'Background preparation never changes the selected calendar month');
+   // Selected-day rows omit a redundant date track. Regression-test a long
+   // fictional payee against the same CSS as the real selected-day panel,
+   // including narrow 320px and 390px iPhone layouts.
+   for(const width of [320,390,...(device.startsWith('iPhone')?[]:[1280])]){
+    await page.setViewportSize({width,height:844});
+    const geometry=await page.evaluate(()=>{
+     const host=document.querySelector('.summary-page');
+     const fixture=document.createElement('section');
+     fixture.className='calendar-day-detail';
+     fixture.innerHTML='<div class="calendar-day-reconciliation"><div class="calendar-day-transactions">'+
+      '<div class="calendar-monthly-entry calendar-detail-entry"><button class="calendar-monthly-row calendar-detail-item ledger-transaction-row" type="button">'+
+      '<span class="calendar-monthly-date ledger-transaction-date">Nov 13</span>'+
+      '<span class="calendar-monthly-name ledger-transaction-identity"><strong>Fictional Long Utility Merchant Description for a Test</strong></span>'+
+      '<strong class="ledger-transaction-amount out">−$1,234.56</strong>'+
+      '<span class="calendar-monthly-view ledger-transaction-action" aria-hidden="true">›</span>'+
+      '</button></div></div></div>';
+     host.appendChild(fixture);
+     const row=fixture.querySelector('.ledger-transaction-row');
+     const name=row.querySelector('.ledger-transaction-identity').getBoundingClientRect();
+     const amount=row.querySelector('.ledger-transaction-amount').getBoundingClientRect();
+     const action=row.querySelector('.ledger-transaction-action').getBoundingClientRect();
+     const bounds=row.getBoundingClientRect();
+     const result={columns:getComputedStyle(row).gridTemplateColumns.split(/\\s+/).length,
+      dateHidden:getComputedStyle(row.querySelector('.ledger-transaction-date')).display==='none',
+      nameRight:name.right,amountLeft:amount.left,amountRight:amount.right,
+      actionLeft:action.left,actionRight:action.right,rowRight:bounds.right,
+      overflow:row.scrollWidth-row.clientWidth};
+     fixture.remove();
+     return result;
+    });
+    assert.equal(geometry.columns,3,device+' '+width+'px selected-day uses three tracks');
+    assert.ok(geometry.dateHidden,device+' '+width+'px has no redundant date');
+    assert.ok(geometry.nameRight<=geometry.amountLeft+1&&
+     geometry.amountRight<=geometry.actionLeft+1&&
+     geometry.actionRight<=geometry.rowRight+1&&geometry.overflow<=1,
+     device+' '+width+'px must not overlap or clip amounts: '+JSON.stringify(geometry));
+   }
+   await page.setViewportSize({width:device.startsWith('iPhone')?390:1280,
+    height:device.startsWith('iPhone')?844:900});
    // Every destination is already prepared. Rapid repeated taps should
    // swap cached DOM without a page loader; the latest selection wins.
    const rapid=await page.evaluate(()=>{
