@@ -3353,7 +3353,8 @@ function warmPreparedViews(context){
   if(epoch!==preparedEpoch)return;
   const job=jobs.shift();
   if(!job){finishPreparation(epoch);return}
-  const previousTab=activeTab,previousHistory=historyView;
+  const previousTab=activeTab,previousHistory=historyView,
+   previousFutureExtent=historyMonthFutureExtent;
   try{
    // The visible page is already rendered. Do not replace it or change the
    // calendar month, Spending filters, selected tab, or review count.
@@ -3374,7 +3375,10 @@ function warmPreparedViews(context){
    // will render it from authoritative in-memory state when requested.
    console.error('Could not prepare '+(job.pane||job.view),error);
   }finally{
+   // Summary's twelve-month picker is a presentation-only expansion. Do
+   // not let an offscreen prepared Summary lengthen Activity/Budget pickers.
    activeTab=previousTab;historyView=previousHistory;
+   historyMonthFutureExtent=previousFutureExtent;
   }
   completed++;
   preparationProgress(completed);
