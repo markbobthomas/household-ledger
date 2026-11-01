@@ -1,6 +1,6 @@
 'use strict';
 // Isolated one-account pilot. No access to the static Ledger or fictional Sandbox.
-const http=require('node:http'),crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path');
+const http=require('node:http'),crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path'),zlib=require('node:zlib');
 const env=process.env;
 const {inspect:accountForecastLinks}=require('./account-forecast-links.cjs');
 // Load optional UI modules only inside their relevant edit endpoints.
@@ -177,6 +177,48 @@ async function sync(){
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
 }
 async function html(){return fs.readFile(path.join(__dirname,'index.html'),'utf8')}
+// The same authenticated payload still owns all immutable bank facts. The
+// prepared projection is a derived, versioned extra attached atomically to it.
+function ledgerPayload(){
+ if(!state.items.length)return {connected:false,account:null,accounts:[],transactions:[],adjustments:{}};
+ return {connected:true,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,
+  transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object')
+   .sort((a,b)=>String(b.date).localeCompare(String(a.date))),
+  reconnectAccounts:state.items.filter(i=>i.reconnectRequired).flatMap(i=>i.accountIds).map(String),
+  adjustments:state.ledgerAdjustments||{}};
+}
+// RAM only. Bank and forecast persistence remain separately encrypted on disk.
+// One invalidation per successful edit, sync, reconnect, or disconnect.
+let preparedGeneration=0,preparedCache=null,prepareScheduled=false;
+function invalidatePrepared(){
+ preparedGeneration++;
+ preparedCache=null;
+}
+function preparedFor(payload){
+ if(!payload.connected)return null;
+ const worker=require('./prepared-forecast.cjs'),
+  today=worker.pacificDate();
+ if(preparedCache&&preparedCache.generation===preparedGeneration&&
+  preparedCache.asOf===today)return preparedCache.result;
+ // The process is single threaded: the prepared result and bank snapshot
+ // cannot change mid-computation. A failed optional compute never prevents
+ // displaying the original authoritative source and browser fallback.
+ const generation=preparedGeneration;
+ const projection=worker.prepare(payload,today);
+ const result=projection?{...projection,generation}:null;
+ if(generation===preparedGeneration)
+  preparedCache={generation,asOf:today,result};
+ return result;
+}
+function schedulePrepared(){
+ if(prepareScheduled)return;
+ prepareScheduled=true;
+ setImmediate(()=>{
+  prepareScheduled=false;
+  try{preparedFor(ledgerPayload())}
+  catch(_error){preparedCache=null}
+ });
+}
 async function start(port=Number(env.PORT||8788)){
  await load();
  const server=http.createServer(async(req,res)=>{
@@ -184,7 +226,23 @@ async function start(port=Number(env.PORT||8788)){
   const requestPath=new URL(req.url,'http://localhost').pathname;
   const respond=(status,data)=>{const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
     if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
-    res.writeHead(status,headers);res.end(JSON.stringify(data))};
+    if(req.method==='POST'&&status>=200&&status<300&&
+       (requestPath.startsWith('/api/ledger/')||
+        ['/api/sync','/api/exchange','/api/disconnect'].includes(requestPath))){
+     invalidatePrepared();
+     schedulePrepared();
+    }
+    const encoded=JSON.stringify(data);
+    // The authenticated forecast can be larger than the raw bank response.
+    // Compress only when supported by the browser; never allow shared caches.
+    if(requestPath==='/api/ledger'&&req.method==='GET'&&status===200&&
+       encoded.length>4096&&/\\bgzip\\b/i.test(String(req.headers['accept-encoding']||''))){
+     headers['Content-Encoding']='gzip';
+     headers.Vary='Accept-Encoding';
+     res.writeHead(status,headers);
+     return res.end(zlib.gzipSync(encoded,{level:3}));
+    }
+    res.writeHead(status,headers);res.end(encoded)};
   // Render provides the deployed Git SHA at runtime. Health exposes only
   // this public source identifier, never credentials, banking records or disk paths.
   if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{
@@ -236,12 +294,14 @@ async function start(port=Number(env.PORT||8788)){
    return res.end(body);
   }
   if(req.method==='GET'&&requestPath==='/api/ledger'){
-   if(!state.items.length)return respond(200,{connected:false,account:null,accounts:[],transactions:[],adjustments:{}});
-   // No truncation: all imported records for the selected accounts.
-   return respond(200,{connected:true,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,
-    transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object').sort((a,b)=>String(b.date).localeCompare(String(a.date))),
-    reconnectAccounts:state.items.filter(i=>i.reconnectRequired).flatMap(i=>i.accountIds).map(String),
-     adjustments:state.ledgerAdjustments||{}});
+   const payload=ledgerPayload();
+   if(!payload.connected)return respond(200,payload);
+   // Every tab receives one coherent snapshot. Old/partial deployments or an
+   // optional forecast failure still return the unmodified authoritative
+   // bank payload, allowing the existing client calculation to run.
+   let ready=null;
+   try{ready=preparedFor(payload)}catch(_error){preparedCache=null}
+   return respond(200,ready?{...payload,preparedForecast:ready}:payload);
   }
   if(req.method==='GET'&&requestPath==='/api/status'){
    const refs=new Map(accountForecastLinks(state).map(x=>[x.id,x]));
@@ -535,7 +595,15 @@ async function start(port=Number(env.PORT||8788)){
    if(releaseEdit)releaseEdit();
   }
  });
- return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>resolve(server))});
+ return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>{
+  // Automatic server-side re-preparation, never a background Plaid sync.
+  // A sleeping Render instance cannot execute hourly tasks until it wakes.
+  schedulePrepared();
+  const hourly=setInterval(()=>{invalidatePrepared();schedulePrepared()},60*60*1000);
+  hourly.unref();
+  server.once('close',()=>clearInterval(hourly));
+  resolve(server);
+ })});
 }
 if(require.main===module)start().then(()=>process.stdout.write('Private multi-account ledger listening\n')).catch(e=>{process.stderr.write('Pilot startup error: '+e.message+'\n');process.exitCode=1});
 module.exports={start};

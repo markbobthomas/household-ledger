@@ -64,7 +64,7 @@ function scheduleListNumber(id){
 let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSuggestions=[];
 // Derived data only. Source bank records and persisted predictions remain the
 // authorities; this cache cannot be written to the bank or planning store.
-let forecastCache=null;
+let forecastCache=null,serverPreparedForecast=null;
 let activeTab=window.HouseholdPlannerSummary?.render?preferredOpeningPage():'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 // A tab switch does not alter bank history or review decisions. Keep the
@@ -142,6 +142,20 @@ function forecastFor(s){
  if(forecastCache&&forecastCache.source===source&&
     forecastCache.transactions===source.transactions&&
     forecastCache.signature===signature)return forecastCache.bundle;
+ // Consume only an atomic server-prepared bundle delivered alongside this
+ // exact private snapshot. After any local edit, the optional prepared bundle
+ // is cleared, so a client never displays a stale server forecast.
+ if(live()&&serverPreparedForecast){
+  const prepared=serverPreparedForecast;
+  serverPreparedForecast=null;
+  if(prepared.version==='canonical-1095-friday-v1'&&
+     prepared.asOf===s.asOf&&prepared.horizon===horizon&&
+     Array.isArray(prepared.bundle?.rows)&&Array.isArray(prepared.bundle?.ledger)&&
+     Array.isArray(prepared.bundle?.projection?.accounts)){
+    forecastCache={source,transactions:source.transactions,signature,bundle:prepared.bundle};
+    return prepared.bundle;
+  }
+ }
  // The only planning entry point: normalize Plaid history, materialize one
  // editable future ledger, then calculate all balances from those entries.
  // Older inference and category forecast engines do not feed balances.
@@ -5491,9 +5505,9 @@ document.addEventListener('change',e=>{
 if(available()){
  window.HouseholdLiveSource.bind({
   render,
-  enterReal(newState,newSnapshot){forecastCache=null;liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;latestError='';clearAudit()},
-  enterDemo(){forecastCache=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()},
-  enterUnavailable(){forecastCache=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()}
+  enterReal(newState,newSnapshot,prepared){forecastCache=null;serverPreparedForecast=prepared||null;liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;latestError='';clearAudit()},
+  enterDemo(){forecastCache=null;serverPreparedForecast=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()},
+  enterUnavailable(){forecastCache=null;serverPreparedForecast=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()}
  });
 }else{
  $('ledger-mode-switch').querySelector('option[value="real"]').disabled=true;

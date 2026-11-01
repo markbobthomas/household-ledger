@@ -5,6 +5,7 @@
 const MODE='household-ledger-view-mode';
 const Accounting=root.HouseholdAccounting||(typeof require==='function'?require('../accounting.js'):null);
 const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('../categorization.js'):null);
+const DataModel=root.HouseholdLedgerData||(typeof require==='function'?require('../ledger-data.js'):null);
 let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank',serverRevision='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
 const BankFeed=root.HouseholdBankFeed||(typeof require==='function'?require('../bank-feed.js'):null);
@@ -85,7 +86,7 @@ function record(t,account){
  }
  return row;
 }
-function prepare(payload){
+function prepare(payload,asOf=today()){
  const banks=Array.isArray(payload.accounts)&&payload.accounts.length?payload.accounts:payload.account?[payload.account]:[];
  if(!payload.connected||!banks.length)throw Error('Connect at least one bank account under Bank Connection');
  const byId=new Map(banks.map(a=>[String(a.id),a]));
@@ -94,21 +95,21 @@ function prepare(payload){
   return bank?record(t,bank):null;
  }).filter(Boolean);
  const adjustments=payload.adjustments||{};
- const state=root.HouseholdLedgerData.migrate({
+ const state=DataModel.migrate({
   transactions:rows,items:[],
   accounts:banks.map(a=>({id:a.id,name:a.name,type:a.type,subtype:a.subtype,
    institution:'Connected via Plaid',itemId:a.itemId||'connected-bank-item'})),
   ...Object.fromEntries(['categoryOverrides','predictions','reviews','learning','customCategories']
    .filter(k=>adjustments[k]!==undefined).map(k=>[k,adjustments[k]]))
  });
- const snapshot={asOf:today(),mode:'plaid',connected:true,source:'Plaid bank-reported balances',
+ const snapshot={asOf,mode:'plaid',connected:true,source:'Plaid bank-reported balances',
   lastSuccessfulSync:payload.lastSync,expectedAccountIds:banks.map(a=>a.id),
   accounts:banks.map(a=>({id:a.id,name:a.name+(a.mask?' ••'+a.mask:''),
    accountType:a.type==='credit'?'credit':a.subtype==='savings'?'savings':'checking',
    type:a.type,subtype:a.subtype,transactionAccount:a.name,current:a.current??null,
    available:a.available??null,balanceAsOf:a.balanceObservedAt||null,
    currency:a.currency||'USD',simulated:false}))};
- return {state,snapshot,account:banks[0],accounts:banks,
+ return {state,snapshot,preparedForecast:payload.preparedForecast||null,account:banks[0],accounts:banks,
   reconnectAccounts:Array.isArray(payload.reconnectAccounts)?payload.reconnectAccounts:[]};
 }
 async function enter(){
@@ -118,7 +119,7 @@ async function enter(){
  host.render();
  try{
   const data=prepare(await request(''));
-  host.enterReal(data.state,data.snapshot);
+  host.enterReal(data.state,data.snapshot,data.preparedForecast);
   loadedAccount=data.account;live=true;
   if(data.reconnectAccounts.length)lastError=reconnectMessage;
   localStorage.setItem(MODE,'real');
@@ -148,7 +149,7 @@ async function refresh(){
    error.code=result?.code||'';throw error;
   }
   const updated=prepare(await request(''));
-  host.enterReal(updated.state,updated.snapshot);
+  host.enterReal(updated.state,updated.snapshot,updated.preparedForecast);
   loadedAccount=updated.account;
   lastError=updated.reconnectAccounts.length?reconnectMessage:'';
  }catch(e){
