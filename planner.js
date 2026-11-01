@@ -4164,7 +4164,11 @@ document.addEventListener('click',async e=>{
       !(previousTab==='history'&&previousHistoryView!=='categories')&&
       root?.firstElementChild&&!root.firstElementChild.classList.contains('navigation-loading'))
     preparedViews.set(previousTab,{element:root.firstElementChild,epoch:preparedEpoch});
-   render({navigationOnly:true});
+   if(preparedContext&&['history','activity'].includes(activeTab)){
+    const c=preparedContext;
+    $('planner-main').innerHTML=pageMarkup(c.bundle,c.s,c.selectedSource,c.derived,c.fresh,c.reviewData);
+    updateHistorySelectionSummary();
+   }else render({navigationOnly:true});
   }
   if(view.dataset.focusTarget)document.querySelector(view.dataset.focusTarget)?.scrollIntoView?.({block:'center',behavior:'instant'});
   // Tab navigation should not animate the global header's position.
