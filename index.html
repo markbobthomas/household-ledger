@@ -11,7 +11,7 @@
 <link rel="icon" type="image/png" sizes="180x180" href="/ledger-icon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/ledger-icon.png">
 <title>Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=iphone-editors-contained-20261031-v1">
+<link rel="stylesheet" href="planner.css?v=prepared-views-gated-20261031-v1">
 </head>
 <body>
 <main class="shell"><div class="content">
@@ -52,6 +52,13 @@
   <div id="planner-main" aria-live="polite"><div class="panel">Preparing your balance plan…</div></div>
   <footer id="planner-fine-print" class="planner-fine-print" hidden></footer>
   </div></main>
+<div id="planner-loading" class="planner-loading" role="status" aria-live="polite" aria-atomic="true">
+  <div class="planner-loading-inner">
+    <span class="planner-loading-spinner" aria-hidden="true"></span>
+    <strong>Preparing Ledger</strong>
+    <p id="planner-loading-progress">Loading your planning views…</p>
+  </div>
+</div>
 <script src="demo-data.js"></script>
 <script src="bank-feed.js?v=calendar-local-weekend-20261031-v1"></script>
 <script src="accounting.js?v=card-payment-priority-v3"></script>
@@ -63,7 +70,7 @@
 <script src="planner-core.js?v=prediction-review-labels-v1"></script>
 <script src="planner-coverage.js?v=retired-renderers-20261028-v1"></script>
 <script src="planner-summary.js?v=shown-month-low-20261031-v1"></script>
-<script src="planner.js?v=prepared-views-20261031-v1"></script>
+<script src="planner.js?v=prepared-views-gated-20261031-v1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>
