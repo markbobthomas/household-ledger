@@ -3276,6 +3276,8 @@ function preparationProgress(count){
  const loading=$('planner-loading');
  if(!loading)return;
  loading.hidden=false;
+ const shell=document.querySelector('main.shell');
+ if(shell){shell.inert=true;shell.setAttribute('aria-busy','true')}
  const progress=$('planner-loading-progress');
  if(progress)progress.textContent='Preparing '+count+' of '+preparedDestinations.length+' views…';
 }
@@ -3284,6 +3286,8 @@ function finishPreparation(epoch){
  preparedReady=true;
  const loading=$('planner-loading');
  if(loading)loading.hidden=true;
+ const shell=document.querySelector('main.shell');
+ if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
 }
 function invalidatePreparedViews(){
  preparedEpoch++;preparedViews.clear();preparedContext=null;preparedNotice=null;
@@ -3311,7 +3315,6 @@ function warmPreparedViews(context){
  const landingIsCurrent=preparedDestinations.includes(activeTab)&&
   !(activeTab==='history'&&historyView!=='categories');
  const views=preparedDestinations.filter(name=>!landingIsCurrent||name!==activeTab);
- const initialTab=activeTab;
  preparationProgress(preparedDestinations.length-views.length);
  let position=0;
  const work=()=>{
@@ -3393,7 +3396,8 @@ function render({navigationOnly=false}={}){
  // Any full render, even an uncached navigation, gets a fresh coherent set.
  // Prepared-page activations bypass render() altogether.
  invalidatePreparedViews();
- const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
+ const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live(),
+  sourceLoading=requestedReal()&&Boolean(window.HouseholdLiveSource?.loading);
  if(!root)return;
  const s=busy?{asOf:dateToday(),accounts:[]}:snapshot();
  mode.value=requestedReal()?'real':'demo';
@@ -3406,6 +3410,12 @@ function render({navigationOnly=false}={}){
   if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
  });
  $('bank-connect').hidden=!available();
+ if(sourceLoading){
+  root.innerHTML='<section class="panel">Loading your private bank connection…</section>';
+  const progress=$('planner-loading-progress');
+  if(progress)progress.textContent='Loading your bank information…';
+  return;
+ }
  if(busy){updateReviewTabCount(null);
   $('planner-notice').innerHTML='<div class="notice'+(window.HouseholdLiveSource?.error?' danger':'')+'"><div><strong>Real bank information is not available yet.</strong> '+
   escapeHTML(window.HouseholdLiveSource?.error||'Loading your private bank connection…')+
