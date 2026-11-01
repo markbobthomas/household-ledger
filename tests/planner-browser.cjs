@@ -512,6 +512,14 @@ const {chromium,webkit}=require('playwright');
     await page.setViewportSize({width,height:mobile?844:900});
     for(const tab of ['summary','schedules','history','activity']){
      await page.locator('.planner-nav-primary [data-view="'+tab+'"]').click();
+     // Uncached pages acknowledge the tab immediately and finish rendering
+     // after a paint opportunity. Verify geometry only after that transition.
+     await page.waitForFunction(tab=>{
+      const expected={summary:'summary-page',schedules:'schedule-page',
+       history:'history-page',activity:'history-page'}[tab];
+      return document.querySelector('#planner-main>.planner-page')?.classList.contains(expected)&&
+       !document.querySelector('#planner-main .ledger-page-wait');
+     },tab,{timeout:30000});
      assert.equal(await page.locator('.planner-nav-primary .tab-link.active').count(),1);
      if(tab==='history'){
        assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
