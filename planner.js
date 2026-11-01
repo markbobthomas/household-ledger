@@ -3264,6 +3264,9 @@ function settingsPage(bundle,s,chosen){
 // markup or forecasts into localStorage, Cache Storage or a service worker.
 const preparedViews=new Map();
 const preparedDestinations=['history','schedules','activity','reviews','settings','transactions'];
+// Safe diagnostic: page names only; never expose account data or snapshots.
+window.HouseholdPreparedViewStatus=()=>[...preparedViews.keys()]
+ .filter(name=>Boolean(preparedViews.get(name)?.element));
 let preparedEpoch=0,preparedContext=null,preparedNotice=null;
 function invalidatePreparedViews(){
  preparedEpoch++;preparedViews.clear();preparedContext=null;preparedNotice=null;
@@ -3354,7 +3357,9 @@ function activatePreparedView(view){
  return true;
 }
 function render({navigationOnly=false}={}){
- if(!navigationOnly)invalidatePreparedViews();
+ // Any full render, even an uncached navigation, gets a fresh coherent set.
+ // Prepared-page activations bypass render() altogether.
+ invalidatePreparedViews();
  const root=$('planner-main'),mode=$('ledger-mode-switch'),busy=requestedReal()&&!live();
  if(!root)return;
  const s=busy?{asOf:dateToday(),accounts:[]}:snapshot();
