@@ -533,14 +533,14 @@ function forecastCashBills(bundle,s,accountId=''){
 // Summary reports recurring or explicitly scheduled expenses on ALL accounts.
 // It excludes cash-to-card settlements, internal transfers, and unplanned shopping.
 // Never infer a bill from its category or merchant text alone.
-function postedScheduledBills(posted,s,settlements){
+function postedScheduledBills(posted,s,settlements,{includePending=false}={}){
  const accounts=activeAccounts(s),byId=new Map(accounts.map(a=>[String(a.id),a])),
   rules=state().predictions?.futureRecurringRules||[],
   T=window.HouseholdPlannerTransactions;
  return posted.flatMap(row=>{
   const account=byId.get(T.accountRef(row.accountId||row.account,accounts)),
    amount=Number(row.amount);
-  if(!account||row.pending||row.pairedTransactionId||
+  if(!account||(!includePending&&row.pending)||row.pairedTransactionId||
      T.bankDirection(row)!=='expense'||settlements.has(String(row.id))||
      row.accountingKind==='card_payment'||
      // An outgoing, unpaired Zelle-like transfer may be a confirmed expense.
@@ -571,7 +571,7 @@ function forecastBudgetExpenses(bundle,s,posted,settlements,months,accountId='al
    .map(a=>[String(a.id),a])),
   eventCategories=new Map((bundle.projection.events||[])
    .filter(e=>!e.transferGroupId).map(e=>[String(e.id),e.category])),
-  postedBills=postedScheduledBills(posted,s,settlements),seen=new Set();
+  postedBills=postedScheduledBills(posted,s,settlements,{includePending:true}),seen=new Set();
  return futureRows(bundle,s).flatMap(row=>{
   if(row.kind!=='event'||!['expense','refund'].includes(row.type)||
    !months.has(row.date.slice(0,7))||
@@ -1273,6 +1273,14 @@ function categorySpendingCents(row,settlements){
  if(settlements?.has(String(row.id)))return 0;
  return cardActivityCents(row)+window.HouseholdPlannerHistory.categorizedOutflowCents(row);
 }
+// Budget shows confirmed bank-visible pending purchases as provisional spending.
+// They remain excluded from *posted* activity, issued card statements, and
+// canonical balance forecasts. A pending row is never a card repayment,
+// linked transfer, or guessed merchant expense.
+function pendingBudgetCents(row,settlements){
+ if(!row?.pending||settlements?.has(String(row.id)))return 0;
+ return cardActivityCents({...row,pending:false});
+}
 function cardActivityCents(row){
  // The History statement total is purchases minus merchant refunds only.
  // A paired card payment is never a new purchase, even if an earlier
@@ -1939,7 +1947,8 @@ function historyMerchantKey(row){return historyMerchantName(row).toLocaleLowerCa
 // matching are untouched. Exclude pending, paired transfers and card payments.
 function historyInsights(rows,view,options={}){
  const spendCents=view==='categories'?
-  r=>categorySpendingCents(r,options.cardSettlementIds):cardActivityCents,
+  r=>categorySpendingCents(r,options.cardSettlementIds)+
+   pendingBudgetCents(r,options.cardSettlementIds):cardActivityCents,
   // Budget is NET spending: refunds are signed credits in the month of
   // posting, including months where the purchase was in an earlier period.
   purchases=rows.filter(r=>view==='categories'?spendCents(r)!==0:spendCents(r)>0),
@@ -1999,13 +2008,22 @@ function historyInsights(rows,view,options={}){
    options.budgets:{},periodMonths=Math.max(1,Number(options.months)||1),
    allAccounts=options.allAccounts!==false,
    predictions=options.predictedExpenses||[],
+   postedCents=purchases.reduce((sum,r)=>sum+categorySpendingCents(r,options.cardSettlementIds),0),
+   pendingCents=purchases.reduce((sum,r)=>sum+pendingBudgetCents(r,options.cardSettlementIds),0),
+   pendingCount=purchases.filter(r=>pendingBudgetCents(r,options.cardSettlementIds)!==0).length,
    expectedCents=predictions.reduce((sum,r)=>sum+r.cents,0),
-   usedCents=cents+expectedCents;
+   usedCents=postedCents+pendingCents+expectedCents;
   const groups=new Map();
   for(const r of purchases){
-   const category=String(r.category||'Other');
-   const g=groups.get(category)||{name:category,cents:0,count:0,expectedCents:0,expectedCount:0};
-   g.cents+=categorySpendingCents(r);g.count++;groups.set(category,g);
+   const category=String(r.category||'Other'),
+    posted=categorySpendingCents(r,options.cardSettlementIds),
+    provisional=pendingBudgetCents(r,options.cardSettlementIds);
+   const g=groups.get(category)||{name:category,cents:0,count:0,pendingCents:0,pendingCount:0,
+    expectedCents:0,expectedCount:0};
+   g.cents+=posted;g.pendingCents+=provisional;
+   if(posted)g.count++;
+   if(provisional)g.pendingCount++;
+   groups.set(category,g);
   }
   for(const r of predictions){
    const g=groups.get(r.name)||{name:r.name,cents:0,count:0,expectedCents:0,expectedCount:0};
@@ -2036,7 +2054,7 @@ function historyInsights(rows,view,options={}){
     return Number(left===undefined)-Number(right===undefined)||
      (left??0)-(right??0)||a.name.localeCompare(b.name);
    });
-  // The overall ratio counts ALL posted purchases, even in unbudgeted categories.
+  // The overall ratio counts posted and provisional purchases, including unbudgeted categories.
   // Only explicitly saved monthly targets form the budget denominator.
   const totalBudgetCents=values.reduce((sum,g)=>{
    if(!Object.hasOwn(budgets,g.name))return sum;
@@ -2045,6 +2063,7 @@ function historyInsights(rows,view,options={}){
     sum+Math.round(monthly*100)*periodMonths:sum;
   },0);
   const totalBudgetPercent=totalBudgetCents>0?Math.max(0,usedCents/totalBudgetCents*100):null;
+  const budgetUsedCents=g=>g.cents+(g.pendingCents||0)+(g.expectedCents||0);
   const budgetField=g=>{
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
@@ -2052,7 +2071,7 @@ function historyInsights(rows,view,options={}){
    // Budget rows are for comparing spent + expected against the selected
    // calendar months, not editing. The cap remains monthly; the overage is
    // measured against that cap multiplied by the selected month count.
-   const overCents=set?Math.max(0,g.cents+(g.expectedCents||0)-
+   const overCents=set?Math.max(0,budgetUsedCents(g)-
     Math.round(value*100)*periodMonths):0;
    return '<span class="history-budget-target" data-history-budget-display="'+
     escapeHTML(g.name)+'" data-budget-monthly="'+(set?value.toFixed(2):'')+
@@ -2082,7 +2101,7 @@ function historyInsights(rows,view,options={}){
   const budgetOver=g=>{
    const target=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN;
    return Number.isFinite(target)&&target>=0&&
-    (g.cents+(g.expectedCents||0))>Math.round(target*100)*periodMonths;
+    budgetUsedCents(g)>Math.round(target*100)*periodMonths;
   };
   // Visual comparison only; use the same monthly target and selected period as
   // the saved budget target. Bank transactions and forecasts are untouched.
@@ -2090,10 +2109,11 @@ function historyInsights(rows,view,options={}){
    const raw=Object.hasOwn(budgets,g.name)?Number(budgets[g.name]):NaN,
     set=Number.isFinite(raw)&&raw>=0,
     monthly=set?Math.round(raw*100)/100:0,
-    spent=(g.cents+(g.expectedCents||0))/100,totalBudget=monthly*periodMonths,
+    spent=budgetUsedCents(g)/100,totalBudget=monthly*periodMonths,
     over=budgetOver(g),
     percent=!set?0:totalBudget>0?Math.max(0,Math.min(100,spent/totalBudget*100)):over?100:0,
-    description=set?cash(spent)+(g.expectedCount?' spent + expected of ':' spent of ')+cash(totalBudget)+' budget for '+g.name+
+    description=set?cash(spent)+((g.pendingCount||0)?' including pending of ':
+     g.expectedCount?' spent + expected of ':' spent of ')+cash(totalBudget)+' budget for '+g.name+
      (periodMonths>1?' over '+periodMonths+' months':' this month')+
      (over?' (over budget)':''):
      'No monthly budget set for '+g.name;
@@ -2105,7 +2125,8 @@ function historyInsights(rows,view,options={}){
     '" title="'+escapeHTML(description)+'" style="--budget-used:'+percent.toFixed(2)+'%">'+
     '<span class="history-budget-fill" style="width:'+percent.toFixed(2)+'%"></span>'+
     '<strong class="history-category-actual'+(over?' over':'')+
-    '" data-budget-marker title="'+escapeHTML(cash(g.cents/100)+' spent · '+
+    '" data-budget-marker title="'+escapeHTML(cash(g.cents/100)+' posted · '+
+     cash((g.pendingCents||0)/100)+' pending · '+
      cash((g.expectedCents||0)/100)+' expected')+'">'+cash(spent)+'</strong></span>';
   };
   const budgetSummary=allAccounts?
@@ -2118,14 +2139,20 @@ function historyInsights(rows,view,options={}){
      '<div class="history-budget-summary-track'+(totalBudgetPercent>100?' over':'')+
       '" role="img" aria-label="'+escapeHTML(
        cash(usedCents/100)+' of '+cash(totalBudgetCents/100)+
-       ' budget used, including unbudgeted category spending and predictions, '+Math.round(totalBudgetPercent)+
+       ' budget used, including posted, pending and predicted spending in all categories, '+Math.round(totalBudgetPercent)+
        ' percent')+'">'+
       '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>':
     '';
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
-  const spendingOverview='<div class="history-spending-overview" aria-label="'+escapeHTML(cash(usedCents/100)+' spent and expected across '+n+' spending transactions')+'">'+
-    '<strong>'+cash(usedCents/100)+(expectedCents?' spent + expected':' spent')+'</strong>'+
-    '<span>'+n+' transactions'+(expectedCents?' · '+cash(total)+' spent · '+cash(expectedCents/100)+' expected':'')+'</span></div>';
+  const spendingOverview='<div class="history-spending-overview" aria-label="'+
+   escapeHTML(cash(usedCents/100)+' budget usage: '+cash(postedCents/100)+' posted, '+
+    cash(pendingCents/100)+' pending, '+cash(expectedCents/100)+' expected')+'">'+
+    '<strong>'+cash(usedCents/100)+
+     (pendingCents?' spent + pending + expected':expectedCents?' spent + expected':' spent')+'</strong>'+
+    '<span>'+n+' transactions'+(pendingCount?' ('+(n-pendingCount)+' posted · '+pendingCount+' pending)':'')+
+     ((expectedCents||pendingCents)?' · '+cash(postedCents/100)+' spent'+
+      (pendingCents?' · '+cash(pendingCents/100)+' pending':'')+
+      (expectedCents?' · '+cash(expectedCents/100)+' expected':''):'')+'</span></div>';
   return '<section class="history-insight-panel" data-history-category-insights>'+
    '<div class="history-category-panel-heading">'+spendingOverview+
     '<details class="history-category-manager" data-history-category-manager>'+
@@ -2167,7 +2194,9 @@ function historyInsights(rows,view,options={}){
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="See category transactions">'+
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
-      '<small>'+g.count+' transactions'+(g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button></div>'+ 
+      '<small>'+(g.count+(g.pendingCount||0))+' transactions'+
+       (g.pendingCount?' · '+g.pendingCount+' pending':'')+
+       (g.expectedCount?' · '+g.expectedCount+' expected':'')+'</small></span></button></div>'+ 
      budgetBar(g)+
      '<div class="history-category-budget">'+budgetField(g)+'</div></div>').join('')+
     '</div></div>':'<p class="history-insight-empty">No purchases or saved budgets in this period.</p>')+
@@ -2528,13 +2557,14 @@ function historyPage(bundle,s){
   String(t.id)===latestCategorySave.id);
  const budgetSaveFeedback=(displayView==='categories'||displayView==='list')&&savedRow?(()=>{
   const amount=categorySpendingCents(savedRow,budgetCardSettlements),
+   provisional=pendingBudgetCents(savedRow,budgetCardSettlements),
    month=savedRow.date.slice(0,7),
    monthText=new Date(month+'-01T12:00:00Z').toLocaleDateString('en-US',{
     month:'long',year:'numeric',timeZone:'UTC'}),
    inMonth=historySelectedMonths.has(month),
    inAccount=historyAccount==='all'||String(window.HouseholdPlannerHistory.accountOf(savedRow,accounts))===historyAccount,
    category=escapeHTML(categoryLabel(savedRow.category));
-  const eligible=amount!==0,
+  const eligible=amount!==0||provisional!==0,
    nonSpending=savedRow.pending?'pending transaction':savedRow.type==='income'?'deposit':
     ['card_payment','internal_transfer'].includes(savedRow.accountingKind)||
      budgetCardSettlements.has(String(savedRow.id))?'card payment or internal transfer':'transaction';
@@ -2544,10 +2574,13 @@ function historyPage(bundle,s){
    // navigating to Budget. A prior-month or account-filtered transaction
    // cannot silently appear in the currently selected month's totals.
    message='Saved to '+category+' · '+monthText+'. '+
-    (eligible?'View the updated spending in Budget.':
-     'This '+nonSpending+' does not count as posted Budget spending.');
+    (provisional?'This bank charge is pending and included provisionally in Budget.':
+     eligible?'View the updated spending in Budget.':
+     'This '+nonSpending+' does not count as Budget spending.');
   }else if(!eligible)message='Saved to '+category+', but this '+
-   nonSpending+' does not count as posted Budget spending.';
+   nonSpending+' does not count as Budget spending.';
+  else if(provisional)message='Saved to '+category+' · '+monthText+
+   '. This charge is pending and included provisionally in Budget.';
   else if(!inMonth||!inAccount)message='Saved to '+category+' · '+monthText+
    '. This transaction is outside the selected Budget '+(!inMonth?'months':'account')+'.';
   else message='Updated '+category+' Budget for '+monthText+'.';
