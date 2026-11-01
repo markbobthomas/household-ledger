@@ -287,7 +287,7 @@ async function start(port=Number(env.PORT||8788)){
    const token=await auth.issue();
    auth.successful(ip);
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
-    'X-Content-Type-Options':'nosniff','Set-Cookie':[auth.cookie(token),auth.clearSignedOut()]});
+    'X-Content-Type-Options':'nosniff','Set-Cookie':[auth.cookie(token),auth.clearSignedOut(),auth.upgradedCookie()]});
    return res.end(JSON.stringify({signedIn:true,expiresInDays:90}));
   }
   if(req.method==='POST'&&requestPath==='/auth/logout'){
@@ -305,7 +305,7 @@ async function start(port=Number(env.PORT||8788)){
   // Compatibility with previously cached browser HTTP Basic credentials and
   // existing API clients. Only a first-party session gives 90-day persistence.
   const cookieSession=auth.authenticated(req);
-  const basicAuthorized=basic&&!auth.isSignedOut(req);
+  const basicAuthorized=basic&&!auth.isSignedOut(req)&&!auth.wasUpgraded(req);
   if(!cookieSession&&!basicAuthorized){
    if(req.method==='GET'&&!requestPath.startsWith('/api/')){
     res.writeHead(303,{'Location':'/login','Cache-Control':'no-store'});return res.end();
@@ -316,7 +316,7 @@ async function start(port=Number(env.PORT||8788)){
   // its next page load; do not force the household to enter a new password.
   const upgradeCookie=!cookieSession&&basicAuthorized&&req.method==='GET'&&
    (requestPath==='/'||requestPath==='/index.html')?
-    [auth.cookie(await auth.issue()),auth.clearSignedOut()]:null;
+    [auth.cookie(await auth.issue()),auth.clearSignedOut(),auth.upgradedCookie()]:null;
   if(req.method==='GET'&&requestPath==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
   const staticPath=requestPath.slice(1);
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js|manifest[.]webmanifest|ledger-icon[.]png)$/;
