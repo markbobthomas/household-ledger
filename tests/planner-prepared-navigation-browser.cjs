@@ -109,6 +109,56 @@ const {chromium,webkit}=require('playwright');
    assert.ok(postFilter.cached.includes('summary')&&postFilter.cached.includes('schedules'),
     'Home and Bills remain prepared while filters update');
    await page.locator('.history-activity-filters [data-history-sort]').selectOption('newest');
+   // Every read-only filter must preserve the prepared forecast and unrelated
+   // page cache; these are work-count invariants, not machine-speed guesses.
+   const assertCheapFilter=async label=>{
+    const result=await page.evaluate(()=>({
+     generation:window.HouseholdPreparedViewGeneration(),
+     work:window.HouseholdPlannerWorkStats(),
+     cached:window.HouseholdPreparedViewStatus()
+    }));
+    assert.equal(result.generation,preFilter.generation,label+' must retain prepared generation');
+    assert.equal(result.work.forecastBuilds,preFilter.work.forecastBuilds,
+     label+' must not build a financial forecast');
+    assert.equal(result.work.historyNormalizations,preFilter.work.historyNormalizations,
+     label+' must reuse normalized bank history');
+    assert.ok(result.cached.includes('summary')&&result.cached.includes('schedules'),
+     label+' must keep Home and Bills prepared');
+   };
+   const categories=await page.locator('.history-activity-filters [data-history-category-filter] option')
+    .evaluateAll(options=>options.map(option=>option.value).filter(Boolean));
+   if(categories.length){
+    await page.locator('.history-activity-filters [data-history-category-filter]').selectOption(categories[0]);
+    assert.equal(await page.locator('.history-activity-filters [data-history-category-filter]').inputValue(),categories[0]);
+    const visibleCats=await page.locator('.history-entry [data-history-category]')
+     .evaluateAll(selects=>selects.map(select=>select.value));
+    assert.ok(visibleCats.every(value=>value===categories[0]),
+     'Category filter must not display a different category');
+    await assertCheapFilter('Category selection');
+    await page.locator('.history-activity-filters [data-history-category-filter]').selectOption('');
+   }
+   const accounts=await page.locator('.history-activity-filters [name="historyAccount"] option')
+    .evaluateAll(options=>options.map(option=>option.value).filter(value=>value!=='all'));
+   if(accounts.length){
+    await page.locator('.history-activity-filters [name="historyAccount"]').selectOption(accounts[0]);
+    assert.equal(await page.locator('.history-activity-filters [name="historyAccount"]').inputValue(),accounts[0]);
+    await assertCheapFilter('Account selection');
+    await page.locator('.history-activity-filters [name="historyAccount"]').selectOption('all');
+   }
+   await page.locator('.history-activity-filters [data-history-month-toggle]').click();
+   await page.locator('.history-activity-filters [data-history-month-all]').click();
+   await assertCheapFilter('All-month selection');
+   await page.locator('.history-activity-filters [data-history-month-current]').click();
+   await assertCheapFilter('This-month selection');
+   await page.locator('.history-activity-filters input[name="search"]').fill('fictional-never-match-987654');
+   await page.locator('.history-activity-filters input[name="search"]').press('Enter');
+   assert.equal(await page.locator('.history-activity-filters [data-history-month-menu]').isHidden(),true,
+    'Submitting Activity search closes the month overlay so Clear is clickable');
+   assert.equal(await page.locator('.history-entry').count(),0,'Search must filter visible records');
+   await assertCheapFilter('Search submit');
+   await page.locator('[data-clear-history-search]').click();
+   assert.equal(await page.locator('.history-activity-filters input[name="search"]').inputValue(),'');
+   await assertCheapFilter('Clear search');
    await jump('reviews','reviews-page');
    await jump('settings','settings-page');
    await jump('transactions','transactions-page');

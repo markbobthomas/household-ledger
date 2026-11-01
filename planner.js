@@ -4417,10 +4417,10 @@ document.addEventListener('click',async e=>{
  }
  if(e.target.closest('[data-more-category-review]')){categoryReviewLimit+=40;render();return}
  if(e.target.closest('[data-history-more]')){
-  historyLimit+=90;render();return;
+  historyLimit+=90;renderHistoryFilters();return;
  }
  if(e.target.closest('[data-clear-history-search]')){
-  historySearch='';historyLimit=90;render();return;
+  historySearch='';historyLimit=90;renderHistoryFilters();return;
  }
  const mortgageReview=e.target.closest('[data-review-mortgage]');
  if(mortgageReview){
@@ -4919,6 +4919,9 @@ document.addEventListener('submit',async e=>{
  e.preventDefault();
  const fields=Object.fromEntries(new FormData(form));
  historySearch=String(fields.search||'').trim().slice(0,100);
+ // Submitting a search should dismiss the month popover: otherwise it can
+ // overlay the Clear button and trap subsequent taps on narrow screens.
+ historyMonthPickerOpen=false;
  historyAccount=String(fields.historyAccount||'all');
  historyCategoryFilter=String(fields.historyCategory||'');
  historySort=['newest','oldest','amount-desc','amount-asc','merchant','category']

@@ -30,6 +30,8 @@ The balance calculator does not recognize merchants, mortgages, or subscriptions
 
 The only financial specialty is a credit-card statement/autopay adapter (`payment-obligations.js`), which adds linked payments to the **same future ledger** before balance calculation. A card purchase raises that card's projected debt but does not debit checking until a separately forecast linked card payment occurs. Card statements are estimates unless an issued amount was entered, and no payments are initiated.
 
+**UI responsiveness:** See [PERFORMANCE_ARCHITECTURE.md](PERFORMANCE_ARCHITECTURE.md) for the mandatory scoped-render and cache-invalidation rules introduced with the faster Spending/Activity filters. Switching already-prepared views or changing a visual filter must reuse in-memory data without recalculating the canonical three-year balance forecast or reconstructing unrelated pages. True bank or forecast edits still invalidate their dependent caches.
+
 ### Key files
 
 - `planner-core.js`: one generalized bank-history analyzer, canonical future-ledger builder, pure balance calculator, and walk-forward accuracy audit.
