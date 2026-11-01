@@ -72,7 +72,16 @@ function build(snapshot,expectedEvents=[],plans=[],options={}){
   const valid=type!=='unsupported'&&initial!==null&&!disconnected;
   const live=sourceIsLive||a.provider==='plaid'||a.source?.provider==='plaid';
   const observedRaw=a.balanceAsOf||a.observedAt||a.balanceObservedAt||a.asOf||null;
-  const observedDate=observedRaw?String(observedRaw).slice(0,10):null;
+  // This application's as-of day is Pacific; a late evening UTC timestamp
+  // can otherwise look like tomorrow and disable a trustworthy balance.
+  const observedDate=observedRaw?(()=>{
+   const raw=String(observedRaw);
+   if(!raw.includes('T')||!Number.isFinite(Date.parse(raw)))return raw.slice(0,10);
+   const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',
+    year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(raw));
+   const part=type=>parts.find(p=>p.type===type)?.value||'';
+   return part('year')+'-'+part('month')+'-'+part('day');
+  })():null;
   const age=observedDate&&iso(observedDate)?deltaDays(asOf,observedDate):null;
   const simulated=snapshot.mode==='demo'||a.simulated===true;
   const balanceStatus=disconnected?'disconnected':!valid?'unavailable':simulated?'simulated':
