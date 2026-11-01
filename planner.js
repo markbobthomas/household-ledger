@@ -2212,7 +2212,7 @@ function historyInsights(rows,view,options={}){
       '<span aria-hidden="true">⠿</span></button>'+
      '<button type="button" class="history-category-drill" data-history-drill-category="'+
       escapeHTML(g.name)+'" title="Show category expenses" aria-expanded="false"'+
-      ((g.items||[]).length?'':' disabled')+'>',
+      ((g.items||[]).length?'':' disabled')+'>'+
      '<span class="history-category-name">'+escapeHTML(categoryLabel(g.name))+
       '<small>'+(g.count+(g.pendingCount||0))+' transaction'+
        (g.count+(g.pendingCount||0)===1?'':'s')+
