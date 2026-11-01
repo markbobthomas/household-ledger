@@ -2139,7 +2139,7 @@ function historyInsights(rows,view,options={}){
      '<div class="history-budget-summary-track'+(totalBudgetPercent>100?' over':'')+
       '" role="img" aria-label="'+escapeHTML(
        cash(usedCents/100)+' of '+cash(totalBudgetCents/100)+
-       ' budget used, including posted, pending and predicted spending in all categories, '+Math.round(totalBudgetPercent)+
+       ' budget used, including unbudgeted category spending, posted and pending purchases and predictions, '+Math.round(totalBudgetPercent)+
        ' percent')+'">'+
       '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>':
     '';
