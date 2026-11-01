@@ -5,6 +5,7 @@ const assert=require('node:assert/strict');
 const crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {spawn}=require('node:child_process');
 const {chromium,webkit}=require('playwright');
+const {prepare:serverPrepare,VERSION:serverForecastVersion}=require('../pilot/prepared-forecast.cjs');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-private-category-'));
 const port=19849,pass='test-'+crypto.randomBytes(24).toString('hex');
 const env={...process.env,PORT:String(port),PILOT_PASSWORD:pass,
@@ -60,6 +61,42 @@ let desktop,iphone;
   assert.ok(!/Calendar needs attention|categorization component failed to load/i.test(outcome.text),
    name+': no misleading missing-bank Calendar error');
   assert.deepEqual(errors,[],name+': no uncaught errors while loading private Calendar');
+
+  // Regression for the live bank initialization order: private data-source.js
+  // is injected before ledger-data.js. A prior eager reference captured null
+  // permanently, even though the later file finished loading successfully.
+  const today=await page.evaluate(()=>window.HouseholdBankFeed.localDate());
+  const fakeAccount={
+   id:'fictional-checking-1',name:'Fictional Checking',type:'depository',
+   subtype:'checking',itemId:'fictional-institution',current:8750,
+   available:8750,balanceObservedAt:new Date().toISOString(),currency:'USD'
+  };
+  const fixture={connected:true,account:fakeAccount,accounts:[fakeAccount],
+   lastSync:new Date().toISOString(),transactions:[{
+    id:'fictional-private-grocery',accountId:fakeAccount.id,
+    itemId:fakeAccount.itemId,date:today,name:'Fictional Grocery',
+    merchant:'Fictional Grocery',amount:27.75,pending:false
+   }],adjustments:{predictions:{warnBelow:500}}};
+  const calculated=serverPrepare(fixture,today);
+  assert.equal(calculated.version,serverForecastVersion);
+  await page.route('**/api/ledger',route=>route.fulfill({
+   status:200,contentType:'application/json',
+   headers:{'cache-control':'no-store'},
+   body:JSON.stringify({...fixture,preparedForecast:calculated})
+  }));
+  await page.evaluate(()=>localStorage.setItem('household-ledger-view-mode','real'));
+  await page.reload({waitUntil:'load'});
+  await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK'||
+   document.querySelector('#planner-notice')?.textContent?.includes('Real bank information is not available yet'),null,{timeout:30000});
+  assert.equal(await page.locator('#source-type').textContent(),'REAL BANK',
+   name+': real mode loads bank data after its model is available');
+  await page.waitForFunction(()=>window.HouseholdAllViewsReady?.(),null,{timeout:35000});
+  assert.equal(await page.locator('.summary-page').count(),1,
+   name+': real forecast calendar is visible, not a bank reconnection warning');
+  assert.doesNotMatch(await page.locator('#planner-notice').innerText(),
+   /Real bank information is not available yet|DataModel\\.migrate|null is not an object/,
+   name+': no false bank disconnection from script order');
+  assert.deepEqual(errors,[],name+': no browser errors in authenticated Real startup');
   await context.close();
  }
  console.log('PASS private inline classifier, blocked standalone fetch, and safe Plaid record processing in desktop Chromium and iPhone WebKit');

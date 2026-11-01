@@ -5,7 +5,11 @@
 const MODE='household-ledger-view-mode';
 const Accounting=root.HouseholdAccounting||(typeof require==='function'?require('../accounting.js'):null);
 const Categorization=root.HouseholdCategorization||(typeof require==='function'?require('../categorization.js'):null);
-const DataModel=root.HouseholdLedgerData||(typeof require==='function'?require('../ledger-data.js'):null);
+// This private adapter is deliberately injected BEFORE ledger-data.js so
+// it can bind real bank loading early. Resolve the model only when an actual
+// bank payload arrives, after the following parser-blocking script has run.
+const dataModel=()=>root.HouseholdLedgerData||
+ (typeof require==='function'?require('../ledger-data.js'):null);
 let host=null,live=false,loading=false,writeQueue=Promise.resolve(),loadedAccount=null,lastError='',lastErrorKind='bank',serverRevision='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','"':'&#39;'}[c]));
 const BankFeed=root.HouseholdBankFeed||(typeof require==='function'?require('../bank-feed.js'):null);
@@ -95,7 +99,9 @@ function prepare(payload,asOf=today()){
   return bank?record(t,bank):null;
  }).filter(Boolean);
  const adjustments=payload.adjustments||{};
- const state=DataModel.migrate({
+ const model=dataModel();
+ if(typeof model?.migrate!=='function')throw Error('The Ledger data model is unavailable. Reload the page; your bank data and saved changes are unchanged.');
+ const state=model.migrate({
   transactions:rows,items:[],
   accounts:banks.map(a=>({id:a.id,name:a.name,type:a.type,subtype:a.subtype,
    institution:'Connected via Plaid',itemId:a.itemId||'connected-bank-item'})),
