@@ -11,7 +11,7 @@
 <link rel="icon" type="image/png" sizes="180x180" href="/ledger-icon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/ledger-icon.png">
 <title>Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=prepared-views-gated-20261031-v1">
+<link rel="stylesheet" href="planner.css?v=prepared-views-gated-20261031-v2">
 </head>
 <body>
 <main class="shell"><div class="content">
@@ -100,6 +100,7 @@
    // Cancel an older uncached destination so a rapid subsequent tap wins.
    sequence++;wanted=null;
    root.querySelector('.ledger-page-wait')?.remove();
+   root.removeAttribute('aria-busy');
    return;
   }
   // Until the existing warmup finishes, keep the tab interactive and visible.
@@ -118,22 +119,33 @@
   placeholder.setAttribute('role','status');
   placeholder.textContent='Loading '+(button.textContent.trim()||'page')+'…';
   root.appendChild(placeholder);
+  root.setAttribute('aria-busy','true');
   if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
   if(splash&&window.HouseholdAllViewsReady?.())splash.style.display='none';
   const replay=()=>{
    if(id!==sequence||!wanted)return;
    if(window.HouseholdAllViewsReady?.()){
-    wanted=null;placeholder.remove();
-    // Original listener owns actual rendering and financial state.
+    wanted=null;
+    // Keep the in-page loading surface visible through the synchronous
+    // destination build. Render/DOM swap removes it only after the new page
+    // is ready, rather than exposing a frozen previous page.
     replaying=true;
-    try{button.click()}finally{replaying=false}
+    try{button.click()}finally{
+     replaying=false;
+     if(placeholder.isConnected)placeholder.remove();
+     root.removeAttribute('aria-busy');
+    }
    }else setTimeout(replay,35);
   };
-  setTimeout(replay,35);
+  // A task immediately after a paint frame lets Safari/Chromium paint the
+  // newly selected tab and spinner BEFORE any expensive Activity markup.
+  if(typeof requestAnimationFrame==='function'&&document.visibilityState!=='hidden')
+   requestAnimationFrame(()=>setTimeout(replay,0));
+  else setTimeout(replay,35);
  },true);
 })();
 </script>
-<script src="planner.js?v=all-pages-prepared-20261031-v1"></script>
+<script src="planner.js?v=activity-loading-after-edit-20261031-v1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>

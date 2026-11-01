@@ -160,6 +160,54 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-calendar-today]').click();
    assert.equal(await page.locator('.calendar-month-title').innerText(),before,
     'Today returns from a future month');
+   // Regression: a saved category edit invalidates the in-memory pages.
+   // Keep optional idle rebuilding queued so this tests an actual cold
+   // Activity navigation, not a lucky fully re-prepared cache.
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   const picker=page.locator('.history-page [data-history-category]').first();
+   assert.ok(await picker.count()>0,'Fictional Activity has categorized bank rows');
+   const original=await picker.inputValue();
+   const changed=await picker.locator('option').evaluateAll((options,old)=>
+    options.map(option=>option.value).find(value=>value!==old&&value!=='Uncategorized'),original);
+   assert.ok(changed,'Category editor offers another category');
+   await page.evaluate(()=>{
+    window.__queuedNavigationRebuilds=[];
+    window.requestIdleCallback=callback=>{
+     window.__queuedNavigationRebuilds.push(callback);
+     return window.__queuedNavigationRebuilds.length;
+    };
+   });
+   const editGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
+   await picker.selectOption(changed);
+   await page.waitForFunction(previous=>
+    window.HouseholdPreparedViewGeneration()>previous,editGeneration,{timeout:10000});
+   assert.equal(await page.locator('.history-page [data-history-category]').first().inputValue(),changed,
+    'Saved category remains selected after the fresh Activity render');
+   const coldJump=async view=>{
+    const immediate=await page.evaluate(view=>{
+     const button=document.querySelector('.planner-nav-primary [data-view="'+view+'"]');
+     const start=performance.now();button.click();
+     return {duration:performance.now()-start,
+      selected:button.classList.contains('active'),
+      busy:document.querySelector('#planner-main')?.getAttribute('aria-busy'),
+      loading:!!document.querySelector('#planner-main .ledger-page-wait')};
+    },view);
+    assert.ok(immediate.duration<180&&immediate.selected&&immediate.loading&&immediate.busy==='true',
+     device+' uncached '+view+' acknowledges the tap with an in-page loader: '+JSON.stringify(immediate));
+    assert.equal(await page.evaluate(()=>new Promise(resolve=>
+     requestAnimationFrame(()=>resolve(!!document.querySelector('#planner-main .ledger-page-wait'))))),true,
+     'The loading screen remains through a paint opportunity');
+    await page.waitForFunction(view=>Boolean(document.querySelector('#planner-main>.planner-page'))&&
+     !document.querySelector('#planner-main .ledger-page-wait')&&
+     (view==='activity'?!!document.querySelector('.history-activity-filters'):
+      !!document.querySelector('.history-spending-overview')),view,{timeout:30000});
+    assert.notEqual(await page.locator('#planner-main').getAttribute('aria-busy'),'true',
+     'The page returns to idle once rebuilt');
+   };
+   await coldJump('history');
+   await coldJump('activity');
+   assert.equal(await page.locator('.history-page [data-history-category]').first().inputValue(),changed,
+    'Category edits survive cold Activity navigation without stale prepared markup');
    await context.close();
    assert.deepEqual(errors,[],device+' console errors');
   }
