@@ -26,14 +26,17 @@ const {chromium,webkit}=require('playwright');
    const page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto(url,{waitUntil:'load'});
-   await page.locator('.summary-page').waitFor();
+   await page.locator('.summary-page').waitFor({state:'attached'});
+   assert.equal(await page.locator('#planner-loading').count(),1,
+    'Initial load has a full-screen preparation gate');
    const initialMonth=await page.locator('.calendar-month-title').innerText();
-   // Home is immediately ready; inactive pages are prepared one per idle period.
-   await page.waitForFunction(()=>window.HouseholdPreparedViewStatus&&
-    ['history','schedules','activity','reviews','settings','transactions']
-    .every(name=>window.HouseholdPreparedViewStatus().includes(name)),null,{timeout:25000});
+   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.()&&
+    ['summary','history','schedules','activity','reviews','settings','transactions','trend']
+    .every(name=>window.HouseholdPreparedViewStatus().includes(name)),null,{timeout:35000});
+   assert.equal(await page.locator('#planner-loading').isHidden(),true,
+    'Navigation is enabled only after all eight main pages have been prepared');
    assert.equal(await page.locator('.summary-page').count(),1,
-    'Background preparation never replaces the visible Home calendar');
+    'Preparation never replaces the visible Home calendar');
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
     'Background preparation never changes the selected calendar month');
    const jump=async (view,expected)=>{
@@ -43,11 +46,12 @@ const {chromium,webkit}=require('playwright');
      button.click();
      return {elapsed:performance.now()-begin,
       visible:document.querySelector('#planner-main>.planner-page')?.className,
-      stillPrepared:window.HouseholdPreparedViewStatus().includes(view)};
+      ready:window.HouseholdAllViewsReady(),
+      generation:window.HouseholdPreparedViewGeneration()};
     },view);
     assert.ok(result.visible?.includes(expected),
      'Prepared '+view+' is displayed synchronously: '+JSON.stringify(result));
-    assert.equal(result.stillPrepared,false,'Activated destination is consumed');
+    assert.equal(result.ready,true,'Ready gate stays released during pure navigation');
     assert.ok(result.elapsed<180,
      device+' prepared '+view+' should switch without full data processing: '+JSON.stringify(result));
    };
@@ -61,17 +65,29 @@ const {chromium,webkit}=require('playwright');
    await jump('reviews','reviews-page');
    await jump('settings','settings-page');
    await jump('transactions','transactions-page');
+   await jump('summary','summary-page');
+   await jump('history','history-page');
+   await jump('schedules','schedule-page');
+   await jump('activity','history-page');
+   assert.equal(await page.locator('.history-activity-filters').count(),1,
+    'Returning to Activity reuses the correctly scoped page');
+   const beforeRepeatedNav=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
+   await jump('history','history-page');
+   await jump('summary','summary-page');
+   assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),beforeRepeatedNav,
+    'Repeated navigation reuses prepared nodes without invalidating or regenerating them');
 
-   // Any real re-render invalidates ALL prepared old pages, not just the
-   // visible destination, so edits and bank refreshes cannot show stale HTML.
+   // A real re-render rebuilds every prepared page behind the loading gate.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    const priorGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
    await page.locator('[data-history-view="merchants"]').click();
    const currentGeneration=await page.evaluate(()=>window.HouseholdPreparedViewGeneration());
    assert.ok(currentGeneration>priorGeneration,
     'Non-navigation edits increment cache generation and discard previous prepared views');
-   await page.waitForFunction(()=>window.HouseholdPreparedViewStatus()?.includes('schedules'),null,{timeout:25000});
+   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.()&&
+    window.HouseholdPreparedViewStatus()?.includes('schedules'),null,{timeout:35000});
    await page.locator('.planner-nav-primary [data-view="history"]').click();
+   await page.waitForFunction(()=>window.HouseholdAllViewsReady?.(),null,{timeout:35000});
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     'Opening Spending always returns to Budget');
    assert.equal(await page.locator('.history-spending-overview strong').innerText(),budget,
