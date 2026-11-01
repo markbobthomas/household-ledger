@@ -65,6 +65,9 @@ let liveState=null,liveSnapshot=null,selectedAccount=null,latestError='',lastSug
 // Derived data only. Source bank records and persisted predictions remain the
 // authorities; this cache cannot be written to the bank or planning store.
 let forecastCache=null,serverPreparedForecast=null;
+let historyDataCache=null;
+const workStats={forecastBuilds:0,historyNormalizations:0,historyPageBuilds:0,filterRefreshes:0};
+window.HouseholdPlannerWorkStats=()=>({...workStats});
 let activeTab=window.HouseholdPlannerSummary?.render?preferredOpeningPage():'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 // A tab switch does not alter bank history or review decisions. Keep the
@@ -159,6 +162,7 @@ function forecastFor(s){
  // The only planning entry point: normalize Plaid history, materialize one
  // editable future ledger, then calculate all balances from those entries.
  // Older inference and category forecast engines do not feed balances.
+ workStats.forecastBuilds++;
  const bundle=window.HouseholdFutureLedger.materialize(
   s,model.records(source),prefs,
   window.HouseholdPlannerTransactions,window.HouseholdPaymentObligations,horizon,
@@ -2438,6 +2442,14 @@ function updateHistorySelectionSummary(){
  if(total)total.textContent='Net total: '+(cents<0?'−':cents>0?'+':'')+cash(Math.abs(cents)/100);
  if(clear)clear.hidden=checked.length===0;
 }
+function historyRecords(s){
+ if(historyDataCache&&historyDataCache.source===state()&&historyDataCache.asOf===s.asOf)
+  return historyDataCache.records;
+ const records=model.records(state()).filter(t=>t.date&&t.date<=s.asOf);
+ historyDataCache={source:state(),asOf:s.asOf,records};
+ workStats.historyNormalizations++;
+ return records;
+}
 // Spending navigation reflects the user's questions, not implementation modules.
 // The existing Summary stays read-only and uses the unchanged canonical totals.
 function spendingTabNav(active){
@@ -2449,28 +2461,30 @@ function spendingTabNav(active){
    .join('')+'</nav>';
 }
 function historyPage(bundle,s){
+ workStats.historyPageBuilds++;
  if(activeTab==='history'&&historyView==='summary')return '<div class="planner-page history-page spending-summary-page">'+
   '<div class="history-view-toolbar">'+spendingTabNav('summary')+'</div>'+
   financialRecapPage(bundle,s)+'</div>';
  const displayView=activeTab==='activity'?'list':historyView;
  const accounts=activeAccounts(s),
+  rawRecords=historyRecords(s),
   // Read the current category overrides directly. The derived forecast is
   // independently cached and must never be the authority for Budget totals.
-  records=model.records(state()).filter(x=>x.date&&x.date<=s.asOf)
+  records=historyDataCache.displayRecords||(historyDataCache.displayRecords=rawRecords
   .map(t=>({...t,category:
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='income'?'Income':
     t.method!=='unassigned'&&['Other','Uncategorized',''].includes(t.category||'Other')&&t.type==='transfer'?'Transfer':
     model.canonicalCategory(state(),t.category)||t.category||'Other'}))
-  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),
+  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)))),
   // Both filters and row editors consult the same canonical category registry.
   // Effective provider labels are included as read-only observed names; they
   // are not saved as duplicate registry entries.
-  categories=categoryOptionsWithOther(model.categories(state(),records.map(t=>t.category))),
+  categories=historyDataCache.displayCategories||(historyDataCache.displayCategories=categoryOptionsWithOther(model.categories(state(),records.map(t=>t.category)))),
   filterCategories=categories;
  const picker=spendingMonthPicker(records,s.asOf,displayView==='categories');
  // Use complete posted, cross-account history to recognize a bank-coded card
  // payment even when the Budget is filtered to one account or calendar month.
- const budgetCardSettlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records);
+ const budgetCardSettlements=historyDataCache.settlements||(historyDataCache.settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(records));
  const filtered=records.filter(t=>{
   if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
   if(displayView==='list'&&historyPurchaseDrill&&
@@ -2556,6 +2570,13 @@ function historyPage(bundle,s){
  if(displayView==='list'){
  const savedRules=state().predictions?.futureRecurringRules||[];
  const projections=futureRows(bundle,s);
+ // Build the automatic forecast lookup once instead of scanning every
+ // three-year prediction for each visible bank transaction.
+ const autoKeys=new Set(projections.filter(r=>
+  r.kind==='event'&&String(r.id||'').startsWith('auto|')).map(r=>
+   JSON.stringify([String(r.sourceAccountId||r.accountId),r.sourceType,
+    window.HouseholdPlannerTransactions.recurrenceKey(
+     r.sourceAccountId||r.accountId,r.sourceType,r.sourceMerchant)])));
  const rowMarkup=visible.map(t=>{
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   const incoming=['income','refund'].includes(t.type)||
@@ -2563,10 +2584,8 @@ function historyPage(bundle,s){
   const tools=window.HouseholdPlannerTransactions,
    matches=tools.historicalScheduleMatches(t,accounts,savedRules),
    ambiguous=matches.length>1,kind=tools.bankDirection(t),
-   predicted=projections.some(r=>r.kind==='event'&&String(r.id||'').startsWith('auto|')&&
-    String(r.sourceAccountId||r.accountId)===aid&&r.sourceType===kind&&
-    tools.recurrenceKey(aid,kind,r.sourceMerchant)===
-     tools.recurrenceKey(aid,kind,t.merchant||t.name)),
+   predicted=autoKeys.has(JSON.stringify([aid,kind,
+    tools.recurrenceKey(aid,kind,t.merchant||t.name)])),
    canPlan=window.HouseholdPlannerHistory.canPlan(t),
    status=matches.length?'confirmed':predicted?'automatic':'unplanned',
    caption=status==='confirmed'?(ambiguous?'Several repeating plans':'Repeating plan saved'):
@@ -3314,6 +3333,7 @@ function finishPreparation(epoch){
  if(shell){shell.inert=false;shell.removeAttribute('aria-busy')}
 }
 function invalidatePreparedViews(){
+ historyDataCache=null;
  preparedEpoch++;warmingEpoch=-1;preparedViews.clear();preparedHistoryViews.clear();
  preparedContext=null;preparedNotice=null;
  // After an edit, keep navigation responsive even while the next generation
@@ -3469,6 +3489,16 @@ function renderHistorySubview(previousView){
  }
  if(historyView==='categories')preparedViews.delete('history');
  updateHistorySelectionSummary();
+}
+function renderHistoryFilters(){
+ if(!preparedContext||!preparedReady){render();return}
+ preparedViews.delete('history');
+ preparedViews.delete('activity');
+ preparedHistoryViews.clear();
+ const c=preparedContext;
+ $('planner-main').innerHTML=pageMarkup(c.bundle,c.s,c.selectedSource,c.derived,c.fresh,c.reviewData);
+ updateHistorySelectionSummary();
+ workStats.filterRefreshes++;
 }
 function switchExistingPane(buttonAttr,paneAttr,newValue){
  const root=$('planner-main');
@@ -3693,7 +3723,7 @@ document.addEventListener('click',async e=>{
    historySelectedMonths=new Set([snapshot().asOf.slice(0,7)]);
   else historySelectedMonths=new Set([...document.querySelectorAll('[data-history-month-option]')]
    .map(input=>input.value));
-  historyLimit=90;render();
+  historyLimit=90;renderHistoryFilters();
   document.querySelector(monthShortcut.hasAttribute('data-history-month-current')?
    '[data-history-month-current]':'[data-history-month-all]')?.focus({preventScroll:true});
   return;
@@ -4136,7 +4166,11 @@ document.addEventListener('click',async e=>{
       !(previousTab==='history'&&previousHistoryView!=='categories')&&
       root?.firstElementChild&&!root.firstElementChild.classList.contains('navigation-loading'))
     preparedViews.set(previousTab,{element:root.firstElementChild,epoch:preparedEpoch});
-   render({navigationOnly:true});
+   if(preparedContext&&['history','activity'].includes(activeTab)){
+    const c=preparedContext;
+    $('planner-main').innerHTML=pageMarkup(c.bundle,c.s,c.selectedSource,c.derived,c.fresh,c.reviewData);
+    updateHistorySelectionSummary();
+   }else render({navigationOnly:true});
   }
   if(view.dataset.focusTarget)document.querySelector(view.dataset.focusTarget)?.scrollIntoView?.({block:'center',behavior:'instant'});
   // Tab navigation should not animate the global header's position.
@@ -4890,7 +4924,7 @@ document.addEventListener('submit',async e=>{
  historySort=['newest','oldest','amount-desc','amount-asc','merchant','category']
   .includes(fields.historySort)?fields.historySort:historySort;
  historyLimit=90;
- render();
+ renderHistoryFilters();
 });
 document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-history-recurring-form]');
@@ -5048,7 +5082,7 @@ document.addEventListener('change',e=>{
   else if(historySelectedMonths.size>1)historySelectedMonths.delete(month);
   else{monthCheckbox.checked=true;return}
   const scroll=monthCheckbox.closest('[data-history-month-list]')?.scrollTop||0;
-  historyLimit=90;render();
+  historyLimit=90;renderHistoryFilters();
   const monthList=document.querySelector('[data-history-month-list]');
   if(monthList)monthList.scrollTop=scroll;
   document.querySelector('[data-history-month-option][value="'+month+'"]')?.focus({preventScroll:true});
@@ -5246,7 +5280,7 @@ async function saveBudgetCategoryOrder(){
   historyBudgetMessage='Could not save category order. Try again.';
  }finally{
   historyCategoryOrderBusy=false;
-  render();
+  renderHistoryFilters();
  }
 }
 document.addEventListener('pointerdown',e=>{
@@ -5329,7 +5363,7 @@ document.addEventListener('change',async e=>{
    const result=await savePlanning();
    if(live()&&(!result||result.saved!==true))throw Error('Budget save was not confirmed');
    historyBudgetMessage='Monthly budget saved';
-   render();
+   renderHistoryFilters();
    if(managerWasOpen){
     const manager=document.querySelector('[data-history-category-manager]');
     if(manager)manager.open=true;
@@ -5516,7 +5550,7 @@ document.addEventListener('change',async e=>{
   }
   historyCategoryFilter=next;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
-  render();return;
+  renderHistoryFilters();return;
  }
  if(e.target.matches?.('[data-history-sort]')){
   const next=e.target.value;
@@ -5527,10 +5561,10 @@ document.addEventListener('change',async e=>{
   }
   historySort=next;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
-  render();return;
+  renderHistoryFilters();return;
  }
  if(e.target.name==='historyAccount'){
-  historyAccount=e.target.value;historyLimit=90;render();return;
+  historyAccount=e.target.value;historyLimit=90;renderHistoryFilters();return;
  }
  if(e.target.name==='scope'){
   const form=e.target.closest('[data-future-edit-form]');

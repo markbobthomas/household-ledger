@@ -87,6 +87,28 @@ const {chromium,webkit}=require('playwright');
    await jump('activity','history-page');
    assert.equal(await page.locator('.history-activity-filters').count(),1,
     'Preloaded Activity must use transactions rather than Budget categories');
+   // Sort/category filters touch only the visible report, not the canonical
+   // three-year forecast or cached Home/Bills/Review pages.
+   const preFilter=await page.evaluate(()=>({
+    generation:window.HouseholdPreparedViewGeneration(),
+    work:window.HouseholdPlannerWorkStats()
+   }));
+   await page.locator('.history-activity-filters [data-history-sort]').selectOption('oldest');
+   const postFilter=await page.evaluate(()=>({
+    generation:window.HouseholdPreparedViewGeneration(),
+    work:window.HouseholdPlannerWorkStats(),
+    cached:window.HouseholdPreparedViewStatus()
+   }));
+   assert.equal(postFilter.generation,preFilter.generation);
+   assert.equal(postFilter.work.forecastBuilds,preFilter.work.forecastBuilds,
+    'Sorting Activity never recalculates the forecast');
+   assert.equal(postFilter.work.historyNormalizations,preFilter.work.historyNormalizations,
+    'Sorting reuses the source-history cache');
+   assert.ok(postFilter.work.filterRefreshes>preFilter.work.filterRefreshes,
+    'Sorting uses the local report update');
+   assert.ok(postFilter.cached.includes('summary')&&postFilter.cached.includes('schedules'),
+    'Home and Bills remain prepared while filters update');
+   await page.locator('.history-activity-filters [data-history-sort]').selectOption('newest');
    await jump('reviews','reviews-page');
    await jump('settings','settings-page');
    await jump('transactions','transactions-page');
