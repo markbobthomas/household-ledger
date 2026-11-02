@@ -3160,6 +3160,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
        (expanded?'Close editing':'Edit payment')+'</button>'+
       '<button type="button" class="btn" data-ignore-overdue="'+escapeHTML(item.key)+'">Ignore alert</button>'+
       '<button type="button" class="btn" data-skip-overdue="'+escapeHTML(item.key)+'">Skip payment</button></div>'+
+     (item.kind==='movement'?
+      '<small>One linked checking-to-card transfer. Edit payment to move or adjust this occurrence.</small>':
      '<form data-overdue-date="'+escapeHTML(item.key)+'" data-overdue-mode="'+(expanded?'edit':'move')+'">'+
       (expanded?
        '<div class="overdue-edit-fields">'+
@@ -3173,7 +3175,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
         '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div>':
        common+'<button type="submit" class="btn primary">Move just this payment</button>')+
      '<small>Only this occurrence changes. Future repeating dates and actual bank records stay unchanged.</small>'+
-     '</form></article>';
+     '</form>')+'</article>';
    }).join('')+
    (ignoredOverdue.length?
     '<details class="overdue-ignored" data-ignored-overdue><summary>Dismissed payment alerts ('+
@@ -3886,6 +3888,12 @@ document.addEventListener('click',async e=>{
    snap=snapshot(),item=forecastFor(snap)?.overduePayments?.find(x=>x.key===key);
   if(!item){reviewNotice='This payment changed or posted. Refresh Review.';render();return}
   if(overdueAction.hasAttribute('data-edit-overdue')){
+   if(item.kind==='movement'){
+    const row=futureRows(forecastFor(snap),snap).find(p=>p.kind==='movement'&&p.key===key);
+    if(row)openPrediction(key,overdueAction);
+    else{reviewNotice='This card payment changed. Refresh Things to check.';render()}
+    return;
+   }
    overdueEditKey=key;transactionDetail={kind:'overdue',key};render();
    document.querySelector('.transaction-detail [name=merchant]')?.focus();return;
   }
