@@ -14,8 +14,20 @@ const file=env.PILOT_STATE_PATH||'/var/data/pilot.enc';
 // Forecast preferences live beside the bank snapshot, but save independently.
 // This avoids encrypting and rewriting every Plaid transaction for one edit.
 const forecastFile=file+'.forecasts';
-const HOST={production:'https://production.plaid.com',sandbox:'https://sandbox.plaid.com'}[env.PLAID_ENV||'production'];
+const plaidEnvironment=env.PLAID_ENV||'production';
+const HOST={production:'https://production.plaid.com',sandbox:'https://sandbox.plaid.com'}[plaidEnvironment];
 if(!HOST)throw Error('PLAID_ENV must be production or sandbox');
+const deployedCommit=/^[a-f0-9]{40}$/i.test(String(env.RENDER_GIT_COMMIT||''))?env.RENDER_GIT_COMMIT:null;
+// Private, temporary, sanitized diagnostics. No credential, account ID,
+// transaction or bank amount is ever recorded; only authenticated users can
+// view these observations. In particular, distinguish a locally shown stale
+// error from a fresh provider response and show the actual Plaid environment.
+let lastPlaidCall=null,lastSyncAttempt=null;
+const bankDiagnostics=()=>({
+ environment:plaidEnvironment,deployCommit:deployedCommit,
+ lastSyncAttempt:lastSyncAttempt?{...lastSyncAttempt}:null,
+ lastPlaidCall:lastPlaidCall?{...lastPlaidCall}:null
+});
 const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const stamp=()=>new Date().toISOString();
 const freshState=()=>({items:[],transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}});
@@ -93,21 +105,38 @@ async function saveForecast(predictions,expectedRevision){
  await write;
 }
 async function plaid(endpoint,body){
- const resp=await fetch(HOST+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,client_id:env.PLAID_CLIENT_ID,secret:env.PLAID_SECRET}),signal:AbortSignal.timeout(25000)});
- const data=await resp.json();
- if(!resp.ok||data.error_code){
-  const code=String(data.error_code||resp.status).slice(0,60),
-   error=new Error('Plaid request failed: '+code);
-  // Plaid's raw error_message may contain rejected request values, including
-  // customer data. Expose only fixed API route, opaque ID and safe field name.
-  const field=String(data.error_message||'').match(/\b(?:access_token|cursor|count|products|country_codes|language|client_name|client_user_id|redirect_uri|account_id|start_date|end_date)\b/i)?.[0]||null;
-  error.plaidCode=code;error.plaidEndpoint=endpoint;
-  error.plaidRequestId=/^[a-zA-Z0-9_-]{3,80}$/.test(String(data.request_id||''))?data.request_id:null;
-  error.plaidField=field?.toLowerCase()||null;throw error;
+ const observation={at:stamp(),endpoint,outcome:'started'};
+ lastPlaidCall=observation;
+ try{
+  const resp=await fetch(HOST+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,client_id:env.PLAID_CLIENT_ID,secret:env.PLAID_SECRET}),signal:AbortSignal.timeout(25000)});
+  const data=await resp.json();
+  if(!resp.ok||data.error_code){
+   const code=String(data.error_code||resp.status).slice(0,60),
+    error=new Error('Plaid request failed: '+code);
+   // Store only a recognized field name. Plaid error_message can contain
+   // rejected values and must never be sent to the Ledger browser.
+   const field=String(data.error_message||'').match(/\b(?:access_token|cursor|count|products|country_codes|language|client_name|client_user_id|redirect_uri|account_id|start_date|end_date)\b/i)?.[0];
+   const requestId=/^[a-zA-Z0-9_-]{3,80}$/.test(String(data.request_id||''))?data.request_id:null;
+   observation.outcome='provider_error';
+   observation.code=code;
+   if(requestId)observation.requestId=requestId;
+   if(field)observation.field=field.toLowerCase();
+   error.plaidCode=code;error.plaidEndpoint=endpoint;
+   error.plaidRequestId=requestId;error.plaidField=field?.toLowerCase()||null;
+   throw error;
+  }
+  observation.outcome='success';
+  return data;
+ }catch(error){
+  // If a fetch never got a readable JSON response, this was not a confirmed
+  // Plaid INVALID_FIELD and will not have any Plaid request ID to find.
+  if(observation.outcome==='started')observation.outcome='transport_or_response_error';
+  throw error;
  }
- return data;
 }
 async function sync(){
+ lastSyncAttempt={at:stamp(),outcome:'started'};lastPlaidCall=null;
+ try{
  if(!state.items.length)throw Error('No connected accounts');
  const stages=[],observedAt=stamp(),allIds=new Set();
  for(const item of state.items){
@@ -175,6 +204,7 @@ async function sync(){
     // Persist a per-Item diagnostic while retaining the entire last-known-good
     // bank snapshot, original token, cursor and encrypted forecast preferences.
     item.syncIssue={code:error.plaidCode,endpoint:error.plaidEndpoint||null,
+     observedAt:stamp(),environment:plaidEnvironment,
      ...(error.plaidField?{field:error.plaidField}:{}),
      ...(error.plaidRequestId?{requestId:error.plaidRequestId}:{})};
     if(error.plaidCode==='ITEM_LOGIN_REQUIRED'){
@@ -223,7 +253,9 @@ async function sync(){
  });
  state.ledgerAdjustments.categoryOverrides=overrides;
  state.lastSync=observedAt;state.error=null;await save();
+ lastSyncAttempt.outcome='success';
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
+ }catch(error){lastSyncAttempt.outcome='failed';throw error}
 }
 async function html(){return fs.readFile(path.join(__dirname,'index.html'),'utf8')}
 // The same authenticated payload still owns all immutable bank facts. The
@@ -300,7 +332,7 @@ async function start(port=Number(env.PORT||8788)){
   // this public source identifier, never credentials, banking records or disk paths.
   if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{
    ok:true,mode:'multi-account-private',
-   commit:/^[a-f0-9]{40}$/i.test(String(env.RENDER_GIT_COMMIT||''))?env.RENDER_GIT_COMMIT:null
+   commit:deployedCommit
   });
   const origin=req.headers.origin,host=req.headers.host;
   // Reject cross-origin writes including sign in/out. Other mutations also
@@ -426,7 +458,7 @@ async function start(port=Number(env.PORT||8788)){
     accounts:state.accounts.map(a=>({...a,forecastUsage:refs.get(String(a.id)),
       needsReconnect:state.items.some(i=>i.reconnectRequired&&i.accountIds.includes(String(a.id))),
       syncIssue:state.items.find(i=>i.accountIds.includes(String(a.id)))?.syncIssue||null})),
-    lastSync:state.lastSync,
+    lastSync:state.lastSync,diagnostics:bankDiagnostics(),
     transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   }
   // Unknown browser navigation should be a 404, not a misleading bank-action error.

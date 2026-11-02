@@ -3,6 +3,10 @@
 <style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:0 18px;color:#1e293b}button{padding:12px 18px;border:1px solid #64748b;border-radius:8px;background:white;margin:3px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button.remove-account{border-color:#bc6e68;color:#9f281e;background:#fff9f8}.usage{padding:10px 12px;border-radius:8px;background:#f1f5f9;font-size:14px;line-height:1.5}.usage.protected{background:#fff5f0;color:#862a1c}.usage.clear{background:#edf6f2;color:#164b32}.usage strong{font-size:14px}.account-note{font-size:13px}.removal-help{background:#f6f9fc}.remove-account:disabled{background:#f3f4f6;color:#64748b;border-color:#cbd5e1}.repair-panel{background:#fff8ed;border-color:#e4b36b}#sync-issue[hidden]{display:none}#sync-issue{background:#fff8ed;border-color:#e4b36b}.repair-panel p{line-height:1.5}.repair-button{background:#1e293b;color:#fff;border-color:#1e293b}.repair-button:hover{background:#374151}.account-alert{color:#894a10;font-size:14px;font-weight:650}.panel{border:1px solid #cbd5e1;border-radius:12px;padding:18px;margin:14px 0}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0}strong{font-size:1.1em}.danger{color:#9f281e}label{display:block;margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:7px}input[type=checkbox]{transform:scale(1.2);margin-right:10px}#account-choices[hidden]{display:none}#status{white-space:pre-wrap}</style></head><body>
 <h1>Bank connections</h1><p class="muted">Add checking, savings and credit cards to your existing Ledger. Adding another account never clears one already connected. Bank balances and transactions remain read-only. <a href="/">Return to Ledger</a>.</p>
 <div class="panel" id="status" role="status">Loading…</div>
+<div class="panel" id="private-diagnostics" aria-label="Private bank connection diagnostics">
+ <h2>Connection diagnostics</h2>
+ <div id="private-diagnostics-detail">Checking private server revision and Plaid environment…</div>
+</div>
 <div class="panel" id="sync-issue" role="alert" hidden>
  <h2>Bank refresh needs attention</h2>
  <p id="sync-issue-message">Your last bank update could not complete.</p>
@@ -54,8 +58,31 @@ async function api(path,data){const r=await fetch('/api/'+path,{method:data===un
   error.code=payload.code||'';error.reconnectAccountId=payload.reconnectAccountId||null;
   throw error;
  }return payload}
+function showDiagnostics(details){
+ const area=document.getElementById('private-diagnostics-detail');
+ if(!details){
+  area.textContent='This private bank server does not expose deployment or provider diagnostics yet. Confirm its deployed revision before relying on earlier retry fixes.';
+  return;
+ }
+ const envLabel=details.environment==='production'?'Production':
+  details.environment==='sandbox'?'Sandbox':'Unknown';
+ const commit=typeof details.deployCommit==='string'&&/^[a-f0-9]{40}$/i.test(details.deployCommit)?
+  details.deployCommit:'Unavailable';
+ const attempt=details.lastSyncAttempt,call=details.lastPlaidCall;
+ area.innerHTML='<p><strong>Plaid environment: '+esc(envLabel)+'</strong> · Server commit: <code>'+esc(commit)+'</code></p>'+
+  '<p>Latest refresh: '+(attempt?esc(attempt.at||'Unknown')+' ('+esc(attempt.outcome||'unknown')+')':'None since this server started')+'</p>'+
+  '<p>Latest direct Plaid call during refresh: '+(call?
+   esc(call.at||'Unknown')+' · '+esc(call.endpoint||'unknown endpoint')+
+   ' · '+esc(call.outcome||'unknown outcome')+
+   (call.code?' · '+esc(call.code):'')+
+   (call.field?' · Field '+esc(call.field):'')+
+   (call.requestId?' · Request ID '+esc(call.requestId):''):
+   'None recorded for the latest refresh')+'</p>'+
+  '<p class="muted">These are observations from this private Ledger server, not the Plaid Dashboard. Match the environment and time when checking Plaid logs. A previous error displayed below may be older than the latest refresh.</p>';
+}
 async function refresh(){
  try{const d=await api('status'),accounts=d.accounts||d.account?[...(d.accounts||[d.account])]:[],transactions=d.transactions||[];
+  showDiagnostics(d.diagnostics);
   lastAccounts=accounts;
   status.textContent=accounts.length?accounts.length+' connected account(s) · last successful sync '+(d.lastSync||'unknown'):'No bank accounts connected';
   const failed=accounts.filter(a=>a.syncIssue&&!a.needsReconnect),
@@ -67,7 +94,9 @@ async function refresh(){
    return '<p><strong>'+esc(a.name)+'</strong> · '+esc(issue.code||'Sync error')+
     (issue.endpoint?' · API '+esc(issue.endpoint):'')+
     (issue.field?' · Field: '+esc(issue.field):'')+
-    (issue.requestId?' · Plaid request ID: '+esc(issue.requestId):'')+'</p>';
+    (issue.requestId?' · Plaid request ID: '+esc(issue.requestId):'')+
+    ' · Recorded: '+esc(issue.observedAt||'time unknown (older error)')+
+    (issue.environment?' · Environment: '+esc(issue.environment):'')+'</p>';
   }).join('');
   document.getElementById('sync-issue-message').textContent=uniqueFailed.length?
    'Plaid rejected an update for the listed connection(s). The precise bank request must be checked; reconnecting alone may not correct INVALID_FIELD.':

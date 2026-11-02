@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=requ
 const {spawn}=require('node:child_process');
 (async()=>{
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'hl-plaid-flow-')),port=19849,pass=crypto.randomBytes(24).toString('hex'),store=path.join(folder,'pilot.enc');
- const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1',PILOT_INVALID_FIELD_TEST:'1'};
+ const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1',PILOT_INVALID_FIELD_TEST:'1',RENDER_GIT_COMMIT:'a'.repeat(40)};
  const child=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','sandbox/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});
  const request=(route,body)=>{
   return new Promise((resolve,reject)=>{
@@ -16,6 +16,10 @@ const {spawn}=require('node:child_process');
  try{
   for(let i=0;i<100;i++){try{const r=await request('/api/status');if(r.code===200)break}catch{}await new Promise(r=>setTimeout(r,50))}
   let before=await request('/api/status');assert.equal(before.data.connected,false);
+  assert.equal(before.data.diagnostics.environment,'sandbox');
+  assert.equal(before.data.diagnostics.deployCommit,'a'.repeat(40));
+  assert.equal(before.data.diagnostics.lastSyncAttempt,null,'A page read does not pretend to contact Plaid');
+  assert.equal(before.data.diagnostics.lastPlaidCall,null);
   let token=await request('/api/link-token',{});assert.equal(token.data.link_token,'link-test');
   let connected=await request('/api/exchange',{publicToken:'public-test',accountId:'acct-1'});assert.equal(connected.data.connected,true);
   let status=await request('/api/status');assert.equal(status.data.account.current,321.45,'Exact bank current balance');assert.equal(status.data.account.available,300.10,'Separate available');
@@ -142,8 +146,23 @@ const {spawn}=require('node:child_process');
   const invalidStatus=await request('/api/status');
   const affected=invalidStatus.data.accounts.find(a=>a.id==='acct-1');
   assert.equal(affected.needsReconnect,false,'API field failure does not demand a bank re-login');
-  assert.deepEqual(affected.syncIssue,{code:'INVALID_FIELD',endpoint:'/transactions/sync',
-   field:'account_id',requestId:'fictional-request-id-42'});
+  assert.equal(affected.syncIssue.code,'INVALID_FIELD');
+  assert.equal(affected.syncIssue.endpoint,'/transactions/sync');
+  assert.equal(affected.syncIssue.field,'account_id');
+  assert.equal(affected.syncIssue.requestId,'fictional-request-id-42');
+  assert.equal(affected.syncIssue.environment,'sandbox','Error environment is retained with the issue');
+  assert.match(affected.syncIssue.observedAt,/^\d{4}-\d{2}-\d{2}T/);
+  const diagnostics=invalidStatus.data.diagnostics;
+  assert.equal(diagnostics.environment,'sandbox');
+  assert.equal(diagnostics.lastSyncAttempt.outcome,'failed');
+  assert.match(diagnostics.lastSyncAttempt.at,/^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(diagnostics.lastPlaidCall.endpoint,'/transactions/sync');
+  assert.equal(diagnostics.lastPlaidCall.outcome,'provider_error');
+  assert.equal(diagnostics.lastPlaidCall.code,'INVALID_FIELD');
+  assert.equal(diagnostics.lastPlaidCall.requestId,'fictional-request-id-42');
+  assert.equal(diagnostics.lastPlaidCall.field,'account_id');
+  assert.equal(JSON.stringify(diagnostics).includes('secret-test-access-token'),false,
+   'Provider diagnostics never disclose the original bank token');
   assert.equal(invalidStatus.data.accounts.find(a=>a.id==='acct-2').syncIssue,null,
    'The healthy institution is not incorrectly flagged as failed');
   const staleField=await request('/api/ledger');
@@ -159,6 +178,9 @@ const {spawn}=require('node:child_process');
   const cleared=await request('/api/status');
   assert.equal(cleared.data.accounts.every(a=>a.syncIssue===null),true,
    'Only successful full sync clears Plaid diagnostics');
+  assert.equal(cleared.data.diagnostics.lastSyncAttempt.outcome,'success',
+   'Fresh successful retry is distinct from an older persisted error');
+  assert.equal(cleared.data.diagnostics.lastPlaidCall.outcome,'success');
   const retried=await request('/api/ledger');
   assert.deepEqual(retried.data.adjustments,beforeInvalid.data.adjustments,
    'After retry household settings remain unchanged');

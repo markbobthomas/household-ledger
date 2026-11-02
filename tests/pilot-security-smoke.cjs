@@ -24,6 +24,9 @@ function post(route,body={},cookie='',extra={}){
 }
 (async()=>{
  const child=spawn(process.execPath,['pilot/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:['ignore','pipe','pipe']});
+ // Fictional offline fixture only. Surface startup errors so CI failures are
+ // actionable instead of hiding the real exception behind ECONNRESET.
+ child.stderr.on('data',chunk=>process.stderr.write(chunk));
  try{
   for(let i=0;i<100;i++){try{let h=await get('/healthz',false);if(h.status===200)break}catch{}await new Promise(r=>setTimeout(r,50))}
   const health=await get('/healthz',false);
