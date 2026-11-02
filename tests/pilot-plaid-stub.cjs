@@ -1,6 +1,6 @@
 'use strict';
 // Injected ONLY by offline test subprocess. Prevents all external network calls.
-let stage=0,secondStage=0,removals=0,authorizedAgain=false,invalidFieldOnce=false,countRecovered=false,cursorRecovered=false;
+let stage=0,secondStage=0,removals=0,authorizedAgain=false,invalidFieldOnce=false,countRecovered=false,cursorRecovered=false,clientFieldDiagnosed=false;
 global.fetch=async function(url,options){
  const p=new URL(url).pathname,body=JSON.parse(options.body||'{}');
  let data;
@@ -53,6 +53,17 @@ global.fetch=async function(url,options){
       error_message:'The cursor field has an invalid value',request_id:'fictional-cursor-id'
      })};
      cursorRecovered=true;
+    }
+    // The provider may identify the client_id in a message containing
+    // sensitive values. Record only the name of the offending field.
+    if(process.env.PILOT_INVALID_FIELD_TEST==='1'&&authorizedAgain&&
+       cursorRecovered&&stage>=7&&!clientFieldDiagnosed){
+     clientFieldDiagnosed=true;
+     return {ok:false,status:400,json:async()=>({
+      error_code:'INVALID_FIELD',error_type:'INVALID_REQUEST',
+      error_message:'The client_id field was rejected (private value must stay hidden)',
+      request_id:'fictional-client-field-request'
+     })};
     }
     data={added:stage++===0?[{transaction_id:'pending-1',account_id:'acct-1',date:'2026-10-19',name:'Test pending',amount:10,pending:true},
      ...(process.env.PILOT_REMOVE_TEST==='1'?[{transaction_id:'card-from-shared-item',account_id:'acct-2',date:'2026-10-18',name:'Card purchase from shared link',amount:43,pending:false}]:[])]:
