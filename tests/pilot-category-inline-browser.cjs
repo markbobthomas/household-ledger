@@ -45,7 +45,13 @@ let desktop,iphone;
    return route.abort();
   });
   await page.goto(address,{waitUntil:'load'});
-  await page.locator('#planner-main .planner-page').first().waitFor();
+  // With no bank connected, private sign-in remains Real/Unavailable rather
+  // than presenting fictional Demo. The embedded classifier still loads.
+  await page.waitForFunction(()=>typeof window.HouseholdCategorization?.classify==='function'&&
+   Boolean(document.querySelector('#planner-notice')?.textContent?.includes('Real bank information is not available yet')),
+   null,{timeout:30000});
+  assert.equal(await page.locator('#source-type').textContent(),'REAL · UNAVAILABLE',
+   name+': a fresh private browser without a bank never silently shows Demo balances');
   const outcome=await page.evaluate(()=>{
    const model=window.HouseholdLedgerData;
    const fixture=model.migrate({transactions:[{
