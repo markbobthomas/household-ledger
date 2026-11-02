@@ -66,8 +66,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     'The Real preference is initialized on this new device');
    assert.match(await page.locator('#planner-main').innerText(),/Test Checking/,
     'Connected private bank records load automatically on a newly signed-in device');
-   assert.match(await page.locator('#planner-main').innerText(),/★\s*Test Checking/,
-    'The main-account preference saved on the server survives across devices');
+   assert.match(await page.locator('#summary-account option:checked').textContent(),/Test Checking.*Main/,
+    'The server-saved main-account preference is restored on every device');
    if(!mobile){
     // Only a deliberate Demo choice should be local to this browser. It must
     // survive reload without deleting or overwriting saved household state.
