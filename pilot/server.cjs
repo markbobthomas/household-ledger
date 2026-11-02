@@ -24,7 +24,7 @@ const deployedCommit=/^[a-f0-9]{40}$/i.test(String(env.RENDER_GIT_COMMIT||''))?e
 // error from a fresh provider response and show the actual Plaid environment.
 let lastPlaidCall=null,lastSyncAttempt=null;
 const bankDiagnostics=()=>({
- environment:plaidEnvironment,deployCommit,
+ environment:plaidEnvironment,deployCommit:deployedCommit,
  lastSyncAttempt:lastSyncAttempt?{...lastSyncAttempt}:null,
  lastPlaidCall:lastPlaidCall?{...lastPlaidCall}:null
 });
