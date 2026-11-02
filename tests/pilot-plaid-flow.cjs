@@ -17,6 +17,9 @@ const {spawn}=require('node:child_process');
   for(let i=0;i<100;i++){try{const r=await request('/api/status');if(r.code===200)break}catch{}await new Promise(r=>setTimeout(r,50))}
   let before=await request('/api/status');assert.equal(before.data.connected,false);
   assert.equal(before.data.diagnostics.environment,'sandbox');
+  assert.equal(before.data.diagnostics.requestHost,'https://sandbox.plaid.com');
+  assert.equal(before.data.diagnostics.clientIdEnding,null,
+   'Never reveal an entire short client ID; real IDs expose only six characters');
   assert.equal(before.data.diagnostics.deployCommit,'a'.repeat(40));
   assert.equal(before.data.diagnostics.lastSyncAttempt,null,'A page read does not pretend to contact Plaid');
   assert.equal(before.data.diagnostics.lastPlaidCall,null);
@@ -150,6 +153,11 @@ const {spawn}=require('node:child_process');
   assert.equal(affected.syncIssue.endpoint,'/transactions/sync');
   assert.equal(affected.syncIssue.field,'account_id');
   assert.equal(affected.syncIssue.requestId,'fictional-request-id-42');
+  assert.equal(affected.syncIssue.httpStatus,400);
+  assert.equal(affected.syncIssue.errorType,'INVALID_REQUEST');
+  assert.equal(affected.syncIssue.hasProviderMessage,true);
+  assert.equal(JSON.stringify(affected.syncIssue).includes('The account_id field has an invalid value'),false,
+   'Raw provider error details must not appear in persistent diagnostics');
   assert.equal(affected.syncIssue.environment,'sandbox','Error environment is retained with the issue');
   assert.match(affected.syncIssue.observedAt,/^\d{4}-\d{2}-\d{2}T/);
   const diagnostics=invalidStatus.data.diagnostics;
@@ -159,6 +167,9 @@ const {spawn}=require('node:child_process');
   assert.equal(diagnostics.lastPlaidCall.endpoint,'/transactions/sync');
   assert.equal(diagnostics.lastPlaidCall.outcome,'provider_error');
   assert.equal(diagnostics.lastPlaidCall.code,'INVALID_FIELD');
+  assert.equal(diagnostics.lastPlaidCall.httpStatus,400);
+  assert.equal(diagnostics.lastPlaidCall.errorType,'INVALID_REQUEST');
+  assert.equal(diagnostics.lastPlaidCall.hasProviderMessage,true);
   assert.equal(diagnostics.lastPlaidCall.requestId,'fictional-request-id-42');
   assert.equal(diagnostics.lastPlaidCall.field,'account_id');
   assert.equal(JSON.stringify(diagnostics).includes('secret-test-access-token'),false,
