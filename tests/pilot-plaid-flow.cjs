@@ -223,6 +223,19 @@ const {spawn}=require('node:child_process');
    'No sensitive access token is exposed by recovery');
   assert.equal((await request('/api/status')).data.accounts.every(a=>a.syncIssue===null),true,
    'Successful cursor replay clears only the error flags');
+  const beforeClientFailure=await request('/api/ledger');
+  const clientFieldFailed=await request('/api/sync',{});
+  assert.equal(clientFieldFailed.code,502,'Field diagnostics must not silently relink accounts');
+  assert.equal(clientFieldFailed.data.field,'client_id',
+   'Safe allowlist recognizes Plaid client_id when the provider identifies it');
+  const clientStatus=await request('/api/status');
+  assert.equal(clientStatus.data.accounts.find(a=>a.id==='acct-1').syncIssue.field,'client_id');
+  assert.equal(JSON.stringify(clientStatus.data).includes('private value must stay hidden'),false,
+   'Never reveal raw provider error text or rejected values');
+  assert.deepEqual((await request('/api/ledger')).data.adjustments,beforeClientFailure.data.adjustments,
+   'A client ID validation error must not mutate household data');
+  assert.equal((await request('/api/sync',{})).code,200,
+   'A subsequent authorized refresh can clear the diagnostic');
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');

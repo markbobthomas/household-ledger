@@ -125,7 +125,7 @@ async function plaid(endpoint,body){
    const hasProviderMessage=typeof data.error_message==='string'&&!!data.error_message.trim();
    // Store only a recognized field name. Plaid error_message can contain
    // rejected values and must never be sent to the Ledger browser.
-   const field=String(data.error_message||'').match(/\b(?:access_token|cursor|count|products|country_codes|language|client_name|client_user_id|redirect_uri|account_id|start_date|end_date)\b/i)?.[0];
+   const field=String(data.error_message||'').match(/\b(?:access_token|cursor|count|client_id|secret|products|country_codes|language|client_name|client_user_id|redirect_uri|account_id|start_date|end_date)\b/i)?.[0];
    const requestId=/^[a-zA-Z0-9_-]{3,80}$/.test(String(data.request_id||''))?data.request_id:null;
    observation.outcome='provider_error';
    observation.code=code;
