@@ -98,7 +98,12 @@ async function plaid(endpoint,body){
  if(!resp.ok||data.error_code){
   const code=String(data.error_code||resp.status).slice(0,60),
    error=new Error('Plaid request failed: '+code);
-  error.plaidCode=code;throw error;
+  // Plaid's raw error_message may contain rejected request values, including
+  // customer data. Expose only fixed API route, opaque ID and safe field name.
+  const field=String(data.error_message||'').match(/\b(?:access_token|cursor|count|products|country_codes|language|client_name|client_user_id|redirect_uri|account_id|start_date|end_date)\b/i)?.[0]||null;
+  error.plaidCode=code;error.plaidEndpoint=endpoint;
+  error.plaidRequestId=/^[a-zA-Z0-9_-]{3,80}$/.test(String(data.request_id||''))?data.request_id:null;
+  error.plaidField=field;throw error;
  }
  return data;
 }
@@ -137,10 +142,17 @@ async function sync(){
   }
   stages.push({item,cursor,pages,accounts:selected});
   }catch(error){
-   if(error.plaidCode==='ITEM_LOGIN_REQUIRED'){
-    // Preserve bank history, IDs and forecast preferences on expired consent.
-    item.reconnectRequired=true;
-    error.reconnectAccountId=item.accountIds[0]||null;
+   if(error.plaidCode){
+    // Request-validation errors aren't proof of an expired bank login.
+    // Persist a per-Item diagnostic while retaining the entire last-known-good
+    // bank snapshot, original token, cursor and encrypted forecast preferences.
+    item.syncIssue={code:error.plaidCode,endpoint:error.plaidEndpoint||null,
+     ...(error.plaidField?{field:error.plaidField}:{}),
+     ...(error.plaidRequestId?{requestId:error.plaidRequestId}:{})};
+    if(error.plaidCode==='ITEM_LOGIN_REQUIRED'){
+     item.reconnectRequired=true;
+     error.reconnectAccountId=item.accountIds[0]||null;
+    }
     await save();
    }
    throw error;
@@ -177,7 +189,10 @@ async function sync(){
  const selectedIds=new Set(stages.flatMap(s=>s.accounts.map(a=>a.id)));
  for(const [id,t] of Object.entries(next))if(t.accountId&&!selectedIds.has(t.accountId)){delete next[id];delete overrides[id]}
  state.transactions=next;state.accounts=stages.flatMap(s=>s.accounts);
- state.items=state.items.map(i=>({...i,cursor:stages.find(s=>s.item.id===i.id).cursor,reconnectRequired:false}));
+ state.items=state.items.map(i=>{
+  const {syncIssue:_oldIssue,...item}=i;
+  return {...item,cursor:stages.find(s=>s.item.id===i.id).cursor,reconnectRequired:false};
+ });
  state.ledgerAdjustments.categoryOverrides=overrides;
  state.lastSync=observedAt;state.error=null;await save();
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
@@ -191,6 +206,9 @@ function ledgerPayload(){
   transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object')
    .sort((a,b)=>String(b.date).localeCompare(String(a.date))),
   reconnectAccounts:state.items.filter(i=>i.reconnectRequired).flatMap(i=>i.accountIds).map(String),
+  syncIssues:state.items.filter(i=>i.syncIssue).map(i=>({
+   accountIds:i.accountIds.map(String),...i.syncIssue
+  })),
   adjustments:state.ledgerAdjustments||{}};
 }
 // RAM only. Bank and forecast persistence remain separately encrypted on disk.
@@ -378,7 +396,8 @@ async function start(port=Number(env.PORT||8788)){
    const refs=new Map(accountForecastLinks(state).map(x=>[x.id,x]));
    return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,
     accounts:state.accounts.map(a=>({...a,forecastUsage:refs.get(String(a.id)),
-      needsReconnect:state.items.some(i=>i.reconnectRequired&&i.accountIds.includes(String(a.id)))})),
+      needsReconnect:state.items.some(i=>i.reconnectRequired&&i.accountIds.includes(String(a.id))),
+      syncIssue:state.items.find(i=>i.accountIds.includes(String(a.id)))?.syncIssue||null})),
     lastSync:state.lastSync,
     transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   }
@@ -657,10 +676,21 @@ async function start(port=Number(env.PORT||8788)){
    }
    return respond(404,{error:'Unknown action'});
   }catch(e){
-   if(e.plaidCode==='ITEM_LOGIN_REQUIRED')
-    return respond(409,{error:'Your bank needs you to sign in again before new transactions can be fetched.',
-     code:'ITEM_LOGIN_REQUIRED',reconnectAccountId:e.reconnectAccountId||null});
-   return respond(e.httpStatus||400,{error:e.message.startsWith('Plaid request failed:')?e.message:String(e.message).slice(0,140),
+   if(e.plaidCode){
+    return respond(e.plaidCode==='ITEM_LOGIN_REQUIRED'?409:502,{
+     error:e.plaidCode==='ITEM_LOGIN_REQUIRED'?
+      'Your bank needs you to sign in again before new transactions can be fetched.':
+      e.plaidCode==='INVALID_FIELD'?
+       'Plaid rejected a request field. This is not proof your bank login failed; the saved bank history and forecasts are intact.':
+       'Plaid could not refresh the bank connection ('+e.plaidCode+'). Your saved bank history and forecasts are intact.',
+     code:e.plaidCode,
+     ...(e.plaidEndpoint?{endpoint:e.plaidEndpoint}:{}),
+     ...(e.plaidField?{field:e.plaidField}:{}),
+     ...(e.plaidRequestId?{requestId:e.plaidRequestId}:{}),
+     ...(e.reconnectAccountId?{reconnectAccountId:e.reconnectAccountId}:{})
+    });
+   }
+   return respond(e.httpStatus||400,{error:String(e.message).slice(0,140),
     ...(e.httpStatus===409?{code:'STALE_LEDGER'}:{})})
   }finally{
    if(releaseEdit)releaseEdit();
