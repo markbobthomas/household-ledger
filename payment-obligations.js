@@ -158,8 +158,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      if(!(amount>0))continue;
      const id='card-history-estimate|'+card.id+'|'+when;
      plans.push({id,fromAccountId:candidate.fromAccountId,toAccountId:String(card.id),
-      anchorDate:expectedWithdrawal(when),originalDueDate:when,
-      ...(when<=asOf?{_unpostedEstimated:true,_overdueFrom:when}:{}),
+      anchorDate:expectedWithdrawal(when),
+      ...(when<=asOf?{originalDueDate:when,_unpostedEstimated:true,_overdueFrom:when}:{}),
       amount,frequency:'once',
       merchant:card.name+' Credit-card payment (transaction-based)',
       origin:'card-history-estimate',status:'estimated',
@@ -360,7 +360,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
     historicalAverage:null,fullBalanceEstimate:fullAmount,
-    autopayEnabled:autopay,alreadyPaid:paid,pendingReserved,actualPayments:postedForCycle,
+    autopayEnabled:autopay,alreadyPaid:paid,...(pendingReserved?{pendingReserved:true}:{}),actualPayments:postedForCycle,
     actualPaymentAmount:postedPaymentTotal,actualPaymentDate:postedForCycle[0]?.date||null,
     lastPostedPayment:recentPostedPayment,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
     incompleteFuture:cycleClose>asOf};
@@ -369,8 +369,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // confirmed full-statement autopay rule schedules a checking withdrawal.
    if(amount>0&&autopay&&!paid&&!pendingReserved){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
-     anchorDate:expectedWithdrawal(due),originalDueDate:due,
-     ...(due<=asOf?{_unpostedEstimated:true,_overdueFrom:due}:{}),
+     anchorDate:expectedWithdrawal(due),
+     ...(due<=asOf?{originalDueDate:due,_unpostedEstimated:true,_overdueFrom:due}:{}),
      amount,frequency:'once',status:'scheduled',origin:'card-autopay',
      merchant:card.name+' Credit-card payment (autopay)',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
@@ -424,7 +424,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     kind:'automatic_bill',confidence:'entered schedule / amount estimate'});
   }
  }
- return {plans,billEvents,suppressedExpectedIds,pendingPaymentMatches,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
+ return {plans,billEvents,suppressedExpectedIds,...(pendingPaymentMatches.length?{pendingPaymentMatches}:{}),obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
   cardEstimates,paymentDetails,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
 const api={build,plus,closeFor,ready,inferPayment,statementPeriodFor};
