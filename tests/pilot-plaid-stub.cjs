@@ -1,6 +1,6 @@
 'use strict';
 // Injected ONLY by offline test subprocess. Prevents all external network calls.
-let stage=0,secondStage=0,removals=0,authorizedAgain=false,invalidFieldOnce=false;
+let stage=0,secondStage=0,removals=0,authorizedAgain=false,invalidFieldOnce=false,countRecovered=false,cursorRecovered=false;
 global.fetch=async function(url,options){
  const p=new URL(url).pathname,body=JSON.parse(options.body||'{}');
  let data;
@@ -31,9 +31,28 @@ global.fetch=async function(url,options){
      invalidFieldOnce=true;
      return {ok:false,status:400,json:async()=>({
       error_code:'INVALID_FIELD',error_type:'INVALID_REQUEST',
-      error_message:'The count field has an invalid value',
+      error_message:'The account_id field has an invalid value',
       request_id:'fictional-request-id-42'
      })};
+    }
+    // The first rejected field above is intentionally NOT recoverable.
+    // Separate cases below prove that the server changes exactly the field
+    // named by Plaid and only when the original Item has a committed cursor.
+    if(process.env.PILOT_INVALID_FIELD_TEST==='1'&&authorizedAgain&&
+      stage>=5&&!countRecovered){
+     if(body.count!==undefined)return {ok:false,status:400,json:async()=>({
+      error_code:'INVALID_FIELD',error_type:'INVALID_REQUEST',
+      error_message:'The count field has an invalid value',request_id:'fictional-count-id'
+     })};
+     countRecovered=true;
+    }
+    if(process.env.PILOT_INVALID_FIELD_TEST==='1'&&authorizedAgain&&
+      stage>=6&&countRecovered&&!cursorRecovered){
+     if(body.cursor!==undefined)return {ok:false,status:400,json:async()=>({
+      error_code:'INVALID_FIELD',error_type:'INVALID_REQUEST',
+      error_message:'The cursor field has an invalid value',request_id:'fictional-cursor-id'
+     })};
+     cursorRecovered=true;
     }
     data={added:stage++===0?[{transaction_id:'pending-1',account_id:'acct-1',date:'2026-10-19',name:'Test pending',amount:10,pending:true},
      ...(process.env.PILOT_REMOVE_TEST==='1'?[{transaction_id:'card-from-shared-item',account_id:'acct-2',date:'2026-10-18',name:'Card purchase from shared link',amount:43,pending:false}]:[])]:

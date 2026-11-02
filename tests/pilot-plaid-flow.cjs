@@ -135,7 +135,7 @@ const {spawn}=require('node:child_process');
   assert.equal(fieldFailed.code,502,'Plaid request validation failure is not an expired-login conflict');
   assert.equal(fieldFailed.data.code,'INVALID_FIELD');
   assert.equal(fieldFailed.data.endpoint,'/transactions/sync');
-  assert.equal(fieldFailed.data.field,'count','The safe field name is available for diagnosis');
+  assert.equal(fieldFailed.data.field,'account_id','Unrecognized failures are diagnosed without changing the sync cursor');
   assert.equal(fieldFailed.data.requestId,'fictional-request-id-42');
   assert.ok(!JSON.stringify(fieldFailed.data).includes('The count field has an invalid value'),
    'Raw Plaid error messages are not exposed to the browser');
@@ -143,7 +143,7 @@ const {spawn}=require('node:child_process');
   const affected=invalidStatus.data.accounts.find(a=>a.id==='acct-1');
   assert.equal(affected.needsReconnect,false,'API field failure does not demand a bank re-login');
   assert.deepEqual(affected.syncIssue,{code:'INVALID_FIELD',endpoint:'/transactions/sync',
-   field:'count',requestId:'fictional-request-id-42'});
+   field:'account_id',requestId:'fictional-request-id-42'});
   assert.equal(invalidStatus.data.accounts.find(a=>a.id==='acct-2').syncIssue,null,
    'The healthy institution is not incorrectly flagged as failed');
   const staleField=await request('/api/ledger');
@@ -162,6 +162,34 @@ const {spawn}=require('node:child_process');
   const retried=await request('/api/ledger');
   assert.deepEqual(retried.data.adjustments,beforeInvalid.data.adjustments,
    'After retry household settings remain unchanged');
+  // Plaid sometimes rejects one optional parameter even after a previous
+  // successful connection. Retry only the specifically named field: omitting
+  // count is valid and uses Plaid's default page size; re-reading the saved
+  // Item from an empty cursor preserves exact transactions and user edits.
+  const beforeRecovery=await request('/api/ledger');
+  const countFixed=await request('/api/sync',{});
+  assert.equal(countFixed.code,200,'A count-specific INVALID_FIELD retries without optional count');
+  const afterCount=await request('/api/ledger');
+  assert.deepEqual(afterCount.data.adjustments,beforeRecovery.data.adjustments,
+   'Retrying a page-size failure cannot reset any household prediction');
+  assert.equal(afterCount.data.transactions.length,beforeRecovery.data.transactions.length,
+   'Retrying a page-size failure cannot duplicate bank transactions');
+  assert.equal((await request('/api/status')).data.accounts[0].syncIssue,null,
+   'Successful count recovery does not leave a false connection failure');
+  const cursorFixed=await request('/api/sync',{});
+  assert.equal(cursorFixed.code,200,
+   'A cursor-specific INVALID_FIELD replays with the existing access token');
+  const afterCursor=await request('/api/ledger');
+  assert.equal(afterCursor.data.accounts.length,beforeRecovery.data.accounts.length,
+   'Cursor replay cannot unlink or recreate accounts');
+  assert.deepEqual(afterCursor.data.adjustments,beforeRecovery.data.adjustments,
+   'Cursor replay preserves category edits and every saved forecast');
+  assert.equal(afterCursor.data.transactions.length,beforeRecovery.data.transactions.length,
+   'Cursor replay merges existing transaction IDs rather than creating duplicates');
+  assert.equal(JSON.stringify(afterCursor.data).includes('secret-test-access-token'),false,
+   'No sensitive access token is exposed by recovery');
+  assert.equal((await request('/api/status')).data.accounts.every(a=>a.syncIssue===null),true,
+   'Successful cursor replay clears only the error flags');
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');

@@ -103,7 +103,7 @@ async function plaid(endpoint,body){
   const field=String(data.error_message||'').match(/\b(?:access_token|cursor|count|products|country_codes|language|client_name|client_user_id|redirect_uri|account_id|start_date|end_date)\b/i)?.[0]||null;
   error.plaidCode=code;error.plaidEndpoint=endpoint;
   error.plaidRequestId=/^[a-zA-Z0-9_-]{3,80}$/.test(String(data.request_id||''))?data.request_id:null;
-  error.plaidField=field;throw error;
+  error.plaidField=field?.toLowerCase()||null;throw error;
  }
  return data;
 }
@@ -113,20 +113,48 @@ async function sync(){
  for(const item of state.items){
   try{
   if(!item.token||!item.accountIds?.length)throw Error('Incomplete connected institution');
-  let cursor=item.cursor||undefined,pages=[],complete=false;
-  for(let attempt=0;attempt<3;attempt++){
-   cursor=item.cursor||undefined;pages=[];complete=false;
-   try{
-    for(let n=0;n<100;n++){
-     const page=await plaid('/transactions/sync',{access_token:item.token,count:500,...(cursor?{cursor}:{})});
-     if(!Array.isArray(page.added)||!Array.isArray(page.modified)||!Array.isArray(page.removed)||typeof page.next_cursor!=='string')throw Error('Malformed sync response');
-     pages.push(page);cursor=page.next_cursor;
-     if(!page.has_more){complete=true;break}
+  // Finish all pages before making ANY source or cursor changes. If Plaid
+  // identifies an invalid optional count, retry without that field (default
+  // 100). If it specifically rejects the previously saved cursor, replay
+  // from the start using the SAME Item token and merge by transaction ID.
+  // This does not delete old records absent from the replay; a failed replay
+  // preserves both the original cursor and the last successful bank snapshot.
+  const readPages=async(start,withCount=true)=>{
+   for(let attempt=0;attempt<3;attempt++){
+    let cursor=start,complete=false;
+    const pages=[];
+    try{
+     for(let n=0;n<100;n++){
+      const body={access_token:item.token,
+       ...(withCount?{count:500}:{}),...(cursor?{cursor}:{})};
+      const page=await plaid('/transactions/sync',body);
+      if(!Array.isArray(page.added)||!Array.isArray(page.modified)||
+       !Array.isArray(page.removed)||typeof page.next_cursor!=='string')
+       throw Error('Malformed sync response');
+      pages.push(page);cursor=page.next_cursor;
+      if(!page.has_more){complete=true;break}
+     }
+     if(!complete)throw Error('Sync pagination incomplete');
+     return {cursor,pages};
+    }catch(error){
+     if(error.plaidCode!=='TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION'||
+      attempt===2)throw error;
     }
-    if(!complete)throw Error('Sync pagination incomplete');
-    break;
-   }catch(error){if(!error.message.includes('TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION')||attempt===2)throw error}
+   }
+  };
+  const savedCursor=typeof item.cursor==='string'&&item.cursor?item.cursor:undefined;
+  let result;
+  try{result=await readPages(savedCursor)}
+  catch(error){
+   const invalid=error.plaidCode==='INVALID_FIELD'&&
+    error.plaidEndpoint==='/transactions/sync';
+   if(invalid&&error.plaidField==='count')
+    result=await readPages(savedCursor,false);
+   else if(invalid&&error.plaidField==='cursor'&&savedCursor)
+    result=await readPages(undefined);
+   else throw error;
   }
+  const {cursor,pages}=result;
   const response=await plaid('/accounts/get',{access_token:item.token});
   if(!Array.isArray(response.accounts))throw Error('Plaid accounts response incomplete');
   const selected=[];
