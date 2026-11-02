@@ -14,6 +14,8 @@ global.fetch=async function(url,options){
    break;
   case '/item/public_token/exchange':data=body.public_token==='public-second'?
  {access_token:'secret-second-access-token',item_id:'test-item-2'}:
+ body.public_token==='public-duplicate-new'?
+ {access_token:'secret-duplicate-new',item_id:'test-duplicate-new'}:
  {access_token:'secret-test-access-token',item_id:'test-item'};break;
   case '/item/get':
    if(options.headers['PLAID-CLIENT-ID']&&
@@ -23,7 +25,14 @@ global.fetch=async function(url,options){
     throw Error('Test did not keep original Plaid credentials private in headers');
    data={item:{item_id:'fictional-item',available_products:['transactions']}};
    break;
-  case '/accounts/get':data={accounts:[{account_id:'acct-1',name:'Test Checking',mask:'1234',type:'depository',subtype:'checking',balances:{current:321.45,available:300.10,iso_currency_code:'USD'}},{account_id:'acct-2',name:'Test Visa',mask:'5555',type:'credit',subtype:'credit card',balances:{current:900,available:null}}]};break;
+  case '/accounts/get':
+   if(body.access_token==='secret-duplicate-new'){
+    data={accounts:[{account_id:'acct-duplicate-new',name:'Test Checking',
+     mask:'1234',type:'depository',subtype:'checking',
+     balances:{current:321.45,available:300.10,iso_currency_code:'USD'}}]};
+    break;
+   }
+   data={accounts:[{account_id:'acct-1',name:'Test Checking',mask:'1234',type:'depository',subtype:'checking',balances:{current:321.45,available:300.10,iso_currency_code:'USD'}},{account_id:'acct-2',name:'Test Visa',mask:'5555',type:'credit',subtype:'credit card',balances:{current:900,available:null}}]};break;
   case '/transactions/sync':
    if(body.access_token==='secret-second-access-token'){
     data={added:secondStage++===0?[
