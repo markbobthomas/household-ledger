@@ -29,6 +29,14 @@ const {spawn}=require('node:child_process');
   assert.equal(status.data.transactions.length,1);assert.equal(status.data.transactions[0].pending,true);
   assert.equal(JSON.stringify(status.data).includes('acct-2'),false,'Only selected account exposed');
   assert.equal(fs.readFileSync(store,'utf8').includes('secret-test-access-token'),false,'Plaid access token encrypted on disk');
+  const beforeOriginalDuplicate=await request('/api/ledger');
+  const originalDuplicate=await request('/api/exchange',{publicToken:'public-test',accountId:'acct-1'});
+  assert.equal(originalDuplicate.code,409,'Same Item returned by exchange must not be removed');
+  assert.equal(originalDuplicate.data.code,'ALREADY_CONNECTED');
+  const afterOriginalDuplicate=await request('/api/ledger');
+  assert.deepEqual(afterOriginalDuplicate.data.accounts,beforeOriginalDuplicate.data.accounts);
+  assert.deepEqual(afterOriginalDuplicate.data.transactions,beforeOriginalDuplicate.data.transactions);
+  assert.deepEqual(afterOriginalDuplicate.data.adjustments,beforeOriginalDuplicate.data.adjustments);
   const pendingOverride=await request('/api/ledger/adjustments',{categoryOverrides:{'pending-1':'Groceries'}});
   assert.equal(pendingOverride.code,200);
   await request('/api/sync',{});
@@ -78,6 +86,15 @@ const {spawn}=require('node:child_process');
   assert.equal(after.data.adjustments.categoryOverrides['posted-1'],'Pet supplies');
   assert.equal(after.data.account.current,321.45,'Category changes never recalculate bank balances');
   assert.equal(after.data.transactions[0].amount,10,'Original bank amount remains immutable');
+  const beforeNewDuplicate=await request('/api/ledger');
+  const newDuplicate=await request('/api/exchange',{
+   publicToken:'public-duplicate-new',accountId:'acct-duplicate-new'});
+  assert.equal(newDuplicate.code,409,'New Plaid account ID for same bank must not duplicate');
+  assert.match(newDuplicate.data.error,/Reconnect without losing saved data/);
+  const afterNewDuplicate=await request('/api/ledger');
+  assert.deepEqual(afterNewDuplicate.data.accounts,beforeNewDuplicate.data.accounts);
+  assert.deepEqual(afterNewDuplicate.data.transactions,beforeNewDuplicate.data.transactions);
+  assert.deepEqual(afterNewDuplicate.data.adjustments,beforeNewDuplicate.data.adjustments);
   const illegal=await request('/api/ledger/adjustments',{transactions:[{id:'posted-1',amount:99999}]});
   assert.equal(illegal.code,400,'Server refuses bank transaction modification through settings');
   const unknown=await request('/api/ledger/adjustments',{categoryOverrides:{'fake-bank-transaction':'Shopping'}});
@@ -118,9 +135,14 @@ const {spawn}=require('node:child_process');
   assert.equal(invalid.code,404,'Cannot request update mode for an unconnected bank');
   const invalidShape=await request('/api/link-token',{reconnectAccountId:'acct-1',unknown:'value'});
   assert.equal(invalidShape.code,400,'Update-mode token requests accept only the selected account');
+  const beforeUpdate=await request('/api/ledger');
   const repaired=await request('/api/link-token',{reconnectAccountId:'acct-1'});
   assert.equal(repaired.code,200);
   assert.deepEqual(repaired.data,{link_token:'link-update-test',mode:'update'});
+  const afterUpdate=await request('/api/ledger');
+  assert.deepEqual(afterUpdate.data.accounts,beforeUpdate.data.accounts);
+  assert.deepEqual(afterUpdate.data.transactions,beforeUpdate.data.transactions);
+  assert.deepEqual(afterUpdate.data.adjustments,beforeUpdate.data.adjustments);
   // Plaid update mode does NOT exchange a new public token. A fresh sync after
   // reauthorization retains the same selected IDs and account-specific edits.
   assert.equal((await request('/api/sync',{})).code,200,
