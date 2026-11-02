@@ -101,8 +101,8 @@ function inferPayment(card,accounts,records,asOf){
  const match=recent[0],debt=Number(card.current);
  if(card.current==null||!Number.isFinite(debt)||debt<=0)
   return {...result,eligible:false,reason:'Current bank card balance is unavailable; confirm the account before forecasting a payment'};
- let next=plus(match.last.date,1);
- for(let i=0;i<18&&next<=asOf;i++)next=plus(next,1);
+ // A date passing without a posted bank payment cannot advance the series.
+ const next=plus(match.last.date,1);
  return {...result,eligible:true,fromAccountId:match.id,
   fromName:accounts.find(a=>String(a.id)===match.id)?.name||match.id,
   nextPaymentDate:next,lastPaymentDate:match.last.date,
@@ -111,11 +111,19 @@ function inferPayment(card,accounts,records,asOf){
 function build(snapshot,records=[],expected=[],predictions={},options={}){
  const asOf=String(snapshot.asOf||''),days=options.days||90,through=shift(asOf,days);
  const postingDate=typeof options.effectiveDate==='function'?options.effectiveDate:d=>d;
+ const nextBusiness=from=>{
+  let d=shift(from,1);
+  while([0,6].includes(new Date(d+'T12:00:00Z').getUTCDay()))d=shift(d,1);
+  return d;
+ };
+ const overdueSince=shift(asOf,-90);
+ // The bank snapshot does not prove that today's predicted payment occurred.
+ const expectedWithdrawal=due=>due<=asOf?nextBusiness(asOf):postingDate(due);
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
  const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],historyStatements=[],suppressedExpectedIds=[],
-  cardEstimates=[],paymentDetails=[];
+  cardEstimates=[],paymentDetails=[],pendingPaymentMatches=[];
  for(const card of accounts.filter(credit))
   if(!ready(cards[card.id],card,accounts)){
    const candidate=cards[card.id]?{
@@ -135,6 +143,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
       type:t.type,amount:round(Number(t.amount)),source:postedOnly?'posted':'scheduled'
      })).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
     for(let when=candidate.nextPaymentDate,n=0;when<=through;when=plus(when,1),n++){
+     if(when<overdueSince)continue;
      const from=shift(plus(candidate.lastPaymentDate,n),1),
       actual=entries(records,from,when,true),
       scheduled=entries(expected,from,when,false).filter(t=>t.date>asOf),
@@ -149,12 +158,14 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      if(!(amount>0))continue;
      const id='card-history-estimate|'+card.id+'|'+when;
      plans.push({id,fromAccountId:candidate.fromAccountId,toAccountId:String(card.id),
-      anchorDate:when,amount,frequency:'once',
+      anchorDate:expectedWithdrawal(when),
+      ...(when<=asOf?{originalDueDate:when,_unpostedEstimated:true,_overdueFrom:when}:{}),
+      amount,frequency:'once',
       merchant:card.name+' Credit-card payment (transaction-based)',
       origin:'card-history-estimate',status:'estimated',
       amountEstimate:'transaction-based'});
      paymentDetails.push({id,cardId:String(card.id),cardName:card.name,
-      fromAccountId:candidate.fromAccountId,withdrawalDate:postingDate(when),
+      fromAccountId:candidate.fromAccountId,withdrawalDate:expectedWithdrawal(when),
       periodStart:from,periodEnd:when,periodSource:'inferred-payment-window',
       method:'statement',amount,calculated:round(Math.max(0,raw)),
       postedTransactions:actual,predictedTransactions:scheduled,
@@ -250,7 +261,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   for(let n=0;n<=Math.ceil(days/28)+2;n++){
    const due=plus(rule.nextPaymentDate,n),actualDue=plus(String(rule.nextDueDate||rule.nextPaymentDate),n);
    if(due>through)break;
-   if(due<=asOf)continue;
+   if(due<overdueSince)continue;
    const cycleClose=n===0?lastClose:closeFor(plus(lastClose,n).slice(0,7),rule.closingDay);
    const cycleStart=n===0?anchorStart:
     shift(closeFor(plus(lastClose,n-1).slice(0,7),rule.closingDay),1);
@@ -321,29 +332,50 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    if(paid&&Math.abs(postedPaymentTotal-amount)>.011)
     warnings.push(card.name+': actual payment '+postedPaymentTotal.toFixed(2)+
      ' differs from planned '+amount.toFixed(2)+'; confirm any remaining balance.');
+   // A pending transfer is provisional, not posted. Suppress a second debit
+   // only if the bank-reported available balance covers every pending outflow
+   // and exactly one hold belongs to this card and expected installment.
+   const pendingOutflows=autopay&&from?records.filter(t=>t.pending&&
+    matchesAccount(t,from)&&Number(t.amount)>0&&
+    (t.type==='expense'||t.type==='transfer'&&t.cashDirection==='out')):[];
+   const pendingTotal=pendingOutflows.reduce((sum,t)=>sum+Number(t.amount),0);
+   const availableHold=from&&from.current!=null&&from.available!=null&&
+    Number.isFinite(Number(from.current))&&Number.isFinite(Number(from.available))&&
+    Number(from.current)-Number(from.available)+.01>=pendingTotal&&pendingTotal>0;
+   const candidates=pendingOutflows.filter(t=>t.type==='transfer'&&
+    t.accountingKind==='card_payment'&&t.cashDirection==='out'&&
+    date(t.date)&&t.date<=asOf&&Math.abs((Date.parse(t.date)-Date.parse(due))/86400000)<=7&&
+    Math.abs(Number(t.amount)-amount)<=Math.max(.01,amount*.02));
+   const pendingReserved=Boolean(!paid&&availableHold&&candidates.length===1);
+   if(pendingReserved)pendingPaymentMatches.push({
+    id:'autopay|'+id+'|'+due,accountId:from.id,cardId:id,
+    bankId:String(candidates[0].id),status:'pending',reservedInAvailable:true
+   });
    const recentPostedPayment=postedPayments[0]||null;
    const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
-    dueDate:actualDue,withdrawalDate:postingDate(due),closingDate:cycleClose,amount,
+    dueDate:actualDue,withdrawalDate:expectedWithdrawal(due),closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
     actualPeriodNet,periodComplete,postedTransactions,predictedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
     historicalAverage:null,fullBalanceEstimate:fullAmount,
-    autopayEnabled:autopay,alreadyPaid:paid,actualPayments:postedForCycle,
+    autopayEnabled:autopay,alreadyPaid:paid,...(pendingReserved?{pendingReserved:true}:{}),actualPayments:postedForCycle,
     actualPaymentAmount:postedPaymentTotal,actualPaymentDate:postedForCycle[0]?.date||null,
     lastPostedPayment:recentPostedPayment,observedCount:cycleRows.length,scheduledCount:predictedRows.length,
     incompleteFuture:cycleClose>asOf};
    statements.push(statement);
    // A statement preview exists even when autopay is disabled. Only a
    // confirmed full-statement autopay rule schedules a checking withdrawal.
-   if(amount>0&&autopay&&!paid){
+   if(amount>0&&autopay&&!paid&&!pendingReserved){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
-     anchorDate:due,amount,frequency:'once',status:'scheduled',origin:'card-autopay',
+     anchorDate:expectedWithdrawal(due),
+     ...(due<=asOf?{originalDueDate:due,_unpostedEstimated:true,_overdueFrom:due}:{}),
+     amount,frequency:'once',status:'scheduled',origin:'card-autopay',
      merchant:card.name+' Credit-card payment (autopay)',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
     paymentDetails.push({id:plan.id,cardId:id,cardName:card.name,
-     fromAccountId:from.id,withdrawalDate:postingDate(due),
+     fromAccountId:from.id,withdrawalDate:expectedWithdrawal(due),
      periodStart:cycleStart,periodEnd:cycleClose,periodSource:'configured-statement',
      method,amount,calculated,postedTransactions,predictedTransactions,
      confirmed:confirmedFirst,issuedAmount:confirmedFirst?Number(rule.lastStatementBalance):null,
@@ -351,7 +383,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      caveat:method==='statement'?'This statement estimate uses identified posted and scheduled card activity only.':
       'The selected payment method changes the transfer amount; identified card activity remains separately visible.'});
     plannedCardPayments=round(plannedCardPayments+amount);
-    obligations.push({id:plan.id,date:postingDate(due),amount,fromAccountId:from.id,
+    obligations.push({id:plan.id,date:expectedWithdrawal(due),amount,fromAccountId:from.id,
      merchant:card.name+' autopay',kind:'card_payment',confidence,cardId:id});
    }
   }
@@ -392,7 +424,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     kind:'automatic_bill',confidence:'entered schedule / amount estimate'});
   }
  }
- return {plans,billEvents,suppressedExpectedIds,obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
+ return {plans,billEvents,suppressedExpectedIds,...(pendingPaymentMatches.length?{pendingPaymentMatches}:{}),obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
   cardEstimates,paymentDetails,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
 const api={build,plus,closeFor,ready,inferPayment,statementPeriodFor};
