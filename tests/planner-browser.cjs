@@ -1259,9 +1259,13 @@ const {chromium,webkit}=require('playwright');
    await chooseAllMonths(page);
    const firstCategory=page.locator('.history-category-item').filter({hasText:/[1-9][0-9]* transactions/}).first();
    await firstCategory.locator('[data-history-drill-category]').click();
-   assert.equal(await page.locator('.planner-nav-primary [data-view="activity"][aria-current="page"]').count(),1,
-    'Category drill-down opens the detailed transaction list');
-   assert.ok(await page.locator('.history-actual-row').count()>0);
+   assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
+    'Budget category drill-down stays in Budget rather than dropping expected or provisional items');
+   const categoryItems=firstCategory.locator('[data-history-budget-details]');
+   assert.equal(await categoryItems.isVisible(),true,
+    'Budget category opens its underlying spent and expected items');
+   assert.ok(await categoryItems.locator('[data-budget-source]').count()>0,
+    'Expanded category shows the transactions that make up its total');
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
