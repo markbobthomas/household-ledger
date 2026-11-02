@@ -677,7 +677,7 @@ async function start(port=Number(env.PORT||8788)){
    return respond(404,{error:'Unknown action'});
   }catch(e){
    if(e.plaidCode){
-    return respond(e.plaidCode==='ITEM_LOGIN_REQUIRED'?409:502,{
+    return respond(e.plaidCode==='ITEM_LOGIN_REQUIRED'?409:e.plaidCode==='INVALID_FIELD'?502:400,{
      error:e.plaidCode==='ITEM_LOGIN_REQUIRED'?
       'Your bank needs you to sign in again before new transactions can be fetched.':
       e.plaidCode==='INVALID_FIELD'?
