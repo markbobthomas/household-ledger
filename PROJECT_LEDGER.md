@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-11-01 (Pacific)  
+**Updated:** 2026-11-02 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -23,7 +23,9 @@ Product priorities:
 
 **Banking safety:** Preserve the current GitHub, Plaid and private Render architecture. Actual source transactions/balances remain authoritative and unchanged by editable predictions. Do not use public fictional Demo data as if it were real bank data. This repository is public: do not put actual financial records, private amounts, authentication details, or private user messages in this ledger.
 
-## Current state (reviewed November 1, 2026)
+## Current state (reviewed November 2, 2026)
+
+- **2026-11-02 cross-device sign-in data loading — IMPLEMENTED; CI/MERGE PENDING; PRIVATE RENDER UNVERIFIED:** A fresh browser on the authenticated private Ledger previously fell back to fictional Demo because `pilot/data-source.js` only auto-requested real household data if that device's localStorage already contained `real`. Default private sign-in now selects Real, loads the server-authoritative encrypted account snapshot and saved household category/planning preferences, and preserves a deliberately selected per-device Demo choice. Public GitHub Pages remains fictional Demo. Existing desktop/iPhone private browser regression checks a fresh session, restored Real records and server-saved main account, and intentional Demo mode. No bank, Plaid, authentication, persistence format, forecasts, or financial calculations changed. Files: `pilot/data-source.js`, `tests/pilot-remove-account-browser.cjs`, `PROJECT_LEDGER.md`. CI and merge pending; production deployed revision and actual second-device result not independently verified.
 
 - **2026-11-01 Budget Unassigned drill reconciled — MERGED; BANKING/BROWSER CI PASSED; PRIVATE RENDER UNVERIFIED:** [PR #456](https://github.com/markbobthomas/household-ledger/pull/456) squash merged into `main` as `5526e3908f80fbb06223acb47e10b8e48ca5b007` (tested head `f94b631f0c42e27809323e20c1ea24d7b4168f22`). Budget category clicks expand the exact posted/provisional purchases and expected future expense entries contributing to the category total in place, including internal `Uncategorized` shown as Unassigned and signed refunds. The earlier Activity-only drill had omitted pending/future rows. Existing category totals, bank source data, settlement/transfer exclusions, scheduled forecasts, and prepared-page navigation remain unchanged. Synthetic bank/forecast safety [run #41364809982](https://github.com/markbobthomas/household-ledger/actions/runs/41364809982) and desktop Chromium/iPhone WebKit [run #41364810094](https://github.com/markbobthomas/household-ledger/actions/runs/41364810094) passed, including Unassigned itemized-total reconciliation and existing navigation regression. Files: `planner.js`, `planner.css`, `index.html`, `tests/planner-budget-netting-browser.cjs`, `tests/planner-browser.cjs`, `PROJECT_LEDGER.md`. Private Render deployed revision and real-account outcomes remain independently unverified; public Pages publication not independently verified. This verified entry supersedes the implementation-pending note below.
 
