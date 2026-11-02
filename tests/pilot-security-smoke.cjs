@@ -89,7 +89,7 @@ function post(route,body={},cookie='',extra={}){
   const broken=await get('/not-a-route?utm_source=chatgpt.com',true);
   assert.equal(broken.status,404,'Unknown browser links return Not found, not an API action-header error');
   assert.equal((await get('/api/ledger?source=browser',false)).status,401,'Query parameters do not bypass authentication');
-  const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect accounts/,'Plaid authorization available on same website');
+  const link=await get('/bank-connect',true);assert.equal(link.status,200);assert.match(link.body,/Connect new accounts/,'Plaid authorization available on same website');
   assert.equal((await get('/pilot/data-source.js',true)).status,200);
   assert.match(ledger.body,/manifest[.]webmanifest/,'Private app exposes install manifest');
   assert.match(ledger.body,/apple-touch-icon/,'iPhone gets an app icon');
