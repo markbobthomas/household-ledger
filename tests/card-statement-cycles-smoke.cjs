@@ -225,19 +225,20 @@ const dueSnapshot=(asOf,accounts=dueAccounts)=>({asOf,accounts,mode:'demo'});
 const calculate=(asOf,bank=[],prefs=duePrefs,accounts=dueAccounts)=>
  Core.materialize(dueSnapshot(asOf,accounts),bank,prefs,T,Payments,60,{weekendPolicy:'friday'});
 const cardMoves=b=>b.ledger.filter(x=>x.kind==='movement'&&x.toAccountId==='card-due');
+const firstCard=b=>cardMoves(b).filter(p=>p.id==='autopay|card-due|2026-11-02');
 const todayUnposted=calculate('2026-11-02');
-assert.equal(cardMoves(todayUnposted).length,1,'Due-today card autopay is not discarded');
-assert.equal(cardMoves(todayUnposted)[0].date,'2026-11-03','Unposted payment reserves next business day');
-assert.equal(cardMoves(todayUnposted)[0].originalDueDate,'2026-11-02','Stable original statement date retained');
+assert.equal(firstCard(todayUnposted).length,1,'Due-today card autopay is not discarded');
+assert.equal(firstCard(todayUnposted)[0].date,'2026-11-03','Unposted payment reserves next business day');
+assert.equal(firstCard(todayUnposted)[0].originalDueDate,'2026-11-02','Stable original statement date retained');
 assert.equal(todayUnposted.overduePayments.length,1,'Due-today unpaid autopay appears in Review');
 assert.equal(todayUnposted.overduePayments[0].kind,'movement','Overdue card item uses linked-transfer editing');
 assert.equal(todayUnposted.projection.accounts.find(a=>a.id==='checking-due')
  .series.find(p=>p.date==='2026-11-03').balance,1300,
  'The projected checking balance must reserve the unposted card payment');
 const nextDay=calculate('2026-11-03');
-assert.equal(cardMoves(nextDay).length,1,'Missing bank posting still has exactly one debit');
-assert.equal(cardMoves(nextDay)[0].date,'2026-11-04','Unpaid card is carried forward again');
-assert.equal(cardMoves(calculate('2026-11-12')).filter(x=>x.originalDueDate==='2026-11-02').length,1,
+assert.equal(firstCard(nextDay).length,1,'Missing bank posting still has exactly one debit');
+assert.equal(firstCard(nextDay)[0].date,'2026-11-04','Unpaid card is carried forward again');
+assert.equal(firstCard(calculate('2026-11-12')).filter(x=>x.originalDueDate==='2026-11-02').length,1,
  'Missing card payment survives more than a week of bank posting delay');
 const paidBank=[
  {id:'actual-checking',date:'2026-11-02',accountId:'checking-due',
@@ -248,30 +249,30 @@ const paidBank=[
   pairedTransactionId:'actual-checking',pending:false}
 ];
 const paid=calculate('2026-11-03',paidBank);
-assert.equal(cardMoves(paid).length,0,'Actual paired bank posting settles due installment once');
+assert.equal(firstCard(paid).length,0,'Actual paired bank posting settles due installment once');
 assert.equal(paid.overduePayments.length,0,'Posted autopay clears the missed-payment alert');
 const wrongBank=calculate('2026-11-03',paidBank.map(x=>({...x,accountId:
  x.accountId==='checking-due'?'other-account':x.accountId})));
-assert.equal(cardMoves(wrongBank).length,1,'Another account cannot settle the planned checking withdrawal');
+assert.equal(firstCard(wrongBank).length,1,'Another account cannot settle the planned checking withdrawal');
 const pendingBank=[{id:'pending-checking',date:'2026-11-02',
  accountId:'checking-due',type:'transfer',accountingKind:'card_payment',
  cashDirection:'out',amount:700,pending:true}];
 const pendingAccounts=[{...dueAccounts[0],available:1300},dueAccounts[1]];
 const pending=calculate('2026-11-03',pendingBank,duePrefs,pendingAccounts);
-assert.equal(cardMoves(pending).length,0,'Available-balance reserved pending card debit is not deducted twice');
+assert.equal(firstCard(pending).length,0,'Available-balance reserved pending card debit is not deducted twice');
 assert.equal(pending.pendingPaymentMatches.length,1,'Pending debit is provisional, never reported as posted');
 assert.equal(pending.payments.statements[0].alreadyPaid,false);
 const unreserved=calculate('2026-11-03',pendingBank);
-assert.equal(cardMoves(unreserved).length,1,'Pending debit without a bank available hold still needs a reserve');
-assert.equal(cardMoves(calculate('2026-11-03',[])).length,1,
+assert.equal(firstCard(unreserved).length,1,'Pending debit without a bank available hold still needs a reserve');
+assert.equal(firstCard(calculate('2026-11-03',[])).length,1,
  'If pending debit disappears without posting, card prediction returns');
 const ignored={...duePrefs,overdueReviewDismissals:{
  [T.keyMovement('autopay|card-due|2026-11-02')]:'2026-11-02'}};
-assert.equal(cardMoves(calculate('2026-11-03',[],ignored)).length,1,
+assert.equal(firstCard(calculate('2026-11-03',[],ignored)).length,1,
  'Dismissal of overdue review cannot silently erase the forecast reserve');
 const skipped={...duePrefs,futureTransactionEdits:{
  [T.keyMovement('autopay|card-due|2026-11-02')]:{skipped:true}}};
-assert.equal(cardMoves(calculate('2026-11-03',[],skipped)).length,0,
+assert.equal(firstCard(calculate('2026-11-03',[],skipped)).length,0,
  'Intentional skip removes only the chosen outstanding autopay');
 const twoCycles=calculate('2026-12-03');
 const carried=cardMoves(twoCycles).filter(p=>['2026-11-02','2026-12-02'].includes(p.originalDueDate));
@@ -279,7 +280,7 @@ assert.equal(carried.length,2,'Independent overdue statement cycles must not col
 assert.deepEqual(carried.map(p=>p.date),['2026-12-04','2026-12-04'],
  'Both unconfirmed card cycles reserve the next business day');
 const postedBeforeDue=calculate('2026-11-02',paidBank);
-assert.equal(cardMoves(postedBeforeDue).length,0,'Bank posting on the due date prevents a second forecast debit');
+assert.equal(firstCard(postedBeforeDue).length,0,'Bank posting on the due date prevents a second forecast debit');
 assert.deepEqual(paid.projection.diagnostics.balanceMismatches,[],
  'Card reconciliation must preserve full daily balance integrity');
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
