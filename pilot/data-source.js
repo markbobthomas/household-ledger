@@ -24,11 +24,19 @@ const today=()=>{
 };
 const statusText=()=>lastError?'<p role="alert">'+esc(lastError)+'</p>':''; 
 const reconnectMessage='Your bank connection needs attention. Plaid requires you to sign in again or renew permission. Previously imported transactions and saved predictions are preserved; refresh results may be out of date.';
+const syncIssueMessage=issues=>{
+ const first=issues[0]||{},code=String(first.code||'SYNC_FAILED');
+ return code==='INVALID_FIELD'?
+  'Bank refresh could not complete: Plaid rejected a request field (INVALID_FIELD'+
+   (first.endpoint?' at '+first.endpoint:'')+'). This does not mean your login failed. '+
+   'Open Bank connections to retry and view the safe request diagnostic. Previous bank history and saved predictions remain available.':
+  'Bank refresh could not complete ('+code+'). Open Bank connections to retry or review the error. Previous data may be out of date.';
+};
 const warningBanner=()=>live&&lastError?
  '<div class="notice danger" role="alert"><div><strong>'+
  (lastErrorKind==='save'?'Could not save changes.':'Bank connection needs attention.')+
  '</strong> '+esc(lastError)+'</div>'+
- (lastErrorKind==='bank'?'<a class="btn" href="/bank-connect">Reconnect bank</a>':'')+
+ (lastErrorKind==='bank'?'<a class="btn" href="/bank-connect">Bank connections &amp; recovery</a>':'')+
  '</div>':'';
 const selection=()=>live?'real':'demo';
 async function request(path,body){
@@ -116,7 +124,8 @@ function prepare(payload,asOf=today()){
    available:a.available??null,balanceAsOf:a.balanceObservedAt||null,
    currency:a.currency||'USD',simulated:false}))};
  return {state,snapshot,preparedForecast:payload.preparedForecast||null,account:banks[0],accounts:banks,
-  reconnectAccounts:Array.isArray(payload.reconnectAccounts)?payload.reconnectAccounts:[]};
+  reconnectAccounts:Array.isArray(payload.reconnectAccounts)?payload.reconnectAccounts:[],
+  syncIssues:Array.isArray(payload.syncIssues)?payload.syncIssues:[]};
 }
 async function enter(){
  if(loading)return;serverRevision='';loading=true;lastError='';lastErrorKind='bank';localStorage.setItem(MODE,'real');
@@ -128,6 +137,7 @@ async function enter(){
   host.enterReal(data.state,data.snapshot,data.preparedForecast);
   loadedAccount=data.account;live=true;
   if(data.reconnectAccounts.length)lastError=reconnectMessage;
+  else if(data.syncIssues.length)lastError=syncIssueMessage(data.syncIssues);
   localStorage.setItem(MODE,'real');
  }catch(e){
   // Never silently show fictional balances after an explicit Real choice.
@@ -157,10 +167,14 @@ async function refresh(){
   const updated=prepare(await request(''));
   host.enterReal(updated.state,updated.snapshot,updated.preparedForecast);
   loadedAccount=updated.account;
-  lastError=updated.reconnectAccounts.length?reconnectMessage:'';
+  lastError=updated.reconnectAccounts.length?reconnectMessage:
+   updated.syncIssues.length?syncIssueMessage(updated.syncIssues):'';
  }catch(e){
   lastError=e.code==='ITEM_LOGIN_REQUIRED'?reconnectMessage:
-   'Bank refresh failed: '+e.message+'. Check Bank connections and try again.';
+   e.code==='INVALID_FIELD'?
+    'Plaid rejected a bank API request field (INVALID_FIELD'+
+     (e.endpoint?' at '+e.endpoint:'')+'). Your previous data is safe. Open Bank connections to retry or see the diagnostic.':
+    'Bank refresh failed: '+e.message+'. Check Bank connections and try again.';
  }
  finally{loading=false;host.render()}
 }
