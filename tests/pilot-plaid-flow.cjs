@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=requ
 const {spawn}=require('node:child_process');
 (async()=>{
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'hl-plaid-flow-')),port=19849,pass=crypto.randomBytes(24).toString('hex'),store=path.join(folder,'pilot.enc');
- const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1'};
+ const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1',PILOT_INVALID_FIELD_TEST:'1'};
  const child=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','sandbox/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});
  const request=(route,body)=>{
   return new Promise((resolve,reject)=>{
@@ -127,6 +127,41 @@ const {spawn}=require('node:child_process');
   assert.equal(restored.data.accounts.find(a=>a.id==='acct-1').current,321.45);
   assert.equal(restored.data.accounts.find(a=>a.id==='acct-2').current,900);
   assert.equal(JSON.stringify(restored.data).includes('secret-test-access-token'),false);
+  // Plaid INVALID_FIELD is a request validation error, NOT proof that bank
+  // credentials expired. Never silently force update-mode or erase an Item.
+  // Preserve the latest valid source snapshot and make the next action clear.
+  const beforeInvalid=await request('/api/ledger');
+  const fieldFailed=await request('/api/sync',{});
+  assert.equal(fieldFailed.code,502,'Plaid request validation failure is not an expired-login conflict');
+  assert.equal(fieldFailed.data.code,'INVALID_FIELD');
+  assert.equal(fieldFailed.data.endpoint,'/transactions/sync');
+  assert.equal(fieldFailed.data.field,'count','The safe field name is available for diagnosis');
+  assert.equal(fieldFailed.data.requestId,'fictional-request-id-42');
+  assert.ok(!JSON.stringify(fieldFailed.data).includes('The count field has an invalid value'),
+   'Raw Plaid error messages are not exposed to the browser');
+  const invalidStatus=await request('/api/status');
+  const affected=invalidStatus.data.accounts.find(a=>a.id==='acct-1');
+  assert.equal(affected.needsReconnect,false,'API field failure does not demand a bank re-login');
+  assert.deepEqual(affected.syncIssue,{code:'INVALID_FIELD',endpoint:'/transactions/sync',
+   field:'count',requestId:'fictional-request-id-42'});
+  assert.equal(invalidStatus.data.accounts.find(a=>a.id==='acct-2').syncIssue,null,
+   'The healthy institution is not incorrectly flagged as failed');
+  const staleField=await request('/api/ledger');
+  assert.deepEqual(staleField.data.transactions,beforeInvalid.data.transactions,
+   'Failed Plaid validation never mutates the last good imported records');
+  assert.deepEqual(staleField.data.adjustments,beforeInvalid.data.adjustments,
+   'INVALID_FIELD never drops saved household forecasts or categories');
+  assert.equal(staleField.data.syncIssues.length,1,'Persisted invalid-field diagnostic reaches Ledger');
+  assert.equal(staleField.data.syncIssues[0].code,'INVALID_FIELD');
+  assert.equal(JSON.stringify(staleField.data).includes('secret-test-access-token'),false,
+   'API response must never reveal access tokens');
+  assert.equal((await request('/api/sync',{})).code,200,'Retry without account deletion can restore the connection');
+  const cleared=await request('/api/status');
+  assert.equal(cleared.data.accounts.every(a=>a.syncIssue===null),true,
+   'Only successful full sync clears Plaid diagnostics');
+  const retried=await request('/api/ledger');
+  assert.deepEqual(retried.data.adjustments,beforeInvalid.data.adjustments,
+   'After retry household settings remain unchanged');
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');
