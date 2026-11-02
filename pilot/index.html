@@ -70,12 +70,18 @@ function showDiagnostics(details){
   details.deployCommit:'Unavailable';
  const attempt=details.lastSyncAttempt,call=details.lastPlaidCall;
  area.innerHTML='<p><strong>Plaid environment: '+esc(envLabel)+'</strong> · Server commit: <code>'+esc(commit)+'</code></p>'+
+  '<p>API destination: '+esc(details.requestHost||'Unavailable')+
+  ' · Client ID ends in <code>'+esc(details.clientIdEnding?'…'+details.clientIdEnding:'Unavailable')+
+  '</code>. Compare with the client ID in Plaid Dashboard → API Keys for the selected team. Do not share your API secret.</p>'+
   '<p>Latest refresh: '+(attempt?esc(attempt.at||'Unknown')+' ('+esc(attempt.outcome||'unknown')+')':'None since this server started')+'</p>'+
   '<p>Latest direct Plaid call during refresh: '+(call?
    esc(call.at||'Unknown')+' · '+esc(call.endpoint||'unknown endpoint')+
    ' · '+esc(call.outcome||'unknown outcome')+
    (call.code?' · '+esc(call.code):'')+
+   (call.httpStatus?' · HTTP '+esc(call.httpStatus):'')+
+   (call.errorType?' · Type '+esc(call.errorType):'')+
    (call.field?' · Field '+esc(call.field):'')+
+   (call.hasProviderMessage?' · Provider supplied an error description (sensitive text withheld)':'')+
    (call.requestId?' · Request ID '+esc(call.requestId):''):
    'None recorded for the latest refresh')+'</p>'+
   '<p class="muted">These are observations from this private Ledger server, not the Plaid Dashboard. Match the environment and time when checking Plaid logs. A previous error displayed below may be older than the latest refresh.</p>';
@@ -93,6 +99,8 @@ async function refresh(){
    const issue=a.syncIssue||{};
    return '<p><strong>'+esc(a.name)+'</strong> · '+esc(issue.code||'Sync error')+
     (issue.endpoint?' · API '+esc(issue.endpoint):'')+
+    (issue.httpStatus?' · HTTP '+esc(issue.httpStatus):'')+
+    (issue.errorType?' · Type '+esc(issue.errorType):'')+
     (issue.field?' · Field: '+esc(issue.field):'')+
     (issue.requestId?' · Plaid request ID: '+esc(issue.requestId):'')+
     ' · Recorded: '+esc(issue.observedAt||'time unknown (older error)')+
