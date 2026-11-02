@@ -18,6 +18,10 @@ const plaidEnvironment=env.PLAID_ENV||'production';
 const HOST={production:'https://production.plaid.com',sandbox:'https://sandbox.plaid.com'}[plaidEnvironment];
 if(!HOST)throw Error('PLAID_ENV must be production or sandbox');
 const deployedCommit=/^[a-f0-9]{40}$/i.test(String(env.RENDER_GIT_COMMIT||''))?env.RENDER_GIT_COMMIT:null;
+// Only an authenticated, six-character ID suffix is needed to check which
+// Plaid Dashboard team owns the live Render credentials.
+const plaidClientIdEnding=String(env.PLAID_CLIENT_ID||'').length>=6?
+ String(env.PLAID_CLIENT_ID).slice(-6):null;
 // Private, temporary, sanitized diagnostics. No credential, account ID,
 // transaction or bank amount is ever recorded; only authenticated users can
 // view these observations. In particular, distinguish a locally shown stale
@@ -25,6 +29,7 @@ const deployedCommit=/^[a-f0-9]{40}$/i.test(String(env.RENDER_GIT_COMMIT||''))?e
 let lastPlaidCall=null,lastSyncAttempt=null;
 const bankDiagnostics=()=>({
  environment:plaidEnvironment,deployCommit:deployedCommit,
+ requestHost:HOST,clientIdEnding:plaidClientIdEnding,
  lastSyncAttempt:lastSyncAttempt?{...lastSyncAttempt}:null,
  lastPlaidCall:lastPlaidCall?{...lastPlaidCall}:null
 });
@@ -113,16 +118,26 @@ async function plaid(endpoint,body){
   if(!resp.ok||data.error_code){
    const code=String(data.error_code||resp.status).slice(0,60),
     error=new Error('Plaid request failed: '+code);
+   // Expose only response metadata, not Plaid's raw error_message: provider
+   // messages may echo credentials or bank request values.
+   const httpStatus=Number.isInteger(resp.status)&&resp.status>=100&&resp.status<=599?resp.status:null;
+   const errorType=/^[A-Z_]{3,40}$/.test(String(data.error_type||''))?data.error_type:null;
+   const hasProviderMessage=typeof data.error_message==='string'&&!!data.error_message.trim();
    // Store only a recognized field name. Plaid error_message can contain
    // rejected values and must never be sent to the Ledger browser.
    const field=String(data.error_message||'').match(/\b(?:access_token|cursor|count|products|country_codes|language|client_name|client_user_id|redirect_uri|account_id|start_date|end_date)\b/i)?.[0];
    const requestId=/^[a-zA-Z0-9_-]{3,80}$/.test(String(data.request_id||''))?data.request_id:null;
    observation.outcome='provider_error';
    observation.code=code;
+   if(httpStatus)observation.httpStatus=httpStatus;
+   if(errorType)observation.errorType=errorType;
+   observation.hasProviderMessage=hasProviderMessage;
    if(requestId)observation.requestId=requestId;
    if(field)observation.field=field.toLowerCase();
    error.plaidCode=code;error.plaidEndpoint=endpoint;
    error.plaidRequestId=requestId;error.plaidField=field?.toLowerCase()||null;
+   error.plaidHttpStatus=httpStatus;error.plaidErrorType=errorType;
+   error.plaidHasProviderMessage=hasProviderMessage;
    throw error;
   }
   observation.outcome='success';
@@ -205,6 +220,9 @@ async function sync(){
     // bank snapshot, original token, cursor and encrypted forecast preferences.
     item.syncIssue={code:error.plaidCode,endpoint:error.plaidEndpoint||null,
      observedAt:stamp(),environment:plaidEnvironment,
+     ...(error.plaidHttpStatus?{httpStatus:error.plaidHttpStatus}:{}),
+     ...(error.plaidErrorType?{errorType:error.plaidErrorType}:{}),
+     ...(error.plaidHasProviderMessage!==undefined?{hasProviderMessage:error.plaidHasProviderMessage}:{}),
      ...(error.plaidField?{field:error.plaidField}:{}),
      ...(error.plaidRequestId?{requestId:error.plaidRequestId}:{})};
     if(error.plaidCode==='ITEM_LOGIN_REQUIRED'){
