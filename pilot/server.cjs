@@ -682,7 +682,7 @@ async function start(port=Number(env.PORT||8788)){
       'Your bank needs you to sign in again before new transactions can be fetched.':
       e.plaidCode==='INVALID_FIELD'?
        'Plaid rejected a request field. This is not proof your bank login failed; the saved bank history and forecasts are intact.':
-       'Plaid could not refresh the bank connection ('+e.plaidCode+'). Your saved bank history and forecasts are intact.',
+       'Plaid request failed: '+e.plaidCode,
      code:e.plaidCode,
      ...(e.plaidEndpoint?{endpoint:e.plaidEndpoint}:{}),
      ...(e.plaidField?{field:e.plaidField}:{}),
