@@ -78,8 +78,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     await page.locator('#ledger-mode-switch').selectOption('real');
     await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK',
      null,{timeout:30000});
-    assert.match(await page.locator('#planner-main').innerText(),/Test Checking/,
-     'Switching back to Real restores the same encrypted household bank data');
+    assert.match(await page.locator('#summary-account option:checked').textContent(),/Test Checking.*Main/,
+     'Switching back to Real restores the same private account and its saved main-account setting');
    }
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
    await page.locator('[data-remove-account="acct-2"]').waitFor();
