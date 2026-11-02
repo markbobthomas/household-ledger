@@ -236,6 +236,28 @@ const {spawn}=require('node:child_process');
    'A client ID validation error must not mutate household data');
   assert.equal((await request('/api/sync',{})).code,200,
    'A subsequent authorized refresh can clear the diagnostic');
+  const beforeUnknown=await request('/api/ledger');
+  assert.equal((await request('/api/sync',{})).code,200,
+   'Unknown field safely recovers if optional count is rejected');
+  const unknownRecovered=await request('/api/status');
+  assert.equal(unknownRecovered.data.diagnostics.lastRecovery.kind,'optional_count');
+  assert.equal(unknownRecovered.data.diagnostics.lastRecovery.outcome,'recovered');
+  assert.deepEqual((await request('/api/ledger')).data.adjustments,beforeUnknown.data.adjustments,
+   'Unknown-field fallback must not change user forecasts');
+  const beforeProbe=await request('/api/ledger');
+  assert.equal((await request('/api/sync',{})).code,502,
+   'Read-only Item check must not pretend an invalid sync succeeded');
+  const probeStatus=await request('/api/status');
+  assert.equal(probeStatus.data.diagnostics.lastRecovery.kind,'item_check');
+  assert.equal(probeStatus.data.diagnostics.lastRecovery.outcome,'accepted');
+  assert.equal(probeStatus.data.diagnostics.lastPlaidCall.endpoint,'/transactions/sync');
+  assert.deepEqual((await request('/api/ledger')).data.transactions,beforeProbe.data.transactions,
+   'Item check cannot alter immutable bank transactions');
+  assert.deepEqual((await request('/api/ledger')).data.adjustments,beforeProbe.data.adjustments,
+   'Item check cannot alter saved forecasts');
+  assert.equal(JSON.stringify(probeStatus.data).includes('secret-test-access-token'),false);
+  assert.equal((await request('/api/sync',{})).code,200,
+   'A later legitimate refresh resumes with the original Item');
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');
