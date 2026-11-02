@@ -54,6 +54,35 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
      authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}}));
    const page=await ctx.newPage();
    page.on('dialog',d=>d.accept());
+   // A second device has no localStorage mode preference. Signing in to the
+   // private site must automatically load the same encrypted server records;
+   // a missing browser preference must not silently substitute Demo data.
+   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'load'});
+   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK',
+    null,{timeout:30000});
+   assert.equal(await page.locator('#ledger-mode-switch').inputValue(),'real',
+    'A fresh '+(mobile?'iPhone':'desktop')+' selects shared Real mode without setup');
+   assert.equal(await page.evaluate(()=>localStorage.getItem('household-ledger-view-mode')),'real',
+    'The Real preference is initialized on this new device');
+   assert.match(await page.locator('#planner-main').innerText(),/\$300\.10/,
+    'The private Home shows the fictional bank-reported available balance on the new device');
+   assert.match(await page.locator('#summary-account option:checked').textContent(),/Test Checking.*Main/,
+    'The server-saved main-account preference is restored on every device');
+   if(!mobile){
+    // Only a deliberate Demo choice should be local to this browser. It must
+    // survive reload without deleting or overwriting saved household state.
+    await page.locator('#planner-menu > summary').click();
+    await page.locator('#ledger-mode-switch').selectOption('demo');
+    await page.reload({waitUntil:'load'});
+    assert.equal(await page.locator('#source-type').textContent(),'DEMO DATA',
+     'Explicit Demo selection is respected on this device after reload');
+    await page.locator('#planner-menu > summary').click();
+    await page.locator('#ledger-mode-switch').selectOption('real');
+    await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK',
+     null,{timeout:30000});
+    assert.match(await page.locator('#summary-account option:checked').textContent(),/Test Checking.*Main/,
+     'Switching back to Real restores the same private account and its saved main-account setting');
+   }
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
    await page.locator('[data-remove-account="acct-2"]').waitFor();
    assert.equal(await page.locator('[data-remove-account]').count(),2,

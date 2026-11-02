@@ -263,7 +263,10 @@ function bind(callbacks){
   if(e.target?.id!=='ledger-mode-switch')return;
   if(e.target.value==='real')enter();else demo();
  });
- if(localStorage.getItem(MODE)==='real')enter();
+ // Private authenticated Ledger is Real by default on every new device.
+ // Only an explicit Demo choice on this device opts out; bank facts and
+ // household decisions are always retrieved from the private server.
+ if(localStorage.getItem(MODE)!=='demo')enter();
 }
 if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
 root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCategory,deleteCategory,renameCategory,forgetCategoryRule,enterReal:enter,refresh,mode:selection,
