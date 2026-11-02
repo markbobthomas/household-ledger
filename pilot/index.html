@@ -87,6 +87,15 @@ function showDiagnostics(details){
   (details.lastRecovery?'<p>Safe recovery: '+(
     details.lastRecovery.kind==='optional_count'?
      'A retry without optional page size completed successfully.':
+    details.lastRecovery.kind==='header_credentials'?
+     (details.lastRecovery.outcome==='recovered'?
+      'Plaid accepted the identical credentials using supported HTTP authentication headers; synchronization completed.':
+      details.lastRecovery.outcome==='item_accepted_sync_failed'?
+       'Plaid accepted these credentials and the existing bank Item with HTTP headers, but Transactions Sync still failed.':
+       details.lastRecovery.outcome==='item_rejected'?
+        'Plaid also rejected the existing bank Item when using supported authentication headers'+
+        (details.lastRecovery.code?' ('+esc(details.lastRecovery.code)+')':'')+'.':
+       'Read-only credential verification did not complete.'):
     details.lastRecovery.kind==='item_check'?
      (details.lastRecovery.outcome==='accepted'?
       'Plaid accepted the existing Item and credentials; Transactions Sync remains rejected.':

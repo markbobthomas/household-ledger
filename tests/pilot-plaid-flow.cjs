@@ -228,6 +228,10 @@ const {spawn}=require('node:child_process');
   assert.equal(clientFieldFailed.code,502,'Field diagnostics must not silently relink accounts');
   assert.equal(clientFieldFailed.data.field,'client_id',
    'Safe allowlist recognizes Plaid client_id when the provider identifies it');
+  const headerFailed=(await request('/api/status')).data.diagnostics.lastRecovery;
+  assert.equal(headerFailed.kind,'header_credentials');
+  assert.equal(headerFailed.outcome,'item_accepted_sync_failed',
+   'Failed header retry checks Item read-only without changing saved records');
   const clientStatus=await request('/api/status');
   assert.equal(clientStatus.data.accounts.find(a=>a.id==='acct-1').syncIssue.field,'client_id');
   assert.equal(JSON.stringify(clientStatus.data).includes('private value must stay hidden'),false,
@@ -258,6 +262,16 @@ const {spawn}=require('node:child_process');
   assert.equal(JSON.stringify(probeStatus.data).includes('secret-test-access-token'),false);
   assert.equal((await request('/api/sync',{})).code,200,
    'A later legitimate refresh resumes with the original Item');
+  const beforeHeader=await request('/api/ledger');
+  assert.equal((await request('/api/sync',{})).code,200,
+   'Named client_id rejection can recover with Plaid documented header authentication');
+  const headerStatus=(await request('/api/status')).data;
+  assert.equal(headerStatus.diagnostics.lastRecovery.kind,'header_credentials');
+  assert.equal(headerStatus.diagnostics.lastRecovery.outcome,'recovered');
+  assert.equal(headerStatus.accounts.every(a=>a.syncIssue===null),true);
+  assert.deepEqual((await request('/api/ledger')).data.adjustments,beforeHeader.data.adjustments,
+   'Header retry cannot change saved forecasts or categories');
+  assert.equal(JSON.stringify(headerStatus).includes('secret-test-access-token'),false);
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');

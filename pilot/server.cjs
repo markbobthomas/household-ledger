@@ -110,11 +110,19 @@ async function saveForecast(predictions,expectedRevision){
  forecastWrites=write.catch(()=>{});
  await write;
 }
-async function plaid(endpoint,body){
+async function plaid(endpoint,body,credentialsInHeaders=false){
  const observation={at:stamp(),endpoint,outcome:'started'};
  lastPlaidCall=observation;
  try{
-  const resp=await fetch(HOST+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,client_id:env.PLAID_CLIENT_ID,secret:env.PLAID_SECRET}),signal:AbortSignal.timeout(25000)});
+  // Plaid supports credentials in the JSON body or in these headers.
+  // Only retry using headers after an explicit client_id/secret rejection.
+  const headers={'Content-Type':'application/json'};
+  if(credentialsInHeaders){
+   headers['PLAID-CLIENT-ID']=env.PLAID_CLIENT_ID;
+   headers['PLAID-SECRET']=env.PLAID_SECRET;
+  }
+  const requestBody=credentialsInHeaders?body:{...body,client_id:env.PLAID_CLIENT_ID,secret:env.PLAID_SECRET};
+  const resp=await fetch(HOST+endpoint,{method:'POST',headers,body:JSON.stringify(requestBody),signal:AbortSignal.timeout(25000)});
   const data=await resp.json();
   if(!resp.ok||data.error_code){
    const code=String(data.error_code||resp.status).slice(0,60),
@@ -164,7 +172,7 @@ async function sync(){
   // from the start using the SAME Item token and merge by transaction ID.
   // This does not delete old records absent from the replay; a failed replay
   // preserves both the original cursor and the last successful bank snapshot.
-  const readPages=async(start,withCount=true)=>{
+  const readPages=async(start,withCount=true,credentialsInHeaders=false)=>{
    for(let attempt=0;attempt<3;attempt++){
     let cursor=start,complete=false;
     const pages=[];
@@ -172,7 +180,7 @@ async function sync(){
      for(let n=0;n<100;n++){
       const body={access_token:item.token,
        ...(withCount?{count:500}:{}),...(cursor?{cursor}:{})};
-      const page=await plaid('/transactions/sync',body);
+      const page=await plaid('/transactions/sync',body,credentialsInHeaders);
       if(!Array.isArray(page.added)||!Array.isArray(page.modified)||
        !Array.isArray(page.removed)||typeof page.next_cursor!=='string')
        throw Error('Malformed sync response');
@@ -197,6 +205,24 @@ async function sync(){
     result=await readPages(savedCursor,false);
    else if(invalid&&error.plaidField==='cursor'&&savedCursor)
     result=await readPages(undefined);
+   else if(invalid&&['client_id','secret'].includes(error.plaidField)){
+    // Exact same credentials/Item/cursor. No relinking or data reset.
+    try{
+     result=await readPages(savedCursor,true,true);
+     lastRecovery={at:stamp(),kind:'header_credentials',outcome:'recovered'};
+    }catch(retryError){
+     const failedSyncCall=lastPlaidCall?{...lastPlaidCall}:null;
+     try{
+      await plaid('/item/get',{access_token:item.token},true);
+      lastRecovery={at:stamp(),kind:'header_credentials',outcome:'item_accepted_sync_failed'};
+     }catch(itemError){
+      lastRecovery={at:stamp(),kind:'header_credentials',
+       outcome:itemError.plaidCode?'item_rejected':'item_unavailable',
+       ...(itemError.plaidCode?{code:itemError.plaidCode}:{})};
+     }finally{lastPlaidCall=failedSyncCall}
+     throw retryError;
+    }
+   }
    else if(invalid&&!error.plaidField){
     // Omit ONLY the optional page-size field; never speculate about a
     // different cursor, Item, or credential. Changes stage on full success.
