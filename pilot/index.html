@@ -84,6 +84,17 @@ function showDiagnostics(details){
    (call.hasProviderMessage?' · Provider supplied an error description (sensitive text withheld)':'')+
    (call.requestId?' · Request ID '+esc(call.requestId):''):
    'None recorded for the latest refresh')+'</p>'+
+  (details.lastRecovery?'<p>Safe recovery: '+(
+    details.lastRecovery.kind==='optional_count'?
+     'A retry without optional page size completed successfully.':
+    details.lastRecovery.kind==='item_check'?
+     (details.lastRecovery.outcome==='accepted'?
+      'Plaid accepted the existing Item and credentials; Transactions Sync remains rejected.':
+      details.lastRecovery.outcome==='rejected'?
+       'Plaid also rejected the read-only Item check'+
+       (details.lastRecovery.code?' ('+esc(details.lastRecovery.code)+')':'')+'.':
+      'Read-only Item check could not complete.'):
+    'No recovery result')+'</p>':'')+
   '<p class="muted">These are observations from this private Ledger server, not the Plaid Dashboard. Match the environment and time when checking Plaid logs. A previous error displayed below may be older than the latest refresh.</p>';
 }
 async function refresh(){

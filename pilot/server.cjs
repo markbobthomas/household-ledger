@@ -26,12 +26,13 @@ const plaidClientIdEnding=String(env.PLAID_CLIENT_ID||'').length>=6?
 // transaction or bank amount is ever recorded; only authenticated users can
 // view these observations. In particular, distinguish a locally shown stale
 // error from a fresh provider response and show the actual Plaid environment.
-let lastPlaidCall=null,lastSyncAttempt=null;
+let lastPlaidCall=null,lastSyncAttempt=null,lastRecovery=null;
 const bankDiagnostics=()=>({
  environment:plaidEnvironment,deployCommit:deployedCommit,
  requestHost:HOST,clientIdEnding:plaidClientIdEnding,
  lastSyncAttempt:lastSyncAttempt?{...lastSyncAttempt}:null,
- lastPlaidCall:lastPlaidCall?{...lastPlaidCall}:null
+ lastPlaidCall:lastPlaidCall?{...lastPlaidCall}:null,
+ lastRecovery:lastRecovery?{...lastRecovery}:null
 });
 const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
 const stamp=()=>new Date().toISOString();
@@ -150,7 +151,7 @@ async function plaid(endpoint,body){
  }
 }
 async function sync(){
- lastSyncAttempt={at:stamp(),outcome:'started'};lastPlaidCall=null;
+ lastSyncAttempt={at:stamp(),outcome:'started'};lastPlaidCall=null;lastRecovery=null;
  try{
  if(!state.items.length)throw Error('No connected accounts');
  const stages=[],observedAt=stamp(),allIds=new Set();
@@ -196,7 +197,28 @@ async function sync(){
     result=await readPages(savedCursor,false);
    else if(invalid&&error.plaidField==='cursor'&&savedCursor)
     result=await readPages(undefined);
-   else throw error;
+   else if(invalid&&!error.plaidField){
+    // Omit ONLY the optional page-size field; never speculate about a
+    // different cursor, Item, or credential. Changes stage on full success.
+    try{
+     result=await readPages(savedCursor,false);
+     lastRecovery={at:stamp(),kind:'optional_count',outcome:'recovered'};
+    }catch(retryError){
+     // Read-only Item metadata distinguishes a working bank Item from
+     // a Transactions-only failure without modifying source records.
+     const failedSyncCall=lastPlaidCall?{...lastPlaidCall}:null;
+     try{
+      await plaid('/item/get',{access_token:item.token});
+      lastRecovery={at:stamp(),kind:'item_check',outcome:'accepted'};
+     }catch(itemError){
+      lastRecovery={at:stamp(),kind:'item_check',
+       outcome:itemError.plaidCode?'rejected':'unavailable',
+       ...(itemError.plaidCode?{code:itemError.plaidCode}:{}),
+       ...(itemError.plaidField?{field:itemError.plaidField}:{})};
+     }finally{lastPlaidCall=failedSyncCall}
+     throw retryError;
+    }
+   }else throw error;
   }
   const {cursor,pages}=result;
   const response=await plaid('/accounts/get',{access_token:item.token});
