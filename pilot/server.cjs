@@ -739,20 +739,37 @@ async function start(port=Number(env.PORT||8788)){
     const ids=[...new Set((Array.isArray(body.accountIds)?body.accountIds:[body.accountId]).map(String))];
     if(!ids.length||ids.length>30)throw Error('Choose 1–30 accounts');
     const x=await plaid('/item/public_token/exchange',{public_token:body.publicToken});
-    let retained=false;
+    // Never revoke the original Item when the exchanged token refers to an
+    // already-connected bank. This check must precede ANY cleanup.
+    if(state.items.some(i=>i.id===x.item_id||i.token===x.access_token))
+     return respond(409,{code:'ALREADY_CONNECTED',
+      error:'Bank is already connected. Use Reconnect without losing saved data beside the original account.'});
+    let retained=false,inserted=false;
     try{
-     if(state.items.some(i=>i.id===x.item_id))throw Error('This institution is already connected');
      const response=await plaid('/accounts/get',{access_token:x.access_token});
      for(const id of ids){
       const a=response.accounts.find(y=>y.account_id===id&&['depository','credit'].includes(y.type));
       if(!a)throw Error('Select only eligible bank or credit accounts');
       if(state.accounts.some(y=>y.id===id))throw Error('This account is already connected');
+      // Plaid can assign a new account ID to the same underlying bank.
+      // Refuse a confident duplicate instead of orphaning stored metadata.
+      if(a.mask&&String(a.mask).length>=3&&state.accounts.some(old=>
+       old.mask&&String(old.mask)===String(a.mask)&&old.type===a.type&&
+       old.subtype===a.subtype&&String(old.name||'').trim().toLowerCase()===
+        String(a.name||'').trim().toLowerCase())){
+       const error=new Error('A matching bank account is already saved. Use Reconnect without losing saved data for the existing account.');
+       error.httpStatus=409;throw error;
+      }
      }
      state.items.push({id:x.item_id,token:x.access_token,cursor:null,accountIds:ids});
+     inserted=true;
      await sync();retained=true;
      return respond(200,{connected:true,accounts:state.accounts.length});
-    }catch(error){state.items=state.items.filter(i=>i.id!==x.item_id);await save();throw error}
-    finally{if(!retained)try{await plaid('/item/remove',{access_token:x.access_token})}catch{}}
+    }catch(error){
+     // Only an Item added by this attempt may be rolled back.
+     if(inserted){state.items=state.items.filter(i=>i.id!==x.item_id);await save()}
+     throw error;
+    }finally{if(!retained)try{await plaid('/item/remove',{access_token:x.access_token})}catch{}}
    }
    if(requestPath==='/api/sync'){await sync();return respond(200,{ok:true,accounts:state.accounts.length})}
    if(requestPath==='/api/accounts/remove'){
