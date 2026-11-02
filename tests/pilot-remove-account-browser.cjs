@@ -40,6 +40,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    futureTransactionEdits:{'event|planned-event|acct-1':{accountId:'acct-1',amount:123}}
   }})).code,200);
   const invalidRefresh=await api('/api/sync',{});
+  const beforeBrowserDiagnostics=(await api('/api/status')).data.diagnostics;
+  assert.equal(beforeBrowserDiagnostics.environment,'sandbox');
+  assert.equal(beforeBrowserDiagnostics.lastSyncAttempt.outcome,'failed');
+  assert.equal(beforeBrowserDiagnostics.lastPlaidCall.outcome,'provider_error');
   assert.equal(invalidRefresh.data.code,'INVALID_FIELD',
    'Synthetic request-validation error is stored without unlinking banks');
   chrome=await chromium.launch({headless:true});iphone=await webkit.launch({headless:true});
@@ -90,6 +94,15 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
    await page.locator('[data-remove-account="acct-2"]').waitFor();
    await page.locator('#sync-issue').waitFor({state:'visible'});
+   const diagnosticText=await page.locator('#private-diagnostics').innerText();
+   assert.match(diagnosticText,/Plaid environment: Sandbox/,
+    'Private bank page shows the server actual Plaid environment');
+   assert.match(diagnosticText,/Latest refresh: .*failed/,
+    'Private page distinguishes a failed recent refresh from an older saved warning');
+   assert.match(diagnosticText,/Latest direct Plaid call during refresh:.*provider_error.*INVALID_FIELD/,
+    'Private page proves a provider error came from a server-side Plaid call');
+   assert.match(diagnosticText,/fictional-request-id-42/,
+    'Safe Plaid request ID is tied to the last actual provider response');
    assert.match(await page.locator('#sync-issue').innerText(),/INVALID_FIELD/);
    assert.match(await page.locator('#sync-issue').innerText(),/\/transactions\/sync/);
    assert.match(await page.locator('#sync-issue').innerText(),/fictional-request-id-42/);
@@ -110,6 +123,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    if(!mobile){
     await page.locator('#retry-sync').click();
     await page.locator('#sync-issue').waitFor({state:'hidden'});
+    await page.waitForFunction(()=>document.querySelector('#private-diagnostics-detail')?.textContent.includes('(success)'));
     assert.equal((await api('/api/status')).data.accounts.every(a=>!a.syncIssue),true,
      'A successful retry clears only the error, not banking state');
     await page.locator('[data-remove-account="acct-2"]').click();
