@@ -110,6 +110,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     'Bank error has an actual retry button on '+(mobile?'iPhone':'desktop'));
    assert.ok(await page.locator('[data-reconnect-account="acct-1"]').isVisible(),
     'Existing-bank access can be renewed without deleting Plaid Items');
+   assert.match(await page.locator('[data-reconnect-account="acct-1"]').innerText(),/Reconnect without losing saved data/);
+   assert.match(await page.locator('body').innerText(),/Do not use Connect new accounts for a bank already saved/);
    assert.equal(await page.locator('[data-remove-account]').count(),2,
     'Each connected card/checking account shows its own Remove account action');
    assert.equal(await page.locator('[data-remove-account="acct-1"]').isDisabled(),true,

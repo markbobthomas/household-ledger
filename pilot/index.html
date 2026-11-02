@@ -20,7 +20,8 @@
  <p><strong>Reconnect your existing bank below.</strong> Complete the bank's verification prompts, then refresh. Do not disconnect or add the same institution as a new account to fix this error.</p>
  <div id="repair-actions"></div>
 </div>
-<button id="connect">+ Connect accounts</button><button id="sync">Refresh all banks</button>
+<p class="muted"><strong>Reconnecting an existing bank?</strong> Use <strong>Reconnect without losing saved data</strong> beside the account below. It renews the same Plaid Item and preserves your saved categories, rules, history, account IDs, and forecasts. Do not use Connect new accounts for a bank already saved.</p>
+<button id="connect">+ Connect new accounts</button><button id="sync">Refresh all banks</button>
 <div id="account-choices" class="panel" hidden><h2>Select accounts to add</h2><p>Choose every eligible account you want included from this institution.</p><form id="choices-form"><div id="choices-list"></div><button type="submit">Add selected accounts</button><button type="button" id="choices-cancel">Cancel</button></form></div>
 <div class="panel removal-help"><h2>Which duplicate should I remove?</h2><p>Household Ledger checks your saved forecast changes against each account’s unique Plaid ID—not its name. <strong>Keep the copy marked “Has saved links.”</strong> An account with saved predictions or category edits is protected from removal until those changes are reassigned. If neither copy has links, review its actual transactions before deciding. Automatic predictions from bank history are not saved edits.</p><p class="muted">Do not use “Disconnect everything” to remove a duplicate.</p></div>
 <div id="report"></div>
@@ -147,7 +148,7 @@ async function refresh(){
    ' · Bank connection '+(connections.indexOf(String(a.itemId||a.id))+1)+'</p>'+
    (a.needsReconnect?'<p class="account-alert">Bank sign-in required. Reconnect this existing connection to resume updates.</p>':'')+
    (a.syncIssue&&!a.needsReconnect?'<p class="account-alert">Last update failed ('+esc(a.syncIssue.code||'Sync error')+'). The saved bank records have been retained. Retry refresh; renewing access is optional and might not resolve a malformed request.</p>':'')+
-   ((a.needsReconnect||a.syncIssue)?'<button type="button" data-reconnect-account="'+esc(a.id)+'">Renew existing bank access</button>':'')+
+   '<button type="button" data-reconnect-account="'+esc(a.id)+'">Reconnect without losing saved data</button>'+
    usageText(a)+
    '<button type="button" class="remove-account" data-remove-account="'+esc(a.id)+
    '" '+(!a.forecastUsage||a.forecastUsage.protected?'disabled title="This account has saved changes or its forecast links have not been verified"':'')+
@@ -185,7 +186,7 @@ async function reconnect(accountId){
  if(!account){status.textContent='That account is no longer connected. Refresh this page.';return}
  repairBusy=true;
  try{
-  status.textContent='Opening Plaid to reconnect '+account.name+'…';
+  status.textContent='Renewing the original connection for '+account.name+'. Your Ledger edits and history will stay attached…';
   const token=await api('link-token',{reconnectAccountId:String(account.id)});
   if(token.mode!=='update')throw Error('The bank server did not open the existing connection. Try again.');
   const link=Plaid.create({token:token.link_token,
@@ -194,8 +195,8 @@ async function reconnect(accountId){
     // its access token and every existing account linkage stay unchanged.
     status.textContent='Bank authorization completed. Checking for new transactions…';
     try{await api('sync',{});await refresh();
-     status.textContent='Bank reconnected and refreshed. Your saved predictions are unchanged.';
-    }catch(e){await refresh();status.textContent='Bank authorization completed, but refresh did not finish: '+e.message+
+     status.textContent='Existing bank reconnected and refreshed. Your saved edits, categories, rules, and forecasts are preserved.';
+    }catch(e){await refresh();status.textContent='Existing bank authorization completed and saved data is retained, but refresh failed: '+e.message+
      '. Check any other bank requiring attention and try Refresh all banks.'}
    },
    onExit:(error)=>{
