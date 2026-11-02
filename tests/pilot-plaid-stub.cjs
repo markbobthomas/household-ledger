@@ -25,7 +25,9 @@ global.fetch=async function(url,options){
    }else{
     if(process.env.PILOT_LOGIN_REQUIRED_TEST==='1'&&stage>=3&&!authorizedAgain)
      return {ok:false,status:400,json:async()=>({error_code:'ITEM_LOGIN_REQUIRED'})};
-    if(process.env.PILOT_INVALID_FIELD_TEST==='1'&&authorizedAgain&&stage>=4&&!invalidFieldOnce){
+    if(process.env.PILOT_INVALID_FIELD_TEST==='1'&&!invalidFieldOnce&&
+     (process.env.PILOT_INVALID_FIELD_AFTER_STAGE?
+      stage>=Number(process.env.PILOT_INVALID_FIELD_AFTER_STAGE):authorizedAgain&&stage>=4)){
      invalidFieldOnce=true;
      return {ok:false,status:400,json:async()=>({
       error_code:'INVALID_FIELD',error_type:'INVALID_REQUEST',
