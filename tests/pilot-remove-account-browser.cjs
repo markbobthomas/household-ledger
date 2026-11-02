@@ -54,6 +54,33 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
      authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}}));
    const page=await ctx.newPage();
    page.on('dialog',d=>d.accept());
+   // A second device has no localStorage mode preference. Signing in to the
+   // private site must automatically load the same encrypted server records;
+   // a missing browser preference must not silently substitute Demo data.
+   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'load'});
+   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK',
+    null,{timeout:30000});
+   assert.equal(await page.locator('#ledger-mode-switch').inputValue(),'real',
+    'A fresh '+(mobile?'iPhone':'desktop')+' selects shared Real mode without setup');
+   assert.equal(await page.evaluate(()=>localStorage.getItem('household-ledger-view-mode')),'real',
+    'The Real preference is initialized on this new device');
+   assert.match(await page.locator('#planner-main').innerText(),/Test Checking/,
+    'Connected private bank records load automatically on a newly signed-in device');
+   assert.match(await page.locator('#planner-main').innerText(),/★\s*Test Checking/,
+    'The main-account preference saved on the server survives across devices');
+   if(!mobile){
+    // Only a deliberate Demo choice should be local to this browser. It must
+    // survive reload without deleting or overwriting saved household state.
+    await page.locator('#ledger-mode-switch').selectOption('demo');
+    await page.reload({waitUntil:'load'});
+    assert.equal(await page.locator('#source-type').textContent(),'DEMO DATA',
+     'Explicit Demo selection is respected on this device after reload');
+    await page.locator('#ledger-mode-switch').selectOption('real');
+    await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK',
+     null,{timeout:30000});
+    assert.match(await page.locator('#planner-main').innerText(),/Test Checking/,
+     'Switching back to Real restores the same encrypted household bank data');
+   }
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
    await page.locator('[data-remove-account="acct-2"]').waitFor();
    assert.equal(await page.locator('[data-remove-account]').count(),2,
