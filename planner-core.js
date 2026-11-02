@@ -559,13 +559,13 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   baseDate:m.anchorDate}));
  const plans=[...movementRules,...(payment.plans||[]).filter(p=>
   !movementRules.some(m=>m.fromAccountId===p.fromAccountId&&
-   m.toAccountId===p.toAccountId&&m.date.slice(0,7)===p.anchorDate.slice(0,7)))
+   m.toAccountId===p.toAccountId&&m.date.slice(0,7)===(p.originalDueDate||p.anchorDate).slice(0,7)))
   .map(p=>({...p,date:p.anchorDate,seriesKey:tools.seriesPlan(p),
    // Statement autopay is a monthly series, even though each generated
    // occurrence enters the ledger as a one-time linked movement.
    cadence:p.cadence||(p.origin==='card-autopay'?'monthly':
     p.frequency==='once'?null:p.frequency||null),
-   baseDate:p.anchorDate,recurringRuleId:p.seriesRuleId||null}))];
+   baseDate:p.originalDueDate||p.anchorDate,recurringRuleId:p.seriesRuleId||null}))];
  for(const e of extras.filter(x=>x.type==='transfer'&&x.date>asOf&&x.date<=end)){
   // An explicit one-off transfer to a credit card supersedes a provisional
   // same-cycle history estimate. It must not create two checking withdrawals.
@@ -585,10 +585,20 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   const edit=edits[tools.keyMovement(moved.id)];
   if(edit?.skipped)continue;
   const v=edit?{...moved,...edit}:moved;
+  // A manually postponed but still-unpaid card transfer must not expire.
+  if(v._unpostedEstimated&&v.date<=asOf)v.date=nextPosting;
   if(v.date>asOf&&v.date<=end){
    const date=effective(v.date);
    if(date>asOf&&date<=end)finalPlans.push(date===v.date?v:{...v,date});
   }
+ }
+ // Reuse the existing missed-payment review and skip/ignore controls for
+ // card transfers while retaining each original statement's due date.
+ for(const p of finalPlans)if(p._unpostedEstimated&&valid(p._overdueFrom)){
+  overduePayments.push({key:tools.keyMovement(p.id),id:p.id,kind:'movement',
+   ruleId:null,accountId:p.fromAccountId,toAccountId:p.toAccountId,
+   merchant:p.merchant,amount:Number(p.amount),expectedDate:p._overdueFrom,
+   proposedDate:p.date,dueDate:p.date});
  }
  const bySignature=new Map();
  const ledger=[];
@@ -611,6 +621,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(ledger.some(e=>e.kind==='movement'&&e.fromAccountId===p.fromAccountId&&
    e.toAccountId===p.toAccountId&&Math.abs(diff(e.date,p.date))<=3&&
    Math.abs(cents(e.amount)-cents(p.amount))<=1&&
+   // Two distinct unpaid card billing cycles can share a rolled date.
+   !(e.originalDueDate&&p.originalDueDate&&e.originalDueDate!==p.originalDueDate)&&
    // Two separately confirmed linked obligations must never collapse.
    !(e.recurringRuleId&&p.recurringRuleId&&e.recurringRuleId!==p.recurringRuleId))){
    checks.push({id:p.id,reason:'Already represented as a linked account movement'});continue;
@@ -639,7 +651,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
-  postedMatchReview:covered.review||[],pendingPaymentMatches,overduePayments};
+  postedMatchReview:covered.review||[],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[]),overduePayments};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){
