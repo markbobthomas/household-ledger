@@ -1,8 +1,15 @@
 <!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Household Ledger · Bank connections</title><script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-<style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:0 18px;color:#1e293b}button{padding:12px 18px;border:1px solid #64748b;border-radius:8px;background:white;margin:3px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button.remove-account{border-color:#bc6e68;color:#9f281e;background:#fff9f8}.usage{padding:10px 12px;border-radius:8px;background:#f1f5f9;font-size:14px;line-height:1.5}.usage.protected{background:#fff5f0;color:#862a1c}.usage.clear{background:#edf6f2;color:#164b32}.usage strong{font-size:14px}.account-note{font-size:13px}.removal-help{background:#f6f9fc}.remove-account:disabled{background:#f3f4f6;color:#64748b;border-color:#cbd5e1}.repair-panel{background:#fff8ed;border-color:#e4b36b}.repair-panel p{line-height:1.5}.repair-button{background:#1e293b;color:#fff;border-color:#1e293b}.repair-button:hover{background:#374151}.account-alert{color:#894a10;font-size:14px;font-weight:650}.panel{border:1px solid #cbd5e1;border-radius:12px;padding:18px;margin:14px 0}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0}strong{font-size:1.1em}.danger{color:#9f281e}label{display:block;margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:7px}input[type=checkbox]{transform:scale(1.2);margin-right:10px}#account-choices[hidden]{display:none}#status{white-space:pre-wrap}</style></head><body>
+<style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:0 18px;color:#1e293b}button{padding:12px 18px;border:1px solid #64748b;border-radius:8px;background:white;margin:3px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button.remove-account{border-color:#bc6e68;color:#9f281e;background:#fff9f8}.usage{padding:10px 12px;border-radius:8px;background:#f1f5f9;font-size:14px;line-height:1.5}.usage.protected{background:#fff5f0;color:#862a1c}.usage.clear{background:#edf6f2;color:#164b32}.usage strong{font-size:14px}.account-note{font-size:13px}.removal-help{background:#f6f9fc}.remove-account:disabled{background:#f3f4f6;color:#64748b;border-color:#cbd5e1}.repair-panel{background:#fff8ed;border-color:#e4b36b}#sync-issue[hidden]{display:none}#sync-issue{background:#fff8ed;border-color:#e4b36b}.repair-panel p{line-height:1.5}.repair-button{background:#1e293b;color:#fff;border-color:#1e293b}.repair-button:hover{background:#374151}.account-alert{color:#894a10;font-size:14px;font-weight:650}.panel{border:1px solid #cbd5e1;border-radius:12px;padding:18px;margin:14px 0}.muted{color:#64748b}table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0}strong{font-size:1.1em}.danger{color:#9f281e}label{display:block;margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:7px}input[type=checkbox]{transform:scale(1.2);margin-right:10px}#account-choices[hidden]{display:none}#status{white-space:pre-wrap}</style></head><body>
 <h1>Bank connections</h1><p class="muted">Add checking, savings and credit cards to your existing Ledger. Adding another account never clears one already connected. Bank balances and transactions remain read-only. <a href="/">Return to Ledger</a>.</p>
 <div class="panel" id="status" role="status">Loading…</div>
+<div class="panel" id="sync-issue" role="alert" hidden>
+ <h2>Bank refresh needs attention</h2>
+ <p id="sync-issue-message">Your last bank update could not complete.</p>
+ <div id="sync-issue-details"></div>
+ <p><strong>Your last imported bank history and saved forecasts remain intact.</strong> Retry the refresh below. An INVALID_FIELD error is usually an API request issue, not a reason to disconnect your accounts.</p>
+ <button type="button" id="retry-sync">Retry bank refresh</button>
+</div>
 <div class="panel repair-panel" id="repair-alert" role="alert" hidden>
  <h2>Bank sign-in required</h2>
  <p>Plaid needs you to sign in again or renew permission with your bank. Previously imported transactions, connected account IDs and saved predictions are preserved; new balances and transactions may be outdated.</p>
@@ -51,6 +58,20 @@ async function refresh(){
  try{const d=await api('status'),accounts=d.accounts||d.account?[...(d.accounts||[d.account])]:[],transactions=d.transactions||[];
   lastAccounts=accounts;
   status.textContent=accounts.length?accounts.length+' connected account(s) · last successful sync '+(d.lastSync||'unknown'):'No bank accounts connected';
+  const failed=accounts.filter(a=>a.syncIssue&&!a.needsReconnect),
+   uniqueFailed=[...new Map(failed.map(a=>[String(a.itemId||a.id),a])).values()],
+   issuePanel=document.getElementById('sync-issue');
+  issuePanel.hidden=!uniqueFailed.length;
+  document.getElementById('sync-issue-details').innerHTML=uniqueFailed.map(a=>{
+   const issue=a.syncIssue||{};
+   return '<p><strong>'+esc(a.name)+'</strong> · '+esc(issue.code||'Sync error')+
+    (issue.endpoint?' · API '+esc(issue.endpoint):'')+
+    (issue.field?' · Field: '+esc(issue.field):'')+
+    (issue.requestId?' · Plaid request ID: '+esc(issue.requestId):'')+'</p>';
+  }).join('');
+  document.getElementById('sync-issue-message').textContent=uniqueFailed.length?
+   'Plaid rejected an update for the listed connection(s). The precise bank request must be checked; reconnecting alone may not correct INVALID_FIELD.':
+   '';
   const broken=accounts.filter(a=>a.needsReconnect),
    unique=[...new Map(broken.map(a=>[String(a.itemId||a.id),a])).values()],
    alert=document.getElementById('repair-alert');
@@ -68,6 +89,8 @@ async function refresh(){
    '<p class="muted">Last observed '+esc(a.balanceObservedAt||'unknown')+' · '+esc(a.type)+
    ' · Bank connection '+(connections.indexOf(String(a.itemId||a.id))+1)+'</p>'+
    (a.needsReconnect?'<p class="account-alert">Bank sign-in required. Reconnect this existing connection to resume updates.</p>':'')+
+   (a.syncIssue&&!a.needsReconnect?'<p class="account-alert">Last update failed ('+esc(a.syncIssue.code||'Sync error')+'). The saved bank records have been retained. Retry refresh; renewing access is optional and might not resolve a malformed request.</p>':'')+
+   ((a.needsReconnect||a.syncIssue)?'<button type="button" data-reconnect-account="'+esc(a.id)+'">Renew existing bank access</button>':'')+
    usageText(a)+
    '<button type="button" class="remove-account" data-remove-account="'+esc(a.id)+
    '" '+(!a.forecastUsage||a.forecastUsage.protected?'disabled title="This account has saved changes or its forecast links have not been verified"':'')+
@@ -127,17 +150,24 @@ async function reconnect(accountId){
  }catch(e){status.textContent='Could not start reconnection: '+e.message+'. Please try again.'}
  finally{repairBusy=false}
 }
-document.getElementById('repair-alert').addEventListener('click',e=>{
+document.addEventListener('click',e=>{
  const button=e.target.closest('[data-reconnect-account]');
  if(button)reconnect(button.dataset.reconnectAccount);
 });
+document.getElementById('retry-sync').onclick=()=>document.getElementById('sync').click();
 document.getElementById('sync').onclick=async()=>{
  try{status.textContent='Refreshing all connected banks…';await api('sync',{});await refresh()}
  catch(e){
   if(e.code==='ITEM_LOGIN_REQUIRED'){
    await refresh();status.textContent='Bank sign-in required. Use Reconnect bank below to renew access; your saved transactions and predictions are safe.';
-  }else status.textContent='Bank refresh failed: '+e.message+
-   '. Try again, check your bank’s website, or return later if the institution is unavailable.';
+  }else if(e.code==='INVALID_FIELD'){
+   await refresh();
+   status.textContent='Plaid rejected a bank API request (INVALID_FIELD). See the affected bank, API endpoint, field (if known), and Plaid request ID above. Retry refresh; if it repeats, this requires checking the Ledger–Plaid request rather than deleting your connection.';
+  }else{
+   await refresh();
+   status.textContent='Bank refresh failed: '+e.message+
+    '. Your saved bank history remains intact. Try again or review the connection details above.';
+  }
  }
 };
 document.getElementById('report').addEventListener('click',async e=>{

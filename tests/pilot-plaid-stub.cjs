@@ -1,6 +1,6 @@
 'use strict';
 // Injected ONLY by offline test subprocess. Prevents all external network calls.
-let stage=0,secondStage=0,removals=0,authorizedAgain=false;
+let stage=0,secondStage=0,removals=0,authorizedAgain=false,invalidFieldOnce=false;
 global.fetch=async function(url,options){
  const p=new URL(url).pathname,body=JSON.parse(options.body||'{}');
  let data;
@@ -25,6 +25,16 @@ global.fetch=async function(url,options){
    }else{
     if(process.env.PILOT_LOGIN_REQUIRED_TEST==='1'&&stage>=3&&!authorizedAgain)
      return {ok:false,status:400,json:async()=>({error_code:'ITEM_LOGIN_REQUIRED'})};
+    if(process.env.PILOT_INVALID_FIELD_TEST==='1'&&!invalidFieldOnce&&
+     (process.env.PILOT_INVALID_FIELD_AFTER_STAGE?
+      stage>=Number(process.env.PILOT_INVALID_FIELD_AFTER_STAGE):authorizedAgain&&stage>=4)){
+     invalidFieldOnce=true;
+     return {ok:false,status:400,json:async()=>({
+      error_code:'INVALID_FIELD',error_type:'INVALID_REQUEST',
+      error_message:'The count field has an invalid value',
+      request_id:'fictional-request-id-42'
+     })};
+    }
     data={added:stage++===0?[{transaction_id:'pending-1',account_id:'acct-1',date:'2026-10-19',name:'Test pending',amount:10,pending:true},
      ...(process.env.PILOT_REMOVE_TEST==='1'?[{transaction_id:'card-from-shared-item',account_id:'acct-2',date:'2026-10-18',name:'Card purchase from shared link',amount:43,pending:false}]:[])]:
     [{transaction_id:'posted-1',pending_transaction_id:'pending-1',account_id:'acct-1',date:'2026-10-19',name:'Test posted',amount:10,pending:false}],

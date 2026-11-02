@@ -10,6 +10,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
  const env={...process.env,PORT:String(port),PILOT_PASSWORD:pass,
   PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'fictional',
   PLAID_SECRET:'fictional',PLAID_ENV:'sandbox',PILOT_REMOVE_TEST:'1',
+  PILOT_INVALID_FIELD_TEST:'1',PILOT_INVALID_FIELD_AFTER_STAGE:'1',
   PILOT_STATE_PATH:path.join(dir,'bank.enc')};
  const child=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','pilot/server.cjs'],
   {cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});
@@ -38,6 +39,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    primaryAccountId:'acct-1',
    futureTransactionEdits:{'event|planned-event|acct-1':{accountId:'acct-1',amount:123}}
   }})).code,200);
+  const invalidRefresh=await api('/api/sync',{});
+  assert.equal(invalidRefresh.data.code,'INVALID_FIELD',
+   'Synthetic request-validation error is stored without unlinking banks');
   chrome=await chromium.launch({headless:true});iphone=await webkit.launch({headless:true});
   for(const [browser,mobile] of [[iphone,true],[chrome,false]]){
    const ctx=await browser.newContext({
@@ -85,6 +89,14 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    }
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
    await page.locator('[data-remove-account="acct-2"]').waitFor();
+   await page.locator('#sync-issue').waitFor({state:'visible'});
+   assert.match(await page.locator('#sync-issue').innerText(),/INVALID_FIELD/);
+   assert.match(await page.locator('#sync-issue').innerText(),/\/transactions\/sync/);
+   assert.match(await page.locator('#sync-issue').innerText(),/fictional-request-id-42/);
+   assert.ok(await page.locator('#retry-sync').isVisible(),
+    'Bank error has an actual retry button on '+(mobile?'iPhone':'desktop'));
+   assert.ok(await page.locator('[data-reconnect-account="acct-1"]').isVisible(),
+    'Existing-bank access can be renewed without deleting Plaid Items');
    assert.equal(await page.locator('[data-remove-account]').count(),2,
     'Each connected card/checking account shows its own Remove account action');
    assert.equal(await page.locator('[data-remove-account="acct-1"]').isDisabled(),true,
@@ -96,6 +108,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.ok(await page.locator('[data-remove-account="acct-2"]').isVisible(),
     'Removal control accessible on desktop and mobile');
    if(!mobile){
+    await page.locator('#retry-sync').click();
+    await page.locator('#sync-issue').waitFor({state:'hidden'});
+    assert.equal((await api('/api/status')).data.accounts.every(a=>!a.syncIssue),true,
+     'A successful retry clears only the error, not banking state');
     await page.locator('[data-remove-account="acct-2"]').click();
     await page.getByText('1 account(s) remain connected').waitFor();
     assert.equal(await page.locator('[data-remove-account]').count(),1,
@@ -104,7 +120,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    }
    await ctx.close();
   }
-  console.log('PASS desktop Chromium and iPhone WebKit per-account Remove button; scoped account survives safely');
+  console.log('PASS desktop Chromium and iPhone WebKit per-account removal plus Plaid INVALID_FIELD recovery and retry controls');
  }finally{
   if(chrome)await chrome.close();if(iphone)await iphone.close();
   child.kill('SIGTERM');fs.rmSync(dir,{recursive:true,force:true});
