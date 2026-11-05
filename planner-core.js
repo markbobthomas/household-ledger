@@ -592,6 +592,147 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    if(date>asOf&&date<=end)finalPlans.push(date===v.date?v:{...v,date});
   }
  }
+ // Reconcile every remaining future cash withdrawal with uniquely attributable
+ // bank evidence. The older general bill matcher and card-specific estimates
+ // run first, but neither may double-count a pending ACH whose bank amount
+ // differs from a forecast. This final pass applies to events AND transfers.
+ //
+ // POSTED: the source balance already reflects the withdrawal, so remove its
+ // forecast occurrence. PENDING: the bank may or may not reserve it in
+ // available cash. If fully reserved, remove the forecast; otherwise retain
+ // exactly one future entry for the bank's observed pending amount, rather
+ // than the outdated estimate. Neither case rewrites a source transaction.
+ const paymentReconciliations=[];
+ const priorBankMatches=new Set([
+  ...pendingPaymentMatches,...(payment.pendingPaymentMatches||[]),
+  ...(payment.statements||[]).flatMap(s=>s.actualPayments||[])
+ ].map(m=>String(m.bankId||m.id||'')));
+ const candidatesForReconcile=[
+  ...finalEvents.filter(e=>e.type==='expense').map(e=>({e,kind:'event',
+   account:String(e.accountId),cardId:null})),
+  ...finalPlans.map(e=>({e,kind:'movement',account:String(e.fromAccountId),
+   cardId:accounts.find(a=>String(a.id)===String(e.toAccountId)&&
+    String(a.accountType||a.type).toLowerCase()==='credit')?.id||null}))
+ ];
+ const bankText=t=>String(t.merchant||'')+' '+String(t.description||'');
+ const issuerName=s=>{
+  const v=String(s||'').toLowerCase();
+  return /\b(?:amex|american express)\b/.test(v)?'amex':
+   /\bchase\b/.test(v)?'chase':
+   /\bciti(?:bank)?\b/.test(v)?'citi':
+   /\bdiscover\b/.test(v)?'discover':
+   /\bcapital one\b/.test(v)?'capital-one':
+   /\bbarclays\b/.test(v)?'barclays':'';
+ };
+ const cardDebit=t=>t.accountingKind==='card_payment'||
+  /\b(?:credit\s*(?:card|crd)|cardmember|(?:card|crd)\s*(?:payment|pmt|autopay)|(?:visa|mastercard|amex|discover)\s*(?:payment|pmt|autopay))\b/i.test(bankText(t));
+ const samePayee=(a,b)=>{
+  const left=norm(a),right=norm(b);
+  if(!left||!right)return false;
+  if(left===right)return true;
+  const ignore=new Set(['payment','autopay','transfer','monthly','credit','card','bill','account','scheduled','estimated']);
+  const words=left.split(/\s+/).filter(w=>w.length>=5&&!ignore.has(w));
+  return words.length>0&&words.some(w=>right.split(/\s+/).includes(w));
+ };
+ const reconciliableRows=rows.filter(t=>t&&t.id&&!priorBankMatches.has(String(t.id))&&
+  valid(t.date)&&t.date<=asOf&&Number(t.amount)>0&&
+  tools.bankDirection(t)==='expense'&&
+  cashIds.has(String(tools.accountRef(t.accountId||t.account,accounts))));
+ const pairs=[];
+ for(const bank of reconciliableRows){
+  const from=String(tools.accountRef(bank.accountId||bank.account,accounts));
+  for(const item of candidatesForReconcile){
+   if(item.account!==from)continue;
+   const planned=item.e;
+   const reference=[planned.originalDueDate,planned.baseDate,planned.anchorDate,
+    planned._seriesDate,planned.date].filter(valid);
+   if(!reference.length)continue;
+   const gap=Math.min(...reference.map(d=>Math.abs(diff(bank.date,d))));
+   if(gap>3)continue;
+   const closeAmount=Math.abs(Number(bank.amount)-Number(planned.amount))<=
+    Math.max(2,Number(planned.amount)*.02);
+   if(item.cardId){
+    if(!cardDebit(bank))continue;
+    const card=accounts.find(a=>String(a.id)===String(item.cardId));
+    const named=issuerName(card?.name),observed=issuerName(bankText(bank));
+    if(named&&observed&&named!==observed)continue;
+    // An issuer-specific bank description is allowed to differ from the
+    // estimated card amount. Without issuer evidence, require a unique
+    // nearby due occurrence; the one-to-one check below enforces this.
+   }else{
+    const named=samePayee(bank.merchant||bank.description,planned.merchant);
+    if(!named&&!(closeAmount&&gap<=2))continue;
+    if(bank.accountingKind==='card_payment'&&
+     !named)continue; // never pay an ordinary bill with card ACH evidence
+   }
+   pairs.push({bank,item,gap});
+  }
+ }
+ const pendingBankByAccount=new Map();
+ for(const t of rows){
+  if(!t?.pending||!valid(t.date)||t.date>asOf||
+   !(Number(t.amount)>0)||tools.bankDirection(t)!=='expense')continue;
+  const aid=String(tools.accountRef(t.accountId||t.account,accounts));
+  pendingBankByAccount.set(aid,(pendingBankByAccount.get(aid)||0)+Number(t.amount));
+ }
+ const heldAccounts=new Set(accounts.filter(a=>{
+  const id=String(a.id),total=pendingBankByAccount.get(id)||0;
+  return cashIds.has(id)&&total>0&&a.current!=null&&a.available!=null&&
+   Number.isFinite(Number(a.current))&&Number.isFinite(Number(a.available))&&
+   Number(a.current)-Number(a.available)+.01>=total;
+ }).map(a=>String(a.id)));
+ const usedPredicted=new Set(),usedActual=new Set();
+ for(const pair of pairs){
+  const id=String(pair.item.e.id),bankId=String(pair.bank.id);
+  if(usedPredicted.has(id)||usedActual.has(bankId))continue;
+  if(pairs.filter(x=>String(x.bank.id)===bankId).length!==1||
+   pairs.filter(x=>String(x.item.e.id)===id).length!==1)continue;
+  usedPredicted.add(id);usedActual.add(bankId);
+  const pending=Boolean(pair.bank.pending),held=pending&&heldAccounts.has(pair.item.account);
+  const actualAmount=money(pair.bank.amount),planned=pair.item.e;
+  const record={id,bankId,accountId:pair.item.account,
+   ...(pair.item.cardId?{cardId:pair.item.cardId}:{}),
+   status:pending?'pending':'posted',reservedInAvailable:Boolean(held),
+   actualAmount,forecastAmount:money(planned.amount)};
+  paymentReconciliations.push(record);
+  const list=pair.item.kind==='event'?finalEvents:finalPlans,
+   index=list.findIndex(x=>String(x.id)===id);
+  if(index<0)continue;
+  if(!pending||held)list.splice(index,1);
+  else list[index]={...list[index],amount:actualAmount,
+   _bankPendingId:bankId,_pendingEstimated:true};
+  // A pending ACH isn't a posted card payment. Keep that distinction in
+  // the statement summary even if its cash has been reserved by the bank.
+  if(pair.item.cardId){
+   const statement=(payment.statements||[]).find(s=>String(s.cardId)===String(pair.item.cardId)&&
+    String(s.fromAccountId)===String(pair.item.account)&&
+    Math.abs(diff(pair.bank.date,s.withdrawalDate||s.dueDate))<=7);
+   if(statement){
+    if(pending){statement.pendingReserved=Boolean(held);
+     statement.pendingPaymentAmount=actualAmount;}
+    else{
+     statement.alreadyPaid=true;statement.actualPaymentDate=pair.bank.date;
+     statement.actualPaymentAmount=actualAmount;
+     statement.actualPayments=[...(statement.actualPayments||[]),
+      {id:bankId,date:pair.bank.date,amount:actualAmount,checkingOnly:true}];
+    }
+   }
+   const detail=(payment.paymentDetails||[]).find(d=>String(d.id)===id);
+   if(detail){
+    detail.pendingPaymentAmount=pending?actualAmount:null;
+    detail.bankMatched=true;
+    if(pending&&!held)detail.amount=actualAmount;
+   }
+  }
+  // Pending and actual payments clear the specific missed-payment warning.
+  for(let i=overduePayments.length-1;i>=0;i--)
+   if(String(overduePayments[i].id)===id)overduePayments.splice(i,1);
+  if(pending)warnings.push('A pending bank withdrawal matches '+String(planned.merchant||'a planned payment')+
+   '. The bank payment amount is used once; confirm settlement after it posts.');
+  else if(Math.abs(actualAmount-Number(planned.amount))>.01)
+   warnings.push('A posted bank withdrawal matches '+String(planned.merchant||'a planned payment')+
+    ' but differs from the estimate. Review the amount, not a second withdrawal.');
+ }
  // Reuse the existing missed-payment review and skip/ignore controls for
  // card transfers while retaining each original statement's due date.
  for(const p of finalPlans)if(p._unpostedEstimated&&valid(p._overdueFrom)){
@@ -651,7 +792,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
-  postedMatchReview:covered.review||[],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[]),overduePayments};
+  postedMatchReview:covered.review||[],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[],paymentReconciliations.filter(m=>m.status==='pending')),paymentReconciliations,overduePayments};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){
