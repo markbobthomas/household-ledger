@@ -500,6 +500,7 @@ function futureRows(bundle,s){
   const key=e.predictionKey||window.HouseholdPlannerTransactions.keyEvent(e.id,accountId);
   rows.push({key,kind:'event',id:String(e.id||''),date:e.date,amount:e.amount,
    merchant:e.merchant||'Expected transaction',accountId,account:labels.get(accountId)||accountId,
+   category:e.category||'Uncategorized',
    type:e.type==='transfer'?'transfer':e.kind==='card_refund'?'refund':
     e.kind==='card_purchase'?'expense':e.type==='refund'?'refund':
     e.type==='income'?'income':'expense',
