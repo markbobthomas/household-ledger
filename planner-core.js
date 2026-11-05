@@ -736,9 +736,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   // can clear that obligation's outstanding posting alert.
   if(!pending)for(let i=overduePayments.length-1;i>=0;i--)
    if(String(overduePayments[i].id)===id)overduePayments.splice(i,1);
-  if(pending)warnings.push('A pending bank withdrawal matches '+String(planned.merchant||'a planned payment')+
-   '. The bank payment amount is used once; confirm settlement after it posts.');
-  else if(Math.abs(actualAmount-Number(planned.amount))>.01)
+  // A uniquely matched pending debit already has one correct cash reserve.
+  // This is routine bank settlement, not an actionable forecast exception:
+  // retain pending status in paymentReconciliations, not the red Review banner.
+  if(!pending&&Math.abs(actualAmount-Number(planned.amount))>.01)
    warnings.push('A posted bank withdrawal matches '+String(planned.merchant||'a planned payment')+
     ' but differs from the estimate. Review the amount, not a second withdrawal.');
  }
