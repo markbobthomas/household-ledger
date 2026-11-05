@@ -10,12 +10,13 @@ const asOf='2026-10-20';
 const row=(id,date,merchant,amount,accountId,type,extra={})=>
  ({id,date,merchant,amount,accountId,type,pending:false,...extra});
 const mortgage=row('loan','2026-09-14','HOME LOAN ACH',2000,'checking','transfer',
- {cashDirection:'out',accountingKind:'internal_transfer'});
+ {cashDirection:'out',accountingKind:'internal_transfer',category:'Housing'});
 const suggested=H.draftFor(mortgage,[mortgage],accounts,asOf);
 assert.equal(H.canPlan(mortgage),true,'The mortgage transfer must offer Make recurring');
 assert.equal(suggested.type,'expense','Unmatched mortgage debit becomes a suggested future checking expense');
 assert.equal(suggested.originalType,'transfer');
 assert.equal(suggested.accountId,'checking');
+assert.equal(suggested.category,'Housing','A categorized bank row carries its assigned category into the recurring editor');
 assert.equal(suggested.amount,2000);
 assert.equal(suggested.nextDate,'2026-11-14');
 const gift=row('gift','2026-09-18','Incoming wire',1200,'checking','transfer',
@@ -54,13 +55,28 @@ const confirm=T.defineRecurring(settings,{
  accountId:'checking',type:'expense',frequency:'monthly'
 },accounts,asOf,{
  kind:'event',accountId:'checking',type:'transfer',amount:2000,
- merchant:mortgage.merchant,date:mortgage.date,sourceAmount:2000
+ merchant:mortgage.merchant,date:mortgage.date,sourceAmount:2000,bankTransactionId:'loan'
 },[mortgage],['loan']);
 assert.equal(confirm.kind,'event');
 assert.equal(confirm.type,'expense');
 assert.equal(confirm.originalType,'transfer');
+assert.equal(confirm.category,'Housing','Saving a bank-backed repeating rule must inherit the effective bank category');
 assert.equal(T.generatedRecurring([confirm],asOf,'2027-01-30').events.length,3);
 const forecast=T.generatedRecurring([confirm],asOf,'2026-11-25').events;
+assert.equal(forecast[0].category,'Housing','Future months retain the confirmed repeating category');
+const nextMonths=T.generatedRecurring([confirm],asOf,'2027-02-15').events;
+assert.ok(nextMonths.length>=3&&nextMonths.every(e=>e.category==='Housing'),
+ 'Every generated future occurrence inherits the saved category');
+const inferred=T.defineRecurring({predictions:{}},{
+ date:'2026-11-05',merchant:'Electric Service',amount:60,
+ accountId:'checking',type:'expense',frequency:'monthly'
+},accounts,asOf,{
+ kind:'event',accountId:'checking',type:'expense',amount:60,
+ merchant:'Electric Service',date:'2026-11-05',category:'Utilities'
+},[],[]);
+assert.equal(inferred.category,'Utilities','Converting an inferred categorized prediction also preserves its category');
+assert.ok(T.generatedRecurring([inferred],asOf,'2027-01-20').events.every(e=>e.category==='Utilities'));
+
 const posted=[{...mortgage,date:'2026-11-11',id:'posted-early'}];
 assert.equal(T.postedCoverage({events:forecast,plans:[]},[confirm],
  posted,accounts,'2026-11-12').events.length,0,
