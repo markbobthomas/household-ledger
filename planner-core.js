@@ -800,7 +800,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
-  postedMatchReview:covered.review||[],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[],paymentReconciliations.filter(m=>m.status==='pending')),paymentReconciliations,overduePayments};
+  postedMatchReview:covered.review||[],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[],paymentReconciliations.filter(m=>m.status==='pending'&&m.reservedInAvailable)),paymentReconciliations,overduePayments};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){
