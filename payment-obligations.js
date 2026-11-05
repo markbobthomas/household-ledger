@@ -383,7 +383,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     Math.abs((Date.parse(t.date)-Date.parse(due))/86400000)<=7):[];
    const checkingOnly=oneSidedSettlements.get(id+'|'+due);
    if(checkingOnly&&!postedForCycle.length)postedForCycle.push(checkingOnly);
-   if(checkingOnly&&!postedPayments.length)
+   if(checkingOnly&&postedForCycle.some(t=>t.checkingOnly))
     warnings.push(card.name+': checking withdrawal posted, but its card credit is not yet matched. Verify the card credit when it arrives.');
    // One matching posted payment is enough to require reconciliation. Never
    // schedule the full amount again when part/all may already have been paid.
