@@ -202,7 +202,7 @@ assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],pending:true}],[]
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],accountId:'savings'}],[],
  issued.predictions,{days:30}).plans.length,1,'Wrong funding account cannot settle');
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],
- type:'expense',accountingKind:'purchase'}],[],
+ type:'expense',accountingKind:'purchase',merchant:'Unrelated grocery purchase'}],[],
  issued.predictions,{days:30}).plans.length,1,'Unrelated purchase cannot settle');
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],amount:75}],[],
  issued.predictions,{days:30}).plans.length,1,
@@ -224,6 +224,54 @@ assert.equal(named.plans[0].toAccountId,'visa','Unrelated card remains forecast'
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],
  merchant:'Amex Card Autopay'}],[],issued.predictions,{days:30}).plans.length,1,
  'Named debit for another connected card cannot settle Visa');
+// Real bank ACH card-payment descriptions sometimes use PMT/EPAY, leaving
+// the posted checking withdrawal classified as an expense until issuer credit
+// arrives. Never forecast the same checking debit a second time.
+const Adapter=require('../pilot/data-source.js');
+const Accounting=require('../accounting.js');
+const imported=Adapter.record({
+ id:'plaid-amex-ach',date:'2026-11-09',amount:500,
+ name:'AMEX ACH PMT',accountId:'checking',pending:false
+},{id:'checking',name:'Main Checking',type:'depository'});
+const cleaned=Accounting.reconcile({
+ accounts:earlySnapshot.accounts.map(a=>({id:a.id,name:a.name,type:a.type})),
+ transactions:[imported]
+}).transactions;
+assert.equal(cleaned[0].type,'expense','Unusual ACH PMT is still an expense before card-side pairing');
+assert.equal(cleaned[0].accountingKind,'purchase','This reproduces missing one-sided payment classification');
+const issuerAch=Payments.build(earlySnapshot,cleaned,[],twoCards,{days:30});
+assert.deepEqual(issuerAch.plans.map(p=>p.toAccountId),['visa'],
+ 'A posted AMEX ACH PMT debit clears only the unambiguously named Amex payment');
+assert.equal(issuerAch.statements.find(s=>s.cardId==='amex').alreadyPaid,true);
+assert.equal(issuerAch.statements.find(s=>s.cardId==='amex').actualPaymentAmount,500);
+assert.equal(Payments.build(earlySnapshot,cleaned.map(t=>({...t,pending:true})),[],
+ twoCards,{days:30}).plans.length,2,'A pending PMT descriptor cannot prove settlement');
+const genericCardPmt=Payments.build(earlySnapshot,[{
+ id:'generic-cc-pmt',date:'2026-11-09',accountId:'checking',
+ type:'expense',accountingKind:'purchase',cashDirection:'out',amount:700,
+ merchant:'CREDIT CARD ACH PMT',pending:false
+}],[],issued.predictions,{days:30});
+assert.equal(genericCardPmt.plans.length,0,
+ 'A unique matching posted credit-card ACH PMT is not double forecast');
+assert.equal(Payments.build(earlySnapshot,[{
+ id:'unrelated-merchant',date:'2026-11-09',accountId:'checking',
+ type:'expense',accountingKind:'purchase',cashDirection:'out',amount:700,
+ merchant:'Coffee Shop Payment',pending:false
+}],[],issued.predictions,{days:30}).plans.length,1,
+ 'Merchant payments without explicit card evidence are not auto-reconciled');
+assert.equal(Payments.build(earlySnapshot,[{
+ id:'loan-pmt',date:'2026-11-09',accountId:'checking',
+ type:'expense',accountingKind:'loan_payment',cashDirection:'out',amount:500,
+ merchant:'AMEX Personal Loan PMT',pending:false
+}],[],twoCards,{days:30}).plans.length,2,
+ 'Issuer names on loan payments cannot settle credit-card bills');
+assert.equal(Payments.build(earlySnapshot,[{
+ id:'ambiguous-cc-pmt',date:'2026-11-09',accountId:'checking',
+ type:'expense',accountingKind:'purchase',cashDirection:'out',amount:700,
+ merchant:'CREDIT CARD ACH PMT',pending:false
+}],[],twoCards,{days:30}).plans.length,2,
+ 'Generic PMT labels cannot settle one of two competing cards');
+
 // Once the billing period is closed, no hypothetical future purchases
 // contribute to its total; the posted ledger is the actual cash ledger.
 const closedNoIssuer=Model.migrate({});
