@@ -730,8 +730,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     if(pending&&!held)detail.amount=actualAmount;
    }
   }
-  // Pending and actual payments clear the specific missed-payment warning.
-  for(let i=overduePayments.length-1;i>=0;i--)
+  // A pending hold is not a posted settlement. Keep its overdue Review
+  // reminder until Plaid confirms a posted debit; only a settled bank record
+  // can clear that obligation's outstanding posting alert.
+  if(!pending)for(let i=overduePayments.length-1;i>=0;i--)
    if(String(overduePayments[i].id)===id)overduePayments.splice(i,1);
   if(pending)warnings.push('A pending bank withdrawal matches '+String(planned.merchant||'a planned payment')+
    '. The bank payment amount is used once; confirm settlement after it posts.');
