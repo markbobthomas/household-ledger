@@ -202,7 +202,7 @@ assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],pending:true}],[]
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],accountId:'savings'}],[],
  issued.predictions,{days:30}).plans.length,1,'Wrong funding account cannot settle');
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],
- type:'expense',accountingKind:'purchase'}],[],
+ type:'expense',accountingKind:'purchase',merchant:'Unrelated grocery purchase'}],[],
  issued.predictions,{days:30}).plans.length,1,'Unrelated purchase cannot settle');
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],amount:75}],[],
  issued.predictions,{days:30}).plans.length,1,
