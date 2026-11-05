@@ -400,4 +400,106 @@ const postedBeforeDue=calculate('2026-11-02',paidBank);
 assert.equal(firstCard(postedBeforeDue).length,0,'Bank posting on the due date prevents a second forecast debit');
 assert.deepEqual(paid.projection.diagnostics.balanceMismatches,[],
  'Card reconciliation must preserve full daily balance integrity');
+// Shared payment reconciliation: bank pending amounts are facts, estimates
+// are only planned amounts. An unmatched pending card debit must not produce
+// a second cash withdrawal solely because an estimate differs by >2%.
+const universalAccounts=[
+ {id:'cash-main',name:'Fictional Checking',accountType:'checking',
+  current:5490,available:2500,simulated:true},
+ {id:'card-a',name:'Credit Card ••1111',accountType:'credit',
+  current:3300,simulated:true},
+ {id:'card-b',name:'Credit Card ••2222',accountType:'credit',
+  current:2600,simulated:true},
+ {id:'cash-other',name:'Other Savings',accountType:'savings',
+  current:800,available:800,simulated:true}
+];
+const paymentRule=(when,amount)=>({
+ billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
+ closingDay:18,nextPaymentDate:when,nextDueDate:when,
+ fromAccountId:'cash-main',method:'fixed',fixedAmount:amount,autopayEnabled:true
+});
+const universalPrefs={paymentRules:{
+ 'card-a':paymentRule('2026-11-06',3300),
+ 'card-b':paymentRule('2026-11-10',2600)
+}};
+const universalPending={
+ id:'pending-card-ach',date:'2026-11-04',accountId:'cash-main',
+ type:'transfer',accountingKind:'card_payment',cashDirection:'out',
+ merchant:'ISSUER CREDIT CRD AUTOPAY',amount:2990,pending:true
+};
+const universal=(records,accounts=universalAccounts,prefs=universalPrefs)=>Core.materialize(
+ {asOf:'2026-11-05',accounts,mode:'demo'},records,prefs,T,Payments,30,
+ {weekendPolicy:'friday'});
+const byCard=(b,id)=>b.ledger.filter(x=>x.kind==='movement'&&
+ String(x.toAccountId)===id);
+const reservedPayment=universal([universalPending]);
+assert.equal(byCard(reservedPayment,'card-a').length,0,
+ 'Bank-available reserved pending card debit must suppress its duplicate larger estimate');
+assert.equal(byCard(reservedPayment,'card-b').length,1,
+ 'Another card with a distinct due date keeps its independent forecast');
+assert.equal(reservedPayment.pendingPaymentMatches.filter(x=>
+ x.bankId===universalPending.id).length,1,
+ 'One pending bank debit can reserve at most one forecast');
+assert.equal(reservedPayment.pendingPaymentMatches.find(x=>
+ x.bankId===universalPending.id).reservedInAvailable,true);
+assert.equal(reservedPayment.payments.statements.find(s=>s.cardId==='card-a').alreadyPaid,false,
+ 'Pending withdrawal must never be labeled posted');
+assert.equal(reservedPayment.payments.statements.find(s=>s.cardId==='card-a').pendingReserved,true);
+assert.deepEqual(reservedPayment.projection.diagnostics.balanceMismatches,[]);
+const notHeld=universal([universalPending],universalAccounts.map(a=>
+ a.id==='cash-main'?{...a,available:5490}:a));
+assert.deepEqual(byCard(notHeld,'card-a').map(x=>x.amount),[2990],
+ 'Without bank available hold, use the observed pending amount ONCE, not the forecast amount');
+assert.equal(notHeld.pendingPaymentMatches.length,0,
+ 'Unreserved bank pending is a future cash reserve, not a bank available hold');
+assert.equal(notHeld.paymentReconciliations.find(x=>
+ x.bankId===universalPending.id).reservedInAvailable,false);
+assert.equal(byCard(notHeld,'card-b').length,1);
+assert.deepEqual(notHeld.projection.diagnostics.balanceMismatches,[]);
+const settled=universal([{...universalPending,pending:false}],
+ universalAccounts.map(a=>a.id==='cash-main'?{...a,current:2500,available:2500}:a));
+assert.equal(byCard(settled,'card-a').length,0,
+ 'When that debit posts it remains reconciled, despite the forecast amount difference');
+assert.equal(byCard(settled,'card-b').length,1);
+assert.equal(settled.payments.statements.find(s=>s.cardId==='card-a').alreadyPaid,true,
+ 'Posted debit is accurately distinguished from pending');
+assert.deepEqual(settled.projection.diagnostics.balanceMismatches,[]);
+assert.equal(byCard(universal([]),'card-a').length,1,
+ 'If the pending bank payment vanishes before posting, the forecast must return');
+assert.equal(byCard(universal([{
+ ...universalPending,accountId:'cash-other'
+}]),'card-a').length,1,'Payment from unrelated account does not settle checking');
+assert.equal(byCard(universal([{
+ ...universalPending,merchant:'Fictional Grocery Market',
+ accountingKind:'purchase',type:'expense'
+}]),'card-a').length,1,'Ordinary merchant expense never settles a credit card');
+assert.equal(byCard(universal([universalPending,{...universalPending,
+ id:'another-pending-card'}]),'card-a').length,1,
+ 'Two competing pending bank debits cannot settle a single forecast by guess');
+const competingCards={paymentRules:{
+ 'card-a':paymentRule('2026-11-06',3300),
+ 'card-b':paymentRule('2026-11-07',2600)
+}};
+const ambiguous=universal([universalPending],universalAccounts,competingCards);
+assert.equal(byCard(ambiguous,'card-a').length,1);
+assert.equal(byCard(ambiguous,'card-b').length,1,
+ 'Overlapping card due windows must not pick a recipient from date alone');
+// Same final reconciliation also applies to generic one-off bill expenses.
+const utilityAccounts=[{id:'cash-main',name:'Fictional Checking',
+ accountType:'checking',current:1000,available:655,simulated:true}];
+const utilityPrefs={futureTransactionAdds:[{
+ id:'utility-due',accountId:'cash-main',date:'2026-11-06',
+ merchant:'Fictional Power Utility',type:'expense',amount:300
+}],paymentRules:{}};
+const utilityPending={
+ id:'utility-ach',date:'2026-11-04',accountId:'cash-main',
+ merchant:'Fictional Power Utility',type:'expense',
+ accountingKind:'loan_payment',cashDirection:'out',amount:345,pending:true
+};
+const utility=universal([utilityPending],utilityAccounts,utilityPrefs);
+assert.equal(utility.ledger.filter(x=>x.kind==='event'&&
+ x.merchant==='Fictional Power Utility').length,0,
+ 'A unique pending generic bill with different amount must not be double predicted');
+assert.equal(utility.pendingPaymentMatches.length,1);
+assert.deepEqual(utility.projection.diagnostics.balanceMismatches,[]);
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
