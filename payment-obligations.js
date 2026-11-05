@@ -217,7 +217,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      /\b(?:amex|american express)\b/.test(description))return true;
   const generic=new Set(['bank','card','credit','visa','mastercard','payment',
    'autopay','account','checking','debit','rewards','reward','cash','platinum',
-   'preferred','signature','travel','online','business','automatic']);
+   'preferred','signature','travel','online','business','automatic','express']);
   return name.replace(/[^a-z0-9]+/g,' ').split(' ')
    .some(word=>word.length>=4&&!generic.has(word)&&
     description.includes(' '+word+' '));
