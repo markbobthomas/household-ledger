@@ -6525,3 +6525,33 @@ a:hover{color:#166e61}
   margin-right:4px;
  }
 }
+
+/* Actionable forecast alerts: every issue is a keyboard-accessible row
+   linking to the relevant review destination, not a dead-end text banner. */
+.planner-page ~ .forecast-review-notice,
+.forecast-review-notice{
+ display:flex!important;flex-direction:column!important;
+ align-items:stretch!important;gap:6px!important;
+}
+.forecast-review-notice .forecast-review-items{
+ display:flex;flex-direction:column;gap:3px;min-width:0;
+}
+.forecast-review-notice .forecast-review-link{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ width:100%;min-width:0;min-height:35px;
+ padding:7px 8px;margin:0;border:0;border-radius:9px;
+ background:transparent;text-align:left;font:inherit;
+ color:inherit;line-height:1.45;cursor:pointer;
+}
+.forecast-review-notice .forecast-review-link:hover,
+.forecast-review-notice .forecast-review-link:focus-visible{
+ background:#fbe1dc!important;outline-offset:2px;
+}
+.forecast-review-notice .forecast-review-link>span:first-child{min-width:0;overflow-wrap:anywhere}
+.forecast-review-notice .forecast-review-chevron{
+ flex:0 0 auto;font-size:22px;font-weight:700;line-height:1;opacity:.75;
+}
+.bills-payment-review-help{
+ margin:12px 0;padding:10px 12px;border-radius:10px;
+ background:#f3f7f3;color:#3f6550;font-size:13px;line-height:1.5;
+}
