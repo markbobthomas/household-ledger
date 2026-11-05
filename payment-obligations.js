@@ -33,6 +33,28 @@ function statementPeriodFor(rule,when){
 const cash=a=>['checking','savings','depository'].includes(String(a.accountType||a.type||'').toLowerCase());
 const credit=a=>String(a.accountType||a.type||'').toLowerCase()==='credit';
 const validAmount=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0;
+const cardNameEvidence=(row,card)=>{
+ const name=String(card?.name||'').toLowerCase(),
+  description=(' '+String(row.merchant||'')+' '+String(row.description||'')+' ')
+   .toLowerCase().replace(/[^a-z0-9]+/g,' ');
+ if(/\b(?:amex|american express)\b/.test(name)&&
+    /\b(?:amex|american express)\b/.test(description))return true;
+ const generic=new Set(['bank','card','credit','visa','mastercard','payment',
+  'autopay','account','checking','debit','rewards','reward','cash','platinum',
+  'preferred','signature','travel','online','business','automatic','express']);
+ return name.replace(/[^a-z0-9]+/g,' ').split(' ')
+  .some(word=>word.length>=4&&!generic.has(word)&&
+   description.includes(' '+word+' '));
+};
+const cardPaymentNarrative=row=>{
+ const text=(' '+String(row.merchant||'')+' '+String(row.description||'')+' ')
+  .toLowerCase().replace(/[^a-z0-9]+/g,' ');
+ return {
+  paymentLanguage:/\b(?:payment|payments|pmt|pymt|paymnt|epay|epayment|autopay|autopayment|auto pay|billpay|bill payment|bill pay|ccpmt)\b/.test(text),
+  loanOrOtherBill:/\b(?:mortgage|mtg|loan|rent|insurance|utilities|utility|tuition|property tax)\b/.test(text),
+  explicitCardLabel:/\b(?:credit card|cardmember|cc pmt|cc payment|card pmt)\b/.test(text)
+ };
+};
  // Credit-card settlements are transfers, not new purchases or merchant
  // refunds. Enforce this again at the statement engine boundary so an
  // imported provisional type cannot distort the bill calculation.
@@ -156,6 +178,42 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      // Avoid scheduling a transfer larger than observed debt plus dated charges.
      const amount=round(Math.max(0,n===0?Math.min(raw,maxAvailable):raw));
      if(!(amount>0))continue;
+     // An inferred card-payment series also needs checking-first
+     // reconciliation. The last fully paired payment may be a month old
+     // while the newly posted checking ACH debit is waiting for its issuer
+     // credit. Only clear a uniquely attributable, settled cash debit.
+     const possiblePosted=records.filter(t=>{
+      if(!t||!t.id||t.pending||t.pairedTransactionId||
+       t.cashDirection!=='out'||!(Number(t.amount)>0)||
+       !date(t.date)||t.date>asOf||t.date<=candidate.lastPaymentDate||
+       Math.abs((Date.parse(t.date)-Date.parse(when))/86400000)>7)return false;
+      const from=accounts.find(a=>String(a.id)===candidate.fromAccountId);
+      if(!from)return false;
+      const key=String(t.accountId||t.account||'');
+      const aliases=accounts.filter(a=>String(a.name)===key||
+       String(a.transactionAccount||'')===key);
+      if(key!==String(from.id)&&
+       !(aliases.length===1&&String(aliases[0].id)===String(from.id)))return false;
+      const named=accounts.filter(credit).filter(a=>cardNameEvidence(t,a)),
+       uniquelyNamed=named.length===1&&String(named[0].id)===String(card.id);
+      if(named.length&&!uniquelyNamed)return false;
+      const classified=t.type==='transfer'&&t.accountingKind==='card_payment';
+      const narrative=cardPaymentNarrative(t);
+      if(!classified&&!(narrative.paymentLanguage&&!narrative.loanOrOtherBill&&
+       (uniquelyNamed||narrative.explicitCardLabel)))return false;
+      // Generic card-payment labels cannot be attached to one of several
+      // cards on the same day without issuer evidence. Require a close amount
+      // when the payee is not named, even if bank classification says card.
+      if(!uniquelyNamed){
+       if(accounts.filter(credit).length!==1)return false;
+       if(Math.abs(Number(t.amount)-amount)>Math.max(5,amount*.05))return false;
+      }
+      return true;
+     });
+     if(possiblePosted.length===1){
+      warnings.push(card.name+': checking-side card payment posted before the issuer credit matched; the estimated withdrawal for '+when+' is not predicted again.');
+      continue;
+     }
      const id='card-history-estimate|'+card.id+'|'+when;
      plans.push({id,fromAccountId:candidate.fromAccountId,toAccountId:String(card.id),
       anchorDate:expectedWithdrawal(when),
@@ -209,19 +267,6 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  // Card issuers can report their credit after checking already shows the
  // completed withdrawal. A unique posted checking debit must not be forecast
  // again, even when its card-side entry has not yet paired with it.
- const cardNameEvidence=(row,card)=>{
-  const name=String(card?.name||'').toLowerCase(),
-   description=(' '+String(row.merchant||'')+' '+String(row.description||'')+' ')
-    .toLowerCase().replace(/[^a-z0-9]+/g,' ');
-  if(/\b(?:amex|american express)\b/.test(name)&&
-     /\b(?:amex|american express)\b/.test(description))return true;
-  const generic=new Set(['bank','card','credit','visa','mastercard','payment',
-   'autopay','account','checking','debit','rewards','reward','cash','platinum',
-   'preferred','signature','travel','online','business','automatic','express']);
-  return name.replace(/[^a-z0-9]+/g,' ').split(' ')
-   .some(word=>word.length>=4&&!generic.has(word)&&
-    description.includes(' '+word+' '));
- };
  const unpairedByCycle=new Map();
  for(const row of records){
   if(!row||!row.id||row.pending||row.pairedTransactionId||
@@ -231,12 +276,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   // institution uses PMT/EPAY instead of "payment". Treat an explicit
   // card-payment descriptor as evidence even before accounting pairs the
   // issuer credit. Never promote a generic merchant expense or loan payment.
-  const paymentText=(' '+String(row.merchant||'')+' '+String(row.description||'')+' ')
-   .toLowerCase().replace(/[^a-z0-9]+/g,' ');
   const namedCards=accounts.filter(credit).filter(card=>cardNameEvidence(row,card));
-  const paymentLanguage=/\b(?:payment|payments|pmt|pymt|paymnt|epay|epayment|autopay|autopayment|auto pay|billpay|bill payment|bill pay|ccpmt)\b/.test(paymentText);
-  const loanOrOtherBill=/\b(?:mortgage|mtg|loan|rent|insurance|utilities|utility|tuition|property tax)\b/.test(paymentText);
-  const explicitCardLabel=/\b(?:credit card|cardmember|cc pmt|cc payment|card pmt)\b/.test(paymentText);
+  const {paymentLanguage,loanOrOtherBill,explicitCardLabel}=cardPaymentNarrative(row);
   const categorizedCardPayment=row.type==='transfer'&&row.accountingKind==='card_payment';
   const namedCardPayment=paymentLanguage&&!loanOrOtherBill&&
    (namedCards.length>0||explicitCardLabel);
