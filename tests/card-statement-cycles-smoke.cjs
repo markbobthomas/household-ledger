@@ -450,7 +450,9 @@ const notHeld=universal([universalPending],universalAccounts.map(a=>
  a.id==='cash-main'?{...a,available:5490}:a));
 assert.deepEqual(byCard(notHeld,'card-a').map(x=>x.amount),[2990],
  'Without bank available hold, use the observed pending amount ONCE, not the forecast amount');
-assert.equal(notHeld.pendingPaymentMatches.find(x=>
+assert.equal(notHeld.pendingPaymentMatches.length,0,
+ 'Unreserved bank pending is a future cash reserve, not a bank available hold');
+assert.equal(notHeld.paymentReconciliations.find(x=>
  x.bankId===universalPending.id).reservedInAvailable,false);
 assert.equal(byCard(notHeld,'card-b').length,1);
 assert.deepEqual(notHeld.projection.diagnostics.balanceMismatches,[]);
