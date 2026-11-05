@@ -752,6 +752,16 @@ function relatedCardCalculation(bundle,row){
  // edited dates/amounts and skipped payments are reflected here exactly.
 // The same forecast row component is rendered in Calendar, Predictions, Reviews
 // and advanced Predictions. All buttons resolve the same canonical ledger key.
+// Put a personal note on the SAME title line as its merchant. Notes are
+// cosmetic metadata and never change source bank transactions or forecasts.
+function transactionTitleWithNote(name,key){
+ const merchant=String(name||'Transaction'),note=transactionNote(key);
+ return '<span class="transaction-title-line" data-note-title-key="'+escapeHTML(key)+'">'+
+  '<strong class="transaction-merchant-title" title="'+escapeHTML(merchant)+'">'+
+   escapeHTML(merchant)+'</strong>'+
+  (note?'<span class="transaction-note-subtitle" data-note-subtitle="'+escapeHTML(key)+
+   '" title="'+escapeHTML(note)+'">'+escapeHTML(note)+'</span>':'')+'</span>';
+}
 function editableForecastRow(row,opts={}){
  const isTransfer=row.kind==='movement',inbound=row.type==='income'||row.type==='refund';
  const kindLabel=isTransfer?'Linked transfer':row.type==='income'?'Deposit':
@@ -765,11 +775,8 @@ function editableForecastRow(row,opts={}){
    'data-open-transaction="'+escapeHTML(row.key)+
   '" aria-expanded="false"'+(opts.kind==='schedule'?' data-schedule-occurrence-key="'+escapeHTML(row.key)+'"':'')+'>'+
   '<span class="unified-payment-date future-date ledger-transaction-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
-  '<span class="unified-payment-name ledger-transaction-identity"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-   (transactionNote(forecastNoteKey(row.key))?
-    '<small class="transaction-note-subtitle" data-note-subtitle="'+
-     escapeHTML(forecastNoteKey(row.key))+'">'+
-     escapeHTML(transactionNote(forecastNoteKey(row.key)))+'</small>':'')+
+  '<span class="unified-payment-name ledger-transaction-identity">'+
+   transactionTitleWithNote(row.merchant,forecastNoteKey(row.key))+
    '<small>'+escapeHTML(subtitle)+'</small></span>'+
   '<span class="unified-payment-value ledger-transaction-amount future-amount'+(inbound?' incoming':'')+'">'+
    (inbound?'+':'−')+cash(row.amount)+'</span>'+
@@ -2691,9 +2698,8 @@ function historyPage(bundle,s){
    '" aria-expanded="'+isExpanded+'" aria-label="'+escapeHTML((isExpanded?'Close':'Open')+
     ' repeating payment details: '+(t.merchant||'Bank transaction'))+'">'+
    '<span class="history-actual-date ledger-row-date ledger-transaction-date">'+escapeHTML(dayLabel(t.date))+'</span>'+
-   '<span class="history-actual-description ledger-row-description ledger-transaction-identity recurrence-row-name"><strong>'+escapeHTML(t.merchant||'Bank transaction')+'</strong>'+
-   (transactionNote(bankNoteKey(aid,t.id))?'<small class="transaction-note-subtitle" data-note-subtitle="'+
-    escapeHTML(bankNoteKey(aid,t.id))+'">'+escapeHTML(transactionNote(bankNoteKey(aid,t.id)))+'</small>':'')+
+   '<span class="history-actual-description ledger-row-description ledger-transaction-identity recurrence-row-name">'+
+    transactionTitleWithNote(t.merchant||'Bank transaction',bankNoteKey(aid,t.id))+
    '<small>'+escapeHTML(label(aid))+' · '+escapeHTML(t.type||'Unclassified')+
     (t.pending?' · Pending':' · Posted')+' · <span class="history-recurring-status">'+
     escapeHTML(caption)+'</span></small></span>'+
@@ -3083,9 +3089,10 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     '<button type="button" class="category-review-info category-review-open ledger-transaction-row"'+openAttrs+
      ' aria-label="Open '+escapeHTML(label.toLowerCase())+' details for '+escapeHTML(item.merchant)+'">'+
      '<span class="ledger-transaction-date">'+escapeHTML(item.date?dayLabel(item.date):'—')+'</span>'+
-     '<span class="ledger-transaction-identity"><strong>'+escapeHTML(item.merchant)+'</strong>'+
-     (item.isPlan?'':transactionNote(bankNoteKey(item.accountId||'',item.id))?
-       '<small class="transaction-note-subtitle">'+escapeHTML(transactionNote(bankNoteKey(item.accountId||'',item.id)))+'</small>':'')+
+     '<span class="ledger-transaction-identity">'+
+     (item.isPlan?'<span class="transaction-title-line"><strong class="transaction-merchant-title">'+
+       escapeHTML(item.merchant)+'</strong></span>':
+       transactionTitleWithNote(item.merchant,bankNoteKey(item.accountId||'',item.id)))+
      '<small>'+label+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
      '<strong class="ledger-transaction-amount">'+cash(item.amount)+'</strong>'+
      '<span class="ledger-transaction-action" aria-hidden="true">›</span></button>'+
@@ -3717,35 +3724,32 @@ document.addEventListener('submit',async e=>{
  if(status)status.textContent='Saving…';
  try{
   const note=await saveTransactionNote(key,field.value);
-  document.querySelectorAll('[data-note-subtitle]').forEach(el=>{
-   if(el.dataset.noteSubtitle!==key)return;
-   el.textContent=note;el.hidden=!note;
-  });
-  // When saving a first note, create its subtitle immediately without
-  // rebuilding the bank list or closing an unrelated editor.
-  if(note&&key.startsWith('bank:')){
-   document.querySelectorAll('[data-edit-transaction-note]').forEach(trigger=>{
-    if(trigger.dataset.editTransactionNote!==key)return;
-    const name=trigger.closest('.history-actual-row')?.querySelector('.history-actual-description'),
-     title=name?.querySelector('strong');
-    if(name&&title&&!name.querySelector('[data-note-subtitle]')){
-     const subtitle=document.createElement('small');
+  // Update the active row AND prebuilt inactive pages in place. Notes change
+  // no banking arithmetic, so rebuilding the prepared views would be wasteful.
+  const noteRoots=[document,...[...preparedViews.values(),...preparedHistoryViews.values()]
+   .map(entry=>entry?.element).filter(Boolean)];
+  for(const root of noteRoots){
+   root.querySelectorAll('[data-note-title-key]').forEach(line=>{
+    if(line.dataset.noteTitleKey!==key)return;
+    let subtitle=line.querySelector('[data-note-subtitle]');
+    if(!note){subtitle?.remove();return;}
+    if(!subtitle){
+     subtitle=document.createElement('span');
      subtitle.className='transaction-note-subtitle';
      subtitle.dataset.noteSubtitle=key;
-     subtitle.textContent=note;
-     title.insertAdjacentElement('afterend',subtitle);
+     line.appendChild(subtitle);
     }
-    trigger.setAttribute('aria-label','Edit note for '+(trigger.dataset.noteName||'transaction'));
+    subtitle.textContent=note;
+    subtitle.title=note;
+   });
+   root.querySelectorAll('[data-edit-transaction-note]').forEach(trigger=>{
+    if(trigger.dataset.editTransactionNote===key)
+     trigger.setAttribute('aria-label',(note?'Edit':'Add')+' note for '+(trigger.dataset.noteName||'transaction'));
    });
   }
-  // This editor updates visible subtitles without a full render; discard
-  // any prebuilt views so they never display the previous note.
-  // Transaction notes do not alter forecasts, balances or bill statements.
-  // Only the two history views can contain their previous note text.
-  preparedViews.delete('history');
-  preparedViews.delete('activity');
-  button.disabled=false;
-  if(status)status.textContent='Saved';
+  // Close only after the private preference save is confirmed. On failure,
+  // keep the editor open and its unsaved text available for another attempt.
+  dismissTransaction();
  }catch(err){
   button.disabled=false;
   if(status){status.textContent='Not saved: '+String(err.message||err);status.setAttribute('role','alert')}
