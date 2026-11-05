@@ -42,7 +42,7 @@ sandbox.createHouseholdLedgerDemo=()=>{
   id:'solo-bank-mortgage',date:'2026-09-15',
   merchant:'Home Mortgage ACH',accountId:'demo-checking',account:'Checking',
   amount:2000,type:'transfer',cashDirection:'out',
-  category:'Other',pending:false,demo:true
+  category:'Housing',pending:false,demo:true
  },{
   id:'generic-bank-first',date:'2026-09-09',merchant:'ABC Draft 984',
   accountId:'demo-checking',account:'Checking',amount:82.35,
@@ -120,6 +120,12 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  const saved=JSON.parse(store['household-planner-sample-settings-v1']||'{}');
  assert.equal(saved.futureRecurringRules.length,1);
  assert.equal(saved.futureRecurringRules[0].date,'2026-11-25');
+ assert.equal(saved.futureRecurringRules[0].category,'Housing',
+  'Repeating a categorized bank payment inherits the category without a second selection');
+ assert.ok(sandbox.HouseholdPlannerTransactions.generatedRecurring(
+  saved.futureRecurringRules,'2026-10-20','2027-02-01').events
+  .every(e=>e.category==='Housing'),
+  'Future bill predictions keep the saved bank category across subsequent months');
  await click('[data-view]',{view:'transactions'});
  assert.ok(forecastBuilds>buildsBeforeSave,
   'Rendering after a saved schedule edit must invalidate the cached projection');
