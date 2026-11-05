@@ -184,6 +184,17 @@ assert.equal(uncertain.statements[0].actualPaymentAmount,640);
 assert.equal(uncertain.plans.length,0,'Actual $640 payment suppresses stale estimated $700 autopay');
 assert.ok(uncertain.warnings.some(w=>w.includes('differs from planned')),
  'A partial or different amount requires reconciliation, not silent full-payment claim');
+const paymentMismatch=uncertain.warningActions.find(a=>
+ a.kind==='card-payment-difference');
+assert.ok(paymentMismatch,'Actual-versus-estimate mismatch must have a review destination');
+assert.equal(paymentMismatch.cardId,'visa',
+ 'Review destination uses the exact credit-card identity, not a merchant search');
+assert.equal(paymentMismatch.periodEnd,uncertain.statements[0].periodEnd,
+ 'Review destination opens the statement cycle that generated the warning');
+assert.ok(uncertain.warnings.includes(paymentMismatch.message),
+ 'Clickable warning metadata must reference the original visible warning');
+assert.equal(actual.warningActions.length,0,
+ 'Matching full payment must not create a false review action');
 // The checking debit can settle before the card issuer reports its credit.
 const checkingOnly=[{id:'checking-posted-first',date:'2026-11-09',accountId:'checking',
  type:'transfer',accountingKind:'card_payment',cashDirection:'out',amount:700,
