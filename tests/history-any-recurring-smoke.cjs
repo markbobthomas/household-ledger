@@ -74,8 +74,8 @@ const inferred=T.defineRecurring({predictions:{}},{
  kind:'event',accountId:'checking',type:'expense',amount:60,
  merchant:'Electric Service',date:'2026-11-05',category:'Utilities'
 },[],[]);
-assert.equal(inferred.category,'Utilities','Converting an inferred categorized prediction also preserves its category');
-assert.ok(T.generatedRecurring([inferred],asOf,'2027-01-20').events.every(e=>e.category==='Utilities'));
+assert.equal(inferred.category,'Utility','The canonical category alias is retained when confirming an inferred prediction');
+assert.ok(T.generatedRecurring([inferred],asOf,'2027-01-20').events.every(e=>e.category==='Utility'));
 
 const posted=[{...mortgage,date:'2026-11-11',id:'posted-early'}];
 assert.equal(T.postedCoverage({events:forecast,plans:[]},[confirm],
