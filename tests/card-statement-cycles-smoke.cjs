@@ -184,6 +184,43 @@ assert.equal(uncertain.statements[0].actualPaymentAmount,640);
 assert.equal(uncertain.plans.length,0,'Actual $640 payment suppresses stale estimated $700 autopay');
 assert.ok(uncertain.warnings.some(w=>w.includes('differs from planned')),
  'A partial or different amount requires reconciliation, not silent full-payment claim');
+// The checking debit can settle before the card issuer reports its credit.
+const checkingOnly=[{id:'checking-posted-first',date:'2026-11-09',accountId:'checking',
+ type:'transfer',accountingKind:'card_payment',cashDirection:'out',amount:700,
+ merchant:'Credit Card Autopay',pending:false}];
+const checkingOnlyOriginal=JSON.stringify(checkingOnly);
+const oneSided=Payments.build(earlySnapshot,checkingOnly,[],issued.predictions,{days:30});
+assert.equal(oneSided.plans.length,0,'Posted checking-side card debit is not forecast twice');
+assert.equal(oneSided.statements[0].alreadyPaid,true);
+assert.equal(oneSided.statements[0].actualPaymentDate,'2026-11-09');
+assert.equal(oneSided.statements[0].actualPaymentAmount,700);
+assert.ok(oneSided.warnings.some(w=>w.includes('card credit is not yet matched')),
+ 'Warn when the matching card credit has not yet posted');
+assert.equal(JSON.stringify(checkingOnly),checkingOnlyOriginal,'Source bank facts are immutable');
+assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],pending:true}],[],
+ issued.predictions,{days:30}).plans.length,1,'Pending debit cannot prove posted settlement');
+assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],accountId:'savings'}],[],
+ issued.predictions,{days:30}).plans.length,1,'Wrong funding account cannot settle');
+assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],
+ type:'expense',accountingKind:'purchase'}],[],
+ issued.predictions,{days:30}).plans.length,1,'Unrelated purchase cannot settle');
+assert.equal(Payments.build(earlySnapshot,[checkingOnly[0],{...checkingOnly[0],
+ id:'second-ambiguous-debit'}],[],issued.predictions,{days:30}).plans.length,1,
+ 'Two unpaired debits competing for a cycle must not be guessed');
+const twoCards={paymentRules:{...issued.predictions.paymentRules,amex:{
+ billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',closingDay:18,
+ nextPaymentDate:'2026-11-11',nextDueDate:'2026-11-12',fromAccountId:'checking',
+ method:'fixed',fixedAmount:500,autopayEnabled:true
+}}};
+assert.equal(Payments.build(earlySnapshot,checkingOnly,[],twoCards,{days:30}).plans.length,2,
+ 'Shared funding source and same due dates are ambiguous');
+const named=Payments.build(earlySnapshot,[{...checkingOnly[0],
+ merchant:'Amex Card Autopay'}],[],twoCards,{days:30});
+assert.equal(named.plans.length,1,'Issuer name can disambiguate a single card');
+assert.equal(named.plans[0].toAccountId,'visa','Unrelated card remains forecast');
+assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],
+ merchant:'Amex Card Autopay'}],[],issued.predictions,{days:30}).plans.length,1,
+ 'Named debit for another connected card cannot settle Visa');
 // Once the billing period is closed, no hypothetical future purchases
 // contribute to its total; the posted ledger is the actual cash ledger.
 const closedNoIssuer=Model.migrate({});
