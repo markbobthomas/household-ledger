@@ -144,7 +144,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
- const plans=[],billEvents=[],obligations=[],warnings=[],statements=[],historyStatements=[],suppressedExpectedIds=[],
+ const plans=[],billEvents=[],obligations=[],warnings=[],warningActions=[],statements=[],historyStatements=[],suppressedExpectedIds=[],
   cardEstimates=[],paymentDetails=[],pendingPaymentMatches=[];
  for(const card of accounts.filter(credit))
   if(!ready(cards[card.id],card,accounts)){
@@ -448,9 +448,15 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // schedule the full amount again when part/all may already have been paid.
    const paid=postedForCycle.length>0;
    const postedPaymentTotal=round(postedForCycle.reduce((n,t)=>n+t.amount,0));
-   if(paid&&Math.abs(postedPaymentTotal-amount)>.011)
-    warnings.push(card.name+': actual payment '+postedPaymentTotal.toFixed(2)+
-     ' differs from planned '+amount.toFixed(2)+'; confirm any remaining balance.');
+   if(paid&&Math.abs(postedPaymentTotal-amount)>.011){
+    const message=card.name+': actual payment '+postedPaymentTotal.toFixed(2)+
+     ' differs from planned '+amount.toFixed(2)+'; confirm any remaining balance.';
+    warnings.push(message);
+    // Keep the private card/cycle identity separate from display strings so
+    // actionable banners can open the exact statement without fuzzy lookup.
+    warningActions.push({message,kind:'card-payment-difference',
+     cardId:id,periodEnd:cycleClose});
+   }
    // A pending transfer is provisional, not posted. Suppress a second debit
    // only if the bank-reported available balance covers every pending outflow
    // and exactly one hold belongs to this card and expected installment.
@@ -543,7 +549,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     kind:'automatic_bill',confidence:'entered schedule / amount estimate'});
   }
  }
- return {plans,billEvents,suppressedExpectedIds,...(pendingPaymentMatches.length?{pendingPaymentMatches}:{}),obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,statements,
+ return {plans,billEvents,suppressedExpectedIds,...(pendingPaymentMatches.length?{pendingPaymentMatches}:{}),obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,warningActions,statements,
   cardEstimates,paymentDetails,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
 const api={build,plus,closeFor,ready,inferPayment,statementPeriodFor};
