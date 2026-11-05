@@ -715,8 +715,9 @@ const {chromium,webkit}=require('playwright');
     total=page.locator('[data-history-selected-total]'),
     count=page.locator('[data-history-selected-count]');
    assert.ok(await boxes.count()>=2,'Two fictional bank rows exist for multi-selection');
-   // A personal note is a subtitle tied to one actual bank record, NOT a
-   // source-bank mutation. It survives page refresh, editing and clearing.
+   // A personal note is private display metadata tied to one actual
+   // bank record. It shares the merchant title line and the editor dismisses
+   // automatically on successful save (including edit and clearing).
    const noteRow=page.locator('.history-entry:has([data-history-select])').first();
    const noteEdit=noteRow.locator('[data-edit-transaction-note]');
    assert.equal(await noteEdit.count(),1,'Every actual transaction offers an edit-note cue');
@@ -727,14 +728,15 @@ const {chromium,webkit}=require('playwright');
    const noteText='Fictional family supply purchase';
    await noteForm.locator('[name=note]').fill(noteText);
    await noteForm.locator('[type=submit]').click();
-   assert.equal(await noteForm.locator('[data-note-status]').innerText(),'Saved',
-    'Note saves to planning preferences without a bank edit');
+   await page.waitForFunction(()=>!document.querySelector('[data-transaction-overlay]'),
+    null,{timeout:10000});
+   assert.equal(await page.locator('.transaction-detail').count(),0,
+    'Successful note save closes the edit window automatically');
    const notePrefs=await page.evaluate(()=>JSON.parse(localStorage.getItem(
     'household-planner-sample-settings-v1')||'{}'));
    assert.equal(notePrefs.transactionNotes?.[noteKey],noteText);
-   await page.locator('.transaction-detail-close').click();
-   assert.equal(await noteRow.locator('.transaction-note-subtitle').innerText(),noteText,
-    'Saved note becomes a visible subtitle directly beneath the transaction name');
+   assert.equal(await noteRow.locator('.transaction-title-line .transaction-note-subtitle').innerText(),
+    noteText,'Saved note appears next to the merchant on the same first line');
    await page.reload({waitUntil:'load'});
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
@@ -746,8 +748,10 @@ const {chromium,webkit}=require('playwright');
    await persistedRow.click();
    await page.locator('.transaction-detail [name=note]').fill('');
    await page.locator('.transaction-detail [data-transaction-note-form] [type=submit]').click();
-   assert.equal(await page.locator('.transaction-detail [data-note-status]').innerText(),'Saved');
-   await page.locator('.transaction-detail-close').click();
+   await page.waitForFunction(()=>!document.querySelector('[data-transaction-overlay]'),
+    null,{timeout:10000});
+   assert.equal(await page.locator('.history-entry .transaction-note-subtitle').count(),0,
+    'Clearing a note removes its inline text and closes the editor');
    const clearedPrefs=await page.evaluate(()=>JSON.parse(localStorage.getItem(
     'household-planner-sample-settings-v1')||'{}'));
    assert.ok(!Object.hasOwn(clearedPrefs.transactionNotes||{},noteKey),
