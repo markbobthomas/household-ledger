@@ -445,6 +445,10 @@ assert.equal(reservedPayment.pendingPaymentMatches.find(x=>
 assert.equal(reservedPayment.payments.statements.find(s=>s.cardId==='card-a').alreadyPaid,false,
  'Pending withdrawal must never be labeled posted');
 assert.equal(reservedPayment.payments.statements.find(s=>s.cardId==='card-a').pendingReserved,true);
+assert.ok(!reservedPayment.payments.warnings.some(w=>w.includes('A pending bank withdrawal matches')),
+ 'Automatically matched pending payment must not appear as a manual Forecast requires review warning');
+assert.equal(reservedPayment.paymentReconciliations.find(m=>m.bankId===universalPending.id).status,'pending',
+ 'Pending bank payment remains inspectable as provisional, never posted');
 assert.deepEqual(reservedPayment.projection.diagnostics.balanceMismatches,[]);
 const notHeld=universal([universalPending],universalAccounts.map(a=>
  a.id==='cash-main'?{...a,available:5490}:a));
