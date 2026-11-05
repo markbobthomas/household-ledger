@@ -204,6 +204,9 @@ assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],accountId:'saving
 assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],
  type:'expense',accountingKind:'purchase'}],[],
  issued.predictions,{days:30}).plans.length,1,'Unrelated purchase cannot settle');
+assert.equal(Payments.build(earlySnapshot,[{...checkingOnly[0],amount:75}],[],
+ issued.predictions,{days:30}).plans.length,1,
+ 'A wrong-amount generic debit cannot erase a much larger card obligation');
 assert.equal(Payments.build(earlySnapshot,[checkingOnly[0],{...checkingOnly[0],
  id:'second-ambiguous-debit'}],[],issued.predictions,{days:30}).plans.length,1,
  'Two unpaired debits competing for a cycle must not be guessed');
