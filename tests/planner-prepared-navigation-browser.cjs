@@ -270,6 +270,61 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),beforeRepeatedNav,
     'Repeated navigation reuses prepared nodes without invalidating or regenerating them');
 
+   // One fictional actionable mismatch notice must open its exact connected
+   // card on Bills > Statements, even when the original payment no longer
+   // exists as a future prediction. This is navigation, not a bank edit.
+   const noticeBaseline=await page.evaluate(()=>({
+    generation:window.HouseholdPreparedViewGeneration(),
+    work:window.HouseholdPlannerWorkStats()
+   }));
+   await page.evaluate(()=>{
+    const root=document.querySelector('#planner-notice');
+    root.insertAdjacentHTML('beforeend',
+     '<div class="notice danger forecast-review-notice">'+
+     '<strong>Forecast requires review.</strong>'+
+     '<div class="forecast-review-items">'+
+     '<button type="button" class="forecast-review-link" '+
+     'data-forecast-review="card-statement" data-forecast-card-id="demo-visa" '+
+     'data-forecast-period="2026-09-30">'+
+     '<span>Fictional card payment differs from forecast</span>'+
+     '<span class="forecast-review-chevron" aria-hidden="true">›</span></button>'+
+     '</div></div>');
+   });
+   const noticeLink=page.locator('[data-forecast-review="card-statement"]');
+   assert.equal(await noticeLink.count(),1,'Card warning exposes a clickable review destination');
+   await noticeLink.click();
+   assert.equal(await page.locator('.planner-nav-primary [data-view="schedules"][aria-current="page"]').count(),1,
+    'Clicking the forecast warning opens Bills');
+   assert.equal(await page.locator('[data-bills-pane="statements"]').isVisible(),true,
+    'Card warning opens Statements instead of an unrelated Bills tab');
+   assert.equal(await page.locator('[data-bills-statement-account]').inputValue(),'demo-visa',
+    'Card warning selects its exact card, not the first available card');
+   assert.equal(await page.locator('[data-bills-card="demo-visa"]').count(),1);
+   assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),
+    noticeBaseline.generation,'Review navigation preserves the prepared view generation');
+   assert.equal((await page.evaluate(()=>window.HouseholdPlannerWorkStats())).forecastBuilds,
+    noticeBaseline.work.forecastBuilds,'Review navigation never re-runs forecasts');
+   // Other actionable warnings also open their relevant review/setup views.
+   await page.evaluate(()=>{
+    document.querySelector('#planner-notice').insertAdjacentHTML('beforeend',
+     '<div class="notice danger"><button type="button" data-forecast-review="settings-card" '+
+     'data-forecast-card-id="demo-visa">Check fictional card setup</button></div>');
+   });
+   await page.locator('[data-forecast-review="settings-card"]').click();
+   assert.equal(await page.locator('.settings-page #card-autopay[open]').count(),1,
+    'Credit-card setup warning opens the appropriate Settings section');
+   assert.equal(await page.locator('.settings-page [data-card-rule="demo-visa"]').count(),1);
+   await page.evaluate(()=>{
+    document.querySelector('#planner-notice').insertAdjacentHTML('beforeend',
+     '<div class="notice danger"><button type="button" '+
+     'data-forecast-review="reviews-payments">Review a fictional payment</button></div>');
+   });
+   await page.locator('[data-forecast-review="reviews-payments"]').click();
+   assert.equal(await page.locator('[data-review-pane="payments"]').isVisible(),true,
+    'Payment warning opens Things to check > Payments');
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+
+
    // Pure internal pane changes must be instant after the opening warmup.
    // All three are rendered before the first tap, not rebuilt on selection.
    await page.locator('.planner-nav-primary [data-view="history"]').click();
