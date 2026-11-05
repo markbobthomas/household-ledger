@@ -198,6 +198,63 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-clear-history-search]').click();
    assert.equal(await page.locator('.history-activity-filters input[name="search"]').inputValue(),'');
    await assertCheapFilter('Clear search');
+   // Notes are private display metadata. Save and edit one fictional
+   // transaction without recalculating forecasts or leaving the editor open.
+   await page.locator('.history-activity-filters [data-history-month-toggle]').click();
+   await page.locator('.history-activity-filters [data-history-month-all]').click();
+   assert.ok(await page.locator('.history-entry .transaction-note-trigger').count()>0,
+    'The fictional bank history has a transaction that accepts a personal note');
+   const noteTrigger=page.locator('.history-entry .transaction-note-trigger').first();
+   await noteTrigger.click();
+   await page.locator('.transaction-overlay .transaction-note-form input[name="note"]')
+    .fill('Inspection and invoice confirmed');
+   await page.locator('.transaction-overlay .transaction-note-form button[type="submit"]').click();
+   await page.waitForFunction(()=>!document.querySelector('[data-transaction-overlay]'),
+    null,{timeout:10000});
+   const firstLine=page.locator('.history-entry').first().locator('.transaction-title-line');
+   assert.equal(await firstLine.locator('.transaction-note-subtitle').textContent(),
+    'Inspection and invoice confirmed','Saved note appears alongside the merchant');
+   // The merchant is truncated before it can displace the note, including at
+   // the narrowest supported phone viewport. Both titles use the same type size.
+   await page.setViewportSize({width:320,height:844});
+   const inlineGeometry=await firstLine.evaluate(line=>{
+    const merchant=line.querySelector('.transaction-merchant-title'),
+     note=line.querySelector('.transaction-note-subtitle'),
+     original=merchant.textContent;
+    merchant.textContent='Fictional Very Long Utility Merchant Description That Needs Ellipsis';
+    const a=merchant.getBoundingClientRect(),b=note.getBoundingClientRect(),
+     box=line.getBoundingClientRect();
+    const result={fontA:getComputedStyle(merchant).fontSize,
+     fontB:getComputedStyle(note).fontSize,
+     merchantTruncated:merchant.scrollWidth>merchant.clientWidth+1,
+     adjacent:a.right<=b.left+1,noteInLine:b.right<=box.right+1,
+     lineOverflow:line.scrollWidth-line.clientWidth};
+    merchant.textContent=original;
+    return result;
+   });
+   assert.equal(inlineGeometry.fontA,inlineGeometry.fontB,
+    device+' note and merchant have exactly the same font size');
+   assert.ok(inlineGeometry.merchantTruncated&&inlineGeometry.adjacent&&
+    inlineGeometry.noteInLine&&inlineGeometry.lineOverflow<=1,
+    device+' long merchant is ellipsized while note stays next to it: '+
+    JSON.stringify(inlineGeometry));
+   await page.setViewportSize({width:device.startsWith('iPhone')?390:1280,
+    height:device.startsWith('iPhone')?844:900});
+   await page.locator('.history-entry .transaction-note-trigger').first().click();
+   assert.equal(await page.locator('.transaction-note-form input[name="note"]').inputValue(),
+    'Inspection and invoice confirmed','Saved note reopens for editing');
+   await page.locator('.transaction-note-form input[name="note"]')
+    .fill('Updated fictional note');
+   await page.locator('.transaction-note-form button[type="submit"]').click();
+   await page.waitForFunction(()=>!document.querySelector('[data-transaction-overlay]'),
+    null,{timeout:10000});
+   assert.equal(await firstLine.locator('.transaction-note-subtitle').textContent(),
+    'Updated fictional note','Editing a note updates its inline text immediately');
+   await jump('summary','summary-page');
+   await jump('activity','history-page');
+   assert.equal(await page.locator('.history-entry').first()
+    .locator('.transaction-note-subtitle').textContent(),
+    'Updated fictional note','Prepared Activity retains the latest note');
    await jump('reviews','reviews-page');
    await jump('settings','settings-page');
    await jump('transactions','transactions-page');
