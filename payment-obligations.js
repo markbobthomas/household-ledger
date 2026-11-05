@@ -205,6 +205,64 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   }).map(t=>({id:String(t.id),date:t.date,amount:round(t.amount)}))
    .sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
  };
+
+ // Card issuers can report their credit after checking already shows the
+ // completed withdrawal. A unique posted checking debit must not be forecast
+ // again, even when its card-side entry has not yet paired with it.
+ const cardNameEvidence=(row,card)=>{
+  const name=String(card?.name||'').toLowerCase(),
+   description=(' '+String(row.merchant||'')+' '+String(row.description||'')+' ')
+    .toLowerCase().replace(/[^a-z0-9]+/g,' ');
+  if(/\b(?:amex|american express)\b/.test(name)&&
+     /\b(?:amex|american express)\b/.test(description))return true;
+  const generic=new Set(['bank','card','credit','visa','mastercard','payment',
+   'autopay','account','checking','debit','rewards','reward','cash','platinum',
+   'preferred','signature','travel','online','business','automatic']);
+  return name.replace(/[^a-z0-9]+/g,' ').split(' ')
+   .some(word=>word.length>=4&&!generic.has(word)&&
+    description.includes(' '+word+' '));
+ };
+ const unpairedByCycle=new Map();
+ for(const row of records){
+  if(!row||!row.id||row.pending||row.pairedTransactionId||
+     row.type!=='transfer'||row.accountingKind!=='card_payment'||
+     row.cashDirection!=='out'||!(Number(row.amount)>0)||
+     !date(row.date)||row.date>asOf)continue;
+  const candidates=[];
+  for(const [cardId,rule] of Object.entries(cards)){
+   const card=byId.get(String(cardId)),from=byId.get(String(rule.fromAccountId||'')),
+    closingDay=Number(rule.closingDay),lastClose=String(rule.billingEndDate||rule.lastStatementClose||'');
+   if(!ready(rule,card,accounts)||rule.autopayEnabled===false||
+      !from||!cash(from)||!matchesAccount(row,from)||
+      !Number.isInteger(closingDay)||closingDay<1||closingDay>31||
+      rule.nextPaymentDate<=lastClose)continue;
+   for(let n=0;n<=Math.ceil(days/28)+2;n++){
+    const due=plus(rule.nextPaymentDate,n);
+    if(due>through)break;
+    const cycleClose=n===0?lastClose:closeFor(plus(lastClose,n).slice(0,7),closingDay);
+    if(row.date>cycleClose&&
+       Math.abs((Date.parse(row.date)-Date.parse(due))/86400000)<=7)
+     candidates.push({cardId:String(cardId),due});
+   }
+  }
+  if(!candidates.length)continue;
+  // If a debit names an issuer, never assign it to a different connected
+  // card merely because that card has a nearby due date.
+  const namedCards=accounts.filter(credit).filter(card=>cardNameEvidence(row,card)),
+   eligible=namedCards.length?candidates.filter(c=>namedCards.some(card=>
+    String(card.id)===c.cardId)):candidates;
+  if(eligible.length!==1)continue;
+  const target=eligible[0],key=target.cardId+'|'+target.due;
+  if(!unpairedByCycle.has(key))unpairedByCycle.set(key,[]);
+  unpairedByCycle.get(key).push({...row,issuerMatched:namedCards.length===1&&
+   String(namedCards[0].id)===target.cardId});
+ }
+ // Two indistinguishable posted debits cannot clear one card obligation.
+ const oneSidedSettlements=new Map([...unpairedByCycle.entries()]
+  .filter(([,rows])=>rows.length===1)
+  .map(([key,rows])=>[key,{id:String(rows[0].id),date:rows[0].date,
+   amount:round(rows[0].amount),checkingOnly:true,
+   issuerMatched:Boolean(rows[0].issuerMatched)}]));
  for(const [id,rule] of Object.entries(cards)){
   const card=byId.get(id),from=byId.get(String(rule.fromAccountId||''));
   const autopay=rule.autopayEnabled!==false;
@@ -325,6 +383,14 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const postedForCycle=autopay?postedPayments.filter(t=>
     t.date>cycleClose&&
     Math.abs((Date.parse(t.date)-Date.parse(due))/86400000)<=7):[];
+   const checkingOnly=oneSidedSettlements.get(id+'|'+due);
+   // Generic card-payment descriptors require a close amount as well as
+   // an unambiguous date/account. A named issuer may pay a different sum.
+   const safelyAttributed=checkingOnly&&(checkingOnly.issuerMatched||
+    Math.abs(checkingOnly.amount-amount)<=Math.max(5,amount*.05));
+   if(safelyAttributed&&!postedForCycle.length)postedForCycle.push(checkingOnly);
+   if(safelyAttributed&&postedForCycle.some(t=>t.checkingOnly))
+    warnings.push(card.name+': checking withdrawal posted, but its card credit is not yet matched. Verify the card credit when it arrives.');
    // One matching posted payment is enough to require reconciliation. Never
    // schedule the full amount again when part/all may already have been paid.
    const paid=postedForCycle.length>0;
