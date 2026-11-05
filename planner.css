@@ -6494,3 +6494,34 @@ a:hover{color:#166e61}
  .history-page .history-budget-details{grid-row:3;padding-left:3px}
  .history-page .history-budget-detail-row{grid-template-columns:49px minmax(0,1fr) max-content;gap:6px;font-size:11px}
 }
+
+
+/* Transaction names and saved personal notes share one title baseline.
+   Give the note its space first; truncate long merchant names rather than
+   placing personal notes on a second line. Secondary account details remain
+   below, and the amount/category/action columns keep their original widths. */
+.planner-page .ledger-transaction-row .ledger-transaction-identity .transaction-title-line{
+ display:flex;align-items:baseline;gap:8px;
+ min-width:0;max-width:100%;overflow:hidden;white-space:nowrap;
+}
+.planner-page .ledger-transaction-row .transaction-title-line .transaction-merchant-title{
+ display:block;flex:0 1 auto;min-width:0;max-width:100%;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.planner-page .ledger-transaction-row .transaction-title-line .transaction-note-subtitle{
+ display:block;flex:0 1 auto;min-width:0;max-width:65%;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ color:#527767!important;
+ font-family:inherit!important;
+ font-size:var(--ledger-transaction-name-size,15px)!important;
+ font-weight:560!important;line-height:inherit!important;
+}
+.planner-page .ledger-transaction-row .transaction-title-line .transaction-note-subtitle::before{
+ content:"·";margin-right:6px;
+}
+@media(max-width:390px){
+ .planner-page .ledger-transaction-row .transaction-title-line{gap:5px}
+ .planner-page .ledger-transaction-row .transaction-title-line .transaction-note-subtitle::before{
+  margin-right:4px;
+ }
+}
