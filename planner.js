@@ -757,8 +757,7 @@ function relatedCardCalculation(bundle,row){
 function transactionTitleWithNote(name,key){
  const merchant=String(name||'Transaction'),note=transactionNote(key);
  return '<span class="transaction-title-line" data-note-title-key="'+escapeHTML(key)+'">'+
-  '<strong class="transaction-merchant-title" title="'+escapeHTML(merchant)+'">'+
-   escapeHTML(merchant)+'</strong>'+
+  '<strong class="transaction-merchant-title">'+escapeHTML(merchant)+'</strong>'+
   (note?'<span class="transaction-note-subtitle" data-note-subtitle="'+escapeHTML(key)+
    '" title="'+escapeHTML(note)+'">'+escapeHTML(note)+'</span>':'')+'</span>';
 }
