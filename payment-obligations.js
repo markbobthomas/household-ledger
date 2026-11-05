@@ -225,9 +225,22 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  const unpairedByCycle=new Map();
  for(const row of records){
   if(!row||!row.id||row.pending||row.pairedTransactionId||
-     row.type!=='transfer'||row.accountingKind!=='card_payment'||
      row.cashDirection!=='out'||!(Number(row.amount)>0)||
      !date(row.date)||row.date>asOf)continue;
+  // The real bank adapter can label an ACH card debit as a purchase when the
+  // institution uses PMT/EPAY instead of "payment". Treat an explicit
+  // card-payment descriptor as evidence even before accounting pairs the
+  // issuer credit. Never promote a generic merchant expense or loan payment.
+  const paymentText=(' '+String(row.merchant||'')+' '+String(row.description||'')+' ')
+   .toLowerCase().replace(/[^a-z0-9]+/g,' ');
+  const namedCards=accounts.filter(credit).filter(card=>cardNameEvidence(row,card));
+  const paymentLanguage=/\b(?:payment|payments|pmt|pymt|paymnt|epay|epayment|autopay|autopayment|auto pay|billpay|bill payment|bill pay|ccpmt)\b/.test(paymentText);
+  const loanOrOtherBill=/\b(?:mortgage|mtg|loan|rent|insurance|utilities|utility|tuition|property tax)\b/.test(paymentText);
+  const explicitCardLabel=/\b(?:credit card|cardmember|cc pmt|cc payment|card pmt)\b/.test(paymentText);
+  const categorizedCardPayment=row.type==='transfer'&&row.accountingKind==='card_payment';
+  const namedCardPayment=paymentLanguage&&!loanOrOtherBill&&
+   (namedCards.length>0||explicitCardLabel);
+  if(!categorizedCardPayment&&!namedCardPayment)continue;
   const candidates=[];
   for(const [cardId,rule] of Object.entries(cards)){
    const card=byId.get(String(cardId)),from=byId.get(String(rule.fromAccountId||'')),
@@ -248,8 +261,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   if(!candidates.length)continue;
   // If a debit names an issuer, never assign it to a different connected
   // card merely because that card has a nearby due date.
-  const namedCards=accounts.filter(credit).filter(card=>cardNameEvidence(row,card)),
-   eligible=namedCards.length?candidates.filter(c=>namedCards.some(card=>
+  const eligible=namedCards.length?candidates.filter(c=>namedCards.some(card=>
     String(card.id)===c.cardId)):candidates;
   if(eligible.length!==1)continue;
   const target=eligible[0],key=target.cardId+'|'+target.due;
