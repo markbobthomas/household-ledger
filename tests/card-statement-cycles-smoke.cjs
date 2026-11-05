@@ -288,6 +288,17 @@ const paidBank=[
 const paid=calculate('2026-11-03',paidBank);
 assert.equal(firstCard(paid).length,0,'Actual paired bank posting settles due installment once');
 assert.equal(paid.overduePayments.length,0,'Posted autopay clears the missed-payment alert');
+const postedCheckingOnly=calculate('2026-11-03',[{
+ id:'posted-cash-without-card-credit',date:'2026-11-02',accountId:'checking-due',
+ type:'transfer',accountingKind:'card_payment',cashDirection:'out',amount:700,
+ merchant:'Credit Card Autopay',pending:false
+}]);
+assert.equal(firstCard(postedCheckingOnly).length,0,
+ 'The canonical balance calendar cannot deduct a completed one-sided card payment twice');
+assert.equal(postedCheckingOnly.overduePayments.length,0,
+ 'Confirmed checking debit resolves the missed-payment review');
+assert.deepEqual(postedCheckingOnly.projection.diagnostics.balanceMismatches,[],
+ 'Single-sided posted settlement preserves cashflow balance integrity');
 const wrongBank=calculate('2026-11-03',paidBank.map(x=>({...x,accountId:
  x.accountId==='checking-due'?'other-account':x.accountId})));
 assert.equal(firstCard(wrongBank).length,1,'Another account cannot settle the planned checking withdrawal');
