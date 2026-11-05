@@ -607,10 +607,12 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   ...pendingPaymentMatches,...(payment.pendingPaymentMatches||[]),
   ...(payment.statements||[]).flatMap(s=>s.actualPayments||[])
  ].map(m=>String(m.bankId||m.id||'')));
+ const closeToBank=e=>[e.originalDueDate,e.baseDate,e.anchorDate,
+  e._seriesDate,e.date].some(d=>valid(d)&&d>=add(asOf,-90)&&d<=add(asOf,3));
  const candidatesForReconcile=[
-  ...finalEvents.filter(e=>e.type==='expense').map(e=>({e,kind:'event',
+  ...finalEvents.filter(e=>e.type==='expense'&&closeToBank(e)).map(e=>({e,kind:'event',
    account:String(e.accountId),cardId:null})),
-  ...finalPlans.map(e=>({e,kind:'movement',account:String(e.fromAccountId),
+  ...finalPlans.filter(closeToBank).map(e=>({e,kind:'movement',account:String(e.fromAccountId),
    cardId:accounts.find(a=>String(a.id)===String(e.toAccountId)&&
     String(a.accountType||a.type).toLowerCase()==='credit')?.id||null}))
  ];
@@ -635,7 +637,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   return words.length>0&&words.some(w=>right.split(/\s+/).includes(w));
  };
  const reconciliableRows=rows.filter(t=>t&&t.id&&!priorBankMatches.has(String(t.id))&&
-  valid(t.date)&&t.date<=asOf&&Number(t.amount)>0&&
+  valid(t.date)&&t.date<=asOf&&t.date>=add(asOf,-90)&&Number(t.amount)>0&&
   tools.bankDirection(t)==='expense'&&
   cashIds.has(String(tools.accountRef(t.accountId||t.account,accounts))));
  const pairs=[];
