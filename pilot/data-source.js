@@ -71,12 +71,18 @@ function record(t,account){
  const amount=Number(t.amount),pfc=t.category||null;
  if(!t.id||!/^\d{4}-\d{2}-\d{2}$/.test(String(t.date))||!Number.isFinite(amount))return null;
  const name=String(t.merchant||t.name||'Bank transaction').slice(0,250);
- const code=String(pfc?.primary||'').toUpperCase(),lower=name.toLowerCase();
+ // Plaid supplies both the normalized merchant and the bank's original
+ // transaction name. The latter often contains "ACH PMT", "EPAY" or other
+ // settlement evidence missing from merchant_name. Keep both for the
+ // read-only accounting/reconciliation view; never replace it with a label.
+ const originalName=String(t.name||name).slice(0,250);
+ const bankNarrative=name+' '+originalName;
+ const code=String(pfc?.primary||'').toUpperCase(),lower=bankNarrative.toLowerCase();
  const incoming=amount<0,card=account.type==='credit';
  const obligation=Categorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
  // External mortgage and other bank-coded loan installments are cash bills,
  // NOT internal account transfers. Card settlements remain transfers.
- const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(name)||
+ const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(bankNarrative)||
    code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
  const earned=incoming&&!card&&Accounting?.recognizedIncome?.({
   merchant:name,personal_finance_category:pfc,source:{plaidAmount:amount}
@@ -84,7 +90,7 @@ function record(t,account){
  const transfer=!earned&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
   lower.includes('transfer to ')||lower.includes('transfer from ')||payment);
  const type=transfer?'transfer':incoming&&(card||obligation?.isBill)?'refund':incoming?'income':'expense';
- const row={id:String(t.id),date:t.date,merchant:name,description:'Bank-imported transaction',amount:Math.abs(amount),
+ const row={id:String(t.id),date:t.date,merchant:name,description:originalName,amount:Math.abs(amount),
   type,account:account.name,accountId:account.id,pending:!!t.pending,category:'Other',
   ...(transfer?{cashDirection:incoming?'in':'out'}:{}),personal_finance_category:pfc,
   source:{provider:'plaid',verified:true,itemId:account.itemId||'connected-bank-item',
