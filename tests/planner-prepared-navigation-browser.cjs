@@ -310,7 +310,7 @@ const {chromium,webkit}=require('playwright');
      '<div class="notice danger"><button type="button" data-forecast-review="settings-card" '+
      'data-forecast-card-id="demo-visa">Check fictional card setup</button></div>');
    });
-   await page.locator('[data-forecast-review="settings-card"]').click();
+   await page.getByRole('button',{name:'Check fictional card setup'}).click();
    assert.equal(await page.locator('.settings-page #card-autopay[open]').count(),1,
     'Credit-card setup warning opens the appropriate Settings section');
    assert.equal(await page.locator('.settings-page [data-card-rule="demo-visa"]').count(),1);
@@ -319,7 +319,7 @@ const {chromium,webkit}=require('playwright');
      '<div class="notice danger"><button type="button" '+
      'data-forecast-review="reviews-payments">Review a fictional payment</button></div>');
    });
-   await page.locator('[data-forecast-review="reviews-payments"]').click();
+   await page.getByRole('button',{name:'Review a fictional payment'}).click();
    assert.equal(await page.locator('[data-review-pane="payments"]').isVisible(),true,
     'Payment warning opens Things to check > Payments');
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
