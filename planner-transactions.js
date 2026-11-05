@@ -694,7 +694,13 @@ function defineRecurring(state,data,accounts,asOf,reference=null,records=[],sele
   ...savedMatchBounds(data,old),
   ...(secondDay?{secondDay}:{}),...fields,
   scheduleLabel:String(data.scheduleLabel||old?.scheduleLabel||'').trim().slice(0,110),
-  category:scheduleCategory(data.category===undefined?old?.category:data.category,state),
+  // A confirmed plan inherits an already assigned category even when the
+  // entry-point editor omits its own category control. Existing rule choices
+  // and explicit owner changes always take precedence over bank history.
+  category:scheduleCategory(data.category===undefined?
+   (old?.category||reference?.category||
+    (records||[]).find(t=>reference?.bankTransactionId&&
+     String(t.id)===String(reference.bankTransactionId))?.category):data.category,state),
   amountBasis:data.amountBasis==='estimate'||data.amountBasis==='fixed'?data.amountBasis:
    old?.amountBasis||'fixed',
   // Honor previously saved date-range amounts until the owner explicitly
