@@ -666,10 +666,11 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     // estimated card amount. Without issuer evidence, require a unique
     // nearby due occurrence; the one-to-one check below enforces this.
    }else{
+    // General recurring bills already have the mature mortgage/ACH amount
+    // fallback above. In this *second* pass require a merchant identity;
+    // a dollars-and-date-only guess could reuse unrelated same-size debits.
     const named=samePayee(bank.merchant||bank.description,planned.merchant);
-    if(!named&&!(closeAmount&&gap<=2))continue;
-    if(bank.accountingKind==='card_payment'&&
-     !named)continue; // never pay an ordinary bill with card ACH evidence
+    if(!named||bank.accountingKind==='card_payment')continue;
    }
    pairs.push({bank,item,gap});
   }
