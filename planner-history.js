@@ -141,6 +141,8 @@ function draftFor(row,records,accounts,asOf){
    Math.min(Math.abs(Math.round((Date.parse(t.date)-Date.parse(row.date))/86400000)%28),
     28-Math.abs(Math.round((Date.parse(t.date)-Date.parse(row.date))/86400000)%28))<=3);
  return {accountId:sourceAccount,merchant:String(row.merchant||row.name||'Bank transaction'),
+  // Preserve the effective private category when converting a bank row to a plan.
+  category:row.category||'Uncategorized',
   amount:Number(row.amount)||0,type,originalType:row.type,
   cashDirection:row.cashDirection||null,frequency,
   nextDate:nextDate(alternating?row.date:last.date,frequency,asOf),sourceRow:row,
