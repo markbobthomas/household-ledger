@@ -1601,8 +1601,18 @@ function billsStatementsPage(bundle,s){
     '<div><span>Expected card payment</span><strong>'+
      (p.autopayEnabled?cash(p.amount):'No autopay')+'</strong></div>'+
     '<div><span>Payment status</span><strong>'+
-     (p.alreadyPaid?'Posted':'Not confirmed')+'</strong></div>')+
-  '</div>',
+     (p.alreadyPaid?'Posted':'Not confirmed')+'</strong></div>'+
+    (p.alreadyPaid&&Number(p.actualPaymentAmount)>0?
+     '<div><span>Bank-recorded payment</span><strong>'+cash(p.actualPaymentAmount)+'</strong></div>':'')+
+    (p.alreadyPaid&&Math.abs(Number(p.actualPaymentAmount)-Number(p.amount))>.011?
+     '<div data-bills-payment-difference><span>Difference from estimate</span><strong>'+
+      cash(Math.abs(Number(p.amount)-Number(p.actualPaymentAmount)))+
+      (Number(p.actualPaymentAmount)<Number(p.amount)?' less':' more')+'</strong></div>':'')
+   )+
+  '</div>'+
+  (!historical&&p.alreadyPaid&&Math.abs(Number(p.actualPaymentAmount)-Number(p.amount))>.011?
+   '<p class="bills-payment-review-help">Ledger compares the bank-recorded payment with a planned estimate. A difference does not necessarily mean an unpaid balance. Check the card issuer statement and current balance to confirm whether anything else is due.</p>':''),
+
   cycle='<details class="bills-statement-cycle" data-bills-statement="'+
    escapeHTML(accountId)+'|'+escapeHTML(p.periodEnd)+'" open>'+
    '<summary><span class="bills-statement-label">'+
@@ -3644,32 +3654,66 @@ function render({navigationOnly=false}={}){
  const statuses=projection?.diagnostics||{};
  const missingCards=activeAccounts(s).filter(a=>accountType(a)==='credit'&&
   !window.HouseholdPaymentObligations.ready(state().predictions?.paymentRules?.[a.id],a,activeAccounts(s)));
+ // Notices identify their resolution destination, rather than hiding a
+ // non-actionable string behind a generic red banner. A card mismatch keeps
+ // the precise private card and billing-cycle identity from the engine.
+ const paymentWarnings=(bundle?.payments?.warnings||[]).slice(0,3);
+ const warningActions=bundle?.payments?.warningActions||[];
+ const creditCards=activeAccounts(s).filter(a=>accountType(a)==='credit');
+ const cardNotice=message=>{
+  const matched=warningActions.find(w=>w.message===message&&
+   w.kind==='card-payment-difference'&&
+   creditCards.some(a=>String(a.id)===String(w.cardId)));
+  if(matched)return {text:message,action:'card-statement',
+   cardId:String(matched.cardId),periodEnd:String(matched.periodEnd)};
+  const card=creditCards.find(a=>message.startsWith(String(a.name)+':'));
+  return {text:message,action:card?'settings-card':'reviews-payments',
+   cardId:card?String(card.id):''};
+ };
  const caution=[
-  ...(missingCards.length?['Credit-card payment prediction not set for '+missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.']:[]),
-  ...((bundle?.payments?.warnings||[]).slice(0,3)),
+  ...(missingCards.length?[{text:'Credit-card payment prediction not set for '+
+    missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.',
+   action:'settings-card'}]:[]),
+  ...paymentWarnings.map(cardNotice),
   ...(bundle?.recurrenceMigration&&!bundle.recurrenceMigration.approvedOnly&&
    bundle.recurrenceMigration.legacySeries.length?
-   [bundle.recurrenceMigration.legacySeries.length+' unsaved automatic repeating estimate stream(s) still affect future balances. See the highlighted payments at the top of Review.']:[]),
-  ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>
-   'An actual '+cash(m.amount)+' mortgage payment from '+m.account+' is not in the forecast. Review its proposed recurring prediction below.')),
-  ...((bundle?.routines?.warnings||[]).slice(0,2).map(w=>
-   'Possible mortgage withdrawal not included: '+w.merchant+' ('+w.reason+'). Confirm its recurrence before relying on the projected balance.')),
-  ...((bundle?.postedMatchReview||[]).length?['Some posted payments may cover one of several confirmed predictions. Choose the matching prediction in Review before relying on the projected balance.']:[]),
-  ...((bundle?.forecast?.suppressedDuplicates||[]).length?['Older overlapping one-time forecasts were excluded to avoid duplicate payments.']:[]),
-  ...((statuses.unassigned||[]).length?['Some expected payments lack a confirmed account, so those are not included in the balance.']:[]),
-  ...((statuses.unmatchedTransfers||[]).length?['Some predicted transfers do not have a verified counterpart; review before relying on cash coverage.']:[])
+   [{text:bundle.recurrenceMigration.legacySeries.length+
+    ' unsaved automatic repeating estimate stream(s) still affect future balances. See the highlighted payments at the top of Review.',
+    action:'reviews-suggestions'}]:[]),
+  ...((bundle?.missingMortgages||[]).slice(0,2).map(m=>({
+   text:'An actual '+cash(m.amount)+' mortgage payment from '+m.account+
+   ' is not in the forecast. Review its proposed recurring prediction below.',
+   action:'reviews-payments'}))),
+  ...((bundle?.routines?.warnings||[]).slice(0,2).map(w=>({
+   text:'Possible mortgage withdrawal not included: '+w.merchant+' ('+w.reason+
+   '). Confirm its recurrence before relying on the projected balance.',
+   action:'reviews-payments'}))),
+  ...((bundle?.postedMatchReview||[]).length?[{
+   text:'Some posted payments may cover one of several confirmed predictions. Choose the matching prediction in Review before relying on the projected balance.',
+   action:'reviews-payments'}]:[]),
+  ...((bundle?.forecast?.suppressedDuplicates||[]).length?[{
+   text:'Older overlapping one-time forecasts were excluded to avoid duplicate payments.',
+   action:'transactions'}]:[]),
+  ...((statuses.unassigned||[]).length?[{
+   text:'Some expected payments lack a confirmed account, so those are not included in the balance.',
+   action:'reviews-categories'}]:[]),
+  ...((statuses.unmatchedTransfers||[]).length?[{
+   text:'Some predicted transfers do not have a verified counterpart; review before relying on cash coverage.',
+   action:'reviews-payments'}]:[])
  ];
  let note='';
  if(error)note='<div class="notice danger"><strong>Forecast calculation unavailable.</strong> '+escapeHTML(error)+
   '. Your bank balances have not been changed.</div>';
  else if(latestError)note='<div class="notice danger">'+escapeHTML(latestError)+'</div>';
- else if(caution.length)note='<div class="notice danger"><div><strong>Forecast requires review.</strong> '+
-  escapeHTML(caution.join(' '))+'</div>'+
-  ((bundle?.recurrenceMigration?.legacySeries||[]).length&&!bundle.recurrenceMigration.approvedOnly?
-   '<button type="button" class="btn" data-view="reviews">See automatic estimates</button>':
-   (bundle?.postedMatchReview||[]).length?
-   '<button type="button" class="btn" data-view="history">Choose matching prediction</button>':'')+
-  '</div>';
+ else if(caution.length)note='<div class="notice danger forecast-review-notice">'+
+  '<strong>Forecast requires review.</strong><div class="forecast-review-items">'+
+  caution.map(item=>'<button type="button" class="forecast-review-link" '+
+   'data-forecast-review="'+escapeHTML(item.action)+'"'+
+   (item.cardId?' data-forecast-card-id="'+escapeHTML(item.cardId)+'"':'')+
+   (item.periodEnd?' data-forecast-period="'+escapeHTML(item.periodEnd)+'"':'')+
+   '><span>'+escapeHTML(item.text)+'</span>'+
+   '<span class="forecast-review-chevron" aria-hidden="true">›</span></button>').join('')+
+  '</div></div>';
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
@@ -4204,6 +4248,56 @@ document.addEventListener('click',async e=>{
  const historicalBill=e.target.closest?.('[data-open-bill-rule]');
  if(historicalBill){
   openSchedulePlan(historicalBill.dataset.openBillRule,'',historicalBill);return;
+ }
+ const noticeAction=e.target.closest?.('[data-forecast-review]');
+ if(noticeAction){
+  const target=noticeAction.dataset.forecastReview,cardId=noticeAction.dataset.forecastCardId||'';
+  if(target==='card-statement'){
+   const card=activeAccounts(snapshot()).find(a=>String(a.id)===cardId&&accountType(a)==='credit');
+   if(!card){setNotice('This card is no longer connected. Refresh its account information.');return}
+   billsStatementAccount=cardId;
+   billsStatementPeriod=noticeAction.dataset.forecastPeriod||'';
+   billsPane='statements';
+   // Use the existing prepared Bills destination; rebuild only its selected
+   // statement pane from the current in-memory bundle (no forecast reload).
+   if(activeTab!=='schedules'){
+    const tab=document.querySelector('.planner-nav-primary [data-view="schedules"]')||
+     document.querySelector('[data-view="schedules"]');
+    if(tab)tab.click();
+    else {activeTab='schedules';render({navigationOnly:true})}
+   }
+   const host=$('planner-main')?.querySelector('[data-bills-pane="statements"]');
+   if(host){
+    const data=preparedContext;
+    host.innerHTML=billsStatementsPage(data?.bundle||forecastFor(snapshot()),data?.s||snapshot());
+    switchExistingPane('data-bills-tab','data-bills-pane','statements');
+    const panel=host.querySelector('[data-bills-card]')||host;
+    panel.setAttribute('tabindex','-1');
+    panel.focus({preventScroll:true});
+    panel.scrollIntoView?.({block:'start',behavior:'instant'});
+   }else render({navigationOnly:true});
+   return;
+  }
+  const destination=target==='settings-card'?'settings':
+   target==='transactions'?'transactions':'reviews';
+  const nav=document.querySelector('.planner-nav-primary [data-view="'+destination+'"]')||
+   document.querySelector('[data-view="'+destination+'"]');
+  if(nav&&activeTab!==destination)nav.click();
+  else if(activeTab!==destination){activeTab=destination;render({navigationOnly:true})}
+  if(destination==='settings'){
+   const section=document.getElementById('card-autopay');
+   if(section)section.open=true;
+   const cardForm=cardId?[...document.querySelectorAll('[data-card-rule]')]
+    .find(x=>x.dataset.cardRule===cardId):null;
+   (cardForm||section)?.scrollIntoView?.({block:'start',behavior:'instant'});
+  }else if(destination==='reviews'){
+   const pane=target==='reviews-categories'?'categories':
+    target==='reviews-suggestions'?'suggestions':'payments';
+   const tab=document.querySelector('[data-review-tab="'+pane+'"]');
+   if(tab&&reviewPane!==pane)tab.click();
+   else if(!tab){reviewPane=pane;render({navigationOnly:true})}
+  }
+  return;
  }
  const billsTab=e.target.closest?.('[data-bills-tab]');
  if(billsTab){
