@@ -272,6 +272,24 @@ assert.equal(Payments.build(earlySnapshot,[{
 }],[],twoCards,{days:30}).plans.length,2,
  'Generic PMT labels cannot settle one of two competing cards');
 
+// Plaid's original payment name must survive a different merchant label.
+const splitPayment=Adapter.record({
+ id:'split-desc',date:'2026-11-09',accountId:'checking',
+ merchant:'American Express',name:'AMEX ACH PMT',amount:500,pending:false
+},{id:'checking',name:'Main Checking',type:'depository'});
+assert.equal(splitPayment.merchant,'American Express');
+assert.equal(splitPayment.description,'AMEX ACH PMT');
+const splitRows=Accounting.reconcile({
+ accounts:earlySnapshot.accounts.map(a=>({id:a.id,name:a.name,type:a.type})),
+ transactions:[splitPayment]
+}).transactions;
+assert.deepEqual(Payments.build(earlySnapshot,splitRows,[],twoCards,{days:30})
+ .plans.map(p=>p.toAccountId),['visa'],
+ 'Original ACH descriptor settles only matching issuer in two-card case');
+assert.equal(Payments.build(earlySnapshot,[{...splitRows[0],
+ description:'Bank-imported transaction'}],[],twoCards,{days:30}).plans.length,2,
+ 'Dropping the original ACH descriptor would leave both payments unmatched');
+
 // Once the billing period is closed, no hypothetical future purchases
 // contribute to its total; the posted ledger is the actual cash ledger.
 const closedNoIssuer=Model.migrate({});
