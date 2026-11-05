@@ -636,8 +636,12 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   const words=left.split(/\s+/).filter(w=>w.length>=5&&!ignore.has(w));
   return words.length>0&&words.some(w=>right.split(/\s+/).includes(w));
  };
+ // Confirmed recurring rules already received their own posted-bank evidence
+ // above. A later generic fallback must not reuse that bank debit to clear a
+ // second independent same-payee schedule (house / garden, multiple loans).
  const reconciliableRows=rows.filter(t=>t&&t.id&&!priorBankMatches.has(String(t.id))&&
   valid(t.date)&&t.date<=asOf&&t.date>=add(asOf,-90)&&Number(t.amount)>0&&
+  (t.pending||!(tools.historicalScheduleMatches?.(t,accounts,rules)||[]).length)&&
   tools.bankDirection(t)==='expense'&&
   cashIds.has(String(tools.accountRef(t.accountId||t.account,accounts))));
  const pairs=[];
