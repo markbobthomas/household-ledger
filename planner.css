@@ -6567,3 +6567,6 @@ a:hover{color:#166e61}
 .schedule-page .bills-upcoming-card-sum{font-size:12px;font-weight:650;color:#647a6e;white-space:nowrap;font-variant-numeric:tabular-nums}
 .schedule-page .bills-upcoming-row[data-bills-kind="card-charge"] .bills-upcoming-description small{color:#617a70}
 @media(max-width:650px){.schedule-page .bills-upcoming-card-sum{font-size:11px}}
+
+.summary-page .calendar-outside-total{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;color:#527065;font-size:12px;font-variant-numeric:tabular-nums}
+.summary-page .calendar-outside-total strong{color:#375d4b;font-weight:700}
