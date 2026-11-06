@@ -6790,3 +6790,23 @@ a:hover{color:#166e61}
   grid-column:4!important;grid-row:2!important;
  }
 }
+
+/* Final overflow guard: every Recurring toolbar and row column is allowed to
+   shrink to the available width rather than imposing text intrinsic widths. */
+.schedule-page .schedule-toolbar.ledger-toolbar>*{
+ min-width:0!important;max-width:100%!important;box-sizing:border-box!important;
+}
+.schedule-page .schedule-toolbar.ledger-toolbar :is(input,select){
+ min-width:0!important;max-width:100%!important;width:100%!important;
+ box-sizing:border-box!important;
+}
+.schedule-page .schedule-toolbar.ledger-toolbar>.ledger-add-repeating{
+ min-width:0!important;max-width:100%!important;overflow:hidden!important;
+ text-overflow:ellipsis;
+}
+.schedule-page .schedule-row-title,.schedule-page .schedule-row-identity{
+ min-width:0!important;max-width:100%!important;overflow-wrap:anywhere;
+}
+.schedule-page .schedule-row-title small{
+ display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
