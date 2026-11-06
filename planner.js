@@ -3466,7 +3466,7 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  categoryLearning+auditPanel(chosen)+'</details>'+
+  auditPanel(chosen)+'</details>'+categoryLearning+
    (available()?'<section class="panel" aria-label="Share Ledger"><div class="section-title"><h2>Share Ledger</h2></div>'+
     '<p>Use this same private website on both phones to see the same household data. Send the link privately; the password must be shared separately.</p>'+
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
