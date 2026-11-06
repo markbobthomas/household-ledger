@@ -340,10 +340,19 @@ async function sync(){
   if(!updatedNotes)updatedNotes={...notes};
   if(!Object.prototype.hasOwnProperty.call(updatedNotes,target))
    updatedNotes[target]=updatedNotes[source];
-  delete updatedNotes[source];
+  // Keep both IDs through the bank snapshot's disk commit. If that save fails
+  // or the process stops mid-sync, the source pending note still exists while
+  // the posted note is already ready; neither state can lose the annotation.
  }
  if(updatedNotes)await saveForecast({...predictions,transactionNotes:updatedNotes});
  state.lastSync=observedAt;state.error=null;await save();
+ if(updatedNotes){
+  const settledNotes={...updatedNotes};
+  for(const {accountId,from} of noteReplacements)
+   delete settledNotes['bank:'+JSON.stringify([accountId,from])];
+  try{await saveForecast({...predictions,transactionNotes:settledNotes})}
+  catch(_error){/* The posted note was already saved; obsolete keys are harmless. */}
+ }
  lastSyncAttempt.outcome='success';
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
  }catch(error){lastSyncAttempt.outcome='failed';throw error}
