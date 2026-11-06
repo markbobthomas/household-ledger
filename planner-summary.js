@@ -427,7 +427,34 @@ function displayedMonthLow(){
  const matching=points.filter(p=>p.date.startsWith(calendarMonth)&&Number.isFinite(p.balance));
  return matching.length?matching.reduce((a,b)=>b.balance<a.balance?b:a):null;
 }
+function monthlyLowMarkup(card=false){
+ const point=displayedMonthLow(),past=isHistoricalMonth(),
+  title=past?'Reconstructed lowest in month':
+   card?'Lowest card debt in shown month':'Lowest in shown month';
+ return '<div class="summary-monthly" data-summary-month-low>'+
+  '<div class="summary-overline">'+esc(title)+'</div>'+
+  '<strong class="summary-low'+(!past&&!card?balanceRiskClass(point?.balance,calendarContext?.prefs):'')+
+   '" data-summary-month-low-value>'+(point?money(point.balance):
+    past?'Not enough history':'Not projected')+'</strong>'+
+  '<button type="button" class="summary-low-date" data-calendar-month-low="'+
+   esc(point?.date||'')+'"'+(point?'':' disabled')+'>'+
+   (point?esc(dateLabel(point.date))+' →':
+    past?'No complete posted history':'No projected date')+'</button></div>';
+}
 function updateDisplayedMonthLow(){
+ // A card's next statement estimate is relevant to future months, whereas
+ // posted-history months show a reconstructed card-debt low. Switch the one
+ // metric in place when navigating, not the canonical projection.
+ const numbers=document.querySelector('.summary-page:not(.trend-page) .summary-numbers');
+ if(calendarContext?.card&&numbers?.children?.[1]){
+  const second=numbers.children[1],past=isHistoricalMonth();
+  if(past&&second.hasAttribute('data-summary-card-next-statement')||
+    !past&&second.hasAttribute('data-summary-month-low')){
+   const html=past?monthlyLowMarkup(true):calendarContext.cardFutureMetric;
+   if(html){const wrap=document.createElement('div');wrap.innerHTML=html;
+    if(wrap.firstElementChild)second.replaceWith(wrap.firstElementChild);}
+  }
+ }
  const el=document.querySelector('[data-summary-month-low]');
  if(!el)return;
  const point=displayedMonthLow(),value=el.querySelector('[data-summary-month-low-value]'),
@@ -435,7 +462,7 @@ function updateDisplayedMonthLow(){
  const historical=isHistoricalMonth();
  const label=el.querySelector('.summary-overline');
  if(label)label.textContent=historical?'Reconstructed lowest in month':
-  'Lowest in shown month';
+  calendarContext?.card?'Lowest card debt in shown month':'Lowest in shown month';
  if(value){value.textContent=point?money(point.balance):
   historical?'Not enough history':'Not projected';
   value.classList.toggle('summary-low-alert',Boolean(!historical&&point&&point.balance>=0&&
@@ -824,16 +851,12 @@ function render(input){
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  const monthMinimum=credit?null:displayedMonthLow();
+ const cardFutureMetric=credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):'';
+ if(credit&&calendarContext)calendarContext.cardFutureMetric=cardFutureMetric;
  const calendarHtml='<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
-  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid',allAccounts)+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
-   '<div class="summary-monthly" data-summary-month-low>'+
-    '<div class="summary-overline">Lowest in shown month</div>'+
-    '<strong class="summary-low'+balanceRiskClass(monthMinimum?.balance,prefs)+'" data-summary-month-low-value>'+
-     (monthMinimum?money(monthMinimum.balance):'Not projected')+'</strong>'+
-    '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthMinimum?.date||'')+'"'+
-     (monthMinimum?'':' disabled')+'>'+
-     (monthMinimum?esc(dateLabel(monthMinimum.date))+' →':'No projected date')+'</button>'+
-    '</div>')+'</div>'+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid',allAccounts)+
+   (credit?(isHistoricalMonth()?monthlyLowMarkup(true):cardFutureMetric):
+    monthlyLowMarkup(false))+'</div>'+
     calendarGrid()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
 
