@@ -283,12 +283,19 @@ async function sync(){
   }
  }
  const next={...state.transactions},overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
+ // A pending Plaid ID is temporary, but its private user-authored notes must
+ // survive conversion to a posted bank record. Never edit source bank facts.
+ const noteReplacements=[];
  for(const stage of stages){
   const ids=new Set(stage.item.accountIds);
   for(const page of stage.pages){
    for(const t of [...page.added,...page.modified]){
     if(!ids.has(t.account_id))continue;
     if(t.pending_transaction_id){
+     if(next[t.pending_transaction_id]&&
+        String(next[t.pending_transaction_id].accountId)===String(t.account_id))
+      noteReplacements.push({accountId:String(t.account_id),
+       from:String(t.pending_transaction_id),to:String(t.transaction_id)});
      delete next[t.pending_transaction_id];
      if(Object.prototype.hasOwnProperty.call(overrides,t.pending_transaction_id)){
       if(!Object.prototype.hasOwnProperty.call(overrides,t.transaction_id))
@@ -318,6 +325,24 @@ async function sync(){
   return {...item,cursor:stages.find(s=>s.item.id===i.id).cursor,reconnectRequired:false};
  });
  state.ledgerAdjustments.categoryOverrides=overrides;
+ // The separate encrypted forecast-preferences file is authoritative at load.
+ // Migrate only known user-authored ID-keyed annotations, preserving a note
+ // already saved on the posted ID; other reviewed decisions have fingerprints
+ // tied to the old bank facts and should be re-evaluated after settlement.
+ const predictions=state.ledgerAdjustments?.predictions||{};
+ const notes=predictions.transactionNotes||{};
+ let updatedNotes=null;
+ for(const {accountId,from,to} of noteReplacements){
+  const source='bank:'+JSON.stringify([accountId,from]);
+  const target='bank:'+JSON.stringify([accountId,to]);
+  if(!Object.prototype.hasOwnProperty.call(notes,source)&&
+     !Object.prototype.hasOwnProperty.call(updatedNotes||{},source))continue;
+  if(!updatedNotes)updatedNotes={...notes};
+  if(!Object.prototype.hasOwnProperty.call(updatedNotes,target))
+   updatedNotes[target]=updatedNotes[source];
+  delete updatedNotes[source];
+ }
+ if(updatedNotes)await saveForecast({...predictions,transactionNotes:updatedNotes});
  state.lastSync=observedAt;state.error=null;await save();
  lastSyncAttempt.outcome='success';
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
