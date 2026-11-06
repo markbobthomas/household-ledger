@@ -45,7 +45,9 @@ const {chromium,webkit}=require('playwright');
      device+' should select actual local today, including Saturday');
     // The back arrow is a real posted-history calendar, not a dead end at
     // the initial forecast date. Previous months retain posted transactions.
-    const previous=new Date(localToday+'T12:00:00Z');
+    // Anchor to the 15th before subtracting a month: October 31 minus
+    // one month otherwise normalizes an invalid September 31 into October.
+    const previous=new Date(localToday.slice(0,7)+'-15T12:00:00Z');
     previous.setUTCMonth(previous.getUTCMonth()-1);
     const previousName=previous.toLocaleDateString('en-US',
      {month:'long',year:'numeric',timeZone:'UTC'});
