@@ -643,7 +643,7 @@ const {chromium,webkit}=require('playwright');
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('.history-subtab').count(),4);
    assert.deepEqual((await page.locator('.history-subtab').allTextContents()).map(s=>s.trim()),
-    ['Budget','Merchants','Purchase sizes','Summary'],
+    ['Budget','Merchants','Purchase sizes','Month insights'],
     'Budget is the first named Bank History view');
    const tabGeometry=await page.locator('.spending-tabs .history-subtab').evaluateAll(tabs=>{
     const boxes=tabs.map(tab=>tab.getBoundingClientRect());
