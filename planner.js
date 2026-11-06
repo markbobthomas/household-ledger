@@ -3211,7 +3211,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      (item.isPlan?'<span class="transaction-title-line"><strong class="transaction-merchant-title">'+
        escapeHTML(item.merchant)+'</strong></span>':
        transactionTitleWithNote(item.merchant,bankNoteKey(item.accountId||'',item.id)))+
-     '<small>'+label+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
+     '<small>'+label+(item.pending?' · Pending (provisional)':'')+
+      (item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
      '<strong class="ledger-transaction-amount">'+cash(item.amount)+'</strong>'+
      '<span class="ledger-transaction-action" aria-hidden="true">›</span></button>'+
     '<label class="minimal-control-label"><span class="visually-hidden">Category</span><select name="category" aria-label="Category for '+
