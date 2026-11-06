@@ -247,6 +247,64 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   const aliases=accounts.filter(a=>String(a.name)===key||String(a.transactionAccount||'')===key);
   return aliases.length===1&&aliases[0].id===id;
  };
+ // Suggestions are read-only evidence, not settled payments. We search both
+ // the configured funding account and the issuer, but never promote an
+ // unpaired credit, generic descriptor or split into a paid checking debit.
+ const paymentDifferenceSuggestions=(from,card,due,cycleClose,difference,known)=>{
+  if(!(difference>.01)||!from||!card)return [];
+  const counted=new Set();
+  for(const p of known){
+   counted.add(String(p.id));
+   const original=settled.get(String(p.id));
+   if(original?.pairedTransactionId)counted.add(String(original.pairedTransactionId));
+  }
+  const creditAccounts=accounts.filter(credit);
+  const plausible=records.filter(t=>{
+   if(!t||!t.id||!date(t.date)||t.date>asOf||t.date<=cycleClose||
+      Math.abs((Date.parse(t.date)-Date.parse(due))/86400000)>10||
+      !Number.isFinite(Number(t.amount))||Number(t.amount)<=0||
+      counted.has(String(t.id))||counted.has(String(t.pairedTransactionId||'')))return false;
+   const onCash=matchesAccount(t,from),onCard=matchesAccount(t,card);
+   if(!onCash&&!onCard)return false;
+   const narrative=cardPaymentNarrative(t);
+   if(narrative.loanOrOtherBill)return false;
+   if(onCash){
+    if(t.cashDirection!=='out')return false;
+    const named=creditAccounts.filter(c=>cardNameEvidence(t,c));
+    if(named.length&&!(named.length===1&&String(named[0].id)===String(card.id)))return false;
+    return t.type==='transfer'&&t.accountingKind==='card_payment'||
+     narrative.paymentLanguage&&(narrative.explicitCardLabel||named.length===1);
+   }
+   return t.cashDirection==='in'&&
+    (t.type==='transfer'&&t.accountingKind==='card_payment'||
+     narrative.paymentLanguage&&t.type==='refund');
+  }).map(t=>({
+   ids:[String(t.id)],date:t.date,amount:round(t.amount),pending:Boolean(t.pending),
+   side:matchesAccount(t,from)?'Funding account':'Credit card',
+   name:String(t.merchant||t.description||'Payment-like transaction'),
+   reason:matchesAccount(t,from)?
+    'Possible separate checking withdrawal; issuer link not confirmed':
+    'Possible issuer-side credit; checking withdrawal not confirmed'
+  })).sort((a,b)=>Number(a.pending)-Number(b.pending)||
+   Math.abs(Date.parse(a.date)-Date.parse(due))-
+    Math.abs(Date.parse(b.date)-Date.parse(due))||a.date.localeCompare(b.date));
+  // Show exact delta matches first. Two separate checking-side withdrawals
+  // may also explain a split, but a card credit and checking debit describe
+  // the same transfer and must NEVER be added together.
+  const exact=plausible.filter(p=>Math.abs(p.amount-difference)<.011)
+   .map(p=>({...p,kind:'single'}));
+  const cashRows=plausible.filter(p=>p.side==='Funding account');
+  const splits=[];
+  for(let i=0;i<cashRows.length;i++)for(let j=i+1;j<cashRows.length;j++){
+   const a=cashRows[i],b=cashRows[j];
+   if(Math.abs(round(a.amount+b.amount)-difference)>.011)continue;
+   splits.push({ids:[...a.ids,...b.ids],date:a.date+' / '+b.date,
+    amount:round(a.amount+b.amount),pending:a.pending||b.pending,
+    side:'Funding account',name:a.name+' + '+b.name,kind:'split',
+    reason:'Two possible checking withdrawals total the difference; both need confirmation'});
+  }
+  return [...exact,...splits].slice(0,3);
+ };
  // Only actual, reconciled transfers between the chosen funding account and
  // the particular card qualify as actual card payments. Amounts need not equal
  // our estimate (which may not include unplanned charges or account credits).
@@ -455,7 +513,14 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     // Keep the private card/cycle identity separate from display strings so
     // actionable banners can open the exact statement without fuzzy lookup.
     warningActions.push({message,kind:'card-payment-difference',
-     cardId:id,periodEnd:cycleClose});
+     cardId:id,periodEnd:cycleClose,
+     // The acknowledgement expires if the planned amount or any settled
+     // payment changes, so a new bank posting can surface the warning again.
+     signature:[amount.toFixed(2),postedPaymentTotal.toFixed(2),
+      ...postedForCycle.map(p=>String(p.id)+'@'+p.date+':'+p.amount.toFixed(2)).sort()].join('|'),
+     difference:round(amount-postedPaymentTotal),
+     suggestions:paymentDifferenceSuggestions(from,card,due,cycleClose,
+      round(amount-postedPaymentTotal),postedForCycle)});
    }
    // A pending transfer is provisional, not posted. Suppress a second debit
    // only if the bank-reported available balance covers every pending outflow

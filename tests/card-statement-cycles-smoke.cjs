@@ -195,6 +195,45 @@ assert.ok(uncertain.warnings.includes(paymentMismatch.message),
  'Clickable warning metadata must reference the original visible warning');
 assert.equal(actual.warningActions.length,0,
  'Matching full payment must not create a false review action');
+// Candidate reconciliation is advisory: a separate exact payment, two
+// checking withdrawals or an issuer-only credit can explain a difference,
+// but none may mutate bank records or be called a confirmed settlement.
+const differingPaid=postedPayment.map(p=>({...p,amount:640}));
+const postedExtra={id:'additional-cash-payment',date:'2026-11-10',
+ accountId:'checking',type:'transfer',accountingKind:'card_payment',
+ cashDirection:'out',amount:60,merchant:'Credit Card Payment',pending:true};
+const possible=Payments.build(earlySnapshot,[...differingPaid,postedExtra],[],
+ issued.predictions,{days:30});
+const suggested=possible.warningActions.find(a=>a.kind==='card-payment-difference');
+assert.ok(suggested);
+assert.equal(suggested.difference,60);
+assert.equal(suggested.suggestions[0].amount,60);
+assert.equal(suggested.suggestions[0].pending,true,
+ 'Pending payment is only a possible match, never posted proof');
+assert.equal(possible.statements[0].actualPaymentAmount,640,
+ 'The candidate never adds an unverified payment to the actual total');
+assert.equal(possible.plans.length,0,
+ 'Already recognized posted payment still prevents a second full autopay');
+assert.ok(suggested.signature.includes('640.00'));
+const differenceSplitRows=[20,40].map((amount,i)=>({...postedExtra,
+ id:'split-cash-'+i,amount,pending:false}));
+const differenceSplit=Payments.build(earlySnapshot,[...differingPaid,...differenceSplitRows],[],
+ issued.predictions,{days:30}).warningActions.find(a=>a.kind==='card-payment-difference');
+assert.ok(differenceSplit.suggestions.some(c=>c.kind==='split'&&c.amount===60),
+ 'Two distinct bank-side payment-like debits may explain the gap');
+const issuerCredit=Payments.build(earlySnapshot,[...differingPaid,{
+ id:'unpaired-issuer-credit',date:'2026-11-10',accountId:'visa',
+ type:'transfer',accountingKind:'card_payment',cashDirection:'in',
+ amount:60,merchant:'Payment Received',pending:false
+}],[],issued.predictions,{days:30}).warningActions.find(a=>a.kind==='card-payment-difference');
+assert.ok(issuerCredit.suggestions.some(c=>c.side==='Credit card'&&c.amount===60),
+ 'Unpaired issuer-side credit is shown as a possible match, not a checked debit');
+const unrelated=Payments.build(earlySnapshot,[...differingPaid,{
+ ...postedExtra,id:'groceries',type:'expense',accountingKind:'purchase',
+ merchant:'Grocery Store',pending:false
+}],[],issued.predictions,{days:30}).warningActions.find(a=>a.kind==='card-payment-difference');
+assert.deepEqual(unrelated.suggestions,[],
+ 'An unrelated equal-amount purchase must not become a candidate payment');
 // The checking debit can settle before the card issuer reports its credit.
 const checkingOnly=[{id:'checking-posted-first',date:'2026-11-09',accountId:'checking',
  type:'transfer',accountingKind:'card_payment',cashDirection:'out',amount:700,

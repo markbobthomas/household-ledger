@@ -42,7 +42,7 @@ const DEMO_SETTINGS='household-planner-sample-settings-v1';
 try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
-  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
+  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cardPaymentReviewAcks','cashCushion','lowAlertThreshold','warnBelow',
     'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','categoryDisplayOrder','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
@@ -104,7 +104,7 @@ function savePlanning(){
  else {
   const p=demoState.predictions||{};
   localStorage.setItem(DEMO_SETTINGS,JSON.stringify({primaryAccountId:p.primaryAccountId,
-   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
+   plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cardPaymentReviewAcks:p.cardPaymentReviewAcks,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
    scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,categoryDisplayOrder:p.categoryDisplayOrder,
@@ -133,7 +133,7 @@ function forecastFor(s){
  const source=state(),prefs=source.predictions||{};
  // Budgets are reporting preferences and never change forecast projections.
  const {categoryMonthlyBudgets:_reportOnly,categoryDisplayOrder:_displayOrder,
-  transactionNotes:_annotations,...forecastPrefs}=prefs;
+  transactionNotes:_annotations,cardPaymentReviewAcks:_cardReviewsOnly,...forecastPrefs}=prefs;
  // The live bank adapter replaces the source state on every refresh. Saved
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
@@ -1593,6 +1593,33 @@ function billsStatementsPage(bundle,s){
   // Within the selected billing cycle, display the newest charges first.
   transactionRows=records.sort((a,b)=>b.date.localeCompare(a.date)||
    a.merchant.localeCompare(b.merchant)),
+  reviewAction=!historical?(bundle?.payments?.warningActions||[]).find(w=>
+   w.kind==='card-payment-difference'&&String(w.cardId)===accountId&&
+   w.periodEnd===p.periodEnd):null,
+  paymentReviewed=Boolean(reviewAction&&state().predictions?.cardPaymentReviewAcks?.[
+   accountId+'|'+p.periodEnd]===reviewAction.signature),
+  reviewPanel=reviewAction?
+   '<section class="bills-payment-reconciliation" data-card-payment-reconciliation>'+
+    '<strong>'+(paymentReviewed?'Reviewed payment difference':'Review payment difference')+'</strong>'+
+    '<p>'+(!paymentReviewed?
+     'Ledger found a difference from the planned amount. These are possible explanations, not confirmed additional payments.':
+     'Review acknowledged. Bank records and future payment estimates were not changed.')+'</p>'+
+    (!paymentReviewed?
+     (reviewAction.suggestions?.length?
+      '<div class="bills-payment-suggestions">'+reviewAction.suggestions.map(item=>
+       '<div class="bills-payment-suggestion"><span><strong>'+
+        escapeHTML(item.kind==='split'?'Possible split payment':'Possible matching payment')+
+        '</strong><small>'+escapeHTML(item.name)+' · '+escapeHTML(item.date)+
+        ' · '+escapeHTML(item.side)+(item.pending?' · Pending':' · Posted')+
+        '</small><small>'+escapeHTML(item.reason)+'</small></span>'+
+        '<strong>'+cash(item.amount)+'</strong></div>').join('')+'</div>':
+      '<p>No separate payment matching the difference was found in nearby checking or card records. The original estimate may simply have been different from what was due.</p>')+
+     '<p>Check the issuer statement before assuming this amount is still owed. Ledger will not book these suggestions as payments.</p>':'')+
+    '<button type="button" class="btn" data-card-payment-review-toggle="1"'+
+      ' data-review-card-id="'+escapeHTML(accountId)+'"'+
+      ' data-review-period="'+escapeHTML(p.periodEnd)+'">'+
+      (paymentReviewed?'Reopen review':'Mark reviewed — keep bank payment')+'</button>'+
+   '</section>':'',
   details='<div class="bills-statement-detail">'+
    '<div><span>Posted net charges</span><strong>'+cash(posted)+'</strong></div>'+
    (historical?'<div><span>Past period</span><strong>Posted activity only</strong></div>':
@@ -1612,7 +1639,8 @@ function billsStatementsPage(bundle,s){
    )+
   '</div>'+
   (!historical&&p.alreadyPaid&&Math.abs(Number(p.actualPaymentAmount)-Number(p.amount))>.011?
-   '<p class="bills-payment-review-help">Ledger compares the bank-recorded payment with a planned estimate. A difference does not necessarily mean an unpaid balance. Check the card issuer statement and current balance to confirm whether anything else is due.</p>':''),
+   '<p class="bills-payment-review-help">Ledger compares the bank-recorded payment with a planned estimate. A difference does not necessarily mean an unpaid balance. Check the card issuer statement and current balance to confirm whether anything else is due.</p>':'')+
+  reviewPanel,
 
   cycle='<details class="bills-statement-cycle" data-bills-statement="'+
    escapeHTML(accountId)+'|'+escapeHTML(p.periodEnd)+'" open>'+
@@ -3674,15 +3702,20 @@ function render({navigationOnly=false}={}){
  // Notices identify their resolution destination, rather than hiding a
  // non-actionable string behind a generic red banner. A card mismatch keeps
  // the precise private card and billing-cycle identity from the engine.
- const paymentWarnings=(bundle?.payments?.warnings||[]).slice(0,3);
+ const paymentWarnings=bundle?.payments?.warnings||[];
  const warningActions=bundle?.payments?.warningActions||[];
  const creditCards=activeAccounts(s).filter(a=>accountType(a)==='credit');
  const cardNotice=message=>{
   const matched=warningActions.find(w=>w.message===message&&
    w.kind==='card-payment-difference'&&
    creditCards.some(a=>String(a.id)===String(w.cardId)));
-  if(matched)return {text:message,action:'card-statement',
-   cardId:String(matched.cardId),periodEnd:String(matched.periodEnd)};
+  if(matched){
+   const saved=state().predictions?.cardPaymentReviewAcks?.[
+    String(matched.cardId)+'|'+String(matched.periodEnd)];
+   if(saved===matched.signature)return null;
+   return {text:message,action:'card-statement',
+    cardId:String(matched.cardId),periodEnd:String(matched.periodEnd)};
+  }
   const card=creditCards.find(a=>message.startsWith(String(a.name)+':'));
   return {text:message,action:card?'settings-card':'reviews-payments',
    cardId:card?String(card.id):''};
@@ -3691,7 +3724,7 @@ function render({navigationOnly=false}={}){
   ...(missingCards.length?[{text:'Credit-card payment prediction not set for '+
     missingCards.map(a=>a.name).join(', ')+'. Future checking withdrawals may be incomplete.',
    action:'settings-card'}]:[]),
-  ...paymentWarnings.map(cardNotice),
+  ...paymentWarnings.map(cardNotice).filter(Boolean).slice(0,3),
   ...(bundle?.recurrenceMigration&&!bundle.recurrenceMigration.approvedOnly&&
    bundle.recurrenceMigration.legacySeries.length?
    [{text:bundle.recurrenceMigration.legacySeries.length+
@@ -3898,6 +3931,33 @@ document.addEventListener('click',async e=>{
  }
  if(e.target.closest?.('[data-undo-forecast]')){
   e.preventDefault();await undoLastForecastChange();return;
+ }
+ const cardReviewToggle=e.target.closest?.('[data-card-payment-review-toggle]');
+ if(cardReviewToggle){
+  const cardId=cardReviewToggle.dataset.reviewCardId||'',
+   periodEnd=cardReviewToggle.dataset.reviewPeriod||'',
+   action=(forecastFor(snapshot())?.payments?.warningActions||[]).find(w=>
+    w.kind==='card-payment-difference'&&String(w.cardId)===cardId&&
+    w.periodEnd===periodEnd);
+  if(!action){setNotice('This payment review has changed. Refresh the statement before acknowledging it.');return}
+  const prefs=state().predictions??={},key=cardId+'|'+periodEnd,
+   before={...(prefs.cardPaymentReviewAcks||{})},
+   reviews=prefs.cardPaymentReviewAcks={...before};
+  if(reviews[key]===action.signature)delete reviews[key];
+  else reviews[key]=action.signature;
+  cardReviewToggle.disabled=true;
+  try{
+   await reviewCatalogSave.catch(()=>{});
+   const saved=await savePlanning();
+   if(live()&&saved?.saved!==true)throw Error('The review acknowledgement was not saved');
+   // An acknowledgement affects alerts only, not forecast arithmetic.
+   // Reuse prepared calculation and existing navigation caches.
+   render({navigationOnly:true});
+  }catch(error){
+   prefs.cardPaymentReviewAcks=before;
+   setNotice('Could not save payment review: '+String(error.message||error));
+  }
+  return;
  }
  if(e.target.closest?.('[data-close-transaction-detail]')){dismissTransaction();return}
  const stopPlan=e.target.closest?.('[data-stop-plan]');
