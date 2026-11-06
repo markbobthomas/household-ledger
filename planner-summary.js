@@ -374,12 +374,25 @@ function monthlyPredictions(state){
 }
 // The balance card follows the displayed Calendar month, not a rolling window.
 // A historical month or an incomplete final forecast month is not projected.
+function isHistoricalMonth(){
+ return Boolean(calendarContext?.asOf&&calendarMonth&&
+  calendarMonth<calendarContext.asOf.slice(0,7));
+}
 function displayedMonthLow(){
  const state=calendarContext,points=state?.points||[];
- if(!state?.asOf||!calendarMonth||!points.length)return null;
+ if(!state?.asOf||!calendarMonth)return null;
  const [year,month]=calendarMonth.split('-').map(Number);
- const lastDay=calendarMonth+'-'+String(new Date(year,month,0).getDate()).padStart(2,'0');
- if(lastDay<state.asOf||points.at(-1).date<lastDay)return null;
+ const firstDay=calendarMonth+'-01',
+  lastDay=calendarMonth+'-'+String(new Date(year,month,0).getDate()).padStart(2,'0');
+ if(isHistoricalMonth()){
+  // Only publish a whole-month reconstructed low if the bank's observed
+  // activity covers the first AND last day. No partial month masquerades as
+  // a historical actual. The dated bank balance itself is not verified.
+  if(!state.history?.has(firstDay)||!state.history?.has(lastDay))return null;
+  const days=[...state.history.values()].filter(p=>p.date.startsWith(calendarMonth));
+  return days.length?days.reduce((a,b)=>b.balance<a.balance?b:a):null;
+ }
+ if(!points.length||lastDay<state.asOf||points.at(-1).date<lastDay)return null;
  const matching=points.filter(p=>p.date.startsWith(calendarMonth)&&Number.isFinite(p.balance));
  return matching.length?matching.reduce((a,b)=>b.balance<a.balance?b:a):null;
 }
@@ -388,11 +401,17 @@ function updateDisplayedMonthLow(){
  if(!el)return;
  const point=displayedMonthLow(),value=el.querySelector('[data-summary-month-low-value]'),
   button=el.querySelector('[data-calendar-month-low]');
- if(value){value.textContent=point?money(point.balance):'Not projected';
-  value.classList.toggle('summary-low-alert',Boolean(point&&point.balance>=0&&
+ const historical=isHistoricalMonth();
+ const label=el.querySelector('.summary-overline');
+ if(label)label.textContent=historical?'Reconstructed lowest in month':
+  'Lowest in shown month';
+ if(value){value.textContent=point?money(point.balance):
+  historical?'Not enough history':'Not projected';
+  value.classList.toggle('summary-low-alert',Boolean(!historical&&point&&point.balance>=0&&
    point.balance<alertThreshold(calendarContext?.prefs)));
   value.classList.toggle('summary-low-negative',Boolean(point&&point.balance<0));}
- if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
+ if(button){button.textContent=point?dateLabel(point.date)+' →':
+  historical?'No complete posted history':'No projected date';
   button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
 }
 
