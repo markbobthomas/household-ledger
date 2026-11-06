@@ -84,6 +84,7 @@ const todayRows=[
   cashDirection:'out',amount:7,merchant:'Fictional Yesterday',pending:false}
 ];
 const todayInput={...opts,bundle:{...opts.bundle,rows:todayRows}};
+const todayRowsBefore=JSON.stringify(todayRows);
 const todayHTML=tool.render(todayInput);
 assert.match(todayHTML,/data-calendar-today-actual/,
  'Today keeps a separate bank-activity section in the Calendar day detail');
@@ -94,16 +95,16 @@ assert.match(todayHTML,/See all October 2026 activity and predictions/,
  'Current-month list includes actual bank history without disguising it as forecasts');
 assert.match(todayHTML,/Predicted deposits: <strong>/,
  'Summary totals remain labeled as predictions, not all activity');
-assert.match(todayHTML,/data-calendar-day="2026-10-21"[\\s\\S]*?calendar-actual-event/,
+assert.match(todayHTML,/data-calendar-day="2026-10-21"[\s\S]*?calendar-actual-event/,
  'Today cell displays bank activity without modifying the canonical prediction');
 assert.match(todayHTML,/data-calendar-math-total|calendar-math-total/,
  'Displayed bank history never replaces the canonical balance footer');
 assert.match(todayHTML,/data-calendar-day="2026-10-21"/);
-assert.equal(JSON.stringify(todayRows),JSON.stringify(todayInput.bundle.rows),
+assert.equal(JSON.stringify(todayRows),todayRowsBefore,
  'Calendar bank overlay never rewrites the source records');
 const nextDayHTML=tool.render({...todayInput,snapshot:{...snapshot,asOf:iso(1)},
  derived:{...derived,series:series.slice(1)}});
-assert.doesNotMatch(nextDayHTML,/data-calendar-today-actual[^>]*>[\\s\\S]*?Fictional Today Posted/,
+assert.doesNotMatch(nextDayHTML,/data-calendar-today-actual[^>]*>[\s\S]*?Fictional Today Posted/,
  'Yesterday bank records do not remain in a new day forecast overlay');
 tool.render(opts); // Restore the earlier fixture for subsequent assertions.
 // Plaid checking accounts can report accountType=depository and
