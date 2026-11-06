@@ -80,7 +80,7 @@ const reordered=[
   subtype:'checking',available:5000,current:5000}
 ];
 tool.setCalendarScope('all',false);
-const checkingWithSubtype=tool.render({...opts,accounts:reordered,chosen:reordered[0],
+const checkingWithSubtype=tool.render({...opts,days:1095,accounts:reordered,chosen:reordered[0],
  prefs:{...opts.prefs,primaryAccountId:'checking-main'},
  bundle:{...opts.bundle,projection:{...opts.bundle.projection,accounts:[
   {...derived,id:'checking-main',balanceStatus:'fresh'}
