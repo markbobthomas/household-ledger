@@ -28,7 +28,9 @@ const fetch=async(uri,options={})=>{
  serverRevision=String.fromCharCode(97+successfulSaves).repeat(64);
  return response(200,{saved:true,scope:'predictions'});
 };
-const root={HouseholdLedgerData:{migrate:x=>x},
+// The authenticated app loads accounting before this adapter. Its isolated
+// fixture must supply the same shared classification contract.
+const root={HouseholdAccounting:require('../accounting.js'),HouseholdLedgerData:{migrate:x=>x},
  HouseholdCategorization:{classify:()=>({category:'Housing'}),loanBill:()=>({isBill:true})}};
 const localStorage={getItem:k=>k==='household-ledger-view-mode'?mode:null,
  setItem(k,v){if(k==='household-ledger-view-mode')mode=v}};
