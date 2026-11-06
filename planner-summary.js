@@ -22,6 +22,64 @@ const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency
 const dateLabel=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 const shortDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
+const validDay=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&
+ !Number.isNaN(Date.parse(d+'T12:00:00Z'));
+function addDay(iso,offset){
+ const date=new Date(iso+'T12:00:00Z');date.setUTCDate(date.getUTCDate()+offset);
+ return date.toISOString().slice(0,10);
+}
+function historicalCalendarStart(asOf,rows){
+ const limit=new Date(asOf+'T12:00:00Z');limit.setUTCMonth(limit.getUTCMonth()-24);
+ const earliestLimit=limit.toISOString().slice(0,7)+'-01';
+ const previousMonth=new Date(asOf.slice(0,7)+'-15T12:00:00Z');
+ previousMonth.setUTCMonth(previousMonth.getUTCMonth()-1);
+ const prior=previousMonth.toISOString().slice(0,7)+'-01';
+ const oldest=(rows||[]).filter(t=>validDay(t.date)&&t.date<asOf)
+  .reduce((d,t)=>!d||t.date<d?t.date:d,'');
+ return [earliestLimit,[prior,oldest?oldest.slice(0,7)+'-01':prior]
+  .reduce((a,b)=>a<b?a:b)].reduce((a,b)=>a>b?a:b);
+}
+// Actual transactions are trustworthy *activity*, not daily bank balances.
+// Plaid supplies a current posted balance but no per-day historical snapshots.
+// A daily history estimate is therefore reconstructed backward from CURRENT,
+// using only non-pending posted transactions on the chosen account. Never
+// describe this calculated balance as a bank-verified historical actual.
+function reconstructedHistory(account,derived,rows,asOf,start,accountOf,accounts){
+ const history=new Map(),current=account?.current;
+ if(current===null||current===undefined||current===''||
+  !Number.isFinite(Number(current))||
+  !['fresh','simulated'].includes(derived?.balanceStatus))return history;
+ const mine=(rows||[]).filter(t=>validDay(t.date)&&t.date<=asOf&&
+  String(accountOf?.(t,accounts)||t.accountId||'')===String(account.id)&&
+  !t.pending),
+  first=mine.reduce((d,t)=>!d||t.date<d?t.date:d,'');
+ if(!first)return history;
+ const changes=new Map();
+ let unknown=false;
+ const card=String(account.accountType||account.type).toLowerCase()==='credit';
+ for(const t of mine){
+  const amount=Number(t.amount);
+  const direction=['in','out'].includes(t.cashDirection)?t.cashDirection:
+   t.cashDirection==='unknown'?'':
+   Number.isFinite(Number(t.source?.plaidAmount))&&
+   t.source?.plaidAmount!==undefined&&t.source?.plaidAmount!==null?
+    (Number(t.source.plaidAmount)>0?'out':Number(t.source.plaidAmount)<0?'in':''):
+   ['income','refund'].includes(t.type)?'in':
+   t.type==='expense'?'out':'';
+  if(!Number.isFinite(amount)||amount<0||!direction){unknown=true;break}
+  const sign=card?(direction==='out'?1:-1):(direction==='in'?1:-1);
+  changes.set(t.date,(changes.get(t.date)||0)+sign*Math.round(amount*100));
+ }
+ if(unknown)return history;
+ let cents=Math.round(Number(current)*100);
+ for(let date=asOf;date>=start;date=addDay(date,-1)){
+  if(date<asOf&&date>=first)
+   history.set(date,{date,balance:cents/100,kind:'reconstructed'});
+  cents-=changes.get(date)||0;
+ }
+ return history;
+}
+
 function getPoints(derived,asOf,days){
  const end=new Date(asOf+'T12:00:00Z');end.setUTCDate(end.getUTCDate()+days);
  const through=end.toISOString().slice(0,10);
@@ -145,7 +203,8 @@ function quickEditor(){
 
 
 function postedDay(date){
- const rows=calendarContext.actual.get(date)||[];
+ const rows=calendarContext.actual.get(date)||[],
+  history=calendarContext.history?.get(date);
  const body=rows.map(t=>{
   const account=String(root.HouseholdPlannerHistory?.accountOf?.(t,calendarContext.accounts)||
    t.accountId||calendarContext.chosen),
@@ -172,7 +231,12 @@ function postedDay(date){
    esc(dateLabel(date))+'</strong></div></div>'+
   (rows.length?'<div class="calendar-detail-items">'+body+'</div>':
    '<p class="calendar-empty">No bank transactions recorded on this date.</p>')+
-  '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
+  (history?'<div class="calendar-day-ending calendar-reconstructed-ending" data-calendar-reconstructed-balance>'+
+   '<span>Reconstructed end-of-day balance</span><strong>'+money(history.balance)+'</strong></div>':'')+
+  '<p class="calendar-actual-note">'+(history?
+   'Calculated from the latest posted bank balance and available posted transactions; this is not a bank-verified daily balance.':
+   'Posted activity is actual. A past daily balance cannot be verified from the available bank history.')+
+   ' Bank records remain unchanged.</p>'+
   '<button type="button" class="calendar-edit" data-view="activity">All bank history →</button></section>';
 }
 function calendarNote(key){
@@ -278,7 +342,32 @@ function dayDetail(point,card){
  '</section>';
 }
 
+function monthlyActuals(state){
+ const rows=[...state.actual.entries()].filter(([day])=>
+  day.startsWith(calendarMonth)).flatMap(([date,items])=>
+   items.map(t=>({date,t}))).sort((a,b)=>a.date.localeCompare(b.date));
+ const accountName=t=>state.accounts.find(a=>
+  String(a.id)===String(t.accountId))?.name||'Account';
+ const body=rows.map(({date,t})=>{
+  const incoming=['income','refund'].includes(t.type)||
+   t.type==='transfer'&&t.cashDirection==='in',
+   dir=incoming?'+':'−';
+  return '<div class="calendar-monthly-row calendar-posted-month-row" data-calendar-posted-month-row>'+
+   '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
+   '<span class="calendar-monthly-name"><strong>'+esc(t.merchant||'Bank transaction')+'</strong>'+
+    '<small>'+(t.pending?'Pending':'Posted')+
+    (state.scope==='all'?' · '+esc(accountName(t)):'')+'</small></span>'+
+   '<strong class="ledger-transaction-amount">'+dir+money(Number(t.amount))+'</strong></div>';
+ }).join('');
+ return '<details class="calendar-monthly-list" data-calendar-monthly'+
+  (calendarMonthExpanded?' open':'')+'>'+
+  '<summary>See all '+esc(monthName(calendarMonth))+' bank activity ('+rows.length+')</summary>'+
+  (body?'<div class="calendar-monthly-rows">'+body+'</div>':
+    '<p class="calendar-empty">No bank activity available for this month.</p>')+
+  '<small class="calendar-actual-note">Posted transactions are actual. Reconstructed balances are not bank-verified daily balances.</small></details>';
+}
 function monthlyPredictions(state){
+ if(isHistoricalMonth())return monthlyActuals(state);
  const primary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
   (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i,other:false,card:state.card}))),
   secondary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
@@ -317,25 +406,71 @@ function monthlyPredictions(state){
 }
 // The balance card follows the displayed Calendar month, not a rolling window.
 // A historical month or an incomplete final forecast month is not projected.
+function isHistoricalMonth(){
+ return Boolean(calendarContext?.asOf&&calendarMonth&&
+  calendarMonth<calendarContext.asOf.slice(0,7));
+}
 function displayedMonthLow(){
  const state=calendarContext,points=state?.points||[];
- if(!state?.asOf||!calendarMonth||!points.length)return null;
+ if(!state?.asOf||!calendarMonth)return null;
  const [year,month]=calendarMonth.split('-').map(Number);
- const lastDay=calendarMonth+'-'+String(new Date(year,month,0).getDate()).padStart(2,'0');
- if(lastDay<state.asOf||points.at(-1).date<lastDay)return null;
+ const firstDay=calendarMonth+'-01',
+  lastDay=calendarMonth+'-'+String(new Date(year,month,0).getDate()).padStart(2,'0');
+ if(isHistoricalMonth()){
+  // Only publish a whole-month reconstructed low if the bank's observed
+  // activity covers the first AND last day. No partial month masquerades as
+  // a historical actual. The dated bank balance itself is not verified.
+  if(!state.history?.has(firstDay)||!state.history?.has(lastDay))return null;
+  const days=[...state.history.values()].filter(p=>p.date.startsWith(calendarMonth));
+  return days.length?days.reduce((a,b)=>b.balance<a.balance?b:a):null;
+ }
+ if(!points.length||lastDay<state.asOf||points.at(-1).date<lastDay)return null;
  const matching=points.filter(p=>p.date.startsWith(calendarMonth)&&Number.isFinite(p.balance));
  return matching.length?matching.reduce((a,b)=>b.balance<a.balance?b:a):null;
 }
+function monthlyLowMarkup(card=false){
+ const point=displayedMonthLow(),past=isHistoricalMonth(),
+  title=past?'Reconstructed lowest in month':
+   card?'Lowest card debt in shown month':'Lowest in shown month';
+ return '<div class="summary-monthly" data-summary-month-low>'+
+  '<div class="summary-overline">'+esc(title)+'</div>'+
+  '<strong class="summary-low'+(!past&&!card?balanceRiskClass(point?.balance,calendarContext?.prefs):'')+
+   '" data-summary-month-low-value>'+(point?money(point.balance):
+    past?'Not enough history':'Not projected')+'</strong>'+
+  '<button type="button" class="summary-low-date" data-calendar-month-low="'+
+   esc(point?.date||'')+'"'+(point?'':' disabled')+'>'+
+   (point?esc(dateLabel(point.date))+' →':
+    past?'No complete posted history':'No projected date')+'</button></div>';
+}
 function updateDisplayedMonthLow(){
+ // A card's next statement estimate is relevant to future months, whereas
+ // posted-history months show a reconstructed card-debt low. Switch the one
+ // metric in place when navigating, not the canonical projection.
+ const numbers=document.querySelector('.summary-page:not(.trend-page) .summary-numbers');
+ if(calendarContext?.card&&numbers?.children?.[1]){
+  const second=numbers.children[1],past=isHistoricalMonth();
+  if(past&&second.hasAttribute('data-summary-card-next-statement')||
+    !past&&second.hasAttribute('data-summary-month-low')){
+   const html=past?monthlyLowMarkup(true):calendarContext.cardFutureMetric;
+   if(html){const wrap=document.createElement('div');wrap.innerHTML=html;
+    if(wrap.firstElementChild)second.replaceWith(wrap.firstElementChild);}
+  }
+ }
  const el=document.querySelector('[data-summary-month-low]');
  if(!el)return;
  const point=displayedMonthLow(),value=el.querySelector('[data-summary-month-low-value]'),
   button=el.querySelector('[data-calendar-month-low]');
- if(value){value.textContent=point?money(point.balance):'Not projected';
-  value.classList.toggle('summary-low-alert',Boolean(point&&point.balance>=0&&
+ const historical=isHistoricalMonth();
+ const label=el.querySelector('.summary-overline');
+ if(label)label.textContent=historical?'Reconstructed lowest in month':
+  calendarContext?.card?'Lowest card debt in shown month':'Lowest in shown month';
+ if(value){value.textContent=point?money(point.balance):
+  historical?'Not enough history':'Not projected';
+  value.classList.toggle('summary-low-alert',Boolean(!historical&&point&&point.balance>=0&&
    point.balance<alertThreshold(calendarContext?.prefs)));
   value.classList.toggle('summary-low-negative',Boolean(point&&point.balance<0));}
- if(button){button.textContent=point?dateLabel(point.date)+' →':'No projected date';
+ if(button){button.textContent=point?dateLabel(point.date)+' →':
+  historical?'No complete posted history':'No projected date';
   button.disabled=!point;button.dataset.calendarMonthLow=point?.date||'';}
 }
 
@@ -375,7 +510,8 @@ function calendarGrid(){
  if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
  const weekday=iso=>iso&&![0,6].includes(new Date(iso+'T12:00:00Z').getUTCDay());
  // Even on a five-day grid, preserve a selected weekend as-of date in the day detail.
- if(!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
+ if(calendarDate.slice(0,7)!==calendarMonth||
+   !currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
   calendarDate=currentPoints.find(p=>weekday(p.date))?.date||
    [...state.actual.keys()].find(d=>d.startsWith(calendarMonth)&&weekday(d));
  const start=calendarMonth+'-01',
@@ -398,11 +534,19 @@ function calendarGrid(){
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
   if(!p&&state.actual.has(iso)){
-   const rows=state.actual.get(iso)||[];
-   return '<button type="button" class="calendar-day actual'+(calendarDate===iso?' selected':'')+
+   const rows=state.actual.get(iso)||[],history=state.history?.get(iso);
+   return '<button type="button" class="calendar-day actual'+
+    (monthMinimum?.date===iso?' month-minimum':'')+
+    (calendarDate===iso?' selected':'')+
     '" data-calendar-actual-day="'+iso+'" aria-label="'+esc(dateLabel(iso)+', '+
-    rows.length+' actual bank transactions, no predicted balance')+'">'+
-    '<span class="calendar-day-number">'+dom+'</span><span class="calendar-day-balance">'+(rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No activity')+'</span>'+
+    rows.length+' bank transactions'+(history?
+     ', reconstructed end-of-day '+money(history.balance):
+     ', no verified historical balance'))+'">'+
+    '<span class="calendar-day-number">'+dom+'</span>'+
+    '<span class="calendar-day-balance">'+(history?
+     '<span class="calendar-money-wide">'+money(history.balance)+'</span>'+
+     '<span class="calendar-money-narrow">'+shortMoney(history.balance)+'</span>':
+     rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No balance data')+'</span>'+
     '<span class="calendar-day-events">'+rows.slice(0,2).map(t=>
      '<span class="calendar-event"><span class="calendar-event-name">'+
      esc(t.merchant||'Transaction')+'</span></span>').join('')+
@@ -450,7 +594,8 @@ function calendarGrid(){
  return '<div class="calendar-wrapper" data-calendar-stage>'+
   
   '<div class="calendar-grid" style="--calendar-weeks:'+weekCount+'" role="group" aria-label="'+
-   esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
+   esc(monthName(calendarMonth)+(isHistoricalMonth()?' posted-history calendar':' forecast calendar'))+'">'+
+   header+cells+'</div>'+
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
 }
@@ -531,18 +676,9 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
   hasCounts=Number.isInteger(postedCount)&&Number.isInteger(predictedCount);
  const statementDate=next?.dueDate||'',
   navigable=Boolean(statementDate&&(points||[]).some(p=>p.date===statementDate));
- return '<div class="summary-monthly" data-summary-card-statement>'+
-  '<div class="summary-overline">'+(issued?'Statement balance':'Estimated statement')+'</div>'+
-  '<strong class="summary-low" data-summary-statement-value>'+
-   (hasStatement?money(Number(next.statementBalance)):'Not available')+'</strong>'+
-  (hasStatement?
-   (navigable?'<button type="button" class="summary-low-date" data-calendar-card-statement-date="'+
-    esc(statementDate)+'">':'<small class="summary-low-date">')+
-    esc((issued?'Issued':'Estimated')+' · Due '+dateLabel(statementDate))+
-    (navigable?' →</button>':'</small>'):
-   '<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
-  '</div>'+
-  '<div class="summary-minimum" data-summary-card-next-statement>'+
+ // Keep statement details in Bills. The Calendar needs only current card
+ // debt and the next statement estimate, not a confusing middle number.
+ return '<div class="summary-minimum" data-summary-card-next-statement>'+
   '<div class="summary-overline">Next statement estimate</div>'+
   '<strong class="summary-low" data-summary-next-statement-value>'+
    (hasFollowing?money(Number(following.statementBalance)):'Not available')+'</strong>'+
@@ -637,17 +773,19 @@ function render(input){
  }
  for(const rows of outside.values())
   rows.sort((a,b)=>a.merchant.localeCompare(b.merchant)||a.accountId.localeCompare(b.accountId));
- const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf;
- for(let n=45;n>=1;n--){
-  const dt=new Date(snapshot.asOf+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()-n);
-  actual.set(dt.toISOString().slice(0,10),[]);
- }
+ const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf,
+  historyStart=historicalCalendarStart(snapshot.asOf,bundle?.rows||[]);
+ for(let date=historyStart;date<snapshot.asOf;date=addDay(date,1))
+  actual.set(date,[]);
  for(const r of bundle?.rows||[]){
   if(!actual.has(r.date)||!allAccounts&&
     String(accountOf?.(r,accounts)||r.accountId)!==String(chosen.id))continue;
   actual.get(r.date).push(r);
  }
- calendarContext={points:series,actual,outside,scope:allAccounts?'all':String(chosen.id),
+ const history=reconstructedHistory(chosen,derived,bundle?.rows||[],
+  snapshot.asOf,historyStart,accountOf,accounts);
+ calendarContext={points:series,actual,outside,history,
+  scope:allAccounts?'all':String(chosen.id),
   coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],
   paymentDetails:bundle?.payments?.paymentDetails||[],
@@ -714,16 +852,12 @@ function render(input){
  const causes=listed.length?listed.slice(0,2).map(e=>esc(e.merchant||'Expected payment')).join(' · ')+
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  const monthMinimum=credit?null:displayedMonthLow();
+ const cardFutureMetric=credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):'';
+ if(credit&&calendarContext)calendarContext.cardFutureMetric=cardFutureMetric;
  const calendarHtml='<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
-  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid',allAccounts)+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
-   '<div class="summary-monthly" data-summary-month-low>'+
-    '<div class="summary-overline">Lowest in shown month</div>'+
-    '<strong class="summary-low'+balanceRiskClass(monthMinimum?.balance,prefs)+'" data-summary-month-low-value>'+
-     (monthMinimum?money(monthMinimum.balance):'Not projected')+'</strong>'+
-    '<button type="button" class="summary-low-date" data-calendar-month-low="'+esc(monthMinimum?.date||'')+'"'+
-     (monthMinimum?'':' disabled')+'>'+
-     (monthMinimum?esc(dateLabel(monthMinimum.date))+' →':'No projected date')+'</button>'+
-    '</div>')+'</div>'+
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid',allAccounts)+
+   (credit?(isHistoricalMonth()?monthlyLowMarkup(true):cardFutureMetric):
+    monthlyLowMarkup(false))+'</div>'+
     calendarGrid()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
 
@@ -933,7 +1067,7 @@ document.addEventListener('keydown',e=>{
   document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
 });
 
-root.HouseholdPlannerSummary={render,getPoints,knownGaps,
+root.HouseholdPlannerSummary={render,getPoints,knownGaps,reconstructedHistory,
  setCalendarScope:(value,redraw=true)=>{
   // A scope change is display-only: reuse prepared projection and replace
   // just the visible calendar without invalidating the other prepared tabs.

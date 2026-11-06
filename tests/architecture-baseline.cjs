@@ -121,6 +121,8 @@ function summary(bundle,scenario,context){
  assert.doesNotMatch(checkingHTML,/Long-term outlook|3-year low/,
   'Distant predictions stay in Balance Trend, not above the daily calendar');
  assert.match(cardHTML,/Next statement estimate/);
+ assert.doesNotMatch(cardHTML,/data-summary-card-statement/,
+  'The Calendar no longer shows a redundant middle statement number');
  assert.doesNotMatch(cardHTML,/3-month estimated low/);
  assert.doesNotMatch(cardHTML,/Lowest in shown month/);
  // Preserve the frozen numeric architecture contract independently of how
@@ -188,9 +190,15 @@ function summary(bundle,scenario,context){
    postedReview:bundle.postedMatchReview.length},
   card:{statement:cardDue?{dueDate:cardDue.dueDate,amount:money(cardDue.statementBalance),
    confirmed:cardDue.confirmed,autopay:cardDue.autopayEnabled}:null,
-   configuredMetric:metric(cardHTML,'summary-statement-value'),
+   // Golden banking values come directly from the canonical obligations
+   // model. A display-only removal of the third Calendar metric must not
+   // change historical saved statement amounts or rewrite these goldens.
+   configuredMetric:cardDue?formatCard(cardDue.statementBalance):'Not available',
    cardLowMetric:originalLow, // frozen old 90-day numeric checksum, no longer shown
-   unconfiguredMetric:metric(noneHTML,'summary-statement-value')},
+   unconfiguredMetric:(bundle.payments.statements||[])
+    .find(p=>p.cardId==='other-card')?.statementBalance!=null?
+     formatCard(bundle.payments.statements.find(p=>p.cardId==='other-card').statementBalance):
+     'Not available'},
   checking:{monthLow:frozenMonthlyLow,
    threeYearLow:threeYear},
   warningsHash:sha(bundle.payments.warnings||[]),
