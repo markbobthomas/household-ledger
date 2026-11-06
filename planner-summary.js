@@ -216,6 +216,8 @@ function predictionEntry(date,e,index,card,selected=false,other=false){
 }
 function dayDetail(point,card){
  const events=point.events||[],other=outsideDay(point.date),
+  cardSpending=other.filter(e=>e.kind==='card_purchase')
+   .reduce((sum,e)=>sum+Number(e.amount||0),0),
   first=calendarContext.points[0],
   previousIndex=calendarContext.points.indexOf(point)-1,
   previous=previousIndex>=0?calendarContext.points[previousIndex].balance:point.balance,
@@ -243,9 +245,12 @@ function dayDetail(point,card){
     '<strong>Other accounts · excluded from this balance</strong>'+
     '<div class="calendar-day-transactions" aria-label="Predictions on other accounts">'+
     other.map((e,i)=>predictionEntry(point.date,e,i,Boolean(e._calendarCard),true,true)).join('')+
-    '</div></div>':'')+
+    '</div>'+
+    (cardSpending?'<div class="calendar-outside-total" data-calendar-day-card-spending>'+
+     '<span>On other credit cards</span><strong>'+money(cardSpending)+'</strong></div>':'')+
+    '</div>':'')+
    '<div class="calendar-day-net" data-calendar-net-change data-net-cents="'+netCents+'">'+
-    '<span>Total change</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
+    '<span>Selected account change</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
    '</div>':
   '<p class="calendar-empty">No transactions predicted for this day.</p>';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
