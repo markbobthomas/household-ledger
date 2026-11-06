@@ -147,6 +147,9 @@ function quickEditor(){
 function postedDay(date){
  const rows=calendarContext.actual.get(date)||[];
  const body=rows.map(t=>{
+  const account=String(root.HouseholdPlannerHistory?.accountOf?.(t,calendarContext.accounts)||
+   t.accountId||calendarContext.chosen),
+   accountName=calendarContext.accounts.find(a=>String(a.id)===account)?.name||account;
   const incoming=['income','refund'].includes(t.type)||t.type==='transfer'&&t.cashDirection==='in',
    matches=root.HouseholdPlannerTransactions.historicalScheduleMatches(
     t,calendarContext.accounts,calendarContext.prefs?.futureRecurringRules||[]),
@@ -155,13 +158,14 @@ function postedDay(date){
    '<span class="ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
    '<span class="calendar-transaction-name ledger-transaction-identity"><strong>'+
    esc(t.merchant||'Bank transaction')+'</strong>'+
-   (calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)]))?
+   (calendarNote('bank:'+JSON.stringify([account,String(t.id)]))?
     '<small class="transaction-note-subtitle">'+
-     esc(calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)])))+'</small>':'')+
-   '<small>'+(t.pending?'Pending':'Posted')+'</small></span>'+
+     esc(calendarNote('bank:'+JSON.stringify([account,String(t.id)])))+'</small>':'')+
+   '<small>'+(t.pending?'Pending':'Posted')+
+    (calendarContext.scope==='all'?' · '+esc(accountName):'')+'</small></span>'+
    '<strong class="ledger-transaction-amount '+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
    '</strong><button type="button" class="calendar-item-edit ledger-transaction-action" data-calendar-history-plan="'+
-   esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">'+action+'</button></div>';
+   esc(t.id)+'" data-history-account="'+esc(account)+'">'+action+'</button></div>';
  }).join('');
  return '<section class="calendar-day-detail calendar-actual-detail" data-calendar-detail>'+
   '<div class="calendar-detail-heading"><div><span>BANK HISTORY · NOT A PREDICTION</span><strong>'+
@@ -251,7 +255,9 @@ function dayDetail(point,card){
      '<span>On other credit cards</span><strong>'+money(cardSpending)+'</strong></div>':'')+
     '</div>':'')+
    '<div class="calendar-day-net" data-calendar-net-change data-net-cents="'+netCents+'">'+
-    '<span>Selected account change</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
+    '<span>'+(calendarContext.scope==='all'?'Main checking change':
+      card?'Card debt change':'Selected account change')+
+    '</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
    '</div>':
   '<p class="calendar-empty">No transactions predicted for this day.</p>';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
