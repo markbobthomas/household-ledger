@@ -1160,7 +1160,7 @@ const {chromium,webkit}=require('playwright');
     'Multi-month Budget adds posted and projected expenses from every selected month');
    await page.locator('[data-history-view="summary"]').click();
    assert.match(await page.locator('[data-recap-budget] small').innerText(),
-    /including expected/, 'Summary Budget percentage includes expected charges');
+    /Posted \$[\d,.]+ · Provisional pending \$[\d,.]+ · Expected \$[\d,.]+/, 'Summary Budget shows the same posted, provisional and expected components');
    await page.evaluate(()=>{
     const key='household-planner-sample-settings-v1',
      raw=JSON.parse(localStorage.getItem(key)||'{}');
