@@ -2,6 +2,25 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process');
 (async()=>{
+ const M=require('../ledger-data.js'),keyFor=(a,id)=>'bank:'+JSON.stringify([a,id]);
+ const metadata={categoryOverrides:{pending:'Groceries',posted:'Dining'},
+  reviews:{categoryConfirmed:{pending:true}},predictions:{
+   transactionNotes:{[keyFor('checking','pending')]:'Pending note',
+    [keyFor('checking','posted')]:'Posted note',[keyFor('card','pending')]:'Card note'},
+   futureRecurringRules:[{accountId:'checking',exampleIds:['pending','posted']},
+    {accountId:'card',exampleIds:['pending']}]
+  }};
+ M.remapTransactionMetadata(metadata,'checking','pending','posted');
+ assert.equal(metadata.categoryOverrides.posted,'Dining');
+ assert.equal(metadata.categoryOverrides.pending,undefined);
+ assert.equal(metadata.predictions.transactionNotes[keyFor('checking','posted')],'Posted note','Posted note wins collision');
+ assert.equal(metadata.predictions.transactionNotes[keyFor('card','pending')],'Card note','Other account is untouched');
+ assert.deepEqual(metadata.predictions.futureRecurringRules[0].exampleIds,['posted']);
+ assert.deepEqual(metadata.predictions.futureRecurringRules[1].exampleIds,['pending']);
+ assert.equal(metadata.reviews.categoryConfirmed.posted,true);
+ const once=JSON.stringify(metadata);M.remapTransactionMetadata(metadata,'checking','pending','posted');
+ assert.equal(JSON.stringify(metadata),once,'Replacement replay is idempotent');
+
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'hl-plaid-flow-')),port=19849,pass=crypto.randomBytes(24).toString('hex'),store=path.join(folder,'pilot.enc');
  const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1',PILOT_INVALID_FIELD_TEST:'1',RENDER_GIT_COMMIT:'a'.repeat(40)};
  const child=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','sandbox/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});

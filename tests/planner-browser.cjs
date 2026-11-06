@@ -445,7 +445,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.financial-recap-card').count(),3);
    assert.equal(await page.locator('.financial-recap-page [data-history-month-picker]').count(),1,
     'Summary reuses the Spending calendar-month checklist');
-   assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page select').count(),0,
+   assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page select:not([name="historyAccount"])').count(),0,
     'Summary contains no editable financial fields');
    assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Scheduled expenses')),
     'Single-month bills are a selected-month sum, not a 12-month average');

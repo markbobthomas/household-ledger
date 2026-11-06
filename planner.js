@@ -1309,6 +1309,9 @@ function pendingBudgetCents(row,settlements){
  if(!row?.pending||settlements?.has(String(row.id)))return 0;
  return cardActivityCents({...row,pending:false});
 }
+function purchaseReportCents(row,settlements){
+ return settlements?.has(String(row.id))?0:cardActivityCents(row);
+}
 function cardActivityCents(row){
  // The History statement total is purchases minus merchant refunds only.
  // A paired card payment is never a new purchase, even if an earlier
@@ -2042,7 +2045,7 @@ function historyMerchantKey(row){return historyMerchantName(row).toLocaleLowerCa
 function historyInsights(rows,view,options={}){
  const spendCents=view==='categories'?
   r=>categorySpendingCents(r,options.cardSettlementIds)+
-   pendingBudgetCents(r,options.cardSettlementIds):cardActivityCents,
+   pendingBudgetCents(r,options.cardSettlementIds):r=>purchaseReportCents(r,options.cardSettlementIds),
   // Budget is NET spending: refunds are signed credits in the month of
   // posting, including months where the purchase was in an earlier period.
   purchases=rows.filter(r=>view==='categories'?spendCents(r)!==0:spendCents(r)>0),
@@ -2056,7 +2059,7 @@ function historyInsights(rows,view,options={}){
   // from being counted as additional shopping.
   const groups=new Map();
   for(const r of rows){
-   const amount=cardActivityCents(r);
+   const amount=purchaseReportCents(r,options.cardSettlementIds);
    if(!amount)continue;
    const key=historyMerchantKey(r),name=historyMerchantName(r),
     g=groups.get(key)||{key,name,cents:0,count:0,refunds:0};
@@ -2117,7 +2120,8 @@ function historyInsights(rows,view,options={}){
    if(posted)g.count++;
    if(provisional)g.pendingCount++;
    if(posted||provisional)g.items.push({date:r.date,merchant:historyMerchantName(r),
-    cents:posted+provisional,source:provisional?'pending':'spent'});
+    cents:posted+provisional,source:provisional?'pending':'spent',id:r.id,
+    accountId:window.HouseholdPlannerHistory.accountOf(r,activeAccounts(snapshot()))});
    groups.set(category,g);
   }
   for(const r of predictions){
@@ -2230,15 +2234,15 @@ function historyInsights(rows,view,options={}){
      '" data-budget-cents="'+item.cents+'">'+
      '<span class="history-budget-detail-date">'+escapeHTML(dayLabel(item.date))+'</span>'+
      '<span class="history-budget-detail-name"><strong>'+escapeHTML(item.merchant)+
-     '</strong>'+(item.source==='expected'?'<small>Expected</small>':item.source==='pending'?'<small>Provisional pending · category review available after posting</small>':'')+'</span>'+
+     '</strong>'+(item.source==='expected'?'<small>Expected</small>':item.source==='pending'?'<small>Provisional pending · category review available after posting</small><button type="button" class="btn" data-history-plan="'+escapeHTML(item.id)+'" data-history-account="'+escapeHTML(item.accountId)+'">View transaction / category</button>':'')+'</span>'+
      '<strong class="history-budget-detail-amount">'+(item.cents<0?'−':'')+
       cash(Math.abs(item.cents)/100)+'</strong></div>').join('')+'</div>';
   };
-  const budgetSummary=allAccounts?
+  const budgetSummary=
    '<div class="history-budget-summary" data-history-total-budget>'+
     (totalBudgetPercent===null?
      '<span class="history-budget-summary-empty">Set a budget to see progress.</span>':
-     '<div class="history-budget-summary-head"><span>Budget used</span>'+
+     '<div class="history-budget-summary-head"><span>'+(allAccounts?'Budget used':'Selected account / household budget')+'</span>'+ 
       '<strong data-history-total-budget-percent>'+Math.round(totalBudgetPercent)+'%</strong>'+
       '<small>'+cash(totalBudgetCents/100)+' budget</small></div>'+
      '<div class="history-budget-summary-track'+(totalBudgetPercent>100?' over':'')+
@@ -2246,8 +2250,7 @@ function historyInsights(rows,view,options={}){
        cash(usedCents/100)+' of '+cash(totalBudgetCents/100)+
        ' budget used, including unbudgeted category spending and predictions, '+Math.round(totalBudgetPercent)+
        ' percent')+'">'+
-      '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>':
-    '';
+      '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>';
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   const spendingOverview='<div class="history-spending-overview" aria-label="'+
    escapeHTML(cash(usedCents/100)+' budget usage: '+cash((postedCents+pendingCents)/100)+
@@ -2312,7 +2315,7 @@ function historyInsights(rows,view,options={}){
  const groups=historyBands.map(b=>({...b,count:0,cents:0}));
  for(const r of purchases){
   const i=historyBandIndex(Math.abs(Number(r.amount)||0));
-  if(i>=0){groups[i].count++;groups[i].cents+=cardActivityCents(r);}
+  if(i>=0){groups[i].count++;groups[i].cents+=purchaseReportCents(r,options.cardSettlementIds);}
  }
  const largest=Math.max(1,...groups.map(g=>g.count));
  return '<section class="history-insight-panel" data-history-size-insights aria-label="Purchase sizes">'+
@@ -2378,7 +2381,7 @@ function spendingMonthPicker(records,asOf,includeUpcoming=false){
    the numbers. Never persist a second financial model or change bank facts. */
 function financialRecapPage(bundle,s){
  const asOf=String(s.asOf||dateToday()),month=asOf.slice(0,7),
-  posted=model.records(state()).filter(r=>r.date&&r.date<=asOf),
+  posted=historyRecords(s),
   picker=spendingMonthPicker(posted,asOf,true),
   selectedMonths=historySelectedMonths,
   periodLabel=picker.label,
@@ -2621,10 +2624,10 @@ function historyPage(bundle,s){
  const filtered=records.filter(t=>{
   if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
   if(displayView==='list'&&historyPurchaseDrill&&
-   (historyCategoryFilter?categorySpendingCents(t,budgetCardSettlements):cardActivityCents(t))===0)return false;
+   (historyCategoryFilter?categorySpendingCents(t,budgetCardSettlements):purchaseReportCents(t,budgetCardSettlements))===0)return false;
   if(displayView==='list'&&historyMerchantFilter&&
-    (historyMerchantKey(t)!==historyMerchantFilter||!cardActivityCents(t)))return false;
-  if(displayView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
+    (historyMerchantKey(t)!==historyMerchantFilter||!purchaseReportCents(t,budgetCardSettlements)))return false;
+  if(displayView==='list'&&historySizeFilter>=0&&(purchaseReportCents(t,budgetCardSettlements)<=0||historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter))return false;
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
   if(displayView!=='categories'&&historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
@@ -3662,6 +3665,13 @@ function renderHistorySubview(previousView){
  }
  if(historyView==='categories')preparedViews.delete('history');
  updateHistorySelectionSummary();
+}
+function renderScheduleFilters(){
+ if(!preparedContext||!preparedReady){render({navigationOnly:true});return;}
+ const c=preparedContext,root=$('planner-main');
+ preparedViews.delete('schedules');
+ root.innerHTML=schedulesPage(c.bundle,c.s);
+ applyScheduleSearch(root);
 }
 function renderHistoryFilters(){
  if(!preparedContext||!preparedReady){render();return}
@@ -5888,11 +5898,10 @@ document.addEventListener('change',async e=>{
   render();return;
  }
  const kindFilter=e.target.closest?.('[data-schedule-kind-filter]');
- if(kindFilter){scheduleKindFilter=kindFilter.value;render();return;}
  const sorter=e.target.closest?.('[data-schedule-sort]'),
   filter=e.target.closest?.('[data-schedule-category-filter]'),
   schedulePicker=e.target.name==='scheduleAccount'?e.target:null;
- if(sorter||filter||schedulePicker){
+ if(sorter||filter||schedulePicker||kindFilter){
   const nextSort=sorter?sorter.value:scheduleSort,
    nextFilter=filter?filter.value:scheduleCategoryFilter,
    nextAccount=schedulePicker?schedulePicker.value:scheduleAccount,
@@ -5904,10 +5913,11 @@ document.addEventListener('change',async e=>{
    return field.value!==field.defaultValue;
   });
   if(dirty&&!window.confirm('Discard unsaved prediction edits to reorganize the list?')){
-   e.target.value=sorter?scheduleSort:schedulePicker?scheduleAccount:scheduleCategoryFilter;return;
+   e.target.value=kindFilter?scheduleKindFilter:sorter?scheduleSort:schedulePicker?scheduleAccount:scheduleCategoryFilter;return;
   }
   scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;scheduleAccount=nextAccount;
-  scheduleMode='';scheduleTarget='';transactionDetail=null;render();return;
+  if(kindFilter)scheduleKindFilter=kindFilter.value;
+  scheduleMode='';scheduleTarget='';transactionDetail=null;renderScheduleFilters();return;
  }
  if(e.target.name==='separateSchedule'&&e.target.checked){
   const form=e.target.closest?.('[data-history-recurring-form]');

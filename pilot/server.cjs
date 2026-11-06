@@ -303,18 +303,15 @@ async function sync(){
    for(const t of [...page.added,...page.modified]){
     if(!ids.has(t.account_id))continue;
     if(t.pending_transaction_id){
-     if(!replacements.some(r=>r.pendingId===t.pending_transaction_id&&r.accountId===t.account_id))
+     const replacement=replacements.find(r=>r.pendingId===t.pending_transaction_id&&r.accountId===t.account_id);
+     if(replacement&&replacement.id!==t.transaction_id)throw Error('Conflicting pending replacement identity');
+     if(!replacement)
       replacements.push({accountId:t.account_id,pendingId:t.pending_transaction_id,id:t.transaction_id});
      const predecessor=next[t.pending_transaction_id];
      if(predecessor&&(predecessor.accountId!==t.account_id||predecessor.itemId!==stage.item.id))
       throw Error('Pending predecessor belongs to another account or Item');
      require('../ledger-data.js').remapTransactionMetadata(adjustments,t.account_id,t.pending_transaction_id,t.transaction_id);
      delete next[t.pending_transaction_id];
-     if(Object.prototype.hasOwnProperty.call(overrides,t.pending_transaction_id)){
-      if(!Object.prototype.hasOwnProperty.call(overrides,t.transaction_id))
-       overrides[t.transaction_id]=overrides[t.pending_transaction_id];
-      delete overrides[t.pending_transaction_id];
-     }
     }
     next[t.transaction_id]={id:t.transaction_id,accountId:t.account_id,itemId:stage.item.id,
      date:t.date,name:t.name,merchant:t.merchant_name||t.name,amount:t.amount,
