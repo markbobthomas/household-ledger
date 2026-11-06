@@ -29,11 +29,12 @@ const OPENING_PAGE_KEY='household-ledger-opening-page-v1';
 const OPENING_PAGES=[
  ['summary','Home'],['history','Spending'],['schedules','Bills'],
  ['activity','Transactions · Posted'],['reviews','Things to check'],
- ['trend','Home · Balance trend'],['transactions','Transactions · Planned'],
- ['settings','Settings']
+ ['trend','Home · Balance trend'],['settings','Settings']
 ];
 const preferredOpeningPage=()=>{
  const saved=localStorage.getItem(OPENING_PAGE_KEY);
+ // Legacy Planned startup preference migrates to the unified Upcoming page.
+ if(saved==='transactions')return 'schedules';
  return OPENING_PAGES.some(([id])=>id===saved)?saved:'summary';
 };
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
@@ -112,7 +113,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsUpcomingScope=localStorage.getItem(OPENING_PAGE_KEY)==='transactions'?'all':'bills',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1876,6 +1877,11 @@ function schedulesPage(bundle,s){
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
+  '<div class="upcoming-scope-selector" role="group" aria-label="Upcoming transaction filter">'+
+   [['bills','Bills only'],['all','All expected']].map(([id,name])=>
+    '<button type="button" class="history-subtab'+(billsUpcomingScope===id?' active':'')+
+    '" data-upcoming-filter="'+id+'" aria-pressed="'+(billsUpcomingScope===id)+'">'+name+'</button>').join('')+'</div>'+
+  '<div data-upcoming-scope="bills"'+(billsUpcomingScope==='bills'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2 class="visually-hidden">Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
@@ -1887,6 +1893,7 @@ function schedulesPage(bundle,s){
    (groupedBills||'<p class="bills-upcoming-empty">No upcoming bills in this period.</p>')+
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
+  '<div data-upcoming-scope="all"'+(billsUpcomingScope==='all'?'':' hidden')+'>'+transactionsPage(bundle,s)+'</div></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
   '<div class="bills-manage-heading"><div><h2 class="visually-hidden">Recurring bills</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
@@ -1935,9 +1942,8 @@ function transactionsPage(bundle,s){
   skipped.map(([key,v])=>'<div class="future-skip-line">'+escapeHTML(v.label||'Predicted transaction')+
    ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
- return '<div class="planner-page transactions-page">'+
-  transactionsViewTabs('transactions')+
-  '<div class="page-heading"><div><h2>Planned transactions</h2></div>'+
+ return '<div class="planner-page transactions-page upcoming-all-page">'+
+  '<div class="page-heading"><div><h2 class="visually-hidden">All expected transactions</h2></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -2825,7 +2831,7 @@ function historyPage(bundle,s){
  })();
  }
  return '<div class="planner-page history-page">'+
-  (activeTab==='activity'?transactionsViewTabs('activity'):'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
+  (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -3480,7 +3486,7 @@ function settingsPage(bundle,s,chosen){
 const preparedViews=new Map();
 const preparedHistoryViews=new Map();
 const spendingDestinations=['categories','merchants','sizes','summary'];
-const preparedDestinations=['summary','history','schedules','activity','reviews','settings','transactions','trend'];
+const preparedDestinations=['summary','history','schedules','activity','reviews','settings','trend'];
 // Prepared financial pages stay in this browser tab's memory only. No stored HTML,
 // service worker, localStorage data snapshots or additional server requests.
 let preparedEpoch=0,preparedContext=null,preparedNotice=null,preparedReady=false;
@@ -4439,6 +4445,15 @@ document.addEventListener('click',async e=>{
    const tab=document.querySelector('[data-review-tab="'+pane+'"]');
    if(tab&&reviewPane!==pane)tab.click();
    else if(!tab){reviewPane=pane;render({navigationOnly:true})}
+  }
+  return;
+ }
+ const upcomingFilter=e.target.closest?.('[data-upcoming-filter]');
+ if(upcomingFilter){
+  const next=upcomingFilter.dataset.upcomingFilter;
+  if(['bills','all'].includes(next)&&next!==billsUpcomingScope){
+   billsUpcomingScope=next;
+   switchExistingPane('data-upcoming-filter','data-upcoming-scope',next);
   }
   return;
  }
