@@ -202,10 +202,9 @@ function quickEditor(){
 }
 
 
-function postedDay(date){
- const rows=calendarContext.actual.get(date)||[],
-  history=calendarContext.history?.get(date);
- const body=rows.map(t=>{
+function postedEntries(date){
+ const rows=calendarContext.actual.get(date)||[];
+ return rows.map(t=>{
   const account=String(root.HouseholdPlannerHistory?.accountOf?.(t,calendarContext.accounts)||
    t.accountId||calendarContext.chosen),
    accountName=calendarContext.accounts.find(a=>String(a.id)===account)?.name||account;
@@ -226,6 +225,10 @@ function postedDay(date){
    '</strong><button type="button" class="calendar-item-edit ledger-transaction-action" data-calendar-history-plan="'+
    esc(t.id)+'" data-history-account="'+esc(account)+'">'+action+'</button></div>';
  }).join('');
+}
+function postedDay(date){
+ const rows=calendarContext.actual.get(date)||[],
+  history=calendarContext.history?.get(date),body=postedEntries(date);
  return '<section class="calendar-day-detail calendar-actual-detail" data-calendar-detail>'+
   '<div class="calendar-detail-heading"><div><span>BANK HISTORY · NOT A PREDICTION</span><strong>'+
    esc(dateLabel(date))+'</strong></div></div>'+
@@ -285,6 +288,10 @@ function predictionEntry(date,e,index,card,selected=false,other=false){
 }
 function dayDetail(point,card){
  const events=point.events||[],other=outsideDay(point.date),
+  // The as-of date is already represented by a bank-reported starting balance,
+  // yet its posted/pending rows must remain visible alongside future forecasts.
+  todayActivity=point.date===calendarContext.asOf?
+   calendarContext.actual.get(point.date)||[]:[],
   cardSpending=other.filter(e=>e.kind==='card_purchase')
    .reduce((sum,e)=>sum+Number(e.amount||0),0),
   first=calendarContext.points[0],
@@ -329,7 +336,12 @@ function dayDetail(point,card){
    esc(dateLabel(point.date))+'</strong></div>'+
    '<button type="button" class="calendar-add" data-calendar-add'+
    (point.date===first.date?' disabled':'')+'>+ Add prediction</button></div>'+
-  activity+
+  (todayActivity.length?'<div class="calendar-today-actual" data-calendar-today-actual>'+
+   '<strong>BANK ACTIVITY · ALREADY REFLECTED IN BANK BALANCES</strong>'+
+   '<div class="calendar-detail-items">'+postedEntries(point.date)+'</div>'+
+   '<small>Posted and pending records are shown for reference, not added to the forecast again.</small>'+
+   '</div>':'')+
+  (todayActivity.length&&!events.length&&!other.length?'':activity)+
   (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
    gaps.map((g,i)=>'<div><span>'+esc(g.merchant)+' · '+money(g.amount)+
     '</span><button type="button" data-calendar-fill-gap="'+i+'">Review and add</button></div>').join('')+
@@ -368,12 +380,18 @@ function monthlyActuals(state){
 }
 function monthlyPredictions(state){
  if(isHistoricalMonth())return monthlyActuals(state);
- const primary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
+ const posted=[...state.actual.entries()].filter(([day])=>
+  day.startsWith(calendarMonth)).flatMap(([date,items])=>
+   items.map(t=>({date,transaction:t}))),
+  primary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
   (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i,other:false,card:state.card}))),
   secondary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
    outsideDay(p.date).map((e,i)=>({date:p.date,event:e,index:i,other:true,card:Boolean(e._calendarCard)}))),
-  rows=[...primary,...secondary].sort((a,b)=>a.date.localeCompare(b.date)||
-   Number(a.other)-Number(b.other)||a.event.merchant.localeCompare(b.event.merchant));
+  rows=[...posted,...primary,...secondary].sort((a,b)=>
+   a.date.localeCompare(b.date)||
+   Number(Boolean(a.event))-Number(Boolean(b.event))||
+   String(a.transaction?.merchant||a.event?.merchant||'').localeCompare(
+    String(b.transaction?.merchant||b.event?.merchant||'')));
  const futureDays=state.points.filter(p=>p.date>state.asOf&&p.date.startsWith(calendarMonth)),
   from=futureDays[0]?.date,to=futureDays.at(-1)?.date,
   period=from?(shortDate(from)+(from===to?'':' – '+shortDate(to))):
@@ -391,7 +409,7 @@ function monthlyPredictions(state){
    ' in recent posted purchases (not an issued statement)</span>'+
    '<button type="button" class="btn" data-view="settings">Set payment date →</button></div>').join('')+'</div>':'';
  return '<details class="calendar-monthly-list" data-calendar-monthly'+(calendarMonthExpanded?' open':'')+'>'+
-  '<summary>See all '+esc(monthName(calendarMonth))+' predictions ('+rows.length+')'+
+  '<summary>See all '+esc(monthName(calendarMonth))+' activity and predictions ('+rows.length+')'+
    '</summary>'+
   '<p class="calendar-monthly-context">'+period+'</p>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
@@ -399,9 +417,19 @@ function monthlyPredictions(state){
    esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span>'+
    (otherCardCharges?'<span data-calendar-other-card-total>Other card purchases: <strong>'+
     money(otherCardCharges)+'</strong> · excluded from selected balance</span>':'')+'</div>'+
-  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index,card,other})=>
+  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index,card,other,transaction:t})=>
+    t?'<div class="calendar-monthly-row calendar-posted-month-row" data-calendar-posted-month-row>'+
+      '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
+      '<span class="calendar-monthly-name"><strong>'+esc(t.merchant||'Bank transaction')+'</strong>'+
+      '<small>'+(t.pending?'Pending':'Posted')+' · Bank activity'+
+      (state.scope==='all'?' · '+esc(state.accounts.find(a=>
+       String(a.id)===String(root.HouseholdPlannerHistory?.accountOf?.(t,state.accounts)||
+        t.accountId))?.name||'Account'):'')+'</small></span>'+
+      '<strong class="ledger-transaction-amount">'+
+       ((['income','refund'].includes(t.type)||t.type==='transfer'&&t.cashDirection==='in')?'+':'−')+
+       money(Number(t.amount))+'</strong></div>':
     predictionEntry(date,e,index,card,date===calendarDate,other)).join('')+
-   '</div>':'<p class="calendar-empty">No upcoming predicted deposits or withdrawals for this account during the remaining forecast days this month.</p>')+
+   '</div>':'<p class="calendar-empty">No recorded bank activity or predictions in this month.</p>')+
    '</details>'+unplanned;
 }
 // The balance card follows the displayed Calendar month, not a rolling window.
@@ -556,6 +584,7 @@ function calendarGrid(){
   if(!p)return '<div class="calendar-outside" aria-hidden="true"><span>'+
    dom+'</span></div>';
   const events=p.events||[],other=outsideDay(iso),
+   actualToday=iso===state.asOf?state.actual.get(iso)||[]:[],
    all=[...events.map(e=>({event:e,external:false,card:state.card})),
     ...other.map(e=>({event:e,external:true,card:Boolean(e._calendarCard)}))],
    gaps=state.gaps.get(iso)||[],low=!state.card&&p.balance<state.cushion,
@@ -571,6 +600,7 @@ function calendarGrid(){
      '<span class="calendar-event-amount">'+amount+'</span></span>';
    }).join('');
   const aria=dateLabel(iso)+', '+money(p.balance)+
+   (actualToday.length?', '+actualToday.length+' bank transactions':'')+
    (all.length?', '+events.length+' selected-account and '+other.length+
      ' other-account predicted transactions':
     ', no predicted transactions')+
@@ -585,8 +615,23 @@ function calendarGrid(){
    '<span class="calendar-day-balance"><span class="calendar-money-wide">'+
     money(p.balance)+'</span><span class="calendar-money-narrow">'+
     shortMoney(p.balance)+'</span></span>'+
-   '<span class="calendar-day-events">'+delta+
-    (all.length>2?'<span class="calendar-more">+'+(all.length-2)+' more</span>':'')+
+   '<span class="calendar-day-events">'+
+    actualToday.slice(0,2).map(t=>
+     '<span class="calendar-event calendar-actual-event" title="'+
+      esc((t.pending?'Pending':'Posted')+' bank activity · '+
+       (t.merchant||'Transaction'))+'"><span class="calendar-event-name">'+
+       esc(t.merchant||'Bank transaction')+'</span><span class="calendar-event-amount">'+
+       (t.pending?'Pending':'Posted')+'</span></span>').join('')+
+    (actualToday.length>=2?(actualToday.length+all.length>2?
+      '<span class="calendar-more">+'+(actualToday.length+all.length-2)+' more</span>':''):
+      (actualToday.length===1?all.slice(0,1).map(({event:e,external,card})=>
+       '<span class="calendar-event '+(external?'external':signed(e,card)>0?'in':'out')+
+        '"><span class="calendar-event-name">'+esc(e.merchant||'Payment')+
+        '</span><span class="calendar-event-amount">'+
+        (signed(e,card)>0?'+':'−')+shortMoney(Number(e.amount))+'</span></span>').join(''):
+       delta)+
+      (actualToday.length+all.length>2?
+       '<span class="calendar-more">+'+(actualToday.length+all.length-2)+' more</span>':''))+
     (gaps.length?'<span class="calendar-unplanned">? '+esc(gaps[0].merchant)+'</span>':'')+
    '</span></button>';
  }).join('');
@@ -775,7 +820,7 @@ function render(input){
   rows.sort((a,b)=>a.merchant.localeCompare(b.merchant)||a.accountId.localeCompare(b.accountId));
  const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf,
   historyStart=historicalCalendarStart(snapshot.asOf,bundle?.rows||[]);
- for(let date=historyStart;date<snapshot.asOf;date=addDay(date,1))
+ for(let date=historyStart;date<=snapshot.asOf;date=addDay(date,1))
   actual.set(date,[]);
  for(const r of bundle?.rows||[]){
   if(!actual.has(r.date)||!allAccounts&&
