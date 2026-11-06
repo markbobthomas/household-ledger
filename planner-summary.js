@@ -598,10 +598,15 @@ function render(input){
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
  trendContext=series.length?{points:series,credit,prefs,derived}:null;
  trendSeries=series;
+ // Preparing the separate Balance Trend page must not replace the active
+ // Calendar's account scope, joint-account overlay, selected month or day.
+ // Prepared navigation invokes both renders offscreen from the same bundle.
+ if(view==='calendar'){
  if(calendarAsOf!==snapshot.asOf){
   calendarAsOf=snapshot.asOf;calendarMonth=snapshot.asOf.slice(0,7);
   calendarDate=snapshot.asOf;calendarFocus=null;
  }
+
  const accountScope=(allAccounts?'all':String(chosen.id))+'|'+String(chosen.id);
  if(calendarAccount!==accountScope){
   calendarAccount=accountScope;calendarEditor=null;calendarNotice='';
@@ -647,6 +652,7 @@ function render(input){
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
    series.at(-1).date,chosen.id,series):new Map()};
+ }
  if(series.length<2){
   const status=derived?.balanceStatus||(!bundle?.projection?'calculation':'unavailable');
   const reason=status==='unavailable'?'The bank did not report a usable current balance for this account.':
