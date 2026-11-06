@@ -6760,3 +6760,33 @@ a:hover{color:#166e61}
 .calendar-weekend-day .calendar-detail-items{margin-top:4px}
 .calendar-actual-row .transaction-title-line,
 .calendar-monthly-name .transaction-title-line{max-width:100%;min-width:0}
+
+/* Seven recurring controls in two compact rows on phone/tablet: four filters
+   above, with search spanning two columns and the action kept in row two. */
+@media(max-width:850px){
+ .schedule-page .schedule-toolbar.ledger-toolbar{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  grid-template-rows:auto auto!important;
+ }
+ .schedule-page .schedule-toolbar.ledger-toolbar>.bills-month-field{
+  grid-column:1!important;grid-row:1!important;
+ }
+ .schedule-page .schedule-toolbar.ledger-toolbar>label:nth-child(3){
+  grid-column:2!important;grid-row:1!important;
+ }
+ .schedule-page .schedule-toolbar.ledger-toolbar>label:nth-child(4){
+  grid-column:3!important;grid-row:1!important;
+ }
+ .schedule-page .schedule-toolbar.ledger-toolbar>.schedule-category-controls{
+  grid-column:4!important;grid-row:1!important;
+ }
+ .schedule-page .schedule-toolbar.ledger-toolbar>.schedule-search-wrap{
+  grid-column:1/3!important;grid-row:2!important;
+ }
+ .schedule-page .schedule-toolbar.ledger-toolbar>label:nth-child(5){
+  grid-column:3!important;grid-row:2!important;
+ }
+ .schedule-page .schedule-toolbar.ledger-toolbar>.ledger-add-repeating{
+  grid-column:4!important;grid-row:2!important;
+ }
+}
