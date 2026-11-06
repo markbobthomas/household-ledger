@@ -6690,3 +6690,40 @@ a:hover{color:#166e61}
  .summary-page>.home-subtabs{width:100%}
  .bills-statement-settings{width:100%}
 }
+
+/* Keep Posted bank history in the same centered content frame as Bills and
+   Spending. The old Posted/Planned subtab no longer consumes a narrow strip. */
+.planner-page.history-page.posted-transactions-page{
+ width:100%;max-width:1050px;min-width:0;margin-inline:auto;box-sizing:border-box;
+}
+.posted-transactions-page>.history-filters,
+.posted-transactions-page>.history-list-surface{
+ width:100%;max-width:100%;min-width:0;box-sizing:border-box;
+}
+/* Upcoming is a single destination with two presentation lenses; these
+   controls hide/show prepared DOM and do not request a new forecast. */
+.schedule-page .upcoming-scope-selector{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ align-items:center;gap:5px;
+ width:min(420px,100%);max-width:100%;
+ padding:4px;margin:0 0 13px;
+ border:1px solid var(--ledger-hairline,#dce6de);
+ border-radius:10px;background:#f2f6f2;
+}
+.schedule-page .upcoming-scope-selector .history-subtab{
+ min-height:39px;padding:8px 9px;min-width:0;
+ white-space:nowrap;font-size:13px;font-weight:650;
+ border:0;border-radius:7px;cursor:pointer;
+ color:#587060;background:transparent;
+}
+.schedule-page .upcoming-scope-selector .history-subtab.active{
+ background:#fff;color:#243e31;box-shadow:0 1px 4px #17291b15;
+}
+.schedule-page [data-upcoming-scope][hidden]{display:none!important}
+.schedule-page .upcoming-all-page{width:100%;max-width:100%;margin:0}
+.schedule-page .upcoming-all-page .page-heading{margin-bottom:10px}
+.schedule-page .upcoming-all-page .transaction-panel{width:100%;max-width:100%;box-sizing:border-box}
+@media(max-width:650px){
+ .planner-page.history-page.posted-transactions-page{max-width:100%}
+ .schedule-page .upcoming-scope-selector{width:100%}
+}
