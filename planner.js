@@ -1593,7 +1593,7 @@ function billsStatementsPage(bundle,s){
       (historical?' · Past':p.periodStart<=s.asOf&&p.periodEnd>s.asOf?
        ' · Current':p.periodComplete?' · Closed':' · Estimate')+'</option>').join(''):
      '<option value="">No statements available</option>')+
-   '</select></label><button type="button" class="btn bills-statement-settings" data-view="settings" data-focus-target="#card-autopay">Autopay settings</button></div>';
+   '</select></label><button type="button" class="btn bills-statement-settings" data-forecast-review="settings-card" data-forecast-card-id="'+escapeHTML(accountId)+'">Autopay settings</button></div>';
  if(!selected)return '<div class="bills-statements-page">'+controls+
   '<section class="panel bills-card-statements" data-bills-card="'+
    escapeHTML(accountId)+'"><p class="bills-card-empty">'+
