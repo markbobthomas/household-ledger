@@ -638,13 +638,25 @@ function calendarGrid(){
    '</span></button>';
  }).join('');
  const active=state.points.find(p=>p.date===calendarDate)||currentPoints[0];
+ // Keep Saturday/Sunday actual postings on their bank date, not Friday/Monday.
+ const weekendDates=[...state.actual.keys()].filter(d=>
+  d.startsWith(calendarMonth)&&[0,6].includes(
+   new Date(d+'T12:00:00Z').getUTCDay())&&(state.actual.get(d)||[]).length).sort();
+ const weekendCount=weekendDates.reduce((n,d)=>n+(state.actual.get(d)||[]).length,0);
+ const weekendActivity=weekendCount?
+  '<details class="calendar-weekend-activity" data-calendar-weekend-activity>'+
+   '<summary>Weekend bank activity · '+weekendCount+
+   ' transaction'+(weekendCount===1?'':'s')+'</summary>'+
+   weekendDates.map(d=>'<div class="calendar-weekend-day"><strong>'+esc(dateLabel(d))+
+    '</strong><div class="calendar-detail-items">'+postedEntries(d)+'</div></div>').join('')+
+  '</details>':'';
  return '<div class="calendar-wrapper" data-calendar-stage>'+
   
   '<div class="calendar-grid" style="--calendar-weeks:'+weekCount+'" role="group" aria-label="'+
    esc(monthName(calendarMonth)+(isHistoricalMonth()?' posted-history calendar':' forecast calendar'))+'">'+
    header+cells+'</div>'+
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
-   monthlyPredictions(state)+'</div>';
+   weekendActivity+monthlyPredictions(state)+'</div>';
 }
 function showCalendar(date,keepWeekend=false){
  // Only business-day grid navigation advances weekends. Direct month/date and
