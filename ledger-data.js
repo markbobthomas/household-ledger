@@ -293,11 +293,54 @@ function categoryRuleSafety(state,t,index){
  return {mixed,count:index?(stored?.count||0):related.length,distinctCategories:categories.size,
   cause:mixedUse.test(t.merchant)?'Multi-purpose merchant':categories.size>1?'Conflicting past categories':'Consistent merchant history'};
 }
-function resolution(state,t,index){
+// A uniquely matched saved repeating category is a reporting classification
+// for its bank activity too. Never modify original bank records or overwrite
+// a transaction's separate, explicitly saved category selection.
+const repeatMerchantKey=value=>String(value||'').toLowerCase().trim()
+ .replace(/[^a-z0-9]+/g,' ').trim();
+function confirmedRepeatCategoryIndex(state){
+ const byMerchant=new Map(),byExample=new Map();
+ const add=(map,key,item)=>{
+  const list=map.get(key)||[];
+  if(!list.some(existing=>existing.id===item.id))list.push(item);
+  map.set(key,list);
+ };
+ for(const rule of state.predictions?.futureRecurringRules||[]){
+  if(rule?.kind!=='event'||rule.type!=='expense')continue;
+  const category=canonicalCategory(state,rule.category);
+  if(!category||['Other','Uncategorized','Income','Transfer'].includes(category))continue;
+  const account=String(rule.originalAccountId||rule.accountId||'');
+  if(!account)continue;
+  const item={id:String(rule.id||''),account,category};
+  const names=[rule.originalMerchant,rule.merchant,
+   ...(Array.isArray(rule.matchNames)?rule.matchNames:[])];
+  for(const name of new Set(names.map(repeatMerchantKey).filter(Boolean)))
+   add(byMerchant,account+'|'+name,item);
+  for(const id of new Set((rule.exampleIds||[]).map(String).filter(Boolean)))
+   add(byExample,id,item);
+ }
+ return {byMerchant,byExample};
+}
+function confirmedRepeatCategory(row,index){
+ if(!index||row.pairedTransactionId||row.accountingKind==='card_payment'||
+    !(row.type==='expense'||row.type==='transfer'&&row.cashDirection==='out'))
+  return null;
+ const account=String(row.accountId||row.account||'');
+ if(!account)return null;
+ const linked=(index.byExample.get(String(row.id))||[])
+  .filter(rule=>rule.account===account);
+ const named=index.byMerchant.get(account+'|'+repeatMerchantKey(row.merchant))||[];
+ const matches=linked.length?linked:named;
+ // Independent same-payee schedules are ambiguous without a bank example ID.
+ return matches.length===1?matches[0].category:null;
+}
+function resolution(state,t,index,recurringCategories){
  const explicit=state.categoryOverrides?.[t.id];
  if(explicit==='Uncategorized'||explicit&&removedCategory(state,explicit))
   return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
  if(explicit)return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
+ const confirmed=confirmedRepeatCategory(t,recurringCategories);
+ if(confirmed)return {category:confirmed,method:'recurring',confidence:'Saved repeating plan',ruleKey:null};
  const original=t.category||'Other';
  if(removedCategory(state,original))
   return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
@@ -332,7 +375,8 @@ function resolution(state,t,index){
 function records(state){
  const learned=state.learning?.categoryRules||{};
  const index=Object.keys(learned).length?categorySafetyIndex(state):null;
- return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t,index),originalCategory:t.category||'Other'}));
+ const repeats=confirmedRepeatCategoryIndex(state);
+ return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t,index,repeats),originalCategory:t.category||'Other'}));
 }
 // The same category registry and manual overrides serve Bank History and Review.
 // A category that only came from low-confidence provider/merchant evidence stays
@@ -356,7 +400,7 @@ function categoryReviewQueue(state){
      (t.type==='income'?'Income':'Transfer'):
      String(t.category||'Other'),
     manual=knownKind||Boolean(state.categoryOverrides?.[t.id]&&state.categoryOverrides[t.id]!=='Uncategorized')||
-     ['manual','learned'].includes(t.method),
+     ['manual','learned','recurring'].includes(t.method),
     // An explicitly saved Other category is a reviewed choice, not a gap.
     missing=missingCategory(category)&&!manual,
     score=confidenceScore(t),
@@ -390,7 +434,7 @@ function categoryReviewQueue(state){
 }
 function categoryFor(state,id){
  const t=(state.transactions||[]).find(x=>x.id===id);
- return t?resolution(state,t).category:null;
+ return t?resolution(state,t,null,confirmedRepeatCategoryIndex(state)).category:null;
 }
 function learnCategory(state,id,category,remember=true){
  const t=(state.transactions||[]).find(x=>x.id===id);
