@@ -146,4 +146,32 @@ assert.ok(checkingPoints.every(p=>p.balance===100000),
 assert.ok(cardProjection.ledger.some(e=>e.kind==='event'&&e.accountId==='fictional-card'&&e.ruleId===cardRule.id),
  'Canonical future ledger retains card activity for all-account Calendar and Bills views');
 
+
+// A card charge posted last week must not clear next week's confirmed charge.
+const weekAsOf='2026-11-05',weekBank={id:'posted-week',date:'2026-11-04',
+ merchant:'Fictional Home Delivery',type:'expense',amount:18,
+ accountId:'fictional-card',pending:false};
+const weekRule={...cardRule,id:'weekly-linked-card',
+ anchorDate:'2026-11-18',sourceAnchorDate:'2026-11-04',
+ reconciliationAnchorDate:'2026-11-18',sourceFrequency:'weekly',
+ exampleIds:[weekBank.id],matchNames:['fictional home delivery']};
+const weekAccounts=[...accounts,cardAccount];
+assert.equal(Transactions.postedWithinMatchWindow(
+ weekRule,weekBank,'2026-11-11',18,true),false);
+assert.equal(Transactions.reconciliationAnchor(
+ weekRule,[weekBank],weekAccounts,weekAsOf),'2026-11-04');
+const weekSnapshot={asOf:weekAsOf,accounts:weekAccounts,mode:'demo'};
+const before=JSON.stringify({weekRule,weekBank});
+const weekForecast=Core.materialize(weekSnapshot,[weekBank],
+ {futureRecurringRules:[weekRule],recurringForecastMode:'approved-only'},
+ Transactions,null,45);
+const weeks=weekForecast.ledger.filter(e=>e.ruleId===weekRule.id).map(e=>e.date);
+assert.ok(['2026-11-11','2026-11-18','2026-11-25'].every(d=>weeks.includes(d)),
+ 'An earlier linked card charge cannot hide the next weekly purchase');
+assert.equal(JSON.stringify({weekRule,weekBank}),before,'Bank and rule are immutable');
+assert.ok(weekForecast.projection.accounts.find(a=>a.id==='checking')
+ .series.every(p=>p.balance===100000),'Card charges cannot debit checking');
+assert.equal(Transactions.postedWithinMatchWindow(
+ {...weekRule,frequency:'biweekly'},weekBank,'2026-11-18',18,true),false);
+
 console.log('PASS schedule category preservation: encrypted-forecast preference shape, custom categories, individual edits and linked-transfer legs');
