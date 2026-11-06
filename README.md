@@ -43,7 +43,7 @@ The only financial specialty is a credit-card statement/autopay adapter (`paymen
 - `pilot/server.cjs`, `pilot/data-source.js`: retained authenticated Plaid connector and encrypted private forecast-preference storage.
 - `sandbox/server.cjs`: optional fictional hosted Sandbox, **not** the private production bank server.
 
-Legacy forecast implementations such as `forecast.js`, `forecast-ledger.js`, `account-forecast.js`, and `planner-intelligence.js` are retained as **test-only historical compatibility code**; none runs in the application. The obsolete Phase 4 accuracy/stress/readiness laboratory stack and tests for the former Insights interface were retired in Phase 5. See [PHASE5_LEGACY_RETIREMENT.md](PHASE5_LEGACY_RETIREMENT.md) for the consumer audit and rollback boundary. Older commits remain in Git history.
+Some older forecast implementations (`forecast.js`, `forecast-ledger.js`, `account-forecast.js`) remain **test-only historical compatibility code** until their remaining specialized regressions are safely migrated; none runs in the application. `planner-intelligence.js`, `planner-recurrence.js`, and `planner-backtest.js` have now been retired with their historical-only test cases after migrating essential assertions to the canonical engine. The obsolete Phase 4 accuracy/stress/readiness laboratory stack and tests for the former Insights interface were retired in Phase 5. See [PHASE5_LEGACY_RETIREMENT.md](PHASE5_LEGACY_RETIREMENT.md) for the consumer audit and rollback boundary. Older commits remain in Git history.
 
 ## Predictive rules
 
