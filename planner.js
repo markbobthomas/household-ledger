@@ -3206,7 +3206,9 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
    (categoryCount?
     '<div class="review-bulk-toolbar" data-review-bulk-toolbar>'+
-     '<button type="button" class="btn" data-review-select-all>Select all shown</button>'+
+     '<button type="button" class="btn" data-review-select-all>'+
+      (shownCategories.length&&shownCategories.every(item=>reviewCategorySelected.has(
+       reviewCategoryKey(item.kind,item.id)))?'Deselect shown':'Select all shown')+'</button>'+
      '<span data-review-bulk-count role="status" aria-live="polite">'+reviewCategorySelected.size+' selected</span>'+
      '<select data-review-bulk-category aria-label="Category for selected items"'+
       (reviewCategorySelected.size?'':' disabled')+'>'+categoryOptions()+'</select>'+
