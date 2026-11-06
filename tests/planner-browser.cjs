@@ -2180,6 +2180,11 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await outsideRow.count(),1,
     'Selected day lists the predicted card purchase on its associated card');
    assert.match(await outsideRow.innerText(),/Card purchase.*no selected-balance change/s);
+   assert.match(await page.locator('[data-calendar-day-card-spending]').innerText(),
+    /On other credit cards.*\$18\.00/s,
+    'Selected day summarizes foreign card spending without treating it as checking cash');
+   assert.match(await page.locator('[data-calendar-net-change]').innerText(),
+    /Selected account change/);
    const netBefore=await page.locator('[data-calendar-net-change]').getAttribute('data-net-cents');
    assert.equal(Number(netBefore),0,
     'A day with only a card purchase has no checking withdrawal');
