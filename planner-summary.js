@@ -493,7 +493,7 @@ function rawBalanceMarkup(account,real,allAccounts=false){
  const n=raw===null||raw===undefined||raw===''||!Number.isFinite(Number(raw))?
   null:Number(raw);
  const title=credit?(real?'Actual Current Balance':'Sample Current Balance'):
-  allAccounts?(real?'Main checking available today':'Main checking sample available'):
+  allAccounts?(real?'Main checking · Available today':'Main checking · Sample available today'):
   (real?'Available today':'Sample available today');
  return '<div class="summary-bank"><small>'+title+'</small>'+
   '<strong class="'+(!credit&&n!==null&&n<0?'summary-bank-negative':'')+'" data-bank-balance-value'+(credit?
@@ -571,10 +571,16 @@ function render(input){
    accounts.find(a=>String(a.accountType||a.subtype||'').toLowerCase()==='checking')||
    accounts.find(a=>String(a.accountType||a.type||'').toLowerCase()!=='credit')||chosen;
   const display=calendarScope==='all'?main:
-   accounts.find(a=>String(a.id)===calendarScope)||main;
-  chosen=display;
-  derived=bundle?.projection?.accounts?.find(a=>String(a.id)===String(display.id))||null;
-  fresh=Boolean(derived&&['fresh','simulated'].includes(derived.balanceStatus));
+   accounts.find(a=>String(a.id)===calendarScope)||main,
+   projected=bundle?.projection?.accounts?.find(a=>String(a.id)===String(display.id));
+  // Direct summary consumers may provide a verified projection without
+  // bundle.projection.accounts; do not discard its bank-status evidence.
+  // In the live app, authoritative account projections always take priority.
+  const sameInput=String(chosen?.id)===String(display.id);
+  chosen=sameInput?chosen:display;
+  derived=projected||(sameInput?derived:null);
+  fresh=projected?['fresh','simulated'].includes(projected.balanceStatus):
+   sameInput?Boolean(fresh):false;
  }
  const allAccounts=view==='calendar'&&calendarScope==='all';
  const credit=String(chosen.accountType||chosen.type)==='credit';
