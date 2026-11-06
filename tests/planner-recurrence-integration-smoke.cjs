@@ -91,7 +91,12 @@ async function submit(fields){
  for(const fn of handlers.submit||[])await fn(event);
 }
 const future=()=>el('planner-main').innerHTML;
-const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
+// Upcoming has two mutually exclusive presentation scopes. Count only the
+// canonical per-occurrence rows, never the hidden Bills-only preview as an
+// additional forecast or withdrawal.
+const forecastItems=html=>html.match(/<article class="future-item"[\s\S]*?<\/article>/g)||[];
+const occurrences=html=>forecastItems(html).filter(row=>row.includes('Mortgage ACH')).length;
+const merchantOccurrences=(html,name)=>forecastItems(html).filter(row=>row.includes(name)).length;
 (async()=>{
  await click('[data-view]',{view:'transactions'});
  const initial=future();
@@ -103,7 +108,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
  await click('[data-view]',{view:'transactions'});
  assert.equal(forecastBuilds,buildsBeforeNavigation,
   'Switching tabs without changing financial data must reuse the same three-year projection');
- assert.equal((initial.match(/ABC Draft 984/g)||[]).length,36,
+ assert.equal(merchantOccurrences(initial,'ABC Draft 984'),36,
   'Unfamiliar merchant with two real equal monthly payments appears automatically');
  assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
   'A bank-derived mortgage must not be absent from the future schedule');
@@ -165,7 +170,7 @@ const occurrences=html=>(html.match(/Mortgage ACH/g)||[]).length;
   'Confirming unrelated generic payment creates one separate recurring rule');
  await click('[data-view]',{view:'transactions'});
  const genericAfter=future();
- assert.equal((genericAfter.match(/ABC Draft 984/g)||[]).length,35,
+ assert.equal(merchantOccurrences(genericAfter,'ABC Draft 984'),35,
   'Owner-modified generic payment occurs once per month through the entire modeled period');
  assert.match(genericAfter,/Nov 26/);
  assert.doesNotMatch(genericAfter,/Nov 9[^<]*.*ABC Draft 984/);
