@@ -112,7 +112,7 @@ assert.match(weekendHTML,/data-calendar-weekend-activity/,
 assert.match(weekendHTML,/Sunday, October 18|Oct 18/,
  'Actual weekend posting date remains visible in the disclosure');
 assert.match(weekendHTML,/Fictional Sunday Pharmacy/);
-assert.match(weekendHTML,/transaction-title-line[\\s\\S]*?Picked up prescription/,
+assert.match(weekendHTML,/transaction-title-line[\s\S]*?Picked up prescription/,
  'Calendar uses the same inline merchant-and-note presentation as Activity');
 
 const nextDayHTML=tool.render({...todayInput,snapshot:{...snapshot,asOf:iso(1)},
