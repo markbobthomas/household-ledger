@@ -460,7 +460,7 @@ const {chromium,webkit}=require('playwright');
     budget:await recapMoney('budget'),bills:await recapMoney('bills')};
    assert.equal(october.bills,0,
     'Demo has no confirmed scheduled bills, so posted mortgage-like labels alone do not count');
-   assert.match(await page.locator('[data-recap-bills] small').innerText(),/Paid .*Upcoming/,
+   assert.match(await page.locator('[data-recap-bills] small').innerText(),/Posted .*Expected/,
     'Summary distinguishes paid bills from future estimates without extra controls');
    assert.deepEqual(await selectedMonths(page),['2026-10'],
     'Summary initially shows the current calendar month');
