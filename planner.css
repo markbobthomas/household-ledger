@@ -6587,3 +6587,15 @@ a:hover{color:#166e61}
 .bills-payment-suggestion>span{display:grid;gap:3px;min-width:0}
 .bills-payment-suggestion small{font-size:.9em;color:var(--muted,#66717c);overflow-wrap:anywhere}
 .bills-payment-suggestion>strong{white-space:nowrap}
+
+/* Current as-of day: actual bank activity is visible next to forecasts,
+   but never contributes an extra movement to the projected opening balance. */
+.calendar-today-actual{
+ display:grid;gap:7px;margin:8px 0 12px;padding:10px 0;
+ border-bottom:1px solid var(--line,#dce1e5)
+}
+.calendar-today-actual>strong{font-size:.82em;letter-spacing:.03em}
+.calendar-today-actual>small{color:var(--muted,#66717c);line-height:1.45}
+.calendar-today-actual .calendar-detail-items{display:grid;gap:5px}
+.calendar-actual-event{font-weight:500}
+.calendar-actual-event .calendar-event-amount{font-size:.82em;font-weight:500}
