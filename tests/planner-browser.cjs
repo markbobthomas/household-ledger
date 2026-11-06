@@ -2183,6 +2183,7 @@ const {chromium,webkit}=require('playwright');
    const netBefore=await page.locator('[data-calendar-net-change]').getAttribute('data-net-cents');
    assert.equal(Number(netBefore),0,
     'A day with only a card purchase has no checking withdrawal');
+   await page.locator('[data-calendar-monthly] summary').click();
    assert.match(await page.locator('[data-calendar-monthly]').innerText(),/Fictional Dairy Delivery/,
     'Monthly prediction drawer retains linked card purchases');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
