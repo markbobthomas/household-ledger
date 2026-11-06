@@ -2846,7 +2846,7 @@ function historyPage(bundle,s){
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select></label></div>')+
    (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear search</button>':'')+
-   '<button type="button" class="btn ledger-clear-filters" data-history-clear-all>Reset filters</button>'+
+   ((historyAccount!=='all'||historySearch||historySort!=='newest'||historyCategoryFilter||historyMerchantFilter||historySizeFilter>=0||historySelectedMonths.size!==1||!historySelectedMonths.has(s.asOf.slice(0,7)))?'<button type="button" class="btn ledger-clear-filters" data-history-clear-all>Reset filters</button>':'')+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement total: purchases − refunds · excludes payments, transfers and pending</p>':
    selectedHistoryCard?'<p class="ledger-statement-help">Set this card’s billing period in Settings to group transactions by statement.</p>':'')+
@@ -3450,6 +3450,7 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
     escapeHTML(warningThreshold(state().predictions))+'" required></label>'+
     '<button class="btn primary" type="submit">Save</button></form></section>'+
+  autopayPanel(s,bundle)+connectionPanel(s,bundle)+
   '<details class="panel ledger-advanced-settings"><summary>Advanced settings and diagnostics</summary>'+
   (state().predictions?.recurringForecastMode!=='approved-only'&&
    Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
@@ -3465,7 +3466,7 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  categoryLearning+auditPanel(chosen)+'</details>'+autopayPanel(s,bundle)+connectionPanel(s,bundle)+
+  categoryLearning+auditPanel(chosen)+'</details>'+
    (available()?'<section class="panel" aria-label="Share Ledger"><div class="section-title"><h2>Share Ledger</h2></div>'+
     '<p>Use this same private website on both phones to see the same household data. Send the link privately; the password must be shared separately.</p>'+
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
