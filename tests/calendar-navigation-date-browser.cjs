@@ -100,6 +100,9 @@ const {chromium,webkit}=require('playwright');
       String(a.accountType||a.type).toLowerCase()==='credit')?.id||'',localToday);
     assert.ok(cardId,'Fictional fixture includes a credit account');
     await page.locator('#summary-account').selectOption(cardId);
+    if(localToday==='2026-10-15')assert.equal(
+     await page.locator('[data-calendar-today-actual] .calendar-actual-row').count(),0,
+     'Choosing a card must not leak same-day checking transactions into its calendar');
     assert.equal(await page.locator('.summary-numbers>div').count(),2,
      'Card view has the same compact two-number layout as checking');
     assert.equal(await page.locator('[data-summary-card-statement]').count(),0,
