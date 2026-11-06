@@ -1309,6 +1309,16 @@ function pendingBudgetCents(row,settlements){
  if(!row?.pending||settlements?.has(String(row.id)))return 0;
  return cardActivityCents({...row,pending:false});
 }
+// Canonical posted household spending: purchases/refunds and user-reviewed
+// external outflows, excluding internal transfers and credit-card settlements.
+// Card statement math deliberately continues to use cardActivityCents only.
+function reportingSpendCents(row,settlements){return categorySpendingCents(row,settlements)}
+function budgetUsageCents(rows,settlements,expected=[]){
+ const posted=rows.reduce((n,r)=>n+reportingSpendCents(r,settlements),0),
+  pending=rows.reduce((n,r)=>n+pendingBudgetCents(r,settlements),0),
+  projected=expected.reduce((n,r)=>n+Number(r.cents||0),0);
+ return {posted,pending,expected:projected,total:posted+pending+projected};
+}
 function cardActivityCents(row){
  // The History statement total is purchases minus merchant refunds only.
  // A paired card payment is never a new purchase, even if an earlier
@@ -1912,7 +1922,7 @@ function schedulesPage(bundle,s){
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming transactions">'+
-   '<div class="bills-heading"><div><h2 class="visually-hidden">Upcoming transactions</h2></div>'+
+   '<div class="bills-heading"><div><h2 class="visually-hidden">All expected activity</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
      '<label class="bills-account-field minimal-control-label">Account'+
       accountSelect(accounts,transactionFilter,'transactionFilter',true)+'</label>'+
@@ -1921,7 +1931,7 @@ function schedulesPage(bundle,s){
       cash(upcomingCents/100)+'</strong>'+
      '<span class="bills-upcoming-card-sum" data-bills-upcoming-card-sum>Card purchases '+
       cash(cardChargeCents/100)+'</span>'+
-     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
+     '<span class="bills-upcoming-total">'+upcomingBills.length+' planned entries · all activity types</span></div></div>'+
     (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
     (showNewTransaction?newTransactionForm(s):'')+
     (groupedBills||'<p class="bills-upcoming-empty">No expected transactions in this period.</p>')+
@@ -2053,11 +2063,12 @@ function historyMerchantKey(row){return historyMerchantName(row).toLocaleLowerCa
 // matching are untouched. Exclude pending, paired transfers and card payments.
 function historyInsights(rows,view,options={}){
  const spendCents=view==='categories'?
-  r=>categorySpendingCents(r,options.cardSettlementIds)+
-   pendingBudgetCents(r,options.cardSettlementIds):cardActivityCents,
+  r=>reportingSpendCents(r,options.cardSettlementIds)+
+   pendingBudgetCents(r,options.cardSettlementIds):
+   r=>reportingSpendCents(r,options.cardSettlementIds),
   // Budget is NET spending: refunds are signed credits in the month of
   // posting, including months where the purchase was in an earlier period.
-  purchases=rows.filter(r=>view==='categories'?spendCents(r)!==0:spendCents(r)>0),
+  purchases=rows.filter(r=>view==='sizes'?spendCents(r)>0:spendCents(r)!==0),
   cents=purchases.reduce((sum,r)=>sum+spendCents(r),0),
   total=cents/100,n=purchases.length;
  const header='<div class="history-insights-head"><strong>'+n+' purchases</strong>'+
@@ -2068,7 +2079,7 @@ function historyInsights(rows,view,options={}){
   // from being counted as additional shopping.
   const groups=new Map();
   for(const r of rows){
-   const amount=cardActivityCents(r);
+   const amount=reportingSpendCents(r,options.cardSettlementIds);
    if(!amount)continue;
    const key=historyMerchantKey(r),name=historyMerchantName(r),
     g=groups.get(key)||{key,name,cents:0,count:0,refunds:0};
@@ -2114,11 +2125,10 @@ function historyInsights(rows,view,options={}){
    options.budgets:{},periodMonths=Math.max(1,Number(options.months)||1),
    allAccounts=options.allAccounts!==false,
    predictions=options.predictedExpenses||[],
-   postedCents=purchases.reduce((sum,r)=>sum+categorySpendingCents(r,options.cardSettlementIds),0),
-   pendingCents=purchases.reduce((sum,r)=>sum+pendingBudgetCents(r,options.cardSettlementIds),0),
+   usage=budgetUsageCents(purchases,options.cardSettlementIds,predictions),
+   postedCents=usage.posted,pendingCents=usage.pending,
    pendingCount=purchases.filter(r=>pendingBudgetCents(r,options.cardSettlementIds)!==0).length,
-   expectedCents=predictions.reduce((sum,r)=>sum+r.cents,0),
-   usedCents=postedCents+pendingCents+expectedCents;
+   expectedCents=usage.expected,usedCents=usage.total;
   const groups=new Map();
   for(const r of purchases){
    const category=String(r.category||'Other'),
@@ -2330,7 +2340,7 @@ function historyInsights(rows,view,options={}){
  const groups=historyBands.map(b=>({...b,count:0,cents:0}));
  for(const r of purchases){
   const i=historyBandIndex(Math.abs(Number(r.amount)||0));
-  if(i>=0){groups[i].count++;groups[i].cents+=cardActivityCents(r);}
+  if(i>=0){groups[i].count++;groups[i].cents+=reportingSpendCents(r,options.cardSettlementIds);}
  }
  const largest=Math.max(1,...groups.map(g=>g.count));
  return '<section class="history-insight-panel" data-history-size-insights aria-label="Purchase sizes">'+
@@ -2402,7 +2412,7 @@ function financialRecapPage(bundle,s){
   periodLabel=picker.label,
   settlements=window.HouseholdPlannerHistory.budgetCardSettlementIds(posted),
   current=posted.filter(r=>selectedMonths.has(r.date.slice(0,7))),
-  spendingCents=current.reduce((total,r)=>total+categorySpendingCents(r,settlements),0),
+  spendingCents=current.reduce((total,r)=>total+reportingSpendCents(r,settlements),0),
   incomeCents=current.reduce((total,r)=>{
    if(r.pending||r.pairedTransactionId||r.type!=='income'||
       ['card_payment','internal_transfer'].includes(r.accountingKind))return total;
@@ -2418,8 +2428,9 @@ function financialRecapPage(bundle,s){
   budgetSet=Object.entries(budgets).some(([name,amount])=>
    categories.has(name)&&amount!==null&&amount!==''&&Number.isFinite(Number(amount))&&Number(amount)>=0),
   periodBudgetCents=budgetCents*selectedMonths.size,
-  budgetExpectedCents=forecastBudgetExpenses(bundle,s,posted,settlements,selectedMonths)
-   .reduce((sum,row)=>sum+row.cents,0),
+  budgetEstimates=forecastBudgetExpenses(bundle,s,posted,settlements,selectedMonths),
+  budgetUsage=budgetUsageCents(current,settlements,budgetEstimates),
+  budgetExpectedCents=budgetUsage.expected,
   hasProjection=Boolean(bundle?.projection),
   rules=new Map((state().predictions?.futureRecurringRules||[])
    .filter(rule=>rule.kind!=='movement'&&
@@ -2489,29 +2500,32 @@ function financialRecapPage(bundle,s){
   '<header class="financial-recap-header">'+
    picker.markup+'</header>'+
   '<div class="financial-recap-metrics">'+
-   metric(selectedMonths.size===1?'Total monthly bills':'Total bills',
+   metric(selectedMonths.size===1?'Scheduled expenses this month':'Scheduled expenses',
     canSummarizeBills?cash(billCents/100):'Unavailable',
-    'Paid '+cash(paidCents/100)+' · Upcoming '+(hasProjection?cash(upcomingCents/100):'Unavailable')+
+    'Posted '+cash(paidCents/100)+' · Expected '+(hasProjection?cash(upcomingCents/100):'Unavailable')+
     ' · '+periodLabel,'bills')+
    metric('Spent',cash(spendingCents/100),
-    periodLabel+' · net purchases','spent')+
+    periodLabel+' · net posted spending (pending excluded)','spent')+
    metric('Income',cash(incomeCents/100),
     periodLabel+' · deposits','income')+
    metric('Budget',budgetSet?cash(periodBudgetCents/100):'Not set',
-    budgetSet?Math.round(periodBudgetCents?(spendingCents+budgetExpectedCents)/periodBudgetCents*100:0)+'% used'+(budgetExpectedCents?' including expected':'')+' · '+periodLabel:
+    budgetSet?Math.round(periodBudgetCents?Math.max(0,budgetUsage.total/periodBudgetCents*100):0)+
+     '% used · posted '+cash(budgetUsage.posted/100)+
+     ' · pending '+cash(budgetUsage.pending/100)+
+     ' · expected '+cash(budgetExpectedCents/100):
     'Targets are set on Budget','budget')+
   '</div>'+
   '<div class="financial-recap-sections">'+
-   '<section class="financial-recap-card"><h3>Bills by category</h3>'+
+   '<section class="financial-recap-card"><h3>Scheduled expenses by category</h3>'+
     '<p>'+escapeHTML(periodLabel)+' · paid and upcoming</p>'+
     (canSummarizeBills?breakdown(billCategories,'No bills recorded or predicted for the selected months.'):
      '<p class="financial-recap-empty">Bill totals unavailable for the selected months.</p>')+
-    '<small class="financial-recap-note">Scheduled payments on all accounts · transfers excluded</small></section>'+
+    '<small class="financial-recap-note">Includes recurring card purchases; excludes card repayments and internal transfers</small></section>'+
    '<section class="financial-recap-card"><h3>Largest spending categories</h3>'+
     '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
     breakdown(topSpending,'No posted purchases in selected months.')+
     '</section>'+
-   '<details class="financial-recap-card financial-recap-upcoming"><summary>Next predicted bills</summary>'+
+   '<details class="financial-recap-card financial-recap-upcoming"><summary>Next checking outflows (includes card payments)</summary>'+
     '<p>Next 30 days</p>'+
     (hasProjection?(upcoming.length?'<div class="financial-recap-rows">'+
       upcoming.map(r=>'<div class="financial-recap-row"><span><strong>'+
@@ -2642,10 +2656,12 @@ function historyPage(bundle,s){
  const filtered=records.filter(t=>{
   if(!historySelectedMonths.has(t.date.slice(0,7)))return false;
   if(displayView==='list'&&historyPurchaseDrill&&
-   (historyCategoryFilter?categorySpendingCents(t,budgetCardSettlements):cardActivityCents(t))===0)return false;
+   reportingSpendCents(t,budgetCardSettlements)===0)return false;
   if(displayView==='list'&&historyMerchantFilter&&
-    (historyMerchantKey(t)!==historyMerchantFilter||!cardActivityCents(t)))return false;
-  if(displayView==='list'&&historySizeFilter>=0&&historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter)return false;
+    (historyMerchantKey(t)!==historyMerchantFilter||!reportingSpendCents(t,budgetCardSettlements)))return false;
+  if(displayView==='list'&&historySizeFilter>=0&&
+    (historyBandIndex(Math.abs(Number(t.amount)||0))!==historySizeFilter||
+     reportingSpendCents(t,budgetCardSettlements)<=0))return false;
   const aid=window.HouseholdPlannerHistory.accountOf(t,accounts);
   if(historyAccount!=='all'&&historyAccount!==aid)return false;
   if(displayView!=='categories'&&historyCategoryFilter&&String(t.category||'Other')!==historyCategoryFilter)return false;
