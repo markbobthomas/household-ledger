@@ -72,6 +72,17 @@ async function load(){
    throw Error('Invalid encrypted forecast preferences');
   state.ledgerAdjustments.predictions=predictions;
  }catch(e){if(e.code!=='ENOENT')throw e}
+ remapPostedMetadata(state.ledgerAdjustments);
+}
+// The bank snapshot's provider replacement IDs are the durable migration log.
+// Replay after loading the independently saved forecast file, so a crash between
+// files cannot orphan a pending note or undo its recurring evidence link.
+function remapPostedMetadata(adjustments,transactions=state.transactions){
+ for(const t of [...(state.transactionReplacements||[]),...Object.values(transactions||{})]){
+  if(t.pendingId)require('../ledger-data.js').remapTransactionMetadata(
+   adjustments,t.accountId,t.pendingId,t.id);
+ }
+ return adjustments;
 }
 async function atomicEncryptedWrite(filename,value){
  await fs.mkdir(path.dirname(filename),{recursive:true});
@@ -91,6 +102,7 @@ const auth=require('./session-auth.cjs')({
 // One small encrypted write per forecast edit. The full encrypted bank ledger
 // is neither touched nor read, and concurrent browser saves are serialized.
 async function saveForecast(predictions,expectedRevision){
+ predictions=remapPostedMetadata({predictions:structuredClone(predictions)}).predictions;
  // All writes share this serialized encrypted boundary. Compare against the
  // last saved snapshot INSIDE the queue, so repeated client submissions are
  // idempotent and can never create a new duplicate. Existing legacy duplicate
@@ -282,13 +294,21 @@ async function sync(){
    throw error;
   }
  }
- const next={...state.transactions},overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
+ const next={...state.transactions},adjustments=structuredClone(state.ledgerAdjustments||{}),
+  overrides=adjustments.categoryOverrides||{},replacements=[...(state.transactionReplacements||[])];
+ adjustments.categoryOverrides=overrides;
  for(const stage of stages){
   const ids=new Set(stage.item.accountIds);
   for(const page of stage.pages){
    for(const t of [...page.added,...page.modified]){
     if(!ids.has(t.account_id))continue;
     if(t.pending_transaction_id){
+     if(!replacements.some(r=>r.pendingId===t.pending_transaction_id&&r.accountId===t.account_id))
+      replacements.push({accountId:t.account_id,pendingId:t.pending_transaction_id,id:t.transaction_id});
+     const predecessor=next[t.pending_transaction_id];
+     if(predecessor&&(predecessor.accountId!==t.account_id||predecessor.itemId!==stage.item.id))
+      throw Error('Pending predecessor belongs to another account or Item');
+     require('../ledger-data.js').remapTransactionMetadata(adjustments,t.account_id,t.pending_transaction_id,t.transaction_id);
      delete next[t.pending_transaction_id];
      if(Object.prototype.hasOwnProperty.call(overrides,t.pending_transaction_id)){
       if(!Object.prototype.hasOwnProperty.call(overrides,t.transaction_id))
@@ -312,13 +332,15 @@ async function sync(){
  for(const t of Object.values(next))if(!t.accountId&&legacyId)t.accountId=legacyId;
  const selectedIds=new Set(stages.flatMap(s=>s.accounts.map(a=>a.id)));
  for(const [id,t] of Object.entries(next))if(t.accountId&&!selectedIds.has(t.accountId)){delete next[id];delete overrides[id]}
- state.transactions=next;state.accounts=stages.flatMap(s=>s.accounts);
- state.items=state.items.map(i=>{
-  const {syncIssue:_oldIssue,...item}=i;
-  return {...item,cursor:stages.find(s=>s.item.id===i.id).cursor,reconnectRequired:false};
- });
- state.ledgerAdjustments.categoryOverrides=overrides;
- state.lastSync=observedAt;state.error=null;await save();
+ const committed={...state,transactions:next,accounts:stages.flatMap(s=>s.accounts),
+  transactionReplacements:replacements,ledgerAdjustments:adjustments,
+  items:state.items.map(i=>{
+   const {syncIssue:_oldIssue,...item}=i;
+   return {...item,cursor:stages.find(s=>s.item.id===i.id).cursor,reconnectRequired:false};
+  }),lastSync:observedAt,error:null};
+ // Publish source rows, cursors and preference remapping together only after
+ // the encrypted snapshot is durable. The forecast file is replayed on load.
+ await atomicEncryptedWrite(file,committed);state=committed;
  lastSyncAttempt.outcome='success';
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
  }catch(error){lastSyncAttempt.outcome='failed';throw error}

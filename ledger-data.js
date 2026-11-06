@@ -710,11 +710,10 @@ function applyPlaidSync(state,change){
     categoryConfidence:classified.category!=='Other'?classified.confidence:current?.source?.categoryConfidence??0,
     ...(pfc?{personalFinanceCategory:pfc}:{})}};
   const previous=t.pending_transaction_id?providerId(t.pending_transaction_id):null;
-  if(previous&&staged.categoryOverrides?.[previous]&&!staged.categoryOverrides[id])
-   staged.categoryOverrides[id]=staged.categoryOverrides[previous];
   if(previous){
    const old=byId.get(previous);
    if(old&&old.accountId!==String(t.account_id))throw Error('Pending predecessor belongs to another account');
+   remapTransactionMetadata(staged,t.account_id,previous,id);
    if(old)byId.delete(previous);
   }
   byId.set(id,next);
@@ -736,6 +735,27 @@ function applyPlaidSync(state,change){
  * every page before persisting a completed Item cursor; never publish partial
  * provider updates after a failed page, interrupted sync or malformed cursor.
  */
+// Preference-only identity migration. Never infer replacements from payee/amount.
+// Posted metadata wins on collision; unrelated account notes stay untouched.
+function remapTransactionMetadata(adjustments,accountId,previous,id){
+ const move=(map,from,to)=>{
+  if(!map||!Object.hasOwn(map,from))return;
+  if(!Object.hasOwn(map,to))map[to]=map[from];
+  delete map[from];
+ };
+ if(!previous||previous===id)return adjustments;
+ move(adjustments.categoryOverrides,previous,id);
+ move(adjustments.reviews?.categoryConfirmed,previous,id);
+ const p=adjustments.predictions;
+ move(p?.transactionNotes,'bank:'+JSON.stringify([String(accountId),String(previous)]),
+  'bank:'+JSON.stringify([String(accountId),String(id)]));
+ for(const rule of p?.futureRecurringRules||[]){
+  if(![rule.accountId,rule.fromAccountId,rule.toAccountId].some(a=>String(a||'')===String(accountId)))continue;
+  if(Array.isArray(rule.exampleIds))rule.exampleIds=[...new Set(rule.exampleIds.map(x=>
+   String(x)===String(previous)?String(id):x))];
+ }
+ return adjustments;
+}
 function applyPlaidSyncPages(state,batch){
  if(!batch||!String(batch.itemId||'')||!Array.isArray(batch.pages)||!batch.pages.length)
   throw Error('Completed Plaid Item sync requires an Item ID and pages');
@@ -814,7 +834,7 @@ function setCashCushion(state,amount){
  if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>999999999)throw Error('Invalid cash cushion');
  state.predictions.cashCushion=round(amount);
 }
-const api={VERSION,migrate,records,categories,canonicalCategory,addCategory,renameCategory,removeCategory,removedCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
+const api={remapTransactionMetadata,VERSION,migrate,records,categories,canonicalCategory,addCategory,renameCategory,removeCategory,removedCategory,accountsFor:Accounting.accountsFor,registerAccounts:Accounting.registerAccounts,accountingView:Accounting.reconcile,categoryFor,resolution,categoryReviewQueue,categoryRuleKey,categoryRuleSafety,learnCategory,removeCategoryRule,setCategory,setMonthlyBudget,setCategoryForecast,setPatternRule,recurringRuleKey,updateExpectedTransaction,saveManualExpected,removeManualExpected,expectedForCategory,setStreamOverride,setDailyVariable,saveEvent,removeEvent,saveAccountMovement,removeAccountMovement,setCardPaymentRule,removeCardPaymentRule,savePaymentBill,removePaymentBill,setCashCushion,applyPlaidSync,applyPlaidSyncPages};
 root.HouseholdLedgerData=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

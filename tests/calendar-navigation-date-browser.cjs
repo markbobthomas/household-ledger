@@ -20,11 +20,13 @@ const {chromium,webkit}=require('playwright');
    ['2026-10-15T18:00:00Z','October 2026','2026-10-15'],
    ['2026-10-31T15:44:00Z','October 2026','2026-10-31'],
    ['2027-01-01T07:30:00Z','December 2026','2026-12-31'],
-   ['2027-01-01T08:30:00Z','January 2027','2027-01-01']
+   ['2027-01-01T08:30:00Z','January 2027','2027-01-01'],
+   ['2027-01-01T07:30:00Z','January 2027','2027-01-01','Asia/Tokyo'],
+   ['2026-10-31T23:30:00Z','November 2026','2026-11-01','Asia/Tokyo']
   ];
   for(const [browser,device] of [[desktop,'desktop Chromium'],[iphone,'iPhone WebKit']]){
-   for(const [instant,expectedMonth,localToday] of cases){
-    const context=await browser.newContext({timezoneId:'America/Los_Angeles',
+   for(const [instant,expectedMonth,localToday,zone] of cases){
+    const context=await browser.newContext({timezoneId:zone||'America/Los_Angeles',
      viewport:device==='iPhone WebKit'?{width:390,height:844}:{width:1280,height:900}});
     await context.addInitScript(iso=>{
      const OriginalDate=Date;

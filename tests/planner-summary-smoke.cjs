@@ -73,7 +73,7 @@ for(const days of [1095]){
 // Current-day Activity rows must remain visible in Calendar's bank overlay,
 // even though the canonical opening projection is already bank reported.
 // Never re-add posted/pending activity to that starting balance.
-global.HouseholdPlannerTransactions={historicalScheduleMatches:()=>[]};
+global.HouseholdPlannerTransactions={...require('../planner-transactions.js'),historicalScheduleMatches:()=>[]};
 tool.setCalendarScope('all',false);
 const todayRows=[
  {id:'today-posted-fixture',date:iso(0),accountId:'checking',type:'expense',
@@ -281,3 +281,16 @@ assert.doesNotMatch(unavailableTrend,/data-summary-plot|data-calendar-stage/);
 const noCurrent=tool.render({...opts,days:1095,chosen:{...opts.chosen,current:null,available:5000}});
 assert.ok(noCurrent.includes('data-bank-available-value>$5,000.00<'));
 console.log('PASS shown-month lowest balance Summary: correct month range, weekend low, and unverified suppression');
+
+const weekendRows=[{id:'weekend-sat',accountId:'checking',date:'2026-10-17',type:'expense',amount:12,merchant:'Fictional Saturday'},
+ {id:'weekend-sun',accountId:'checking',date:'2026-10-18',type:'income',amount:34,merchant:'Fictional Sunday'}];
+const weekendBefore=JSON.stringify(weekendRows),balanceBefore=JSON.stringify(series);
+const weekendHTML=tool.render({...opts,days:1095,bundle:{...opts.bundle,rows:weekendRows}});
+assert.match(weekendHTML,/data-calendar-actual-day="2026-10-17"/);
+assert.match(weekendHTML,/data-calendar-actual-day="2026-10-18"/);
+assert.match(weekendHTML,/weekend bank transaction/);
+assert.equal(JSON.stringify(weekendRows),weekendBefore);
+assert.equal(JSON.stringify(series),balanceBefore,'Weekend navigation does not shift bank dates or forecast balances');
+const title=require('../planner-transactions.js').transactionTitle('<Shop>','bank:key','<Private note>');
+assert.match(title,/transaction-title-line/);assert.match(title,/&lt;Private note&gt;/);
+assert.doesNotMatch(title,/<small/,'Same shared inline note markup in Calendar and Activity');

@@ -75,3 +75,10 @@ assert.equal(inspect(categoryOnly)[0].categoryEdits,1);
 assert.equal(inspect(categoryOnly)[0].protected,true,
  'Do not drop user-selected categories as collateral deletion');
 console.log('PASS exact account ID audit: primary account, individual and series edits, recurring schedules, linked transfers, card payments, opt-outs, category decisions, read-only inspection');
+
+const noteOnly={accounts:[{id:'note-account'}],ledgerAdjustments:{predictions:{transactionNotes:{
+ ['bank:'+JSON.stringify(['note-account','pending-note'])]:'Fictional note'
+}}}};
+assert.equal(inspect(noteOnly)[0].protected,true,'Bank note prevents silently removing its account');
+assert.equal(keyContains('bank:'+JSON.stringify(['another-account','note-account']),'note-account'),false,
+ 'Transaction ID is not confused with account ID');

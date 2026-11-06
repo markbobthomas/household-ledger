@@ -447,7 +447,7 @@ const {chromium,webkit}=require('playwright');
     'Summary reuses the Spending calendar-month checklist');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page select').count(),0,
     'Summary contains no editable financial fields');
-   assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Total monthly bills')),
+   assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Scheduled expenses')),
     'Single-month bills are a selected-month sum, not a 12-month average');
    assert.doesNotMatch(await page.locator('[data-recap-bills]').innerText(),/12-month average/);
    // Summary totals count only saved recurring or explicitly scheduled
@@ -1523,7 +1523,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await repeatingBillsMonth.inputValue(),'2026-11',
     'Selected month is retained when switching to Repeating');
-   assert.ok((await page.locator('[data-bills-repeating-total]').innerText()).startsWith('Total $'),
+   assert.ok((await page.locator('[data-bills-repeating-total]').innerText()).startsWith('Total shown: '),
     'Repeating shows a live total beside the filtered list count');
    assert.equal(await page.locator('.schedule-toolbar').evaluate(el=>
     el.firstElementChild?.matches('.bills-month-field')),true,
@@ -1588,7 +1588,7 @@ const {chromium,webkit}=require('playwright');
     'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
-   assert.equal(await page.locator('.bills-heading h2').innerText(),'Upcoming transactions');
+   assert.equal(await page.locator('.bills-heading h2').innerText(),'All expected activity');
    assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Recurring bills',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
@@ -2188,8 +2188,8 @@ const {chromium,webkit}=require('playwright');
    const monthPicker=page.locator('[data-bills-pane="upcoming"] [data-bills-month]');
    assert.equal(await monthPicker.inputValue(),'');
    assert.equal(await page.locator('[data-schedule-visible-count]').innerText(),
-    'Showing 3 of 3 recurring expenses',
-    'Repeating includes scheduled credit-card charges but excludes income and transfers');
+    'Showing 5 of 5 recurring rules',
+    'Repeating includes expenses, income and transfers without duplicating them');
    assert.equal(await page.locator('.bills-upcoming-row[data-bills-source="actual"]').count(),0,
     'Upcoming shows forecasted cash bills, not already posted bank rows');
    assert.ok(await page.locator('.bills-upcoming-row[data-bills-kind="deposit"]').filter({hasText:'Fictional Paycheck'}).count()>0,
@@ -2216,28 +2216,30 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await page.locator('[data-bills-pane="repeating"] [data-bills-month]').inputValue(),'2026-11');
    assert.equal(await repeating.count(),1);
-   assert.equal(await page.locator('[data-schedule-card="fictional-income-excluded"]').count(),0,
-    'Repeating excludes income');
-   assert.equal(await page.locator('[data-schedule-card="fictional-transfer-excluded"]').count(),0,
-    'Repeating excludes transfers');
+   assert.equal(await page.locator('[data-schedule-card="fictional-income-excluded"]').count(),1,
+    'Recurring includes income');
+   assert.equal(await page.locator('[data-schedule-card="fictional-transfer-excluded"]').count(),1,
+    'Recurring includes transfers');
    assert.equal(await repeating.locator('.schedule-row-next').count(),0,
     'Repeating remains an undated rule list even with a month filter');
    await page.locator('[data-schedule-search]').fill('Fictional Internet Bill');
-   assert.equal(await repeatingSum.innerText(),'Total $85.00',
+   assert.equal(await repeatingSum.innerText(),'Total shown: Out $85.00',
     'Search sums the visible fictional matching schedule only');
    await page.locator('[data-schedule-category-filter]').selectOption('Other');
-   assert.equal(await repeatingSum.innerText(),'Total $0.00',
+   assert.equal(await repeatingSum.innerText(),'Total shown: $0',
     'Category filtering with a search recalculates the sum to zero');
    await page.locator('[data-schedule-category-filter]').selectOption('Utility');
-   assert.equal(await repeatingSum.innerText(),'Total $85.00',
+   assert.equal(await repeatingSum.innerText(),'Total shown: Out $85.00',
     'Restoring the matching category restores the filtered sum');
    await page.locator('[data-schedule-search]').fill('');
    await page.locator('[data-schedule-category-filter]').selectOption('');
-   const listedCents=await page.locator('[data-schedule-card]:visible').evaluateAll(nodes=>
-    nodes.reduce((sum,node)=>sum+Number(node.dataset.scheduleListedCents||0),0));
-   assert.equal(Number((await repeatingSum.innerText()).replace(/[^0-9.-]/g,'')),
-    Math.round(listedCents)/100,
-    'Unsearched Repeating total equals the sum of every visible displayed row');
+   const recurringTotals=await repeatingSum.innerText();
+   assert.match(recurringTotals,/Out .*In .*Transfers /,'Recurring totals separate cash directions');
+   const beforeKind=await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds}));
+   await page.locator('[data-schedule-kind-filter]').selectOption('income');
+   assert.equal(await page.locator('[data-schedule-card]').count(),1,'Kind filter exposes saved payroll');
+   await page.locator('[data-schedule-kind-filter]').selectOption('all');
+   assert.deepEqual(await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds})),beforeKind,'Kind filter does not rebuild forecast');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-12');
    assert.equal(await repeating.locator('.schedule-row-next').count(),0,
     'Changing month recalculates amount without adding an upcoming date');

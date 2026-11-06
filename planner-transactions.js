@@ -1110,7 +1110,15 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
  return r.id;
 }
 
-const api={ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,assertNoNewForecastDuplicates,
+function transactionTitle(name,key,note=''){
+ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ return '<span class="transaction-title-line" data-note-title-key="'+esc(key)+'">'+
+  '<strong class="transaction-merchant-title">'+esc(name||'Transaction')+'</strong>'+
+  (note?'<span class="transaction-note-subtitle" data-note-subtitle="'+esc(key)+
+   '" title="'+esc(note)+'">'+esc(note)+'</span>':'')+'</span>';
+}
+
+const api={transactionTitle,ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,assertNoNewForecastDuplicates,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
  frequencies,defaultScheduleCategories,scheduleCategories,reconciliationAnchor,matchWindow,postedWithinMatchWindow,savedMatchBounds,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,

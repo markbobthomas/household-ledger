@@ -202,6 +202,7 @@ function quickEditor(){
 }
 
 
+function calendarTitle(name,key){return (root.HouseholdPlannerTransactions||require('./planner-transactions.js')).transactionTitle(name,key,calendarNote(key))}
 function postedEntries(date){
  const rows=calendarContext.actual.get(date)||[];
  return rows.map(t=>{
@@ -214,11 +215,8 @@ function postedEntries(date){
    action=matches.length===1?'View prediction':matches.length>1?'Choose prediction':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row ledger-transaction-row">'+
    '<span class="ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
-   '<span class="calendar-transaction-name ledger-transaction-identity"><strong>'+
-   esc(t.merchant||'Bank transaction')+'</strong>'+
-   (calendarNote('bank:'+JSON.stringify([account,String(t.id)]))?
-    '<small class="transaction-note-subtitle">'+
-     esc(calendarNote('bank:'+JSON.stringify([account,String(t.id)])))+'</small>':'')+
+   '<span class="calendar-transaction-name ledger-transaction-identity">'+
+   calendarTitle(t.merchant||'Bank transaction','bank:'+JSON.stringify([account,String(t.id)]))+
    '<small>'+(t.pending?'Pending':'Posted')+
     (calendarContext.scope==='all'?' · '+esc(accountName):'')+'</small></span>'+
    '<strong class="ledger-transaction-amount '+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
@@ -271,10 +269,8 @@ function predictionEntry(date,e,index,card,selected=false,other=false){
   '" data-open-transaction="'+key+'" aria-expanded="false" aria-label="'+
   esc('Edit '+(e.merchant||'predicted payment')+' on '+shortDate(date))+'">'+
   '<span class="calendar-monthly-date ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
-  '<span class="calendar-monthly-name ledger-transaction-identity"><strong>'+esc(e.merchant||'Predicted payment')+'</strong>'+
-  (calendarNote('forecast:'+predictionIdentity(e))?
-   '<small class="transaction-note-subtitle">'+
-    esc(calendarNote('forecast:'+predictionIdentity(e)))+'</small>':'')+
+  '<span class="calendar-monthly-name ledger-transaction-identity">'+
+  calendarTitle(e.merchant||'Predicted payment','forecast:'+predictionIdentity(e))+
   (e.amountEstimate?'<small>Estimated</small>':'')+
   (other?'<small class="calendar-account-context">'+esc(outsideLabel(e))+'</small>':'')+'</span>'+
   '<strong class="ledger-transaction-amount '+(other?'external':signed(e,card)>0?'in':'out')+'">'+
@@ -366,7 +362,7 @@ function monthlyActuals(state){
    dir=incoming?'+':'−';
   return '<div class="calendar-monthly-row calendar-posted-month-row" data-calendar-posted-month-row>'+
    '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
-   '<span class="calendar-monthly-name"><strong>'+esc(t.merchant||'Bank transaction')+'</strong>'+
+   '<span class="calendar-monthly-name">'+calendarTitle(t.merchant||'Bank transaction','bank:'+JSON.stringify([String(root.HouseholdPlannerHistory?.accountOf?.(t,state.accounts)||t.accountId),String(t.id)]))+
     '<small>'+(t.pending?'Pending':'Posted')+
     (state.scope==='all'?' · '+esc(accountName(t)):'')+'</small></span>'+
    '<strong class="ledger-transaction-amount">'+dir+money(Number(t.amount))+'</strong></div>';
@@ -420,7 +416,7 @@ function monthlyPredictions(state){
   (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index,card,other,transaction:t})=>
     t?'<div class="calendar-monthly-row calendar-posted-month-row" data-calendar-posted-month-row>'+
       '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
-      '<span class="calendar-monthly-name"><strong>'+esc(t.merchant||'Bank transaction')+'</strong>'+
+      '<span class="calendar-monthly-name">'+calendarTitle(t.merchant||'Bank transaction','bank:'+JSON.stringify([String(root.HouseholdPlannerHistory?.accountOf?.(t,state.accounts)||t.accountId),String(t.id)]))+
       '<small>'+(t.pending?'Pending':'Posted')+' · Bank activity'+
       (state.scope==='all'?' · '+esc(state.accounts.find(a=>
        String(a.id)===String(root.HouseholdPlannerHistory?.accountOf?.(t,state.accounts)||
@@ -527,6 +523,13 @@ function updateCalendarNavigation(){
  const header=document.querySelector('[data-calendar-header]');
  if(header)header.outerHTML=calendarNavigation();
 }
+function weekendActivity(dates,state){
+ const rows=dates.filter(d=>(state.actual.get(d)||[]).length);
+ return rows.length?'<div class="calendar-weekend-activity" style="grid-column:1 / -1" data-calendar-weekend-activity>'+rows.map(d=>
+  '<button type="button" class="btn" data-calendar-actual-day="'+d+'">'+esc(dateLabel(d))+': '+
+  state.actual.get(d).length+' weekend bank transaction'+(state.actual.get(d).length===1?'':'s')+'</button>').join(' ')+
+  '</div>':'';
+}
 function calendarGrid(){
  const state=calendarContext;
  if(!state||!state.points.length)return '';
@@ -557,7 +560,12 @@ function calendarGrid(){
   '<div class="calendar-weekday" aria-hidden="true">'+d+'</div>').join('');
  const cells=Array.from({length:count},(_,i)=>{
   // Weekday-only rows, retaining the true day numbers.
-  if(i%7>=5)return '';
+  if(i%7===5){
+   const dates=[i-weekdayOffset+1,i-weekdayOffset+2].filter(d=>d>=1&&d<=monthDays)
+    .map(d=>calendarMonth+'-'+String(d).padStart(2,'0'));
+   return weekendActivity(dates,state);
+  }
+  if(i%7===6)return '';
   const dom=i-weekdayOffset+1;
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
@@ -638,7 +646,7 @@ function calendarGrid(){
   
   '<div class="calendar-grid" style="--calendar-weeks:'+weekCount+'" role="group" aria-label="'+
    esc(monthName(calendarMonth)+(isHistoricalMonth()?' posted-history calendar':' forecast calendar'))+'">'+
-   header+cells+'</div>'+
+   header+weekendActivity(Array.from({length:firstWeek>=5?7-firstWeek:0},(_,i)=>calendarMonth+'-'+String(i+1).padStart(2,'0')),state)+cells+'</div>'+ 
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
 }
