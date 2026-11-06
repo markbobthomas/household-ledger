@@ -1066,7 +1066,7 @@ document.addEventListener('keydown',e=>{
   document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
 });
 
-root.HouseholdPlannerSummary={render,getPoints,knownGaps,
+root.HouseholdPlannerSummary={render,getPoints,knownGaps,reconstructedHistory,
  setCalendarScope:(value,redraw=true)=>{
   // A scope change is display-only: reuse prepared projection and replace
   // just the visible calendar without invalidating the other prepared tabs.
