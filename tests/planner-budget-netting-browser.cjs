@@ -2,8 +2,8 @@
 // Fictional end-to-end UI: card repayments remain cash-flow forecasts but
 // Summary monthly bills count only recurring/scheduled card purchases.
 const assert=require('node:assert/strict'),path=require('node:path');
-const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwright');
-(async()=>{
+const {spawn}=require('node:child_process'),{chromium,webkit}=require('./browser-harness.cjs');
+module.exports=(async()=>{
  const port=19871,server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],
   {cwd:path.resolve(__dirname,'..'),stdio:'ignore'});
  let chrome,iphone;

@@ -2,8 +2,8 @@
 // All fixtures are fictional. Visited DOM never persists outside this browser tab.
 const assert=require('node:assert/strict'),path=require('node:path');
 const {spawn}=require('node:child_process');
-const {chromium,webkit}=require('playwright');
-(async()=>{
+const {chromium,webkit}=require('./browser-harness.cjs');
+module.exports=(async()=>{
  const port=19026,url='http://127.0.0.1:'+port+'/index.html';
  const server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],{
   cwd:path.resolve(__dirname,'..'),stdio:'ignore'

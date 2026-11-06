@@ -4,7 +4,7 @@
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {spawn}=require('node:child_process');
-const {chromium,webkit}=require('playwright');
+const {chromium,webkit}=require('./browser-harness.cjs');
 const {prepare:serverPrepare,VERSION:serverForecastVersion}=require('../pilot/prepared-forecast.cjs');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-private-category-'));
 const port=19849,pass='test-'+crypto.randomBytes(24).toString('hex');
@@ -16,7 +16,7 @@ const server=spawn(process.execPath,['pilot/server.cjs'],
  {cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});
 const address='http://127.0.0.1:'+port+'/';
 let desktop,iphone;
-(async()=>{
+module.exports=(async()=>{
  for(let i=0;i<100;i++){
   try{if((await fetch(address+'healthz')).ok)break}catch{}
   await new Promise(resolve=>setTimeout(resolve,80));

@@ -3,8 +3,8 @@
 // The Plaid and bank accounts here are fictional, served by the offline stub.
 const assert=require('node:assert/strict'),crypto=require('node:crypto');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
-const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwright');
-(async()=>{
+const {spawn}=require('node:child_process'),{chromium,webkit}=require('./browser-harness.cjs');
+module.exports=(async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-remove-browser-')),
   port=19862,pass=crypto.randomBytes(24).toString('hex');
  const env={...process.env,PORT:String(port),PILOT_PASSWORD:pass,

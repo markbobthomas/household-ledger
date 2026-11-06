@@ -2,8 +2,8 @@
 // Device-local startup preference; only fictional data and static app files.
 const assert=require('node:assert/strict');
 const {spawn}=require('node:child_process'),path=require('node:path');
-const {chromium,webkit}=require('playwright');
-(async()=>{
+const {chromium,webkit}=require('./browser-harness.cjs');
+module.exports=(async()=>{
  const port=18916,url='http://127.0.0.1:'+port+'/index.html';
  const server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],{
   cwd:path.resolve(__dirname,'..'),stdio:'ignore'

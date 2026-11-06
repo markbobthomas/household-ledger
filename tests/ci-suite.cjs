@@ -30,6 +30,18 @@ if(require.main===module){
   process.exit(0);
  }
  console.log('Running '+group+' regression suite: '+tests.length+' distinct scripts');
+ if(group==='browser'){
+  // Browser specs run sequentially in one Node process and share a Chromium/WebKit pair.
+  // Each spec still makes isolated browser contexts and runs its own fictional server.
+  const outcome=spawnSync(process.execPath,[path.join(__dirname,'browser-suite.cjs')],
+   {stdio:'inherit',cwd:path.join(__dirname,'..')});
+  if(outcome.error||outcome.status!==0){
+   if(outcome.error)console.error(outcome.error);
+   process.exit(outcome.status||1);
+  }
+  console.log('PASS '+group+' regression suite ('+tests.length+' tests)');
+  process.exit(0);
+ }
  for(const name of tests){
   const result=spawnSync(process.execPath,[path.join(__dirname,name+'.cjs')],{stdio:'inherit',cwd:path.join(__dirname,'..')});
   if(result.error||result.status!==0){
