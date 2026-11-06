@@ -2152,8 +2152,13 @@ const {chromium,webkit}=require('playwright');
     const income={...r,id:'fictional-income-excluded',type:'income',
      originalType:'income',merchant:'Fictional Paycheck',
      originalMerchant:'Fictional Paycheck',scheduleLabel:'Fictional Paycheck',amount:4100};
-    const transfer={...r,id:'fictional-transfer-excluded',type:'transfer',
-     originalType:'transfer',cashDirection:'out',merchant:'Fictional Transfer',
+    const transferTarget=window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
+     String(a.id)!==String(accountId)&&
+     !['credit','credit card'].includes(String(a.accountType||a.type).toLowerCase()));
+    if(!transferTarget)throw Error('Fictional linked cash destination missing');
+    const transfer={...r,id:'fictional-transfer-excluded',kind:'movement',type:'transfer',
+     originalType:'transfer',cashDirection:'out',fromAccountId:accountId,
+     toAccountId:transferTarget.id,merchant:'Fictional Transfer',
      originalMerchant:'Fictional Transfer',scheduleLabel:'Fictional Transfer',amount:700};
     const card=window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
      String(a.accountType||a.type).toLowerCase()==='credit');
