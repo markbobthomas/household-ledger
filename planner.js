@@ -29,12 +29,13 @@ const OPENING_PAGE_KEY='household-ledger-opening-page-v1';
 const OPENING_PAGES=[
  ['summary','Home'],['history','Spending'],['schedules','Bills'],
  ['activity','Transactions · Posted'],['reviews','Things to check'],
- ['trend','Home · Balance trend'],['settings','Settings']
+ ['settings','Settings']
 ];
 const preferredOpeningPage=()=>{
  const saved=localStorage.getItem(OPENING_PAGE_KEY);
  // Legacy Planned startup preference migrates to the unified Upcoming page.
  if(saved==='transactions')return 'schedules';
+ if(saved==='trend')return 'summary';
  return OPENING_PAGES.some(([id])=>id===saved)?saved:'summary';
 };
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
@@ -60,7 +61,7 @@ const horizon=1095; // Three-year modeled floor. No user-selectable time windows
 function navigationSelected(button,view){
  const target=button.dataset.view;
  if(button.closest?.('.planner-nav-primary'))
-  return target===(view==='transactions'?'schedules':view==='trend'?'summary':view);
+  return target===(view==='transactions'?'schedules':view);
  return target===view;
 }
 function scheduleListNumber(id){
@@ -106,7 +107,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsUpcomingScope=localStorage.getItem(OPENING_PAGE_KEY)==='transactions'?'all':'bills',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -3410,19 +3411,13 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    (notes||'<p class="lead">No upcoming dated transactions identified.</p>')+
    '</section></div>';
 }
-function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
- const content=window.HouseholdPlannerSummary.render({
+function summaryPage(bundle,s,chosen,derived,fresh){
+ // The Home page is the daily balance calendar; no parallel Trend page.
+ return window.HouseholdPlannerSummary.render({
   snapshot:s,chosen,derived,bundle,days:horizon,
   prefs:state().predictions||{},accounts:activeAccounts(s),
-  fresh,ready:window.HouseholdPaymentObligations.ready,view
+  fresh,ready:window.HouseholdPaymentObligations.ready,view:'calendar'
  });
- // The chart and calendar are both Home views, not additional destinations.
- const tabs='<nav class="history-subtabs spending-tabs ledger-section-tabs home-subtabs" aria-label="Home views">'+
-  [['calendar','Calendar'],['trend','Balance trend']].map(([id,name])=>
-   '<button type="button" class="history-subtab'+(view===id?' active':'')+
-   '" data-view="'+(id==='calendar'?'summary':'trend')+
-   '" aria-pressed="'+(view===id)+'">'+name+'</button>').join('')+'</nav>';
- return content.replace(/^(<div class="planner-page[^"]*">)/,'$1'+tabs);
 }
 function settingsPage(bundle,s,chosen){
  const rules=Object.entries(state().learning?.categoryRules||{});
@@ -3479,7 +3474,7 @@ function settingsPage(bundle,s,chosen){
 const preparedViews=new Map();
 const preparedHistoryViews=new Map();
 const spendingDestinations=['categories','merchants','sizes','summary'];
-const preparedDestinations=['summary','history','schedules','activity','reviews','settings','trend'];
+const preparedDestinations=['summary','history','schedules','activity','reviews','settings'];
 // Prepared financial pages stay in this browser tab's memory only. No stored HTML,
 // service worker, localStorage data snapshots or additional server requests.
 let preparedEpoch=0,preparedContext=null,preparedNotice=null,preparedReady=false;
@@ -3528,8 +3523,6 @@ function pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData){
   activeTab==='recap'?financialRecapPage(bundle,s):
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
-  activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
-   summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
    (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
 }
 // After initial startup, run offscreen rebuilds only in idle opportunities.
@@ -3641,10 +3634,7 @@ function activatePreparedView(view,from,fromHistoryView){
  for(const form of root.querySelectorAll('[data-card-rule]'))configureCardFields(form);
  if(view==='schedules'){
   applyScheduleSearch(root);
-  // Cached Bills pages may have been created before a linked action chose
-  // the All expected scope. Synchronize only hidden/pressed DOM attributes.
   switchExistingPane('data-bills-tab','data-bills-pane',billsPane);
-  switchExistingPane('data-upcoming-filter','data-upcoming-scope',billsUpcomingScope);
  }
  if(view==='history'){
   // Budget is now visible, not a detached Spending subpage.
@@ -4425,7 +4415,7 @@ document.addEventListener('click',async e=>{
    }else render({navigationOnly:true});
    return;
   }
-  if(target==='transactions'){billsPane='upcoming';billsUpcomingScope='all';}
+  if(target==='transactions')billsPane='upcoming';
   const destination=target==='settings-card'?'settings':
    target==='transactions'?'schedules':'reviews';
   const nav=document.querySelector('.planner-nav-primary [data-view="'+destination+'"]')||
@@ -4434,7 +4424,6 @@ document.addEventListener('click',async e=>{
   else if(activeTab!==destination){activeTab=destination;render({navigationOnly:true})}
   if(destination==='schedules'){
    switchExistingPane('data-bills-tab','data-bills-pane',billsPane);
-   switchExistingPane('data-upcoming-filter','data-upcoming-scope',billsUpcomingScope);
   }
   if(destination==='settings'){
    const section=document.getElementById('card-autopay');
@@ -4448,15 +4437,6 @@ document.addEventListener('click',async e=>{
    const tab=document.querySelector('[data-review-tab="'+pane+'"]');
    if(tab&&reviewPane!==pane)tab.click();
    else if(!tab){reviewPane=pane;render({navigationOnly:true})}
-  }
-  return;
- }
- const upcomingFilter=e.target.closest?.('[data-upcoming-filter]');
- if(upcomingFilter){
-  const next=upcomingFilter.dataset.upcomingFilter;
-  if(['bills','all'].includes(next)&&next!==billsUpcomingScope){
-   billsUpcomingScope=next;
-   switchExistingPane('data-upcoming-filter','data-upcoming-scope',next);
   }
   return;
  }
@@ -4499,11 +4479,10 @@ document.addEventListener('click',async e=>{
    historyCategoryFilter='';historySizeFilter=-1;
    historyMerchantFilter='';historyPurchaseDrill=false;historyMonthPickerOpen=false;
   }
-  if(view.dataset.view==='transactions'){
-   billsPane='upcoming';billsUpcomingScope='all';
-  }
+  if(view.dataset.view==='transactions')billsPane='upcoming';
   activeTab=view.dataset.view==='recap'?'history':
-   view.dataset.view==='transactions'?'schedules':view.dataset.view;
+   view.dataset.view==='transactions'?'schedules':
+   view.dataset.view==='trend'?'summary':view.dataset.view;
   transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
@@ -4822,7 +4801,7 @@ document.addEventListener('click',async e=>{
   const m=lastMissingMortgages.find(x=>x.id===mortgageReview.dataset.reviewMortgage);
   if(!m){setNotice('Mortgage history changed. Refresh and try again.');return}
   mortgageDraft={...m};activeTab='schedules';billsPane='upcoming';
-  billsUpcomingScope='all';transactionFilter=m.accountId;
+  transactionFilter=m.accountId;
   showNewTransaction=true;editingKey='';transactionNotice='';
   render();
   $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});
