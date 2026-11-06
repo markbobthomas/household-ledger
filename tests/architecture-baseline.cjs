@@ -109,10 +109,14 @@ function summary(bundle,scenario,context){
  const card=projection.accounts.find(a=>a.id==='visa');
  const options={snapshot:snap,bundle,days:DAYS,accounts:snap.accounts,prefs:scenario,
   fresh:true,ready:Payments.ready};
+ Summary.setCalendarScope('all',false);
  const checkingHTML=Summary.render({...options,chosen:snap.accounts[0],derived:current});
+ Summary.setCalendarScope('visa',false);
  const cardHTML=Summary.render({...options,chosen:snap.accounts[2],derived:card});
+ Summary.setCalendarScope('other-card',false);
  const noneHTML=Summary.render({...options,chosen:snap.accounts[3],
   derived:projection.accounts.find(a=>a.id==='other-card')});
+ Summary.setCalendarScope('all',false);
  assert.match(checkingHTML,/Lowest in shown month/);
  assert.doesNotMatch(checkingHTML,/Long-term outlook|3-year low/,
   'Distant predictions stay in Balance Trend, not above the daily calendar');
