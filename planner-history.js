@@ -99,23 +99,7 @@ function draftFor(row,records,accounts,asOf){
   linkedTransfer:linked,examples:chosen.filter(t=>Number(t.amount)>0).slice(-8).map(x=>String(x.id))};
 }
 function guessFrequency(history){
- const ts=[...(history||[])].sort((a,b)=>a.date.localeCompare(b.date));
- if(ts.length<2)return null;
- const gaps=ts.slice(1).map((t,i)=>diff(t.date,ts[i].date));
- const recent=gaps.slice(-3),avg=recent.reduce((a,b)=>a+b,0)/recent.length;
- const days=ts.slice(-Math.min(ts.length,4)).map(t=>Number(t.date.slice(-2)));
- const spread=Math.max(...days)-Math.min(...days);
- const choices=[
-  {frequency:'weekly',span:7,tolerance:2},
-  {frequency:'biweekly',span:14,tolerance:3},
-  {frequency:'monthly',span:30.44,tolerance:6},
-  {frequency:'quarterly',span:91.31,tolerance:9},
-  {frequency:'semiannual',span:182.6,tolerance:11},
-  {frequency:'annual',span:365.25,tolerance:16}
- ];
- return choices.find(c=>Math.abs(avg-c.span)<=c.tolerance&&
-  recent.every(d=>Math.abs(d-c.span)<=c.tolerance)&&
-  (!['monthly','quarterly','semiannual','annual'].includes(c.frequency)||spread<=7))?.frequency||null;
+ return shared.recurrenceCadence(history,'review');
 }
 function nextDate(last,frequency,asOf){
  if(!validDate(last)||!validDate(asOf))return null;
@@ -130,28 +114,20 @@ function nextDate(last,frequency,asOf){
 function candidates(records,accounts,asOf,preferences={},forecastEvents=[],options={}){
  const dismissed=preferences.historyPatternDecisions||{},rules=preferences.futureRecurringRules||[],
   excluded=preferences.plannerRoutineDecisions||{};
- const groups=new Map();
- for(const t of records||[]){
-  if(!canPlan(t)||t.pending||Number(t.amount)<=0||t.date>asOf||
-   // Paired transfers already move between linked accounts, not bills.
-   t.pairedTransactionId)continue;
-  // Bank feeds sometimes misclassify ACH bills as transfers. Both outgoing
-  // and incoming unpaired entries are reviewable, but an incoming transfer
-  // must never be silently assumed to be earned income.
-  const kind=t.type==='transfer'?
-   (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':null):
-   t.type;
-  if(!['expense','income'].includes(kind))continue; // Refunds remain manually schedulable in History.
-  const aid=accountOf(t,accounts),name=norm(t.merchant||t.name);
-  if(!name)continue;
-  const account=(accounts||[]).find(a=>String(a.id)===aid);
-  if(!account||String(account.accountType||account.type||'').toLowerCase()==='loan')continue;
-  if(String(account.accountType||account.type||'').toLowerCase()==='credit'&&kind==='income')continue;
-  const key=[aid,kind,name,String(amount(t.amount))].map(encodeURIComponent).join('|');
-  if(!groups.has(key))groups.set(key,{key,accountId:aid,accountName:account.name||aid,
-   merchant:String(t.merchant||t.name),amount:Number(t.amount),type:kind,rows:[]});
-  groups.get(key).rows.push(t);
- }
+ const groups=shared.recurrenceEvidence(records,accounts,asOf,{
+  includeAmount:true,
+  eligible:t=>canPlan(t)&&!t.pending&&Number(t.amount)>0&&t.date<=asOf&&
+   !t.pairedTransactionId,
+  typeOf:(t,account)=>{
+   const kind=t.type==='transfer'?
+    (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':null):t.type;
+   if(!['expense','income'].includes(kind)||
+      String(account.accountType||account.type||'').toLowerCase()==='loan'||
+      String(account.accountType||account.type||'').toLowerCase()==='credit'&&kind==='income')
+    return null;
+   return kind;
+  }
+ });
  const result=[];
  for(const g of groups.values()){
   g.rows.sort((a,b)=>a.date.localeCompare(b.date));
@@ -216,22 +192,20 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[],optio
 // unless there is credible recurring evidence. Variable utilities are grouped
 // by account/payee/direction rather than an exact amount.
 function recommendedRepeating(records,accounts,asOf){
- const groups=new Map(),output=[];
- for(const t of records||[]){
-  if(!canPlan(t)||t.pending||Number(t.amount)<=0||t.date>asOf||t.pairedTransactionId)continue;
-  const type=t.type==='transfer'?(t.cashDirection==='out'?'expense':
-   t.cashDirection==='in'?'income':null):t.type;
-  if(!['expense','income'].includes(type))continue;
-  const aid=accountOf(t,accounts),bank=accounts.find(a=>String(a.id)===aid);
-  if(!bank||String(bank.accountType||bank.type).toLowerCase()==='loan'||
-   String(bank.accountType||bank.type).toLowerCase()==='credit'&&type==='income')continue;
-  const merchant=norm(t.merchant||t.name);
-  if(!merchant)continue;
-  const id=[aid,type,merchant].map(encodeURIComponent).join('|');
-  if(!groups.has(id))groups.set(id,{accountId:aid,accountName:bank.name||aid,
-   merchant:String(t.merchant||t.name),type,rows:[],name:merchant});
-  groups.get(id).rows.push(t);
- }
+ const output=[];
+ const groups=shared.recurrenceEvidence(records,accounts,asOf,{
+  eligible:t=>canPlan(t)&&!t.pending&&Number(t.amount)>0&&t.date<=asOf&&
+   !t.pairedTransactionId,
+  typeOf:(t,bank)=>{
+   const kind=t.type==='transfer'?(t.cashDirection==='out'?'expense':
+    t.cashDirection==='in'?'income':null):t.type;
+   if(!['expense','income'].includes(kind)||
+      String(bank.accountType||bank.type||'').toLowerCase()==='loan'||
+      String(bank.accountType||bank.type||'').toLowerCase()==='credit'&&kind==='income')
+    return null;
+   return kind;
+  }
+ });
  for(const g of groups.values()){
   g.rows.sort((a,b)=>a.date.localeCompare(b.date));
   const latest=g.rows.at(-1),f=guessFrequency(g.rows),
@@ -265,7 +239,7 @@ function recommendedRepeating(records,accounts,asOf){
     // Variable bills get a stable account/payee identity across later amounts.
     identity=equal?String(amount(newest.amount)):alternating?
      String(amount(newest.amount)):'variable',
-    key=[g.accountId,g.type,g.name,identity].map(encodeURIComponent).join('|'),
+    key=[g.accountId,g.type,g.identityMerchant,identity].map(encodeURIComponent).join('|'),
     upcoming=nextDate(newest.date,frequency,asOf);
    if(!upcoming)continue;
    output.push({key,accountId:g.accountId,accountName:g.accountName,

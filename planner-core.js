@@ -56,36 +56,24 @@ const internalName=/\b(?:transfer to|transfer from|savings transfer|account tran
 const metadata=t=>t.personal_finance_category||t.source?.personalFinanceCategory||{};
 const trusted=t=>billName.test(String(t.merchant||''))||
  /(?:MORTGAGE|SUBSCRIPTION|RECURRING|RENT_PAYMENT|RENT_AND_UTILITIES_RENT|AUTO_LOAN|LOAN_PAYMENT)/.test(String(metadata(t).detailed||'').toUpperCase());
-const cadence=(a,b)=>{
- const days=diff(b,a),months=index(b)-index(a),
-  daySpread=Math.abs(+a.slice(-2)-+b.slice(-2));
- if(Math.abs(days-7)<=1)return 'weekly';
- if(Math.abs(days-14)<=2)return 'biweekly';
- for(const [span,name] of [[1,'monthly'],[3,'quarterly'],[6,'semiannual'],[12,'annual']])
-  if(months===span&&daySpread<=5)return name;
- return null;
-};
+const cadence=(a,b)=>shared.recurrenceCadence([a,b],'forecast');
 const horizon=(s,days)=>add(s,days);
 const accountId=(row,accounts)=>
  shared.accountRef(row.accountId||row.account||row.fromAccountId,accounts);
 const direction=t=>t.type==='expense'||t.type==='income'?t.type:
  t.type==='transfer'&&!t.pairedTransactionId&&t.cashDirection==='out'?'expense':null;
 function analyze(rows,accounts,asOf,prefs={},days=90){
- const groups=new Map(),end=horizon(asOf,days),excluded=prefs.plannerRoutineDecisions||{},
+ const end=horizon(asOf,days),excluded=prefs.plannerRoutineDecisions||{},
   dismiss=prefs.historyPatternDecisions||{},rules=prefs.futureRecurringRules||[];
- for(const t of rows||[]){
-  if(!t||t.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0)||
-   t.pairedTransactionId)continue;
-  const aid=accountId(t,accounts),acct=accounts.find(a=>String(a.id)===aid);
-  if(!acct||String(acct.type||acct.accountType||'').toLowerCase()==='loan')continue;
-  const kind=direction(t),reviewType=kind||(t.type==='refund'?'refund':
-   t.type==='transfer'&&t.cashDirection==='in'?'income':null);
-  if(!reviewType||!norm(t.merchant))continue;
-  const id=signature(aid,reviewType,t.merchant);
-  if(!groups.has(id))groups.set(id,{id,accountId:aid,accountName:acct.name||aid,
-   merchant:String(t.merchant),kind:reviewType,rows:[]});
-  groups.get(id).rows.push(t);
- }
+ const groups=shared.recurrenceEvidence(rows,accounts,asOf,{
+  eligible:t=>!t.pending&&valid(t.date)&&t.date<=asOf&&Number(t.amount)>0&&
+   !t.pairedTransactionId,
+  typeOf:(t,acct)=>{
+   if(String(acct.type||acct.accountType||'').toLowerCase()==='loan')return null;
+   return direction(t)||(t.type==='refund'?'refund':
+    t.type==='transfer'&&t.cashDirection==='in'?'income':null);
+  }
+ });
  const automatic=[],review=[],conflicts=[];
  for(const g of groups.values()){
   g.rows.sort((a,b)=>a.date.localeCompare(b.date));
