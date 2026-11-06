@@ -3638,18 +3638,42 @@ function renderHistorySubview(previousView){
  if(historyView==='categories')preparedViews.delete('history');
  updateHistorySelectionSummary();
 }
+// Bills and Review selectors do not edit financial inputs. Refresh only their
+// view; keep the prepared Home and Spending DOM and canonical ledger intact.
 function renderScheduleFilters(){
- if(!preparedContext||!preparedReady){render({navigationOnly:true});return;}
+ if(!preparedContext||!preparedReady){render({navigationOnly:true});return}
  const c=preparedContext,root=$('planner-main');
  preparedViews.delete('schedules');
  root.innerHTML=schedulesPage(c.bundle,c.s);
  applyScheduleSearch(root);
+ switchExistingPane('data-bills-tab','data-bills-pane',billsPane);
 }
-function renderHistoryFilters(){
- if(!preparedContext||!preparedReady){render();return}
- preparedViews.delete('history');
- preparedViews.delete('activity');
- preparedHistoryViews.clear();
+function renderReviewFilters(){
+ if(!preparedContext||!preparedReady){render({navigationOnly:true});return}
+ const c=preparedContext;
+ preparedViews.delete('reviews');
+ $('planner-main').innerHTML=reviewsPage(c.bundle,c.s,c.reviewData||reviewQueue(c.bundle,c.s));
+ switchExistingPane('data-review-tab','data-review-pane',reviewPane);
+}
+// Invalidate only report views affected by a presentation filter. Month
+// and account filters are shared by all Spending/Activity panes, whereas
+// Activity search/sort and Budget display preferences are local.
+function renderHistoryFilters(scope='shared'){
+ if(!preparedContext||!preparedReady){render({navigationOnly:true});return}
+ if(scope==='shared'){
+  preparedViews.delete('history');preparedViews.delete('activity');
+  preparedHistoryViews.clear();
+ }else if(scope==='activity')preparedViews.delete('activity');
+ else if(scope==='budget'||scope==='budget-summary'){
+  preparedViews.delete('history');preparedHistoryViews.delete('categories');
+  if(scope==='budget-summary')preparedHistoryViews.delete('summary');
+ }else if(scope==='current'){
+  if(activeTab==='activity')preparedViews.delete('activity');
+  else if(activeTab==='history'){
+   if(historyView==='categories')preparedViews.delete('history');
+   preparedHistoryViews.delete(historyView);
+  }
+ }else throw Error('Unknown report refresh scope');
  const c=preparedContext;
  $('planner-main').innerHTML=pageMarkup(c.bundle,c.s,c.selectedSource,c.derived,c.fresh,c.reviewData);
  updateHistorySelectionSummary();
@@ -4320,19 +4344,24 @@ document.addEventListener('click',async e=>{
     !window.confirm('Discard unsaved payment changes?'))return;
   activeTab='activity';historyView='list';historyMerchantFilter=merchant.dataset.historyDrillMerchant;
   historySizeFilter=-1;historyCategoryFilter='';historyPurchaseDrill=false;
-  historySearch='';historyLimit=90;render();return;
+  historySearch='';historyLimit=90;
+  preparedViews.delete('activity');render({navigationOnly:true});return;
  }
  if(e.target.closest?.('[data-history-clear-merchant]')){
-  activeTab='history';historyView='merchants';historyMerchantFilter='';historyLimit=90;render();return;
+  activeTab='history';historyView='merchants';historyMerchantFilter='';historyLimit=90;
+  preparedHistoryViews.delete('merchants');render({navigationOnly:true});return;
  }
  const sizeBand=e.target.closest?.('[data-history-size-band]');
  if(sizeBand){
   const i=Number(sizeBand.dataset.historySizeBand);
   if(i<0||i>=historyBands.length)return;
-  activeTab='activity';historyView='list';historySizeFilter=i;historyCategoryFilter='';historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;render();return;
+  activeTab='activity';historyView='list';historySizeFilter=i;historyCategoryFilter='';
+  historyMerchantFilter='';historyPurchaseDrill=true;historySearch='';historyLimit=90;
+  preparedViews.delete('activity');render({navigationOnly:true});return;
  }
  if(e.target.closest?.('[data-history-clear-size]')){
-  historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;render();return;
+  historySizeFilter=-1;historyPurchaseDrill=false;historyLimit=90;
+  renderHistoryFilters('activity');return;
  }
  const categoryDrill=e.target.closest?.('[data-history-drill-category]');
  if(categoryDrill){
@@ -4346,7 +4375,7 @@ document.addEventListener('click',async e=>{
  if(savedBudget&&latestCategorySave){
   historySelectedMonths=new Set([latestCategorySave.date.slice(0,7)]);
   activeTab='history';historyAccount='all';historyView='categories';historyMonthPickerOpen=false;
-  render();
+  preparedViews.delete('history');render({navigationOnly:true});
   // The action explicitly selects the transaction's posting month and all
   // accounts; it never edits a saved budget or changes source transactions.
   const categoryRow=[...document.querySelectorAll('[data-history-category-row]')]
@@ -4441,7 +4470,7 @@ document.addEventListener('click',async e=>{
   recurringDraft=null;overdueEditKey='';reviewPane=next;
   switchExistingPane('data-review-tab','data-review-pane',next);return;
  }
- if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;render();return;}
+ if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;renderScheduleFilters();return;}
  const view=e.target.closest('[data-view]');
  if(view){
   if(!preparedReady)return;
@@ -4770,10 +4799,10 @@ document.addEventListener('click',async e=>{
   categoryReviewLimit+=40;render();return;
  }
  if(e.target.closest('[data-history-more]')){
-  historyLimit+=90;renderHistoryFilters();return;
+  historyLimit+=90;renderHistoryFilters('activity');return;
  }
  if(e.target.closest('[data-clear-history-search]')){
-  historySearch='';historyLimit=90;renderHistoryFilters();return;
+  historySearch='';historyLimit=90;renderHistoryFilters('activity');return;
  }
  const mortgageReview=e.target.closest('[data-review-mortgage]');
  if(mortgageReview){
@@ -5314,7 +5343,7 @@ document.addEventListener('submit',async e=>{
  historySort=['newest','oldest','amount-desc','amount-asc','merchant','category']
   .includes(fields.historySort)?fields.historySort:historySort;
  historyLimit=90;
- renderHistoryFilters();
+ renderHistoryFilters(activeTab==='activity'?'activity':'shared');
 });
 document.addEventListener('submit',async e=>{
  const form=e.target.closest('[data-history-recurring-form]');
@@ -5670,7 +5699,7 @@ async function saveBudgetCategoryOrder(){
   historyBudgetMessage='Could not save category order. Try again.';
  }finally{
   historyCategoryOrderBusy=false;
-  renderHistoryFilters();
+  renderHistoryFilters('budget');
  }
 }
 document.addEventListener('pointerdown',e=>{
@@ -5705,7 +5734,7 @@ document.addEventListener('pointerup',e=>{
 document.addEventListener('pointercancel',e=>{
  if(!historyCategoryDrag||e.pointerId!==historyCategoryDrag.pointerId)return;
  historyCategoryDrag=null;
- render(); // Revert any unsaved temporary DOM movement.
+ renderHistoryFilters('budget'); // No financial input changed.
 });
 document.addEventListener('keydown',e=>{
  const handle=e.target.closest?.('[data-history-category-handle]');
@@ -5753,7 +5782,7 @@ document.addEventListener('change',async e=>{
    const result=await savePlanning();
    if(live()&&(!result||result.saved!==true))throw Error('Budget save was not confirmed');
    historyBudgetMessage='Monthly budget saved';
-   renderHistoryFilters();
+   renderHistoryFilters('budget-summary');
    if(managerWasOpen){
     const manager=document.querySelector('[data-history-category-manager]');
     if(manager)manager.open=true;
@@ -5842,18 +5871,18 @@ document.addEventListener('change',async e=>{
    e.target.value=reviewSort;return;
   }
   reviewSort=next;categoryReviewLimit=40;
-  render();return;
+  renderReviewFilters();return;
  }
  const statementAccount=e.target.closest?.('[data-bills-statement-account]');
  if(statementAccount){
   billsStatementAccount=statementAccount.value;
   billsStatementPeriod=''; // New card selects its current/open or nearest cycle.
-  render();return;
+  renderScheduleFilters();return;
  }
  const statementPeriod=e.target.closest?.('[data-bills-statement-period]');
  if(statementPeriod){
   billsStatementPeriod=statementPeriod.value;
-  render();return;
+  renderScheduleFilters();return;
  }
  const billsMonth=e.target.closest?.('[data-bills-month]');
  if(billsMonth){
@@ -5867,7 +5896,7 @@ document.addEventListener('change',async e=>{
   }
   billsSelectedMonth=selected;
   scheduleMode='';scheduleTarget='';scheduleRemoveTarget='';
-  render();return;
+  renderScheduleFilters();return;
  }
  const kindFilter=e.target.closest?.('[data-schedule-kind-filter]');
  const sorter=e.target.closest?.('[data-schedule-sort]'),
@@ -5942,7 +5971,7 @@ document.addEventListener('change',async e=>{
   }
   historyCategoryFilter=next;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
-  renderHistoryFilters();return;
+  renderHistoryFilters('activity');return;
  }
  if(e.target.matches?.('[data-history-sort]')){
   const next=e.target.value;
@@ -5953,7 +5982,7 @@ document.addEventListener('change',async e=>{
   }
   historySort=next;historyLimit=90;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';recurringDraft=null;
-  renderHistoryFilters();return;
+  renderHistoryFilters('activity');return;
  }
  if(e.target.name==='historyAccount'){
   historyAccount=e.target.value;historyLimit=90;renderHistoryFilters();return;
