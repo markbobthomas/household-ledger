@@ -648,18 +648,9 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
   hasCounts=Number.isInteger(postedCount)&&Number.isInteger(predictedCount);
  const statementDate=next?.dueDate||'',
   navigable=Boolean(statementDate&&(points||[]).some(p=>p.date===statementDate));
- return '<div class="summary-monthly" data-summary-card-statement>'+
-  '<div class="summary-overline">'+(issued?'Statement balance':'Estimated statement')+'</div>'+
-  '<strong class="summary-low" data-summary-statement-value>'+
-   (hasStatement?money(Number(next.statementBalance)):'Not available')+'</strong>'+
-  (hasStatement?
-   (navigable?'<button type="button" class="summary-low-date" data-calendar-card-statement-date="'+
-    esc(statementDate)+'">':'<small class="summary-low-date">')+
-    esc((issued?'Issued':'Estimated')+' · Due '+dateLabel(statementDate))+
-    (navigable?' →</button>':'</small>'):
-   '<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
-  '</div>'+
-  '<div class="summary-minimum" data-summary-card-next-statement>'+
+ // Keep statement details in Bills. The Calendar needs only current card
+ // debt and the next statement estimate, not a confusing middle number.
+ return '<div class="summary-minimum" data-summary-card-next-statement>'+
   '<div class="summary-overline">Next statement estimate</div>'+
   '<strong class="summary-low" data-summary-next-statement-value>'+
    (hasFollowing?money(Number(following.statementBalance)):'Not available')+'</strong>'+
