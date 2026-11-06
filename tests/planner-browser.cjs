@@ -2409,8 +2409,7 @@ const {chromium,webkit}=require('playwright');
     assertFontsMatch('Posted Activity '+width,await transactionFonts(
      '.history-row-open.ledger-transaction-row',
      '.history-actual-description strong','.history-actual-amount'),baseline);
-    await page.locator('#planner-menu>summary').click();
-    await page.locator('#planner-menu [data-view="transactions"]').click();
+    await page.locator('.history-page [data-view="transactions"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     assertFontsMatch('Dated Predictions '+width,await transactionFonts(
      '.unified-payment-trigger.ledger-transaction-row',
