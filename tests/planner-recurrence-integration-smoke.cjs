@@ -107,8 +107,8 @@ const merchantOccurrences=name=>canonicalRows().filter(row=>row.merchant.include
  const initial=future();
  assert.equal(occurrences(),36,
   'One posted mortgage automatically creates November, December, January without review');
- assert.ok(canonicalRows().some(row=>row.date==='2026-11-15'&&row.merchant.includes('Mortgage ACH')),
-  'Canonical projection contains the expected first mortgage date');
+ assert.equal(canonicalRows().filter(row=>row.date.startsWith('2026-11')&&row.merchant.includes('Mortgage ACH')).length,1,
+  'Canonical projection has one November mortgage after the weekend posting shift');
  const buildsBeforeNavigation=forecastBuilds;
  await click('[data-view]',{view:'history'});
  await click('[data-view]',{view:'transactions'});
