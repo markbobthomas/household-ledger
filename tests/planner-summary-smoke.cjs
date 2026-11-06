@@ -83,7 +83,7 @@ const todayRows=[
  {id:'prior-fixture',date:iso(-1),accountId:'checking',type:'expense',
   cashDirection:'out',amount:7,merchant:'Fictional Yesterday',pending:false}
 ];
-const todayInput={...opts,bundle:{...opts.bundle,rows:todayRows}};
+const todayInput={...opts,days:1095,bundle:{...opts.bundle,rows:todayRows}};
 const todayRowsBefore=JSON.stringify(todayRows);
 const todayHTML=tool.render(todayInput);
 assert.match(todayHTML,/data-calendar-today-actual/,
@@ -106,7 +106,7 @@ const nextDayHTML=tool.render({...todayInput,snapshot:{...snapshot,asOf:iso(1)},
  derived:{...derived,series:series.slice(1)}});
 assert.doesNotMatch(nextDayHTML,/data-calendar-today-actual[^>]*>[\s\S]*?Fictional Today Posted/,
  'Yesterday bank records do not remain in a new day forecast overlay');
-tool.render(opts); // Restore the earlier fixture for subsequent assertions.
+tool.render({...opts,days:1095}); // Restore the earlier fixture for subsequent assertions.
 // Plaid checking accounts can report accountType=depository and
 // subtype=checking. All accounts must never accidentally select the savings
 // balance merely because savings appears first in the linked account list.
