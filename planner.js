@@ -3639,7 +3639,13 @@ function activatePreparedView(view,from,fromHistoryView){
   updateHistoryLinks(form);
  }
  for(const form of root.querySelectorAll('[data-card-rule]'))configureCardFields(form);
- if(view==='schedules')applyScheduleSearch(root);
+ if(view==='schedules'){
+  applyScheduleSearch(root);
+  // Cached Bills pages may have been created before a linked action chose
+  // the All expected scope. Synchronize only hidden/pressed DOM attributes.
+  switchExistingPane('data-bills-tab','data-bills-pane',billsPane);
+  switchExistingPane('data-upcoming-filter','data-upcoming-scope',billsUpcomingScope);
+ }
  if(view==='history'){
   // Budget is now visible, not a detached Spending subpage.
   preparedHistoryViews.delete('categories');
@@ -4426,6 +4432,10 @@ document.addEventListener('click',async e=>{
    document.querySelector('[data-view="'+destination+'"]');
   if(nav&&activeTab!==destination)nav.click();
   else if(activeTab!==destination){activeTab=destination;render({navigationOnly:true})}
+  if(destination==='schedules'){
+   switchExistingPane('data-bills-tab','data-bills-pane',billsPane);
+   switchExistingPane('data-upcoming-filter','data-upcoming-scope',billsUpcomingScope);
+  }
   if(destination==='settings'){
    const section=document.getElementById('card-autopay');
    if(section)section.open=true;
