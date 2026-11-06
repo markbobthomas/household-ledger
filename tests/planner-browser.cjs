@@ -2355,7 +2355,14 @@ const {chromium,webkit}=require('playwright');
     'Repeating text matches Upcoming Bills: '+JSON.stringify({ref,scheduled}));
    assert.equal(scheduled.cardBorder,'none','Repeating has no individual enclosing card');
    assert.equal(scheduled.cardShadow,'none','Repeating has no per-item shadow');
-   assert.ok(ref.overflow<=3&&scheduled.overflow<=3,'No horizontal overflow in Bills: '+JSON.stringify({ref,scheduled}));
+   const overflowing=scheduled.overflow>3?await page.evaluate(()=>[...document.querySelectorAll('body *')]
+    .filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.right>innerWidth+3})
+    .map(el=>({tag:el.tagName,cls:String(el.className||'').slice(0,110),
+     right:Math.round(el.getBoundingClientRect().right),width:Math.round(el.getBoundingClientRect().width),
+     minWidth:getComputedStyle(el).minWidth,display:getComputedStyle(el).display}))
+    .sort((a,b)=>b.right-a.right).slice(0,18)):null;
+   assert.ok(ref.overflow<=3&&scheduled.overflow<=3,
+    'No horizontal overflow in Bills: '+JSON.stringify({viewport:await page.evaluate(()=>innerWidth),ref,scheduled,overflowing}));
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const posted=await design(page.locator('.history-entry .history-actual-row').first(),
