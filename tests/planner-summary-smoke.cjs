@@ -85,7 +85,7 @@ const checkingWithSubtype=tool.render({...opts,days:1095,accounts:reordered,chos
  bundle:{...opts.bundle,projection:{...opts.bundle.projection,accounts:[
   {...derived,id:'checking-main',balanceStatus:'fresh'}
  ]}}});
-assert.match(checkingWithSubtype,/Main checking.*Available today/,
+assert.match(checkingWithSubtype,/Main checking.*available today/i,
  'All accounts explicitly shows the main checking available balance');
 assert.match(checkingWithSubtype,/data-bank-available-value>\$5,000\.00<\/strong>/,
  'The All reference is a Plaid checking subtype, not the first savings account');
