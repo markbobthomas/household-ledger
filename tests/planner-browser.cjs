@@ -2363,7 +2363,17 @@ const {chromium,webkit}=require('playwright');
     'Repeating text matches Upcoming Bills: '+JSON.stringify({ref,scheduled}));
    assert.equal(scheduled.cardBorder,'none','Repeating has no individual enclosing card');
    assert.equal(scheduled.cardShadow,'none','Repeating has no per-item shadow');
-   assert.ok(ref.overflow<=3&&scheduled.overflow<=3,'No horizontal overflow in Bills');
+   if(ref.overflow>3||scheduled.overflow>3){
+    const offenders=await page.evaluate(()=>[...document.querySelectorAll('body *')]
+     .map(el=>({el,rect:el.getBoundingClientRect()}))
+     .filter(({rect})=>rect.width>0&&rect.right>innerWidth+3)
+     .slice(0,10).map(({el,rect})=>({tag:el.tagName,
+      className:String(el.className||'').slice(0,80),
+      text:String(el.textContent||'').slice(0,65),
+      right:Math.round(rect.right)})));
+    assert.fail('No horizontal overflow in Bills: '+
+     JSON.stringify({ref,scheduled,offenders}));
+   }
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const posted=await design(page.locator('.history-entry .history-actual-row').first(),
