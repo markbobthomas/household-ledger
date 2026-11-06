@@ -17,6 +17,7 @@ const {chromium,webkit}=require('playwright');
   desktop=await chromium.launch({headless:true});
   iphone=await webkit.launch({headless:true});
   const cases=[
+   ['2026-10-15T18:00:00Z','October 2026','2026-10-15'],
    ['2026-10-31T15:44:00Z','October 2026','2026-10-31'],
    ['2027-01-01T07:30:00Z','December 2026','2026-12-31'],
    ['2027-01-01T08:30:00Z','January 2027','2027-01-01']
@@ -43,6 +44,31 @@ const {chromium,webkit}=require('playwright');
      device+' should show the Pacific-local month at '+instant);
     assert.equal(await selectedDay(),localToday,
      device+' should select actual local today, including Saturday');
+    if(localToday==='2026-10-15'){
+     // Fictional demo has posted pay and transfer records on the as-of day.
+     // Activity and Calendar must display the same records, not just dates
+     // strictly earlier than today. The bank balance must not be re-debited.
+     const postedRows=page.locator('[data-calendar-today-actual] .calendar-actual-row');
+     assert.ok(await postedRows.count()>=2,
+      device+' must show today\'s posted Activity records in Calendar');
+     const todayText=await page.locator('[data-calendar-detail]').innerText();
+     assert.match(todayText,/Household Paycheck/);
+     assert.match(todayText,/Transfer to Savings/);
+     assert.match(await page.locator('[data-calendar-day="2026-10-15"]').innerText(),
+      /Household Paycheck|Transfer to Savings/,
+      'Today cell visibly identifies source bank activity');
+     await page.locator('.planner-nav-primary [data-view="activity"]').click();
+     await page.locator('.history-page').waitFor({state:'attached'});
+     const activity=await page.locator('.history-actual-row[data-history-sort-date="2026-10-15"]')
+      .allTextContents();
+     assert.ok(activity.some(x=>x.includes('Household Paycheck'))&&
+      activity.some(x=>x.includes('Transfer to Savings')),
+      'The source bank Activity page includes the same fictional today records');
+     await page.locator('.planner-nav-primary [data-view="summary"]').click();
+     await page.locator('.calendar-month-title').waitFor({state:'attached'});
+     assert.ok(await page.locator('[data-calendar-today-actual] .calendar-actual-row').count()>=2,
+      'Prepared Calendar navigation preserves current-day bank rows');
+    }
     // The back arrow is a real posted-history calendar, not a dead end at
     // the initial forecast date. Previous months retain posted transactions.
     // Anchor to the 15th before subtracting a month: October 31 minus
