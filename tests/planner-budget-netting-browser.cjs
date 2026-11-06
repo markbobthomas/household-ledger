@@ -333,8 +333,8 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const recurring=page.locator('[data-schedule-card="fictional-recurring-card-pay"]');
-   assert.equal(await recurring.count(),0,
-    name+': card repayment is excluded from Repeating expense plans');
+   assert.equal(await recurring.count(),1,
+    name+': manually saved repeating card transfer is manageable as a transfer, not a second expense');
    assert.match(await page.locator('.bills-upcoming').innerText(),/Fictional Recurring Card Repayment/,
     name+': recurring card repayment is visible in Upcoming cash bills');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
