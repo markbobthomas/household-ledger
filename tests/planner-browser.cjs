@@ -1589,7 +1589,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
    assert.equal(await page.locator('.bills-heading h2').innerText(),'Upcoming bills');
-   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
+   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Recurring bills',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
    const billHeader=await page.locator('.bills-heading').evaluate(el=>{
