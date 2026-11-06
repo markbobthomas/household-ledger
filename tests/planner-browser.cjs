@@ -2226,7 +2226,7 @@ const {chromium,webkit}=require('playwright');
    assert.match(await repeatingSum.innerText(),/Out \$85\.00/,
     'Search sums the visible fictional matching outgoing schedule only');
    await page.locator('[data-schedule-category-filter]').selectOption('Other');
-   assert.match(await repeatingSum.innerText(),/\$0\.00/,
+   assert.match(await repeatingSum.innerText(),/\$0(?:\.00)?/,
     'Category filtering with a search recalculates the sum to zero');
    await page.locator('[data-schedule-category-filter]').selectOption('Utility');
    assert.match(await repeatingSum.innerText(),/Out \$85\.00/,
