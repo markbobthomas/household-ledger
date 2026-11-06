@@ -68,4 +68,55 @@ assert.throws(()=>Transactions.defineRecurring(state,{
 }),/Choose an existing prediction category/);
 assert.equal(state.predictions.futureRecurringRules.find(r=>r.id===rule.id).category,'Pet Care',
  'Unknown category cannot corrupt the saved schedule');
+// A repeating plan's category must also appear on uniquely related ACTUAL
+// transactions in History/Budget. The bank facts stay immutable and an
+// independent per-transaction category override always takes precedence.
+const Model=require('../ledger-data.js');
+const actual=(id,merchant,accountId='checking',extra={})=>({
+ id,date:'2026-10-12',merchant,amount:18.95,type:'expense',accountId,
+ category:'Other',pending:false,source:{provider:'demo',verified:true},...extra
+});
+const bankView=Model.migrate({
+ accounts,transactions:[
+  actual('linked-bank','Fictional Vet'),
+  actual('later-bank','Fictional Vet'),
+  actual('manual-bank','Fictional Vet'),
+  actual('other-account','Fictional Vet','savings'),
+  actual('other-merchant','Another Store'),
+  actual('paired-bank','Fictional Vet','checking',{pairedTransactionId:'paired-credit'})
+ ],
+ predictions:{futureRecurringRules:[{...updated,category:'Pet Care',exampleIds:['linked-bank']}]},
+ categoryOverrides:{'manual-bank':'Insurance'}
+});
+const sourceBefore=JSON.stringify(bankView.transactions);
+const find=id=>Model.records(bankView).find(t=>t.id===id);
+assert.equal(find('linked-bank').category,'Pet Care');
+assert.equal(find('later-bank').category,'Pet Care',
+ 'Posted payment on the same account and payee inherits the saved repeating category');
+assert.equal(Model.categoryFor(bankView,'later-bank'),'Pet Care',
+ 'The inline actual-transaction selector uses the same effective category');
+assert.equal(find('manual-bank').category,'Insurance',
+ 'An individually confirmed bank category wins over the repeating default');
+assert.equal(find('other-account').category,'Other','Other bank accounts stay independent');
+assert.equal(find('other-merchant').category,'Other','Unrelated payees retain their category');
+assert.equal(find('paired-bank').category,'Other',
+ 'A bank item with an internal paired transfer must never be automatically recategorized');
+assert.equal(find('later-bank').method,'recurring');
+assert.ok(!Model.categoryReviewQueue(bankView).transactions.some(t=>t.id==='later-bank'),
+ 'Confirmed repeating-category history is not a low-confidence category review item');
+bankView.predictions.futureRecurringRules[0].category='Groceries';
+assert.equal(find('later-bank').category,'Groceries',
+ 'Editing the repeating category updates associated past activity automatically');
+assert.equal(find('manual-bank').category,'Insurance');
+bankView.predictions.futureRecurringRules.push({
+ ...updated,id:'another-independent-plan',category:'Housing',exampleIds:[],
+ originalMerchant:'Fictional Vet',matchNames:['fictional vet']
+});
+assert.equal(find('linked-bank').category,'Groceries',
+ 'Explicit bank-example ownership disambiguates two same-merchant schedules');
+assert.equal(find('later-bank').category,'Other',
+ 'Independent same-merchant streams without linked evidence remain ambiguous');
+assert.equal(JSON.stringify(bankView.transactions),sourceBefore,
+ 'Neither repeating category changes nor derived history classification edit Plaid bank facts');
+
 console.log('PASS schedule category preservation: encrypted-forecast preference shape, custom categories, individual edits and linked-transfer legs');
