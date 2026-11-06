@@ -64,6 +64,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
         {id:'fictional-energy',kind:'event',type:'expense',accountId:'demo-checking',
          frequency:'monthly',anchorDate:'2026-10-04',date:'2026-10-04',
          merchant:'Puget Sound Energy',amount:106.70,category:'Utilities'},
+        {id:'fictional-payroll',kind:'event',type:'income',accountId:'demo-checking',
+         frequency:'every-4-weeks',anchorDate:'2026-12-04',date:'2026-12-04',
+         merchant:'Fictional Payroll',amount:1800,category:'Income'},
         {id:'fictional-zelle-childcare',kind:'event',type:'transfer',
          cashDirection:'out',accountId:'demo-checking',
          frequency:'monthly',anchorDate:'2026-10-08',date:'2026-10-08',
@@ -134,6 +137,15 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': forecast metrics and calendar are the first surface');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
+   await page.locator('[data-bills-tab="repeating"]').click();
+   await page.locator('[data-schedule-kind-filter]').selectOption('income');
+   assert.match(await page.locator('[data-bills-pane="repeating"]').innerText(),
+    /Fictional Payroll/,name+': recurring payroll must be manageable, not absent');
+   await page.locator('[data-schedule-kind-filter]').selectOption('transfer');
+   assert.match(await page.locator('[data-bills-pane="repeating"]').innerText(),
+    /Fictional Zelle Childcare/,name+': recurring external transfers are visible');
+   await page.locator('[data-schedule-kind-filter]').selectOption('all');
+   await page.locator('[data-bills-tab="upcoming"]').click();
    const currentBills=await page.locator('.bills-upcoming').innerText();
    assert.match(currentBills,/Fictional Earlier Bill/,
     name+': Upcoming lists the next checking withdrawals');
@@ -235,6 +247,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    assert.equal(centsOf(await page.locator('[data-recap-spent] strong').innerText()),
     centsOf(parts[1])-9000,
     name+': Summary remains posted-only; Budget includes the fictional $90 pending purchase');
+   const budgetUsageExplanation=await page.locator('[data-recap-budget] small').innerText();
+   assert.match(budgetUsageExplanation,/posted .* · pending \$90\.00 · expected \$75\.00/,
+    name+': Month insights itemizes provisional and expected amounts as Budget does');
    assert.equal(await page.locator('.financial-recap-page [data-history-month-picker]').count(),1,
     name+': Summary shares the calendar-month picker');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page button:not([data-history-month-toggle]):not([data-history-month-current]):not([data-history-month-all])').count(),0,
@@ -242,7 +257,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    const moneyCents=text=>Math.round(Number(String(text).replace(/[^0-9.-]/g,''))*100),
     octoberBills=moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
     octoberBreakdown=await page.locator('[data-recap-bills] small').innerText(),
-    paidMatch=octoberBreakdown.match(/Paid (\$[\d,.]+) · Upcoming (\$[\d,.]+)/);
+    paidMatch=octoberBreakdown.match(/Posted (\$[\d,.]+) · Expected (\$[\d,.]+)/);
    assert.ok(paidMatch,name+': October shows posted and remaining bills');
    const paidOctober=moneyCents(paidMatch[1]),upcomingOctober=moneyCents(paidMatch[2]);
    assert.equal(paidOctober,373170,
