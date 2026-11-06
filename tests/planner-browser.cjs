@@ -1588,8 +1588,8 @@ const {chromium,webkit}=require('playwright');
     'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
-   assert.equal(await page.locator('.bills-heading h2').innerText(),'Upcoming transactions');
-   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Recurring bills',
+   assert.equal(await page.locator('.bills-heading h2').innerText(),'All expected activity');
+   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Recurring transactions',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
    const billHeader=await page.locator('.bills-heading').evaluate(el=>{
