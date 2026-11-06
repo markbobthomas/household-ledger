@@ -1110,6 +1110,86 @@ function linkPostedToSchedule(state,bankId,ruleId,records,accounts){
  return r.id;
 }
 
+// Shared immutable evidence index for forecast, Review and monthly coverage.
+// An account+direction+merchant identity is stable across variable amounts;
+// includeAmount is used only for compatibility with saved Review dismissal keys.
+// Each consumer retains its own confidence/approval policy, but all consumers
+// see the same sorted bank postings and stable stream identity.
+function recurrenceEvidence(rows,accounts,asOf,options={}){
+ const groups=new Map(),normalize=options.normalizeMerchant||merchantKey;
+ for(const row of rows||[]){
+  if(!row||options.eligible&&!options.eligible(row))continue;
+  const aid=accountRef(row.accountId||row.account||row.fromAccountId,accounts),
+   acct=(accounts||[]).find(a=>String(a.id)===String(aid));
+  if(!acct)continue;
+  const kind=options.typeOf?.(row,acct);
+  if(!kind)continue;
+  const merchant=normalize(row.merchant||row.name);
+  if(!merchant)continue;
+  const identity=[String(aid),String(kind),merchant];
+  if(options.includeAmount)identity.push(String(Math.round(Number(row.amount)*100)));
+  const id=identity.map(encodeURIComponent).join('|');
+  if(!groups.has(id))groups.set(id,{
+   id,key:id,accountId:String(aid),accountName:acct.name||String(aid),
+   merchant:String(row.merchant||row.name),identityMerchant:merchant,
+   kind,type:kind,amount:Number(row.amount),rows:[]});
+  groups.get(id).rows.push(row);
+ }
+ for(const group of groups.values())
+  group.rows.sort((a,b)=>a.date.localeCompare(b.date));
+ return groups;
+}
+// A single cadence implementation with explicit policy thresholds. The
+// forecast has strict two-posting evidence, Review accepts wider spacing,
+// and coverage tolerates bank posting drift; do not silently tighten or
+// loosen an existing policy while centralizing its evidence.
+function recurrenceCadence(history,policy='forecast'){
+ const dates=(history||[]).map(x=>typeof x==='string'?x:x?.date)
+  .filter(x=>typeof x==='string').sort();
+ if(dates.length<2)return null;
+ const dayGap=(a,b)=>daysBetween(a,b);
+ if(policy==='forecast'){
+  const a=dates.at(-2),b=dates.at(-1),
+   days=dayGap(b,a),
+   months=(Number(b.slice(0,4))*12+Number(b.slice(5,7)))-
+    (Number(a.slice(0,4))*12+Number(a.slice(5,7))),
+   spread=Math.abs(+a.slice(-2)-+b.slice(-2));
+  if(Math.abs(days-7)<=1)return 'weekly';
+  if(Math.abs(days-14)<=2)return 'biweekly';
+  for(const [span,name] of [[1,'monthly'],[3,'quarterly'],[6,'semiannual'],[12,'annual']])
+   if(months===span&&spread<=5)return name;
+  return null;
+ }
+ if(policy==='review'){
+  const gaps=dates.slice(1).map((d,i)=>dayGap(d,dates[i])),
+   recent=gaps.slice(-3),avg=recent.reduce((a,b)=>a+b,0)/recent.length,
+   days=dates.slice(-Math.min(dates.length,4)).map(d=>Number(d.slice(-2))),
+   spread=Math.max(...days)-Math.min(...days),
+   choices=[
+    {frequency:'weekly',span:7,tolerance:2},
+    {frequency:'biweekly',span:14,tolerance:3},
+    {frequency:'monthly',span:30.44,tolerance:6},
+    {frequency:'quarterly',span:91.31,tolerance:9},
+    {frequency:'semiannual',span:182.6,tolerance:11},
+    {frequency:'annual',span:365.25,tolerance:16}
+   ];
+  return choices.find(c=>Math.abs(avg-c.span)<=c.tolerance&&
+   recent.every(g=>Math.abs(g-c.span)<=c.tolerance)&&
+   (!['monthly','quarterly','semiannual','annual'].includes(c.frequency)||spread<=7))?.frequency||null;
+ }
+ if(policy==='coverage'){
+  const unique=[...new Set(dates)],
+   gaps=unique.slice(1).map((d,i)=>dayGap(d,unique[i])),
+   recent=gaps.slice(-4),
+   biweekly=recent.length>=2&&recent.every(g=>g>=12&&g<=16),
+   monthly=recent.length>=1&&recent.every(g=>g>=25&&g<=36);
+  if(biweekly)return 'biweekly';
+  if(monthly)return 'monthly';
+  if(recent.length>=3&&recent.every(g=>g>=12&&g<=19))return 'twice-monthly';
+  return null;
+ }
+ throw Error('Unknown recurrence evidence policy');
+}
 function transactionTitle(name,key,note=''){
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  return '<span class="transaction-title-line" data-note-title-key="'+esc(key)+'">'+
@@ -1124,7 +1204,8 @@ const api={transactionTitle,ensure,keyEvent,keyMovement,normalFields,transferFie
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
  // Shared primitives only; scheduling, recommendation and payment policies stay
  // separate. Preserve unknown/ambiguous account references unchanged.
- merchantKey,accountRef,daysBetween,shift,monthAt,forecastBusinessDate};
+ merchantKey,accountRef,daysBetween,shift,monthAt,forecastBusinessDate,
+ recurrenceEvidence,recurrenceCadence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

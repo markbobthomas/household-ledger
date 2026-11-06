@@ -603,7 +603,7 @@ function forecastBudgetExpenses(bundle,s,posted,settlements,months,accountId='al
    additions.get(String(row.id))?.category;
   let name=model.canonicalCategory(state(),sourceCategory)||'Other';
   if(['Income','Transfer'].includes(name))name='Other';
-  return [{name,cents:Math.round(amount*100)*(row.type==='refund'?-1:1),
+  return [{name,cents:window.HouseholdAccounting.forecastSpendingCents(row),
    date:row.date,merchant:row.merchant,key:row.key}];
  });
 }
@@ -1293,36 +1293,13 @@ function cardStatementPeriod(accountId,when){
  return window.HouseholdPaymentObligations.statementPeriodFor(
   state().predictions?.paymentRules?.[accountId],when);
 }
-function categorySpendingCents(row,settlements){
- // Reporting-only: preserve actual posted purchases/refunds, and recognize
- // high-confidence bank-matched card settlements even when the bank describes
- // the checking debit as an ordinary payment. Neither settlement side is
- // budget spending. Merchant/statement forecasts keep their own calculations.
- if(settlements?.has(String(row.id)))return 0;
- return cardActivityCents(row)+window.HouseholdPlannerHistory.categorizedOutflowCents(row);
-}
-// Budget shows confirmed bank-visible pending purchases as provisional spending.
-// They remain excluded from *posted* activity, issued card statements, and
-// canonical balance forecasts. A pending row is never a card repayment,
-// linked transfer, or guessed merchant expense.
-function pendingBudgetCents(row,settlements){
- if(!row?.pending||settlements?.has(String(row.id)))return 0;
- return cardActivityCents({...row,pending:false});
-}
-function purchaseReportCents(row,settlements){
- return settlements?.has(String(row.id))?0:cardActivityCents(row);
-}
-function cardActivityCents(row){
- // The History statement total is purchases minus merchant refunds only.
- // A paired card payment is never a new purchase, even if an earlier
- // provisional import called that card credit a refund.
- if(row.pending||row.pairedTransactionId||
-  ['card_payment','internal_transfer'].includes(row.accountingKind)||
-  !['expense','refund'].includes(row.type))return 0;
- const cents=Math.round(Math.abs(Number(row.amount))*100);
- if(!Number.isFinite(cents))return 0;
- return row.type==='refund'?-cents:cents;
-}
+// One accounting contract for Budget, Activity, Merchants, Purchase Sizes
+// and Summary. Classification remains read-only; no new forecast computation.
+const reportMeasures=(row,settlements)=>window.HouseholdAccounting.reportingMeasures(row,settlements);
+const categorySpendingCents=(row,settlements)=>reportMeasures(row,settlements).postedSpendingCents;
+const pendingBudgetCents=(row,settlements)=>reportMeasures(row,settlements).provisionalPendingSpendingCents;
+const purchaseReportCents=(row,settlements)=>reportMeasures(row,settlements).purchaseCents;
+const cardActivityCents=row=>window.HouseholdAccounting.cardActivityCents(row);
 function budgetAggregation(rows,predictions,budgets,months,settlements){
  const postedCents=rows.reduce((n,r)=>n+categorySpendingCents(r,settlements),0),
   pendingCents=rows.reduce((n,r)=>n+pendingBudgetCents(r,settlements),0),
@@ -2389,12 +2366,7 @@ function financialRecapPage(bundle,s){
   current=posted.filter(r=>selectedMonths.has(r.date.slice(0,7))&&
    (historyAccount==='all'||window.HouseholdPlannerHistory.accountOf(r,activeAccounts(s))===historyAccount)),
   spendingCents=current.reduce((total,r)=>total+categorySpendingCents(r,settlements),0),
-  incomeCents=current.reduce((total,r)=>{
-   if(r.pending||r.pairedTransactionId||r.type!=='income'||
-      ['card_payment','internal_transfer'].includes(r.accountingKind))return total;
-   const cents=Math.round(Math.abs(Number(r.amount))*100);
-   return total+(Number.isSafeInteger(cents)?cents:0);
-  },0),
+  incomeCents=current.reduce((total,r)=>total+reportMeasures(r,settlements).postedIncomeCents,0),
   budgets=state().predictions?.categoryMonthlyBudgets||{},
   totals=budgetAggregation(current,
    forecastBudgetExpenses(bundle,s,posted,settlements,selectedMonths,historyAccount),

@@ -432,26 +432,17 @@ function mortgageCoverage({months,ledger,rows,chosen,accounts,asOf,prefs,project
  })};
 }
 function cadenceFor(history){
- const list=[...new Set(history.map(r=>r.date))].sort();
- if(list.length<2)return null;
- const gaps=list.slice(1).map((d,i)=>daysBetween(d,list[i]));
- const last=gaps.slice(-4),biweekly=last.length>=2&&last.every(g=>g>=12&&g<=16),
-  monthly=last.length>=1&&last.every(g=>g>=25&&g<=36);
- if(biweekly)return 'biweekly';
- if(monthly)return 'monthly';
- if(last.length>=3&&last.every(g=>g>=12&&g<=19))return 'twice-monthly';
- return null;
+ return shared.recurrenceCadence(history,'coverage');
 }
-function projectedIncomeSlots(records,months){
- const groups=new Map();
- for(const r of records){
-  const key=norm(r.merchant||r.name);
-  if(!key)continue;
-  if(!groups.has(key))groups.set(key,[]);
-  groups.get(key).push(r);
- }
+function projectedIncomeSlots(records,months,accounts){
+ const groups=shared.recurrenceEvidence(records,accounts,null,{
+  eligible:r=>Boolean(norm(r.merchant||r.name)),
+  typeOf:()=> 'income',
+  normalizeMerchant:norm
+ });
  const slots=[];
- for(const [source,group] of groups){
+ for(const evidence of groups.values()){
+  const source=evidence.identityMerchant,group=evidence.rows;
   const distinct=new Set(group.map(r=>r.date.slice(0,7)));
   if(group.length<2||distinct.size<2)continue;
   const rhythm=cadenceFor(group),seed=group.at(-1).date;
@@ -480,7 +471,7 @@ function incomeCoverage({months,ledger,rows,chosen,accounts,asOf,prefs}){
   posted=historyFor(rows,accounts,id,realIncome,asOf),
   planned=(ledger||[]).filter(e=>e.kind==='event'&&e.type==='income'&&
    asId(e.accountId)===id);
- let slots=projectedIncomeSlots(posted,months);
+ let slots=projectedIncomeSlots(posted,months,accounts);
  // Saved recurring payroll is authoritative when history is sparse. Generate
  // slots from each separate confirmed rule (including alternating 4-week
  // income streams), never lump those two rules together by merchant alone.
