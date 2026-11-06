@@ -447,7 +447,7 @@ const {chromium,webkit}=require('playwright');
     'Summary reuses the Spending calendar-month checklist');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page select').count(),0,
     'Summary contains no editable financial fields');
-   assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Total monthly bills')),
+   assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Scheduled expenses this month')),
     'Single-month bills are a selected-month sum, not a 12-month average');
    assert.doesNotMatch(await page.locator('[data-recap-bills]').innerText(),/12-month average/);
    // Summary totals count only saved recurring or explicitly scheduled
