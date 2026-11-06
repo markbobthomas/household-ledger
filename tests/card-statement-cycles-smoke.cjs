@@ -215,11 +215,11 @@ assert.equal(possible.statements[0].actualPaymentAmount,640,
 assert.equal(possible.plans.length,0,
  'Already recognized posted payment still prevents a second full autopay');
 assert.ok(suggested.signature.includes('640.00'));
-const splitRows=[20,40].map((amount,i)=>({...postedExtra,
+const differenceSplitRows=[20,40].map((amount,i)=>({...postedExtra,
  id:'split-cash-'+i,amount,pending:false}));
-const split=Payments.build(earlySnapshot,[...differingPaid,...splitRows],[],
+const differenceSplit=Payments.build(earlySnapshot,[...differingPaid,...differenceSplitRows],[],
  issued.predictions,{days:30}).warningActions.find(a=>a.kind==='card-payment-difference');
-assert.ok(split.suggestions.some(c=>c.kind==='split'&&c.amount===60),
+assert.ok(differenceSplit.suggestions.some(c=>c.kind==='split'&&c.amount===60),
  'Two distinct bank-side payment-like debits may explain the gap');
 const issuerCredit=Payments.build(earlySnapshot,[...differingPaid,{
  id:'unpaired-issuer-credit',date:'2026-11-10',accountId:'visa',
