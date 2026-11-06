@@ -6570,3 +6570,20 @@ a:hover{color:#166e61}
 
 .summary-page .calendar-outside-total{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;color:#527065;font-size:12px;font-variant-numeric:tabular-nums}
 .summary-page .calendar-outside-total strong{color:#375d4b;font-weight:700}
+
+/* Payment-review suggestions are evidence only: clear action, compact rows,
+   and no suggestion that acknowledging a warning changes a bank payment. */
+.bills-payment-reconciliation{
+ margin:12px 0 4px;padding:12px 14px;border:1px solid var(--line,#dce1e5);
+ border-radius:10px;display:grid;gap:9px
+}
+.bills-payment-reconciliation>p{margin:0;line-height:1.45}
+.bills-payment-reconciliation>button{justify-self:start}
+.bills-payment-suggestions{display:grid;gap:7px}
+.bills-payment-suggestion{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:12px;padding:9px 0;border-top:1px solid var(--line,#dce1e5)
+}
+.bills-payment-suggestion>span{display:grid;gap:3px;min-width:0}
+.bills-payment-suggestion small{font-size:.9em;color:var(--muted,#66717c);overflow-wrap:anywhere}
+.bills-payment-suggestion>strong{white-space:nowrap}
