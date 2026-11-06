@@ -18,6 +18,11 @@ function keyContains(key,id){
   if(seen.has(part))continue;
   seen.add(part);
   if(part===id)return true;
+  if(part.startsWith('bank:')){
+   try{const pair=JSON.parse(part.slice(5));
+    if(Array.isArray(pair)&&String(pair[0])===id)return true;
+   }catch{}
+  }
   if(part.includes('|'))pending.push(...part.split('|'));
   try{const decoded=decodeURIComponent(part);if(decoded!==part)pending.push(decoded)}
   catch{}

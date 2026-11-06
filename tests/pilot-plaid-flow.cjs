@@ -2,6 +2,25 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process');
 (async()=>{
+ const M=require('../ledger-data.js'),keyFor=(a,id)=>'bank:'+JSON.stringify([a,id]);
+ const metadata={categoryOverrides:{pending:'Groceries',posted:'Dining'},
+  reviews:{categoryConfirmed:{pending:true}},predictions:{
+   transactionNotes:{[keyFor('checking','pending')]:'Pending note',
+    [keyFor('checking','posted')]:'Posted note',[keyFor('card','pending')]:'Card note'},
+   futureRecurringRules:[{accountId:'checking',exampleIds:['pending','posted']},
+    {accountId:'card',exampleIds:['pending']}]
+  }};
+ M.remapTransactionMetadata(metadata,'checking','pending','posted');
+ assert.equal(metadata.categoryOverrides.posted,'Dining');
+ assert.equal(metadata.categoryOverrides.pending,undefined);
+ assert.equal(metadata.predictions.transactionNotes[keyFor('checking','posted')],'Posted note','Posted note wins collision');
+ assert.equal(metadata.predictions.transactionNotes[keyFor('card','pending')],'Card note','Other account is untouched');
+ assert.deepEqual(metadata.predictions.futureRecurringRules[0].exampleIds,['posted']);
+ assert.deepEqual(metadata.predictions.futureRecurringRules[1].exampleIds,['pending']);
+ assert.equal(metadata.reviews.categoryConfirmed.posted,true);
+ const once=JSON.stringify(metadata);M.remapTransactionMetadata(metadata,'checking','pending','posted');
+ assert.equal(JSON.stringify(metadata),once,'Replacement replay is idempotent');
+
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'hl-plaid-flow-')),port=19849,pass=crypto.randomBytes(24).toString('hex'),store=path.join(folder,'pilot.enc');
  const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1',PILOT_INVALID_FIELD_TEST:'1',RENDER_GIT_COMMIT:'a'.repeat(40)};
  const child=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','sandbox/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});
@@ -39,11 +58,38 @@ const {spawn}=require('node:child_process');
   assert.deepEqual(afterOriginalDuplicate.data.adjustments,beforeOriginalDuplicate.data.adjustments);
   const pendingOverride=await request('/api/ledger/adjustments',{categoryOverrides:{'pending-1':'Groceries'}});
   assert.equal(pendingOverride.code,200);
+  const noteKey=id=>'bank:'+JSON.stringify(['acct-1',id]);
+  assert.equal((await request('/api/ledger/forecasts',{predictions:{
+   transactionNotes:{[noteKey('pending-1')]:'Fictional private note',
+    ['bank:'+JSON.stringify(['other-account','pending-1'])]:'Other account'},
+   futureRecurringRules:[{id:'fictional-note-rule',accountId:'acct-1',type:'expense',
+    exampleIds:['pending-1'],frequency:'monthly',amount:10,date:'2026-11-19',merchant:'Test'}]
+  }})).code,200);
   await request('/api/sync',{});
   const carried=await request('/api/ledger');
   assert.equal(carried.data.adjustments.categoryOverrides['posted-1'],'Groceries','Manual category follows replaced pending transaction');
   assert.equal(carried.data.adjustments.categoryOverrides['pending-1'],undefined,'Obsolete pending ID is removed');
 
+  assert.equal(carried.data.adjustments.predictions.transactionNotes[noteKey('posted-1')],'Fictional private note');
+  assert.equal(carried.data.adjustments.predictions.transactionNotes[noteKey('pending-1')],undefined);
+  assert.deepEqual(carried.data.adjustments.predictions.futureRecurringRules[0].exampleIds,['posted-1']);
+  // Replay startup with the OLD independently saved preferences file. This is
+  // the crash boundary: sync committed the bank snapshot, not a second file.
+  const restartPort=19859;
+  const restarted=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','sandbox/server.cjs'],
+   {cwd:path.resolve(__dirname,'..'),env:{...env,PORT:String(restartPort)},stdio:'ignore'});
+  try{
+   let loaded;
+   for(let i=0;i<100;i++){
+    try{const response=await fetch('http://127.0.0.1:'+restartPort+'/api/ledger',{
+     headers:{Authorization:'Basic '+Buffer.from('pilot:'+pass).toString('base64')}});
+     if(response.ok){loaded=await response.json();break}
+    }catch{}await new Promise(r=>setTimeout(r,50));
+   }
+   assert.equal(loaded.adjustments.predictions.transactionNotes[noteKey('posted-1')],'Fictional private note',
+    'Restart replays the durable replacement without losing notes');
+   assert.deepEqual(loaded.adjustments.predictions.futureRecurringRules[0].exampleIds,['posted-1']);
+  }finally{restarted.kill();}
   status=await request('/api/status');
   assert.equal(status.data.transactions.length,1,'Pending charge replaced rather than duplicated');
   assert.equal(status.data.transactions[0].pending,false);

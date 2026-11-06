@@ -35,3 +35,16 @@
 8. Pacific and non-Pacific client dates around midnight do not silently mislabel stale snapshots or post weekend event dates.
 
 **Status:** Source-supported findings and proposed tests only. No evidence of a currently incorrect live private bank balance; no claims of live reproduction or deployment verification. 
+
+## Implementation checklist — November 6, 2026
+
+- [x] Pending-to-posted notes/categories/review confirmations/recurring example IDs; account isolation, collision precedence and restart replay.
+- [x] Shared Budget and Insights posted/provisional/expected aggregation and account/month scope.
+- [x] Explicit scheduled-expense, checking-outflow and all-expected-activity definitions.
+- [x] Purchases-only Merchant/Size definitions; categorized outward spending retained in Budget.
+- [x] Provisional pending category status and review timing explained in Budget details.
+- [x] All saved recurring kinds; directional totals; authoritative autopay settings link.
+- [x] Weekend bank-date drilldowns in five-day Calendar; shared inline notes.
+- [ ] Desktop Chromium/iPhone WebKit CI (including Pacific/non-Pacific midnight) and release verification pending.
+
+Core fictional suite: 55 scripts passed locally. No private bank-record reproduction. Intentional accounting differences above remain unchanged.

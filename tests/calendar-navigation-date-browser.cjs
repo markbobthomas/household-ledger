@@ -20,11 +20,13 @@ const {chromium,webkit}=require('playwright');
    ['2026-10-15T18:00:00Z','October 2026','2026-10-15'],
    ['2026-10-31T15:44:00Z','October 2026','2026-10-31'],
    ['2027-01-01T07:30:00Z','December 2026','2026-12-31'],
-   ['2027-01-01T08:30:00Z','January 2027','2027-01-01']
+   ['2027-01-01T08:30:00Z','January 2027','2027-01-01'],
+   ['2027-01-01T07:30:00Z','January 2027','2027-01-01','Asia/Tokyo'],
+   ['2026-10-31T23:30:00Z','November 2026','2026-11-01','Asia/Tokyo']
   ];
   for(const [browser,device] of [[desktop,'desktop Chromium'],[iphone,'iPhone WebKit']]){
-   for(const [instant,expectedMonth,localToday] of cases){
-    const context=await browser.newContext({timezoneId:'America/Los_Angeles',
+   for(const [instant,expectedMonth,localToday,zone] of cases){
+    const context=await browser.newContext({timezoneId:zone||'America/Los_Angeles',
      viewport:device==='iPhone WebKit'?{width:390,height:844}:{width:1280,height:900}});
     await context.addInitScript(iso=>{
      const OriginalDate=Date;
@@ -36,6 +38,20 @@ const {chromium,webkit}=require('playwright');
     },instant);
     const page=await context.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
+    await page.route('**/demo-data.js',async route=>{
+     const response=await route.fetch();
+     const injection=()=>{
+      const original=window.createHouseholdLedgerDemo;
+      window.createHouseholdLedgerDemo=()=>{
+       const data=original();
+       for(const [id,date] of [['saturday','2026-10-17'],['sunday','2026-10-18']])
+        data.transactions.push({id:'fictional-weekend-'+id,date,merchant:'Fictional '+id,
+         amount:12,type:'expense',category:'Groceries',accountId:'demo-checking',account:'Checking',pending:false});
+       return data;
+      };
+     };
+     await route.fulfill({response,body:await response.text()+'\n('+injection.toString()+')();'});
+    });
     await page.goto(url,{waitUntil:'load'});
     await page.locator('.calendar-month-title').waitFor();
     const month=()=>page.locator('.calendar-month-title').innerText();
@@ -68,6 +84,17 @@ const {chromium,webkit}=require('playwright');
      await page.locator('.calendar-month-title').waitFor({state:'attached'});
      assert.ok(await page.locator('[data-calendar-today-actual] .calendar-actual-row').count()>=2,
       'Prepared Calendar navigation preserves current-day bank rows');
+    }
+    if(localToday==='2026-10-31'){
+     const beforeWeekend=await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds}));
+     for(const day of ['2026-10-17','2026-10-18']){
+      await page.locator('[data-calendar-weekend-activity] [data-calendar-actual-day="'+day+'"]').click();
+      assert.equal(await selectedDay(),day,'Weekend drill preserves actual bank date');
+      assert.match(await page.locator('[data-calendar-detail]').innerText(),/Fictional (saturday|sunday)/);
+      assert.equal(await page.locator('[data-calendar-detail] .transaction-title-line').count()>0,true);
+     }
+     assert.deepEqual(await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds})),beforeWeekend);
+     await page.locator('[data-calendar-today]').click();
     }
     // The back arrow is a real posted-history calendar, not a dead end at
     // the initial forecast date. Previous months retain posted transactions.

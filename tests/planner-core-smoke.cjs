@@ -251,7 +251,8 @@ assert.ok(adjustedCard.projection.plans.filter(p=>p.toAccountId==='visa')
 
 const priorTZ=process.env.TZ;
 try {
- process.env.TZ='America/Los_Angeles';
+ for(const zone of ['America/Los_Angeles','Asia/Tokyo','America/New_York']){
+ process.env.TZ=zone;
  const real={asOf:'2026-10-22',mode:'plaid',connected:true,accounts:[
   {id:'income',name:'Income checking',accountType:'checking',current:5000,
    available:4800,balanceAsOf:'2026-10-23T04:22:00.000Z'}]};
@@ -262,6 +263,7 @@ try {
   balanceAsOf:'2026-10-24T04:22:00.000Z'}]},[],2).accounts[0];
  assert.equal(future.balanceStatus,'future-dated',
   'A genuinely future local balance observation remains unverified');
+ }
 } finally {
  if(priorTZ===undefined)delete process.env.TZ;else process.env.TZ=priorTZ;
 }

@@ -53,6 +53,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
       // The full Visa repayment affects checking cash flow but is not an
       // additional household expense in the monthly bill summary.
       data.predictions={
+       categoryMonthlyBudgets:{Groceries:1000,Housing:3000},
        recurringForecastMode:'approved-only',
        futureRecurringRules:[
         {id:'fictional-mortgage',kind:'event',type:'expense',accountId:'demo-checking',
@@ -169,6 +170,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
     name+': Budget opens by default');
+   const budgetPercent=await page.locator('[data-history-total-budget-percent]').innerText();
    const category=key=>page.locator('[data-history-category-row="'+key+'"] .history-category-actual').innerText();
    assert.equal(await category('Health'),'$60.00',
     name+': card purchase $100 less same-month $40 merchant refund is $60');
@@ -209,7 +211,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    const details=unassigned.locator('[data-history-budget-details]');
    assert.equal(await details.isVisible(),true,
     name+': clicking Unassigned expands its own matching Budget transactions');
-   assert.equal(await details.locator('[data-budget-source="spent"]').count(),1,
+   assert.equal(await details.locator('[data-budget-source="pending"]').count(),1,
     name+': bank purchase appears even while provisional');
    assert.equal(await details.locator('[data-budget-source="expected"]').count(),1,
     name+': future predicted expense appears without pretending to be posted');
@@ -223,10 +225,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Budget category expansion does not switch to posted-only Activity');
    await unassigned.locator('[data-history-drill-category]').click();
    assert.equal(await details.isHidden(),true,name+': category details can be collapsed');
-   assert.doesNotMatch(await page.locator('[data-history-category-insights]').evaluate(el=>
+   assert.match(await page.locator('[data-history-category-insights]').evaluate(el=>
     el.innerText+' '+[...el.querySelectorAll('[aria-label],[title]')].map(node=>
      (node.getAttribute('aria-label')||'')+' '+(node.getAttribute('title')||'')).join(' ')),
-    /\bpending\b/i,name+': No visible, tooltip or accessible Budget labels mention pending');
+    /\bpending\b/i,name+': Provisional pending spending is explained including review availability');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
@@ -239,6 +241,16 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Summary shares the calendar-month picker');
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page button:not([data-history-month-toggle]):not([data-history-month-current]):not([data-history-month-all])').count(),0,
     name+': Summary can select report months but cannot edit financial information');
+   assert.ok((await page.locator('[data-recap-budget] small').innerText()).startsWith(budgetPercent+' used'),name+': Insights and Budget percentages reconcile including pending');
+   assert.match(await page.locator('[data-recap-budget]').innerText(),/Provisional pending \$90.00/);
+   const beforeScope=await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds}));
+   await page.locator('.financial-recap-page [name="historyAccount"]').selectOption('demo-visa');
+   const cardRecapBudget=await page.locator('[data-recap-budget] small').innerText();
+   await page.locator('[data-history-view="categories"]').click();
+   assert.ok(cardRecapBudget.startsWith((await page.locator('[data-history-total-budget-percent]').innerText())+' used'),name+': Card-only account scope ties between reports');
+   await page.locator('[data-history-view="summary"]').click();
+   await page.locator('.financial-recap-page [name="historyAccount"]').selectOption('all');
+   assert.deepEqual(await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds})),beforeScope);
    const moneyCents=text=>Math.round(Number(String(text).replace(/[^0-9.-]/g,''))*100),
     octoberBills=moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
     octoberBreakdown=await page.locator('[data-recap-bills] small').innerText(),
@@ -318,8 +330,16 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const recurring=page.locator('[data-schedule-card="fictional-recurring-card-pay"]');
-   assert.equal(await recurring.count(),0,
-    name+': card repayment is excluded from Repeating expense plans');
+   assert.equal(await recurring.count(),1,
+    name+': recurring card repayment is now visible in the complete Repeating catalog');
+   assert.equal(await recurring.getAttribute('data-schedule-listed-kind'),'transfers',
+    name+': card repayment stays a transfer, not a new expense');
+   await page.locator('[data-bills-tab="repeating"]').click();
+   await page.locator('[data-schedule-kind-filter]').selectOption('expense');
+   assert.equal(await page.locator('[data-schedule-card="fictional-recurring-card-pay"]').count(),0,
+    name+': expense-only filter correctly excludes linked card repayments');
+   await page.locator('[data-schedule-kind-filter]').selectOption('all');
+   await page.locator('[data-bills-tab="upcoming"]').click();
    assert.match(await page.locator('.bills-upcoming').innerText(),/Fictional Recurring Card Repayment/,
     name+': recurring card repayment is visible in Upcoming cash bills');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
