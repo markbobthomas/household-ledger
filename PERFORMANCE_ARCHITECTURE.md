@@ -36,6 +36,14 @@ A change passes only if the fictional browser tests demonstrate:
 
 Avoid synthetic speed thresholds for full report construction, because CI machine speed varies. Keep the existing immediate-click acknowledgment assertions; for device performance, measure **actual elapsed interaction time** separately and only with fictional or permissioned sanitized data. If a genuine real-device slowdown remains, profile row construction/rendering before introducing virtualization or a new data-loading framework.
 
+## Phase 3 selective invalidation (November 6, 2026)
+
+The private server retains a single RAM-only canonical 1,095-day projection if a saved preferences snapshot differs *only* in `transactionNotes`, `categoryMonthlyBudgets`, `categoryDisplayOrder` or `cardPaymentReviewAcks`. Those values still persist, carry the same private revision/conflict checks, and load on other devices. Only changed financial preference inputs call `invalidatePrepared()` and `schedulePrepared()` from the forecast-save path. Plaid sync, bank classification/category and other protected mutation endpoints retain conservative invalidation. These server cache decisions and the client `forecastFor()` exclusion list must stay in sync; the cache never becomes a persisted authority.
+
+The browser retains prepared Home/Bills/Review while an Activity search, sort or category filter refreshes only Activity. Budget visual ordering drops only the Budget view; a monthly target also drops Spending Month insights; account/month changes invalidate all affected Spending/Activity views but not Home or Bills. Bills and Review display selectors render their own prepared snapshot, without requesting bank data or materializing a new three-year projection. Category corrections, saved payment edits, bank refresh and account/source changes still trigger full regeneration. If the prepared financial context is unavailable, scoped rendering takes the existing safe full-render fallback.
+
+The existing fictional server and desktop Chromium/iPhone browser regression scripts assert unchanged prepared generation, `forecastBuilds` and history normalizations for report-only edits, and changed server projection generation for a financial edit. They do **not** establish real-device speed. Keep the 1,095-day horizon unchanged until measured with privacy-safe profiling and verified balance coverage; never optimize by shortening the financial safety window.
+
 ## Future change checklist
 
 Before merging: identify whether an edit is *display-only*, *reporting preference*, *bank history classification*, or *forecast-affecting*; document which cache is invalidated and why; keep unnecessary work off the main thread; verify the fictional UI invariants and banking checks; test category edits and calendar month movement; update `PROJECT_LEDGER.md`. Avoid declaring Render deployed from a GitHub merge or a public Pages publish—verify the private `/healthz` commit separately.
