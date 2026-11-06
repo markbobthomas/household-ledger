@@ -6727,3 +6727,23 @@ a:hover{color:#166e61}
  .planner-page.history-page.posted-transactions-page{max-width:100%}
  .schedule-page .upcoming-scope-selector{width:100%}
 }
+
+/* One Upcoming transaction ledger, not two overlapping bill/prediction views. */
+.schedule-page .bills-heading{width:100%;min-width:0}
+.schedule-page .bills-heading-actions{width:100%;display:flex;align-items:end;gap:9px;flex-wrap:wrap}
+.schedule-page .bills-heading-actions .bills-month-field,
+.schedule-page .bills-heading-actions .bills-account-field{
+ display:flex;flex:0 1 220px;flex-direction:column;justify-content:end;
+ gap:4px;min-width:140px;max-width:100%;font-size:12px;font-weight:600;
+}
+.schedule-page .bills-heading-actions .bills-account-field select{
+ width:100%;min-width:0;min-height:36px;
+}
+.schedule-page .bills-heading-actions .bills-add-transaction{min-height:36px;white-space:nowrap}
+.schedule-page .bills-upcoming .future-skipped{margin:10px 0 0}
+.schedule-page .bills-upcoming .future-new-form{margin:10px 0}
+@media(max-width:650px){
+ .schedule-page .bills-heading-actions .bills-month-field,
+ .schedule-page .bills-heading-actions .bills-account-field{flex:1 1 calc(50% - 9px);min-width:0}
+ .schedule-page .bills-heading-actions .bills-add-transaction{flex:0 1 auto}
+}
