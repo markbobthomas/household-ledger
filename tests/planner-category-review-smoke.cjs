@@ -29,8 +29,10 @@ const s=M.migrate({accounts:[{id:'checking',name:'Fictional Checking',type:'chec
 const source=JSON.stringify(s.transactions);
 let issues=M.categoryReviewQueue(s);
 const flagged=new Set(issues.transactions.map(x=>x.id));
-assert.deepEqual([...flagged].sort(),['low','missing','suggested']);
+assert.deepEqual([...flagged].sort(),['low','missing','pending','suggested']);
 assert.equal(issues.plans.length,4,'Missing and uncertain recurring, one-off and legacy bills need review');
+assert.ok(issues.transactions.find(x=>x.id==='pending')?.pending,
+ 'Pending spending is provisional in Budget and must be actionable in Review');
 assert.ok(issues.plans.every(x=>x.kind!=='transaction'));
 assert.ok(!flagged.has('income')&&!flagged.has('transfer'),
  'Income and transfer types are established by accounting, not guessed merchant categories');
@@ -39,6 +41,9 @@ assert.equal(M.records(s).find(x=>x.id==='income').category,'Other',
 assert.equal(M.records(s).find(x=>x.id==='transfer').category,'Other',
  'Transfer banking facts remain unmodified for forecast and baseline integrity');
 assert.equal(JSON.stringify(s.transactions),source,'Review must never modify authoritative bank records');
+M.setCategory(s,'pending','Home & Maintenance',true);
+assert.ok(!M.categoryReviewQueue(s).transactions.some(x=>x.id==='pending'),
+ 'Reviewing a provisional bank expense resolves its category without altering bank facts');
 M.setCategory(s,'low','Shopping',true);
 assert.ok(!M.categoryReviewQueue(s).transactions.some(x=>x.id==='low'),
  'Explicitly confirming the existing low-confidence category clears Review');
