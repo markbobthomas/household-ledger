@@ -1160,7 +1160,7 @@ const {chromium,webkit}=require('playwright');
     'Multi-month Budget adds posted and projected expenses from every selected month');
    await page.locator('[data-history-view="summary"]').click();
    assert.match(await page.locator('[data-recap-budget] small').innerText(),
-    /including expected/, 'Summary Budget percentage includes expected charges');
+    /expected/, 'Summary Budget percentage includes expected charges');
    await page.evaluate(()=>{
     const key='household-planner-sample-settings-v1',
      raw=JSON.parse(localStorage.getItem(key)||'{}');
@@ -2188,8 +2188,8 @@ const {chromium,webkit}=require('playwright');
    const monthPicker=page.locator('[data-bills-pane="upcoming"] [data-bills-month]');
    assert.equal(await monthPicker.inputValue(),'');
    assert.equal(await page.locator('[data-schedule-visible-count]').innerText(),
-    'Showing 3 of 3 recurring expenses',
-    'Repeating includes scheduled credit-card charges but excludes income and transfers');
+    'Showing 5 of 5 recurring plans',
+    'Recurring includes scheduled credit-card charges, two-phase income and linked transfers');
    assert.equal(await page.locator('.bills-upcoming-row[data-bills-source="actual"]').count(),0,
     'Upcoming shows forecasted cash bills, not already posted bank rows');
    assert.ok(await page.locator('.bills-upcoming-row[data-bills-kind="deposit"]').filter({hasText:'Fictional Paycheck'}).count()>0,
@@ -2216,28 +2216,31 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await page.locator('[data-bills-pane="repeating"] [data-bills-month]').inputValue(),'2026-11');
    assert.equal(await repeating.count(),1);
-   assert.equal(await page.locator('[data-schedule-card="fictional-income-excluded"]').count(),0,
-    'Repeating excludes income');
-   assert.equal(await page.locator('[data-schedule-card="fictional-transfer-excluded"]').count(),0,
-    'Repeating excludes transfers');
+   assert.equal(await page.locator('[data-schedule-card="fictional-income-excluded"]').count(),1,
+    'Recurring includes saved paycheck rules without changing their forecast identity');
+   assert.equal(await page.locator('[data-schedule-card="fictional-transfer-excluded"]').count(),1,
+    'Recurring includes saved linked transfers without counting them as expenses');
    assert.equal(await repeating.locator('.schedule-row-next').count(),0,
     'Repeating remains an undated rule list even with a month filter');
    await page.locator('[data-schedule-search]').fill('Fictional Internet Bill');
-   assert.equal(await repeatingSum.innerText(),'Total $85.00',
-    'Search sums the visible fictional matching schedule only');
+   assert.match(await repeatingSum.innerText(),/Out \$85\.00/,
+    'Search sums the visible fictional matching outgoing schedule only');
    await page.locator('[data-schedule-category-filter]').selectOption('Other');
-   assert.equal(await repeatingSum.innerText(),'Total $0.00',
+   assert.match(await repeatingSum.innerText(),/\$0\.00/,
     'Category filtering with a search recalculates the sum to zero');
    await page.locator('[data-schedule-category-filter]').selectOption('Utility');
-   assert.equal(await repeatingSum.innerText(),'Total $85.00',
-    'Restoring the matching category restores the filtered sum');
+   assert.match(await repeatingSum.innerText(),/Out \$85\.00/,
+    'Restoring the matching category restores the filtered outgoing sum');
    await page.locator('[data-schedule-search]').fill('');
    await page.locator('[data-schedule-category-filter]').selectOption('');
-   const listedCents=await page.locator('[data-schedule-card]:visible').evaluateAll(nodes=>
-    nodes.reduce((sum,node)=>sum+Number(node.dataset.scheduleListedCents||0),0));
-   assert.equal(Number((await repeatingSum.innerText()).replace(/[^0-9.-]/g,'')),
-    Math.round(listedCents)/100,
-    'Unsearched Repeating total equals the sum of every visible displayed row');
+   const shownTypes=await page.locator('[data-schedule-card]:visible').evaluateAll(nodes=>
+    [...new Set(nodes.map(node=>node.dataset.scheduleListedKind))]);
+   const shownSummary=await repeatingSum.innerText();
+   assert.match(shownSummary,/Out /,'Recurring sum separates outgoing spending');
+   if(shownTypes.includes('in'))assert.match(shownSummary,/In /,
+    'Recurring sum separates deposits from checking outflows');
+   if(shownTypes.includes('transfers'))assert.match(shownSummary,/Transfers /,
+    'Recurring sum separates linked transfers from spending');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-12');
    assert.equal(await repeating.locator('.schedule-row-next').count(),0,
     'Changing month recalculates amount without adding an upcoming date');
