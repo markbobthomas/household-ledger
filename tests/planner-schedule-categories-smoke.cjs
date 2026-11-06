@@ -83,7 +83,8 @@ const bankView=Model.migrate({
   actual('manual-bank','Fictional Vet'),
   actual('other-account','Fictional Vet','savings'),
   actual('other-merchant','Another Store'),
-  actual('paired-bank','Fictional Vet','checking',{pairedTransactionId:'paired-credit'})
+  actual('paired-bank','Fictional Vet','checking',{type:'transfer',cashDirection:'out',pairedTransactionId:'paired-credit'}),
+  actual('paired-credit','Fictional Vet','savings',{type:'transfer',cashDirection:'in',pairedTransactionId:'paired-bank'})
  ],
  predictions:{futureRecurringRules:[{...updated,category:'Pet Care',exampleIds:['linked-bank']}]},
  categoryOverrides:{'manual-bank':'Insurance'}
