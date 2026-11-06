@@ -2169,6 +2169,8 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('#summary-account').selectOption(visualAccount);
+   if(await page.locator('[data-calendar-today]').isEnabled())
+    await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
    const fictionalCardDay=page.locator('[data-calendar-day="2026-11-06"]');
    assert.equal(await fictionalCardDay.count(),1);
