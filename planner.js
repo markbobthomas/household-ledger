@@ -2319,7 +2319,7 @@ function historyInsights(rows,view,options={}){
  }
  const largest=Math.max(1,...groups.map(g=>g.count));
  return '<section class="history-insight-panel" data-history-size-insights aria-label="Purchase sizes">'+
-  '<p class="audit-footnote">Posted purchases only, before refunds. Excludes pending activity, refunds, transfers (including categorized outward payments), and card repayments.</p>'+header+'<div class="history-size-list">'+groups.map((g,i)=>
+  '<small class="audit-footnote">Posted purchases only · excludes refunds, transfers and card repayments</small>'+header+'<div class="history-size-list">'+groups.map((g,i)=>
    '<button type="button" class="history-size-row" data-history-size-band="'+i+'">'+
    '<span class="history-size-name">'+escapeHTML(g.name)+'</span>'+
    '<span class="history-size-track"><span style="width:'+Math.round(g.count/largest*100)+'%"></span></span>'+
