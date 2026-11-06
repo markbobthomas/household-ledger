@@ -1828,42 +1828,58 @@ function schedulesPage(bundle,s){
   }).join(''):
   visible.map(cardHtml).join(''); 
  // Upcoming is an activity list, not solely a checking withdrawal list.
- // Display confirmed future credit-card purchases beside cash bills, but
- // never add purchases to checking totals or count them again at autopay.
- const cashBills=forecastCashBills(bundle,s).filter(row=>
-  row.cardBill||!['transfer','income','refund'].includes(row.sourceType))
-  .map(row=>({...row,cardCharge:false,source:'prediction',
-   status:row.cardBill?'Card payment':'Checking withdrawal',
+ // One dated list from the canonical future ledger. A card purchase is
+ // distinct from its eventual checking-to-card repayment, and one linked
+ // transfer is rendered once (never as two account debits).
+ const accountById=new Map(accounts.map(a=>[String(a.id),a]));
+ const allRows=futureRows(bundle,s).map(row=>{
+  const movement=row.kind==='movement';
+  const account=accountById.get(String(movement?row.fromAccountId:row.accountId));
+  const to=movement?accountById.get(String(row.toAccountId)):null;
+  const cardPayment=movement&&accountType(account||{})==='cash'&&
+   accountType(to||{})==='credit';
+  const cardCharge=!movement&&row.type==='expense'&&accountType(account||{})==='credit';
+  const cashOut=cardPayment||!movement&&row.type==='expense'&&accountType(account||{})==='cash';
+  const kind=cardCharge?'card-charge':cashOut?'cash':movement?'transfer':
+   row.type==='income'?'deposit':row.type==='refund'?'refund':
+   row.type==='expense'?'other-expense':'other';
+  const status=cardPayment?'Card payment':movement?'Transfer':
+   cardCharge?'Card purchase':row.type==='income'?'Deposit':
+   row.type==='refund'?'Refund':cashOut?'Checking withdrawal':'Expected purchase';
+  return {...row,billDisplayKind:kind,cardCharge,status,
+   source:'prediction',accountId:movement?row.fromAccountId:row.accountId,
    ruleId:row.recurringRuleId||null,
-   accountId:row.kind==='movement'?row.fromAccountId:row.accountId}));
- const cardCharges=futureRows(bundle,s).filter(row=>
-  row.kind==='event'&&row.type==='expense'&&
-  accountType(accounts.find(a=>String(a.id)===String(row.accountId))||{})==='credit')
-  .map(row=>({...row,cardCharge:true,source:'prediction',status:'Card purchase',
-   ruleId:row.recurringRuleId||null}));
- const upcomingBills=[...cashBills,...cardCharges].filter(row=>
+   accountLabel:movement?(row.from||account?.name||'Account')+' → '+
+    (row.to||to?.name||'Account'):(account?.name||'Account')};
+ });
+ const upcomingBills=allRows.filter(row=>
+  (transactionFilter==='all'||(row.kind==='movement'?
+   String(row.fromAccountId)===transactionFilter||String(row.toAccountId)===transactionFilter:
+   String(row.accountId)===transactionFilter))&&
   (!billsSelectedMonth||row.date.slice(0,7)===billsSelectedMonth)&&
-  (billsSelectedMonth||row.date<=shiftDay(s.asOf,billsExpanded?90:30)))
-  .sort((a,b)=>a.date.localeCompare(b.date)||
-   a.merchant.localeCompare(b.merchant)||String(a.key||a.id).localeCompare(String(b.key||b.id)));
- const upcomingCents=upcomingBills.filter(row=>!row.cardCharge).reduce((total,row)=>
-  total+Math.round(Number(row.amount||0)*100),0),
-  cardChargeCents=upcomingBills.filter(row=>row.cardCharge).reduce((total,row)=>
-   total+Math.round(Number(row.amount||0)*100),0);
- const groupedBills=upcomingBills.map(row=>{
-  const account=accounts.find(a=>String(a.id)===String(row.accountId)),
-   clickable=Boolean(row.key||row.bankId||row.ruleId),tag=clickable?'button':'div',
-   action=row.key?' data-open-transaction="'+escapeHTML(row.key)+'"':
-    row.bankId?' data-open-bill-actual="'+escapeHTML(row.bankId)+
-     '" data-bill-actual-account="'+escapeHTML(row.accountId)+'"':
-    row.ruleId?' data-open-bill-rule="'+escapeHTML(row.ruleId)+'"':'';
-  return '<'+tag+(clickable?' type="button"':'')+' class="bills-upcoming-row" data-bills-source="'+escapeHTML(row.source||'prediction')+'"'+action+
-   ' data-bills-kind="'+(row.cardCharge?'card-charge':'cash')+'"><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+  (billsSelectedMonth||row.date<=shiftDay(s.asOf,billsExpanded?90:30)));
+ const upcomingCents=upcomingBills.filter(row=>row.billDisplayKind==='cash')
+  .reduce((total,row)=>total+Math.round(Number(row.amount||0)*100),0);
+ const cardChargeCents=upcomingBills.filter(row=>row.cardCharge)
+  .reduce((total,row)=>total+Math.round(Number(row.amount||0)*100),0);
+ const groupedBills=upcomingBills.map(row=>
+  '<button type="button" class="bills-upcoming-row" data-bills-source="prediction"'+
+   ' data-open-transaction="'+escapeHTML(row.key)+'"'+
+   ' data-bills-kind="'+escapeHTML(row.billDisplayKind)+'">'+
+   '<span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
    '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
-   '<small>'+escapeHTML(row.status)+' · '+escapeHTML(account?.name||'Account')+
-   '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">'+
-   (clickable?'›':'')+'</span></'+tag+'>';
- }).join('');
+   '<small>'+escapeHTML(row.status)+' · '+escapeHTML(row.accountLabel)+'</small></span>'+
+   '<strong>'+cash(Math.abs(Number(row.amount)||0))+'</strong><span aria-hidden="true">›</span></button>'
+ ).join('');
+ const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([key,v])=>
+  v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter||
+   String(v.toAccountId)===transactionFilter));
+ const restore=skipped.length?'<details class="details future-skipped"><summary>'+
+   skipped.length+' skipped forecast occurrence(s) — restore</summary>'+
+   skipped.map(([key,v])=>'<div class="future-skip-line">'+
+    escapeHTML(v.label||'Predicted transaction')+' · '+escapeHTML(v.date||'')+
+    ' <button type="button" class="btn" data-restore-future="'+escapeHTML(key)+
+    '">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page schedule-page">'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
    [['upcoming','Upcoming'],['repeating','Recurring'],['statements','Statements']].map(([id,name])=>
@@ -1871,23 +1887,24 @@ function schedulesPage(bundle,s){
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
-  '<div class="upcoming-scope-selector" role="group" aria-label="Upcoming transaction filter">'+
-   [['bills','Bills only'],['all','All expected']].map(([id,name])=>
-    '<button type="button" class="history-subtab'+(billsUpcomingScope===id?' active':'')+
-    '" data-upcoming-filter="'+id+'" aria-pressed="'+(billsUpcomingScope===id)+'">'+name+'</button>').join('')+'</div>'+
-  '<div data-upcoming-scope="bills"'+(billsUpcomingScope==='bills'?'':' hidden')+'>'+
-  '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
-   '<div class="bills-heading"><div><h2 class="visually-hidden">Upcoming bills</h2></div>'+
+  '<section class="bills-upcoming panel" aria-label="Upcoming transactions">'+
+   '<div class="bills-heading"><div><h2 class="visually-hidden">Upcoming transactions</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
-    '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Checking '+
+     '<label class="bills-account-field minimal-control-label">Account'+
+      accountSelect(accounts,transactionFilter,'transactionFilter',true)+'</label>'+
+     '<button type="button" class="btn primary bills-add-transaction" data-show-new>+ Add transaction</button>'+
+     '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Checking outflows '+
       cash(upcomingCents/100)+'</strong>'+
-    '<span class="bills-upcoming-card-sum" data-bills-upcoming-card-sum>Card purchases '+
+     '<span class="bills-upcoming-card-sum" data-bills-upcoming-card-sum>Card purchases '+
       cash(cardChargeCents/100)+'</span>'+
-    '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
-   (groupedBills||'<p class="bills-upcoming-empty">No upcoming bills in this period.</p>')+
-   (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
-    (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
-  '<div data-upcoming-scope="all"'+(billsUpcomingScope==='all'?'':' hidden')+'>'+transactionsPage(bundle,s)+'</div></div>'+
+     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
+    (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
+    (showNewTransaction?newTransactionForm(s):'')+
+    (groupedBills||'<p class="bills-upcoming-empty">No expected transactions in this period.</p>')+
+    restore+
+    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
+     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+
+   '</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
   '<div class="bills-manage-heading"><div><h2 class="visually-hidden">Recurring bills</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
@@ -1920,34 +1937,6 @@ function schedulesPage(bundle,s){
   '<div data-bills-pane="statements"'+(billsPane==='statements'?'':' hidden')+'>'+
    billsStatementsPage(bundle,s)+'</div></div>';
 }
-function transactionsPage(bundle,s){
- const accounts=activeAccounts(s),rows=futureRows(bundle,s),visible=rows.filter(r=>
-  transactionFilter==='all'||(r.kind==='movement'?
-   r.fromAccountId===transactionFilter||r.toAccountId===transactionFilter:
-   r.accountId===transactionFilter));
- const opts=accountSelect(accounts,transactionFilter,'transactionFilter',true);
- const lines=visible.map(row=>'<article class="future-item" data-future-item="'+
-  escapeHTML(row.key)+'">'+editableForecastRow(row,{advanced:true})+'</article>').join('');
- const skipped=Object.entries(state().predictions?.futureTransactionEdits||{}).filter(([k,v])=>
-  v?.skipped&&(!v.accountId||transactionFilter==='all'||String(v.accountId)===transactionFilter||
-   String(v.toAccountId)===transactionFilter));
- const undo=skipped.length?'<details class="details future-skipped"><summary>'+
-  skipped.length+' skipped forecast occurrence(s) — restore</summary>'+
-  skipped.map(([key,v])=>'<div class="future-skip-line">'+escapeHTML(v.label||'Predicted transaction')+
-   ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
-   escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
- return '<div class="planner-page transactions-page upcoming-all-page">'+
-  '<div class="page-heading"><div><h2 class="visually-hidden">All expected transactions</h2></div>'+
-   '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
-  '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
-   '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
-   (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
-   (showNewTransaction?newTransactionForm(s):'')+
-   (lines||'<div class="empty-visual">No predicted transactions for this selection. Add one or choose another account.</div>')+
-   undo+
-  '</section></div>';
-}
-
 function recurrenceFormDirty(selector){
  const form=document.querySelector(selector);
  if(!form)return false;
