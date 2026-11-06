@@ -62,7 +62,13 @@ sandbox.HouseholdFutureLedger.materialize=(...args)=>{
  forecastBuilds++;
  return originalMaterialize(...args);
 };
-vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../planner.js'),'utf8'),
+// Read the canonical rows through a test-only hook placed inside the planner
+// module closure. Do not export financial internals or alter production code.
+const plannerSource=fs.readFileSync(path.resolve(__dirname,'../planner.js'),'utf8');
+const futureAnchor='function futureRows(bundle,s){';
+assert.ok(plannerSource.includes(futureAnchor));
+vm.runInContext(plannerSource.replace(futureAnchor,
+ 'window.__fixtureFutureRows=()=>futureRows(forecastFor(snapshot()),snapshot());\n'+futureAnchor),
  context,{filename:'planner.js'});
 async function click(marker,dataset){
  const event={target:{closest:selector=>selector===marker?{dataset}:null}};
@@ -93,7 +99,7 @@ async function submit(fields){
 const future=()=>el('planner-main').innerHTML;
 // The visible Upcoming list defaults to 30 days; longer-range accounting
 // assertions operate on the SAME canonical three-year future ledger, not HTML.
-const canonicalRows=()=>vm.runInContext('futureRows(forecastFor(snapshot()),snapshot())',context);
+const canonicalRows=()=>sandbox.__fixtureFutureRows();
 const occurrences=()=>canonicalRows().filter(row=>row.merchant.includes('Mortgage ACH')).length;
 const merchantOccurrences=name=>canonicalRows().filter(row=>row.merchant.includes(name)).length;
 (async()=>{
