@@ -214,11 +214,9 @@ function postedEntries(date){
    action=matches.length===1?'View prediction':matches.length>1?'Choose prediction':'Make recurring';
   return '<div class="calendar-detail-item calendar-actual-row ledger-transaction-row">'+
    '<span class="ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
-   '<span class="calendar-transaction-name ledger-transaction-identity"><strong>'+
-   esc(t.merchant||'Bank transaction')+'</strong>'+
-   (calendarNote('bank:'+JSON.stringify([account,String(t.id)]))?
-    '<small class="transaction-note-subtitle">'+
-     esc(calendarNote('bank:'+JSON.stringify([account,String(t.id)])))+'</small>':'')+
+   '<span class="calendar-transaction-name ledger-transaction-identity">'+
+   calendarNoteTitle(t.merchant||'Bank transaction',
+    'bank:'+JSON.stringify([account,String(t.id)]))+
    '<small>'+(t.pending?'Pending':'Posted')+
     (calendarContext.scope==='all'?' · '+esc(accountName):'')+'</small></span>'+
    '<strong class="ledger-transaction-amount '+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
@@ -246,6 +244,14 @@ function calendarNote(key){
  const stored=calendarContext?.prefs?.transactionNotes;
  return stored&&typeof stored[key]==='string'?stored[key]:'';
 }
+// Keep note alongside merchant in the same title line as Activity and Bills.
+function calendarNoteTitle(name,key){
+ const note=calendarNote(key);
+ return '<span class="transaction-title-line" data-note-title-key="'+esc(key)+'">'+
+  '<strong class="transaction-merchant-title">'+esc(name)+'</strong>'+
+  (note?'<span class="transaction-note-subtitle" data-note-subtitle="'+esc(key)+
+   '" title="'+esc(note)+'">'+esc(note)+'</span>':'')+'</span>';
+}
 function paymentDetail(event){
  const id=String(event?.transferGroupId||'');
  return calendarContext?.paymentDetails?.find(x=>String(x.id)===id)||null;
@@ -271,10 +277,8 @@ function predictionEntry(date,e,index,card,selected=false,other=false){
   '" data-open-transaction="'+key+'" aria-expanded="false" aria-label="'+
   esc('Edit '+(e.merchant||'predicted payment')+' on '+shortDate(date))+'">'+
   '<span class="calendar-monthly-date ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
-  '<span class="calendar-monthly-name ledger-transaction-identity"><strong>'+esc(e.merchant||'Predicted payment')+'</strong>'+
-  (calendarNote('forecast:'+predictionIdentity(e))?
-   '<small class="transaction-note-subtitle">'+
-    esc(calendarNote('forecast:'+predictionIdentity(e)))+'</small>':'')+
+  '<span class="calendar-monthly-name ledger-transaction-identity">'+
+  calendarNoteTitle(e.merchant||'Predicted payment','forecast:'+predictionIdentity(e))+
   (e.amountEstimate?'<small>Estimated</small>':'')+
   (other?'<small class="calendar-account-context">'+esc(outsideLabel(e))+'</small>':'')+'</span>'+
   '<strong class="ledger-transaction-amount '+(other?'external':signed(e,card)>0?'in':'out')+'">'+
