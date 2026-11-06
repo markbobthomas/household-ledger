@@ -284,7 +284,10 @@ const {chromium,webkit}=require('playwright');
     'Updated fictional note','Prepared Activity retains the latest note');
    await jump('reviews','reviews-page');
    await jump('settings','settings-page');
-   await jump('transactions','transactions-page');
+   await jump('activity','history-page');
+   await page.locator('.history-page [data-view="transactions"]').click();
+   assert.equal(await page.locator('.transactions-page').count(),1,
+    'Planned transactions are accessed through the Transactions subtab');
    await jump('summary','summary-page');
    await jump('history','history-page');
    await jump('schedules','schedule-page');
