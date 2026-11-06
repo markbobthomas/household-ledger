@@ -2081,7 +2081,7 @@ const {chromium,webkit}=require('playwright');
     const transfer={...r,id:'fictional-transfer-excluded',type:'transfer',
      originalType:'transfer',cashDirection:'out',merchant:'Fictional Transfer',
      originalMerchant:'Fictional Transfer',scheduleLabel:'Fictional Transfer',amount:700};
-    const card=window.createHouseholdLedgerDemo().accounts.find(a=>
+    const card=window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
      String(a.accountType||a.type).toLowerCase()==='credit');
     if(!card)throw Error('Fictional card account missing for calendar coverage');
     const recurringCard={...r,id:'fictional-card-purchase-activity',
