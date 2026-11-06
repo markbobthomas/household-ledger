@@ -6555,3 +6555,18 @@ a:hover{color:#166e61}
  margin:12px 0;padding:10px 12px;border-radius:10px;
  background:#f3f7f3;color:#3f6550;font-size:13px;line-height:1.5;
 }
+
+/* Every predicted account is visible in Calendar. Secondary accounts are
+   a visual overlay: only the selected-account rows enter the cash math. */
+.summary-page .calendar-outside-activity{margin:12px 0 8px;padding:10px 0 0;border-top:1px solid #dfe8e3}
+.summary-page .calendar-outside-activity>strong{display:block;font-size:12px;font-weight:680;color:#547066}
+.summary-page .calendar-outside-activity .calendar-day-transactions{margin-top:5px;border-top:0}
+.summary-page .calendar-account-context{color:#58716a;font-size:11px;line-height:1.3}
+.summary-page .calendar-event.external .calendar-event-amount{color:#637b73}
+.summary-page .calendar-monthly-totals [data-calendar-other-card-total]{color:#536e60}
+.schedule-page .bills-upcoming-card-sum{font-size:12px;font-weight:650;color:#647a6e;white-space:nowrap;font-variant-numeric:tabular-nums}
+.schedule-page .bills-upcoming-row[data-bills-kind="card-charge"] .bills-upcoming-description small{color:#617a70}
+@media(max-width:650px){.schedule-page .bills-upcoming-card-sum{font-size:11px}}
+
+.summary-page .calendar-outside-total{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;color:#527065;font-size:12px;font-variant-numeric:tabular-nums}
+.summary-page .calendar-outside-total strong{color:#375d4b;font-weight:700}

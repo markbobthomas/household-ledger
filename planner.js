@@ -1779,15 +1779,29 @@ function schedulesPage(bundle,s){
     items.map(cardHtml).join('')+'</section>';
   }).join(''):
   visible.map(cardHtml).join(''); 
- const upcomingBills=forecastCashBills(bundle,s).filter(row=>
-  (row.cardBill||!['transfer','income','refund'].includes(row.sourceType))&&
-  (!billsSelectedMonth||row.date.slice(0,7)===billsSelectedMonth)&&
-  (billsSelectedMonth||row.date<=shiftDay(s.asOf,billsExpanded?90:30)))
-  .map(row=>({...row,source:'prediction',status:row.cardBill?'Card payment':'Predicted',
+ // Upcoming is an activity list, not solely a checking withdrawal list.
+ // Display confirmed future credit-card purchases beside cash bills, but
+ // never add purchases to checking totals or count them again at autopay.
+ const cashBills=forecastCashBills(bundle,s).filter(row=>
+  row.cardBill||!['transfer','income','refund'].includes(row.sourceType))
+  .map(row=>({...row,cardCharge:false,source:'prediction',
+   status:row.cardBill?'Card payment':'Checking withdrawal',
    ruleId:row.recurringRuleId||null,
    accountId:row.kind==='movement'?row.fromAccountId:row.accountId}));
- const upcomingCents=upcomingBills.reduce((total,row)=>
-  total+Math.round(Number(row.amount||0)*100),0);
+ const cardCharges=futureRows(bundle,s).filter(row=>
+  row.kind==='event'&&row.type==='expense'&&
+  accountType(accounts.find(a=>String(a.id)===String(row.accountId))||{})==='credit')
+  .map(row=>({...row,cardCharge:true,source:'prediction',status:'Card purchase',
+   ruleId:row.recurringRuleId||null}));
+ const upcomingBills=[...cashBills,...cardCharges].filter(row=>
+  (!billsSelectedMonth||row.date.slice(0,7)===billsSelectedMonth)&&
+  (billsSelectedMonth||row.date<=shiftDay(s.asOf,billsExpanded?90:30)))
+  .sort((a,b)=>a.date.localeCompare(b.date)||
+   a.merchant.localeCompare(b.merchant)||String(a.key||a.id).localeCompare(String(b.key||b.id)));
+ const upcomingCents=upcomingBills.filter(row=>!row.cardCharge).reduce((total,row)=>
+  total+Math.round(Number(row.amount||0)*100),0),
+  cardChargeCents=upcomingBills.filter(row=>row.cardCharge).reduce((total,row)=>
+   total+Math.round(Number(row.amount||0)*100),0);
  const groupedBills=upcomingBills.map(row=>{
   const account=accounts.find(a=>String(a.id)===String(row.accountId)),
    clickable=Boolean(row.key||row.bankId||row.ruleId),tag=clickable?'button':'div',
@@ -1796,7 +1810,7 @@ function schedulesPage(bundle,s){
      '" data-bill-actual-account="'+escapeHTML(row.accountId)+'"':
     row.ruleId?' data-open-bill-rule="'+escapeHTML(row.ruleId)+'"':'';
   return '<'+tag+(clickable?' type="button"':'')+' class="bills-upcoming-row" data-bills-source="'+escapeHTML(row.source||'prediction')+'"'+action+
-   '><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
+   ' data-bills-kind="'+(row.cardCharge?'card-charge':'cash')+'"><span class="bills-upcoming-date">'+escapeHTML(dayLabel(row.date))+'</span>'+
    '<span class="bills-upcoming-description"><strong>'+escapeHTML(row.merchant)+'</strong>'+
    '<small>'+escapeHTML(row.status)+' · '+escapeHTML(account?.name||'Account')+
    '</small></span><strong>'+cash(row.amount)+'</strong><span aria-hidden="true">'+
@@ -1812,8 +1826,10 @@ function schedulesPage(bundle,s){
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
-    '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Total '+
+    '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Checking '+
       cash(upcomingCents/100)+'</strong>'+
+    '<span class="bills-upcoming-card-sum" data-bills-upcoming-card-sum>Card purchases '+
+      cash(cardChargeCents/100)+'</span>'+
     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
    (groupedBills||'<p class="bills-upcoming-empty">No upcoming bills in this period.</p>')+
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+

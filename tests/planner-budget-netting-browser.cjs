@@ -143,10 +143,19 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Upcoming includes the cash-to-card payment once');
    assert.doesNotMatch(novemberBills,/Fictional Savings Transfer/,
     name+': Savings movement is not a bill');
-   assert.doesNotMatch(novemberBills,/Fictional Visa Subscription/,
-    name+': Card purchases are listed in Statements, not cash Upcoming');
-   assert.doesNotMatch(novemberBills,/Fictional Scheduled Card Charge/,
-    name+': Scheduled credit-card purchase is not another checking withdrawal');
+   assert.match(novemberBills,/Fictional Visa Subscription/,
+    name+': Explicit recurring card purchase is visible in Upcoming');
+   assert.match(novemberBills,/Fictional Scheduled Card Charge/,
+    name+': Dated credit-card purchase is visible alongside other bills');
+   assert.ok(await page.locator('.bills-upcoming-row[data-bills-kind="card-charge"]')
+    .filter({hasText:'Fictional Scheduled Card Charge'}).count()>0,
+    name+': Card charge is labeled and cannot be totaled as checking cash');
+   const checkingTotal=Number((await page.locator('[data-bills-upcoming-sum]').innerText())
+    .replace(/[^0-9.-]/g,'')),
+    cashOnly=await page.locator('.bills-upcoming-row[data-bills-kind="cash"]>strong')
+     .evaluateAll(nodes=>nodes.reduce((n,x)=>n+Number(x.textContent.replace(/[^0-9.-]/g,'')),0));
+   assert.equal(checkingTotal,Math.round(cashOnly*100)/100,
+    name+': Checking total excludes displayed card charges and includes card settlement once');
    assert.match(novemberBills,/Fictional Scheduled Checking Charge/,
     name+': Checking charge remains in Upcoming');
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');

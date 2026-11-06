@@ -1498,10 +1498,17 @@ const {chromium,webkit}=require('playwright');
     'Bills offers historical bank months as well as the current and upcoming year');
    await upcomingBillsMonth.selectOption('2026-11');
    const billTotalText=await page.locator('[data-bills-upcoming-sum]').innerText();
-   const expectedUpcoming=await page.locator('.bills-upcoming-row>strong').evaluateAll(nodes=>
-    nodes.reduce((sum,node)=>sum+Number(node.textContent.replace(/[^0-9.-]/g,'')),0));
+   const expectedUpcoming=await page.locator('.bills-upcoming-row[data-bills-kind="cash"]>strong')
+    .evaluateAll(nodes=>nodes.reduce((sum,node)=>
+     sum+Number(node.textContent.replace(/[^0-9.-]/g,'')),0));
    assert.equal(Number(billTotalText.replace(/[^0-9.-]/g,'')),Math.round(expectedUpcoming*100)/100,
-    'Upcoming total adds exactly the displayed bills for the selected month');
+    'Upcoming checking total sums only cash withdrawals and linked card repayments');
+   const cardChargeTotal=await page.locator('.bills-upcoming-row[data-bills-kind="card-charge"]>strong')
+    .evaluateAll(nodes=>nodes.reduce((sum,node)=>
+     sum+Number(node.textContent.replace(/[^0-9.-]/g,'')),0));
+   assert.equal(Number((await page.locator('[data-bills-upcoming-card-sum]').innerText())
+    .replace(/[^0-9.-]/g,'')),Math.round(cardChargeTotal*100)/100,
+    'Card purchase total is presented separately rather than withdrawing checking funds');
    assert.equal(await page.locator('[data-bills-more]').count(),0,
     'Choosing a calendar month replaces the old 30/90 day range toggle');
    assert.ok(await page.locator('.bills-upcoming-row').evaluateAll(rows=>
@@ -2074,7 +2081,17 @@ const {chromium,webkit}=require('playwright');
     const transfer={...r,id:'fictional-transfer-excluded',type:'transfer',
      originalType:'transfer',cashDirection:'out',merchant:'Fictional Transfer',
      originalMerchant:'Fictional Transfer',scheduleLabel:'Fictional Transfer',amount:700};
-    p.futureRecurringRules=[r,mortgage,income,transfer];
+    const card=window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
+     String(a.accountType||a.type).toLowerCase()==='credit');
+    if(!card)throw Error('Fictional card account missing for calendar coverage');
+    const recurringCard={...r,id:'fictional-card-purchase-activity',
+     accountId:card.id,originalAccountId:card.id,
+     merchant:'Fictional Dairy Delivery',originalMerchant:'Fictional Dairy Delivery',
+     scheduleLabel:'Fictional Dairy Delivery',frequency:'weekly',sourceFrequency:'weekly',
+     anchorDate:'2026-10-23',sourceAnchorDate:'2026-10-23',
+     amount:18,matchAmount:18,category:'Groceries',
+     matchNames:['fictional dairy delivery']};
+    p.futureRecurringRules=[r,mortgage,income,transfer,recurringCard];
     p.recurringForecastMode='approved-only';
     localStorage.setItem(key,JSON.stringify(p));
    },visualAccount);
@@ -2092,12 +2109,15 @@ const {chromium,webkit}=require('playwright');
    const monthPicker=page.locator('[data-bills-pane="upcoming"] [data-bills-month]');
    assert.equal(await monthPicker.inputValue(),'');
    assert.equal(await page.locator('[data-schedule-visible-count]').innerText(),
-    'Showing 2 of 2 recurring expenses',
-    'The denominator excludes income and transfers rather than claiming 2 of 4');
+    'Showing 3 of 3 recurring expenses',
+    'Repeating includes scheduled credit-card charges but excludes income and transfers');
    assert.equal(await page.locator('.bills-upcoming-row[data-bills-source="actual"]').count(),0,
     'Upcoming shows forecasted cash bills, not already posted bank rows');
    assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Paycheck'}).count(),0);
    assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Transfer'}).count(),0);
+   assert.ok(await page.locator('.bills-upcoming-row[data-bills-kind="card-charge"]')
+    .filter({hasText:'Fictional Dairy Delivery'}).count()>0,
+    'Confirmed repeating purchases on a card appear in Upcoming Bills');
    await page.locator('[data-bills-tab="repeating"]').click();
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-09');
    assert.equal(await repeating.count(),1,
@@ -2144,6 +2164,41 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').inputValue(),'2026-12');
    assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Dec 23/);
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
+   // Cash calendar includes foreign-card purchases as clearly separated
+   // information, without changing the selected checking balance arithmetic.
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
+   await page.locator('#summary-account').selectOption(visualAccount);
+   if(await page.locator('[data-calendar-today]').isEnabled())
+    await page.locator('[data-calendar-today]').click();
+   await page.locator('[data-calendar-nav="1"]').click();
+   const fictionalCardDay=page.locator('[data-calendar-day="2026-11-06"]');
+   assert.equal(await fictionalCardDay.count(),1);
+   assert.match(await fictionalCardDay.innerText(),/Fictional Dairy Delivery/,
+    'Projected card purchase appears on checking calendar');
+   await fictionalCardDay.click();
+   const outsideRow=page.locator('[data-calendar-outside-activity] .calendar-monthly-row')
+    .filter({hasText:'Fictional Dairy Delivery'}).first();
+   assert.equal(await outsideRow.count(),1,
+    'Selected day lists the predicted card purchase on its associated card');
+   assert.match(await outsideRow.innerText(),/Card purchase.*no selected-balance change/s);
+   assert.match(await page.locator('[data-calendar-day-card-spending]').innerText(),
+    /On other credit cards.*\$18\.00/s,
+    'Selected day summarizes foreign card spending without treating it as checking cash');
+   assert.match(await page.locator('[data-calendar-net-change]').innerText(),
+    /Selected account change/);
+   const netBefore=await page.locator('[data-calendar-net-change]').getAttribute('data-net-cents');
+   assert.equal(Number(netBefore),0,
+    'A day with only a card purchase has no checking withdrawal');
+   await page.locator('[data-calendar-monthly] summary').click();
+   assert.match(await page.locator('[data-calendar-monthly]').innerText(),/Fictional Dairy Delivery/,
+    'Monthly prediction drawer retains linked card purchases');
+   // Return to the original October date before existing typography checks.
+   // The test's next section explicitly inspects the October 23 day.
+   await page.locator('[data-calendar-today]').click();
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
+   await page.locator('[data-bills-tab="upcoming"]').click();
    const design=(row,container,merchant,amount)=>row.evaluate(
     (node,{container,merchant,amount})=>{
      const outer=node.closest(container),css=getComputedStyle(outer),r=node.getBoundingClientRect();

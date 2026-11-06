@@ -120,4 +120,30 @@ assert.equal(find('later-bank').category,'Other',
 assert.equal(JSON.stringify(bankView.transactions),sourceBefore,
  'Neither repeating category changes nor derived history classification edit Plaid bank facts');
 
+// Confirmed credit-card purchases are genuine canonical future events:
+// their dates/category/amount must survive projection, while the selected
+// checking account's available balance cannot decrease until an actual
+// cash-to-card payment is separately forecast.
+const cardAccount={id:'fictional-card',name:'Fictional Credit',accountType:'credit',
+ type:'credit',current:160,available:null,simulated:true};
+const cardState={predictions:{}};
+const cardRule=Transactions.defineRecurring(cardState,{
+ date:'2026-11-06',merchant:'Fictional Home Delivery',
+ accountId:'fictional-card',amount:18,type:'expense',
+ frequency:'weekly',amountBasis:'fixed',category:'Groceries',separateSchedule:'on'
+},[...accounts,cardAccount],asOf);
+const cardProjection=Core.materialize({asOf,accounts:[...accounts,cardAccount]},
+ [],cardState.predictions,Transactions,null,45);
+const cardEvents=cardProjection.projection.accounts.find(a=>a.id==='fictional-card').events
+ .filter(e=>e.recurringRuleId===cardRule.id&&e.kind==='card_purchase');
+assert.ok(cardEvents.length>=4,
+ 'Explicit repeating card charge generates future purchases rather than being discarded');
+assert.ok(cardEvents.every(e=>e.category==='Groceries'&&e.amount===18),
+ 'Each projected charge preserves the saved expense category and amount');
+const checkingPoints=cardProjection.projection.accounts.find(a=>a.id==='checking').series;
+assert.ok(checkingPoints.every(p=>p.balance===100000),
+ 'Card purchases cannot debit cash available in the absence of a linked card payment');
+assert.ok(cardProjection.ledger.some(e=>e.kind==='event'&&e.accountId==='fictional-card'&&e.ruleId===cardRule.id),
+ 'Canonical future ledger retains card activity for all-account Calendar and Bills views');
+
 console.log('PASS schedule category preservation: encrypted-forecast preference shape, custom categories, individual edits and linked-transfer legs');
