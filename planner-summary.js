@@ -60,6 +60,7 @@ function reconstructedHistory(account,derived,rows,asOf,start,accountOf,accounts
  for(const t of mine){
   const amount=Number(t.amount);
   const direction=['in','out'].includes(t.cashDirection)?t.cashDirection:
+   t.cashDirection==='unknown'?'':
    Number.isFinite(Number(t.source?.plaidAmount))&&
    t.source?.plaidAmount!==undefined&&t.source?.plaidAmount!==null?
     (Number(t.source.plaidAmount)>0?'out':Number(t.source.plaidAmount)<0?'in':''):
