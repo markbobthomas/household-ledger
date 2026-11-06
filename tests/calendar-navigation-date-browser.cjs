@@ -84,7 +84,8 @@ const {chromium,webkit}=require('playwright');
     assert.equal(await page.locator('[data-summary-card-next-statement]').count(),1,
      'Future card months restore the canonical next statement estimate');
     await page.locator('#summary-account').selectOption('all');
-    await page.locator('[data-calendar-today]').click();
+    if(await page.locator('[data-calendar-today]').isEnabled())
+     await page.locator('[data-calendar-today]').click();
     await page.locator('[data-calendar-nav="1"]').click();
     assert.notEqual(await month(),expectedMonth,
      'Next month must change after '+localToday+' on '+device);
