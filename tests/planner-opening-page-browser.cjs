@@ -38,10 +38,9 @@ const {chromium,webkit}=require('playwright');
    assert.deepEqual(await select.locator('option').evaluateAll(nodes=>nodes.map(n=>[n.value,n.textContent])),
     [['summary','Home'],['history','Spending'],['schedules','Bills'],
      ['activity','Transactions · Posted'],['reviews','Things to check'],
-     ['trend','Home · Balance trend'],['transactions','Transactions · Planned'],
-     ['settings','Settings']]);
+     ['trend','Home · Balance trend'],['settings','Settings']]);
    assert.equal(await select.inputValue(),'summary');
-   const choices=['activity','history','schedules','reviews','trend','transactions','settings','summary'];
+   const choices=['activity','history','schedules','reviews','trend','settings','summary'];
    for(const value of choices){
     // Choosing an opening page doesn't interrupt whatever is being edited.
     await select.selectOption(value);
@@ -62,6 +61,14 @@ const {chromium,webkit}=require('playwright');
     if(value!=='settings')await openSettings();
     assert.equal(await page.locator('#ledger-opening-page').inputValue(),value);
    }
+   // A previously saved Planned landing must migrate to the single Bills
+   // Upcoming destination, with All expected selected.
+   await page.evaluate(()=>localStorage.setItem('household-ledger-opening-page-v1','transactions'));
+   await page.reload({waitUntil:'load'});
+   await waitForPage();
+   assert.equal(await page.locator('.schedule-page').count(),1,
+    'Legacy Planned startup opens the consolidated Bills page');
+   assert.equal(await page.locator('[data-upcoming-filter="all"][aria-pressed="true"]').count(),1);
    // Invalid stale preference fails safe to Home, rather than blank navigation.
    await page.evaluate(()=>localStorage.setItem('household-ledger-opening-page-v1','unexpected-view'));
    await page.reload({waitUntil:'load'});
