@@ -101,6 +101,16 @@ const auth=require('./session-auth.cjs')({
 });
 // One small encrypted write per forecast edit. The full encrypted bank ledger
 // is neither touched nor read, and concurrent browser saves are serialized.
+// Only inputs that can affect the canonical projection invalidate its
+// 1,095-day result. Notes, budget targets/order, and card warning
+// acknowledgements are private display metadata, not financial facts.
+// Keep this exclusion list in sync with planner.js forecastFor().
+// Compare values rather than object identity: saves replace the preferences.
+function projectedPreferencesSignature(predictions){
+ const {transactionNotes,categoryDisplayOrder,categoryMonthlyBudgets,
+  cardPaymentReviewAcks,...financial}=predictions||{};
+ return JSON.stringify(financial);
+}
 async function saveForecast(predictions,expectedRevision){
  predictions=remapPostedMetadata({predictions:structuredClone(predictions)}).predictions;
  // All writes share this serialized encrypted boundary. Compare against the
@@ -114,10 +124,16 @@ async function saveForecast(predictions,expectedRevision){
    if(JSON.stringify(state.ledgerAdjustments?.predictions||{})===JSON.stringify(predictions))return;
    const error=new Error(staleMessage);error.httpStatus=409;throw error;
   }
-  require('../planner-transactions.js').assertNoNewForecastDuplicates(
-   state.ledgerAdjustments?.predictions||{},predictions);
+  const previous=state.ledgerAdjustments?.predictions||{};
+  require('../planner-transactions.js').assertNoNewForecastDuplicates(previous,predictions);
+  const forecastChanged=projectedPreferencesSignature(previous)!==
+   projectedPreferencesSignature(predictions);
   await atomicEncryptedWrite(forecastFile,predictions);
   state.ledgerAdjustments.predictions=predictions;
+  // Do not invalidate for a note, category-order, budget-target or warning
+  // acknowledgement save. Forecast-changing edits must expire the bundle
+  // before any subsequent private GET can reuse an obsolete projection.
+  if(forecastChanged){invalidatePrepared();schedulePrepared()}
  });
  forecastWrites=write.catch(()=>{});
  await write;
@@ -357,7 +373,8 @@ function ledgerPayload(){
   adjustments:state.ledgerAdjustments||{}};
 }
 // RAM only. Bank and forecast persistence remain separately encrypted on disk.
-// One invalidation per successful edit, sync, reconnect, or disconnect.
+// Forecast-only writes invalidate here only when cash-flow inputs change.
+// Bank sync/classification routes still invalidate conservatively.
 let preparedGeneration=0,preparedCache=null,prepareScheduled=false;
 function invalidatePrepared(){
  preparedGeneration++;
@@ -397,7 +414,7 @@ async function start(port=Number(env.PORT||8788)){
   const respond=(status,data)=>{const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
     if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
     if(req.method==='POST'&&status>=200&&status<300&&
-       (requestPath.startsWith('/api/ledger/')||
+       (requestPath.startsWith('/api/ledger/')&&requestPath!=='/api/ledger/forecasts'||
         ['/api/sync','/api/exchange','/api/disconnect'].includes(requestPath))){
      invalidatePrepared();
      schedulePrepared();
