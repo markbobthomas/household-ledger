@@ -282,7 +282,7 @@ const {chromium,webkit}=require('playwright');
     'Current destination is the calm mint-tinted pill');
    assert.notEqual(newTheme.mark,'none','Ledger has the new soft brand mark');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Home','Spending','Bills','Activity']);
+    ['Home','Transactions','Bills','Spending']);
    assert.equal(await page.locator('.topbar [data-view="reviews"]').count(),1,
     'Things to check is a visible action outside three main destinations');
    assert.equal(await page.locator('.topbar .top-actions > #planner-save-feedback').count(),1,
@@ -643,7 +643,7 @@ const {chromium,webkit}=require('playwright');
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('.history-subtab').count(),4);
    assert.deepEqual((await page.locator('.history-subtab').allTextContents()).map(s=>s.trim()),
-    ['Budget','Merchants','Purchase sizes','Summary'],
+    ['Budget','Merchants','Purchase sizes','Month insights'],
     'Budget is the first named Bank History view');
    const tabGeometry=await page.locator('.spending-tabs .history-subtab').evaluateAll(tabs=>{
     const boxes=tabs.map(tab=>tab.getBoundingClientRect());
@@ -1589,7 +1589,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
    assert.equal(await page.locator('.bills-heading h2').innerText(),'Upcoming bills');
-   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Repeating payments',
+   assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Recurring bills',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
    const billHeader=await page.locator('.bills-heading').evaluate(el=>{
@@ -1653,8 +1653,8 @@ const {chromium,webkit}=require('playwright');
     await page.locator('.transaction-detail-close').click();
    }
 
-   await page.locator('#planner-menu>summary').click();
-   await page.locator('#planner-menu [data-view="transactions"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.locator('.history-page [data-view="transactions"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    if(await page.locator('.unified-payment-trigger.ledger-transaction-row').count())
     await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
@@ -2409,8 +2409,7 @@ const {chromium,webkit}=require('playwright');
     assertFontsMatch('Posted Activity '+width,await transactionFonts(
      '.history-row-open.ledger-transaction-row',
      '.history-actual-description strong','.history-actual-amount'),baseline);
-    await page.locator('#planner-menu>summary').click();
-    await page.locator('#planner-menu [data-view="transactions"]').click();
+    await page.locator('.history-page [data-view="transactions"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     assertFontsMatch('Dated Predictions '+width,await transactionFonts(
      '.unified-payment-trigger.ledger-transaction-row',

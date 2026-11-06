@@ -37,8 +37,8 @@ const {chromium,webkit}=require('playwright');
    const select=page.locator('#ledger-opening-page');
    assert.deepEqual(await select.locator('option').evaluateAll(nodes=>nodes.map(n=>[n.value,n.textContent])),
     [['summary','Home'],['history','Spending'],['schedules','Bills'],
-     ['activity','Activity'],['reviews','Things to check'],
-     ['trend','Balance Trend'],['transactions','All upcoming predictions'],
+     ['activity','Transactions · Posted'],['reviews','Things to check'],
+     ['trend','Home · Balance trend'],['transactions','Transactions · Planned'],
      ['settings','Settings']]);
    assert.equal(await select.inputValue(),'summary');
    const choices=['activity','history','schedules','reviews','trend','transactions','settings','summary'];

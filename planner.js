@@ -28,8 +28,8 @@ const available=()=>Boolean(window.HouseholdLiveSource);
 const OPENING_PAGE_KEY='household-ledger-opening-page-v1';
 const OPENING_PAGES=[
  ['summary','Home'],['history','Spending'],['schedules','Bills'],
- ['activity','Activity'],['reviews','Things to check'],
- ['trend','Balance Trend'],['transactions','All upcoming predictions'],
+ ['activity','Transactions · Posted'],['reviews','Things to check'],
+ ['trend','Home · Balance trend'],['transactions','Transactions · Planned'],
  ['settings','Settings']
 ];
 const preferredOpeningPage=()=>{
@@ -55,6 +55,20 @@ try{
 const horizon=1095; // Three-year modeled floor. No user-selectable time windows.
 // Human-facing list number. Canonical rule IDs remain unchanged. Numbers follow
 // the saved list order and are recalculated if schedules are removed/reordered.
+// Prepared subviews share one primary destination and one financial source.
+function navigationSelected(button,view){
+ const target=button.dataset.view;
+ if(button.closest?.('.planner-nav-primary'))
+  return target===(view==='transactions'?'activity':view==='trend'?'summary':view);
+ return target===view;
+}
+function transactionsViewTabs(current){
+ return '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Transactions views">'+
+  [['activity','Posted'],['transactions','Planned']].map(([id,name])=>
+   '<button type="button" class="history-subtab'+(current===id?' active':'')+
+    '" data-view="'+id+'" aria-pressed="'+(current===id)+'">'+name+'</button>').join('')+
+  '</nav>';
+}
 function scheduleListNumber(id){
  const rules=state().predictions?.futureRecurringRules||[];
  const index=rules.findIndex(r=>String(r.id)===String(id));
@@ -885,6 +899,13 @@ function detailHtml(bundle,s){
      selectCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
       (c===assigned?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select><small data-actual-category-status role="status"></small></label>';
+  const linkedPlans=window.HouseholdPlannerTransactions.historicalScheduleMatches(
+   row,activeAccounts(s),state().predictions?.futureRecurringRules||[]);
+  const linkedActions=linkedPlans.length?
+   '<div class="transaction-related-plans"><strong>Related recurring plan'+(linkedPlans.length===1?'':'s')+'</strong>'+
+    linkedPlans.map(plan=>'<button type="button" class="btn" data-open-bill-rule="'+
+     escapeHTML(plan.id)+'">Open '+escapeHTML(plan.scheduleLabel||plan.merchant||'plan')+'</button>').join('')+
+   '</div>':'';
   const summary='<div class="transaction-detail-info">'+
    '<div><span>Bank date</span><strong>'+escapeHTML(dayLabel(row.date))+'</strong></div>'+
    '<div><span>Account</span><strong>'+escapeHTML(account?.name||transactionDetail.account)+'</strong></div>'+
@@ -894,7 +915,8 @@ function detailHtml(bundle,s){
   return detailShell(row.merchant||'Bank transaction',
    'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
    summary+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
-    (recurringDraft?repeatingReviewForm(s):'<p>Unable to create a prediction from this transaction.</p>'),
+    linkedActions+(linkedPlans.length?'':recurringDraft?repeatingReviewForm(s):
+     '<p class="transaction-detail-help">This bank transaction is read-only and cannot create a repeating plan.</p>'),
    'ACTUAL · BANK-RECORDED');
  }
  if(transactionDetail.kind==='history-choice'){
@@ -1571,7 +1593,7 @@ function billsStatementsPage(bundle,s){
       (historical?' · Past':p.periodStart<=s.asOf&&p.periodEnd>s.asOf?
        ' · Current':p.periodComplete?' · Closed':' · Estimate')+'</option>').join(''):
      '<option value="">No statements available</option>')+
-   '</select></label></div>';
+   '</select></label><button type="button" class="btn bills-statement-settings" data-forecast-review="settings-card" data-forecast-card-id="'+escapeHTML(accountId)+'">Autopay settings</button></div>';
  if(!selected)return '<div class="bills-statements-page">'+controls+
   '<section class="panel bills-card-statements" data-bills-card="'+
    escapeHTML(accountId)+'"><p class="bills-card-empty">'+
@@ -1849,13 +1871,13 @@ function schedulesPage(bundle,s){
  }).join('');
  return '<div class="planner-page schedule-page">'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
-   [['upcoming','Upcoming'],['repeating','Repeating'],['statements','Statements']].map(([id,name])=>
+   [['upcoming','Upcoming'],['repeating','Recurring'],['statements','Statements']].map(([id,name])=>
     '<button type="button" class="history-subtab'+(billsPane===id?' active':'')+
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
-   '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
+   '<div class="bills-heading"><div><h2 class="visually-hidden">Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
     '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Checking '+
       cash(upcomingCents/100)+'</strong>'+
@@ -1866,7 +1888,7 @@ function schedulesPage(bundle,s){
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
-  '<div class="bills-manage-heading"><div><h2>Repeating payments</h2></div></div>'+
+  '<div class="bills-manage-heading"><div><h2 class="visually-hidden">Recurring bills</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    billsMonthSelect(s.asOf,'repeating')+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
@@ -1914,7 +1936,8 @@ function transactionsPage(bundle,s){
    ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
-  '<div class="page-heading"><div><h2>Predictions</h2></div>'+
+  transactionsViewTabs('transactions')+
+  '<div class="page-heading"><div><h2>Planned transactions</h2></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -2470,7 +2493,7 @@ function financialRecapPage(bundle,s){
     '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
     breakdown(topSpending,'No posted purchases in selected months.')+
     '</section>'+
-   '<section class="financial-recap-card financial-recap-upcoming"><h3>Next predicted bills</h3>'+
+   '<details class="financial-recap-card financial-recap-upcoming"><summary>Next predicted bills</summary>'+
     '<p>Next 30 days</p>'+
     (hasProjection?(upcoming.length?'<div class="financial-recap-rows">'+
       upcoming.map(r=>'<div class="financial-recap-row"><span><strong>'+
@@ -2483,7 +2506,7 @@ function financialRecapPage(bundle,s){
      '<div class="financial-recap-row"><span><strong>'+escapeHTML(cardAfterFive.merchant)+
      '</strong><small>'+escapeHTML(dayLabel(cardAfterFive.date))+'</small></span>'+
      '<strong>'+cash(cardAfterFive.amount)+'</strong></div></div>':'')+
-    '</section>'+
+    '</details>'+
   '</div></div>';
 }
 
@@ -2567,7 +2590,7 @@ function historyRecords(s){
 // The existing Summary stays read-only and uses the unchanged canonical totals.
 function spendingTabNav(active){
  return '<nav class="history-subtabs spending-tabs" aria-label="Spending views">'+
-  [['categories','Budget'],['merchants','Merchants'],['sizes','Purchase sizes'],['summary','Summary']]
+  [['categories','Budget'],['merchants','Merchants'],['sizes','Purchase sizes'],['summary','Month insights']]
    .map(([id,name])=>'<button type="button" class="history-subtab'+
     (active===id?' active':'')+'" data-history-view="'+id+
     '" aria-pressed="'+(active===id)+'">'+name+'</button>')
@@ -2802,7 +2825,7 @@ function historyPage(bundle,s){
  })();
  }
  return '<div class="planner-page history-page">'+
-  (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
+  (activeTab==='activity'?transactionsViewTabs('activity'):'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -2822,7 +2845,8 @@ function historyPage(bundle,s){
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select></label></div>')+
-   (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
+   (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear search</button>':'')+
+   ((historyAccount!=='all'||historySearch||historySort!=='newest'||historyCategoryFilter||historyMerchantFilter||historySizeFilter>=0||historySelectedMonths.size!==1||!historySelectedMonths.has(s.asOf.slice(0,7)))?'<button type="button" class="btn ledger-clear-filters" data-history-clear-all>Reset filters</button>':'')+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement total: purchases − refunds · excludes payments, transfers and pending</p>':
    selectedHistoryCard?'<p class="ledger-statement-help">Set this card’s billing period in Settings to group transactions by statement.</p>':'')+
@@ -3192,13 +3216,14 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       '<option value="'+value+'"'+(reviewSort===value?' selected':'')+'>'+label+'</option>').join('')+
     '</select></label></div>'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
-   [['categories','Categories'],['payments','Payments'],['earlier','Earlier'],['suggestions','Suggestions']]
+   [['categories','Categories'],['payments','Missing payments'],['earlier','Old forecasts'],['suggestions','Suggestions']]
     .map(([id,name])=>'<button type="button" class="history-subtab'+
      (reviewPane===id?' active':'')+(paneCounts[id]>0?' review-tab-pending':'')+
      '" data-review-tab="'+id+'" aria-pressed="'+
      (reviewPane===id)+'">'+name+
      (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
      '</button>').join('')+'</nav>'+
+  '<p class="review-action-guide">Review the evidence, choose an action, and resolved items leave this list.</p>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   pane('categories')+
   '<section class="panel category-review-panel" data-category-review>'+
@@ -3387,12 +3412,18 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    '</section></div>';
 }
 function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
- // Home leads with bank-backed balances and the forecast calendar, not text.
- return window.HouseholdPlannerSummary.render({
+ const content=window.HouseholdPlannerSummary.render({
   snapshot:s,chosen,derived,bundle,days:horizon,
   prefs:state().predictions||{},accounts:activeAccounts(s),
   fresh,ready:window.HouseholdPaymentObligations.ready,view
  });
+ // The chart and calendar are both Home views, not additional destinations.
+ const tabs='<nav class="history-subtabs spending-tabs ledger-section-tabs home-subtabs" aria-label="Home views">'+
+  [['calendar','Calendar'],['trend','Balance trend']].map(([id,name])=>
+   '<button type="button" class="history-subtab'+(view===id?' active':'')+
+   '" data-view="'+(id==='calendar'?'summary':'trend')+
+   '" aria-pressed="'+(view===id)+'">'+name+'</button>').join('')+'</nav>';
+ return content.replace(/^(<div class="planner-page[^"]*">)/,'$1'+tabs);
 }
 function settingsPage(bundle,s,chosen){
  const rules=Object.entries(state().learning?.categoryRules||{});
@@ -3419,6 +3450,8 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
     escapeHTML(warningThreshold(state().predictions))+'" required></label>'+
     '<button class="btn primary" type="submit">Save</button></form></section>'+
+  autopayPanel(s,bundle)+connectionPanel(s,bundle)+
+  '<details class="panel ledger-advanced-settings"><summary>Advanced settings and diagnostics</summary>'+
   (state().predictions?.recurringForecastMode!=='approved-only'&&
    Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
   '<section class="panel mini-panel" aria-label="Automatic prediction exclusions">'+
@@ -3433,7 +3466,7 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  categoryLearning+auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+
+  auditPanel(chosen)+'</details>'+categoryLearning+
    (available()?'<section class="panel" aria-label="Share Ledger"><div class="section-title"><h2>Share Ledger</h2></div>'+
     '<p>Use this same private website on both phones to see the same household data. Send the link privately; the password must be shared separately.</p>'+
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
@@ -3593,7 +3626,7 @@ function activatePreparedView(view,from,fromHistoryView){
  preparedViews.delete(view);
  root.replaceChildren(entry.element);
  document.querySelectorAll('[data-view]').forEach(button=>{
-  const current=button.dataset.view===view;
+  const current=navigationSelected(button,view);
   button.classList.toggle('active',current);
   if(current)button.setAttribute('aria-current','page');
   else button.removeAttribute('aria-current');
@@ -3672,7 +3705,7 @@ function render({navigationOnly=false}={}){
  $('refresh-bank').hidden=!live();
  $('audit-launch').hidden=busy||!activeAccounts(s).length||activeTab!=='settings';
  document.querySelectorAll('[data-view]').forEach(button=>{
-  const active=button.dataset.view===activeTab;
+  const active=navigationSelected(button,activeTab);
   button.classList.toggle('active',active);
   if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
  });
@@ -4287,6 +4320,16 @@ document.addEventListener('click',async e=>{
  }
 
  // History view switching and drill-down are read-only.
+ const clearAll=e.target.closest?.('[data-history-clear-all]');
+ if(clearAll){
+  const asOf=snapshot().asOf||dateToday();
+  historySelectedMonths=new Set([asOf.slice(0,7)]);
+  historyAccount='all';historySearch='';historySort='newest';historyCategoryFilter='';
+  historyMerchantFilter='';historyMerchantSearch='';historySizeFilter=-1;
+  historyPurchaseDrill=false;historyMonthPickerOpen=false;historyMonthFutureExtent=0;
+  historyLimit=90;historySelected.clear();
+  renderHistoryFilters();return;
+ }
  const historyTab=e.target.closest?.('[data-history-view]');
  if(historyTab){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
@@ -4535,37 +4578,24 @@ document.addEventListener('click',async e=>{
    fromHistory.dataset.historicalTransaction;
   const row=lastHistoryRows.find(t=>String(t.id)===historyId&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
-  if(!row||!window.HouseholdPlannerHistory.canPlan(row)){
+  if(!row){
    setNotice('That bank transaction is no longer available for review.');return;
   }
-  // Calendar and History consult the SAME account/direction/history-ID matcher.
-  // Never open a fresh recurring form for a payment already represented by a
-  // saved prediction, even if its bank amount is different.
+  // Actual bank data always opens the common detail panel. Any matched
+  // recurring plans appear as links; no new competing schedule is created.
   const matching=window.HouseholdPlannerTransactions.historicalScheduleMatches(
    row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
-  if(matching.length===1){
-   recurringDraft=null;
-   if(!openSchedulePlan(matching[0].id,'',e.target))
-    setNotice('That prediction changed. Refresh bank history.');
-   return;
-  }
-  if(matching.length>1){
-   recurringDraft=null;transactionDetail={kind:'history-choice',ids:matching.map(r=>r.id)};
-   detailReturnFocus=e.target;
-   drawTransactionDetail(forecastFor(snapshot()),snapshot());
-   document.querySelector('.transaction-detail-close')?.focus();
-   return;
-  }
   try{
-   recurringDraft=window.HouseholdPlannerHistory.draftFor(
-    row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+   recurringDraft=null;
+   if(!matching.length&&window.HouseholdPlannerHistory.canPlan(row)){
+    recurringDraft=window.HouseholdPlannerHistory.draftFor(
+     row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+   }
    reviewNotice='';
   }catch(error){setNotice(String(error.message||error));return}
   detailReturnFocus=e.target;
-  // Browser users see one shared panel. Lightweight test environments with
-  // no interactive DOM preserve the inline draft for banking safety checks.
   if(typeof $('planner-main')?.insertAdjacentHTML!=='function'){
-   transactionDetail=null;activeTab='history';render();return;
+   transactionDetail=null;activeTab='activity';render();return;
   }
   transactionDetail={kind:'actual',id:String(row.id),account};
   drawTransactionDetail(forecastFor(snapshot()),snapshot());

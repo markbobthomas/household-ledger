@@ -278,6 +278,9 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': unscheduled card purchases never become monthly bills');
    assert.doesNotMatch(billCategories,/Savings Transfer/,
     name+': internal cash transfer is not a bill');
+   assert.equal(await page.locator('.financial-recap-upcoming').evaluate(el=>el.open),false,
+    name+': duplicate upcoming bills start collapsed for less visual clutter');
+   await page.locator('.financial-recap-upcoming > summary').click();
    assert.match(await page.locator('.financial-recap-upcoming').innerText(),
     /Fictional Visa Payment/,
     name+': credit-card payment appears even when five earlier bills precede it');
@@ -319,6 +322,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
+   await page.locator('.financial-recap-upcoming > summary').click();
    const firstFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
    assert.match(firstFive,/Fictional Recurring Card Repayment/,
     name+': next-week card repayment remains in Summary cash forecasts despite Bills exclusion');
@@ -427,6 +431,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
+   await page.locator('.financial-recap-upcoming > summary').click();
    const autopayFive=await page.locator('.financial-recap-upcoming .financial-recap-rows').innerText();
    assert.match(autopayFive,/Credit-card payment \(autopay\)/,
     name+': configured card autopay next week must be one of Summary next five');

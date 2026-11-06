@@ -11,7 +11,7 @@
 <link rel="icon" type="image/png" sizes="180x180" href="/ledger-icon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/ledger-icon.png">
 <title>Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=budget-category-drill-20261101-v1">
+<link rel="stylesheet" href="planner.css?v=nav-unify-20261105-v1">
 </head>
 <body>
 <main class="shell"><div class="content">
@@ -24,8 +24,6 @@
     <div id="planner-save-feedback" class="planner-save-feedback" role="status" aria-live="polite" hidden></div>
       <details class="planner-menu" id="planner-menu"><summary aria-label="Open other planning tools">☰ <span>More</span></summary>
         <div class="planner-menu-content" role="group" aria-label="Other planning tools">
-          <button type="button" data-view="transactions">All upcoming predictions</button>
-          <button type="button" data-view="trend">Balance Trend</button>
           <button type="button" data-view="settings">Settings</button>
           <div class="planner-menu-bank">
             <label for="ledger-mode-switch">Data source</label>
@@ -43,9 +41,9 @@
   <div class="main-navigation">
     <nav class="planner-tabs planner-nav-primary" aria-label="Main navigation">
       <button type="button" class="tab-link active" data-view="summary" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg><span>Home</span></button>
-      <button type="button" class="tab-link" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg><span>Spending</span></button>
+      <button type="button" class="tab-link" data-view="activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h15M6 12h15M6 19h15M2 5h.01M2 12h.01M2 19h.01"/></svg><span>Transactions</span></button>
       <button type="button" class="tab-link" data-view="schedules"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8m-8 5h8"/></svg><span>Bills</span></button>
-      <button type="button" class="tab-link" data-view="activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h15M6 12h15M6 19h15M2 5h.01M2 12h.01M2 19h.01"/></svg><span>Activity</span></button>
+      <button type="button" class="tab-link" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg><span>Spending</span></button>
     </nav>
   </div>
   <div id="planner-notice" aria-live="polite"></div>
@@ -69,7 +67,7 @@
 <script src="planner-history.js?v=prediction-review-labels-v1"></script>
 <script src="planner-core.js?v=prediction-review-labels-v1"></script>
 <script src="planner-coverage.js?v=retired-renderers-20261028-v1"></script>
-<script src="planner-summary.js?v=shown-month-low-20261031-v1"></script>
+<script src="planner-summary.js?v=nav-unify-20261105-v1"></script>
 <style>
 /* A tab click is visible even while a fresh set of views is rebuilding. */
 #planner-main{position:relative}
@@ -108,7 +106,7 @@
   const view=button.dataset.view,id=++sequence;
   wanted={view,button};
   document.querySelectorAll('[data-view]').forEach(tab=>{
-   const selected=tab.dataset.view===view;
+   const selected=tab.dataset.view===(tab.closest?.('.planner-nav-primary')&&view==='transactions'?'activity':tab.closest?.('.planner-nav-primary')&&view==='trend'?'summary':view);
    tab.classList.toggle('active',selected);
    if(selected)tab.setAttribute('aria-current','page');
    else tab.removeAttribute('aria-current');
@@ -145,7 +143,7 @@
  },true);
 })();
 </script>
-<script src="planner.js?v=budget-category-drill-20261101-v1"></script>
+<script src="planner.js?v=nav-unify-20261105-v1"></script>
 <noscript>JavaScript is required to display account balances and planning projections.</noscript>
 </body>
 </html>
