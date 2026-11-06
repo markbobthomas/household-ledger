@@ -42,7 +42,7 @@ const DEMO_SETTINGS='household-planner-sample-settings-v1';
 try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
-  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cashCushion','lowAlertThreshold','warnBelow',
+  const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cardPaymentReviewAcks','cashCushion','lowAlertThreshold','warnBelow',
     'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','categoryDisplayOrder','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
