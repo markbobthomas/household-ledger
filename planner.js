@@ -1188,18 +1188,24 @@ function applyScheduleSearch(root=document){
  const input=root.querySelector('[data-schedule-search]');
  if(!input)return;
  const q=String(scheduleSearch||'').trim().toLowerCase();
- let shown=0,shownCents=0;
+ let shown=0;
+ const totals={out:0,in:0,transfers:0,unforecasted:0,unforecastedCents:0};
  for(const row of root.querySelectorAll('[data-schedule-card]')){
   const matches=!q||String(row.dataset.scheduleSearchText||'').includes(q);
   row.hidden=!matches;
   if(matches){
    shown++;
-   const cents=Number(row.dataset.scheduleListedCents);
-   if(Number.isSafeInteger(cents))shownCents+=cents;
+   const cents=Number(row.dataset.scheduleListedCents),
+    kind=row.dataset.scheduleListedKind;
+   if(kind==='unforecasted'){
+    totals.unforecasted++;
+    if(Number.isSafeInteger(cents)&&cents>0)totals.unforecastedCents+=cents;
+   }else if(['out','in','transfers'].includes(kind)&&Number.isSafeInteger(cents)&&cents>0)
+    totals[kind]+=cents;
   }
  }
  const billTotal=root.querySelector('[data-bills-repeating-total]');
- if(billTotal)billTotal.textContent='Total '+cash(shownCents/100);
+ if(billTotal)billTotal.textContent='Total shown: '+formatScheduleTotals(totals);
  for(const group of root.querySelectorAll('[data-schedule-category-group]')){
   const rows=[...group.querySelectorAll('[data-schedule-card]')].filter(row=>!row.hidden);
   group.hidden=rows.length===0;
@@ -1221,7 +1227,7 @@ function applyScheduleSearch(root=document){
  const count=root.querySelector('[data-schedule-visible-count]');
  if(count){
   const total=Number(count.dataset.scheduleTotalCount)||0;
-  count.textContent='Showing '+shown+' of '+total+' recurring expense'+
+  count.textContent='Showing '+shown+' of '+total+' recurring plan'+
    (total===1?'':'s');
  }
  for(const row of root.querySelectorAll('[data-statement-occurrence]')){
