@@ -106,7 +106,7 @@
   const view=button.dataset.view,id=++sequence;
   wanted={view,button};
   document.querySelectorAll('[data-view]').forEach(tab=>{
-   const selected=tab.dataset.view===view;
+   const selected=tab.dataset.view===(tab.closest?.('.planner-nav-primary')&&view==='transactions'?'activity':tab.closest?.('.planner-nav-primary')&&view==='trend'?'summary':view);
    tab.classList.toggle('active',selected);
    if(selected)tab.setAttribute('aria-current','page');
    else tab.removeAttribute('aria-current');
