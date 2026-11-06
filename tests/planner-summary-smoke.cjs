@@ -91,6 +91,58 @@ assert.match(checkingWithSubtype,/data-bank-available-value>\$5,000\.00<\/strong
  'The All reference is a Plaid checking subtype, not the first savings account');
 assert.doesNotMatch(checkingWithSubtype,/data-bank-available-value>\$100\.00<\/strong>/);
 
+// History is the bank's posted TRANSACTIONS, not a bank-verified daily
+// balance series. Rewind from current posted balance, omit pending items,
+// isolate the selected account, and never calculate when inputs are untrusted.
+const account={id:'fictional-checking',type:'checking',current:1000},
+ otherAccount={id:'fictional-card',type:'credit',current:300},
+ posted=(date,amount,direction,accountId=account.id,extra={})=>({
+  id:date+'|'+accountId+'|'+amount,date,amount,cashDirection:direction,
+  accountId,type:direction==='in'?'income':'expense',pending:false,...extra
+ }),
+ historyRows=[
+  posted('2026-09-30',300,'in'),
+  posted('2026-10-03',50,'out'),
+  posted('2026-10-15',100,'in'),
+  posted('2026-10-31',70,'out'),
+  posted('2026-11-01',40,'in'),
+  posted('2026-11-03',20,'out'),
+  posted('2026-11-04',500,'out',account.id,{pending:true}),
+  posted('2026-10-18',900,'out',otherAccount.id)
+ ];
+const unchanged=JSON.stringify(historyRows),
+ indexed=tool.reconstructedHistory(account,{balanceStatus:'fresh'},
+  historyRows,'2026-11-05','2026-09-01',t=>t.accountId,[account,otherAccount]);
+assert.equal(indexed.get('2026-10-31').balance,980,
+ 'October closing balance is reconstructed from actual posted activity after month end');
+assert.equal(indexed.get('2026-10-14').balance,950,
+ 'Reconstructed daily low reflects dated transactions and credit/debit signs');
+assert.equal(indexed.get('2026-10-01').balance,1000,
+ 'A complete prior month can be reconstructed with bank history preceding it');
+assert.equal(indexed.get('2026-11-04').balance,1000,
+ 'Pending holds never alter posted historical reconstruction');
+assert.equal(JSON.stringify(historyRows),unchanged,
+ 'Backward reconstruction must never mutate Plaid transaction rows');
+assert.equal(tool.reconstructedHistory({...account,current:null},
+ {balanceStatus:'fresh'},historyRows,'2026-11-05','2026-09-01',
+ t=>t.accountId,[account]).size,0,'Missing actual current balance disallows history');
+assert.equal(tool.reconstructedHistory(account,{balanceStatus:'stale'},
+ historyRows,'2026-11-05','2026-09-01',t=>t.accountId,[account]).size,0,
+ 'Stale balance must not anchor historical money values');
+const unclassified=historyRows.concat(posted('2026-11-02',20,'unknown'));
+assert.equal(tool.reconstructedHistory(account,{balanceStatus:'fresh'},
+ unclassified,'2026-11-05','2026-09-01',t=>t.accountId,[account]).size,0,
+ 'Unknown transaction direction must not yield a confident month low');
+const creditHistory=tool.reconstructedHistory(otherAccount,{balanceStatus:'fresh'},
+ [posted('2026-09-30',20,'out',otherAccount.id),
+  posted('2026-10-15',50,'out',otherAccount.id),
+  posted('2026-11-01',10,'out',otherAccount.id)],
+ '2026-11-05','2026-09-01',t=>t.accountId,[account,otherAccount]);
+assert.equal(creditHistory.get('2026-10-31').balance,290,
+ 'Reconstruct card liabilities using the reverse cash sign');
+assert.equal(creditHistory.get('2026-10-14').balance,240,
+ 'Card spending increases debt while repayments and refunds reduce it');
+
 // Lower future-month or day-91 balances must never replace October's low.
 const rolling=series.map((p,i)=>({...p,balance:i===65?1200:i===91?100:p.balance}));
 const rollingView=tool.render({...opts,days:1095,derived:{...derived,series:rolling}});
