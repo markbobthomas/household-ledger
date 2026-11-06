@@ -566,9 +566,12 @@ function render(input){
   calendarRenderInput=input;
   if(calendarScope!=='all'&&!accounts.some(a=>String(a.id)===calendarScope))
    calendarScope='all';
+  const checkingAccount=a=>String(a.accountType||'').toLowerCase()==='checking'||
+   String(a.subtype||'').toLowerCase()==='checking'||
+   String(a.type||'').toLowerCase()==='checking';
   const main=accounts.find(a=>String(a.id)===String(prefs?.primaryAccountId)&&
-    String(a.accountType||a.subtype||'').toLowerCase()==='checking')||
-   accounts.find(a=>String(a.accountType||a.subtype||'').toLowerCase()==='checking')||
+    checkingAccount(a))||
+   accounts.find(checkingAccount)||
    accounts.find(a=>String(a.accountType||a.type||'').toLowerCase()!=='credit')||chosen;
   const display=calendarScope==='all'?main:
    accounts.find(a=>String(a.id)===calendarScope)||main,
