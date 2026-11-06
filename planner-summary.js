@@ -202,7 +202,8 @@ function quickEditor(){
 
 
 function postedDay(date){
- const rows=calendarContext.actual.get(date)||[];
+ const rows=calendarContext.actual.get(date)||[],
+  history=calendarContext.history?.get(date);
  const body=rows.map(t=>{
   const account=String(root.HouseholdPlannerHistory?.accountOf?.(t,calendarContext.accounts)||
    t.accountId||calendarContext.chosen),
@@ -229,7 +230,12 @@ function postedDay(date){
    esc(dateLabel(date))+'</strong></div></div>'+
   (rows.length?'<div class="calendar-detail-items">'+body+'</div>':
    '<p class="calendar-empty">No bank transactions recorded on this date.</p>')+
-  '<p class="calendar-actual-note">Past balances cannot be reconstructed from today’s balance. Bank records remain unchanged.</p>'+
+  (history?'<div class="calendar-day-ending calendar-reconstructed-ending" data-calendar-reconstructed-balance>'+
+   '<span>Reconstructed end-of-day balance</span><strong>'+money(history.balance)+'</strong></div>':'')+
+  '<p class="calendar-actual-note">'+(history?
+   'Calculated from the latest posted bank balance and available posted transactions; this is not a bank-verified daily balance.':
+   'Posted activity is actual. A past daily balance cannot be verified from the available bank history.')+
+   ' Bank records remain unchanged.</p>'+
   '<button type="button" class="calendar-edit" data-view="activity">All bank history →</button></section>';
 }
 function calendarNote(key){
@@ -335,7 +341,32 @@ function dayDetail(point,card){
  '</section>';
 }
 
+function monthlyActuals(state){
+ const rows=[...state.actual.entries()].filter(([day])=>
+  day.startsWith(calendarMonth)).flatMap(([date,items])=>
+   items.map(t=>({date,t}))).sort((a,b)=>a.date.localeCompare(b.date));
+ const accountName=t=>state.accounts.find(a=>
+  String(a.id)===String(t.accountId))?.name||'Account';
+ const body=rows.map(({date,t})=>{
+  const incoming=['income','refund'].includes(t.type)||
+   t.type==='transfer'&&t.cashDirection==='in',
+   dir=incoming?'+':'−';
+  return '<div class="calendar-monthly-row calendar-posted-month-row" data-calendar-posted-month-row>'+
+   '<span class="calendar-monthly-date">'+esc(shortDate(date))+'</span>'+
+   '<span class="calendar-monthly-name"><strong>'+esc(t.merchant||'Bank transaction')+'</strong>'+
+    '<small>'+(t.pending?'Pending':'Posted')+
+    (state.scope==='all'?' · '+esc(accountName(t)):'')+'</small></span>'+
+   '<strong class="ledger-transaction-amount">'+dir+money(Number(t.amount))+'</strong></div>';
+ }).join('');
+ return '<details class="calendar-monthly-list" data-calendar-monthly'+
+  (calendarMonthExpanded?' open':'')+'>'+
+  '<summary>See all '+esc(monthName(calendarMonth))+' bank activity ('+rows.length+')</summary>'+
+  (body?'<div class="calendar-monthly-rows">'+body+'</div>':
+    '<p class="calendar-empty">No bank activity available for this month.</p>')+
+  '<small class="calendar-actual-note">Posted transactions are actual. Reconstructed balances are not bank-verified daily balances.</small></details>';
+}
 function monthlyPredictions(state){
+ if(isHistoricalMonth())return monthlyActuals(state);
  const primary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
   (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i,other:false,card:state.card}))),
   secondary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
@@ -451,7 +482,8 @@ function calendarGrid(){
  if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
  const weekday=iso=>iso&&![0,6].includes(new Date(iso+'T12:00:00Z').getUTCDay());
  // Even on a five-day grid, preserve a selected weekend as-of date in the day detail.
- if(!currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
+ if(calendarDate.slice(0,7)!==calendarMonth||
+   !currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
   calendarDate=currentPoints.find(p=>weekday(p.date))?.date||
    [...state.actual.keys()].find(d=>d.startsWith(calendarMonth)&&weekday(d));
  const start=calendarMonth+'-01',
@@ -474,11 +506,19 @@ function calendarGrid(){
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
   if(!p&&state.actual.has(iso)){
-   const rows=state.actual.get(iso)||[];
-   return '<button type="button" class="calendar-day actual'+(calendarDate===iso?' selected':'')+
+   const rows=state.actual.get(iso)||[],history=state.history?.get(iso);
+   return '<button type="button" class="calendar-day actual'+
+    (monthMinimum?.date===iso?' month-minimum':'')+
+    (calendarDate===iso?' selected':'')+
     '" data-calendar-actual-day="'+iso+'" aria-label="'+esc(dateLabel(iso)+', '+
-    rows.length+' actual bank transactions, no predicted balance')+'">'+
-    '<span class="calendar-day-number">'+dom+'</span><span class="calendar-day-balance">'+(rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No activity')+'</span>'+
+    rows.length+' bank transactions'+(history?
+     ', reconstructed end-of-day '+money(history.balance):
+     ', no verified historical balance'))+'">'+
+    '<span class="calendar-day-number">'+dom+'</span>'+
+    '<span class="calendar-day-balance">'+(history?
+     '<span class="calendar-money-wide">'+money(history.balance)+'</span>'+
+     '<span class="calendar-money-narrow">'+shortMoney(history.balance)+'</span>':
+     rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No balance data')+'</span>'+
     '<span class="calendar-day-events">'+rows.slice(0,2).map(t=>
      '<span class="calendar-event"><span class="calendar-event-name">'+
      esc(t.merchant||'Transaction')+'</span></span>').join('')+
@@ -526,7 +566,8 @@ function calendarGrid(){
  return '<div class="calendar-wrapper" data-calendar-stage>'+
   
   '<div class="calendar-grid" style="--calendar-weeks:'+weekCount+'" role="group" aria-label="'+
-   esc(monthName(calendarMonth)+' forecast calendar')+'">'+header+cells+'</div>'+
+   esc(monthName(calendarMonth)+(isHistoricalMonth()?' posted-history calendar':' forecast calendar'))+'">'+
+   header+cells+'</div>'+
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
 }
