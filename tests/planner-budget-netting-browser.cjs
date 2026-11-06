@@ -54,6 +54,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
       // additional household expense in the monthly bill summary.
       data.predictions={
        recurringForecastMode:'approved-only',
+       categoryMonthlyBudgets:{Groceries:500},
        futureRecurringRules:[
         {id:'fictional-mortgage',kind:'event',type:'expense',accountId:'demo-checking',
          frequency:'monthly',anchorDate:'2026-10-02',date:'2026-10-02',
