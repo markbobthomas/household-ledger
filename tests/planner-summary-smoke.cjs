@@ -102,6 +102,19 @@ assert.match(todayHTML,/data-calendar-math-total|calendar-math-total/,
 assert.match(todayHTML,/data-calendar-day="2026-10-21"/);
 assert.equal(JSON.stringify(todayRows),todayRowsBefore,
  'Calendar bank overlay never rewrites the source records');
+const weekendRow={id:'fictional-weekend',date:'2026-10-18',accountId:'checking',
+ type:'expense',cashDirection:'out',amount:13,merchant:'Fictional Sunday Pharmacy',pending:false};
+const weekendNotes={'bank:'+JSON.stringify(['checking',weekendRow.id]):'Picked up prescription'};
+const weekendHTML=tool.render({...todayInput,prefs:{...todayInput.prefs,
+ transactionNotes:weekendNotes},bundle:{...todayInput.bundle,rows:[...todayRows,weekendRow]}});
+assert.match(weekendHTML,/data-calendar-weekend-activity/,
+ 'The five-day Calendar exposes actual weekend bank activity without moving its date');
+assert.match(weekendHTML,/Sunday, October 18|Oct 18/,
+ 'Actual weekend posting date remains visible in the disclosure');
+assert.match(weekendHTML,/Fictional Sunday Pharmacy/);
+assert.match(weekendHTML,/transaction-title-line[\\s\\S]*?Picked up prescription/,
+ 'Calendar uses the same inline merchant-and-note presentation as Activity');
+
 const nextDayHTML=tool.render({...todayInput,snapshot:{...snapshot,asOf:iso(1)},
  derived:{...derived,series:series.slice(1)}});
 assert.doesNotMatch(nextDayHTML,/data-calendar-today-actual[^>]*>[\s\S]*?Fictional Today Posted/,
