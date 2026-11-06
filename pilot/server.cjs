@@ -82,6 +82,35 @@ async function atomicEncryptedWrite(filename,value){
 async function save(){
  await atomicEncryptedWrite(file,state);
 }
+// Re-key private transaction notes INSIDE the same serialized preference queue
+// used by household edits. A sync on one device must not replay a stale
+// preferences object over a note/recurrence edit made on another device.
+async function migrateTransactionNotes(replacements,finalize=false){
+ if(!replacements.length)return;
+ const write=forecastWrites.catch(()=>{}).then(async()=>{
+  const predictions=state.ledgerAdjustments?.predictions||{};
+  const stored=predictions.transactionNotes||{};
+  if(typeof stored!=='object'||Array.isArray(stored))return;
+  const notes={...stored};let changed=false;
+  for(const {accountId,from,to} of replacements){
+   const source='bank:'+JSON.stringify([accountId,from]),
+    target='bank:'+JSON.stringify([accountId,to]);
+   if(Object.prototype.hasOwnProperty.call(notes,source)&&
+      !Object.prototype.hasOwnProperty.call(notes,target)){
+    notes[target]=notes[source];changed=true;
+   }
+   if(finalize&&Object.prototype.hasOwnProperty.call(notes,source)){
+    delete notes[source];changed=true;
+   }
+  }
+  if(!changed)return;
+  const next={...predictions,transactionNotes:notes};
+  await atomicEncryptedWrite(forecastFile,next);
+  state.ledgerAdjustments.predictions=next;
+ });
+ forecastWrites=write.catch(()=>{});
+ await write;
+}
 // Session records are separately encrypted and persisted on the existing
 // private disk. Never store passwords, bank data or raw bearer IDs there.
 const auth=require('./session-auth.cjs')({
@@ -325,34 +354,15 @@ async function sync(){
   return {...item,cursor:stages.find(s=>s.item.id===i.id).cursor,reconnectRequired:false};
  });
  state.ledgerAdjustments.categoryOverrides=overrides;
- // The separate encrypted forecast-preferences file is authoritative at load.
- // Migrate only known user-authored ID-keyed annotations, preserving a note
- // already saved on the posted ID; other reviewed decisions have fingerprints
- // tied to the old bank facts and should be re-evaluated after settlement.
- const predictions=state.ledgerAdjustments?.predictions||{};
- const notes=predictions.transactionNotes||{};
- let updatedNotes=null;
- for(const {accountId,from,to} of noteReplacements){
-  const source='bank:'+JSON.stringify([accountId,from]);
-  const target='bank:'+JSON.stringify([accountId,to]);
-  if(!Object.prototype.hasOwnProperty.call(notes,source)&&
-     !Object.prototype.hasOwnProperty.call(updatedNotes||{},source))continue;
-  if(!updatedNotes)updatedNotes={...notes};
-  if(!Object.prototype.hasOwnProperty.call(updatedNotes,target))
-   updatedNotes[target]=updatedNotes[source];
-  // Keep both IDs through the bank snapshot's disk commit. If that save fails
-  // or the process stops mid-sync, the source pending note still exists while
-  // the posted note is already ready; neither state can lose the annotation.
- }
- if(updatedNotes)await saveForecast({...predictions,transactionNotes:updatedNotes});
+ // Stage the posted ID note while retaining the pending key across the
+ // encrypted bank snapshot commit. On a crash, either ID still has its note.
+ // All accesses to preferences occur inside the shared write queue.
+ await migrateTransactionNotes(noteReplacements);
  state.lastSync=observedAt;state.error=null;await save();
- if(updatedNotes){
-  const settledNotes={...updatedNotes};
-  for(const {accountId,from} of noteReplacements)
-   delete settledNotes['bank:'+JSON.stringify([accountId,from])];
-  try{await saveForecast({...predictions,transactionNotes:settledNotes})}
-  catch(_error){/* The posted note was already saved; obsolete keys are harmless. */}
- }
+ // Safe, optional cleanup after the source bank change is persisted.
+ // If cleanup fails, both note keys remain; the posted note is intact.
+ try{await migrateTransactionNotes(noteReplacements,true)}
+ catch(_error){/* Obsolete note keys are harmless. */}
  lastSyncAttempt.outcome='success';
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
  }catch(error){lastSyncAttempt.outcome='failed';throw error}
