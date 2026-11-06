@@ -107,7 +107,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',scheduleKindFilter='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1691,7 +1691,25 @@ function schedulesPage(bundle,s){
   tomorrow=shiftDay(s.asOf,1),
   categories=categoryOptionsWithOther(T.scheduleCategories(state())),
   categoryOf=r=>model.canonicalCategory(state(),r.category)||'Uncategorized',
-  monthlyRows=billsSelectedMonth?monthlyExpenseRows(bundle,s,billsSelectedMonth):[];
+  monthlyRows=billsSelectedMonth?[
+  ...monthlyExpenseRows(bundle,s,billsSelectedMonth),
+  // The expense history builder intentionally covers bills only. Recurring
+  // deposits and transfers need their own visible dated rows in this catalog.
+  ...futureRows(bundle,s).filter(row=>row.recurringRuleId&&
+   row.date.slice(0,7)===billsSelectedMonth&&
+   (row.kind==='movement'||row.type!=='expense')).map(row=>({
+    date:row.date,amount:Number(row.amount),ruleId:String(row.recurringRuleId),
+    source:'prediction',status:'Predicted',key:row.key,merchant:row.merchant})),
+  ...model.records(state()).filter(row=>!row.pending&&
+   row.date.slice(0,7)===billsSelectedMonth&&
+   (row.type==='income'||row.type==='refund'||row.type==='transfer')).flatMap(row=>{
+    const matching=T.historicalScheduleMatches(row,accounts,rules)
+     .filter(rule=>rule.kind==='movement'||rule.type!=='expense');
+    return matching.length===1?[{date:row.date,amount:Number(row.amount),
+     ruleId:String(matching[0].id),source:'actual',status:'Posted',
+     bankId:String(row.id),merchant:row.merchant}]:[];
+   })
+ ]:[];
  // Canonical prediction rows already include weekend-to-Friday posting,
  // individual date overrides and skipped occurrences. Show their actual dates
  // here; keep raw recurrence dates solely in the prediction-default editor.
@@ -1707,10 +1725,14 @@ function schedulesPage(bundle,s){
   monthlyByRule.get(row.ruleId).push(row);
  }
  const displayedByRule=billsSelectedMonth?monthByRule:upcomingByRule;
- const expenseRules=rules.filter(rule=>rule.kind!=='movement'&&rule.type==='expense');
+ const recurringRules=rules.filter(rule=>rule&&
+  (rule.kind==='movement'||['expense','income','refund','transfer'].includes(rule.type)));
+ const ruleKind=rule=>rule.kind==='movement'||rule.type==='transfer'?'transfer':
+  rule.type==='income'?'income':rule.type==='refund'?'refund':'expense';
  const indexed=rules.map((rule,index)=>({rule,index}));
  const visible=indexed.filter(({rule})=>
-  rule.kind!=='movement'&&rule.type==='expense'&&
+  recurringRules.includes(rule)&&
+  (scheduleKindFilter==='all'||ruleKind(rule)===scheduleKindFilter)&&
   (!billsSelectedMonth||displayedByRule.has(String(rule.id)))&&
   (scheduleAccount==='all'||[rule.accountId,rule.fromAccountId,rule.toAccountId]
    .some(id=>String(id||'')===scheduleAccount))&&
@@ -1759,6 +1781,7 @@ function schedulesPage(bundle,s){
    '<button class="btn" type="button" data-schedule-remove-estimate="'+id+'" data-estimate-index="'+i+
    '" aria-label="Clear old date-range estimate">Clear old rule</button></div>').join('');
   const number=index+1,title=escapeHTML(r.scheduleLabel||r.merchant),
+   kindLabel={expense:'Withdrawal',income:'Deposit',refund:'Refund',transfer:'Transfer'}[ruleKind(r)],
    pendingRemove=scheduleRemoveTarget===r.id,
    listedKind=scheduleListedKind(r,occurrence),
    listedCents=Math.round(Number(shownAmount)*100),
@@ -1776,7 +1799,8 @@ function schedulesPage(bundle,s){
     '<span class="schedule-row-identity ledger-row-description ledger-transaction-identity recurrence-row-name"><span class="schedule-number" aria-hidden="true">'+number+
      '</span><span class="schedule-row-title"><strong>'+title+'</strong>'+
      '<small>'+(String(r.scheduleLabel||r.merchant)===String(r.merchant)?'':
-      escapeHTML(r.merchant)+' · ')+escapeHTML(account?.name||'Account')+
+      escapeHTML(r.merchant)+' · ')+escapeHTML(kindLabel)+' · '+
+      escapeHTML(account?.name||'Account')+
       ' · '+escapeHTML(r.frequency)+(estimate.estimated?' · Estimated':'')+
       '</small></span></span>'+
     '<span class="schedule-row-amount ledger-row-amount ledger-transaction-amount"><strong>'+
@@ -1912,7 +1936,12 @@ function schedulesPage(bundle,s){
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Search payments" value="'+escapeHTML(scheduleSearch)+'"></label>'+
    '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
-    '<label class="minimal-control-label"><span class="visually-hidden">Sort repeating payments</span><select data-schedule-sort aria-label="Sort repeating payments">'+
+    '<label class="minimal-control-label"><span class="visually-hidden">Transaction type</span><select data-schedule-kind-filter aria-label="Recurring transaction type">'+
+    [['all','All types'],['expense','Withdrawals'],['income','Deposits'],['refund','Refunds'],
+     ['transfer','Transfers']].map(([v,l])=>
+     '<option value="'+v+'"'+(scheduleKindFilter===v?' selected':'')+'>'+l+'</option>').join('')+
+   '</select></label>'+
+   '<label class="minimal-control-label"><span class="visually-hidden">Sort repeating payments</span><select data-schedule-sort aria-label="Sort repeating payments">'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
      '<option value="'+v+'"'+(scheduleSort===v?' selected':'')+'>'+l+'</option>').join('')+
@@ -1927,8 +1956,8 @@ function schedulesPage(bundle,s){
   create+'<div class="schedule-grid">'+
    '<div class="schedule-list-summary">'+
     '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
-     'data-schedule-total-count="'+expenseRules.length+'">Showing '+visible.length+
-     ' of '+expenseRules.length+' expenses</p>'+
+     'data-schedule-total-count="'+recurringRules.length+'">Showing '+visible.length+
+     ' of '+recurringRules.length+' recurring plans</p>'+
     '<strong class="bills-repeating-sum" data-bills-repeating-total></strong></div>'+
    (cards||'<section class="panel">No predictions match. Change the filter or create a prediction.</section>')+
    '</div><p data-schedule-search-empty hidden class="schedule-search-empty">'+
@@ -5881,9 +5910,11 @@ document.addEventListener('change',async e=>{
  }
  const sorter=e.target.closest?.('[data-schedule-sort]'),
   filter=e.target.closest?.('[data-schedule-category-filter]'),
+  kindPicker=e.target.closest?.('[data-schedule-kind-filter]'),
   schedulePicker=e.target.name==='scheduleAccount'?e.target:null;
- if(sorter||filter||schedulePicker){
-  const nextSort=sorter?sorter.value:scheduleSort,
+ if(sorter||filter||kindPicker||schedulePicker){
+  const nextKind=kindPicker?kindPicker.value:scheduleKindFilter,
+   nextSort=sorter?sorter.value:scheduleSort,
    nextFilter=filter?filter.value:scheduleCategoryFilter,
    nextAccount=schedulePicker?schedulePicker.value:scheduleAccount,
    edit=document.querySelector('[data-schedule-edit-form],[data-schedule-new-form]');
@@ -5894,9 +5925,11 @@ document.addEventListener('change',async e=>{
    return field.value!==field.defaultValue;
   });
   if(dirty&&!window.confirm('Discard unsaved prediction edits to reorganize the list?')){
-   e.target.value=sorter?scheduleSort:schedulePicker?scheduleAccount:scheduleCategoryFilter;return;
+   e.target.value=sorter?scheduleSort:kindPicker?scheduleKindFilter:
+    schedulePicker?scheduleAccount:scheduleCategoryFilter;return;
   }
-  scheduleSort=nextSort;scheduleCategoryFilter=nextFilter;scheduleAccount=nextAccount;
+  scheduleSort=nextSort;scheduleKindFilter=nextKind;
+  scheduleCategoryFilter=nextFilter;scheduleAccount=nextAccount;
   scheduleMode='';scheduleTarget='';transactionDetail=null;render();return;
  }
  if(e.target.name==='separateSchedule'&&e.target.checked){
