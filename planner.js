@@ -1937,7 +1937,7 @@ function schedulesPage(bundle,s){
       cash(upcomingCents/100)+'</strong>'+
      '<span class="bills-upcoming-card-sum" data-bills-upcoming-card-sum>Card purchases '+
       cash(cardChargeCents/100)+'</span>'+
-     '<span class="bills-upcoming-total">'+upcomingBills.length+' planned entries · all activity types</span></div></div>'+
+     '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
     (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
     (showNewTransaction?newTransactionForm(s):'')+
     (groupedBills||'<p class="bills-upcoming-empty">No expected transactions in this period.</p>')+
@@ -1946,7 +1946,7 @@ function schedulesPage(bundle,s){
      (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+
    '</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
-  '<div class="bills-manage-heading"><div><h2 class="visually-hidden">Recurring bills</h2></div></div>'+
+  '<div class="bills-manage-heading"><div><h2 class="visually-hidden">Recurring transactions</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    billsMonthSelect(s.asOf,'repeating')+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
