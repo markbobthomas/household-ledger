@@ -183,7 +183,16 @@ function predictionIdentity(e){
  return e.transferGroupId?tools.keyMovement(e.transferGroupId):
   e.predictionKey||tools.keyEvent(e.id,e.accountId);
 }
-function predictionEntry(date,e,index,card,selected=false){
+// The selected account's projection remains the *only* balance authority.
+// Foreign-account activity is a read-only display overlay, indexed once when
+// opening Calendar; a card charge must not debit checking a second time.
+function outsideDay(date){return calendarContext?.outside?.get(date)||[]}
+function outsideLabel(e){
+ const type=e.kind==='card_purchase'?'Card purchase':
+  e.kind==='card_refund'?'Card refund':'Other account';
+ return type+' · '+String(e._calendarAccount||'Account')+' · no selected-balance change';
+}
+function predictionEntry(date,e,index,card,selected=false,other=false){
  const d=paymentDetail(e),key=esc(predictionIdentity(e));
  const entry='<button type="button" class="calendar-monthly-row calendar-detail-item ledger-transaction-row" '+
   'data-calendar-list-date="'+date+'" data-calendar-list-index="'+index+
@@ -194,8 +203,10 @@ function predictionEntry(date,e,index,card,selected=false){
   (calendarNote('forecast:'+predictionIdentity(e))?
    '<small class="transaction-note-subtitle">'+
     esc(calendarNote('forecast:'+predictionIdentity(e)))+'</small>':'')+
-  (e.amountEstimate?'<small>Estimated</small>':'')+'</span>'+
-  '<strong class="ledger-transaction-amount '+(signed(e,card)>0?'in':'out')+'">'+fullSigned(e,card)+'</strong>'+
+  (e.amountEstimate?'<small>Estimated</small>':'')+
+  (other?'<small class="calendar-account-context">'+esc(outsideLabel(e))+'</small>':'')+'</span>'+
+  '<strong class="ledger-transaction-amount '+(other?'external':signed(e,card)>0?'in':'out')+'">'+
+   (other&&e.kind==='card_purchase'?money(Number(e.amount)):fullSigned(e,card))+'</strong>'+
   '<span class="calendar-monthly-view ledger-transaction-action" aria-hidden="true">›</span></button>';
  return '<div class="calendar-monthly-entry calendar-detail-entry'+
   (selected?' selected-date':'')+'" data-calendar-entry-date="'+date+
@@ -204,7 +215,8 @@ function predictionEntry(date,e,index,card,selected=false){
    '">Payment calculation →</button>':'')+'</div>';
 }
 function dayDetail(point,card){
- const events=point.events||[],first=calendarContext.points[0],
+ const events=point.events||[],other=outsideDay(point.date),
+  first=calendarContext.points[0],
   previousIndex=calendarContext.points.indexOf(point)-1,
   previous=previousIndex>=0?calendarContext.points[previousIndex].balance:point.balance,
   gaps=calendarContext.gaps.get(point.date)||[],
@@ -217,15 +229,21 @@ function dayDetail(point,card){
  // Display exactly one arithmetic trail: yesterday's balance, each signed
  // canonical predicted movement, and the canonical end-of-day balance.
  // The transaction rows remain the same editable rows used elsewhere.
- const activity=events.length?
+ const activity=events.length||other.length?
   '<div class="calendar-day-reconciliation" data-calendar-reconciliation>'+
    '<div class="calendar-day-opening"><span>'+
     (previousIndex<0?'Reported starting balance':'Yesterday')+
     '</span><strong>'+money(previous)+'</strong></div>'+
    '<div class="calendar-day-transactions" aria-label="Predictions for selected date">'+
     
-    events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join('')+
+    (events.length?events.map((e,i)=>predictionEntry(point.date,e,i,card,true)).join(''):
+     '<p class="calendar-empty">No change to the selected account.</p>')+
    '</div>'+
+   (other.length?'<div class="calendar-outside-activity" data-calendar-outside-activity>'+
+    '<strong>Other accounts · excluded from this balance</strong>'+
+    '<div class="calendar-day-transactions" aria-label="Predictions on other accounts">'+
+    other.map((e,i)=>predictionEntry(point.date,e,i,Boolean(e._calendarCard),true,true)).join('')+
+    '</div></div>':'')+
    '<div class="calendar-day-net" data-calendar-net-change data-net-cents="'+netCents+'">'+
     '<span>Total change</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
    '</div>':
@@ -249,17 +267,23 @@ function dayDetail(point,card){
 }
 
 function monthlyPredictions(state){
- const rows=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
-  (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i})));
+ const primary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
+  (p.events||[]).map((e,i)=>({date:p.date,event:e,index:i,other:false,card:state.card}))),
+  secondary=state.points.filter(p=>p.date.startsWith(calendarMonth)).flatMap(p=>
+   outsideDay(p.date).map((e,i)=>({date:p.date,event:e,index:i,other:true,card:Boolean(e._calendarCard)}))),
+  rows=[...primary,...secondary].sort((a,b)=>a.date.localeCompare(b.date)||
+   Number(a.other)-Number(b.other)||a.event.merchant.localeCompare(b.event.merchant));
  const futureDays=state.points.filter(p=>p.date>state.asOf&&p.date.startsWith(calendarMonth)),
   from=futureDays[0]?.date,to=futureDays.at(-1)?.date,
   period=from?(shortDate(from)+(from===to?'':' – '+shortDate(to))):
    'No remaining forecast days';
  const credit=state.card;
- const deposits=rows.filter(r=>signed(r.event,credit)>0)
+ const deposits=primary.filter(r=>signed(r.event,credit)>0)
   .reduce((sum,r)=>sum+Number(r.event.amount||0),0),
-  withdrawals=rows.filter(r=>signed(r.event,credit)<=0)
-  .reduce((sum,r)=>sum+Number(r.event.amount||0),0);
+  withdrawals=primary.filter(r=>signed(r.event,credit)<=0)
+  .reduce((sum,r)=>sum+Number(r.event.amount||0),0),
+  otherCardCharges=secondary.filter(r=>r.event.kind==='card_purchase')
+   .reduce((sum,r)=>sum+Number(r.event.amount||0),0);
  const uncertain=!credit?(state.cardEstimates||[]).filter(c=>!c.eligible):[];
  const unplanned=uncertain.length?'<div class="calendar-monthly-unplanned"><strong>Card payments not yet included</strong>'+
   uncertain.map(c=>'<div><span>'+esc(c.cardName)+' · '+money(Number(c.observedCharges||0))+
@@ -271,9 +295,11 @@ function monthlyPredictions(state){
   '<p class="calendar-monthly-context">'+period+'</p>'+
   '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
-   esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span></div>'+
-  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index})=>
-    predictionEntry(date,e,index,credit,date===calendarDate)).join('')+
+   esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span>'+
+   (otherCardCharges?'<span data-calendar-other-card-total>Other card purchases: <strong>'+
+    money(otherCardCharges)+'</strong> · excluded from selected balance</span>':'')+'</div>'+
+  (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index,card,other})=>
+    predictionEntry(date,e,index,card,date===calendarDate,other)).join('')+
    '</div>':'<p class="calendar-empty">No upcoming predicted deposits or withdrawals for this account during the remaining forecast days this month.</p>')+
    '</details>'+unplanned;
 }
@@ -373,17 +399,24 @@ function calendarGrid(){
   }
   if(!p)return '<div class="calendar-outside" aria-hidden="true"><span>'+
    dom+'</span></div>';
-  const events=p.events||[],gaps=state.gaps.get(iso)||[],low=!state.card&&p.balance<state.cushion,
+  const events=p.events||[],other=outsideDay(iso),
+   all=[...events.map(e=>({event:e,external:false,card:state.card})),
+    ...other.map(e=>({event:e,external:true,card:Boolean(e._calendarCard)}))],
+   gaps=state.gaps.get(iso)||[],low=!state.card&&p.balance<state.cushion,
    negative=!state.card&&p.balance<0,
-   delta=events.slice(0,2).map(e=>{
-    const amount=(signed(e,state.card)>0?'+':'−')+shortMoney(Number(e.amount));
-    return '<span class="calendar-event '+(signed(e,state.card)>0?'in':'out')+
-     '" title="'+esc((e.merchant||'Predicted transaction')+' '+fullSigned(e,state.card))+'">'+
+   delta=all.slice(0,2).map(({event:e,external,card})=>{
+    const amount=external&&e.kind==='card_purchase'?
+     shortMoney(Number(e.amount)):
+     (signed(e,card)>0?'+':'−')+shortMoney(Number(e.amount));
+    return '<span class="calendar-event '+(external?'external':signed(e,card)>0?'in':'out')+
+     '" title="'+esc((e.merchant||'Predicted transaction')+' · '+
+      (external?outsideLabel(e):fullSigned(e,card)))+'">'+
      '<span class="calendar-event-name">'+esc(e.merchant||'Payment')+'</span>'+
      '<span class="calendar-event-amount">'+amount+'</span></span>';
    }).join('');
   const aria=dateLabel(iso)+', '+money(p.balance)+
-   (events.length?', '+events.length+' predicted transaction'+(events.length===1?'':'s'):
+   (all.length?', '+events.length+' selected-account and '+other.length+
+     ' other-account predicted transactions':
     ', no predicted transactions')+
    (negative?', below zero':low?', below cash cushion':'');
   return '<button type="button" class="calendar-day'+
@@ -397,7 +430,7 @@ function calendarGrid(){
     money(p.balance)+'</span><span class="calendar-money-narrow">'+
     shortMoney(p.balance)+'</span></span>'+
    '<span class="calendar-day-events">'+delta+
-    (events.length>2?'<span class="calendar-more">+'+(events.length-2)+' more</span>':'')+
+    (all.length>2?'<span class="calendar-more">+'+(all.length-2)+' more</span>':'')+
     (gaps.length?'<span class="calendar-unplanned">? '+esc(gaps[0].merchant)+'</span>':'')+
    '</span></button>';
  }).join('');
@@ -530,6 +563,28 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;calendarFocus=null;
    calendarEditor=null;calendarNotice='';calendarMonthExpanded=false;
  }
+ // Preserve every account's predicted activity without merging those flows
+ // into the chosen account's balance. A transfer gets one visible entry, not
+ // one per bank leg, and an own-account transfer isn't repeated externally.
+ const outside=new Map(),alreadyShownTransfers=new Set(
+  (derived?.events||[]).filter(e=>e.transferGroupId)
+   .map(e=>String(e.transferGroupId))),
+  through=series.at(-1)?.date||snapshot.asOf;
+ for(const account of bundle?.projection?.accounts||[]){
+  if(String(account.id)===String(chosen.id))continue;
+  for(const e of account.events||[]){
+   if(e.date<=snapshot.asOf||e.date>through)continue;
+   const movement=e.transferGroupId?String(e.transferGroupId):null;
+   if(movement&&alreadyShownTransfers.has(movement))continue;
+   if(movement)alreadyShownTransfers.add(movement);
+   const item={...e,_calendarAccount:account.name||account.id,
+    _calendarCard:account.type==='credit'};
+   if(!outside.has(e.date))outside.set(e.date,[]);
+   outside.get(e.date).push(item);
+  }
+ }
+ for(const rows of outside.values())
+  rows.sort((a,b)=>a.merchant.localeCompare(b.merchant)||a.accountId.localeCompare(b.accountId));
  const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf;
  for(let n=45;n>=1;n--){
   const dt=new Date(snapshot.asOf+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()-n);
@@ -539,7 +594,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   if(!actual.has(r.date)||String(accountOf?.(r,accounts)||r.accountId)!==String(chosen.id))continue;
   actual.get(r.date).push(r);
  }
- calendarContext={points:series,actual,coverage:null,asOf:snapshot.asOf,card:credit,prefs,
+ calendarContext={points:series,actual,outside,coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],
   paymentDetails:bundle?.payments?.paymentDetails||[],
   cushion:alertThreshold(prefs),accounts,
