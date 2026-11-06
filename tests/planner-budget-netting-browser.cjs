@@ -330,8 +330,16 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const recurring=page.locator('[data-schedule-card="fictional-recurring-card-pay"]');
-   assert.equal(await recurring.count(),0,
-    name+': card repayment is excluded from Repeating expense plans');
+   assert.equal(await recurring.count(),1,
+    name+': recurring card repayment is now visible in the complete Repeating catalog');
+   assert.equal(await recurring.getAttribute('data-schedule-listed-kind'),'transfers',
+    name+': card repayment stays a transfer, not a new expense');
+   await page.locator('[data-bills-tab="repeating"]').click();
+   await page.locator('[data-schedule-kind-filter]').selectOption('expense');
+   assert.equal(await page.locator('[data-schedule-card="fictional-recurring-card-pay"]').count(),0,
+    name+': expense-only filter correctly excludes linked card repayments');
+   await page.locator('[data-schedule-kind-filter]').selectOption('all');
+   await page.locator('[data-bills-tab="upcoming"]').click();
    assert.match(await page.locator('.bills-upcoming').innerText(),/Fictional Recurring Card Repayment/,
     name+': recurring card repayment is visible in Upcoming cash bills');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
