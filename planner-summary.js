@@ -31,6 +31,7 @@ function getPoints(derived,asOf,days){
 /* Daily calendar uses ONLY the same per-account daily projection and its
  * movements as the Summary balance graph and the Predictions tab. */
 let calendarMonth='',calendarDate='',calendarAccount='',calendarAsOf='',calendarContext=null;
+let calendarScope='all',calendarRenderInput=null;
 let calendarEditor=null,calendarNotice='',calendarFocus=null,reviewOpen=false,cardBreakdownId='';
 let calendarMonthExpanded=false;
 let calendarTipHidden=false;
@@ -146,6 +147,9 @@ function quickEditor(){
 function postedDay(date){
  const rows=calendarContext.actual.get(date)||[];
  const body=rows.map(t=>{
+  const account=String(root.HouseholdPlannerHistory?.accountOf?.(t,calendarContext.accounts)||
+   t.accountId||calendarContext.chosen),
+   accountName=calendarContext.accounts.find(a=>String(a.id)===account)?.name||account;
   const incoming=['income','refund'].includes(t.type)||t.type==='transfer'&&t.cashDirection==='in',
    matches=root.HouseholdPlannerTransactions.historicalScheduleMatches(
     t,calendarContext.accounts,calendarContext.prefs?.futureRecurringRules||[]),
@@ -154,13 +158,14 @@ function postedDay(date){
    '<span class="ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
    '<span class="calendar-transaction-name ledger-transaction-identity"><strong>'+
    esc(t.merchant||'Bank transaction')+'</strong>'+
-   (calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)]))?
+   (calendarNote('bank:'+JSON.stringify([account,String(t.id)]))?
     '<small class="transaction-note-subtitle">'+
-     esc(calendarNote('bank:'+JSON.stringify([String(calendarContext.chosen),String(t.id)])))+'</small>':'')+
-   '<small>'+(t.pending?'Pending':'Posted')+'</small></span>'+
+     esc(calendarNote('bank:'+JSON.stringify([account,String(t.id)])))+'</small>':'')+
+   '<small>'+(t.pending?'Pending':'Posted')+
+    (calendarContext.scope==='all'?' · '+esc(accountName):'')+'</small></span>'+
    '<strong class="ledger-transaction-amount '+(incoming?'in':'out')+'">'+(incoming?'+':'−')+money(Number(t.amount))+
    '</strong><button type="button" class="calendar-item-edit ledger-transaction-action" data-calendar-history-plan="'+
-   esc(t.id)+'" data-history-account="'+esc(calendarContext.chosen)+'">'+action+'</button></div>';
+   esc(t.id)+'" data-history-account="'+esc(account)+'">'+action+'</button></div>';
  }).join('');
  return '<section class="calendar-day-detail calendar-actual-detail" data-calendar-detail>'+
   '<div class="calendar-detail-heading"><div><span>BANK HISTORY · NOT A PREDICTION</span><strong>'+
@@ -250,7 +255,9 @@ function dayDetail(point,card){
      '<span>On other credit cards</span><strong>'+money(cardSpending)+'</strong></div>':'')+
     '</div>':'')+
    '<div class="calendar-day-net" data-calendar-net-change data-net-cents="'+netCents+'">'+
-    '<span>Selected account change</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
+    '<span>'+(calendarContext.scope==='all'?'Main checking change':
+      card?'Card debt change':'Selected account change')+
+    '</span><strong>'+netSign+money(Math.abs(netCents)/100)+'</strong></div>'+
    '</div>':
   '<p class="calendar-empty">No transactions predicted for this day.</p>';
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
@@ -475,7 +482,7 @@ function showCalendar(date,keepWeekend=false){
  return true;
 }
 
-function rawBalanceMarkup(account,real){
+function rawBalanceMarkup(account,real,allAccounts=false){
  const credit=String(account?.accountType||account?.type||'').toLowerCase()==='credit';
  // Checking displays only the bank's AVAILABLE cash. It is also the
  // projection's opening cash balance when supplied, so pending holds are
@@ -486,12 +493,14 @@ function rawBalanceMarkup(account,real){
  const n=raw===null||raw===undefined||raw===''||!Number.isFinite(Number(raw))?
   null:Number(raw);
  const title=credit?(real?'Actual Current Balance':'Sample Current Balance'):
+  allAccounts?(real?'Main checking · Available today':'Main checking · Sample available today'):
   (real?'Available today':'Sample available today');
  return '<div class="summary-bank"><small>'+title+'</small>'+
   '<strong class="'+(!credit&&n!==null&&n<0?'summary-bank-negative':'')+'" data-bank-balance-value'+(credit?
    ' data-bank-current-value':' data-bank-available-value')+'>'+
    (n===null?'Not reported':money(n))+'</strong>'+
-  '<small>'+(real?'Bank reported, not projected':'Sample data')+'</small></div>';
+  '<small>'+(real?'Bank reported, not projected':'Sample data')+
+   (allAccounts?' · '+esc(account?.name||'Main account'):'')+'</small></div>';
 }
 // Issued card statements and reconstructed statement estimates are already
 // differentiated by the canonical card obligations engine. Never substitute
@@ -549,11 +558,40 @@ function cardCalendarMetrics(bundle,cardId,asOf,points){
   ):'<button type="button" class="summary-low-date" data-view="settings">Set up statement →</button>')+
   '</div>';
 }
-function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false,view='calendar'}){
+function render(input){
+ let {snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,isReal=false,view='calendar'}=input;
+ // All accounts is the default; its balance is the MAIN CHECKING forecast,
+ // never a misleading sum of cash and credit-card liabilities.
+ if(view==='calendar'){
+  calendarRenderInput=input;
+  if(calendarScope!=='all'&&!accounts.some(a=>String(a.id)===calendarScope))
+   calendarScope='all';
+  const checkingAccount=a=>String(a.accountType||'').toLowerCase()==='checking'||
+   String(a.subtype||'').toLowerCase()==='checking'||
+   String(a.type||'').toLowerCase()==='checking';
+  const main=accounts.find(a=>String(a.id)===String(prefs?.primaryAccountId)&&
+    checkingAccount(a))||
+   accounts.find(checkingAccount)||
+   accounts.find(a=>String(a.accountType||a.type||'').toLowerCase()!=='credit')||chosen;
+  const display=calendarScope==='all'?main:
+   accounts.find(a=>String(a.id)===calendarScope)||main,
+   projected=bundle?.projection?.accounts?.find(a=>String(a.id)===String(display.id));
+  // Direct summary consumers may provide a verified projection without
+  // bundle.projection.accounts; do not discard its bank-status evidence.
+  // In the live app, authoritative account projections always take priority.
+  const sameInput=String(chosen?.id)===String(display.id);
+  chosen=sameInput?chosen:display;
+  derived=projected||(sameInput?derived:null);
+  fresh=projected?['fresh','simulated'].includes(projected.balanceStatus):
+   sameInput?Boolean(fresh):false;
+ }
+ const allAccounts=view==='calendar'&&calendarScope==='all';
  const credit=String(chosen.accountType||chosen.type)==='credit';
  trendDays=1095; // Chart reset after switching account or bank refresh.
- const options=accounts.map(a=>'<option value="'+esc(a.id)+'"'+
-  (String(a.id)===String(chosen.id)?' selected':'')+'>'+
+ const options=(view==='calendar'?
+  '<option value="all"'+(allAccounts?' selected':'')+'>All accounts</option>':'')+
+  accounts.map(a=>'<option value="'+esc(a.id)+'"'+
+  ((view==='calendar'?calendarScope===String(a.id):String(a.id)===String(chosen.id))?' selected':'')+'>'+
   esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
   '</option>').join('');
  const lead=()=>'<div class="summary-heading calendar-toolbar">'+
@@ -563,10 +601,19 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
  trendContext=series.length?{points:series,credit,prefs,derived}:null;
  trendSeries=series;
- if(calendarAccount!==String(chosen.id)||calendarAsOf!==snapshot.asOf){
-  calendarAccount=String(chosen.id);calendarAsOf=snapshot.asOf;
-  calendarMonth=snapshot.asOf.slice(0,7);calendarDate=snapshot.asOf;calendarFocus=null;
-   calendarEditor=null;calendarNotice='';calendarMonthExpanded=false;
+ // Preparing the separate Balance Trend page must not replace the active
+ // Calendar's account scope, joint-account overlay, selected month or day.
+ // Prepared navigation invokes both renders offscreen from the same bundle.
+ if(view==='calendar'){
+ if(calendarAsOf!==snapshot.asOf){
+  calendarAsOf=snapshot.asOf;calendarMonth=snapshot.asOf.slice(0,7);
+  calendarDate=snapshot.asOf;calendarFocus=null;
+ }
+
+ const accountScope=(allAccounts?'all':String(chosen.id))+'|'+String(chosen.id);
+ if(calendarAccount!==accountScope){
+  calendarAccount=accountScope;calendarEditor=null;calendarNotice='';
+  calendarMonthExpanded=false;
  }
  // Preserve every account's predicted activity without merging those flows
  // into the chosen account's balance. A transfer gets one visible entry, not
@@ -575,7 +622,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   (derived?.events||[]).filter(e=>e.transferGroupId)
    .map(e=>String(e.transferGroupId))),
   through=series.at(-1)?.date||snapshot.asOf;
- for(const account of bundle?.projection?.accounts||[]){
+ for(const account of (allAccounts?bundle?.projection?.accounts||[]:[])){
   if(String(account.id)===String(chosen.id))continue;
   for(const e of account.events||[]){
    if(e.date<=snapshot.asOf||e.date>through)continue;
@@ -596,16 +643,19 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   actual.set(dt.toISOString().slice(0,10),[]);
  }
  for(const r of bundle?.rows||[]){
-  if(!actual.has(r.date)||String(accountOf?.(r,accounts)||r.accountId)!==String(chosen.id))continue;
+  if(!actual.has(r.date)||!allAccounts&&
+    String(accountOf?.(r,accounts)||r.accountId)!==String(chosen.id))continue;
   actual.get(r.date).push(r);
  }
- calendarContext={points:series,actual,outside,coverage:null,asOf:snapshot.asOf,card:credit,prefs,
+ calendarContext={points:series,actual,outside,scope:allAccounts?'all':String(chosen.id),
+  coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],
   paymentDetails:bundle?.payments?.paymentDetails||[],
   cushion:alertThreshold(prefs),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
    series.at(-1).date,chosen.id,series):new Map()};
+ }
  if(series.length<2){
   const status=derived?.balanceStatus||(!bundle?.projection?'calculation':'unavailable');
   const reason=status==='unavailable'?'The bank did not report a usable current balance for this account.':
@@ -636,7 +686,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
    '<div class="summary-empty">A verified starting balance is needed for the trend. '+esc(reason)+
    ' <button type="button" class="btn" data-view="summary">Back to Home</button></div></div>';
   return '<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
-   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+
+   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid',allAccounts)+
    (credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,[]):
     '<div class="summary-minimum"><div class="summary-overline">3-year low</div>'+
     '<strong class="summary-low">Unverified</strong></div>')+'</div>'+
@@ -665,7 +715,7 @@ function render({snapshot,chosen,derived,bundle,days,prefs,accounts,fresh,ready,
   (listed.length>2?' · +'+(listed.length-2)+' more':''):'No dated transactions that day';
  const monthMinimum=credit?null:displayedMonthLow();
  const calendarHtml='<div class="planner-page summary-page"><section class="summary-stage">'+lead()+
-  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid')+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
+  '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid',allAccounts)+(credit?cardCalendarMetrics(bundle,chosen.id,snapshot.asOf,series):
    '<div class="summary-monthly" data-summary-month-low>'+
     '<div class="summary-overline">Lowest in shown month</div>'+
     '<strong class="summary-low'+balanceRiskClass(monthMinimum?.balance,prefs)+'" data-summary-month-low-value>'+
@@ -884,6 +934,20 @@ document.addEventListener('keydown',e=>{
 });
 
 root.HouseholdPlannerSummary={render,getPoints,knownGaps,
+ setCalendarScope:(value,redraw=true)=>{
+  // A scope change is display-only: reuse prepared projection and replace
+  // just the visible calendar without invalidating the other prepared tabs.
+  calendarScope=String(value||'all');
+  if(!redraw)return true;
+  if(!calendarRenderInput)return false;
+  const page=document.querySelector('.planner-page.summary-page:not(.trend-page)');
+  if(!page)return false;
+  const host=document.createElement('div');
+  host.innerHTML=render(calendarRenderInput);
+  if(!host.firstElementChild)return false;
+  page.replaceWith(host.firstElementChild);
+  return true;
+ },
  navigate:date=>showCalendar(date,true),
  currentDay:()=>calendarDate,
  currentEvent:index=>{

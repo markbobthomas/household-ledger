@@ -70,6 +70,27 @@ for(const days of [1095]){
  assert.match(html,/data-calendar-nav="1"/);
  assert.match(html,/End-of-day balance/);
 }
+// Plaid checking accounts can report accountType=depository and
+// subtype=checking. All accounts must never accidentally select the savings
+// balance merely because savings appears first in the linked account list.
+const reordered=[
+ {id:'savings-first',name:'Fictional Savings',accountType:'depository',
+  subtype:'savings',available:100,current:100},
+ {id:'checking-main',name:'Fictional Checking',accountType:'depository',
+  subtype:'checking',available:5000,current:5000}
+];
+tool.setCalendarScope('all',false);
+const checkingWithSubtype=tool.render({...opts,days:1095,accounts:reordered,chosen:reordered[0],
+ prefs:{...opts.prefs,primaryAccountId:'checking-main'},
+ bundle:{...opts.bundle,projection:{...opts.bundle.projection,accounts:[
+  {...derived,id:'checking-main',balanceStatus:'fresh'}
+ ]}}});
+assert.match(checkingWithSubtype,/Main checking.*available today/i,
+ 'All accounts explicitly shows the main checking available balance');
+assert.match(checkingWithSubtype,/data-bank-available-value>\$5,000\.00<\/strong>/,
+ 'The All reference is a Plaid checking subtype, not the first savings account');
+assert.doesNotMatch(checkingWithSubtype,/data-bank-available-value>\$100\.00<\/strong>/);
+
 // Lower future-month or day-91 balances must never replace October's low.
 const rolling=series.map((p,i)=>({...p,balance:i===65?1200:i===91?100:p.balance}));
 const rollingView=tool.render({...opts,days:1095,derived:{...derived,series:rolling}});

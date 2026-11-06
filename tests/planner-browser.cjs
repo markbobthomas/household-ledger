@@ -300,6 +300,10 @@ const {chromium,webkit}=require('playwright');
     'No instructional cards, setup text, or long-range disclosure above the Calendar');
    assert.equal(await page.locator('.summary-page > .summary-stage').count(),1,
     'The Calendar surface is the direct Home landing view');
+   assert.equal(await page.locator('#summary-account').inputValue(),'all',
+    'Calendar starts in All accounts while the visible balance is main checking');
+   assert.ok((await page.locator('.summary-bank').innerText()).includes('Main checking'),
+    'All accounts never pretends that adding card debt to cash is one combined balance');
    // Keep Home calendar days close to the account/month controls in desktop
    // Chromium and iPhone WebKit without hiding either financial metric.
    const homeGeometry=await page.evaluate(()=>{
@@ -2168,33 +2172,84 @@ const {chromium,webkit}=require('playwright');
    // information, without changing the selected checking balance arithmetic.
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
-   await page.locator('#summary-account').selectOption(visualAccount);
+   const mainCardLabel=await page.locator('[data-bank-balance-value]').innerText(),
+    beforeScope=await page.evaluate(()=>({
+     builds:window.HouseholdPlannerWorkStats().forecastBuilds,
+     generation:window.HouseholdPreparedViewGeneration()
+    }));
+   assert.equal(await page.locator('#summary-account').inputValue(),'all',
+    'All accounts remains the selected calendar mode after navigating away and back');
    if(await page.locator('[data-calendar-today]').isEnabled())
     await page.locator('[data-calendar-today]').click();
    await page.locator('[data-calendar-nav="1"]').click();
    const fictionalCardDay=page.locator('[data-calendar-day="2026-11-06"]');
    assert.equal(await fictionalCardDay.count(),1);
    assert.match(await fictionalCardDay.innerText(),/Fictional Dairy Delivery/,
-    'Projected card purchase appears on checking calendar');
+    'All accounts shows projected card purchases on the main checking calendar');
    await fictionalCardDay.click();
    const outsideRow=page.locator('[data-calendar-outside-activity] .calendar-monthly-row')
     .filter({hasText:'Fictional Dairy Delivery'}).first();
    assert.equal(await outsideRow.count(),1,
-    'Selected day lists the predicted card purchase on its associated card');
+    'All accounts shows card purchases without changing main checking');
    assert.match(await outsideRow.innerText(),/Card purchase.*no selected-balance change/s);
    assert.match(await page.locator('[data-calendar-day-card-spending]').innerText(),
     /On other credit cards.*\$18\.00/s,
-    'Selected day summarizes foreign card spending without treating it as checking cash');
+    'All accounts reports card spending separately from main checking');
    assert.match(await page.locator('[data-calendar-net-change]').innerText(),
-    /Selected account change/);
-   const netBefore=await page.locator('[data-calendar-net-change]').getAttribute('data-net-cents');
-   assert.equal(Number(netBefore),0,
-    'A day with only a card purchase has no checking withdrawal');
+    /Main checking change/);
+   assert.equal(Number(await page.locator('[data-calendar-net-change]').getAttribute('data-net-cents')),0,
+    'Card-only spending cannot debit main checking');
    await page.locator('[data-calendar-monthly] summary').click();
    assert.match(await page.locator('[data-calendar-monthly]').innerText(),/Fictional Dairy Delivery/,
-    'Monthly prediction drawer retains linked card purchases');
-   // Return to the original October date before existing typography checks.
-   // The test's next section explicitly inspects the October 23 day.
+    'All-accounts month drawer retains card purchases');
+
+   // Choosing a checking account now truly filters out other credit cards.
+   await page.locator('#summary-account').selectOption(visualAccount);
+   assert.equal(await page.locator('#summary-account').inputValue(),visualAccount);
+   assert.equal(await page.locator('.calendar-month-title').innerText(),'November 2026',
+    'Changing display scope preserves the selected calendar month');
+   assert.doesNotMatch(await page.locator('[data-calendar-day="2026-11-06"]').innerText(),
+    /Fictional Dairy Delivery/,
+    'Checking-only mode excludes a card purchase from the calendar cell');
+   await page.locator('[data-calendar-day="2026-11-06"]').click();
+   assert.equal(await page.locator('[data-calendar-outside-activity]').count(),0,
+    'Checking-only mode has no foreign-account activity section');
+   assert.equal(await page.locator('[data-bank-balance-value]').innerText(),mainCardLabel,
+    'Main checking balance is identical whether scoped or shown with all accounts');
+
+   // A credit card has its own debt and only its own dated charges.
+   const visualCard=await page.evaluate(()=>
+    window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
+     String(a.accountType||a.type).toLowerCase()==='credit')?.id||'');
+   assert.ok(visualCard,'Fictional card account exists for isolated card view');
+   await page.locator('#summary-account').selectOption(visualCard);
+   assert.equal(await page.locator('#summary-account').inputValue(),visualCard);
+   assert.equal(await page.locator('[data-bank-current-value]').count(),1,
+    'Credit-only mode shows card debt, not checking availability');
+   assert.match(await page.locator('[data-calendar-day="2026-11-06"]').innerText(),
+    /Fictional Dairy Delivery/,
+    'Credit-only Calendar shows its own repeating charge');
+   await page.locator('[data-calendar-day="2026-11-06"]').click();
+   assert.equal(await page.locator('[data-calendar-outside-activity]').count(),0,
+    'Credit-only mode does not show checking or unrelated cards');
+   assert.ok(await page.locator('[data-calendar-detail] .calendar-monthly-row')
+    .filter({hasText:'Fictional Dairy Delivery'}).count()>0,
+    'Credit card charges appear in the selected account transaction rows');
+   assert.match(await page.locator('[data-calendar-net-change]').innerText(),/Card debt change/);
+
+   // Returning to All accounts restores the joint view, without recomputing
+   // the three-year forecast or invalidating prepared navigation destinations.
+   await page.locator('#summary-account').selectOption('all');
+   assert.match(await page.locator('[data-calendar-day="2026-11-06"]').innerText(),
+    /Fictional Dairy Delivery/);
+   assert.equal(await page.locator('[data-bank-balance-value]').innerText(),mainCardLabel);
+   const afterScope=await page.evaluate(()=>({
+    builds:window.HouseholdPlannerWorkStats().forecastBuilds,
+    generation:window.HouseholdPreparedViewGeneration()
+   }));
+   assert.deepEqual(afterScope,beforeScope,
+    'Account display filtering cannot invalidate prepared pages or rebuild the forecast');
+   // Return to original October before subsequent visual typography checks.
    await page.locator('[data-calendar-today]').click();
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});

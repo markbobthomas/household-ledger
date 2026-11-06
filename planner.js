@@ -4038,7 +4038,9 @@ document.addEventListener('click',async e=>{
   if(!activeAccounts(s).some(a=>String(a.id)===accountId)){
    setNotice('This payment needs a valid connected account.');return;
   }
-  selectedAccount=accountId;activeTab='summary';scheduleMode='';scheduleTarget='';
+  selectedAccount=accountId;
+  window.HouseholdPlannerSummary?.setCalendarScope?.(accountId,false);
+  activeTab='summary';scheduleMode='';scheduleTarget='';
   transactionDetail=null;render();
   window.HouseholdPlannerSummary?.navigate?.(row.date);
   document.querySelector('[data-calendar-day="'+row.date+'"]')?.scrollIntoView?.({block:'center'});
@@ -5820,6 +5822,10 @@ document.addEventListener('change',async e=>{
   return;
  }
  if(e.target.id==='summary-account'){
+  // Calendar account scope is presentation-only. Use the already prepared
+  // canonical forecast; do not rebuild every tab on a dropdown change.
+  if(activeTab==='summary'&&
+    window.HouseholdPlannerSummary?.setCalendarScope?.(e.target.value))return;
   selectedAccount=e.target.value;render();return;
  }
 });
@@ -5832,9 +5838,9 @@ document.addEventListener('change',e=>{
 if(available()){
  window.HouseholdLiveSource.bind({
   render,
-  enterReal(newState,newSnapshot,prepared){forecastCache=null;serverPreparedForecast=prepared||null;liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;latestError='';clearAudit()},
-  enterDemo(){forecastCache=null;serverPreparedForecast=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()},
-  enterUnavailable(){forecastCache=null;serverPreparedForecast=null;liveState=null;liveSnapshot=null;selectedAccount=null;clearAudit()}
+  enterReal(newState,newSnapshot,prepared){forecastCache=null;serverPreparedForecast=prepared||null;liveState=newState;liveSnapshot=newSnapshot;selectedAccount=null;window.HouseholdPlannerSummary?.setCalendarScope?.('all',false);latestError='';clearAudit()},
+  enterDemo(){forecastCache=null;serverPreparedForecast=null;liveState=null;liveSnapshot=null;selectedAccount=null;window.HouseholdPlannerSummary?.setCalendarScope?.('all',false);clearAudit()},
+  enterUnavailable(){forecastCache=null;serverPreparedForecast=null;liveState=null;liveSnapshot=null;selectedAccount=null;window.HouseholdPlannerSummary?.setCalendarScope?.('all',false);clearAudit()}
  });
 }else{
  $('ledger-mode-switch').querySelector('option[value="real"]').disabled=true;
