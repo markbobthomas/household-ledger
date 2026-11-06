@@ -6810,3 +6810,14 @@ a:hover{color:#166e61}
 .schedule-page .schedule-row-title small{
  display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
+
+/* Income, outflows and transfers are independent totals. On narrow screens
+   the full summary must wrap rather than forcing a 400px unbreakable line. */
+@media(max-width:650px){
+ .schedule-page .schedule-list-summary{min-width:0;max-width:100%;box-sizing:border-box}
+ .schedule-page .bills-repeating-sum{
+  flex:1 1 100%;min-width:0;max-width:100%;
+  white-space:normal!important;overflow-wrap:anywhere;
+  text-align:right;line-height:1.35;
+ }
+}
