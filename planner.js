@@ -28,8 +28,8 @@ const available=()=>Boolean(window.HouseholdLiveSource);
 const OPENING_PAGE_KEY='household-ledger-opening-page-v1';
 const OPENING_PAGES=[
  ['summary','Home'],['history','Spending'],['schedules','Bills'],
- ['activity','Activity'],['reviews','Things to check'],
- ['trend','Balance Trend'],['transactions','All upcoming predictions'],
+ ['activity','Transactions · Posted'],['reviews','Things to check'],
+ ['trend','Home · Balance trend'],['transactions','Transactions · Planned'],
  ['settings','Settings']
 ];
 const preferredOpeningPage=()=>{
@@ -55,6 +55,20 @@ try{
 const horizon=1095; // Three-year modeled floor. No user-selectable time windows.
 // Human-facing list number. Canonical rule IDs remain unchanged. Numbers follow
 // the saved list order and are recalculated if schedules are removed/reordered.
+// Prepared subviews share one primary destination and one financial source.
+function navigationSelected(button,view){
+ const target=button.dataset.view;
+ if(button.closest?.('.planner-nav-primary'))
+  return target===(view==='transactions'?'activity':view==='trend'?'summary':view);
+ return target===view;
+}
+function transactionsViewTabs(current){
+ return '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Transactions views">'+
+  [['activity','Posted'],['transactions','Planned']].map(([id,name])=>
+   '<button type="button" class="history-subtab'+(current===id?' active':'')+
+    '" data-view="'+id+'" aria-pressed="'+(current===id)+'">'+name+'</button>').join('')+
+  '</nav>';
+}
 function scheduleListNumber(id){
  const rules=state().predictions?.futureRecurringRules||[];
  const index=rules.findIndex(r=>String(r.id)===String(id));
@@ -1849,13 +1863,13 @@ function schedulesPage(bundle,s){
  }).join('');
  return '<div class="planner-page schedule-page">'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Bills views">'+
-   [['upcoming','Upcoming'],['repeating','Repeating'],['statements','Statements']].map(([id,name])=>
+   [['upcoming','Upcoming'],['repeating','Recurring'],['statements','Statements']].map(([id,name])=>
     '<button type="button" class="history-subtab'+(billsPane===id?' active':'')+
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
-   '<div class="bills-heading"><div><h2>Upcoming bills</h2></div>'+
+   '<div class="bills-heading"><div><h2 class="visually-hidden">Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
     '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Checking '+
       cash(upcomingCents/100)+'</strong>'+
@@ -1866,7 +1880,7 @@ function schedulesPage(bundle,s){
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
-  '<div class="bills-manage-heading"><div><h2>Repeating payments</h2></div></div>'+
+  '<div class="bills-manage-heading"><div><h2 class="visually-hidden">Recurring bills</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
    billsMonthSelect(s.asOf,'repeating')+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
@@ -1914,7 +1928,8 @@ function transactionsPage(bundle,s){
    ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
  return '<div class="planner-page transactions-page">'+
-  '<div class="page-heading"><div><h2>Predictions</h2></div>'+
+  transactionsViewTabs('transactions')+
+  '<div class="page-heading"><div><h2>Planned transactions</h2></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -2567,7 +2582,7 @@ function historyRecords(s){
 // The existing Summary stays read-only and uses the unchanged canonical totals.
 function spendingTabNav(active){
  return '<nav class="history-subtabs spending-tabs" aria-label="Spending views">'+
-  [['categories','Budget'],['merchants','Merchants'],['sizes','Purchase sizes'],['summary','Summary']]
+  [['categories','Budget'],['merchants','Merchants'],['sizes','Purchase sizes'],['summary','Month insights']]
    .map(([id,name])=>'<button type="button" class="history-subtab'+
     (active===id?' active':'')+'" data-history-view="'+id+
     '" aria-pressed="'+(active===id)+'">'+name+'</button>')
@@ -2802,7 +2817,7 @@ function historyPage(bundle,s){
  })();
  }
  return '<div class="planner-page history-page">'+
-  (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
+  (activeTab==='activity'?transactionsViewTabs('activity'):'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -3192,7 +3207,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       '<option value="'+value+'"'+(reviewSort===value?' selected':'')+'>'+label+'</option>').join('')+
     '</select></label></div>'+
   '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
-   [['categories','Categories'],['payments','Payments'],['earlier','Earlier'],['suggestions','Suggestions']]
+   [['categories','Categories'],['payments','Missing payments'],['earlier','Old forecasts'],['suggestions','Suggestions']]
     .map(([id,name])=>'<button type="button" class="history-subtab'+
      (reviewPane===id?' active':'')+(paneCounts[id]>0?' review-tab-pending':'')+
      '" data-review-tab="'+id+'" aria-pressed="'+
@@ -3593,7 +3608,7 @@ function activatePreparedView(view,from,fromHistoryView){
  preparedViews.delete(view);
  root.replaceChildren(entry.element);
  document.querySelectorAll('[data-view]').forEach(button=>{
-  const current=button.dataset.view===view;
+  const current=navigationSelected(button,view);
   button.classList.toggle('active',current);
   if(current)button.setAttribute('aria-current','page');
   else button.removeAttribute('aria-current');
@@ -3672,7 +3687,7 @@ function render({navigationOnly=false}={}){
  $('refresh-bank').hidden=!live();
  $('audit-launch').hidden=busy||!activeAccounts(s).length||activeTab!=='settings';
  document.querySelectorAll('[data-view]').forEach(button=>{
-  const active=button.dataset.view===activeTab;
+  const active=navigationSelected(button,activeTab);
   button.classList.toggle('active',active);
   if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
  });
