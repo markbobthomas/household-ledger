@@ -60,15 +60,8 @@ const horizon=1095; // Three-year modeled floor. No user-selectable time windows
 function navigationSelected(button,view){
  const target=button.dataset.view;
  if(button.closest?.('.planner-nav-primary'))
-  return target===(view==='transactions'?'activity':view==='trend'?'summary':view);
+  return target===(view==='transactions'?'schedules':view==='trend'?'summary':view);
  return target===view;
-}
-function transactionsViewTabs(current){
- return '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Transactions views">'+
-  [['activity','Posted'],['transactions','Planned']].map(([id,name])=>
-   '<button type="button" class="history-subtab'+(current===id?' active':'')+
-    '" data-view="'+id+'" aria-pressed="'+(current===id)+'">'+name+'</button>').join('')+
-  '</nav>';
 }
 function scheduleListNumber(id){
  const rules=state().predictions?.futureRecurringRules||[];
@@ -2830,7 +2823,7 @@ function historyPage(bundle,s){
    ungrouped.join('');
  })();
  }
- return '<div class="planner-page history-page">'+
+ return '<div class="planner-page history-page'+(displayView==='list'?' posted-transactions-page':'')+'">'+
   (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
@@ -3535,7 +3528,6 @@ function pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData){
   activeTab==='recap'?financialRecapPage(bundle,s):
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
-  activeTab==='transactions'?transactionsPage(bundle,s):
   activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
    summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
    (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
@@ -4427,8 +4419,9 @@ document.addEventListener('click',async e=>{
    }else render({navigationOnly:true});
    return;
   }
+  if(target==='transactions'){billsPane='upcoming';billsUpcomingScope='all';}
   const destination=target==='settings-card'?'settings':
-   target==='transactions'?'transactions':'reviews';
+   target==='transactions'?'schedules':'reviews';
   const nav=document.querySelector('.planner-nav-primary [data-view="'+destination+'"]')||
    document.querySelector('[data-view="'+destination+'"]');
   if(nav&&activeTab!==destination)nav.click();
@@ -4496,7 +4489,12 @@ document.addEventListener('click',async e=>{
    historyCategoryFilter='';historySizeFilter=-1;
    historyMerchantFilter='';historyPurchaseDrill=false;historyMonthPickerOpen=false;
   }
-  activeTab=view.dataset.view==='recap'?'history':view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
+  if(view.dataset.view==='transactions'){
+   billsPane='upcoming';billsUpcomingScope='all';
+  }
+  activeTab=view.dataset.view==='recap'?'history':
+   view.dataset.view==='transactions'?'schedules':view.dataset.view;
+  transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
@@ -4813,7 +4811,8 @@ document.addEventListener('click',async e=>{
  if(mortgageReview){
   const m=lastMissingMortgages.find(x=>x.id===mortgageReview.dataset.reviewMortgage);
   if(!m){setNotice('Mortgage history changed. Refresh and try again.');return}
-  mortgageDraft={...m};activeTab='transactions';transactionFilter=m.accountId;
+  mortgageDraft={...m};activeTab='schedules';billsPane='upcoming';
+  billsUpcomingScope='all';transactionFilter=m.accountId;
   showNewTransaction=true;editingKey='';transactionNotice='';
   render();
   $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});
