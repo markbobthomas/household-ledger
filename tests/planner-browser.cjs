@@ -1653,8 +1653,9 @@ const {chromium,webkit}=require('playwright');
     await page.locator('.transaction-detail-close').click();
    }
 
-   await page.locator('#planner-menu>summary').click();
-   await page.locator('#planner-menu [data-view="transactions"]').click();
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.locator('.transactions-page [data-view="transactions"]').count()===0 &&
+    await page.locator('.history-page [data-view="transactions"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    if(await page.locator('.unified-payment-trigger.ledger-transaction-row').count())
     await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
