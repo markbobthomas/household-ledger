@@ -80,6 +80,8 @@ const {chromium,webkit}=require('playwright');
    }));
    assert.deepEqual(afterNested,beforeNested,
     'Unified Upcoming filters switch prepared DOM without recalculating cash balances');
+   // Preserve the selected-day responsive layout checks at all device widths.
+   for(const width of [320,390,...(device.startsWith('iPhone')?[]:[1280])]){
    await page.setViewportSize({width,height:844});
     const geometry=await page.evaluate(()=>{
      const host=document.querySelector('.summary-page');
