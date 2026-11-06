@@ -22,6 +22,63 @@ const money=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency
 const dateLabel=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 const shortDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[c]));
+const validDay=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&
+ !Number.isNaN(Date.parse(d+'T12:00:00Z'));
+function addDay(iso,offset){
+ const date=new Date(iso+'T12:00:00Z');date.setUTCDate(date.getUTCDate()+offset);
+ return date.toISOString().slice(0,10);
+}
+function historicalCalendarStart(asOf,rows){
+ const limit=new Date(asOf+'T12:00:00Z');limit.setUTCMonth(limit.getUTCMonth()-24);
+ const earliestLimit=limit.toISOString().slice(0,7)+'-01';
+ const previousMonth=new Date(asOf.slice(0,7)+'-15T12:00:00Z');
+ previousMonth.setUTCMonth(previousMonth.getUTCMonth()-1);
+ const prior=previousMonth.toISOString().slice(0,7)+'-01';
+ const oldest=(rows||[]).filter(t=>validDay(t.date)&&t.date<asOf)
+  .reduce((d,t)=>!d||t.date<d?t.date:d,'');
+ return [earliestLimit,[prior,oldest?oldest.slice(0,7)+'-01':prior]
+  .reduce((a,b)=>a<b?a:b)].reduce((a,b)=>a>b?a:b);
+}
+// Actual transactions are trustworthy *activity*, not daily bank balances.
+// Plaid supplies a current posted balance but no per-day historical snapshots.
+// A daily history estimate is therefore reconstructed backward from CURRENT,
+// using only non-pending posted transactions on the chosen account. Never
+// describe this calculated balance as a bank-verified historical actual.
+function reconstructedHistory(account,derived,rows,asOf,start,accountOf,accounts){
+ const history=new Map(),current=account?.current;
+ if(current===null||current===undefined||current===''||
+  !Number.isFinite(Number(current))||
+  !['fresh','simulated'].includes(derived?.balanceStatus))return history;
+ const mine=(rows||[]).filter(t=>validDay(t.date)&&t.date<=asOf&&
+  String(accountOf?.(t,accounts)||t.accountId||'')===String(account.id)&&
+  !t.pending),
+  first=mine.reduce((d,t)=>!d||t.date<d?t.date:d,'');
+ if(!first)return history;
+ const changes=new Map();
+ let unknown=false;
+ const card=String(account.accountType||account.type).toLowerCase()==='credit';
+ for(const t of mine){
+  const amount=Number(t.amount);
+  const direction=['in','out'].includes(t.cashDirection)?t.cashDirection:
+   Number.isFinite(Number(t.source?.plaidAmount))&&
+   t.source?.plaidAmount!==undefined&&t.source?.plaidAmount!==null?
+    (Number(t.source.plaidAmount)>0?'out':Number(t.source.plaidAmount)<0?'in':''):
+   ['income','refund'].includes(t.type)?'in':
+   t.type==='expense'?'out':'';
+  if(!Number.isFinite(amount)||amount<0||!direction){unknown=true;break}
+  const sign=card?(direction==='out'?1:-1):(direction==='in'?1:-1);
+  changes.set(t.date,(changes.get(t.date)||0)+sign*Math.round(amount*100));
+ }
+ if(unknown)return history;
+ let cents=Math.round(Number(current)*100);
+ for(let date=asOf;date>=start;date=addDay(date,-1)){
+  if(date<asOf&&date>=first)
+   history.set(date,{date,balance:cents/100,kind:'reconstructed'});
+  cents-=changes.get(date)||0;
+ }
+ return history;
+}
+
 function getPoints(derived,asOf,days){
  const end=new Date(asOf+'T12:00:00Z');end.setUTCDate(end.getUTCDate()+days);
  const through=end.toISOString().slice(0,10);
