@@ -282,7 +282,11 @@ const {chromium,webkit}=require('playwright');
     'Current destination is the calm mint-tinted pill');
    assert.notEqual(newTheme.mark,'none','Ledger has the new soft brand mark');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
-    ['Home','Transactions','Bills','Spending']);
+    ['Home','Spending','Bills','Transactions']);
+   assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').evaluateAll(
+    nodes=>nodes.map(node=>node.dataset.view)),
+    ['summary','history','schedules','activity'],
+    'Desktop and iPhone use the same navigation order and destination mapping');
    assert.equal(await page.locator('.topbar [data-view="reviews"]').count(),1,
     'Things to check is a visible action outside three main destinations');
    assert.equal(await page.locator('.topbar .top-actions > #planner-save-feedback').count(),1,
