@@ -74,8 +74,10 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     'The Real preference is initialized on this new device');
    assert.match(await page.locator('#planner-main').innerText(),/\$300\.10/,
     'The private Home shows the fictional bank-reported available balance on the new device');
-   assert.match(await page.locator('#summary-account option:checked').textContent(),/Test Checking.*Main/,
-    'The server-saved main-account preference is restored on every device');
+   assert.equal(await page.locator('#summary-account').inputValue(),'all',
+    'All accounts is the default display scope even on a newly signed-in device');
+   assert.match(await page.locator('#summary-account option').filter({hasText:/Test Checking.*Main/}).textContent(),
+    /Test Checking.*Main/,'The server-saved main checking is marked on every device');
    if(!mobile){
     // Only a deliberate Demo choice should be local to this browser. It must
     // survive reload without deleting or overwriting saved household state.
@@ -88,8 +90,11 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     await page.locator('#ledger-mode-switch').selectOption('real');
     await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK',
      null,{timeout:30000});
-    assert.match(await page.locator('#summary-account option:checked').textContent(),/Test Checking.*Main/,
-     'Switching back to Real restores the same private account and its saved main-account setting');
+    assert.equal(await page.locator('#summary-account').inputValue(),'all',
+     'Returning to Real defaults Calendar to All accounts');
+    assert.match(await page.locator('#summary-account option').filter({hasText:/Test Checking.*Main/}).textContent(),
+     /Test Checking.*Main/,
+     'Returning to Real retains the main checking preference under All accounts');
    }
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
    await page.locator('[data-remove-account="acct-2"]').waitFor();
