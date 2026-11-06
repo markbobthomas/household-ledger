@@ -338,8 +338,17 @@ function postedWithinMatchWindow(rule,bank,date,amount,explicit=false,overdue=fa
   (rule.frequency==='weekly'?2:7);
  const gap=Math.abs(daysBetween(bank.date,date)),
   cycle=['monthly','quarterly','semiannual','annual'].includes(rule.frequency)&&
-   bank.date.slice(0,7)===date.slice(0,7)&&gap<=21;
- return gap<=(explicit?Math.max(window.before,14):window.before)||cycle;
+   bank.date.slice(0,7)===date.slice(0,7)&&gap<=21,
+  cadenceDays={weekly:7,biweekly:14,'every-4-weeks':28}[rule.frequency]||0,
+  // A linked bank example is strong PAYEE evidence, not proof that a payment
+  // made in the preceding weekly/biweekly cycle has satisfied the next one.
+  // Never widen the automatic posting match past half a short recurrence
+  // cycle; otherwise last week's card charge can silently erase this week's.
+  // An owner-saved custom window still takes precedence above.
+  explicitDays=cadenceDays?
+   Math.min(Math.max(window.before,14),Math.floor((cadenceDays-1)/2)):
+   Math.max(window.before,14);
+ return gap<=(explicit?explicitDays:window.before)||cycle;
 }
 function savedMatchBounds(data,old){
  const get=(name,integer)=>{
