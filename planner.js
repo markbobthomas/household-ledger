@@ -29,11 +29,12 @@ const OPENING_PAGE_KEY='household-ledger-opening-page-v1';
 const OPENING_PAGES=[
  ['summary','Home'],['history','Spending'],['schedules','Bills'],
  ['activity','Transactions · Posted'],['reviews','Things to check'],
- ['trend','Home · Balance trend'],['transactions','Transactions · Planned'],
- ['settings','Settings']
+ ['trend','Home · Balance trend'],['settings','Settings']
 ];
 const preferredOpeningPage=()=>{
  const saved=localStorage.getItem(OPENING_PAGE_KEY);
+ // Legacy Planned startup preference migrates to the unified Upcoming page.
+ if(saved==='transactions')return 'schedules';
  return OPENING_PAGES.some(([id])=>id===saved)?saved:'summary';
 };
 const rawDemo=window.createHouseholdLedgerDemo?window.createHouseholdLedgerDemo():{transactions:[],items:[]};
@@ -59,15 +60,8 @@ const horizon=1095; // Three-year modeled floor. No user-selectable time windows
 function navigationSelected(button,view){
  const target=button.dataset.view;
  if(button.closest?.('.planner-nav-primary'))
-  return target===(view==='transactions'?'activity':view==='trend'?'summary':view);
+  return target===(view==='transactions'?'schedules':view==='trend'?'summary':view);
  return target===view;
-}
-function transactionsViewTabs(current){
- return '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Transactions views">'+
-  [['activity','Posted'],['transactions','Planned']].map(([id,name])=>
-   '<button type="button" class="history-subtab'+(current===id?' active':'')+
-    '" data-view="'+id+'" aria-pressed="'+(current===id)+'">'+name+'</button>').join('')+
-  '</nav>';
 }
 function scheduleListNumber(id){
  const rules=state().predictions?.futureRecurringRules||[];
@@ -112,7 +106,7 @@ let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=fal
 const historySelected=new Set();
 let historyExpandedId='',historyExpandedAccount='',historyExpandedRuleId='';
 let scheduleMode='',scheduleTarget='',schedulePreset=null,scheduleNotice='',scheduleRemoveTarget='';
-let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
+let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsUpcomingScope=localStorage.getItem(OPENING_PAGE_KEY)==='transactions'?'all':'bills',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
@@ -1876,6 +1870,11 @@ function schedulesPage(bundle,s){
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
+  '<div class="upcoming-scope-selector" role="group" aria-label="Upcoming transaction filter">'+
+   [['bills','Bills only'],['all','All expected']].map(([id,name])=>
+    '<button type="button" class="history-subtab'+(billsUpcomingScope===id?' active':'')+
+    '" data-upcoming-filter="'+id+'" aria-pressed="'+(billsUpcomingScope===id)+'">'+name+'</button>').join('')+'</div>'+
+  '<div data-upcoming-scope="bills"'+(billsUpcomingScope==='bills'?'':' hidden')+'>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming forecast bills">'+
    '<div class="bills-heading"><div><h2 class="visually-hidden">Upcoming bills</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
@@ -1887,6 +1886,7 @@ function schedulesPage(bundle,s){
    (groupedBills||'<p class="bills-upcoming-empty">No upcoming bills in this period.</p>')+
    (billsSelectedMonth?'':'<button type="button" class="bills-range-toggle" data-bills-more>'+
     (billsExpanded?'Show next 30 days':'Show next 90 days')+'</button>')+'</section></div>'+
+  '<div data-upcoming-scope="all"'+(billsUpcomingScope==='all'?'':' hidden')+'>'+transactionsPage(bundle,s)+'</div></div>'+
   '<div data-bills-pane="repeating"'+(billsPane==='repeating'?'':' hidden')+'>'+
   '<div class="bills-manage-heading"><div><h2 class="visually-hidden">Recurring bills</h2></div></div>'+
   '<div class="schedule-toolbar ledger-toolbar" aria-label="Prediction organization">'+
@@ -1935,9 +1935,8 @@ function transactionsPage(bundle,s){
   skipped.map(([key,v])=>'<div class="future-skip-line">'+escapeHTML(v.label||'Predicted transaction')+
    ' · '+escapeHTML(v.date||'')+' <button type="button" class="btn" data-restore-future="'+
    escapeHTML(key)+'">Restore</button></div>').join('')+'</details>':'';
- return '<div class="planner-page transactions-page">'+
-  transactionsViewTabs('transactions')+
-  '<div class="page-heading"><div><h2>Planned transactions</h2></div>'+
+ return '<div class="planner-page transactions-page upcoming-all-page">'+
+  '<div class="page-heading"><div><h2 class="visually-hidden">All expected transactions</h2></div>'+
    '<button type="button" class="btn primary" data-show-new>+ Add transaction</button></div>'+
   '<section class="panel transaction-panel"><div class="future-toolbar"><label>Account '+opts+'</label>'+
    '<span class="status-tag">'+visible.length+' PREDICTED</span></div>'+
@@ -2824,8 +2823,8 @@ function historyPage(bundle,s){
    ungrouped.join('');
  })();
  }
- return '<div class="planner-page history-page">'+
-  (activeTab==='activity'?transactionsViewTabs('activity'):'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
+ return '<div class="planner-page history-page'+(displayView==='list'?' posted-transactions-page':'')+'">'+
+  (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
    (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
@@ -3480,7 +3479,7 @@ function settingsPage(bundle,s,chosen){
 const preparedViews=new Map();
 const preparedHistoryViews=new Map();
 const spendingDestinations=['categories','merchants','sizes','summary'];
-const preparedDestinations=['summary','history','schedules','activity','reviews','settings','transactions','trend'];
+const preparedDestinations=['summary','history','schedules','activity','reviews','settings','trend'];
 // Prepared financial pages stay in this browser tab's memory only. No stored HTML,
 // service worker, localStorage data snapshots or additional server requests.
 let preparedEpoch=0,preparedContext=null,preparedNotice=null,preparedReady=false;
@@ -3529,7 +3528,6 @@ function pageMarkup(bundle,s,selectedSource,derived,fresh,reviewData){
   activeTab==='recap'?financialRecapPage(bundle,s):
   activeTab==='schedules'?schedulesPage(bundle,s):
   activeTab==='reviews'?reviewsPage(bundle,s,reviewData||reviewQueue(bundle,s)):
-  activeTab==='transactions'?transactionsPage(bundle,s):
   activeTab==='trend'&&window.HouseholdPlannerSummary?.render?
    summaryPage(bundle,s,selectedSource,derived,fresh,'trend'):
    (activeTab==='overview'?overviewPage:(window.HouseholdPlannerSummary?.render?summaryPage:overviewPage))(bundle,s,selectedSource,derived,fresh);
@@ -3641,7 +3639,13 @@ function activatePreparedView(view,from,fromHistoryView){
   updateHistoryLinks(form);
  }
  for(const form of root.querySelectorAll('[data-card-rule]'))configureCardFields(form);
- if(view==='schedules')applyScheduleSearch(root);
+ if(view==='schedules'){
+  applyScheduleSearch(root);
+  // Cached Bills pages may have been created before a linked action chose
+  // the All expected scope. Synchronize only hidden/pressed DOM attributes.
+  switchExistingPane('data-bills-tab','data-bills-pane',billsPane);
+  switchExistingPane('data-upcoming-filter','data-upcoming-scope',billsUpcomingScope);
+ }
  if(view==='history'){
   // Budget is now visible, not a detached Spending subpage.
   preparedHistoryViews.delete('categories');
@@ -4421,12 +4425,17 @@ document.addEventListener('click',async e=>{
    }else render({navigationOnly:true});
    return;
   }
+  if(target==='transactions'){billsPane='upcoming';billsUpcomingScope='all';}
   const destination=target==='settings-card'?'settings':
-   target==='transactions'?'transactions':'reviews';
+   target==='transactions'?'schedules':'reviews';
   const nav=document.querySelector('.planner-nav-primary [data-view="'+destination+'"]')||
    document.querySelector('[data-view="'+destination+'"]');
   if(nav&&activeTab!==destination)nav.click();
   else if(activeTab!==destination){activeTab=destination;render({navigationOnly:true})}
+  if(destination==='schedules'){
+   switchExistingPane('data-bills-tab','data-bills-pane',billsPane);
+   switchExistingPane('data-upcoming-filter','data-upcoming-scope',billsUpcomingScope);
+  }
   if(destination==='settings'){
    const section=document.getElementById('card-autopay');
    if(section)section.open=true;
@@ -4439,6 +4448,15 @@ document.addEventListener('click',async e=>{
    const tab=document.querySelector('[data-review-tab="'+pane+'"]');
    if(tab&&reviewPane!==pane)tab.click();
    else if(!tab){reviewPane=pane;render({navigationOnly:true})}
+  }
+  return;
+ }
+ const upcomingFilter=e.target.closest?.('[data-upcoming-filter]');
+ if(upcomingFilter){
+  const next=upcomingFilter.dataset.upcomingFilter;
+  if(['bills','all'].includes(next)&&next!==billsUpcomingScope){
+   billsUpcomingScope=next;
+   switchExistingPane('data-upcoming-filter','data-upcoming-scope',next);
   }
   return;
  }
@@ -4481,7 +4499,12 @@ document.addEventListener('click',async e=>{
    historyCategoryFilter='';historySizeFilter=-1;
    historyMerchantFilter='';historyPurchaseDrill=false;historyMonthPickerOpen=false;
   }
-  activeTab=view.dataset.view==='recap'?'history':view.dataset.view;transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
+  if(view.dataset.view==='transactions'){
+   billsPane='upcoming';billsUpcomingScope='all';
+  }
+  activeTab=view.dataset.view==='recap'?'history':
+   view.dataset.view==='transactions'?'schedules':view.dataset.view;
+  transactionDetail=null;detailParentSchedule=null;detailOriginTab=null;
   document.getElementById('planner-menu')?.removeAttribute('open');
   editingKey='';showNewTransaction=false;transactionNotice='';recurringDraft=null;
   historyExpandedId='';historyExpandedAccount='';historyExpandedRuleId='';
@@ -4798,7 +4821,8 @@ document.addEventListener('click',async e=>{
  if(mortgageReview){
   const m=lastMissingMortgages.find(x=>x.id===mortgageReview.dataset.reviewMortgage);
   if(!m){setNotice('Mortgage history changed. Refresh and try again.');return}
-  mortgageDraft={...m};activeTab='transactions';transactionFilter=m.accountId;
+  mortgageDraft={...m};activeTab='schedules';billsPane='upcoming';
+  billsUpcomingScope='all';transactionFilter=m.accountId;
   showNewTransaction=true;editingKey='';transactionNotice='';
   render();
   $('future-new-form')?.scrollIntoView({behavior:'smooth',block:'center'});

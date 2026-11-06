@@ -1485,6 +1485,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
    assert.equal(await page.locator('[data-bills-tab]').count(),3,
     'Bills uses the shared Spending segmented navigation');
    assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),true);
@@ -1530,6 +1531,7 @@ const {chromium,webkit}=require('playwright');
     'Month selection is first in Repeating controls');
    await repeatingBillsMonth.selectOption('2026-12');
    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
    assert.equal(await upcomingBillsMonth.inputValue(),'2026-12',
     'Choosing month in Repeating also controls Upcoming');
    await upcomingBillsMonth.selectOption('');
@@ -1592,6 +1594,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Recurring bills',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
    const billHeader=await page.locator('.bills-heading').evaluate(el=>{
     const heading=el.querySelector('h2').getBoundingClientRect(),
      count=el.querySelector('.bills-upcoming-total').getBoundingClientRect();
@@ -1654,7 +1657,10 @@ const {chromium,webkit}=require('playwright');
    }
 
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
-   await page.locator('.history-page [data-view="transactions"]').click();
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
+    await page.locator('[data-upcoming-filter="all"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    if(await page.locator('.unified-payment-trigger.ledger-transaction-row').count())
     await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
@@ -2197,6 +2203,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('');
    assert.equal(await repeating.count(),1);
    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
    assert.equal(await page.locator('[data-bills-more]').count(),0);
    assert.equal(await upcoming.count(),1,
@@ -2231,6 +2238,7 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await repeating.locator('.schedule-row-next').count(),0,
     'Changing month recalculates amount without adding an upcoming date');
    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
    assert.equal(await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').inputValue(),'2026-12');
    assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Dec 23/);
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
@@ -2320,6 +2328,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
    const design=(row,container,merchant,amount)=>row.evaluate(
     (node,{container,merchant,amount})=>{
      const outer=node.closest(container),css=getComputedStyle(outer),r=node.getBoundingClientRect();
@@ -2396,6 +2405,7 @@ const {chromium,webkit}=require('playwright');
     await page.locator('.planner-nav-primary [data-view="schedules"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
     const baseline=await transactionFonts(
      '.bills-upcoming-row','.bills-upcoming-description strong','.bills-upcoming-row>strong');
     assert.deepEqual([baseline.name,baseline.value],width<=390?[13,13]:width<=850?[14,14]:[15,16],
@@ -2409,7 +2419,10 @@ const {chromium,webkit}=require('playwright');
     assertFontsMatch('Posted Activity '+width,await transactionFonts(
      '.history-row-open.ledger-transaction-row',
      '.history-actual-description strong','.history-actual-amount'),baseline);
-    await page.locator('.history-page [data-view="transactions"]').click();
+    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+    await page.locator('[data-bills-tab="upcoming"]').click();
+    await page.locator('[data-upcoming-filter="bills"]').click();
+    await page.locator('[data-upcoming-filter="all"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     assertFontsMatch('Dated Predictions '+width,await transactionFonts(
      '.unified-payment-trigger.ledger-transaction-row',
