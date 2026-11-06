@@ -337,9 +337,9 @@ function dayDetail(point,card){
    '<button type="button" class="calendar-add" data-calendar-add'+
    (point.date===first.date?' disabled':'')+'>+ Add prediction</button></div>'+
   (todayActivity.length?'<div class="calendar-today-actual" data-calendar-today-actual>'+
-   '<strong>BANK ACTIVITY · ALREADY REFLECTED IN BANK BALANCES</strong>'+
+   '<strong>BANK ACTIVITY · NOT FORECAST AGAIN</strong>'+
    '<div class="calendar-detail-items">'+postedEntries(point.date)+'</div>'+
-   '<small>Posted and pending records are shown for reference, not added to the forecast again.</small>'+
+   '<small>Posted and pending bank records are shown for reference, not added to the forecast a second time.</small>'+
    '</div>':'')+
   (todayActivity.length&&!events.length&&!other.length?'':activity)+
   (gaps.length?'<div class="calendar-gaps"><strong>Expected, not predicted</strong>'+
@@ -412,9 +412,9 @@ function monthlyPredictions(state){
   '<summary>See all '+esc(monthName(calendarMonth))+' activity and predictions ('+rows.length+')'+
    '</summary>'+
   '<p class="calendar-monthly-context">'+period+'</p>'+
-  '<div class="calendar-monthly-totals"><span>'+esc(credit?'Debt increases':'Deposits')+
+  '<div class="calendar-monthly-totals"><span>'+esc(credit?'Predicted debt increases':'Predicted deposits')+
    ': <strong>'+money(deposits)+'</strong></span><span>'+
-   esc(credit?'Debt reductions':'Withdrawals')+': <strong>'+money(withdrawals)+'</strong></span>'+
+   esc(credit?'Predicted debt reductions':'Predicted withdrawals')+': <strong>'+money(withdrawals)+'</strong></span>'+
    (otherCardCharges?'<span data-calendar-other-card-total>Other card purchases: <strong>'+
     money(otherCardCharges)+'</strong> · excluded from selected balance</span>':'')+'</div>'+
   (rows.length?'<div class="calendar-monthly-rows">'+rows.map(({date,event:e,index,card,other,transaction:t})=>
@@ -589,7 +589,20 @@ function calendarGrid(){
     ...other.map(e=>({event:e,external:true,card:Boolean(e._calendarCard)}))],
    gaps=state.gaps.get(iso)||[],low=!state.card&&p.balance<state.cushion,
    negative=!state.card&&p.balance<0,
-   delta=all.slice(0,2).map(({event:e,external,card})=>{
+   tiles=[
+    ...actualToday.map(t=>({kind:'actual',transaction:t})),
+    ...all.map(v=>({kind:'predicted',...v}))
+   ],
+   delta=tiles.slice(0,2).map(item=>{
+    if(item.kind==='actual'){
+     const t=item.transaction;
+     return '<span class="calendar-event calendar-actual-event" title="'+
+      esc((t.pending?'Pending':'Posted')+' bank activity · '+
+       (t.merchant||'Transaction'))+'"><span class="calendar-event-name">'+
+       esc(t.merchant||'Bank transaction')+'</span><span class="calendar-event-amount">'+
+       (t.pending?'Pending':'Posted')+'</span></span>';
+    }
+    const {event:e,external,card}=item;
     const amount=external&&e.kind==='card_purchase'?
      shortMoney(Number(e.amount)):
      (signed(e,card)>0?'+':'−')+shortMoney(Number(e.amount));
@@ -615,23 +628,8 @@ function calendarGrid(){
    '<span class="calendar-day-balance"><span class="calendar-money-wide">'+
     money(p.balance)+'</span><span class="calendar-money-narrow">'+
     shortMoney(p.balance)+'</span></span>'+
-   '<span class="calendar-day-events">'+
-    actualToday.slice(0,2).map(t=>
-     '<span class="calendar-event calendar-actual-event" title="'+
-      esc((t.pending?'Pending':'Posted')+' bank activity · '+
-       (t.merchant||'Transaction'))+'"><span class="calendar-event-name">'+
-       esc(t.merchant||'Bank transaction')+'</span><span class="calendar-event-amount">'+
-       (t.pending?'Pending':'Posted')+'</span></span>').join('')+
-    (actualToday.length>=2?(actualToday.length+all.length>2?
-      '<span class="calendar-more">+'+(actualToday.length+all.length-2)+' more</span>':''):
-      (actualToday.length===1?all.slice(0,1).map(({event:e,external,card})=>
-       '<span class="calendar-event '+(external?'external':signed(e,card)>0?'in':'out')+
-        '"><span class="calendar-event-name">'+esc(e.merchant||'Payment')+
-        '</span><span class="calendar-event-amount">'+
-        (signed(e,card)>0?'+':'−')+shortMoney(Number(e.amount))+'</span></span>').join(''):
-       delta)+
-      (actualToday.length+all.length>2?
-       '<span class="calendar-more">+'+(actualToday.length+all.length-2)+' more</span>':''))+
+   '<span class="calendar-day-events">'+delta+
+    (tiles.length>2?'<span class="calendar-more">+'+(tiles.length-2)+' more</span>':'')+
     (gaps.length?'<span class="calendar-unplanned">? '+esc(gaps[0].merchant)+'</span>':'')+
    '</span></button>';
  }).join('');
