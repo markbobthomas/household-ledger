@@ -243,6 +243,14 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': Summary can select report months but cannot edit financial information');
    assert.ok((await page.locator('[data-recap-budget] small').innerText()).startsWith(budgetPercent+' used'),name+': Insights and Budget percentages reconcile including pending');
    assert.match(await page.locator('[data-recap-budget]').innerText(),/Provisional pending \$90.00/);
+   const beforeScope=await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds}));
+   await page.locator('.financial-recap-page [name="historyAccount"]').selectOption('demo-visa');
+   const cardRecapBudget=await page.locator('[data-recap-budget] small').innerText();
+   await page.locator('[data-history-view="categories"]').click();
+   assert.ok(cardRecapBudget.startsWith((await page.locator('[data-history-total-budget-percent]').innerText())+' used'),name+': Card-only account scope ties between reports');
+   await page.locator('[data-history-view="summary"]').click();
+   await page.locator('.financial-recap-page [name="historyAccount"]').selectOption('all');
+   assert.deepEqual(await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds})),beforeScope);
    const moneyCents=text=>Math.round(Number(String(text).replace(/[^0-9.-]/g,''))*100),
     octoberBills=moneyCents(await page.locator('[data-recap-bills] strong').innerText()),
     octoberBreakdown=await page.locator('[data-recap-bills] small').innerText(),

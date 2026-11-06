@@ -6705,3 +6705,12 @@ a:hover{color:#166e61}
  .schedule-page .bills-heading-actions .bills-account-field{flex:1 1 calc(50% - 9px);min-width:0}
  .schedule-page .bills-heading-actions .bills-add-transaction{flex:0 1 auto}
 }
+
+/* Weekend actuals occupy a compact row beside their workweek; weekday tiles
+   keep their fixed height and actual dates never become Friday forecasts. */
+.summary-page .calendar-grid{grid-template-rows:23px;grid-auto-rows:auto}
+.calendar-weekend-activity{display:flex;flex-wrap:wrap;gap:4px;padding:3px 0;min-width:0}
+.calendar-weekend-activity .btn{font-size:11px;min-height:32px;white-space:normal;text-align:left}
+.financial-recap-header{flex-wrap:wrap}
+.financial-recap-header>label{display:flex;flex-direction:column;gap:4px;min-width:140px;max-width:100%;font-size:12px}
+.financial-recap-header>label select{max-width:100%;min-height:36px}

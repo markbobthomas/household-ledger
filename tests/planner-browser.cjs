@@ -2151,7 +2151,14 @@ const {chromium,webkit}=require('playwright');
      matchNames:['mortgage'],exampleIds:[bank.id]};
     const income={...r,id:'fictional-income-excluded',type:'income',
      originalType:'income',merchant:'Fictional Paycheck',
-     originalMerchant:'Fictional Paycheck',scheduleLabel:'Fictional Paycheck',amount:4100};
+     originalMerchant:'Fictional Paycheck',scheduleLabel:'Fictional Paycheck',amount:4100,
+     frequency:'every-4-weeks',sourceFrequency:'every-4-weeks',
+     anchorDate:'2026-10-21',sourceAnchorDate:'2026-10-21'};
+    const incomePhaseB={...income,id:'fictional-payroll-phase-b',amount:3900,
+     anchorDate:'2026-11-04',sourceAnchorDate:'2026-11-04'};
+    const refund={...r,id:'fictional-recurring-refund',type:'refund',originalType:'refund',
+     merchant:'Fictional Rebate',originalMerchant:'Fictional Rebate',scheduleLabel:'Fictional Rebate',amount:15,
+     anchorDate:'2026-10-27',sourceAnchorDate:'2026-10-27'};
     const transferTarget=window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
      String(a.id)!==String(accountId)&&
      !['credit','credit card'].includes(String(a.accountType||a.type).toLowerCase()));
@@ -2170,7 +2177,7 @@ const {chromium,webkit}=require('playwright');
      anchorDate:'2026-10-23',sourceAnchorDate:'2026-10-23',
      amount:18,matchAmount:18,category:'Groceries',
      matchNames:['fictional dairy delivery']};
-    p.futureRecurringRules=[r,mortgage,income,transfer,recurringCard];
+    p.futureRecurringRules=[r,mortgage,income,incomePhaseB,refund,transfer,recurringCard];
     p.recurringForecastMode='approved-only';
     localStorage.setItem(key,JSON.stringify(p));
    },visualAccount);
@@ -2188,7 +2195,7 @@ const {chromium,webkit}=require('playwright');
    const monthPicker=page.locator('[data-bills-pane="upcoming"] [data-bills-month]');
    assert.equal(await monthPicker.inputValue(),'');
    assert.equal(await page.locator('[data-schedule-visible-count]').innerText(),
-    'Showing 5 of 5 recurring rules',
+    'Showing 7 of 7 recurring rules',
     'Repeating includes expenses, income and transfers without duplicating them');
    assert.equal(await page.locator('.bills-upcoming-row[data-bills-source="actual"]').count(),0,
     'Upcoming shows forecasted cash bills, not already posted bank rows');
@@ -2237,7 +2244,9 @@ const {chromium,webkit}=require('playwright');
    assert.match(recurringTotals,/Out .*In .*Transfers /,'Recurring totals separate cash directions');
    const beforeKind=await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds}));
    await page.locator('[data-schedule-kind-filter]').selectOption('income');
-   assert.equal(await page.locator('[data-schedule-card]').count(),1,'Kind filter exposes saved payroll');
+   assert.equal(await page.locator('[data-schedule-card]').count(),2,'Kind filter preserves independent four-week payroll phases');
+   await page.locator('[data-schedule-kind-filter]').selectOption('refund');
+   assert.equal(await page.locator('[data-schedule-card="fictional-recurring-refund"]').count(),1,'Recurring refund remains manageable');
    await page.locator('[data-schedule-kind-filter]').selectOption('all');
    assert.deepEqual(await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds})),beforeKind,'Kind filter does not rebuild forecast');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('2026-12');
