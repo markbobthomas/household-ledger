@@ -2193,6 +2193,9 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-calendar-monthly] summary').click();
    assert.match(await page.locator('[data-calendar-monthly]').innerText(),/Fictional Dairy Delivery/,
     'Monthly prediction drawer retains linked card purchases');
+   // Return to the original October date before existing typography checks.
+   // The test's next section explicitly inspects the October 23 day.
+   await page.locator('[data-calendar-today]').click();
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="upcoming"]').click();
