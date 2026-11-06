@@ -34,8 +34,8 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await page.locator('#planner-loading').isHidden(),true,
     'The opening curtain is removed after all financial pages are prepared');
    assert.deepEqual(await page.evaluate(()=>window.HouseholdPreparedViewStatus().sort()),
-    ['activity','history','reviews','schedules','settings','summary','trend'],
-    'All seven distinct destinations must be ready before the opening curtain closes');
+    ['activity','history','reviews','schedules','settings','summary'],
+    'All six distinct destinations must be ready before the opening curtain closes');
    assert.deepEqual(await page.evaluate(()=>window.HouseholdPreparedSpendingStatus().sort()),
     ['merchants','sizes','summary'],
     'Merchants, Purchase Sizes and Spending Summary must also be prepared at startup');
@@ -43,43 +43,35 @@ const {chromium,webkit}=require('playwright');
     'Preparation never replaces the visible Home calendar');
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
     'Background preparation never changes the selected calendar month');
-   // Four destinations, no second copy of upcoming transactions:
-   // posted bank activity is distinct from forecasted events. Bills contains
-   // the one Upcoming view with Bills-only and All-expected scopes.
+   // One Home calendar and one Upcoming list; no separate Trend
+   // destination and no Bills-only / All-expected duplicate presentation.
    const beforeNested=await page.evaluate(()=>({
     epoch:window.HouseholdPreparedViewGeneration(),
     forecast:window.HouseholdPlannerWorkStats().forecastBuilds
    }));
-   await page.locator('.home-subtabs [data-view="trend"]').click();
-   assert.equal(await page.locator('.trend-page').count(),1);
-   assert.equal(await page.locator('.planner-nav-primary [data-view="summary"].active').count(),1);
-   await page.locator('.home-subtabs [data-view="summary"]').click();
+   assert.equal(await page.locator('.home-subtabs').count(),0);
+   assert.equal(await page.locator('[data-view="trend"]').count(),0);
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    const billsWidth=await page.locator('.schedule-page').evaluate(el=>el.getBoundingClientRect().width);
    await page.locator('[data-bills-tab="upcoming"]').click();
-   assert.equal(await page.locator('[data-upcoming-filter]').count(),2);
+   assert.equal(await page.locator('[data-upcoming-filter]').count(),0);
+   assert.equal(await page.locator('[data-upcoming-scope]').count(),0);
    assert.equal(await page.locator('.bills-upcoming').isVisible(),true);
-   await page.locator('[data-upcoming-filter="all"]').click();
-   assert.equal(await page.locator('.transactions-page').isVisible(),true);
-   assert.equal(await page.locator('.planner-nav-primary [data-view="schedules"].active').count(),1,
-    'All future transactions remain within Bills > Upcoming');
-   assert.equal(await page.locator('.bills-upcoming').isVisible(),false);
-   await page.locator('[data-upcoming-filter="bills"]').click();
-   assert.equal(await page.locator('.bills-upcoming').isVisible(),true);
+   assert.equal(await page.locator('.bills-upcoming-row').count()>0,true,
+    'Upcoming lists canonical expected rows once');
+   assert.equal(await page.locator('.transactions-page').count(),0);
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
    assert.equal(await page.locator('.history-page .history-activity-filters').count(),1);
-   assert.equal(await page.locator('.history-page [data-view="transactions"]').count(),0,
-    'Posted bank records no longer duplicate the Upcoming destination');
    const postedWidth=await page.locator('.posted-transactions-page').evaluate(el=>el.getBoundingClientRect().width);
    assert.ok(Math.abs(billsWidth-postedWidth)<=2,
-    'Posted and Bills use the same content width: '+JSON.stringify({billsWidth,postedWidth}));
+    'Posted and Bills use the same width: '+JSON.stringify({billsWidth,postedWidth}));
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
    const afterNested=await page.evaluate(()=>({
     epoch:window.HouseholdPreparedViewGeneration(),
     forecast:window.HouseholdPlannerWorkStats().forecastBuilds
    }));
    assert.deepEqual(afterNested,beforeNested,
-    'Unified Upcoming filters switch prepared DOM without recalculating cash balances');
+    'Prepared Home, Bills and Posted navigation avoids forecast rebuilding');
    // Preserve the selected-day responsive layout checks at all device widths.
    for(const width of [320,390,...(device.startsWith('iPhone')?[]:[1280])]){
    await page.setViewportSize({width,height:844});
@@ -294,9 +286,8 @@ const {chromium,webkit}=require('playwright');
    await jump('settings','settings-page');
    await jump('schedules','schedule-page');
    await page.locator('[data-bills-tab="upcoming"]').click();
-   await page.locator('[data-upcoming-filter="all"]').click();
-   assert.equal(await page.locator('.transactions-page').isVisible(),true,
-    'All dated predictions are found only in Bills > Upcoming');
+   assert.equal(await page.locator('.bills-upcoming').isVisible(),true,
+    'Every expected dated prediction appears within Bills > Upcoming');
    await jump('summary','summary-page');
    await jump('history','history-page');
    await jump('schedules','schedule-page');

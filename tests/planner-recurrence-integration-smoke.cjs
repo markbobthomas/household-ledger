@@ -62,7 +62,13 @@ sandbox.HouseholdFutureLedger.materialize=(...args)=>{
  forecastBuilds++;
  return originalMaterialize(...args);
 };
-vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../planner.js'),'utf8'),
+// Read the canonical rows through a test-only hook placed inside the planner
+// module closure. Do not export financial internals or alter production code.
+const plannerSource=fs.readFileSync(path.resolve(__dirname,'../planner.js'),'utf8');
+const futureAnchor='function futureRows(bundle,s){';
+assert.ok(plannerSource.includes(futureAnchor));
+vm.runInContext(plannerSource.replace(futureAnchor,
+ 'window.__fixtureFutureRows=()=>futureRows(forecastFor(snapshot()),snapshot());\n'+futureAnchor),
  context,{filename:'planner.js'});
 async function click(marker,dataset){
  const event={target:{closest:selector=>selector===marker?{dataset}:null}};
@@ -91,24 +97,24 @@ async function submit(fields){
  for(const fn of handlers.submit||[])await fn(event);
 }
 const future=()=>el('planner-main').innerHTML;
-// Upcoming has two mutually exclusive presentation scopes. Count only the
-// canonical per-occurrence rows, never the hidden Bills-only preview as an
-// additional forecast or withdrawal.
-const forecastItems=html=>html.match(/<article class="future-item"[\s\S]*?<\/article>/g)||[];
-const occurrences=html=>forecastItems(html).filter(row=>row.includes('Mortgage ACH')).length;
-const merchantOccurrences=(html,name)=>forecastItems(html).filter(row=>row.includes(name)).length;
+// The visible Upcoming list defaults to 30 days; longer-range accounting
+// assertions operate on the SAME canonical three-year future ledger, not HTML.
+const canonicalRows=()=>sandbox.__fixtureFutureRows();
+const occurrences=()=>canonicalRows().filter(row=>row.merchant.includes('Mortgage ACH')).length;
+const merchantOccurrences=name=>canonicalRows().filter(row=>row.merchant.includes(name)).length;
 (async()=>{
  await click('[data-view]',{view:'transactions'});
  const initial=future();
- assert.equal(occurrences(initial),36,
+ assert.equal(occurrences(),36,
   'One posted mortgage automatically creates November, December, January without review');
- assert.match(initial,/Nov 15/);
+ assert.equal(canonicalRows().filter(row=>row.date.startsWith('2026-11')&&row.merchant.includes('Mortgage ACH')).length,1,
+  'Canonical projection has one November mortgage after the weekend posting shift');
  const buildsBeforeNavigation=forecastBuilds;
  await click('[data-view]',{view:'history'});
  await click('[data-view]',{view:'transactions'});
  assert.equal(forecastBuilds,buildsBeforeNavigation,
   'Switching tabs without changing financial data must reuse the same three-year projection');
- assert.equal(merchantOccurrences(initial,'ABC Draft 984'),36,
+ assert.equal(merchantOccurrences('ABC Draft 984'),36,
   'Unfamiliar merchant with two real equal monthly payments appears automatically');
  assert.ok(!initial.includes('Forecast needs review.')||initial.includes('Mortgage ACH'),
   'A bank-derived mortgage must not be absent from the future schedule');
@@ -135,10 +141,10 @@ const merchantOccurrences=(html,name)=>forecastItems(html).filter(row=>row.inclu
  assert.ok(forecastBuilds>buildsBeforeSave,
   'Rendering after a saved schedule edit must invalidate the cached projection');
  const after=future();
- assert.equal(occurrences(after),35,
+ assert.equal(occurrences(),35,
   'One user-confirmed mortgage per future month over three years; no old inferred date');
- assert.match(after,/Nov 25/);
- assert.doesNotMatch(after,/Nov 15[^<]*.*Mortgage ACH/,
+ assert.ok(canonicalRows().some(row=>row.date==='2026-11-25'&&row.merchant.includes('Mortgage ACH')));
+ assert.equal(canonicalRows().filter(row=>row.date==='2026-11-15'&&row.merchant.includes('Mortgage ACH')).length,0,
   'Old posting date must not produce a duplicate debit');
  // A bank transaction already attached to the recurring plan is identified
  // as confirmed, without offering a duplicate-creation action.
@@ -154,7 +160,7 @@ const merchantOccurrences=(html,name)=>forecastItems(html).filter(row=>row.inclu
  const again=JSON.parse(store['household-planner-sample-settings-v1']||'{}');
  assert.equal(again.futureRecurringRules.length,1,'Opening existing schedule leaves one rule');
  await click('[data-view]',{view:'transactions'});
- assert.equal(occurrences(future()),35,'No duplicate mortgage created by opening the schedule');
+ assert.equal(occurrences(),35,'No duplicate mortgage created by opening the schedule');
  // Repeat the exact same owner-confirmation scenario for an UNKNOWN merchant.
  // Its category/name provides no fixed-bill shortcut, so detection genuinely
  // depends on the two observed exact-amount calendar payments.
@@ -170,10 +176,10 @@ const merchantOccurrences=(html,name)=>forecastItems(html).filter(row=>row.inclu
   'Confirming unrelated generic payment creates one separate recurring rule');
  await click('[data-view]',{view:'transactions'});
  const genericAfter=future();
- assert.equal(merchantOccurrences(genericAfter,'ABC Draft 984'),35,
+ assert.equal(merchantOccurrences('ABC Draft 984'),35,
   'Owner-modified generic payment occurs once per month through the entire modeled period');
- assert.match(genericAfter,/Nov 26/);
- assert.doesNotMatch(genericAfter,/Nov 9[^<]*.*ABC Draft 984/);
+ assert.ok(canonicalRows().some(row=>row.date==='2026-11-26'&&row.merchant.includes('ABC Draft 984')));
+ assert.equal(canonicalRows().filter(row=>row.date==='2026-11-09'&&row.merchant.includes('ABC Draft 984')).length,0);
  // A changed starting bank balance must invalidate the forecast even though
  // the saved schedule state and selected view have not changed.
  const existing=sandbox.HouseholdBankFeed.getSnapshot('2026-10-20'),

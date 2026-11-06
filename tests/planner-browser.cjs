@@ -1485,7 +1485,6 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
    assert.equal(await page.locator('[data-bills-tab]').count(),3,
     'Bills uses the shared Spending segmented navigation');
    assert.equal(await page.locator('[data-bills-pane="upcoming"]').isVisible(),true);
@@ -1531,7 +1530,6 @@ const {chromium,webkit}=require('playwright');
     'Month selection is first in Repeating controls');
    await repeatingBillsMonth.selectOption('2026-12');
    await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
    assert.equal(await upcomingBillsMonth.inputValue(),'2026-12',
     'Choosing month in Repeating also controls Upcoming');
    await upcomingBillsMonth.selectOption('');
@@ -1590,11 +1588,10 @@ const {chromium,webkit}=require('playwright');
     'Empty Bills test fixtures have no saved schedule rows to compare');
    assert.equal(await page.locator('.bills-heading p,.bills-manage-heading p').count(),0,
     'Bills presents dated predicted withdrawals and schedule controls without instructional paragraphs');
-   assert.equal(await page.locator('.bills-heading h2').innerText(),'Upcoming bills');
+   assert.equal(await page.locator('.bills-heading h2').innerText(),'Upcoming transactions');
    assert.equal(await page.locator('.bills-manage-heading h2').innerText(),'Recurring bills',
     'Bills names the recurring section without repeating an action');
    await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
    const billHeader=await page.locator('.bills-heading').evaluate(el=>{
     const heading=el.querySelector('h2').getBoundingClientRect(),
      count=el.querySelector('.bills-upcoming-total').getBoundingClientRect();
@@ -1659,13 +1656,14 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="activity"]').click();
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
     await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
-    await page.locator('[data-upcoming-filter="all"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
-   if(await page.locator('.unified-payment-trigger.ledger-transaction-row').count())
-    await verifyTransactionAnatomy(page,'.unified-payment-trigger.ledger-transaction-row','Predictions');
-   else assert.equal(await page.locator('.unified-payment-trigger').count(),0,
-    'No dated predictions are available in this fictional fixture');
+   assert.equal(await page.locator('[data-upcoming-filter]').count(),0);
+   if(await page.locator('.bills-upcoming-row').count()){
+    await page.locator('.bills-upcoming-row').first().click();
+    assert.equal(await page.locator('[data-transaction-overlay]').count(),1,
+     'Upcoming rows open the canonical transaction detail');
+    await page.locator('.transaction-detail-close').click();
+   }
    await page.locator('.planner-nav-primary [data-view="summary"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const next=page.locator('[data-calendar-day="2026-10-20"]');
@@ -2154,8 +2152,13 @@ const {chromium,webkit}=require('playwright');
     const income={...r,id:'fictional-income-excluded',type:'income',
      originalType:'income',merchant:'Fictional Paycheck',
      originalMerchant:'Fictional Paycheck',scheduleLabel:'Fictional Paycheck',amount:4100};
-    const transfer={...r,id:'fictional-transfer-excluded',type:'transfer',
-     originalType:'transfer',cashDirection:'out',merchant:'Fictional Transfer',
+    const transferTarget=window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
+     String(a.id)!==String(accountId)&&
+     !['credit','credit card'].includes(String(a.accountType||a.type).toLowerCase()));
+    if(!transferTarget)throw Error('Fictional linked cash destination missing');
+    const transfer={...r,id:'fictional-transfer-excluded',kind:'movement',type:'transfer',
+     originalType:'transfer',cashDirection:'out',fromAccountId:accountId,
+     toAccountId:transferTarget.id,merchant:'Fictional Transfer',
      originalMerchant:'Fictional Transfer',scheduleLabel:'Fictional Transfer',amount:700};
     const card=window.HouseholdBankFeed.getSnapshot('2026-10-20').accounts.find(a=>
      String(a.accountType||a.type).toLowerCase()==='credit');
@@ -2189,8 +2192,10 @@ const {chromium,webkit}=require('playwright');
     'Repeating includes scheduled credit-card charges but excludes income and transfers');
    assert.equal(await page.locator('.bills-upcoming-row[data-bills-source="actual"]').count(),0,
     'Upcoming shows forecasted cash bills, not already posted bank rows');
-   assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Paycheck'}).count(),0);
-   assert.equal(await page.locator('.bills-upcoming-row').filter({hasText:'Fictional Transfer'}).count(),0);
+   assert.ok(await page.locator('.bills-upcoming-row[data-bills-kind="deposit"]').filter({hasText:'Fictional Paycheck'}).count()>0,
+     'Upcoming includes deposits, not a second hidden list');
+   assert.ok(await page.locator('.bills-upcoming-row[data-bills-kind="transfer"]').filter({hasText:'Fictional Transfer'}).count()>0,
+     'Upcoming includes transfers only once');
    assert.ok(await page.locator('.bills-upcoming-row[data-bills-kind="card-charge"]')
     .filter({hasText:'Fictional Dairy Delivery'}).count()>0,
     'Confirmed repeating purchases on a card appear in Upcoming Bills');
@@ -2203,7 +2208,6 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-pane="repeating"] [data-bills-month]').selectOption('');
    assert.equal(await repeating.count(),1);
    await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('2026-11');
    assert.equal(await page.locator('[data-bills-more]').count(),0);
    assert.equal(await upcoming.count(),1,
@@ -2238,7 +2242,6 @@ const {chromium,webkit}=require('playwright');
    assert.equal(await repeating.locator('.schedule-row-next').count(),0,
     'Changing month recalculates amount without adding an upcoming date');
    await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
    assert.equal(await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').inputValue(),'2026-12');
    assert.match(await upcoming.locator('.bills-upcoming-date').innerText(),/Dec 23/);
    await page.locator('[data-bills-pane="upcoming"] [data-bills-month]').selectOption('');
@@ -2328,7 +2331,6 @@ const {chromium,webkit}=require('playwright');
    await page.locator('.planner-nav-primary [data-view="schedules"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
    const design=(row,container,merchant,amount)=>row.evaluate(
     (node,{container,merchant,amount})=>{
      const outer=node.closest(container),css=getComputedStyle(outer),r=node.getBoundingClientRect();
@@ -2405,7 +2407,6 @@ const {chromium,webkit}=require('playwright');
     await page.locator('.planner-nav-primary [data-view="schedules"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
     const baseline=await transactionFonts(
      '.bills-upcoming-row','.bills-upcoming-description strong','.bills-upcoming-row>strong');
     assert.deepEqual([baseline.name,baseline.value],width<=390?[13,13]:width<=850?[14,14]:[15,16],
@@ -2421,12 +2422,8 @@ const {chromium,webkit}=require('playwright');
      '.history-actual-description strong','.history-actual-amount'),baseline);
     await page.locator('.planner-nav-primary [data-view="schedules"]').click();
     await page.locator('[data-bills-tab="upcoming"]').click();
-    await page.locator('[data-upcoming-filter="bills"]').click();
-    await page.locator('[data-upcoming-filter="all"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
-    assertFontsMatch('Dated Predictions '+width,await transactionFonts(
-     '.unified-payment-trigger.ledger-transaction-row',
-     '.unified-payment-name strong','.unified-payment-value'),baseline);
+    assert.equal(await page.locator('[data-upcoming-filter]').count(),0);
     await page.locator('.planner-nav-primary [data-view="summary"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-calendar-day="2026-10-23"]').click();

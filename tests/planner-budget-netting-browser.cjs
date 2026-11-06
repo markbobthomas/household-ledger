@@ -141,8 +141,11 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
    const novemberBills=await page.locator('.bills-upcoming').innerText();
    assert.match(novemberBills,/Fictional Visa Payment/,
     name+': Upcoming includes the cash-to-card payment once');
-   assert.doesNotMatch(novemberBills,/Fictional Savings Transfer/,
-    name+': Savings movement is not a bill');
+   assert.match(novemberBills,/Fictional Savings Transfer/,
+    name+': One Upcoming list includes linked savings transfers');
+   assert.equal(await page.locator('.bills-upcoming-row[data-bills-kind="transfer"]')
+    .filter({hasText:'Fictional Savings Transfer'}).count(),1,
+    name+': Transfer is displayed once, not counted as a second checking expense');
    assert.match(novemberBills,/Fictional Visa Subscription/,
     name+': Explicit recurring card purchase is visible in Upcoming');
    assert.match(novemberBills,/Fictional Scheduled Card Charge/,
