@@ -1585,7 +1585,7 @@ function billsStatementsPage(bundle,s){
       (historical?' · Past':p.periodStart<=s.asOf&&p.periodEnd>s.asOf?
        ' · Current':p.periodComplete?' · Closed':' · Estimate')+'</option>').join(''):
      '<option value="">No statements available</option>')+
-   '</select></label></div>';
+   '</select></label><button type="button" class="btn bills-statement-settings" data-view="settings" data-focus-target="#card-autopay">Autopay settings</button></div>';
  if(!selected)return '<div class="bills-statements-page">'+controls+
   '<section class="panel bills-card-statements" data-bills-card="'+
    escapeHTML(accountId)+'"><p class="bills-card-empty">'+
@@ -2837,7 +2837,8 @@ function historyPage(bundle,s){
     filterCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
      (historyCategoryFilter===c?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select></label></div>')+
-   (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear</button>':'')+
+   (historySearch?'<button type="button" class="btn ledger-history-clear-button" data-clear-history-search>Clear search</button>':'')+
+   '<button type="button" class="btn ledger-clear-filters" data-history-clear-all>Reset filters</button>'+
    '</form>'+
   (groupHistoryCard?'<p class="ledger-statement-intro">Statement total: purchases − refunds · excludes payments, transfers and pending</p>':
    selectedHistoryCard?'<p class="ledger-statement-help">Set this card’s billing period in Settings to group transactions by statement.</p>':'')+
@@ -3214,6 +3215,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      (reviewPane===id)+'">'+name+
      (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
      '</button>').join('')+'</nav>'+
+  '<p class="review-action-guide">Review the evidence, choose an action, and resolved items leave this list.</p>'+
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   pane('categories')+
   '<section class="panel category-review-panel" data-category-review>'+
@@ -3402,12 +3404,18 @@ function overviewPage(bundle,s,chosen,derived,fresh){
    '</section></div>';
 }
 function summaryPage(bundle,s,chosen,derived,fresh,view='calendar'){
- // Home leads with bank-backed balances and the forecast calendar, not text.
- return window.HouseholdPlannerSummary.render({
+ const content=window.HouseholdPlannerSummary.render({
   snapshot:s,chosen,derived,bundle,days:horizon,
   prefs:state().predictions||{},accounts:activeAccounts(s),
   fresh,ready:window.HouseholdPaymentObligations.ready,view
  });
+ // The chart and calendar are both Home views, not additional destinations.
+ const tabs='<nav class="history-subtabs spending-tabs ledger-section-tabs home-subtabs" aria-label="Home views">'+
+  [['calendar','Calendar'],['trend','Balance trend']].map(([id,name])=>
+   '<button type="button" class="history-subtab'+(view===id?' active':'')+
+   '" data-view="'+(id==='calendar'?'summary':'trend')+
+   '" aria-pressed="'+(view===id)+'">'+name+'</button>').join('')+'</nav>';
+ return content.replace(/^(<div class="planner-page[^"]*">)/,'$1'+tabs);
 }
 function settingsPage(bundle,s,chosen){
  const rules=Object.entries(state().learning?.categoryRules||{});
@@ -4302,6 +4310,16 @@ document.addEventListener('click',async e=>{
  }
 
  // History view switching and drill-down are read-only.
+ const clearAll=e.target.closest?.('[data-history-clear-all]');
+ if(clearAll){
+  const asOf=snapshot().asOf||dateToday();
+  historySelectedMonths=new Set([asOf.slice(0,7)]);
+  historyAccount='all';historySearch='';historySort='newest';historyCategoryFilter='';
+  historyMerchantFilter='';historyMerchantSearch='';historySizeFilter=-1;
+  historyPurchaseDrill=false;historyMonthPickerOpen=false;historyMonthFutureExtent=0;
+  historyLimit=90;historySelected.clear();
+  renderHistoryFilters();return;
+ }
  const historyTab=e.target.closest?.('[data-history-view]');
  if(historyTab){
   if(recurrenceFormDirty('.history-page [data-history-inline-detail] form')&&
