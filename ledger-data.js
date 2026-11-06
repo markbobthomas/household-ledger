@@ -391,7 +391,9 @@ const confidenceScore=t=>{
  return ({VERY_HIGH:.99,HIGH:.93,MEDIUM:.75,LOW:.4,UNKNOWN:0})[level]??null;
 };
 function categoryReviewQueue(state){
- const tx=records(state).filter(t=>!t.pending&&t.id!==null&&t.id!==undefined)
+ // Pending purchases contribute provisionally to Budget. Include their missing
+ // or uncertain categories in Review now; category overrides survive posting.
+ const tx=records(state).filter(t=>t.id!==null&&t.id!==undefined)
   .map(t=>{
    // Known income/transfer kinds are safe to label in reporting without
    // changing the authoritative bank-derived record used for forecasting.
@@ -410,7 +412,7 @@ function categoryReviewQueue(state){
    if(!missing&&!low)return null;
    return {kind:'transaction',id:String(t.id),category,reason:missing?'Missing category':'Low-confidence automatic category',
     merchant:String(t.merchant||t.description||'Transaction'),date:String(t.date||''),
-    amount:Number(t.amount)||0,accountId:String(t.accountId||t.account||''),
+    pending:Boolean(t.pending),amount:Number(t.amount)||0,accountId:String(t.accountId||t.account||''),
      suggested:t.suggested&&t.suggested!==category?String(t.suggested):null};
   }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
  const prefs=state.predictions||{},plans=[];
