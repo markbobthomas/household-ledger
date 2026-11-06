@@ -278,6 +278,7 @@ const {spawn}=require('node:child_process'),{chromium,webkit}=require('playwrigh
     name+': unscheduled card purchases never become monthly bills');
    assert.doesNotMatch(billCategories,/Savings Transfer/,
     name+': internal cash transfer is not a bill');
+   await page.locator('.financial-recap-upcoming > summary').click();
    assert.match(await page.locator('.financial-recap-upcoming').innerText(),
     /Fictional Visa Payment/,
     name+': credit-card payment appears even when five earlier bills precede it');
