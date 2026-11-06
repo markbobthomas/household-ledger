@@ -3338,6 +3338,7 @@ body{background:#f6f8fa}
 
 /* Bank History category targets: compact editable amounts next to actual spend.
    Budget targets are monthly reporting preferences, never ledger forecasts. */
+.history-page{--budget-over-pink:#ff1493;--budget-over-pink-text:#d00073}
 .history-page .history-category-table{width:100%;min-width:0}
 .history-page .history-category-columns{
  display:grid;grid-template-columns:minmax(0,1fr) minmax(36px,.65fr) 88px 126px;
@@ -3362,7 +3363,7 @@ body{background:#f6f8fa}
  display:block;height:100%;border-radius:inherit;background:#3b76a9;
  transition:width .2s ease;
 }
-.history-page .history-budget-track.over .history-budget-fill{background:#c47b31}
+.history-page .history-budget-track.over .history-budget-fill{background:var(--budget-over-pink)}
 .history-page .history-budget-track.unset{
  background:repeating-linear-gradient(90deg,#edf2f6 0,#edf2f6 6px,#e1e9f0 6px,#e1e9f0 12px);
 }
@@ -3406,7 +3407,7 @@ body{background:#f6f8fa}
 .history-page .history-budget-difference{
  font-size:10px;font-weight:600;color:#5c7980;white-space:nowrap;
 }
-.history-page .history-budget-difference.over{color:#b56820}
+.history-page .history-budget-difference.over{color:var(--budget-over-pink-text)}
 .history-page .history-budget-explanation{
  margin:0 0 14px;font-size:11px;color:#62778a;
 }
@@ -3435,7 +3436,7 @@ body{background:#f6f8fa}
 .history-page .history-budget-summary-track>span{
  display:block;height:100%;border-radius:inherit;background:#60a995;
 }
-.history-page .history-budget-summary-track.over>span{background:#dd9a66}
+.history-page .history-budget-summary-track.over>span{background:var(--budget-over-pink)}
 .history-page .history-budget-summary-empty{font-size:12px;color:#5b7565}
 .history-page .history-budget-feedback{
  display:inline-block;margin:0 0 11px;color:#2a6650;font-weight:700;font-size:11px;
@@ -3891,7 +3892,7 @@ a:hover{color:#166e61}
 .history-page .history-budget-fill{
  background:#60a995!important;border-radius:99px;
 }
-.history-page .history-budget-track.over .history-budget-fill{background:#dd9a66!important}
+.history-page .history-budget-track.over .history-budget-fill{background:var(--budget-over-pink)!important}
 .history-page .history-budget-input{
  border:1px solid #e0e8e1!important;border-radius:10px!important;
  background:#fff!important;
@@ -4795,7 +4796,7 @@ a:hover{color:#166e61}
    highlight amounts above the selected period's target, and use a single
    compact Account / Months filter row. */
 .history-page .history-category-actual.over{
- color:#c47b31!important;
+ color:var(--budget-over-pink-text)!important;
 }
 .history-page .history-category-item .history-budget-track{
  height:18px;
@@ -5583,7 +5584,7 @@ a:hover{color:#166e61}
 }
 
 /* Budget read-only targets: use the freed-up right column for a clear dollar
-   cap and an orange overage. Position the secondary figure below the target
+   cap and a neon-pink overage. Position the secondary figure below the target
    without shifting its baseline away from the progress bar. */
 .history-page .history-category-columns,
 .history-page .history-category-item{
@@ -5609,7 +5610,7 @@ a:hover{color:#166e61}
  overflow-wrap:anywhere;
 }
 .history-page .history-category-item .history-budget-difference.over{
- color:#c47b31;
+ color:var(--budget-over-pink-text);
  font-weight:800;
 }
 @media(max-width:850px){

@@ -1105,15 +1105,17 @@ const {chromium,webkit}=require('playwright');
     assert.ok(overageBounds.left>=-1&&overageBounds.right<=overageBounds.budgetRight+1&&
      overageBounds.screen<=overageBounds.viewport+3,
      'The overage fits under the target with no horizontal spill: '+JSON.stringify(overageBounds));
-    assert.equal(overageBounds.color,'rgb(196, 123, 49)',
-     'The overage dollar figure uses the same orange emphasis as overspending');
+    assert.equal(overageBounds.color,'rgb(208, 0, 115)',
+     'The overage dollar figure uses legible vivid pink emphasis');
     const overageColor=await budgetRow.locator('.history-category-actual').evaluate(el=>({
      over:el.classList.contains('over'),color:getComputedStyle(el).color
     }));
     assert.equal(overageColor.over,true,'Over-budget spent amount receives its own overage state');
-    assert.equal(overageColor.color,'rgb(196, 123, 49)',
-     'The over-budget dollar amount itself turns orange');
-    assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
+    assert.equal(overageColor.color,'rgb(208, 0, 115)',
+     'The over-budget dollar amount itself turns vivid pink');
+    assert.equal(await budgetRow.locator('.history-budget-fill').evaluate(el=>getComputedStyle(el).backgroundColor),
+      'rgb(255, 20, 147)','Over-budget progress fill is neon pink');
+     assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
      'The over-budget fill caps at its full track width');
     await checkOverall(3);
     await editBudget(categoryName,'275.50');

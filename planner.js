@@ -2184,7 +2184,7 @@ function historyInsights(rows,view,options={}){
      (over?' (over budget)':''):
      'No monthly budget set for '+g.name;
    // The amount follows the fill end, with a clamped visible position at 0
-   // and 100%; the overage remains orange and the fill caps at 100%.
+   // and 100%; the overage is styled neon pink and the fill caps at 100%.
    return '<span class="history-budget-track'+(!set?' unset':over?' over':'')+
     '" role="img" data-history-budget-bar data-budget-status="'+
     (!set?'unset':over?'over':'within')+'" aria-label="'+escapeHTML(description)+
