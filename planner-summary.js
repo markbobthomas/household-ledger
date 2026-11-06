@@ -694,17 +694,19 @@ function render(input){
  }
  for(const rows of outside.values())
   rows.sort((a,b)=>a.merchant.localeCompare(b.merchant)||a.accountId.localeCompare(b.accountId));
- const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf;
- for(let n=45;n>=1;n--){
-  const dt=new Date(snapshot.asOf+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()-n);
-  actual.set(dt.toISOString().slice(0,10),[]);
- }
+ const actual=new Map(),accountOf=root.HouseholdPlannerHistory?.accountOf,
+  historyStart=historicalCalendarStart(snapshot.asOf,bundle?.rows||[]);
+ for(let date=historyStart;date<snapshot.asOf;date=addDay(date,1))
+  actual.set(date,[]);
  for(const r of bundle?.rows||[]){
   if(!actual.has(r.date)||!allAccounts&&
     String(accountOf?.(r,accounts)||r.accountId)!==String(chosen.id))continue;
   actual.get(r.date).push(r);
  }
- calendarContext={points:series,actual,outside,scope:allAccounts?'all':String(chosen.id),
+ const history=reconstructedHistory(chosen,derived,bundle?.rows||[],
+  snapshot.asOf,historyStart,accountOf,accounts);
+ calendarContext={points:series,actual,outside,history,
+  scope:allAccounts?'all':String(chosen.id),
   coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],
   paymentDetails:bundle?.payments?.paymentDetails||[],
