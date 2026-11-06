@@ -899,6 +899,13 @@ function detailHtml(bundle,s){
      selectCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
       (c===assigned?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select><small data-actual-category-status role="status"></small></label>';
+  const linkedPlans=window.HouseholdPlannerTransactions.historicalScheduleMatches(
+   row,activeAccounts(s),state().predictions?.futureRecurringRules||[]);
+  const linkedActions=linkedPlans.length?
+   '<div class="transaction-related-plans"><strong>Related recurring plan'+(linkedPlans.length===1?'':'s')+'</strong>'+
+    linkedPlans.map(plan=>'<button type="button" class="btn" data-open-bill-rule="'+
+     escapeHTML(plan.id)+'">Open '+escapeHTML(plan.scheduleLabel||plan.merchant||'plan')+'</button>').join('')+
+   '</div>':'';
   const summary='<div class="transaction-detail-info">'+
    '<div><span>Bank date</span><strong>'+escapeHTML(dayLabel(row.date))+'</strong></div>'+
    '<div><span>Account</span><strong>'+escapeHTML(account?.name||transactionDetail.account)+'</strong></div>'+
@@ -908,7 +915,8 @@ function detailHtml(bundle,s){
   return detailShell(row.merchant||'Bank transaction',
    'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
    summary+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
-    (recurringDraft?repeatingReviewForm(s):'<p>Unable to create a prediction from this transaction.</p>'),
+    linkedActions+(linkedPlans.length?'':recurringDraft?repeatingReviewForm(s):
+     '<p class="transaction-detail-help">This bank transaction is read-only and cannot create a repeating plan.</p>'),
    'ACTUAL · BANK-RECORDED');
  }
  if(transactionDetail.kind==='history-choice'){
@@ -4569,7 +4577,7 @@ document.addEventListener('click',async e=>{
    fromHistory.dataset.historicalTransaction;
   const row=lastHistoryRows.find(t=>String(t.id)===historyId&&
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(snapshot()))===account);
-  if(!row||!window.HouseholdPlannerHistory.canPlan(row)){
+  if(!row){
    setNotice('That bank transaction is no longer available for review.');return;
   }
   // Calendar and History consult the SAME account/direction/history-ID matcher.
@@ -4577,15 +4585,17 @@ document.addEventListener('click',async e=>{
   // saved prediction, even if its bank amount is different.
   const matching=window.HouseholdPlannerTransactions.historicalScheduleMatches(
    row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
-  if(matching.length===1){
+  // Always open the same bank-record detail. Existing plans appear as
+  // contextual actions inside it; they are never recreated from this record.
+  try{
    recurringDraft=null;
-   if(!openSchedulePlan(matching[0].id,'',e.target))
-    setNotice('That prediction changed. Refresh bank history.');
-   return;
-  }
-  if(matching.length>1){
-   recurringDraft=null;transactionDetail={kind:'history-choice',ids:matching.map(r=>r.id)};
-   detailReturnFocus=e.target;
+   if(!matching.length&&window.HouseholdPlannerHistory.canPlan(row)){
+    recurringDraft=window.HouseholdPlannerHistory.draftFor(
+     row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
+   }
+   reviewNotice='';
+  }catch(error){setNotice(String(error.message||error));return}
+  detailReturnFocus=e.target;
    drawTransactionDetail(forecastFor(snapshot()),snapshot());
    document.querySelector('.transaction-detail-close')?.focus();
    return;
