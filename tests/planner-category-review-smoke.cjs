@@ -41,7 +41,7 @@ assert.equal(M.records(s).find(x=>x.id==='income').category,'Other',
 assert.equal(M.records(s).find(x=>x.id==='transfer').category,'Other',
  'Transfer banking facts remain unmodified for forecast and baseline integrity');
 assert.equal(JSON.stringify(s.transactions),source,'Review must never modify authoritative bank records');
-M.setCategory(s,'pending','Home & Maintenance',true);
+M.setCategory(s,'pending','Housing',true);
 assert.ok(!M.categoryReviewQueue(s).transactions.some(x=>x.id==='pending'),
  'Reviewing a provisional bank expense resolves its category without altering bank facts');
 M.setCategory(s,'low','Shopping',true);
