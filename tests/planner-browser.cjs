@@ -1523,7 +1523,7 @@ const {chromium,webkit}=require('playwright');
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await repeatingBillsMonth.inputValue(),'2026-11',
     'Selected month is retained when switching to Repeating');
-   assert.ok((await page.locator('[data-bills-repeating-total]').innerText()).startsWith('Total $'),
+   assert.ok((await page.locator('[data-bills-repeating-total]').innerText()).startsWith('Total shown:'),
     'Repeating shows a live total beside the filtered list count');
    assert.equal(await page.locator('.schedule-toolbar').evaluate(el=>
     el.firstElementChild?.matches('.bills-month-field')),true,
