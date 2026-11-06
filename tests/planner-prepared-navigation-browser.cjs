@@ -232,6 +232,9 @@ module.exports=(async()=>{
    assert.ok(await page.locator('.history-entry .transaction-note-trigger').count()>0,
     'The fictional bank history has a transaction that accepts a personal note');
    const noteTrigger=page.locator('.history-entry .transaction-note-trigger').first();
+   const beforeNote=await page.evaluate(()=>({
+    epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats()
+   }));
    await noteTrigger.click();
    await page.locator('.transaction-overlay .transaction-note-form input[name="note"]')
     .fill('Inspection and invoice confirmed');
@@ -241,6 +244,18 @@ module.exports=(async()=>{
    const firstLine=page.locator('.history-entry').first().locator('.transaction-title-line');
    assert.equal(await firstLine.locator('.transaction-note-subtitle').textContent(),
     'Inspection and invoice confirmed','Saved note appears alongside the merchant');
+   const afterNote=await page.evaluate(()=>({
+    epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats(),
+    cached:window.HouseholdPreparedViewStatus()
+   }));
+   assert.equal(afterNote.epoch,beforeNote.epoch,
+    'Note save does not invalidate any prepared financial pages');
+   assert.equal(afterNote.work.forecastBuilds,beforeNote.work.forecastBuilds,
+    'Notes cannot rerun the canonical three-year forecast');
+   assert.equal(afterNote.work.historyNormalizations,beforeNote.work.historyNormalizations,
+    'Notes cannot normalize bank history again');
+   assert.ok(afterNote.cached.includes('summary')&&afterNote.cached.includes('schedules'),
+    'Home and Bills remain ready after an annotation save');
    // The merchant is truncated before it can displace the note, including at
    // the narrowest supported phone viewport. Both titles use the same type size.
    await page.setViewportSize({width:320,height:844});
@@ -433,11 +448,43 @@ module.exports=(async()=>{
    assert.equal(await page.locator('[data-bills-pane="repeating"]').isVisible(),true);
    assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),priorGeneration,
     'Bills panes reuse the existing page');
+   const billsSort=page.locator('[data-schedule-sort]').first();
+   if(await billsSort.count()){
+    const from=await billsSort.inputValue();
+    const to=await billsSort.locator('option').evaluateAll((options,current)=>
+     options.map(x=>x.value).find(x=>x&&x!==current),from);
+    if(to){
+     const baseline=await page.evaluate(()=>({
+      epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats()
+     }));
+     await billsSort.selectOption(to);
+     const after=await page.evaluate(()=>({
+      epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats()
+     }));
+     assert.equal(after.epoch,baseline.epoch,'Bills list sort does not invalidate the application');
+     assert.equal(after.work.forecastBuilds,baseline.work.forecastBuilds,
+      'Bills sort never recomputes future balances');
+    }
+   }
    await page.locator('.top-actions [data-view="reviews"]').click();
    await page.locator('[data-review-tab="payments"]').click();
    assert.equal(await page.locator('[data-review-pane="payments"]').isVisible(),true);
    assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),priorGeneration,
     'Review panes reuse the existing page');
+   const reviewSortInput=page.locator('[data-review-sort]').first();
+   if(await reviewSortInput.count()){
+    const baseline=await page.evaluate(()=>({
+     epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats()
+    }));
+    const original=await reviewSortInput.inputValue();
+    await reviewSortInput.selectOption(original==='oldest'?'newest':'oldest');
+    const after=await page.evaluate(()=>({
+     epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats()
+    }));
+    assert.equal(after.epoch,baseline.epoch,'Review sorting only redraws Review');
+    assert.equal(after.work.forecastBuilds,baseline.work.forecastBuilds,
+     'Review sorting cannot trigger a cash forecast');
+   }
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.evaluate(()=>window.HouseholdAllViewsReady()),true);
    assert.equal(await page.locator('[data-history-view="categories"][aria-pressed="true"]').count(),1,
@@ -446,6 +493,55 @@ module.exports=(async()=>{
     'Background preparation and invalidation preserve financial totals');
    assert.equal(await page.locator('[data-review-tab-count]').textContent(),reviewBadge,
     'Background preparation and invalidation preserve Review count');
+   // Phase 3: visual Budget ordering and target amounts update their own
+   // report without evicting prepared Home, Bills, Activity or re-forecasting.
+   const beforeBudgetView=await page.evaluate(()=>({
+    epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats(),
+    cached:window.HouseholdPreparedViewStatus()
+   }));
+   const handles=page.locator('.history-category-legend [data-history-category-handle]');
+   assert.ok(await handles.count()>1,'Fictional Budget has movable categories');
+   const firstBudgetName=await page.locator('.history-category-legend > [data-history-category-row]')
+    .first().getAttribute('data-history-category-row');
+   await handles.first().focus();
+   await handles.first().press('ArrowDown');
+   await page.waitForFunction(before=>
+    document.querySelector('.history-category-legend > [data-history-category-row]')?.
+     getAttribute('data-history-category-row')!==before,firstBudgetName,{timeout:8000});
+   const afterBudgetOrder=await page.evaluate(()=>({
+    epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats(),
+    cached:window.HouseholdPreparedViewStatus()
+   }));
+   assert.equal(afterBudgetOrder.epoch,beforeBudgetView.epoch,
+    'Changing Budget visual order does not invalidate prepared views');
+   assert.equal(afterBudgetOrder.work.forecastBuilds,beforeBudgetView.work.forecastBuilds,
+    'Category order never rebuilds the financial forecast');
+   assert.equal(afterBudgetOrder.work.historyNormalizations,beforeBudgetView.work.historyNormalizations);
+   assert.ok(afterBudgetOrder.cached.includes('activity')&&
+    afterBudgetOrder.cached.includes('summary')&&afterBudgetOrder.cached.includes('schedules'),
+    'Category ordering preserves unrelated prepared destinations');
+   await page.locator('[data-history-category-manager]').evaluate(manager=>{manager.open=true});
+   const budgetField=page.locator('[data-history-budget]').first();
+   const monthlyTarget=budgetField.getAttribute('data-history-budget');
+   const oldTarget=await budgetField.inputValue();
+   const newTarget=oldTarget==='163.27'?'163.28':'163.27';
+   await budgetField.fill(newTarget);
+   await budgetField.press('Tab');
+   await page.waitForFunction(({category,value})=>
+    document.querySelector('[data-history-budget="'+category+'"]')?.value===value&&
+    document.querySelector('.history-budget-feedback')?.textContent?.includes('Monthly budget saved'),
+    {category:monthlyTarget,value:newTarget},{timeout:10000});
+   const afterTarget=await page.evaluate(()=>({
+    epoch:window.HouseholdPreparedViewGeneration(),work:window.HouseholdPlannerWorkStats(),
+    cached:window.HouseholdPreparedViewStatus()
+   }));
+   assert.equal(afterTarget.epoch,beforeBudgetView.epoch,
+    'Budget target change remains scoped to Budget/Month insights');
+   assert.equal(afterTarget.work.forecastBuilds,beforeBudgetView.work.forecastBuilds);
+   assert.equal(afterTarget.work.historyNormalizations,beforeBudgetView.work.historyNormalizations);
+   assert.ok(afterTarget.cached.includes('activity')&&afterTarget.cached.includes('summary')&&
+    afterTarget.cached.includes('schedules'),
+    'Budget target changes keep Activity, Home and Bills prepared');
 
    // The calendar module has independent month state. Neither warming nor
    // showing cached pages may reset it or break next/previous/Today.
