@@ -37,12 +37,21 @@ const {spawn}=require('node:child_process');
   assert.deepEqual(afterOriginalDuplicate.data.accounts,beforeOriginalDuplicate.data.accounts);
   assert.deepEqual(afterOriginalDuplicate.data.transactions,beforeOriginalDuplicate.data.transactions);
   assert.deepEqual(afterOriginalDuplicate.data.adjustments,beforeOriginalDuplicate.data.adjustments);
-  const pendingOverride=await request('/api/ledger/adjustments',{categoryOverrides:{'pending-1':'Groceries'}});
+  const pendingNote='bank:'+JSON.stringify(['acct-1','pending-1']);
+  const postedNote='bank:'+JSON.stringify(['acct-1','posted-1']);
+  const pendingOverride=await request('/api/ledger/adjustments',{
+   categoryOverrides:{'pending-1':'Groceries'},
+   predictions:{transactionNotes:{[pendingNote]:'Paid with reward points'}}
+  });
   assert.equal(pendingOverride.code,200);
   await request('/api/sync',{});
   const carried=await request('/api/ledger');
   assert.equal(carried.data.adjustments.categoryOverrides['posted-1'],'Groceries','Manual category follows replaced pending transaction');
   assert.equal(carried.data.adjustments.categoryOverrides['pending-1'],undefined,'Obsolete pending ID is removed');
+  assert.equal(carried.data.adjustments.predictions.transactionNotes[postedNote],'Paid with reward points',
+   'A private note survives the pending-to-posted source ID transition');
+  assert.equal(carried.data.adjustments.predictions.transactionNotes[pendingNote],undefined,
+   'The obsolete pending ID note is removed');
 
   status=await request('/api/status');
   assert.equal(status.data.transactions.length,1,'Pending charge replaced rather than duplicated');
