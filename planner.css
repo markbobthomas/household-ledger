@@ -6648,3 +6648,45 @@ a:hover{color:#166e61}
  .reviews-page .review-bulk-toolbar [data-review-bulk-apply]{order:3;flex:1 1 auto}
  .reviews-page .review-bulk-toolbar [data-review-bulk-clear]{order:4}
 }
+
+/* Navigation unification: the same cached Home/Transactions destinations
+   retain the primary tab selection across their two prepared subviews. */
+.history-page>.ledger-section-tabs,
+.transactions-page>.ledger-section-tabs,
+.summary-page>.home-subtabs{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ width:min(480px,100%);max-width:100%;margin:0 0 13px;
+}
+.history-page>.ledger-section-tabs .history-subtab,
+.transactions-page>.ledger-section-tabs .history-subtab,
+.summary-page>.home-subtabs .history-subtab{
+ min-width:0;min-height:39px;white-space:nowrap;
+}
+.schedule-page .bills-heading>div:first-child:has(>.visually-hidden),
+.schedule-page .bills-manage-heading>div:first-child:has(>.visually-hidden){
+ display:none;
+}
+.schedule-page .bills-heading{justify-content:flex-end}
+.review-action-guide{
+ margin:0 0 12px;font-size:12px;line-height:1.45;
+ color:var(--muted,#65766b);
+}
+.ledger-clear-filters{white-space:nowrap;min-height:36px}
+.bills-statement-settings{white-space:nowrap;align-self:end}
+.ledger-advanced-settings{margin:10px 0}
+.ledger-advanced-settings>summary{
+ cursor:pointer;font-weight:650;padding:2px 0 4px;
+}
+.ledger-advanced-settings>.panel,.ledger-advanced-settings>details{
+ margin-top:10px;
+}
+.financial-recap-upcoming>summary{cursor:pointer;font-weight:650}
+.financial-recap-upcoming[open]>summary{margin-bottom:10px}
+.transaction-related-plans{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0}
+.transaction-related-plans>strong{flex:1 1 100%;font-size:13px}
+@media(max-width:550px){
+ .history-page>.ledger-section-tabs,
+ .transactions-page>.ledger-section-tabs,
+ .summary-page>.home-subtabs{width:100%}
+ .bills-statement-settings{width:100%}
+}
