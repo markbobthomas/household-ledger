@@ -6235,6 +6235,16 @@ a:hover{color:#166e61}
  }
 }
 
+/* Directional recurring totals may contain several distinct money groups.
+   Unlike the old single expense total, they must wrap on narrow screens. */
+.schedule-page .bills-repeating-sum{
+ min-width:0;max-width:100%;white-space:normal!important;
+ overflow-wrap:anywhere;text-align:right;
+}
+@media(max-width:650px){
+ .schedule-page .schedule-list-summary{min-width:0;max-width:100%}
+ .schedule-page .bills-repeating-sum{flex:1 1 100%;text-align:left}
+}
 .schedule-page .bills-statements-page{display:grid;gap:12px}
 .schedule-page .bills-card-statements{padding:14px 18px}
 .schedule-page .bills-card-heading{display:flex;align-items:baseline;
