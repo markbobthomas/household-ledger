@@ -21,6 +21,7 @@ jobs:
           node --check pilot/server.cjs
           node --check pilot/data-source.js
           node --check planner-core.js
+          node --check planner-history.js
           node --check planner-transactions.js
           node --check payment-obligations.js
           node --check planner.js
@@ -36,5 +37,6 @@ jobs:
           node --check tests/ci-suite.cjs
           node --check tests/architecture-baseline.cjs
           node --check tests/planner-legacy-invariants-smoke.cjs
+          node --check tests/financial-interpretation-smoke.cjs
       - name: Verify frozen output, banking safety, parity and reconciliation once
         run: node tests/ci-suite.cjs core
