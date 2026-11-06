@@ -31,6 +31,7 @@ if(require.main===module){
  }
  console.log('Running '+group+' regression suite: '+tests.length+' distinct scripts');
  if(group==='browser'){
+  console.log('Shared browser worker: '+tests.length+' isolated specs, one Chromium/WebKit pair');
   // Browser specs run sequentially in one Node process and share a Chromium/WebKit pair.
   // Each spec still makes isolated browser contexts and runs its own fictional server.
   const outcome=spawnSync(process.execPath,[path.join(__dirname,'browser-suite.cjs')],
