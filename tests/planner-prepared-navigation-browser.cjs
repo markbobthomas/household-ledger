@@ -43,6 +43,33 @@ const {chromium,webkit}=require('playwright');
     'Preparation never replaces the visible Home calendar');
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
     'Background preparation never changes the selected calendar month');
+   // Four top-level tabs: Home contains Calendar/Balance trend and
+   // Transactions contains Posted/Planned, without a hidden More duplicate.
+   const beforeNested=await page.evaluate(()=>({
+    epoch:window.HouseholdPreparedViewGeneration(),
+    forecast:window.HouseholdPlannerWorkStats().forecastBuilds
+   }));
+   await page.locator('.home-subtabs [data-view="trend"]').click();
+   assert.equal(await page.locator('.trend-page').count(),1);
+   assert.equal(await page.locator('.planner-nav-primary [data-view="summary"].active').count(),1,
+    'Balance trend keeps Home selected');
+   await page.locator('.home-subtabs [data-view="summary"]').click();
+   assert.equal(await page.locator('.summary-page .calendar-day').count()>0,true);
+   await page.locator('.planner-nav-primary [data-view="activity"]').click();
+   await page.locator('.history-page [data-view="transactions"]').click();
+   assert.equal(await page.locator('.transactions-page').count(),1);
+   assert.equal(await page.locator('.planner-nav-primary [data-view="activity"].active').count(),1,
+    'Planned payments keep Transactions selected');
+   await page.locator('.transactions-page [data-view="activity"]').click();
+   assert.equal(await page.locator('.history-page .history-activity-filters').count(),1);
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   const afterNested=await page.evaluate(()=>({
+    epoch:window.HouseholdPreparedViewGeneration(),
+    forecast:window.HouseholdPlannerWorkStats().forecastBuilds
+   }));
+   assert.deepEqual(afterNested,beforeNested,
+    'Nested navigation reuses prepared DOM without new financial calculations');
+
    // Selected-day rows omit a redundant date track. Regression-test a long
    // fictional payee against the same CSS as the real selected-day panel,
    // including narrow 320px and 390px iPhone layouts.
