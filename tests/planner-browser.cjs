@@ -1785,7 +1785,7 @@ const {chromium,webkit}=require('playwright');
     'Review sorter selected value needs no second visible caption');
    // Category choice must share the amount's vertical center on full-width
    // rows; on phones it stays beneath the transaction without clipping.
-   const categoryPickers=page.locator('[data-category-review-form] > label');
+   const categoryPickers=page.locator('[data-category-review-form] > label.minimal-control-label');
    if(await categoryPickers.count()){
     for(const width of (mobile?[320,390]:[768,1280])){
      await page.setViewportSize({width,height:mobile?844:900});
@@ -1821,6 +1821,31 @@ const {chromium,webkit}=require('playwright');
     assert.ok(await page.locator('[data-category-review-form] .ledger-transaction-identity small')
      .evaluateAll(notes=>notes.every(note=>!/Missing category|Unassigned category/i.test(note.textContent))),
      'Review category context must not repeat in every transaction subtitle');
+   }
+   // Category checks are independent from the existing one-click editor.
+   const reviewSelectionRows=page.locator('.reviews-page [data-review-select-row]'),
+    reviewSelectionToolbar=page.locator('[data-review-bulk-toolbar]'),
+    reviewSelectAll=reviewSelectionToolbar.locator('[data-review-select-all]');
+   if(await reviewSelectionRows.count()){
+    assert.equal(await reviewSelectionRows.count(),await page.locator('[data-category-review-form]').count(),
+     'Every visible category issue, bank transaction or plan, has one checkbox');
+    const visibleCount=await reviewSelectionRows.count();
+    await reviewSelectAll.click();
+    assert.equal(await reviewSelectionRows.evaluateAll(rows=>rows.filter(x=>x.checked).length),visibleCount,
+     'Select all shown checks every visible category issue');
+    assert.equal((await reviewSelectionToolbar.locator('[data-review-bulk-count]').innerText()).trim(),
+     visibleCount+' selected');
+    await reviewSelectAll.click();
+    assert.equal(await reviewSelectionRows.evaluateAll(rows=>rows.filter(x=>x.checked).length),0,
+     'Select all shown toggles off without categorizing or saving anything');
+    await reviewSelectionRows.first().check();
+    assert.equal(await reviewSelectionToolbar.locator('[data-review-bulk-category]').isEnabled(),true);
+    await reviewSelectionToolbar.locator('[data-review-bulk-category]').selectOption('Shopping');
+    assert.equal(await reviewSelectionToolbar.locator('[data-review-bulk-apply]').isEnabled(),true,
+     'A selected row and a target category enable the batch Apply action');
+    await reviewSelectionToolbar.locator('[data-review-bulk-clear]').click();
+    assert.equal(await reviewSelectionRows.first().isChecked(),false);
+    assert.equal(await reviewSelectionToolbar.locator('[data-review-bulk-apply]').isEnabled(),false);
    }
    // One selector sorts each review group without altering approvals, review
    // counts, bank records, or the three distinct review sections.
@@ -1965,6 +1990,45 @@ const {chromium,webkit}=require('playwright');
      assert.equal(await page.locator('[data-category-review-form][data-category-id="'+id+'"]').count(),0,
       'A specific category also saves on selection with no extra tap');
     }
+   }
+
+   // Bulk categorization saves two independent exact items with one Apply.
+   // No merchant-level learning may silently alter other posted bank records.
+   const remainingReviewRows=page.locator('[data-category-review-form]');
+   if(await remainingReviewRows.count()>=2){
+    const two=await remainingReviewRows.evaluateAll(rows=>rows.slice(0,2).map(row=>({
+     id:row.dataset.categoryId,kind:row.dataset.categoryKind
+    })));
+    const beforeCount=await remainingReviewRows.count();
+    await remainingReviewRows.nth(0).locator('[data-review-select-row]').check();
+    await remainingReviewRows.nth(1).locator('[data-review-select-row]').check();
+    assert.equal(await page.locator('[data-review-bulk-count]').innerText(),'2 selected');
+    await page.locator('[data-review-bulk-category]').selectOption('Shopping');
+    await page.locator('[data-review-bulk-apply]').click();
+    await page.waitForFunction(expected=>document.querySelectorAll('[data-category-review-form]').length===expected,
+     beforeCount-2,{timeout:30000});
+    assert.equal(await page.locator('[data-review-bulk-count]').count()?
+     await page.locator('[data-review-bulk-count]').innerText():'0 selected','0 selected',
+     'Successful bulk save clears the selection');
+    const preferences=await page.evaluate(()=>JSON.parse(localStorage.getItem(
+     'household-planner-sample-settings-v1')||'{}'));
+    for(const item of two){
+     if(item.kind==='transaction')
+      assert.equal(preferences.categoryOverrides?.[item.id],'Shopping',
+       'Bulk transaction classification persists as an explicit row override');
+     else{
+      const group=item.kind==='schedule'?preferences.futureRecurringRules:
+       item.kind==='oneoff'?preferences.futureTransactionAdds:preferences.paymentBills;
+      // Demo forecast plans live beneath the saved predictions object.
+      const plans=group||preferences[item.kind]||[];
+      if(plans.length){
+       const record=plans.find(row=>String(row.id)===item.id);
+       if(record)assert.equal(record.category,'Shopping');
+      }
+     }
+    }
+    assert.equal(await remainingReviewRows.count(),beforeCount-2,
+     'One Apply clears exactly the selected category issues');
    }
 
    const suggestion=page.locator(
