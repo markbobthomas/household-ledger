@@ -91,8 +91,9 @@ console.log('PASS categorized external outflows count once, paired/card/incoming
 // Execute the real shared renderer aggregation with fictional reporting inputs.
 const vm=require('node:vm'),fs=require('node:fs');
 const code=fs.readFileSync(require.resolve('../planner.js'),'utf8');
-const reporting=code.slice(code.indexOf('function categorySpendingCents('),code.indexOf('function statementHeading('));
-const ctx=vm.createContext({window:{HouseholdPlannerHistory:history}});
+const reporting=code.slice(code.indexOf('const reportMeasures='),code.indexOf('function statementHeading('));
+const Accounting=require('../accounting.js');
+const ctx=vm.createContext({window:{HouseholdPlannerHistory:history,HouseholdAccounting:Accounting}});
 vm.runInContext(reporting,ctx);
 const rows=[{id:'purchase',type:'expense',amount:100},{id:'refund',type:'refund',amount:20},
  {id:'pending',type:'expense',amount:30,pending:true},
@@ -105,4 +106,4 @@ assert.equal(totals.expectedCents,3500);
 assert.equal(totals.usedCents,24000);
 assert.equal(totals.totalBudgetCents,20000);
 assert.equal(totals.totalBudgetPercent,120);
-assert.equal(ctx.cardActivityCents(byId('bill')),0,'Purchase-only reports exclude categorized outward transfers');
+assert.equal(Accounting.cardActivityCents(byId('bill')),0,'Purchase-only reports exclude categorized outward transfers');
