@@ -104,7 +104,7 @@ assert.equal(JSON.stringify(todayRows),todayRowsBefore,
  'Calendar bank overlay never rewrites the source records');
 const weekendRow={id:'fictional-weekend',date:'2026-10-18',accountId:'checking',
  type:'expense',cashDirection:'out',amount:13,merchant:'Fictional Sunday Pharmacy',pending:false};
-const weekendNotes={'bank:'+JSON.stringify(['checking',weekendRow.id]):'Picked up prescription'};
+const weekendNotes={['bank:'+JSON.stringify(['checking',weekendRow.id])]:'Picked up prescription'};
 const weekendHTML=tool.render({...todayInput,prefs:{...todayInput.prefs,
  transactionNotes:weekendNotes},bundle:{...todayInput.bundle,rows:[...todayRows,weekendRow]}});
 assert.match(weekendHTML,/data-calendar-weekend-activity/,
