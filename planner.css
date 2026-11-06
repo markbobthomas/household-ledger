@@ -6600,3 +6600,51 @@ a:hover{color:#166e61}
 .calendar-today-actual .calendar-detail-items{display:grid;gap:5px}
 .calendar-actual-event{font-weight:500}
 .calendar-actual-event .calendar-event-amount{font-size:.82em;font-weight:500}
+
+
+/* Review category batch selection: compact desktop columns, mobile two-line rows. */
+.reviews-page .review-bulk-toolbar{
+ display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+ margin:8px 0 12px;padding:8px 0;border-bottom:1px solid #e4eae6;
+}
+.reviews-page .review-bulk-toolbar [data-review-bulk-count]{
+ font-weight:700;font-size:12px;color:#445d4f;min-width:70px;
+}
+.reviews-page .review-bulk-toolbar select{
+ flex:1 1 160px;min-width:130px;max-width:230px;
+ min-height:36px;padding:6px 9px;border:1px solid #cbd9cf;
+ border-radius:7px;color:#263c30;background:#fff;font:inherit;
+}
+.reviews-page .review-bulk-toolbar .btn{min-height:36px;padding:7px 10px;white-space:nowrap}
+.reviews-page .category-review-row{
+ grid-template-columns:28px minmax(0,1fr) minmax(155px,240px);
+ column-gap:10px;
+}
+.reviews-page .category-review-row>.review-category-check{
+ display:grid;place-items:center;align-self:center;
+ width:28px;height:42px;min-width:0;margin:0;padding:0;cursor:pointer;
+}
+.reviews-page .review-category-check input{
+ width:18px;height:18px;min-width:18px;margin:0;accent-color:#315ebd;
+ cursor:pointer;
+}
+.reviews-page .review-category-check input:disabled{cursor:wait}
+@media(max-width:650px){
+ .reviews-page .category-review-row{
+  grid-template-columns:28px minmax(0,1fr);column-gap:8px;
+ }
+ .reviews-page .category-review-row>.review-category-check{
+  grid-column:1;grid-row:1;
+ }
+ .reviews-page .category-review-row>.category-review-info{
+  grid-column:2;grid-row:1;
+ }
+ .reviews-page .category-review-row>label.minimal-control-label{
+  grid-column:2;grid-row:2;
+ }
+ .reviews-page .review-bulk-toolbar select{
+  order:2;flex:1 1 100%;max-width:none;
+ }
+ .reviews-page .review-bulk-toolbar [data-review-bulk-apply]{order:3;flex:1 1 auto}
+ .reviews-page .review-bulk-toolbar [data-review-bulk-clear]{order:4}
+}

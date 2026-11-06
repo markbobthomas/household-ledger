@@ -89,6 +89,9 @@ let historyAccount='all',historySearch='',historySort='newest',historyCategoryFi
 let historyView=activeTab==='activity'?'list':'categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
 let categoryReviewLimit=40,reviewSort='newest',reviewPane='';
+const reviewCategorySelected=new Set();
+let reviewBulkSaving=false;
+const reviewCategoryKey=(kind,id)=>JSON.stringify([String(kind),String(id)]);
 let historyBudgetMessage='',historyBudgetBusy=false,historyCategoryOrderBusy=false,
  historyCategoryDrag=null,historyCategoryNotice='',latestCategorySave=null;
 // Session-only selection of visible bank records; never stored with bank data or forecasts.
@@ -3134,12 +3137,15 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   ],shownCategories=sortedReviewRows(categoryRows,item=>item.date,
    item=>item.merchant,item=>item.amount).slice(0,categoryReviewLimit),
   categoryRow=item=>{
-   const label=item.isPlan?'Bill':'Transaction';
+   const label=item.isPlan?'Bill':'Transaction',key=reviewCategoryKey(item.kind,item.id);
    const openAttrs=item.isPlan?
     ' data-review-plan-kind="'+escapeHTML(item.kind)+'" data-review-plan-id="'+escapeHTML(item.id)+'"':
     ' data-review-bank-id="'+escapeHTML(item.id)+'" data-review-bank-account="'+escapeHTML(item.accountId||'')+'"';
    return '<div class="category-review-row" data-category-review-form data-review-order-date="'+escapeHTML(item.date||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
+    '<label class="review-category-check"><input type="checkbox" data-review-select-row data-review-category-key="'+
+     escapeHTML(key)+'" aria-label="Select '+escapeHTML(label.toLowerCase())+' '+escapeHTML(item.merchant)+'"'+
+     (reviewCategorySelected.has(key)?' checked':'')+'><span class="visually-hidden">Select</span></label>'+
     '<button type="button" class="category-review-info category-review-open ledger-transaction-row"'+openAttrs+
      ' aria-label="Open '+escapeHTML(label.toLowerCase())+' details for '+escapeHTML(item.merchant)+'">'+
      '<span class="ledger-transaction-date">'+escapeHTML(item.date?dayLabel(item.date):'—')+'</span>'+
@@ -3154,6 +3160,9 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
     '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
   };
+ // A refreshed bank sync or resolved item must not leave a stale bulk choice.
+ const activeKeys=new Set(categoryRows.map(item=>reviewCategoryKey(item.kind,item.id)));
+ for(const key of reviewCategorySelected)if(!activeKeys.has(key))reviewCategorySelected.delete(key);
  const reviewRecommendations=items=>sortedReviewRows(items,
   r=>r.lastDate||r.examples?.[0]?.date||r.nextDate,r=>r.merchant,r=>r.amount),
   reviewOverdue=items=>sortedReviewRows(items,
@@ -3195,7 +3204,19 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   '<section class="panel category-review-panel" data-category-review>'+
    '<div class="section-title"><h2>Categories to confirm</h2>'+
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
-   (categoryCount?shownCategories.map(categoryRow).join('')+
+   (categoryCount?
+    '<div class="review-bulk-toolbar" data-review-bulk-toolbar>'+
+     '<button type="button" class="btn" data-review-select-all>'+
+      (shownCategories.length&&shownCategories.every(item=>reviewCategorySelected.has(
+       reviewCategoryKey(item.kind,item.id)))?'Deselect shown':'Select all shown')+'</button>'+
+     '<span data-review-bulk-count role="status" aria-live="polite">'+reviewCategorySelected.size+' selected</span>'+
+     '<select data-review-bulk-category aria-label="Category for selected items"'+
+      (reviewCategorySelected.size?'':' disabled')+'>'+categoryOptions()+'</select>'+
+     '<button type="button" class="btn primary" data-review-bulk-apply disabled>Apply to selected</button>'+
+     '<button type="button" class="btn" data-review-bulk-clear'+
+      (reviewCategorySelected.size?'':' disabled')+'>Clear</button>'+
+    '</div>'+
+    shownCategories.map(categoryRow).join('')+
     (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
      'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
     '')+'</section></div>'+
@@ -4686,7 +4707,57 @@ document.addEventListener('click',async e=>{
   });
   updateHistorySelectionSummary();return;
  }
- if(e.target.closest('[data-more-category-review]')){categoryReviewLimit+=40;render();return}
+ const toggleReviewSelection=e.target.closest?.('[data-review-select-all]');
+ if(toggleReviewSelection){
+  if(reviewBulkSaving)return;
+  const boxes=[...document.querySelectorAll('.reviews-page [data-review-select-row]')],
+   allShown=boxes.length&&boxes.every(box=>box.checked);
+  for(const box of boxes){
+   box.checked=!allShown;
+   if(allShown)reviewCategorySelected.delete(box.dataset.reviewCategoryKey);
+   else reviewCategorySelected.add(box.dataset.reviewCategoryKey);
+  }
+  updateReviewBulkControls();return;
+ }
+ if(e.target.closest?.('[data-review-bulk-clear]')){
+  if(reviewBulkSaving)return;
+  reviewCategorySelected.clear();
+  for(const box of document.querySelectorAll('.reviews-page [data-review-select-row]'))box.checked=false;
+  updateReviewBulkControls();return;
+ }
+ const applyReviewCategory=e.target.closest?.('[data-review-bulk-apply]');
+ if(applyReviewCategory){
+  if(reviewBulkSaving)return;
+  const categorySelect=document.querySelector('.reviews-page [data-review-bulk-category]'),
+   chosen=model.canonicalCategory(state(),categorySelect?.value);
+  if(!chosen||chosen==='Uncategorized'||!reviewCategorySelected.size)return;
+  const queue=model.categoryReviewQueue(state()),
+   items=[...queue.plans,...queue.transactions].filter(item=>
+    reviewCategorySelected.has(reviewCategoryKey(item.kind,item.id)));
+  if(!items.length){reviewCategorySelected.clear();render();return;}
+  reviewBulkSaving=true;updateReviewBulkControls();
+  applyReviewCategory.textContent='Saving 0 of '+items.length+'…';
+  let saved=0;const failed=[];
+  for(const item of items){
+   try{
+    // Explicit overrides only: bulk edits must not silently learn merchant
+    // rules that would recategorize unselected bank transactions.
+    if(item.kind==='transaction')await saveTransactionCategory(item.id,chosen,true,false);
+    else await saveReviewPlanCategory(item.kind,item.id,chosen);
+    reviewCategorySelected.delete(reviewCategoryKey(item.kind,item.id));
+    saved++;
+   }catch(error){failed.push(String(item.merchant||'Item')+': '+String(error.message||error));}
+   applyReviewCategory.textContent='Saving '+(saved+failed.length)+' of '+items.length+'…';
+  }
+  reviewBulkSaving=false;
+  reviewNotice=(saved?saved+' categor'+(saved===1?'y':'ies')+' saved. ':'')+
+   (failed.length?failed.length+' could not be saved. '+failed.slice(0,2).join(' · '):'');
+  render();return;
+ }
+ if(e.target.closest('[data-more-category-review]')){
+  if(reviewBulkSaving)return;
+  categoryReviewLimit+=40;render();return;
+ }
  if(e.target.closest('[data-history-more]')){
   historyLimit+=90;renderHistoryFilters();return;
  }
@@ -5023,13 +5094,13 @@ document.addEventListener('click',async e=>{
 });
 // Store one correction and its conservative merchant lesson as one decision.
 // Bank-provided source records and unrelated forecasts are never rewritten here.
-async function saveTransactionCategory(id,category,confirm=false){
+async function saveTransactionCategory(id,category,confirm=false,remember=true){
  const current=state(),beforeOverrides=JSON.stringify(current.categoryOverrides||{}),
   beforeLearning=JSON.stringify(current.learning||{});
  try{
   model.setCategory(current,id,category,confirm);
   const tx=(current.transactions||[]).find(row=>String(row.id)===String(id));
-  const lesson=tx?.type==='expense'&&!['Other','Uncategorized'].includes(category)?
+  const lesson=remember&&tx?.type==='expense'&&!['Other','Uncategorized'].includes(category)?
    model.learnCategory(current,id,category):null;
   const saved=live()?
    await window.HouseholdLiveSource.persistCategory(id,current.categoryOverrides?.[id]??null,Boolean(lesson)):
@@ -5055,6 +5126,47 @@ async function saveTransactionCategory(id,category,confirm=false){
   throw error;
  }
 }
+// Use exactly the same forecast editor semantics for one or several Review bills.
+async function saveReviewPlanCategory(kind,id,chosen){
+ await commitForecastChange(()=>{
+  if(kind==='schedule')window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,chosen);
+  else{
+   const group=kind==='oneoff'?state().predictions?.futureTransactionAdds:
+    kind==='bill'?state().predictions?.paymentBills:null;
+   const entry=(group||[]).find(row=>String(row.id)===String(id));
+   if(!entry)throw Error('This bill changed. Refresh and try again.');
+   entry.category=chosen;entry.categoryReviewed=true;
+  }
+ });
+}
+function updateReviewBulkControls(){
+ const bar=document.querySelector('.reviews-page [data-review-bulk-toolbar]');
+ if(!bar)return;
+ const boxes=[...document.querySelectorAll('.reviews-page [data-review-select-row]')],
+  count=reviewCategorySelected.size,
+  allShown=boxes.length>0&&boxes.every(box=>box.checked),
+  selectAll=bar.querySelector('[data-review-select-all]'),
+  clear=bar.querySelector('[data-review-bulk-clear]'),
+  picker=bar.querySelector('[data-review-bulk-category]'),
+  apply=bar.querySelector('[data-review-bulk-apply]');
+ bar.querySelector('[data-review-bulk-count]').textContent=count+' selected';
+ selectAll.textContent=allShown?'Deselect shown':'Select all shown';
+ selectAll.disabled=reviewBulkSaving||!boxes.length;
+ clear.disabled=reviewBulkSaving||!count;
+ picker.disabled=reviewBulkSaving||!count;
+ apply.disabled=reviewBulkSaving||!count||!picker.value;
+ for(const box of boxes)box.disabled=reviewBulkSaving;
+}
+document.addEventListener('change',e=>{
+ if(e.target.matches?.('[data-review-select-row]')){
+  if(reviewBulkSaving)return;
+  const key=e.target.dataset.reviewCategoryKey;
+  if(e.target.checked)reviewCategorySelected.add(key);
+  else reviewCategorySelected.delete(key);
+  updateReviewBulkControls();return;
+ }
+ if(e.target.matches?.('[data-review-bulk-category]'))updateReviewBulkControls();
+});
 // Selecting a category is explicit approval. The category issue remains
 // visible until its private bank override or forecast edit has been saved.
 document.addEventListener('change',async e=>{
@@ -5079,6 +5191,7 @@ document.addEventListener('change',async e=>{
 document.addEventListener('change',async e=>{
  const select=e.target;
  if(!select.matches?.('[data-category-review-form] select[name="category"]'))return;
+ if(reviewBulkSaving)return;
  const item=select.closest('[data-category-review-form]');
  if(!item||item.dataset.saving==='true')return;
  const kind=item.dataset.categoryKind,id=item.dataset.categoryId,
@@ -5099,20 +5212,8 @@ document.addEventListener('change',async e=>{
  const prior=item.querySelector('[data-category-review-error]');
  if(prior)prior.remove();
  try{
-  if(kind==='transaction'){
-   await saveTransactionCategory(id,chosen,true);
-  }else{
-   await commitForecastChange(()=>{
-    if(kind==='schedule')window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,chosen);
-    else{
-     const group=kind==='oneoff'?state().predictions?.futureTransactionAdds:
-      kind==='bill'?state().predictions?.paymentBills:null;
-     const entry=(group||[]).find(row=>String(row.id)===id);
-     if(!entry)throw Error('This bill changed. Refresh and try again.');
-     entry.category=chosen;entry.categoryReviewed=true;
-    }
-   });
-  }
+  if(kind==='transaction')await saveTransactionCategory(id,chosen,true);
+  else await saveReviewPlanCategory(kind,id,chosen);
   reviewNotice='Category saved.';render();
  }catch(error){
   // Reset to the placeholder for easy retry, including reselecting the same
