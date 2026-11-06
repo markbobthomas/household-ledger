@@ -32,62 +32,11 @@ const canPlan=t=>Boolean(t&&validDate(t.date)&&
 // Zelle daycare payment). Only a deliberate saved category correction can
 // count such an unmatched debit in spending reports. Never reclassify the
 // bank fact, forecast ledger, linked transfers, card settlements or deposits.
-function categorizedOutflowCents(t){
- if(!t||t.pending||t.pairedTransactionId||t.type!=='transfer'||
-    t.cashDirection!=='out'||t.method!=='manual'||
-    t.reconciliationStatus==='ambiguous'||
-    ['card_payment','unclassified_card_credit'].includes(t.accountingKind)||
-    t.accountType==='credit'||t.accountType==='loan'||
-    ['Uncategorized','Income','Transfer','Savings'].includes(String(t.category||'')))
-  return 0;
- const cents=Math.round(Number(t.amount)*100);
- return Number.isFinite(cents)&&cents>0?cents:0;
-}
-// Budget-only reconciliation for bank descriptions which omit "credit card".
- // A unique matching inbound credit on a connected card plus payment wording on
- // checking is strong evidence of a settlement, not an extra purchase. Never
- // infer a payment from amount equality alone, or from a merchant refund.
-function budgetCardSettlementIds(rows){
- const ids=new Set(),cardCredits=new Map(),cashDebits=[];
- const cents=t=>Math.round(Number(t.amount)*100),
-  day=t=>Date.parse(String(t.date||'')+'T12:00:00Z'),
-  matched=t=>Boolean(t.pending||t.pairedTransactionId),
-  isIn=t=>t.cashDirection==='in'&&t.accountType==='credit'&&
-   ['card_payment','internal_transfer','unclassified_card_credit'].includes(t.accountingKind),
-  isOut=t=>t.cashDirection==='out'&&t.accountType!=='credit'&&
-   t.accountType!=='loan'&&['expense','transfer'].includes(t.type),
-  paymentHint=t=>{
-   const source=String(t.merchant||'')+' '+String(t.description||''),
-    pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{},
-    category=String(pfc.detailed||'').toUpperCase();
-   // A generic ACH or "payment" is not enough on its own. It can be
-   // paired safely only when a unique actual card-side credit exists.
-   return /\b(?:payment|pmt|pymt|autopay|auto\s?pay|bill\s?pay|paybill|e-?pay)\b/i.test(source)||
-    /CREDIT_CARD_PAYMENT|CARD_PAYMENT/.test(category);
-  };
- for(const row of rows||[]){
-  if(!row||matched(row)||!Number.isFinite(cents(row))||cents(row)<=0||
-     !Number.isFinite(day(row)))continue;
-  if(isIn(row)){
-   if(!cardCredits.has(cents(row)))cardCredits.set(cents(row),[]);
-   cardCredits.get(cents(row)).push(row);
-  }else if(isOut(row)&&paymentHint(row))cashDebits.push(row);
- }
- const choices=new Map();
- for(const debit of cashDebits){
-  const matches=(cardCredits.get(cents(debit))||[]).filter(credit=>
-   credit.accountId!==debit.accountId&&Math.abs(day(credit)-day(debit))<=5*86400000);
-  if(matches.length===1){
-   const credit=matches[0],key=String(credit.id);
-   if(!choices.has(key))choices.set(key,[]);
-   choices.get(key).push(debit);
-  }
- }
- for(const [id,matches] of choices)if(matches.length===1){
-  ids.add(String(matches[0].id));ids.add(id);
- }
- return ids;
-}
+const Accounting=root.HouseholdAccounting||
+ (typeof require==='function'?require('./accounting.js'):null);
+if(!Accounting)throw Error('Shared accounting measures are required');
+const categorizedOutflowCents=Accounting.categorizedOutflowCents;
+const budgetCardSettlementIds=Accounting.budgetCardSettlementIds;
 const isMortgage=t=>{
  const p=t.personal_finance_category||t.source?.personalFinanceCategory||{};
  return /\b(mortgage|mtg|home loan|pennymac|loandepot|newrez|shellpoint|mr cooper)\b/i.test(String(t.merchant||''))||

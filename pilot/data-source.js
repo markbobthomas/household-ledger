@@ -76,20 +76,10 @@ function record(t,account){
  // settlement evidence missing from merchant_name. Keep both for the
  // read-only accounting/reconciliation view; never replace it with a label.
  const originalName=String(t.name||name).slice(0,250);
- const bankNarrative=name+' '+originalName;
- const code=String(pfc?.primary||'').toUpperCase(),lower=bankNarrative.toLowerCase();
- const incoming=amount<0,card=account.type==='credit';
- const obligation=Categorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
- // External mortgage and other bank-coded loan installments are cash bills,
- // NOT internal account transfers. Card settlements remain transfers.
- const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(bankNarrative)||
-   code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
- const earned=incoming&&!card&&Accounting?.recognizedIncome?.({
-  merchant:name,personal_finance_category:pfc,source:{plaidAmount:amount}
- },account);
- const transfer=!earned&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
-  lower.includes('transfer to ')||lower.includes('transfer from ')||payment);
- const type=transfer?'transfer':incoming&&(card||obligation?.isBill)?'refund':incoming?'income':'expense';
+ // Classification and reporting now share the accounting domain layer.
+ const {incoming,transfer,type}=Accounting.classifyPlaidSource({
+  amount,merchant:name,description:originalName,pfc
+ },account,Categorization);
  const row={id:String(t.id),date:t.date,merchant:name,description:originalName,amount:Math.abs(amount),
   type,account:account.name,accountId:account.id,pending:!!t.pending,category:'Other',
   ...(transfer?{cashDirection:incoming?'in':'out'}:{}),personal_finance_category:pfc,

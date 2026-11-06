@@ -269,7 +269,116 @@ function reconcile(state){
   needsReview:output.filter(t=>t.reconciliationStatus==='ambiguous'||t.reconciliationStatus==='needs-review').length
  }};
 }
-const api={accountType,registerAccounts,accountsFor,reconcile,recognizedIncome};
+// The private Plaid adapter and all statement/report readers share this
+// classification boundary. The provider's signed amount and source metadata
+// remain immutable; reconciliation later adds paired-transfer evidence.
+function classifyPlaidSource({amount,merchant,description,pfc},account,categorization){
+ const name=String(merchant||''),bankNarrative=name+' '+String(description||name),
+  code=String(pfc?.primary||'').toUpperCase(),lower=bankNarrative.toLowerCase(),
+  incoming=Number(amount)<0,card=account?.type==='credit';
+ const obligation=categorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
+ const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(bankNarrative)||
+   code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
+ const earned=incoming&&!card&&recognizedIncome({
+  merchant:name,personal_finance_category:pfc,source:{plaidAmount:amount}
+ },account);
+ const transfer=!earned&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
+  lower.includes('transfer to ')||lower.includes('transfer from ')||payment);
+ return {incoming,transfer,type:transfer?'transfer':
+  incoming&&(card||obligation?.isBill)?'refund':incoming?'income':'expense'};
+}
+
+// One signed, integer-cent reporting contract. Reconciliation classifies
+// purchases/refunds/transfers first; selectors use these measures rather than
+// independently deciding whether an item is spending or earned income.
+function cardActivityCents(row){
+ if(!row||row.pending||row.pairedTransactionId||
+  ['card_payment','internal_transfer'].includes(row.accountingKind)||
+  !['expense','refund'].includes(row.type))return 0;
+ const value=Math.round(Math.abs(Number(row.amount))*100);
+ if(!Number.isFinite(value))return 0;
+ return row.type==='refund'?-value:value;
+}
+function categorizedOutflowCents(t){
+ if(!t||t.pending||t.pairedTransactionId||t.type!=='transfer'||
+    t.cashDirection!=='out'||t.method!=='manual'||
+    t.reconciliationStatus==='ambiguous'||
+    ['card_payment','unclassified_card_credit'].includes(t.accountingKind)||
+    t.accountType==='credit'||t.accountType==='loan'||
+    ['Uncategorized','Income','Transfer','Savings'].includes(String(t.category||'')))
+  return 0;
+ const value=Math.round(Number(t.amount)*100);
+ return Number.isFinite(value)&&value>0?value:0;
+}
+function reportingMeasures(row,settlements){
+ const settled=Boolean(row&&settlements?.has(String(row.id))),
+  purchaseCents=settled?0:cardActivityCents(row),
+  manualOutflowCents=settled?0:categorizedOutflowCents(row),
+  provisionalPendingSpendingCents=!settled&&row?.pending?
+   cardActivityCents({...row,pending:false}):0;
+ let postedIncomeCents=0;
+ if(row&&!row.pending&&!row.pairedTransactionId&&row.type==='income'&&
+    !['card_payment','internal_transfer'].includes(row.accountingKind)){
+  const value=Math.round(Math.abs(Number(row.amount))*100);
+  if(Number.isSafeInteger(value))postedIncomeCents=value;
+ }
+ return {purchaseCents,manualOutflowCents,
+  postedSpendingCents:purchaseCents+manualOutflowCents,
+  provisionalPendingSpendingCents,postedIncomeCents};
+}
+// A card repayment or an internal account transfer never creates a second
+// expense in forecast reports; the canonical balance engine owns its legs.
+function forecastSpendingCents(event){
+ if(event?.kind!=='event'||!['expense','refund'].includes(event.type)||
+  event.transferGroupId)return 0;
+ const value=Math.round(Number(event.amount)*100);
+ return Number.isSafeInteger(value)&&value>0?(event.type==='refund'?-value:value):0;
+}
+
+// A generic payment reference is not enough to infer a checking-to-card
+// settlement. It must match ONE opposite-side card credit by amount/date.
+function budgetCardSettlementIds(rows){
+ const ids=new Set(),cardCredits=new Map(),cashDebits=[];
+ const cents=t=>Math.round(Number(t.amount)*100),
+  day=t=>Date.parse(String(t.date||'')+'T12:00:00Z'),
+  matched=t=>Boolean(t.pending||t.pairedTransactionId),
+  isIn=t=>t.cashDirection==='in'&&t.accountType==='credit'&&
+   ['card_payment','internal_transfer','unclassified_card_credit'].includes(t.accountingKind),
+  isOut=t=>t.cashDirection==='out'&&t.accountType!=='credit'&&
+   t.accountType!=='loan'&&['expense','transfer'].includes(t.type),
+  paymentHint=t=>{
+   const source=String(t.merchant||'')+' '+String(t.description||'') ,
+    pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{},
+    category=String(pfc.detailed||'').toUpperCase();
+   return /\b(?:payment|pmt|pymt|autopay|auto\s?pay|bill\s?pay|paybill|e-?pay)\b/i.test(source)||
+    /CREDIT_CARD_PAYMENT|CARD_PAYMENT/.test(category);
+  };
+ for(const row of rows||[]){
+  if(!row||matched(row)||!Number.isFinite(cents(row))||cents(row)<=0||
+     !Number.isFinite(day(row)))continue;
+  if(isIn(row)){
+   if(!cardCredits.has(cents(row)))cardCredits.set(cents(row),[]);
+   cardCredits.get(cents(row)).push(row);
+  }else if(isOut(row)&&paymentHint(row))cashDebits.push(row);
+ }
+ const choices=new Map();
+ for(const debit of cashDebits){
+  const matches=(cardCredits.get(cents(debit))||[]).filter(credit=>
+   credit.accountId!==debit.accountId&&Math.abs(day(credit)-day(debit))<=5*86400000);
+  if(matches.length===1){
+   const credit=matches[0],key=String(credit.id);
+   if(!choices.has(key))choices.set(key,[]);
+   choices.get(key).push(debit);
+  }
+ }
+ for(const [id,matches] of choices)if(matches.length===1){
+  ids.add(String(matches[0].id));ids.add(id);
+ }
+ return ids;
+}
+const api={accountType,registerAccounts,accountsFor,reconcile,recognizedIncome,
+ classifyPlaidSource,cardActivityCents,categorizedOutflowCents,
+ reportingMeasures,forecastSpendingCents,budgetCardSettlementIds};
 root.HouseholdAccounting=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
