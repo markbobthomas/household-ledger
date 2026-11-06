@@ -79,8 +79,29 @@ const request=(route,body,authorized=true)=>new Promise((resolve,reject)=>{
   const same=await request('/api/ledger');
   assert.equal(same.data.preparedForecast.generation,first.data.preparedForecast.generation,
    'Unchanged snapshots reuse a single prepared generation');
+  // Cosmetic and reporting-only saves still persist encrypted preferences
+  // but must not rebuild the unchanged financial forecast or bank history.
+  const reportOnly={
+   warnBelow:500,transactionNotes:{'bank:fictional-one':'Checked receipt'},
+   categoryDisplayOrder:['Groceries','Housing'],
+   categoryMonthlyBudgets:{Groceries:240},
+   cardPaymentReviewAcks:{'fictional-card|2026-10-31':'accepted'}
+  };
+  const cosmeticSave=await request('/api/ledger/forecasts',{predictions:reportOnly});
+  assert.equal(cosmeticSave.status,200,'Display-only preference save still succeeds');
+  const cosmetic=await request('/api/ledger');
+  assert.equal(cosmetic.data.preparedForecast.generation,first.data.preparedForecast.generation,
+   'Notes, category ordering, budget limits and warning acknowledgements reuse one prepared financial forecast');
+  assert.deepEqual(cosmetic.data.adjustments.predictions,reportOnly,
+   'Read-only preferences persist and return to other devices');
+  const changedNotes={...reportOnly,
+   transactionNotes:{...reportOnly.transactionNotes,'bank:fictional-two':'Invoice saved'}};
+  assert.equal((await request('/api/ledger/forecasts',{predictions:changedNotes})).status,200);
+  const cosmeticAgain=await request('/api/ledger');
+  assert.equal(cosmeticAgain.data.preparedForecast.generation,first.data.preparedForecast.generation,
+   'Repeated note-only saves do not invalidate canonical projection cache');
   const saved=await request('/api/ledger/forecasts',{predictions:{
-   warnBelow:700,futureTransactionAdds:[{
+   ...changedNotes,warnBelow:700,futureTransactionAdds:[{
     id:'fictional-next-expense',accountId:account.id,type:'expense',
     date:after,merchant:'Fictional Planned Bill',amount:60
    }]
@@ -88,7 +109,7 @@ const request=(route,body,authorized=true)=>new Promise((resolve,reject)=>{
   assert.equal(saved.status,200,'Forecast-only edit commits normally');
   const next=await request('/api/ledger');
   assert.ok(next.data.preparedForecast.generation>first.data.preparedForecast.generation,
-   'Every accepted client edit invalidates server prepared projections');
+   'A forecast-affecting edit invalidates server prepared projections');
   assert.ok(next.data.preparedForecast.bundle.ledger.some(row=>row.merchant==='Fictional Planned Bill'),
    'Subsequent authenticated read sees updated planned payment');
   assert.deepEqual(next.data.transactions,first.data.transactions,
