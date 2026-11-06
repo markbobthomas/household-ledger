@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-11-05 (Pacific)  
+**Updated:** 2026-11-06 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
