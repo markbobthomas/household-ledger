@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const H=require('../planner-history.js');
-const I=require('../planner-intelligence.js');
+
 const T=require('../planner-transactions.js');
 const accounts=[
  {id:'checking',name:'Primary Checking',accountType:'checking',transactionAccount:'Checking'},
@@ -81,8 +81,8 @@ assert.equal(H.recommendedRepeating([tx('old1','2025-01-02','Mortgage',2000),
  tx('old2','2025-02-02','Mortgage',2000)],accounts,asOf,{}).length,1,
  'Historically observed recurring bills stay recommended even when not recent');
 
-assert.ok(I.missingMortgages(mortgage,{},accounts,asOf).length>0,
- 'Missing mortgage helper remains available independently');
+assert.ok(H.candidates(mortgage,accounts,asOf,{},[]).some(x=>x.merchant==='Home Mortgage ACH'),
+ 'Current Reviews engine retains the missing mortgage candidate');
 const obscureSingle=H.candidates([
  tx('unknown-one','2026-10-10','Bluebird Services',157.42)
 ],accounts,asOf,{},[]);

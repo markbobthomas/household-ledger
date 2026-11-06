@@ -2,8 +2,8 @@
 const assert=require('node:assert/strict');
 const {spawn}=require('node:child_process');
 const path=require('node:path');
-const {chromium,webkit}=require('playwright');
-(async()=>{
+const {chromium,webkit}=require('./browser-harness.cjs');
+module.exports=(async()=>{
  const port=18891,server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],
   {cwd:path.resolve(__dirname,'..'),stdio:'ignore'});
  let desktop,iphone;
