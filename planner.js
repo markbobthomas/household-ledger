@@ -4580,13 +4580,10 @@ document.addEventListener('click',async e=>{
   if(!row){
    setNotice('That bank transaction is no longer available for review.');return;
   }
-  // Calendar and History consult the SAME account/direction/history-ID matcher.
-  // Never open a fresh recurring form for a payment already represented by a
-  // saved prediction, even if its bank amount is different.
+  // Actual bank data always opens the common detail panel. Any matched
+  // recurring plans appear as links; no new competing schedule is created.
   const matching=window.HouseholdPlannerTransactions.historicalScheduleMatches(
    row,activeAccounts(snapshot()),state().predictions?.futureRecurringRules||[]);
-  // Always open the same bank-record detail. Existing plans appear as
-  // contextual actions inside it; they are never recreated from this record.
   try{
    recurringDraft=null;
    if(!matching.length&&window.HouseholdPlannerHistory.canPlan(row)){
@@ -4596,20 +4593,8 @@ document.addEventListener('click',async e=>{
    reviewNotice='';
   }catch(error){setNotice(String(error.message||error));return}
   detailReturnFocus=e.target;
-   drawTransactionDetail(forecastFor(snapshot()),snapshot());
-   document.querySelector('.transaction-detail-close')?.focus();
-   return;
-  }
-  try{
-   recurringDraft=window.HouseholdPlannerHistory.draftFor(
-    row,lastHistoryRows,activeAccounts(snapshot()),snapshot().asOf);
-   reviewNotice='';
-  }catch(error){setNotice(String(error.message||error));return}
-  detailReturnFocus=e.target;
-  // Browser users see one shared panel. Lightweight test environments with
-  // no interactive DOM preserve the inline draft for banking safety checks.
   if(typeof $('planner-main')?.insertAdjacentHTML!=='function'){
-   transactionDetail=null;activeTab='history';render();return;
+   transactionDetail=null;activeTab='activity';render();return;
   }
   transactionDetail={kind:'actual',id:String(row.id),account};
   drawTransactionDetail(forecastFor(snapshot()),snapshot());
