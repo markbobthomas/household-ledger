@@ -2485,7 +2485,7 @@ function financialRecapPage(bundle,s){
     '<p>'+escapeHTML(periodLabel)+' · net of refunds</p>'+
     breakdown(topSpending,'No posted purchases in selected months.')+
     '</section>'+
-   '<section class="financial-recap-card financial-recap-upcoming"><h3>Next predicted bills</h3>'+
+   '<details class="financial-recap-card financial-recap-upcoming"><summary>Next predicted bills</summary>'+
     '<p>Next 30 days</p>'+
     (hasProjection?(upcoming.length?'<div class="financial-recap-rows">'+
       upcoming.map(r=>'<div class="financial-recap-row"><span><strong>'+
@@ -2498,7 +2498,7 @@ function financialRecapPage(bundle,s){
      '<div class="financial-recap-row"><span><strong>'+escapeHTML(cardAfterFive.merchant)+
      '</strong><small>'+escapeHTML(dayLabel(cardAfterFive.date))+'</small></span>'+
      '<strong>'+cash(cardAfterFive.amount)+'</strong></div></div>':'')+
-    '</section>'+
+    '</details>'+
   '</div></div>';
 }
 
@@ -3442,6 +3442,7 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
     escapeHTML(warningThreshold(state().predictions))+'" required></label>'+
     '<button class="btn primary" type="submit">Save</button></form></section>'+
+  '<details class="panel ledger-advanced-settings"><summary>Advanced settings and diagnostics</summary>'+
   (state().predictions?.recurringForecastMode!=='approved-only'&&
    Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?
   '<section class="panel mini-panel" aria-label="Automatic prediction exclusions">'+
@@ -3456,7 +3457,7 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  categoryLearning+auditPanel(chosen)+autopayPanel(s,bundle)+connectionPanel(s,bundle)+
+  categoryLearning+auditPanel(chosen)+'</details>'+autopayPanel(s,bundle)+connectionPanel(s,bundle)+
    (available()?'<section class="panel" aria-label="Share Ledger"><div class="section-title"><h2>Share Ledger</h2></div>'+
     '<p>Use this same private website on both phones to see the same household data. Send the link privately; the password must be shared separately.</p>'+
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+
