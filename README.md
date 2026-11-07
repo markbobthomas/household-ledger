@@ -115,3 +115,11 @@ node tests/forecast-client-save-smoke.cjs
 ```
 
 The dedicated rebuild workflow also checks the desktop Chromium and mobile WebKit interface. A successful unit test alone does not certify live Plaid or a Render deployment. Never use fictional Demo numbers as real household balances.
+
+### Phase 4 — encrypted transactional storage rehearsal (not active in private Ledger)
+
+`pilot/transactional-store.cjs` stages a Node 22+ SQLite transactional store for a future controlled migration. Every bank state document, forecast preference, hashed session record and bank transaction is AES-256-GCM encrypted with authenticated domain/key binding; account, month and transaction lookup keys are keyed HMACs, never plaintext bank IDs. A single SQLite transaction commits bank rows plus their last-good Item cursors; source/forecast/session updates remain independent, and no write can publish half of a bank sync. The existing live `pilot/server.cjs` **does not import or use this new store**.
+
+The offline `rehearseLegacyMigration({sourceFile,destinationFile,secret})` API reads the original AES-GCM files, builds a **new** SQLite file, compares every record after decryption, and publishes the destination only after exact parity. It never edits, removes, or renames the originals; it refuses to overwrite an existing destination. The mandatory fictional-data `tests/transactional-storage-smoke.cjs` covers readback, atomic rollback, sensitive-string absence from SQLite, account/month blind indexing, wrong keys, corrupted ciphertext, missing sidecars and restarts. No real bank data, tokens or snapshots are committed to GitHub.
+
+**Not yet approved or performed:** Turning this on for the private Render service, migrating real account data, changing `PILOT_STATE_PATH`, rotating `PILOT_ENCRYPTION_KEY`, changing disks or deploying a new database. Actual cutover requires a verified current Render revision and persistent-disk snapshots, an independent encrypted backup and restore rehearsal, a pause on concurrent household writes and a reversible rollout. See `docs/phase4-transactional-store-rehearsal.md` and `DEPLOYMENT_STATUS.md`. A green CI run or public GitHub Pages deployment is **not** proof that a private database migration occurred.
