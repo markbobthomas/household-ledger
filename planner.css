@@ -6836,6 +6836,7 @@ a:hover{color:#166e61}
  --ledger-page-filter-font:14px;
  --ledger-secondary-tab-font:13px;
  --ledger-section-heading-font:16px;
+ --ledger-page-heading-font:20px;
  --ledger-compact-filter-font:12px;
 }
 /* The two prominent Months/Account controls are identical wherever they
@@ -6883,6 +6884,16 @@ a:hover{color:#166e61}
  line-height:1.3!important;
  letter-spacing:-.2px!important;
 }
+/* Settings and Things to Check both have a top-level page heading; they
+   should share the same size rather than the prior 19px/20px mismatch. */
+.planner-page .page-heading h2,
+.reviews-page .review-intro h2{
+ font-size:var(--ledger-page-heading-font)!important;
+ font-family:inherit!important;
+ font-weight:750!important;
+ line-height:1.25!important;
+ letter-spacing:-.35px!important;
+}
 /* Repeating has seven fields and stays a deliberately compact toolbar, but
    those fields must not use inconsistent sizes within that same toolbar. */
 .schedule-page .schedule-toolbar.ledger-toolbar :is(input,select){
@@ -6895,6 +6906,7 @@ a:hover{color:#166e61}
   --ledger-page-filter-font:13px;
   --ledger-secondary-tab-font:12px;
   --ledger-section-heading-font:15px;
+  --ledger-page-heading-font:18px;
   --ledger-compact-filter-font:11px;
  }
 }
