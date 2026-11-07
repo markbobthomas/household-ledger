@@ -1621,6 +1621,13 @@ module.exports=(async()=>{
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await repeatingBillsMonth.inputValue(),'2026-11',
     'Selected month is retained when switching to Repeating');
+   const repeatingTypography=await page.locator('.schedule-page .schedule-toolbar.ledger-toolbar')
+    .evaluate(toolbar=>[...toolbar.querySelectorAll('select,input:not([type="checkbox"])')]
+     .filter(el=>!el.hidden).map(el=>getComputedStyle(el).fontSize));
+   assert.ok(repeatingTypography.length>=4&&
+    repeatingTypography.every(size=>size===(mobile?'11px':'12px')),
+    'Dense Repeating toolbar fields share a deliberate compact type scale: '+
+     JSON.stringify(repeatingTypography));
    assert.ok((await page.locator('[data-bills-repeating-total]').innerText()).startsWith('Total shown: '),
     'Repeating shows a live total beside the filtered list count');
    assert.equal(await page.locator('.schedule-toolbar').evaluate(el=>
