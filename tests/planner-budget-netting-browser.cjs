@@ -437,13 +437,14 @@ module.exports=(async()=>{
       controls=[...root.querySelectorAll('.bills-statement-filters :is(select,.bills-statement-settings)')]
        .map(el=>el.getBoundingClientRect());
      return {tabs:tabs.map(r=>({top:r.top,width:r.width,right:r.right})),
-      controls:controls.map(r=>({center:r.top+r.height/2,left:r.left,right:r.right,width:r.width})),
+      controls:controls.map(r=>({center:r.top+r.height/2,height:r.height,left:r.left,right:r.right,width:r.width})),
       viewport:innerWidth,overflow:document.documentElement.scrollWidth-innerWidth};
     });
     assert.ok(geometry.tabs.length===3&&
      geometry.tabs.every(r=>Math.abs(r.top-geometry.tabs[0].top)<=2)&&
      geometry.tabs.every(r=>Math.abs(r.width-geometry.tabs[0].width)<=2)&&
      geometry.controls.length===3&&
+     geometry.controls.every(r=>r.height===36)&&
      geometry.controls.every((r,i)=>Math.abs(r.center-geometry.controls[0].center)<=2&&
       (!i||r.left>=geometry.controls[i-1].right))&&
      geometry.controls.every(r=>r.width>65&&r.right<=width+2)&&
