@@ -3928,7 +3928,12 @@ document.addEventListener('click',async e=>{
  transactionDetail={kind:'note',key:trigger.dataset.editTransactionNote,
   name:trigger.dataset.noteName||'Transaction',date:trigger.dataset.noteDate||''};
  detailReturnFocus=trigger;
- drawTransactionDetail(forecastFor(snapshot()),snapshot());
+ // Notes are annotations. Prefer the already materialized financial bundle;
+ // only fall back to a fresh build after a bank/date refresh or cold startup.
+ const snap=snapshot(),prepared=preparedContext;
+ const bundle=preparedReady&&prepared?.bundle&&prepared.s?.asOf===snap.asOf?
+  prepared.bundle:forecastFor(snap);
+ drawTransactionDetail(bundle,snap);
  document.querySelector('.transaction-detail [name=note]')?.focus();
 });
 document.addEventListener('click',e=>{
