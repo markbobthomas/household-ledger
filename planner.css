@@ -6741,3 +6741,87 @@ a:hover{color:#166e61}
 .history-page .history-budget-filters > .history-budget-month-field{
  justify-content:flex-start!important;
 }
+
+/* Shared page-level month/account filters. Month Insights and Bills Upcoming now
+   use the same two-control, caption-free bar as Spending's Budget and reports.
+   Only the presentation changes; the month pickers retain their own behavior. */
+.planner-page .ledger-primary-filter-bar{
+ display:grid!important;
+ grid-template-columns:repeat(3,minmax(0,1fr))!important;
+ align-items:start!important;
+ justify-content:start!important;
+ column-gap:10px!important;
+ row-gap:0!important;
+ width:100%!important;
+ min-width:0;
+ box-sizing:border-box;
+ margin-bottom:12px!important;
+}
+.planner-page .ledger-primary-filter-bar>.history-budget-month-field,
+.planner-page .ledger-primary-filter-bar>label{
+ display:flex!important;
+ flex-direction:column!important;
+ justify-content:flex-start!important;
+ align-self:stretch!important;
+ grid-column:auto!important;
+ grid-row:1!important;
+ gap:0!important;
+ width:100%!important;
+ max-width:none!important;
+ min-width:0!important;
+ margin:0!important;
+}
+.planner-page .ledger-primary-filter-bar .history-period-controls,
+.planner-page .ledger-primary-filter-bar .history-month-picker{
+ display:block;
+ width:100%;
+ max-width:none;
+ min-width:0;
+}
+.planner-page .ledger-primary-filter-bar .history-month-picker{position:relative}
+.planner-page .ledger-primary-filter-bar :is(.history-month-trigger,select){
+ box-sizing:border-box!important;
+ width:100%!important;
+ max-width:none!important;
+ min-width:0!important;
+ height:40px!important;
+ min-height:40px!important;
+ padding:7px 10px!important;
+ border:1px solid #e1e9e0!important;
+ border-radius:8px!important;
+ background:#f9fbf8!important;
+ color:#31483e!important;
+ box-shadow:none!important;
+ font-family:inherit!important;
+ font-size:13px!important;
+ font-weight:650!important;
+ line-height:1.35!important;
+}
+.planner-page .ledger-primary-filter-bar .history-month-trigger{
+ display:flex;
+ align-items:center;
+ gap:5px;
+ text-align:left;
+}
+.planner-page .ledger-primary-filter-bar .history-month-trigger strong{
+ min-width:0;
+ flex:1;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+ font-size:13px!important;
+ font-weight:650!important;
+}
+.planner-page .ledger-primary-filter-bar .history-month-menu{
+ left:0;
+ right:auto;
+ box-sizing:border-box;
+ width:min(310px,calc(100vw - 48px));
+ max-width:calc(100vw - 48px);
+}
+@media(max-width:650px){
+ .planner-page .ledger-primary-filter-bar{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  column-gap:7px!important;
+ }
+}
