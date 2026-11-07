@@ -6842,7 +6842,7 @@ a:hover{color:#166e61}
    appear. Override older, page-specific 12px/13px font declarations. */
 .history-page :is(.history-budget-filters,.history-activity-filters,.financial-recap-header)
  :is(.history-month-trigger strong,select[name="historyAccount"]),
-.schedule-page .bills-upcoming-filters
+.schedule-page .ledger-toolbar.bills-upcoming-filters
  :is(select[data-bills-month],select[name="transactionFilter"]){
  font-size:var(--ledger-page-filter-font)!important;
  font-weight:650!important;
@@ -6854,7 +6854,7 @@ a:hover{color:#166e61}
    retains its multi-select UI, while Bills remains a native select. */
 .history-page :is(.history-budget-filters,.history-activity-filters,.financial-recap-header)
  :is(.history-month-trigger,select[name="historyAccount"]),
-.schedule-page .bills-upcoming-filters
+.schedule-page .ledger-toolbar.bills-upcoming-filters
  :is(select[data-bills-month],select[name="transactionFilter"]){
  min-height:40px!important;
  height:40px!important;
