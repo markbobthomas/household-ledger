@@ -1839,6 +1839,10 @@ module.exports=(async()=>{
     await page.setViewportSize({width,height:mobile?844:900});
     const grid=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
      .evaluateAll(items=>items.map(el=>el.getBoundingClientRect().toJSON()));
+    const reviewTabSize=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
+     .first().evaluate(el=>getComputedStyle(el).fontSize);
+    assert.equal(reviewTabSize,width<=650?'12px':'13px',
+     'Review tab headings use the same secondary navigation type scale');
     assert.ok(grid.length===4&&Math.abs(grid[0].width-grid[1].width)<=2&&
      (width>650?grid.every(x=>Math.abs(x.top-grid[0].top)<=2):
       grid[2].top>grid[0].bottom+1)&&
