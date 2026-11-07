@@ -449,6 +449,32 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.financial-recap-card').count(),3);
    assert.equal(await page.locator('.financial-recap-page [data-history-month-picker]').count(),1,
     'Summary reuses the Spending calendar-month checklist');
+   assert.equal(await page.locator('.financial-recap-header.ledger-primary-filter-bar').count(),1,
+    'Month insights uses the same filter bar as other Spending pages');
+   for(const width of (mobile?[320,390]:[768,1280])){
+    await page.setViewportSize({width,height:mobile?844:900});
+    const controls=await page.locator('.financial-recap-header.ledger-primary-filter-bar')
+     .evaluate(bar=>{
+      const month=bar.querySelector('.history-month-trigger'),
+       account=bar.querySelector('select[name="historyAccount"]'),
+       m=month?.getBoundingClientRect(),a=account?.getBoundingClientRect(),
+       ms=getComputedStyle(month),as=getComputedStyle(account);
+      return {monthTop:m.top,accountTop:a.top,monthHeight:m.height,accountHeight:a.height,
+       monthLeft:m.left,monthRight:m.right,accountLeft:a.left,accountRight:a.right,
+       monthRadius:ms.borderRadius,accountRadius:as.borderRadius,
+       monthBackground:ms.backgroundColor,accountBackground:as.backgroundColor,
+       scrollWidth:document.documentElement.scrollWidth};
+     });
+    assert.ok(Math.abs(controls.monthTop-controls.accountTop)<=2&&
+     controls.monthHeight===40&&controls.accountHeight===40&&
+     controls.monthRight<=controls.accountLeft+1&&
+     controls.monthRadius===controls.accountRadius&&
+     controls.monthBackground===controls.accountBackground&&
+     controls.scrollWidth<=width+3,
+     'Month insights dropdowns match the aligned standard toolbar at '+width+': '+
+      JSON.stringify(controls));
+   }
+   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
    assert.equal(await page.locator('.financial-recap-page input:not([data-history-month-option]),.financial-recap-page select:not([name="historyAccount"])').count(),0,
     'Summary contains no editable financial fields');
    assert.ok(await page.locator('[data-recap-bills]').innerText().then(v=>v.includes('Scheduled expenses')),
@@ -1544,16 +1570,26 @@ module.exports=(async()=>{
     const grid=await page.locator('.schedule-page .ledger-section-tabs .history-subtab')
      .evaluateAll(items=>items.map(x=>x.getBoundingClientRect().toJSON()));
     const filter=await upcomingBillsMonth.evaluate(el=>{
-     const container=el.closest('.bills-heading-actions').getBoundingClientRect(),
-      select=el.getBoundingClientRect();
+     const container=el.closest('.bills-upcoming-filters').getBoundingClientRect(),
+      select=el.getBoundingClientRect(),
+      account=el.closest('.bills-upcoming-filters').querySelector('[name="transactionFilter"]'),
+      other=account.getBoundingClientRect(),
+      style=getComputedStyle(el),otherStyle=getComputedStyle(account);
      return {left:select.left,right:select.right,top:select.top,bottom:select.bottom,
-      containerLeft:container.left,containerRight:container.right};
+      containerLeft:container.left,containerRight:container.right,
+      accountLeft:other.left,accountTop:other.top,accountHeight:other.height,
+      monthRadius:style.borderRadius,accountRadius:otherStyle.borderRadius,
+      monthBackground:style.backgroundColor,accountBackground:otherStyle.backgroundColor};
     });
     assert.ok(grid.length===3&&Math.abs(grid[0].width-grid[1].width)<=2&&
     Math.abs(grid[1].width-grid[2].width)<=2&&
      Math.abs(grid[0].top-grid[1].top)<=2&&
      filter.right<=filter.containerRight+2&&filter.left>=filter.containerLeft-2&&
-     filter.bottom>filter.top&&
+     Math.abs(filter.top-filter.accountTop)<=2&&
+     filter.accountHeight===40&&Math.abs(filter.bottom-filter.top-40)<=1&&
+     filter.right<=filter.accountLeft+1&&
+     filter.monthRadius===filter.accountRadius&&
+     filter.monthBackground===filter.accountBackground&&
      await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
      'Bills month selector and tabs fit without clipping at '+width+'px: '+
       JSON.stringify(filter));
