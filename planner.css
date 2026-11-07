@@ -6779,7 +6779,7 @@ a:hover{color:#166e61}
  min-width:0;
 }
 .planner-page .ledger-primary-filter-bar .history-month-picker{position:relative}
-.planner-page .ledger-primary-filter-bar :is(.history-month-trigger,select){
+.planner-page .ledger-toolbar.ledger-primary-filter-bar :is(.history-month-trigger,select){
  box-sizing:border-box!important;
  width:100%!important;
  max-width:none!important;
