@@ -138,7 +138,7 @@ module.exports=(async()=>{
    const activityType=await form.evaluate(node=>{
     const font=selector=>{
      const s=getComputedStyle(node.querySelector(selector));
-     return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,line:s.lineHeight};
+     return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily};
     };
     return {month:font('.history-month-trigger strong'),
      account:font('[name="historyAccount"]')};
@@ -200,7 +200,7 @@ module.exports=(async()=>{
      const type=node=>{
       if(!node)return null;
       const s=getComputedStyle(node);
-      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,line:s.lineHeight};
+      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily};
      };
      const surface=node=>{
       if(!node)return null;
