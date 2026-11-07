@@ -135,6 +135,18 @@ module.exports=(async()=>{
      category:rect('[name="historyCategory"]'),left:bar.left,right:bar.right,
      scroll:document.documentElement.scrollWidth,viewport:innerWidth};
    });
+   const activityType=await form.evaluate(node=>{
+    const font=selector=>{
+     const s=getComputedStyle(node.querySelector(selector));
+     return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,line:s.lineHeight};
+    };
+    return {month:font('.history-month-trigger strong'),
+     account:font('[name="historyAccount"]')};
+   });
+   assert.equal(activityType.month.size,width<=650?'13px':'14px',
+    'Transactions Months uses the shared filter type size');
+   assert.deepEqual(activityType.month,activityType.account,
+    'Transactions Months and Account controls use matching typography');
    assert.ok(geo.scroll<=width+3&&
     [geo.months,geo.search,geo.account,geo.sort,geo.category].every(v=>
      v&&v.width>=65&&v.left>=geo.left-2&&v.right<=geo.right+2),
