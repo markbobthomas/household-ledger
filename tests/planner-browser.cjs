@@ -1595,7 +1595,7 @@ module.exports=(async()=>{
      nav=document.querySelector('.schedule-page .ledger-section-tabs .history-subtab'),
      type=node=>{
       const s=getComputedStyle(node);
-      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,line:s.lineHeight,
+      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,
        radius:s.borderRadius,bg:s.backgroundColor,border:s.borderColor};
      };
     return {month:type(month),account:type(account),navSize:getComputedStyle(nav).fontSize};
