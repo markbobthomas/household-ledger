@@ -54,9 +54,12 @@ function open({filename,secret}){
   if(!stat.isFile()||(stat.mode&0o077)!==0)
    throw Error('Refusing insecure, non-regular or shared private database file');
  }
- const db=new DatabaseSync(filename);
+ // SQLite would otherwise create the new file with the process umask
+ // (potentially 0644). Reserve it exclusively as 0600 before opening.
+ if(!exists){const fd=fs.openSync(filename,'wx',0o600);fs.closeSync(fd)}
+ let db;
  try{
-  if(!exists)fs.chmodSync(filename,0o600);
+  db=new DatabaseSync(filename);
   db.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA temp_store=MEMORY; PRAGMA secure_delete=ON');
   const version=db.prepare('PRAGMA user_version').get().user_version;
   if(exists&&version!==1)throw Error('Unexpected private database schema; no automatic upgrade');
@@ -70,7 +73,11 @@ function open({filename,secret}){
     db.exec('COMMIT');
    }catch(error){db.exec('ROLLBACK');throw error}
   }
- }catch(error){db.close();throw error}
+ }catch(error){
+  if(db){try{db.close()}catch{}}
+  if(!exists){try{fs.unlinkSync(filename)}catch(e){if(e.code!=='ENOENT')throw e}}
+  throw error;
+ }
  const transaction=(action)=>{
   db.exec('BEGIN IMMEDIATE');
   try{const value=action();db.exec('COMMIT');return value}
@@ -102,7 +109,14 @@ function open({filename,secret}){
     opaque(key,'month',typeof row.date==='string'?row.date.slice(0,7):''),
     encrypt(key,'transaction',idKey,{id,row}));
   }
-  putDoc('bank',meta);
+  // The collection checksum is itself authenticated and encrypted in
+  // the source document. A missing/deleted transaction cannot silently
+  // turn a complete bank snapshot into incomplete financial history.
+  const keys=Object.keys(bank.transactions).sort();
+  const idDigest=crypto.createHmac('sha256',key)
+   .update('ledger-transaction-set-v1\0')
+   .update(JSON.stringify(keys)).digest('hex');
+  putDoc('bank',{format:1,body:meta,transactionCount:keys.length,idDigest});
  };
  const selectAll=db.prepare('SELECT id_key,account_key,month_key,sealed FROM transactions');
  const readTx=(row)=>{
@@ -115,16 +129,25 @@ function open({filename,secret}){
   return unsealed;
  };
  const readBank=()=>{
-  const meta=doc('bank');
-  if(meta===null)return null;
-  if(!isObject(meta))throw Error('Invalid encrypted bank snapshot');
+  const sealed=doc('bank');
+  if(sealed===null)return null;
+  if(!isObject(sealed)||sealed.format!==1||!isObject(sealed.body)||
+     !Number.isSafeInteger(sealed.transactionCount)||sealed.transactionCount<0||
+     !/^[a-f0-9]{64}$/.test(String(sealed.idDigest||'')))
+   throw Error('Invalid encrypted bank snapshot');
   const transactions={};
   for(const stored of selectAll.all()){
    const {id,row}=readTx(stored);
    if(Object.hasOwn(transactions,id))throw Error('Duplicate bank transaction identity');
    Object.defineProperty(transactions,id,{value:row,writable:true,enumerable:true,configurable:true});
   }
-  return {...meta,transactions};
+  const ids=Object.keys(transactions).sort();
+  const digest=crypto.createHmac('sha256',key)
+   .update('ledger-transaction-set-v1\0')
+   .update(JSON.stringify(ids)).digest('hex');
+  if(ids.length!==sealed.transactionCount||digest!==sealed.idDigest)
+   throw Error('Incomplete encrypted bank transaction set');
+  return {...sealed.body,transactions};
  };
  const queryTransactions=({accountId,month}={})=>{
   const filters=[],values=[];
