@@ -6793,7 +6793,7 @@ a:hover{color:#166e61}
  color:#31483e!important;
  box-shadow:none!important;
  font-family:inherit!important;
- font-size:13px!important;
+ font-size:var(--ledger-page-filter-font)!important;
  font-weight:650!important;
  line-height:1.35!important;
 }
@@ -6809,7 +6809,7 @@ a:hover{color:#166e61}
  overflow:hidden;
  text-overflow:ellipsis;
  white-space:nowrap;
- font-size:13px!important;
+ font-size:var(--ledger-page-filter-font)!important;
  font-weight:650!important;
 }
 .planner-page .ledger-primary-filter-bar .history-month-menu{
