@@ -526,7 +526,7 @@ module.exports=(async()=>{
     'Home and Bills stay ready after a Budget-only reorder');
    await page.locator('[data-history-category-manager]').evaluate(manager=>{manager.open=true});
    const budgetField=page.locator('[data-history-budget]').first();
-   const monthlyTarget=budgetField.getAttribute('data-history-budget');
+   const monthlyTarget=await budgetField.getAttribute('data-history-budget');
    const oldTarget=await budgetField.inputValue();
    const newTarget=oldTarget==='163.27'?'163.28':'163.27';
    await budgetField.fill(newTarget);
