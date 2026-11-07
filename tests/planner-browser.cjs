@@ -1538,6 +1538,10 @@ module.exports=(async()=>{
     await page.locator('#planner-menu summary').click();
     await page.locator('#planner-menu [data-view="settings"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
+    const settingsTitleSize=await page.locator('.settings-page .page-heading h2')
+     .evaluate(el=>getComputedStyle(el).fontSize);
+    assert.equal(settingsTitleSize,mobile?'18px':'20px',
+     'Settings uses the shared page-heading type scale');
     const learnedRules=page.locator('[data-settings-learned-rules]');
     assert.equal(await learnedRules.count(),1,'Learned categories is a collapsible section');
     assert.equal(await learnedRules.evaluate(el=>el.open),false,
@@ -1847,6 +1851,10 @@ module.exports=(async()=>{
    await page.locator('.attention-link[data-view="reviews"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
+   const reviewTitleSize=await page.locator('.reviews-page .review-intro h2')
+    .evaluate(el=>getComputedStyle(el).fontSize);
+   assert.equal(reviewTitleSize,mobile?'18px':'20px',
+    'Review page title matches Settings heading hierarchy');
    assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(items=>
     items.map(x=>x.dataset.reviewTab)),['categories','payments','earlier','suggestions'],
     'Review preserves four distinct sections as tabs');
