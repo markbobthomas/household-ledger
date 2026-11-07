@@ -6734,3 +6734,10 @@ a:hover{color:#166e61}
 .financial-recap-header{flex-wrap:wrap}
 .financial-recap-header>label{display:flex;flex-direction:column;gap:4px;min-width:140px;max-width:100%;font-size:12px}
 .financial-recap-header>label select{max-width:100%;min-height:36px}
+
+/* Page-level filter captions are screen-reader-only. Keep the account select
+   and month trigger anchored to the same top edge at desktop/tablet/mobile widths. */
+.history-page .history-budget-filters > label:has([name="historyAccount"]),
+.history-page .history-budget-filters > .history-budget-month-field{
+ justify-content:flex-start!important;
+}
