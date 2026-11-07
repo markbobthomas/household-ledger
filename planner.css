@@ -6294,7 +6294,7 @@ a:hover{color:#166e61}
  white-space:nowrap!important;min-width:0;overflow:hidden;text-overflow:ellipsis;
 }
 .schedule-page .bills-statement-filters{
- display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;align-items:center;
+ display:grid;grid-template-columns:minmax(68px,1fr) minmax(68px,1.4fr) auto;align-items:center;
  gap:9px;padding:10px;margin:0 0 12px;
  border:1px solid #e7ede5;border-radius:10px;background:#fff;
 }
