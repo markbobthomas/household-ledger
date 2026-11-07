@@ -1574,6 +1574,23 @@ module.exports=(async()=>{
     repeatingBillsMonth=page.locator('[data-bills-pane="repeating"] [data-bills-month]');
    assert.equal(await upcomingBillsMonth.count(),1);
    assert.equal(await repeatingBillsMonth.count(),1);
+   const upcomingStyle=await page.evaluate(()=>{
+    const month=document.querySelector('[data-bills-pane="upcoming"] [data-bills-month]'),
+     account=document.querySelector('[data-bills-pane="upcoming"] [name="transactionFilter"]'),
+     nav=document.querySelector('.schedule-page .ledger-section-tabs .history-subtab'),
+     type=node=>{
+      const s=getComputedStyle(node);
+      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,line:s.lineHeight,
+       radius:s.borderRadius,bg:s.backgroundColor,border:s.borderColor};
+     };
+    return {month:type(month),account:type(account),navSize:getComputedStyle(nav).fontSize};
+   });
+   assert.deepEqual(upcomingStyle.month,upcomingStyle.account,
+    'Bills Upcoming Months/Account must share typography and surface styles');
+   assert.equal(upcomingStyle.month.size,mobile?'13px':'14px',
+    'Bills Upcoming prominent filters match Spending font size');
+   assert.equal(upcomingStyle.navSize,mobile?'12px':'13px',
+    'Bills subtab typography matches Spending');
    assert.equal(await upcomingBillsMonth.inputValue(),'',
     'Upcoming defaults to next 30 days and Repeating opens all expenses');
    assert.equal(await upcomingBillsMonth.locator('option').first().innerText(),'Next 30 days');
