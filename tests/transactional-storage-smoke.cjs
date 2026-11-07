@@ -139,6 +139,15 @@ try{
   sourceFile:corrupted,destinationFile:path.join(directory,'corrupt.sqlite'),secret
  }));
  assert.equal(fs.existsSync(path.join(directory,'corrupt.sqlite')),false);
+ // A deleted transaction must not silently become a smaller ledger.
+ // The sealed bank manifest authenticates the complete set of source IDs.
+ const damagedRows=new DatabaseSync(dest);
+ damagedRows.exec('DELETE FROM transactions WHERE id_key=(SELECT id_key FROM transactions LIMIT 1)');
+ damagedRows.close();
+ const missing=Store.open({filename:dest,secret});
+ assert.throws(()=>missing.readBank(),/Incomplete encrypted bank transaction set/,
+  'Missing source rows must fail closed instead of changing bank history');
+ missing.close();
  // Tamper with an existing ciphertext. Failure must be explicit, never a
  // silent bank reset, partial read, or invented transactions.
  const direct=new DatabaseSync(dest);
