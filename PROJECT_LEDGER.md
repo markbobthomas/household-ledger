@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed November 6, 2026)
 
+**Bills → Statements:** Account, statement period and Autopay settings share one responsive row. See the latest entry for verification status.
+
 **Phase 4 recovery rehearsal verified November 6.** All three private Render copies passed SHA-256 verification and the isolated SQLite candidate passed exact readback. The live file store remains authoritative. Next steps are separate snapshot recovery and application readback validation before any proposed cutover. See the latest entry.
 
 **2026-11-06 Phase 4 LEGACY FILE INVENTORY — ALL THREE PRESENT; EXTERNAL BACKUP STILL PENDING:** Owner ran a read-only Render Shell command using configured `PILOT_STATE_PATH` (or legacy `/var/data/pilot.enc` fallback) and confirmed all three expected encrypted files exist with nonzero size: authoritative bank state, `.forecasts` preferences and `.sessions` login data. File contents, keys and account records were neither read nor shared. This verifies existence only; no independent backup, full-read decryption check, consistent cross-file snapshot, verified offsite copy, or restore exercise has occurred. Preserve live AES-GCM files; the Phase 4 SQLite candidate remains isolated and inactive. Next action: confirm effective absolute file path, then use Render's documented SSH/SCP (SFTP) read-only transfer to a private, access-controlled folder on the owner's computer, compare lengths and cryptographic hashes safely without copying sensitive data into ChatGPT, and rehearse a restore offline before approving any live migration. Public docs-only update uses `[skip render]` to prevent unnecessary banking redeploy.
@@ -3247,3 +3249,7 @@ Used the existing private service’s browser Shell and the procedure in `docs/p
 ### 2026-11-06 — Rehearsal completion confirmed
 
 Status review confirmed the requested same-disk backup and copy-only SQLite rehearsal are complete, as recorded in merged PR #558. Render still reports live revision `4fb7333`. No code change or repeat migration. Independent restore and production cutover remain separate future work. Pages unverified.
+
+### 2026-11-06 — Keep statement controls on one row
+
+Updated `planner.css` and its `index.html` cache version so both selectors and Autopay settings share a three-column row. Extended the existing statement geometry checks in `tests/planner-budget-netting-browser.cjs` for alignment, overlap and fit at 320, 390, 768 and 1280 px. Presentation only. Banking and browser CI, merge and deployment pending at feature commit on `ui/statement-controls-one-row-20261106`.
