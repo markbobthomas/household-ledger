@@ -165,30 +165,55 @@ module.exports=(async()=>{
   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
  }
 
- // Filter controls should not resize or shift horizontally as Spending tabs change.
+
+ // Equivalent page filters must share geometry, type scale, and visual chrome.
  async function verifySpendingFilterWidthParity(page,mobile){
   const widths=mobile?[320,390]:[768,1280];
   for(const width of widths){
    await page.setViewportSize({width,height:mobile?844:900});
    let budget=null;
-   for(const view of ['categories','merchants','sizes']){
+   for(const view of ['categories','merchants','sizes','summary']){
     await page.locator('[data-history-view="'+view+'"]').click();
-    const layout=await page.evaluate(()=>{
-     const form=document.querySelector('.history-page .history-budget-filters');
+    const layout=await page.evaluate(view=>{
+     const form=document.querySelector(view==='summary'?
+      '.history-page .financial-recap-header.ledger-primary-filter-bar':
+      '.history-page .history-budget-filters');
      if(!form)return null;
-     const rect=selector=>{
-      const box=form.querySelector(selector)?.getBoundingClientRect();
+     const month=form.querySelector('.history-month-trigger'),
+      account=form.querySelector('[name="historyAccount"]');
+     const rect=node=>{
+      const box=node?.getBoundingClientRect();
       return box?{left:box.left,width:box.width,height:box.height}:null;
      };
-     return {month:rect('.history-month-trigger'),
-      account:rect('[name="historyAccount"]'),
-      surface:form.getBoundingClientRect().toJSON(),
+     const type=node=>{
+      if(!node)return null;
+      const s=getComputedStyle(node);
+      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,line:s.lineHeight};
+     };
+     const surface=node=>{
+      if(!node)return null;
+      const s=getComputedStyle(node);
+      return {radius:s.borderRadius,bg:s.backgroundColor,border:s.borderColor};
+     };
+     const tab=document.querySelector('.history-page .spending-tabs .history-subtab');
+     return {month:rect(month),account:rect(account),
+      monthText:type(month?.querySelector('strong')),accountText:type(account),
+      monthSurface:surface(month),accountSurface:surface(account),
+      tabText:type(tab),surface:form.getBoundingClientRect().toJSON(),
       pageWidth:document.documentElement.scrollWidth};
-    });
+    },view);
     assert.ok(layout&&layout.month&&layout.account,
      view+' reports Months/Account selectors at '+width+'px');
     assert.ok(layout.pageWidth<=width+3,
      view+' toolbar must not cause horizontal scrolling at '+width+'px: '+JSON.stringify(layout));
+    assert.equal(layout.monthText.size,width<=650?'13px':'14px',
+     view+' month control uses the shared type scale at '+width+'px');
+    assert.deepEqual(layout.monthText,layout.accountText,
+     view+' month/account font size, weight, line height and family must agree');
+    assert.deepEqual(layout.monthSurface,layout.accountSurface,
+     view+' month/account backgrounds, borders and corner radii must agree');
+    assert.equal(layout.tabText.size,width<=650?'12px':'13px',
+     view+' tab typography is consistent at '+width+'px');
     if(!budget){budget=layout;continue;}
     for(const key of ['month','account']){
      for(const measure of ['left','width','height']){
@@ -197,9 +222,19 @@ module.exports=(async()=>{
         JSON.stringify({budget,report:layout}));
      }
     }
+    for(const key of ['monthText','accountText','monthSurface','accountSurface','tabText']){
+     assert.deepEqual(layout[key],budget[key],
+      view+' '+key+' must match Budget at '+width+'px');
+    }
     assert.ok(Math.abs(layout.surface.left-budget.surface.left)<=1.5&&
      Math.abs(layout.surface.width-budget.surface.width)<=1.5,
      view+' toolbar surface must match Budget at '+width+'px');
+    if(view==='summary'){
+     const font=await page.locator('.financial-recap-card h3').first()
+      .evaluate(el=>getComputedStyle(el).fontSize);
+     assert.equal(font,width<=650?'15px':'16px',
+      'Month insights section headings share the app typography hierarchy');
+    }
    }
   }
   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
