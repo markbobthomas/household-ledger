@@ -1881,11 +1881,13 @@ function schedulesPage(bundle,s){
     '" data-bills-tab="'+id+'" aria-pressed="'+(billsPane===id)+'">'+name+'</button>').join('')+
   '</nav>'+
   '<div data-bills-pane="upcoming"'+(billsPane==='upcoming'?'':' hidden')+'>'+
+  '<div class="ledger-toolbar ledger-primary-filter-bar bills-upcoming-filters" aria-label="Upcoming Bills filters">'+
+   billsMonthSelect(s.asOf,'upcoming')+
+   '<label class="bills-account-field minimal-control-label"><span class="visually-hidden">Account</span>'+
+    accountSelect(accounts,transactionFilter,'transactionFilter',true)+'</label></div>'+
   '<section class="bills-upcoming panel" aria-label="Upcoming transactions">'+
    '<div class="bills-heading"><div><h2 class="visually-hidden">All expected activity</h2></div>'+
-    '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
-     '<label class="bills-account-field minimal-control-label"><span class="visually-hidden">Account</span>'+
-      accountSelect(accounts,transactionFilter,'transactionFilter',true)+'</label>'+
+    '<div class="bills-heading-actions">'+
      '<button type="button" class="btn primary bills-add-transaction" data-show-new>+ Add transaction</button>'+
      '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Checking outflows '+
       cash(upcomingCents/100)+'</strong>'+
@@ -2440,8 +2442,9 @@ function financialRecapPage(bundle,s){
     '<strong>'+cash(cents/100)+'</strong></div>').join('')+'</div>':
    '<p class="financial-recap-empty">'+escapeHTML(empty)+'</p>';
  return '<div class="planner-page financial-recap-page" data-financial-recap>'+
-  '<header class="financial-recap-header">'+
-   picker.markup+'<label class="minimal-control-label"><span class="visually-hidden">Account</span>'+accountSelect(activeAccounts(s),historyAccount,'historyAccount',true)+'</label></header>'+
+  '<header class="financial-recap-header ledger-toolbar ledger-primary-filter-bar" aria-label="Month insights filters">'+
+   '<div class="history-budget-month-field">'+picker.markup+'</div>'+
+   '<label class="minimal-control-label"><span class="visually-hidden">Account</span>'+accountSelect(activeAccounts(s),historyAccount,'historyAccount',true)+'</label></header>'+
   '<div class="financial-recap-metrics">'+
    metric('Scheduled expenses',
     canSummarizeBills?cash(billCents/100):'Unavailable',
