@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (reviewed November 6, 2026)
 
+**Month insights alignment:** The four-pixel gap below the Spending subtab bar has been corrected to match Budget (PR #568). Finance and desktop/iPhone browser checks passed; private Render reports the exact code merge live at `0b8021b`.
+
 **Spending Month insights and Bills Upcoming filters:** Both now use the same paired, caption-free 40px month/account toolbar as Budget and other Spending reports (PR #566). Browser layout and banking CI passed; private Render reported the exact merged code live at `be94d5a`.
 
 **Page-level filters:** Redundant visible Months, Account and Kind captions removed in Home, Spending, Bills and Transactions (PR #564, merged). Screen-reader labels remain; dropdowns align without headings. Both banking and Chromium/iPhone WebKit workflows passed; Render reports the code merge live at `837a2d5`.
@@ -3289,3 +3291,7 @@ PR [#566](https://github.com/markbobthomas/household-ledger/pull/566) squash-mer
 ### 2026-11-06 — Align Month insights filter bar with other Spending tabs
 
 A small visible offset remained after the filter-format unification in PR #566. CSS inspection identified the specific override `.history-page.spending-summary-page>.history-view-toolbar{margin-bottom:14px}`, while Budget/Merchants/Purchase Sizes inherit the shared 10px tab-to-filter gap. Changed that one margin to 10px in `planner.css` and refreshed the stylesheet cache key in `index.html`; no selector logic or financial data changed. Extended the existing desktop Chromium/iPhone WebKit `tests/planner-browser.cjs` to compare the Month insights filter bar’s vertical gap, left/right edges and width directly against Budget, on both form factors; existing multi-width selector tests remain. Branch `ui/align-month-insights-spacing-20261106`; PR, CI, merge and live deployment pending verification at time of entry.
+
+### 2026-11-06 — Month insights offset resolved and verified live
+
+PR [#568](https://github.com/markbobthomas/household-ledger/pull/568) squash-merged into `main` as `0b8021b1604de76b700a1cb72f599ef773333bba`; main SHA and merge state independently verified. Resolved the unique Month insights 14px tab-to-filter spacing override by using the shared 10px gap in `planner.css`, with matching stylesheet cache key in `index.html`. The existing `tests/planner-browser.cjs` now compares Month insights with Budget's rendered tab-to-toolbar gap and horizontal left/right/width, on desktop Chromium and iPhone WebKit; existing cross-viewport selector checks remain. Banking/forecast safety [run #42344356879](https://github.com/markbobthomas/household-ledger/actions/runs/42344356879) **passed** and desktop/iPhone browser [run #42344356699](https://github.com/markbobthomas/household-ledger/actions/runs/42344356699) **passed**. Private Render deploy `dep-dbnbouks728c7392ncbg` was reported **live** at the exact merged code SHA by the Render connector. Independent HTTP `/healthz` and GitHub Pages publication were not verified. Only the visible spacing, cache identifier, test assertion and ledger handoff changed; no financial logic, bank state, secrets, storage or Plaid changes. Docs-only `[skip render]` follow-up avoids unnecessary redeploy.
