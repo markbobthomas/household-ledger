@@ -439,6 +439,11 @@ module.exports=(async()=>{
     'The simplified Budget rows remain visible with readable actual and target values');
    assert.ok(budgetType.scrollWidth<=budgetType.viewport+1,
     'Larger Budget type must not create horizontal page overflow');
+   const budgetFilterGeometry=await page.evaluate(()=>{
+    const tabs=document.querySelector('.history-page>.history-view-toolbar').getBoundingClientRect(),
+     toolbar=document.querySelector('.history-page>.history-budget-filters').getBoundingClientRect();
+    return {gap:toolbar.top-tabs.bottom,left:toolbar.left,right:toolbar.right,width:toolbar.width};
+   });
    await page.locator('[data-history-view="summary"]').click();
    assert.equal(await page.locator('[data-history-view="summary"][aria-pressed="true"]').count(),1);
    assert.equal(await page.locator('[data-financial-recap]').count(),1);
@@ -451,6 +456,17 @@ module.exports=(async()=>{
     'Summary reuses the Spending calendar-month checklist');
    assert.equal(await page.locator('.financial-recap-header.ledger-primary-filter-bar').count(),1,
     'Month insights uses the same filter bar as other Spending pages');
+   const insightsFilterGeometry=await page.evaluate(()=>{
+    const tabs=document.querySelector('.history-page>.history-view-toolbar').getBoundingClientRect(),
+     toolbar=document.querySelector('.financial-recap-header.ledger-primary-filter-bar').getBoundingClientRect();
+    return {gap:toolbar.top-tabs.bottom,left:toolbar.left,right:toolbar.right,width:toolbar.width};
+   });
+   assert.ok(Math.abs(insightsFilterGeometry.gap-budgetFilterGeometry.gap)<=1&&
+    Math.abs(insightsFilterGeometry.left-budgetFilterGeometry.left)<=1&&
+    Math.abs(insightsFilterGeometry.right-budgetFilterGeometry.right)<=1&&
+    Math.abs(insightsFilterGeometry.width-budgetFilterGeometry.width)<=1,
+    'Month insights filter bar must share the exact Budget spacing and horizontal frame: '+
+     JSON.stringify({budgetFilterGeometry,insightsFilterGeometry}));
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     const controls=await page.locator('.financial-recap-header.ledger-primary-filter-bar')
