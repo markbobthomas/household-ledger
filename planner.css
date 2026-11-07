@@ -6793,7 +6793,7 @@ a:hover{color:#166e61}
  color:#31483e!important;
  box-shadow:none!important;
  font-family:inherit!important;
- font-size:13px!important;
+ font-size:var(--ledger-page-filter-font)!important;
  font-weight:650!important;
  line-height:1.35!important;
 }
@@ -6809,7 +6809,7 @@ a:hover{color:#166e61}
  overflow:hidden;
  text-overflow:ellipsis;
  white-space:nowrap;
- font-size:13px!important;
+ font-size:var(--ledger-page-filter-font)!important;
  font-weight:650!important;
 }
 .planner-page .ledger-primary-filter-bar .history-month-menu{
@@ -6823,5 +6823,90 @@ a:hover{color:#166e61}
  .planner-page .ledger-primary-filter-bar{
   grid-template-columns:repeat(2,minmax(0,1fr))!important;
   column-gap:7px!important;
+ }
+}
+
+
+/* Cross-page visual consistency audit (2026-11-06).
+   One semantic type scale for equivalent controls and section headings across
+   Spending, Month insights, Bills, Transactions and Review. Preserve the
+   intentionally different sizes for cash balances, transaction amounts,
+   primary navigation, compact statement settings and warning indicators. */
+.planner-page{
+ --ledger-page-filter-font:14px;
+ --ledger-secondary-tab-font:13px;
+ --ledger-section-heading-font:16px;
+ --ledger-page-heading-font:20px;
+ --ledger-compact-filter-font:12px;
+}
+/* The two prominent Months/Account controls are identical wherever they
+   appear. Override older, page-specific 12px/13px font declarations. */
+.history-page :is(.history-budget-filters,.history-activity-filters,.financial-recap-header)
+ :is(.history-month-trigger strong,select[name="historyAccount"]),
+.schedule-page .ledger-toolbar.bills-upcoming-filters
+ :is(select[data-bills-month],select[name="transactionFilter"]){
+ font-size:var(--ledger-page-filter-font)!important;
+ font-weight:650!important;
+ font-family:inherit!important;
+ letter-spacing:normal!important;
+ line-height:1.35!important;
+}
+/* Same control shape for every prominent month/account pair; the month picker
+   retains its multi-select UI, while Bills remains a native select. */
+.history-page :is(.history-budget-filters,.history-activity-filters,.financial-recap-header)
+ :is(.history-month-trigger,select[name="historyAccount"]),
+.schedule-page .ledger-toolbar.bills-upcoming-filters
+ :is(select[data-bills-month],select[name="transactionFilter"]){
+ min-height:40px!important;
+ height:40px!important;
+ padding:7px 10px!important;
+ border:1px solid #e1e9e0!important;
+ border-radius:8px!important;
+ background:#f9fbf8!important;
+ box-shadow:none!important;
+}
+/* Shared report destinations are one navigation tier, regardless of whether
+   the section is Spending, Bills or Things to Check. */
+.history-page .spending-tabs .history-subtab,
+.schedule-page .ledger-section-tabs .history-subtab,
+.reviews-page .ledger-section-tabs .history-subtab{
+ font-size:var(--ledger-secondary-tab-font)!important;
+ font-family:inherit!important;
+ line-height:1.25!important;
+ letter-spacing:normal!important;
+}
+/* Comparable card/section headings share one level; page titles and large
+   financial metrics deliberately remain different hierarchical levels. */
+.planner-page :is(.section-title h2,.schedule-category-heading h3,.financial-recap-card h3){
+ font-size:var(--ledger-section-heading-font)!important;
+ font-family:inherit!important;
+ font-weight:750!important;
+ line-height:1.3!important;
+ letter-spacing:-.2px!important;
+}
+/* Settings and Things to Check both have a top-level page heading; they
+   should share the same size rather than the prior 19px/20px mismatch. */
+.planner-page .page-heading h2,
+.reviews-page .review-intro h2{
+ font-size:var(--ledger-page-heading-font)!important;
+ font-family:inherit!important;
+ font-weight:750!important;
+ line-height:1.25!important;
+ letter-spacing:-.35px!important;
+}
+/* Repeating has seven fields and stays a deliberately compact toolbar, but
+   those fields must not use inconsistent sizes within that same toolbar. */
+.schedule-page .schedule-toolbar.ledger-toolbar :is(input,select){
+ font-size:var(--ledger-compact-filter-font)!important;
+ font-family:inherit!important;
+ line-height:1.35!important;
+}
+@media(max-width:650px){
+ .planner-page{
+  --ledger-page-filter-font:13px;
+  --ledger-secondary-tab-font:12px;
+  --ledger-section-heading-font:15px;
+  --ledger-page-heading-font:18px;
+  --ledger-compact-filter-font:11px;
  }
 }

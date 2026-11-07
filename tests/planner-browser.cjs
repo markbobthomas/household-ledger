@@ -135,6 +135,18 @@ module.exports=(async()=>{
      category:rect('[name="historyCategory"]'),left:bar.left,right:bar.right,
      scroll:document.documentElement.scrollWidth,viewport:innerWidth};
    });
+   const activityType=await form.evaluate(node=>{
+    const font=selector=>{
+     const s=getComputedStyle(node.querySelector(selector));
+     return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily};
+    };
+    return {month:font('.history-month-trigger strong'),
+     account:font('[name="historyAccount"]')};
+   });
+   assert.equal(activityType.month.size,width<=650?'13px':'14px',
+    'Transactions Months uses the shared filter type size');
+   assert.deepEqual(activityType.month,activityType.account,
+    'Transactions Months and Account controls use matching typography');
    assert.ok(geo.scroll<=width+3&&
     [geo.months,geo.search,geo.account,geo.sort,geo.category].every(v=>
      v&&v.width>=65&&v.left>=geo.left-2&&v.right<=geo.right+2),
@@ -165,30 +177,55 @@ module.exports=(async()=>{
   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
  }
 
- // Filter controls should not resize or shift horizontally as Spending tabs change.
+
+ // Equivalent page filters must share geometry, type scale, and visual chrome.
  async function verifySpendingFilterWidthParity(page,mobile){
   const widths=mobile?[320,390]:[768,1280];
   for(const width of widths){
    await page.setViewportSize({width,height:mobile?844:900});
    let budget=null;
-   for(const view of ['categories','merchants','sizes']){
+   for(const view of ['categories','merchants','sizes','summary']){
     await page.locator('[data-history-view="'+view+'"]').click();
-    const layout=await page.evaluate(()=>{
-     const form=document.querySelector('.history-page .history-budget-filters');
+    const layout=await page.evaluate(view=>{
+     const form=document.querySelector(view==='summary'?
+      '.history-page .financial-recap-header.ledger-primary-filter-bar':
+      '.history-page .history-budget-filters');
      if(!form)return null;
-     const rect=selector=>{
-      const box=form.querySelector(selector)?.getBoundingClientRect();
+     const month=form.querySelector('.history-month-trigger'),
+      account=form.querySelector('[name="historyAccount"]');
+     const rect=node=>{
+      const box=node?.getBoundingClientRect();
       return box?{left:box.left,width:box.width,height:box.height}:null;
      };
-     return {month:rect('.history-month-trigger'),
-      account:rect('[name="historyAccount"]'),
-      surface:form.getBoundingClientRect().toJSON(),
+     const type=node=>{
+      if(!node)return null;
+      const s=getComputedStyle(node);
+      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily};
+     };
+     const surface=node=>{
+      if(!node)return null;
+      const s=getComputedStyle(node);
+      return {radius:s.borderRadius,bg:s.backgroundColor,border:s.borderColor};
+     };
+     const tab=document.querySelector('.history-page .spending-tabs .history-subtab');
+     return {month:rect(month),account:rect(account),
+      monthText:type(month?.querySelector('strong')),accountText:type(account),
+      monthSurface:surface(month),accountSurface:surface(account),
+      tabText:type(tab),surface:form.getBoundingClientRect().toJSON(),
       pageWidth:document.documentElement.scrollWidth};
-    });
+    },view);
     assert.ok(layout&&layout.month&&layout.account,
      view+' reports Months/Account selectors at '+width+'px');
     assert.ok(layout.pageWidth<=width+3,
      view+' toolbar must not cause horizontal scrolling at '+width+'px: '+JSON.stringify(layout));
+    assert.equal(layout.monthText.size,width<=650?'13px':'14px',
+     view+' month control uses the shared type scale at '+width+'px');
+    assert.deepEqual(layout.monthText,layout.accountText,
+     view+' month/account font size, weight, line height and family must agree');
+    assert.deepEqual(layout.monthSurface,layout.accountSurface,
+     view+' month/account backgrounds, borders and corner radii must agree');
+    assert.equal(layout.tabText.size,width<=650?'12px':'13px',
+     view+' tab typography is consistent at '+width+'px');
     if(!budget){budget=layout;continue;}
     for(const key of ['month','account']){
      for(const measure of ['left','width','height']){
@@ -197,9 +234,22 @@ module.exports=(async()=>{
         JSON.stringify({budget,report:layout}));
      }
     }
+    for(const key of ['monthText','accountText','monthSurface','accountSurface']){
+     assert.deepEqual(layout[key],budget[key],
+      view+' '+key+' must match Budget at '+width+'px');
+    }
+    assert.equal(layout.tabText.family,budget.tabText.family,
+     view+' navigation font family must match Budget');
+    // Active tabs intentionally have stronger weight than inactive tabs.
     assert.ok(Math.abs(layout.surface.left-budget.surface.left)<=1.5&&
      Math.abs(layout.surface.width-budget.surface.width)<=1.5,
      view+' toolbar surface must match Budget at '+width+'px');
+    if(view==='summary'){
+     const font=await page.locator('.financial-recap-card h3').first()
+      .evaluate(el=>getComputedStyle(el).fontSize);
+     assert.equal(font,width<=650?'15px':'16px',
+      'Month insights section headings share the app typography hierarchy');
+    }
    }
   }
   await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
@@ -1488,6 +1538,10 @@ module.exports=(async()=>{
     await page.locator('#planner-menu summary').click();
     await page.locator('#planner-menu [data-view="settings"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
+    const settingsTitleSize=await page.locator('.settings-page .page-heading h2')
+     .evaluate(el=>getComputedStyle(el).fontSize);
+    assert.equal(settingsTitleSize,mobile?'18px':'20px',
+     'Settings uses the shared page-heading type scale');
     const learnedRules=page.locator('[data-settings-learned-rules]');
     assert.equal(await learnedRules.count(),1,'Learned categories is a collapsible section');
     assert.equal(await learnedRules.evaluate(el=>el.open),false,
@@ -1539,6 +1593,23 @@ module.exports=(async()=>{
     repeatingBillsMonth=page.locator('[data-bills-pane="repeating"] [data-bills-month]');
    assert.equal(await upcomingBillsMonth.count(),1);
    assert.equal(await repeatingBillsMonth.count(),1);
+   const upcomingStyle=await page.evaluate(()=>{
+    const month=document.querySelector('[data-bills-pane="upcoming"] [data-bills-month]'),
+     account=document.querySelector('[data-bills-pane="upcoming"] [name="transactionFilter"]'),
+     nav=document.querySelector('.schedule-page .ledger-section-tabs .history-subtab'),
+     type=node=>{
+      const s=getComputedStyle(node);
+      return {size:s.fontSize,weight:s.fontWeight,family:s.fontFamily,
+       radius:s.borderRadius,bg:s.backgroundColor,border:s.borderColor};
+     };
+    return {month:type(month),account:type(account),navSize:getComputedStyle(nav).fontSize};
+   });
+   assert.deepEqual(upcomingStyle.month,upcomingStyle.account,
+    'Bills Upcoming Months/Account must share typography and surface styles');
+   assert.equal(upcomingStyle.month.size,mobile?'13px':'14px',
+    'Bills Upcoming prominent filters match Spending font size');
+   assert.equal(upcomingStyle.navSize,mobile?'12px':'13px',
+    'Bills subtab typography matches Spending');
    assert.equal(await upcomingBillsMonth.inputValue(),'',
     'Upcoming defaults to next 30 days and Repeating opens all expenses');
    assert.equal(await upcomingBillsMonth.locator('option').first().innerText(),'Next 30 days');
@@ -1569,6 +1640,13 @@ module.exports=(async()=>{
    await page.locator('[data-bills-tab="repeating"]').click();
    assert.equal(await repeatingBillsMonth.inputValue(),'2026-11',
     'Selected month is retained when switching to Repeating');
+   const repeatingTypography=await page.locator('.schedule-page .schedule-toolbar.ledger-toolbar')
+    .evaluate(toolbar=>[...toolbar.querySelectorAll('select,input:not([type="checkbox"])')]
+     .filter(el=>!el.hidden).map(el=>getComputedStyle(el).fontSize));
+   assert.ok(repeatingTypography.length>=4&&
+    repeatingTypography.every(size=>size===(mobile?'11px':'12px')),
+    'Dense Repeating toolbar fields share a deliberate compact type scale: '+
+     JSON.stringify(repeatingTypography));
    assert.ok((await page.locator('[data-bills-repeating-total]').innerText()).startsWith('Total shown: '),
     'Repeating shows a live total beside the filtered list count');
    assert.equal(await page.locator('.schedule-toolbar').evaluate(el=>
@@ -1773,6 +1851,10 @@ module.exports=(async()=>{
    await page.locator('.attention-link[data-view="reviews"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    assert.equal(await page.locator('.review-intro h2').innerText(),'Things to check');
+   const reviewTitleSize=await page.locator('.reviews-page .review-intro h2')
+    .evaluate(el=>getComputedStyle(el).fontSize);
+   assert.equal(reviewTitleSize,mobile?'18px':'20px',
+    'Review page title matches Settings heading hierarchy');
    assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(items=>
     items.map(x=>x.dataset.reviewTab)),['categories','payments','earlier','suggestions'],
     'Review preserves four distinct sections as tabs');
@@ -1780,6 +1862,10 @@ module.exports=(async()=>{
     await page.setViewportSize({width,height:mobile?844:900});
     const grid=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
      .evaluateAll(items=>items.map(el=>el.getBoundingClientRect().toJSON()));
+    const reviewTabSize=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
+     .first().evaluate(el=>getComputedStyle(el).fontSize);
+    assert.equal(reviewTabSize,width<=650?'12px':'13px',
+     'Review tab headings use the same secondary navigation type scale');
     assert.ok(grid.length===4&&Math.abs(grid[0].width-grid[1].width)<=2&&
      (width>650?grid.every(x=>Math.abs(x.top-grid[0].top)<=2):
       grid[2].top>grid[0].bottom+1)&&
