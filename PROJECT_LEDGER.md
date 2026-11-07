@@ -25,7 +25,7 @@ Product priorities:
 
 ## Current state (reviewed November 6, 2026)
 
-**Bills → Statements:** Account, statement period and Autopay settings share one responsive row. Equal-height refinement tracked below. Verified on desktop and iPhone and live on private Render in PR #560.
+**Bills → Statements:** Account, statement period and Autopay settings share one responsive row. All three controls measure 36 px high (PR #562, live). Verified on desktop and iPhone and live on private Render in PR #560.
 
 **Phase 4 recovery rehearsal verified November 6.** All three private Render copies passed SHA-256 verification and the isolated SQLite candidate passed exact readback. The live file store remains authoritative. Next steps are separate snapshot recovery and application readback validation before any proposed cutover. See the latest entry.
 
@@ -3261,3 +3261,7 @@ PR #560 merged as `610003b3`. Browser run `42341177659` passed in desktop Chromi
 ### 2026-11-06 — Match statement control heights
 
 Use a shared 36 px border-box height for Autopay settings and both adjacent dropdowns in `planner.css`. Updated the stylesheet version in `index.html` and extended the existing four-width geometry check in `tests/planner-budget-netting-browser.cjs` to verify actual rendered heights. Branch `ui/equal-statement-control-heights`. Banking and browser checks, merge and deployment pending.
+
+### 2026-11-06 — Equal-height statement controls verified live
+
+PR #562 merged at `a2237b80`. Browser run `42341701419` verified all three controls measure 36 px on one row at 320, 390, 768 and 1280 px in Chromium and iPhone WebKit. Banking run `42341701415` passed. Pages published the merge successfully. Render deploy `dep-dbnb7e4s728c7392a730` is live, and `/healthz` returned `ok: true` for the merge SHA. Layout work complete.
