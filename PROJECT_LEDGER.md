@@ -25,7 +25,7 @@ Product priorities:
 
 ## Current state (reviewed November 6, 2026)
 
-**Bills → Statements:** Account, statement period and Autopay settings share one responsive row. See the latest entry for verification status.
+**Bills → Statements:** Account, statement period and Autopay settings share one responsive row. Verified on desktop and iPhone and live on private Render in PR #560.
 
 **Phase 4 recovery rehearsal verified November 6.** All three private Render copies passed SHA-256 verification and the isolated SQLite candidate passed exact readback. The live file store remains authoritative. Next steps are separate snapshot recovery and application readback validation before any proposed cutover. See the latest entry.
 
@@ -3253,3 +3253,7 @@ Status review confirmed the requested same-disk backup and copy-only SQLite rehe
 ### 2026-11-06 — Keep statement controls on one row
 
 Updated `planner.css` and its `index.html` cache version so both selectors and Autopay settings share a three-column row. Extended the existing statement geometry checks in `tests/planner-budget-netting-browser.cjs` for alignment, overlap and fit at 320, 390, 768 and 1280 px. Presentation only. Banking and browser CI, merge and deployment pending at feature commit on `ui/statement-controls-one-row-20261106`.
+
+### 2026-11-06 — Statement control layout release verified
+
+PR #560 merged as `610003b3`. Browser run `42341177659` passed in desktop Chromium and iPhone WebKit at all four tested widths after reserving sufficient selector width at 320 px. Banking run `42341177714` passed. GitHub Pages publication succeeded for the merge SHA. Private Render deploy `dep-dbnb4am8bjmc73a2s080` is live and `/healthz` returned `ok: true` at the exact merge revision. Layout request complete.
