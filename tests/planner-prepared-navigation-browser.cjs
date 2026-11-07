@@ -517,9 +517,13 @@ module.exports=(async()=>{
    assert.equal(afterBudgetOrder.work.forecastBuilds,beforeBudgetView.work.forecastBuilds,
     'Category order never rebuilds the financial forecast');
    assert.equal(afterBudgetOrder.work.historyNormalizations,beforeBudgetView.work.historyNormalizations);
-   assert.ok(afterBudgetOrder.cached.includes('activity')&&
-    afterBudgetOrder.cached.includes('summary')&&afterBudgetOrder.cached.includes('schedules'),
-    'Category ordering preserves unrelated prepared destinations');
+   for(const view of ['activity','summary','schedules','reviews','settings'])
+    if(beforeBudgetView.cached.includes(view))
+     assert.ok(afterBudgetOrder.cached.includes(view),
+      'Category ordering retains the prepared '+view+' destination');
+   assert.ok(afterBudgetOrder.cached.includes('summary')&&
+    afterBudgetOrder.cached.includes('schedules'),
+    'Home and Bills stay ready after a Budget-only reorder');
    await page.locator('[data-history-category-manager]').evaluate(manager=>{manager.open=true});
    const budgetField=page.locator('[data-history-budget]').first();
    const monthlyTarget=budgetField.getAttribute('data-history-budget');
@@ -539,9 +543,12 @@ module.exports=(async()=>{
     'Budget target change remains scoped to Budget/Month insights');
    assert.equal(afterTarget.work.forecastBuilds,beforeBudgetView.work.forecastBuilds);
    assert.equal(afterTarget.work.historyNormalizations,beforeBudgetView.work.historyNormalizations);
-   assert.ok(afterTarget.cached.includes('activity')&&afterTarget.cached.includes('summary')&&
-    afterTarget.cached.includes('schedules'),
-    'Budget target changes keep Activity, Home and Bills prepared');
+   for(const view of ['activity','summary','schedules','reviews','settings'])
+    if(beforeBudgetView.cached.includes(view))
+     assert.ok(afterTarget.cached.includes(view),
+      'Budget target change preserves unrelated prepared '+view);
+   assert.ok(afterTarget.cached.includes('summary')&&afterTarget.cached.includes('schedules'),
+    'Home and Bills remain ready after a monthly budget save');
 
    // The calendar module has independent month state. Neither warming nor
    // showing cached pages may reset it or break next/previous/Today.
