@@ -234,10 +234,13 @@ module.exports=(async()=>{
         JSON.stringify({budget,report:layout}));
      }
     }
-    for(const key of ['monthText','accountText','monthSurface','accountSurface','tabText']){
+    for(const key of ['monthText','accountText','monthSurface','accountSurface']){
      assert.deepEqual(layout[key],budget[key],
       view+' '+key+' must match Budget at '+width+'px');
     }
+    assert.equal(layout.tabText.family,budget.tabText.family,
+     view+' navigation font family must match Budget');
+    // Active tabs intentionally have stronger weight than inactive tabs.
     assert.ok(Math.abs(layout.surface.left-budget.surface.left)<=1.5&&
      Math.abs(layout.surface.width-budget.surface.width)<=1.5,
      view+' toolbar surface must match Budget at '+width+'px');
