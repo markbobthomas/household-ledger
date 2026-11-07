@@ -4570,7 +4570,7 @@ a:hover{color:#166e61}
 .summary-page .summary-numbers .summary-low{
  font-size:clamp(23px,3.6vw,40px);
 }
-.history-page.spending-summary-page>.history-view-toolbar{margin-bottom:14px}
+.history-page.spending-summary-page>.history-view-toolbar{margin-bottom:10px}
 .history-page .spending-tabs{display:flex;gap:5px;flex-wrap:nowrap}
 .history-page .spending-tabs .history-subtab{flex:1 1 0;min-width:0}
 .history-page.spending-summary-page .financial-recap-page{max-width:100%;margin:0}
