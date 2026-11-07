@@ -3243,3 +3243,7 @@ Final PR source merge verified: `27a2b07092724e1caa3224fd73bc33b770853cc1` at Gi
 ### 2026-11-06 — Render-only backup and SQLite rehearsal verified
 
 Used the existing private service’s browser Shell and the procedure in `docs/phase4-render-only-recovery.md`, with exact-path, nonempty-file and free-space preflight checks. All three source SHA-256 digests before and after copying matched their respective private copies. The deployed `pilot/transactional-store.cjs` read only the copies for migration and verified exact bank, forecast and session readback in a new encrypted SQLite candidate. Shell reported VERIFIED. The private directory and checksum manifest remain on the same Render disk. No application code change, restart, storage switch or snapshot restore. Render showed live revision `4fb7333` (PR #551). Docs-only handoff uses `[skip render]`. Pages publication for this handoff is unverified. Independent recovery, application-level readback and any separately authorized cutover remain outstanding.
+
+### 2026-11-06 — Rehearsal completion confirmed
+
+Status review confirmed the requested same-disk backup and copy-only SQLite rehearsal are complete, as recorded in merged PR #558. Render still reports live revision `4fb7333`. No code change or repeat migration. Independent restore and production cutover remain separate future work. Pages unverified.
