@@ -434,19 +434,21 @@ module.exports=(async()=>{
     const geometry=await page.locator('.schedule-page').evaluate(root=>{
      const tabs=[...root.querySelectorAll('.ledger-section-tabs [data-bills-tab]')]
       .map(el=>el.getBoundingClientRect()),
-      controls=[...root.querySelectorAll('.bills-statement-filters select')]
+      controls=[...root.querySelectorAll('.bills-statement-filters :is(select,.bills-statement-settings)')]
        .map(el=>el.getBoundingClientRect());
      return {tabs:tabs.map(r=>({top:r.top,width:r.width,right:r.right})),
-      controls:controls.map(r=>({top:r.top,right:r.right,width:r.width})),
+      controls:controls.map(r=>({center:r.top+r.height/2,left:r.left,right:r.right,width:r.width})),
       viewport:innerWidth,overflow:document.documentElement.scrollWidth-innerWidth};
     });
     assert.ok(geometry.tabs.length===3&&
      geometry.tabs.every(r=>Math.abs(r.top-geometry.tabs[0].top)<=2)&&
      geometry.tabs.every(r=>Math.abs(r.width-geometry.tabs[0].width)<=2)&&
-     geometry.controls.length===2&&
+     geometry.controls.length===3&&
+     geometry.controls.every((r,i)=>Math.abs(r.center-geometry.controls[0].center)<=2&&
+      (!i||r.left>=geometry.controls[i-1].right))&&
      geometry.controls.every(r=>r.width>65&&r.right<=width+2)&&
      geometry.overflow<=3,
-     name+': three tabs on one row and two statement selectors fit at '+width+
+     name+': tabs and all three statement controls fit on their respective rows at '+width+
      'px: '+JSON.stringify(geometry));
    }
    await page.setViewportSize({width:name==='Chromium'?1280:390,height:name==='Chromium'?900:844});

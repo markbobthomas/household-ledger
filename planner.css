@@ -6294,7 +6294,7 @@ a:hover{color:#166e61}
  white-space:nowrap!important;min-width:0;overflow:hidden;text-overflow:ellipsis;
 }
 .schedule-page .bills-statement-filters{
- display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ display:grid;grid-template-columns:minmax(68px,1fr) minmax(68px,1.4fr) auto;align-items:center;
  gap:9px;padding:10px;margin:0 0 12px;
  border:1px solid #e7ede5;border-radius:10px;background:#fff;
 }
@@ -6675,7 +6675,7 @@ a:hover{color:#166e61}
  color:var(--muted,#65766b);
 }
 .ledger-clear-filters{white-space:nowrap;min-height:36px}
-.bills-statement-settings{white-space:nowrap;align-self:end}
+.bills-statement-settings{white-space:nowrap}
 .ledger-advanced-settings{margin:10px 0}
 .ledger-advanced-settings>summary{
  cursor:pointer;font-weight:650;padding:2px 0 4px;
@@ -6687,7 +6687,9 @@ a:hover{color:#166e61}
 .financial-recap-upcoming[open]>summary{margin-bottom:10px}
 .transaction-related-plans{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0}
 .transaction-related-plans>strong{flex:1 1 100%;font-size:13px}
-@media(max-width:550px){.bills-statement-settings{width:100%}}
+@media(max-width:650px){
+ .schedule-page .bills-statement-settings{font-size:11px;padding-inline:7px}
+}
 
 /* Keep Posted bank history in the same centered content frame as Bills and
    Spending. The old Posted/Planned subtab no longer consumes a narrow strip. */
