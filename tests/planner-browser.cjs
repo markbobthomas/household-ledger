@@ -929,24 +929,24 @@ module.exports=(async()=>{
      .map(el=>el.matches('.history-budget-month-field')?'Months':'Account'));
    assert.deepEqual(budgetFilterOrder,['Months','Account'],
     'Budget month selection precedes Account in document and keyboard order');
+   assert.equal(await page.locator('.history-budget-month-field>span').count(),0,
+    'The selected calendar months identify the dropdown without a visible heading');
+   assert.equal(await page.locator('.history-budget-filters>label:has([name="historyAccount"]) .visually-hidden').count(),1,
+    'The account filter has an accessible name without a visible heading');
    const accountAndMonths=await page.evaluate(()=>{
     const account=document.querySelector('.history-budget-filters [name="historyAccount"]').getBoundingClientRect(),
      month=document.querySelector('.history-budget-filters .history-month-trigger').getBoundingClientRect(),
      form=document.querySelector('.history-budget-filters').getBoundingClientRect();
-    const accountLabel=document.querySelector('.history-budget-filters>label:has([name="historyAccount"])').getBoundingClientRect(),
-     monthLabel=document.querySelector('.history-budget-month-field>span').getBoundingClientRect();
     return {accountTop:account.top,monthTop:month.top,accountBottom:account.bottom,
      monthBottom:month.bottom,accountHeight:account.height,monthHeight:month.height,
-     accountLabelTop:accountLabel.top,monthLabelTop:monthLabel.top,
      accountLeft:account.left,accountRight:account.right,monthLeft:month.left,monthRight:month.right,formRight:form.right};
    });
    assert.ok(Math.abs(accountAndMonths.accountTop-accountAndMonths.monthTop)<=2&&
     Math.abs(accountAndMonths.accountBottom-accountAndMonths.monthBottom)<=2&&
-    Math.abs(accountAndMonths.accountLabelTop-accountAndMonths.monthLabelTop)<=2&&
     Math.abs(accountAndMonths.accountHeight-accountAndMonths.monthHeight)<=1&&
     accountAndMonths.monthRight<=accountAndMonths.accountLeft+1&&
     accountAndMonths.accountRight<=accountAndMonths.formRight,
-    'Account and Months labels/dropdowns must align precisely in one row: '+JSON.stringify(accountAndMonths));
+    'Account and Months dropdowns must align precisely in one row: '+JSON.stringify(accountAndMonths));
    await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
    assert.ok(await page.locator('[data-history-month-option][value="2026-09"]').count()>0,
     'Earlier complete calendar months are available for historical Budget review');

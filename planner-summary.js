@@ -782,7 +782,7 @@ function render(input){
   esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
   '</option>').join('');
  const lead=()=>'<div class="summary-heading calendar-toolbar">'+
-  '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Summary account">'+
+  '<label class="summary-account-picker"><span class="visually-hidden">Account</span><select id="summary-account" aria-label="Summary account">'+
   options+'</select></label>'+calendarNavigation()+'</div>';
  const points=getPoints(derived,snapshot.asOf,days);
  series=fresh&&points.length>=2&&points.every(p=>Number.isFinite(p.balance))?points:[];
@@ -870,7 +870,7 @@ function render(input){
    '</section></div>';
   if(view==='trend')return '<div class="planner-page summary-page trend-page">'+
    '<div class="trend-page-heading"><h2>Balance Trend</h2>'+
-   '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Trend account">'+
+   '<label class="summary-account-picker"><span class="visually-hidden">Account</span><select id="summary-account" aria-label="Trend account">'+
    options+'</select></label></div>'+
    '<div class="summary-empty">A verified starting balance is needed for the trend. '+esc(reason)+
    ' <button type="button" class="btn" data-view="summary">Back to Home</button></div></div>';
@@ -946,7 +946,7 @@ function render(input){
   '</section>';
  if(view==='trend')return '<div class="planner-page summary-page trend-page">'+
   '<div class="trend-page-heading"><h2>Balance Trend</h2>'+
-  '<label class="summary-account-picker">Account <select id="summary-account" aria-label="Trend account">'+
+  '<label class="summary-account-picker"><span class="visually-hidden">Account</span><select id="summary-account" aria-label="Trend account">'+
    options+'</select></label></div>'+
   trendChart+trendTrust+'</div>';
  return calendarHtml+(emptySchedule?'<button type="button" data-view="schedules" class="summary-review-link">Add a prediction →</button>':'')+'</div>';

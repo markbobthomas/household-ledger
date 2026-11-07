@@ -1884,7 +1884,7 @@ function schedulesPage(bundle,s){
   '<section class="bills-upcoming panel" aria-label="Upcoming transactions">'+
    '<div class="bills-heading"><div><h2 class="visually-hidden">All expected activity</h2></div>'+
     '<div class="bills-heading-actions">'+billsMonthSelect(s.asOf,'upcoming')+
-     '<label class="bills-account-field minimal-control-label">Account'+
+     '<label class="bills-account-field minimal-control-label"><span class="visually-hidden">Account</span>'+
       accountSelect(accounts,transactionFilter,'transactionFilter',true)+'</label>'+
      '<button type="button" class="btn primary bills-add-transaction" data-show-new>+ Add transaction</button>'+
      '<strong class="bills-upcoming-sum" data-bills-upcoming-sum>Checking outflows '+
@@ -1906,8 +1906,8 @@ function schedulesPage(bundle,s){
    billsMonthSelect(s.asOf,'repeating')+
    '<label class="schedule-search-wrap minimal-control-label"><span class="visually-hidden">Find a repeating payment</span><input data-schedule-search type="search" '+
     'autocomplete="off" placeholder="Search payments" value="'+escapeHTML(scheduleSearch)+'"></label>'+
-   '<label>Account'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
-   '<label>Kind<select data-schedule-kind-filter>'+[['all','All kinds'],['expense','Expenses'],['income','Deposits'],['refund','Refunds'],['transfer','Transfers']].map(([v,l])=>'<option value="'+v+'"'+(scheduleKindFilter===v?' selected':'')+'>'+l+'</option>').join('')+'</select></label>'+ 
+   '<label class="minimal-control-label"><span class="visually-hidden">Account</span>'+accountSelect(accounts,scheduleAccount,'scheduleAccount',true)+'</label>'+
+   '<label class="minimal-control-label"><span class="visually-hidden">Kind</span><select data-schedule-kind-filter>'+[['all','All kinds'],['expense','Expenses'],['income','Deposits'],['refund','Refunds'],['transfer','Transfers']].map(([v,l])=>'<option value="'+v+'"'+(scheduleKindFilter===v?' selected':'')+'>'+l+'</option>').join('')+'</select></label>'+ 
     '<label class="minimal-control-label"><span class="visually-hidden">Sort repeating payments</span><select data-schedule-sort aria-label="Sort repeating payments">'+
     [['order','Original order'],['value-desc','Amount: high to low'],
      ['value-asc','Amount: low to high'],['category','Category']].map(([v,l])=>
@@ -2340,7 +2340,7 @@ function spendingMonthPicker(records,asOf,includeUpcoming=false){
      '<div class="history-month-picker" data-history-month-picker>'+
       '<button type="button" class="history-month-trigger" data-history-month-toggle aria-haspopup="true" aria-expanded="'+
        historyMonthPickerOpen+'" aria-controls="history-month-menu" aria-label="Calendar months: '+
-       escapeHTML(monthSummary)+'"><span>Months</span><strong>'+escapeHTML(monthSummary)+
+       escapeHTML(monthSummary)+'"><strong>'+escapeHTML(monthSummary)+
        '</strong><span aria-hidden="true" class="history-month-caret">⌄</span></button>'+
       '<div id="history-month-menu" class="history-month-menu" data-history-month-menu'+
        (historyMonthPickerOpen?'':' hidden')+'>'+
@@ -2441,7 +2441,7 @@ function financialRecapPage(bundle,s){
    '<p class="financial-recap-empty">'+escapeHTML(empty)+'</p>';
  return '<div class="planner-page financial-recap-page" data-financial-recap>'+
   '<header class="financial-recap-header">'+
-   picker.markup+'<label>Account'+accountSelect(activeAccounts(s),historyAccount,'historyAccount',true)+'</label></header>'+
+   picker.markup+'<label class="minimal-control-label"><span class="visually-hidden">Account</span>'+accountSelect(activeAccounts(s),historyAccount,'historyAccount',true)+'</label></header>'+
   '<div class="financial-recap-metrics">'+
    metric('Scheduled expenses',
     canSummarizeBills?cash(billCents/100):'Unavailable',
@@ -2799,12 +2799,12 @@ function historyPage(bundle,s){
  return '<div class="planner-page history-page'+(displayView==='list'?' posted-transactions-page':'')+'">'+
   (activeTab==='activity'?'':'<div class="history-view-toolbar">'+spendingTabNav(displayView)+'</div>')+
   '<form class="history-filters ledger-toolbar'+(displayView==='list'?' history-activity-filters':' history-analysis-filters history-budget-filters'+(displayView==='merchants'||displayView==='sizes'?' history-report-filters':''))+'" data-history-filter>'+
-   (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field"><span>Months</span>'+picker.markup+'</div>':'')+
+   (displayView==='list'?'<div class="history-budget-month-field history-activity-month-field">'+picker.markup+'</div>':'')+
    '<label class="history-search-wrap minimal-control-label"><span class="visually-hidden">Find a transaction</span><input name="search" type="search" value="'+escapeHTML(historySearch)+
     '" placeholder="Search transactions"></label>'+
    (displayView==='categories'||displayView==='merchants'||displayView==='sizes'?
-    '<div class="history-budget-month-field'+(displayView==='categories'?'':' history-report-month-field')+'"><span>Months</span>'+picker.markup+'</div>':'')+
-   '<label>Account'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
+    '<div class="history-budget-month-field'+(displayView==='categories'?'':' history-report-month-field')+'">'+picker.markup+'</div>':'')+
+   '<label class="minimal-control-label"><span class="visually-hidden">Account</span>'+accountSelect(accounts,historyAccount,'historyAccount',true)+'</label>'+
    (displayView==='categories'?'':'<label class="minimal-control-label"><span class="visually-hidden">Sort transactions</span><select name="historySort" data-history-sort aria-label="Sort transactions">'+
     [['newest','Newest first'],['oldest','Oldest first'],
      ['amount-desc','Amount: high to low'],['amount-asc','Amount: low to high'],
