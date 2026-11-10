@@ -1372,6 +1372,26 @@ module.exports=(async()=>{
     'Budget category opens its underlying spent and expected items');
    assert.ok(await categoryItems.locator('[data-budget-source]').count()>0,
     'Expanded category shows the transactions that make up its total');
+   // Posted bank purchases used to have no way to open the category editor
+   // from Budget, even when provisional pending purchases had a button.
+   const spentCategory=page.locator('.history-category-item')
+    .filter({has:page.locator('[data-budget-source="spent"]')}).first();
+   assert.ok(await spentCategory.count()>0,'Fixture contains a posted Budget purchase');
+   if(!await spentCategory.locator('[data-history-budget-details]').isVisible())
+    await spentCategory.locator('[data-history-drill-category]').click();
+   const postedRows=spentCategory.locator('[data-budget-source="spent"]');
+   assert.equal(await postedRows.locator('[data-history-plan][data-history-account]').count(),
+    await postedRows.count(),'Every posted Budget purchase opens the category editor');
+   const pendingRows=page.locator('[data-budget-source="pending"]');
+   assert.equal(await pendingRows.locator('[data-history-plan][data-history-account]').count(),
+    await pendingRows.count(),'Pending Budget purchases keep the same edit action');
+   await postedRows.first().locator('[data-history-plan]').click();
+   const categoryEditor=page.locator('.transaction-detail [data-actual-transaction-category]');
+   assert.equal(await categoryEditor.count(),1,
+    'Posted Budget action opens the existing category editor rather than a separate save path');
+   assert.ok(await categoryEditor.locator('option').count()>1,
+    'Posted Budget category editor offers alternative categories');
+   await page.locator('.transaction-detail-close').click();
 
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});

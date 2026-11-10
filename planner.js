@@ -2213,7 +2213,9 @@ function historyInsights(rows,view,options={}){
      '" data-budget-cents="'+item.cents+'">'+
      '<span class="history-budget-detail-date">'+escapeHTML(dayLabel(item.date))+'</span>'+
      '<span class="history-budget-detail-name"><strong>'+escapeHTML(item.merchant)+
-     '</strong>'+(item.source==='expected'?'<small>Expected</small>':item.source==='pending'?'<small>Provisional pending · category review available after posting</small><button type="button" class="btn" data-history-plan="'+escapeHTML(item.id)+'" data-history-account="'+escapeHTML(item.accountId)+'">View transaction / category</button>':'')+'</span>'+
+     '</strong>'+(item.source==='expected'?'<small>Expected</small>':
+      (item.source==='pending'?'<small>Provisional pending · amount and category may change on posting</small>':'')+
+      '<button type="button" class="btn" data-history-plan="'+escapeHTML(item.id)+'" data-history-account="'+escapeHTML(item.accountId)+'">View transaction / category</button>')+'</span>'+
      '<strong class="history-budget-detail-amount">'+(item.cents<0?'−':'')+
       cash(Math.abs(item.cents)/100)+'</strong></div>').join('')+'</div>';
   };
