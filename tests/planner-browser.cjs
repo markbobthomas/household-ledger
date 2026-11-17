@@ -1088,6 +1088,21 @@ module.exports=(async()=>{
     const summary=page.locator('[data-history-total-budget]');
     assert.equal(await summary.locator('p,small').count(),1,
      'Budget summary contains just one short budget amount label');
+    const remaining=summary.locator('[data-history-total-budget-remaining]');
+    assert.equal(await remaining.count(),1,
+     'Budget displays remaining dollars as the primary balance');
+    const balanceCents=totals.limitCents-totals.spentCents;
+    assert.equal(Number(await remaining.getAttribute('data-budget-remaining-cents')),balanceCents,
+     'Remaining balance equals all selected monthly targets minus posted, provisional and expected spending');
+    if(balanceCents<0){
+     assert.match(await remaining.innerText(),/^Over by \\$/,
+      'Overspending is labeled as an overage, not a negative amount left');
+     assert.equal(await remaining.evaluate(el=>getComputedStyle(el).color),
+      'rgb(208, 0, 115)','Overall budget overage uses the existing vivid pink treatment');
+    }else{
+     assert.match(await remaining.innerText(),/^\\$/,
+      'Available budget is displayed as an ordinary dollar amount');
+    }
     if(totals.limitCents<=0){
      assert.equal(await summary.locator('[data-history-total-budget-percent]').count(),0,
       'No misleading percentage is shown without a positive overall budget');
