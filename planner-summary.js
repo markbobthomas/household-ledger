@@ -539,19 +539,19 @@ function calendarGrid(){
   calendarDate=currentPoints[0]?.date||
    [...state.actual.keys()].find(d=>d.startsWith(calendarMonth));
  const start=calendarMonth+'-01',
-  firstWeek=(new Date(start+'T12:00:00Z').getUTCDay()+6)%7,
+  firstWeek=new Date(start+'T12:00:00Z').getUTCDay(),
   monthDays=new Date(Number(calendarMonth.slice(0,4)),
    Number(calendarMonth.slice(5,7)),0).getDate(),
   weekCount=Math.ceil((firstWeek+monthDays)/7),
   count=weekCount*7,
   points=new Map(currentPoints.map(p=>[p.date,p]));
- const header=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>
+ const header=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>
   '<div class="calendar-weekday" aria-hidden="true">'+d+'</div>').join('');
  const cells=Array.from({length:count},(_,i)=>{
   const dom=i-firstWeek+1;
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
   const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso),
-   weekend=i%7>=5;
+   weekend=i%7===0||i%7===6;
   if(!p&&state.actual.has(iso)){
    const rows=state.actual.get(iso)||[],history=state.history?.get(iso);
    return '<button type="button" class="calendar-day actual'+(weekend?' weekend':'')+

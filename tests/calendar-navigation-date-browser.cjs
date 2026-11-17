@@ -61,7 +61,7 @@ module.exports=(async()=>{
     assert.equal(await selectedDay(),localToday,
      device+' should select actual local today, including Saturday');
     assert.deepEqual(await page.locator('.summary-page .calendar-grid>.calendar-weekday').allTextContents(),
-     ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+     ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
      device+' Calendar has all seven weekday columns');
     const sevenColumnLayout=await page.evaluate(()=>{
      const grid=document.querySelector('.summary-page .calendar-grid'),
@@ -103,6 +103,18 @@ module.exports=(async()=>{
       'Every date in October has its own selectable calendar tile');
      assert.equal(await page.locator('[data-calendar-weekend-activity]').count(),0,
       'No detached weekend transaction strips remain');
+     // October 17 is Saturday (last column), October 18 Sunday (first).
+     // The column change must not move either recorded bank date.
+     const weekendColumns=await page.evaluate(()=>{
+      const grid=document.querySelector('.summary-page .calendar-grid');
+      const col=day=>{
+       const tile=grid.querySelector('[data-calendar-actual-day="'+day+'"]');
+       return ((Array.from(grid.children).indexOf(tile)-7)%7)+1;
+      };
+      return [col('2026-10-17'),col('2026-10-18')];
+     });
+     assert.deepEqual(weekendColumns,[7,1],
+      device+' Sunday-first layout puts real Saturday and Sunday in their proper columns');
      for(const day of ['2026-10-17','2026-10-18']){
       const cell=page.locator('.summary-page .calendar-grid>[data-calendar-actual-day="'+day+'"]');
       assert.equal(await cell.count(),1,'Saturday and Sunday each get a dated cell');

@@ -25,6 +25,8 @@ Product priorities:
 
 ## Current state (updated November 17, 2026)
 
+**Sunday-first Calendar — implementation pending CI November 17:** Home's existing seven-day grid changes from Monday–Sunday to Sunday–Saturday. Actual weekend transactions retain their posted dates, weekend tiles remain styled on Saturday and Sunday, and predicted payments still shift to Friday under the unchanged forecast rule. Browser and financial CI, PR merge and private Render release are pending confirmation.
+
 **Posted recurring-bill matching — merged and live November 17:** [PR #578](https://github.com/markbobthomas/household-ledger/pull/578) was squash-merged into `main` at `b674f97536ad1390801ec8643de5a45d2b1ba6c5`. Banking/forecast safety [run #44199928921](https://github.com/markbobthomas/household-ledger/actions/runs/44199928921) **passed**, including complete one-to-one posted utility matching and a guard against weak shared-word merchant collisions. Render deploy `dep-dbue7km0tbcc73cqo7sg` reports **live** at that exact code SHA. Desktop Chromium/iPhone WebKit [browser run #44199928937](https://github.com/markbobthomas/household-ledger/actions/runs/44199928937) **passed** on the exact code PR head; no UI code changed. Private bank-record readback, authenticated visual verification and direct `/healthz` readback were not performed. No bank facts, Plaid connections, encrypted files or Render infrastructure were changed.
 
 **Budget dollars remaining — released November 16:** Spending → Budget now puts selected-period remaining dollars (monthly targets less posted, provisional pending and expected spending) ahead of percent-used; overspending says **Over by $…** in pink. [PR #576](https://github.com/markbobthomas/household-ledger/pull/576) merged into main at `e4df3d7a550b1a0dd8c17bd86d1a630961299551`. Required financial [CI run #43990641370](https://github.com/markbobthomas/household-ledger/actions/runs/43990641370) and desktop Chromium/iPhone WebKit [browser run #43990641442](https://github.com/markbobthomas/household-ledger/actions/runs/43990641442) **passed**. Existing private Render deployment `dep-dbtq9q5ckfvc73bqifi0` was verified **live** at the exact code SHA. Independent HTTP `/healthz`, private authenticated visual check and GitHub Pages publish were not verified. No banking/forecast data changes.
@@ -3351,3 +3353,10 @@ Owner reported that posted utility withdrawals were not being recognized against
 ### 2026-11-17 — Browser suite confirmation for posted-payment release
 
 The existing desktop Chromium/iPhone WebKit [browser run #44199928937](https://github.com/markbobthomas/household-ledger/actions/runs/44199928937) completed **successfully** on the exact code PR head `07e9c2f61e52704b5402f2e368588ffd87a74962`, complementing the passing financial run and independently verified live Render code merge documented above. UI behavior and presentation were not changed in this fix. This docs-only [skip render] update records the final verification without redeploying the banking service.
+
+
+### 2026-11-17 — Sunday-first seven-day Home Calendar
+
+- **Requested outcome:** Sunday through Saturday, rather than Monday through Sunday, in the existing seven-column Home calendar.
+- **Implementation:** Rotate headings; use UTC Sunday-zero month start offset and weekend columns Sunday/Saturday. Keep each bank date, selected-day details, weekly row count, forecast and Friday weekend-prediction policy unchanged. Bust only the calendar renderer script cache. No financial, storage, Plaid or backend change.
+- **Checks and release:** Expanded existing summary and Chromium/iPhone browser checks for order and date placement. Finance CI, browser CI, merge and Render deploy pending at this entry; confirm independently before calling it released.
