@@ -573,6 +573,8 @@ function calendarGrid(){
      '<span class="calendar-event"><span class="calendar-event-name">'+
      esc(t.merchant||'Transaction')+'</span></span>').join('')+
     (rows.length>2?'<span class="calendar-more">+'+(rows.length-2)+' more</span>':'')+
+    (history&&rows.length?'<span class="calendar-posted-count">'+rows.length+
+     ' txn'+(rows.length===1?'':'s')+'</span>':'')+
     '</span></button>';
   }
   if(!p)return '<div class="calendar-outside" aria-hidden="true"><span>'+
