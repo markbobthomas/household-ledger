@@ -6910,3 +6910,73 @@ a:hover{color:#166e61}
   --ledger-compact-filter-font:11px;
  }
 }
+
+/* Seven-day calendar layout (2026-11-16).
+   Actual Saturday/Sunday transactions occupy their real dates; Friday shifting
+   remains solely in the forecast engine. Keep narrow screens scroll-free and
+   show full precision in the selected-day detail rather than squeezing tiles. */
+.summary-page .calendar-grid{
+ grid-template-columns:repeat(7,minmax(0,1fr));
+ grid-template-rows:23px repeat(var(--calendar-weeks,5),112px);
+ gap:4px!important;
+ min-width:0;
+}
+.summary-page .calendar-grid>.calendar-day,
+.summary-page .calendar-grid>.calendar-blank,
+.summary-page .calendar-grid>.calendar-outside{
+ height:112px;max-height:112px;min-width:0;overflow:hidden;
+}
+.summary-page .calendar-day{padding:7px 5px!important;gap:3px}
+.summary-page .calendar-day.weekend:not(.selected):not(.month-minimum):not(.negative):not(.low){
+ background:#f6f8f6!important;
+ border-color:#e4ebe5!important;
+}
+.summary-page .calendar-day.weekend:not(.selected) .calendar-day-number{color:#69786e!important}
+.summary-page .calendar-day-balance{min-width:0;max-width:100%;font-variant-numeric:tabular-nums}
+.summary-page .calendar-event-amount{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.summary-page .calendar-posted-count{display:none}
+@media(max-width:780px){
+ .summary-page .calendar-grid{
+  grid-template-rows:21px repeat(var(--calendar-weeks,5),100px);
+  gap:3px!important;
+ }
+ .summary-page .calendar-grid>.calendar-day,
+ .summary-page .calendar-grid>.calendar-blank,
+ .summary-page .calendar-grid>.calendar-outside{height:100px;max-height:100px}
+ .summary-page .calendar-day{padding:5px 2px!important}
+ .summary-page .calendar-weekday{font-size:10px;padding:2px 0 5px!important}
+}
+@media(max-width:520px){
+ .summary-page .calendar-grid{
+  grid-template-rows:20px repeat(var(--calendar-weeks,5),88px);
+  gap:2px!important;
+ }
+ .summary-page .calendar-grid>.calendar-day,
+ .summary-page .calendar-grid>.calendar-blank,
+ .summary-page .calendar-grid>.calendar-outside{height:88px;max-height:88px}
+ .summary-page .calendar-day{padding:5px 2px!important;gap:2px}
+ .summary-page .calendar-day-number{font-size:10px;margin:0!important}
+ .summary-page .calendar-day-balance{
+  font-size:9px!important;letter-spacing:-.35px;
+  margin:2px 0 3px!important;
+ }
+ .summary-page .calendar-event-name{
+  display:block;font-size:8px;line-height:1.1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ }
+ .summary-page .calendar-day-events{gap:3px}
+ .summary-page .calendar-posted-count{
+  display:block;font-size:9px;font-weight:650;line-height:1.2;
+  color:#62766a;text-align:center;white-space:nowrap;
+ }
+ .summary-page .calendar-event-amount,
+ .summary-page .calendar-more{font-size:9px;line-height:1.15}
+ .summary-page .calendar-weekday{font-size:9px;letter-spacing:0}
+ .summary-page .calendar-unplanned{display:none}
+}
+@media(max-width:360px){
+ .summary-page .calendar-day{padding:5px 1px!important}
+ .summary-page .calendar-day-balance{font-size:8px!important;letter-spacing:-.5px}
+ .summary-page .calendar-event-amount,
+ .summary-page .calendar-more{font-size:8px}
+}

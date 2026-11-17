@@ -288,7 +288,12 @@ const weekendBefore=JSON.stringify(weekendRows),balanceBefore=JSON.stringify(ser
 const weekendHTML=tool.render({...opts,days:1095,bundle:{...opts.bundle,rows:weekendRows}});
 assert.match(weekendHTML,/data-calendar-actual-day="2026-10-17"/);
 assert.match(weekendHTML,/data-calendar-actual-day="2026-10-18"/);
-assert.match(weekendHTML,/weekend bank transaction/);
+assert.match(weekendHTML,/class="calendar-day actual weekend" data-calendar-actual-day="2026-10-17"/);
+assert.match(weekendHTML,/class="calendar-day actual weekend" data-calendar-actual-day="2026-10-18"/);
+assert.doesNotMatch(weekendHTML,/data-calendar-weekend-activity/,
+ 'Weekend bank history appears in dated tiles, never a detached list');
+assert.match(weekendHTML,/>Sat<\/div><div class="calendar-weekday" aria-hidden="true">Sun<\/div>/,
+ 'The calendar header includes both weekend columns');
 assert.equal(JSON.stringify(weekendRows),weekendBefore);
 assert.equal(JSON.stringify(series),balanceBefore,'Weekend navigation does not shift bank dates or forecast balances');
 const title=require('../planner-transactions.js').transactionTitle('<Shop>','bank:key','<Private note>');

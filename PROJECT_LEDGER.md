@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-11-06 (Pacific)  
+**Updated:** 2026-11-16 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -23,7 +23,10 @@ Product priorities:
 
 **Banking safety:** Preserve the current GitHub, Plaid and private Render architecture. Actual source transactions/balances remain authoritative and unchanged by editable predictions. Do not use public fictional Demo data as if it were real bank data. This repository is public: do not put actual financial records, private amounts, authentication details, or private user messages in this ledger.
 
-## Current state (reviewed November 6, 2026)
+## Current state (updated November 16, 2026)
+
+**Seven-day Calendar, implementation awaiting PR checks:** The Home calendar now uses seven Monday–Sunday columns with true Saturday/Sunday bank-history tiles and independent selection; responsive tiles use compact balances, with full-precision selected-day detail. Weekend-to-Friday prediction scheduling is unchanged. Work is on `ui/seven-day-calendar-20261116`; CI, merge, Pages publication and private Render deployment remain to be verified, not assumed.
+
 
 **Shared UI typography and surfaces:** Prominent month/account filters, secondary tabs, card/section headings, Settings/Review page titles and compact Repeating controls have a consistent responsive scale (PR #570). Banking and desktop/iPhone UI checks passed; exact UI code is live on private Render at `f159c2e`.
 
@@ -3313,3 +3316,7 @@ Requested: fix missing edit access for posted purchases in Spending → Budget c
 ### 2026-11-09 — Budget posted-category edit released to GitHub main
 
 PR [#572](https://github.com/markbobthomas/household-ledger/pull/572) squash-merged as `62f8761454b2083bcf5e23845cbcbb26111d7ba9`; GitHub PR merged state and exact `main` SHA independently confirmed. The category editor action now appears on all posted and provisional bank rows in expanded Spending → Budget categories. It opens the existing actual-transaction category selector; future expected entries remain distinct. Banking/forecast safety [run #42766395416](https://github.com/markbobthomas/household-ledger/actions/runs/42766395416) **passed**; desktop Chromium/iPhone WebKit browser [run #42766395598](https://github.com/markbobthomas/household-ledger/actions/runs/42766395598) **passed**, including the new posted-row editor assertion. GitHub Pages [publish run #42766681073](https://github.com/markbobthomas/household-ledger/actions/runs/42766681073) **passed** at the code merge SHA. Private Render deployment is **not verified**: the Render connector has no selected workspace and public `/healthz` was inaccessible from the available browser fetch. Do not conflate public Pages with private banking deployment. No source bank facts, forecast arithmetic, Plaid, persistent files or secrets changed. This is a docs-only `[skip render]` verified-status handoff to avoid redeploying the banking service.
+
+### 2026-11-16 — Return to a seven-day calendar
+
+Requested a clean, legible seven-day Home calendar so actual Saturday and Sunday bank activity appears on its actual date while predictive Friday shifting remains unchanged. In `planner-summary.js`, replaced the five-day columns and detached weekend-transaction strips with Monday–Sunday date cells and full-month row calculation. Weekend bank history is selectable in its real cell, weekend forecast balances remain visible even when no new modeled payment is due, and arrow-key navigation works across all seven days for actual and forecast dates. In `planner.css`, added seven-column desktop/tablet/phone layout with subtle weekend distinction, constrained fixed-height cells, compact narrow-screen tile labels and full amount detail on selection; `index.html` refreshes the two asset keys. Updated the existing `tests/calendar-navigation-date-browser.cjs` Chromium/iPhone WebKit suite to assert seven columns, no horizontal spill, weekend posted transactions within dated cells, day-selection behavior and no extra forecast work. No changes to `planner-core.js`, weekend forecast policy, canonical balance arithmetic, raw bank transactions, storage, Plaid or private infrastructure. Branch `ui/seven-day-calendar-20261116`; PR, required banking/forecast CI, browser CI, merge, Pages and private Render deployment are pending independent confirmation at this entry.
