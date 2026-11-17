@@ -66,7 +66,7 @@ module.exports=(async()=>{
     const sevenColumnLayout=await page.evaluate(()=>{
      const grid=document.querySelector('.summary-page .calendar-grid'),
       rect=grid.getBoundingClientRect();
-     return {columns:getComputedStyle(grid).gridTemplateColumns.split(/\\s+/).length,
+     return {columns:getComputedStyle(grid).gridTemplateColumns.split(/\s+/).length,
       right:rect.right,viewport:document.documentElement.clientWidth};
     });
     assert.equal(sevenColumnLayout.columns,7,device+' should use seven equal date columns');
