@@ -314,7 +314,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  const bankRows=rows.filter(t=>!t.pending&&valid(t.date)&&t.date<=asOf&&
   Number(t.amount)>0&&String(t.id||'')).sort((a,b)=>
   a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
- const paid=new Set(),usedBank=new Set();
+ const paid=new Set(),usedBank=new Set(),ambiguousPosted=new Set();
  // A bank can rename an outgoing debit when pending becomes posted. If there
  // is NO saved-name or linked-ID match, accept strong bank evidence only when
  // BOTH the debit and the due occurrence are unique: same source checking
@@ -356,13 +356,42 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     tools.bankDirection(other)==='expense'&&
     String(tools.accountRef(other.accountId||other.account,accounts))===
      String(best.e.accountId)&&
-    closeAmount(other.amount,best.e.amount)&&closePosting(other,best.e)))continue;
+    closeAmount(other.amount,best.e.amount)&&closePosting(other,best.e))){
+    ambiguousPosted.add(String(t.id));continue;
+   }
   }else if(next&&!(best.explicit&&!next.explicit||
     best.variance<=.18&&(next.variance-best.variance>.18||
-     next.gap-best.gap>=3)))continue;
+     next.gap-best.gap>=3))){ambiguousPosted.add(String(t.id));continue;}
   // One posted bank withdrawal pays at most one obligation. Keep future
   // recurrences intact; the actual bank balance already contains this debit.
   paid.add(best.e.id);usedBank.add(String(t.id));
+ }
+
+ // Two independently posted, named utility debits may settle two same-payee
+ // obligations even if either bank row individually fits either bill. Require
+ // a CLOSED one-to-one group; never guess using an amount/date-only fallback.
+ if(ambiguousPosted.size&&tools.completePostedAssignments){
+  const candidates=[];
+  for(const t of bankRows){
+   if(usedBank.has(String(t.id)))continue;
+   const eligible=tools.historicalScheduleMatches?.(t,accounts,rules)||[];
+   for(const e of dueEntries){
+    if(paid.has(e.id)||tools.bankDirection(t)!=='expense'||
+     String(tools.accountRef(t.accountId||t.account,accounts))!==String(e.accountId))continue;
+    const rule=ruleMap.get(String(e.ruleId));
+    if(!rule||!eligible.some(r=>String(r.id)===String(rule.id)))continue;
+    const explicit=eligible.some(r=>String(r.id)===String(rule.id)&&
+     (r.exampleIds||[]).some(id=>String(id)===String(t.id)));
+    const dates=postingDates(e).filter(d=>d>=add(asOf,-90)&&d<=add(asOf,14)&&
+     tools.postedWithinMatchWindow(rule,t,d,e.amount,explicit,true));
+    if(!dates.length)continue;
+    const gap=Math.min(...dates.map(d=>Math.abs(diff(t.date,d))));
+    candidates.push({p:String(t.id),index:String(e.id),score:gap});
+   }
+  }
+  for(const match of tools.completePostedAssignments(candidates,ambiguousPosted)){
+   paid.add(String(match.index));usedBank.add(String(match.p));
+  }
  }
  // PENDING is not POSTED. It can, however, provisionally account for the
  // same forecast obligation when the bank's AVAILABLE balance has already
@@ -620,9 +649,18 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   const left=norm(a),right=norm(b);
   if(!left||!right)return false;
   if(left===right)return true;
-  const ignore=new Set(['payment','autopay','transfer','monthly','credit','card','bill','account','scheduled','estimated']);
-  const words=left.split(/\s+/).filter(w=>w.length>=5&&!ignore.has(w));
-  return words.length>0&&words.some(w=>right.split(/\s+/).includes(w));
+  // A generic shared word cannot establish that two payees are identical.
+  // Distinct single-word names can match a longer descriptor, while two
+  // multiword names require at least two significant matching words.
+  const ignore=new Set(['payment','autopay','transfer','monthly','credit','card',
+   'bill','account','scheduled','estimated','fictional','sample','demo',
+   'online','bank','banking','withdrawal','check','checking','ach','debit',
+   'transaction','services','service']);
+  const tokens=s=>[...new Set(s.split(/\s+/).filter(w=>w.length>=4&&!ignore.has(w)))];
+  const words=tokens(left),other=tokens(right);
+  if(!words.length||!other.length)return false;
+  const common=words.filter(w=>other.includes(w));
+  return common.length>=2||common.length===1&&(words.length===1||other.length===1);
  };
  // Confirmed recurring rules already received their own posted-bank evidence
  // above. A later generic fallback must not reuse that bank debit to clear a

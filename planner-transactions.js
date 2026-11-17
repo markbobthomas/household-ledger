@@ -995,6 +995,60 @@ function matchesRecurring(rule,event,accounts){
    (rule.sourceFrequency==='weekly'?2:['biweekly','every-4-weeks'].includes(rule.sourceFrequency)?3:6));
 }
 
+
+/* A closed group of posted debits may cover an equal number of obligations,
+ * even if the individual bank-to-rule assignments tie. Only fully matchable
+ * groups are safe to resolve; one debit never settles two independent bills. */
+function completePostedAssignments(pairs,blockedBankIds){
+ const byBank=new Map(),byItem=new Map();
+ for(const edge of pairs||[]){
+  const bank=String(edge.p),item=String(edge.index);
+  if(!byBank.has(bank))byBank.set(bank,[]);
+  if(!byItem.has(item))byItem.set(item,[]);
+  byBank.get(bank).push(edge);
+  byItem.get(item).push(edge);
+ }
+ const seenBanks=new Set(),resolved=[];
+ for(const root of byBank.keys()){
+  if(seenBanks.has(root))continue;
+  const banks=new Set(),items=new Set(),queue=[['bank',root]];
+  while(queue.length){
+   const [kind,id]=queue.pop();
+   if(kind==='bank'){
+    if(banks.has(id))continue;
+    banks.add(id);seenBanks.add(id);
+    for(const edge of byBank.get(id)||[])queue.push(['item',String(edge.index)]);
+   }else{
+    if(items.has(id))continue;
+    items.add(id);
+    for(const edge of byItem.get(id)||[])queue.push(['bank',String(edge.p)]);
+   }
+  }
+  // Reconciliation is linear on the normal path, and bounded on ambiguous
+  // groups. A merely equal total amount is never enough to match unrelated rows.
+  if(banks.size<2||banks.size!==items.size||banks.size>8||
+   ![...banks].some(id=>blockedBankIds.has(id)))continue;
+  const chosen=new Map();
+  const place=(bank,visited)=>{
+   const options=(byBank.get(bank)||[]).slice().sort((a,b)=>
+    (a.score||0)-(b.score||0)||String(a.index).localeCompare(String(b.index)));
+   for(const edge of options){
+    const item=String(edge.index);
+    if(!items.has(item)||visited.has(item))continue;
+    visited.add(item);
+    const prior=chosen.get(item);
+    if(!prior||place(String(prior.p),visited)){
+     chosen.set(item,edge);return true;
+    }
+   }
+   return false;
+  };
+  if([...banks].every(bank=>place(bank,new Set()))&&chosen.size===banks.size)
+   resolved.push(...chosen.values());
+ }
+ return resolved;
+}
+
 /* Source bank balances already include posted transactions. One posted payment
  * can cover at most one future scheduled occurrence; never forecast it again. */
 /* A posted bank fact may cover ONE upcoming obligation, never every schedule
@@ -1071,6 +1125,17 @@ function postedCoverage(generated,rules,records,accounts,asOf){
  }
  pairs.sort((a,b)=>a.score-b.score||a.tie.localeCompare(b.tie));
  const usedItems=new Set(),usedPosted=new Set();
+ // Two independent named debits can cover two equally plausible recurring
+ // estimates, while one debit against two bills remains a Review conflict.
+ const resolvedBanks=new Set();
+ for(const pair of completePostedAssignments(pairs,new Set([...unresolved].map(String)))){
+  usedItems.add(pair.index);usedPosted.add(pair.p);unresolved.delete(pair.p);
+  resolvedBanks.add(String(posted[pair.p].id));
+ }
+ // The earlier ambiguity notice is no longer actionable after a complete
+ // one-to-one match. Leave alerts for all genuinely unresolved bank debits.
+ for(let i=review.length-1;i>=0;i--)
+  if(resolvedBanks.has(String(review[i].bankId)))review.splice(i,1);
  for(const pair of pairs){
   if(unresolved.has(pair.p)||usedItems.has(pair.index)||usedPosted.has(pair.p))continue;
   usedItems.add(pair.index);usedPosted.add(pair.p);
@@ -1200,7 +1265,7 @@ function transactionTitle(name,key,note=''){
 
 const api={transactionTitle,ensure,keyEvent,keyMovement,normalFields,transferFields,saveEdit,skip,restore,add,removeAdded,oneOffKey,assertDistinctOneOffs,assertDistinctSchedules,assertUniqueForecastTransactions,assertNoNewForecastDuplicates,
  seriesEvent,seriesPlan,applySeries,saveSeriesEdit,resetSeries,
- frequencies,defaultScheduleCategories,scheduleCategories,reconciliationAnchor,matchWindow,postedWithinMatchWindow,savedMatchBounds,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,linkPostedToSchedule,
+ frequencies,defaultScheduleCategories,scheduleCategories,reconciliationAnchor,matchWindow,postedWithinMatchWindow,savedMatchBounds,scheduleCategory,setScheduleCategory,addScheduleCategory,findExamples,bankDirection,sameDirection,historicalScheduleMatches,recurrenceDates,manualSeriesKey,defineRecurring,removeRecurring,generatedRecurring,scheduleAmount,setScheduleEstimate,removeScheduleEstimate,matchesRecurring,postedCoverage,completePostedAssignments,linkPostedToSchedule,
  recurrenceKey,isNotRecurring,historyAutoPredictionEnabled,setHistoryAutoPrediction,stopRecurrence,excludeHistorySuggestions,restoreRecurrence,
  // Shared primitives only; scheduling, recommendation and payment policies stay
  // separate. Preserve unknown/ambiguous account references unchanged.

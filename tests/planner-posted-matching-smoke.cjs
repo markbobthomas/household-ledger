@@ -324,6 +324,60 @@ const undecided=Core.materialize(liveSnap,[post('ambiguous-bank',
 assert.equal(undecided.overduePayments.length,2,
  'One ambiguous bank posting never clears two separately confirmed bills');
 
+// Fictional regression: two same-merchant utility estimates and two posted
+// withdrawals must reconcile as a complete group without guessing a specific
+// bank-to-rule mapping or compromising the next monthly cycle.
+const equalRules=[{...lateRule,id:'fictional-grid-a',
+ merchant:'Fictional Grid Utility',originalMerchant:'Fictional Grid Utility',
+ matchNames:['fictional grid utility'],anchorDate:'2026-10-15',amount:200},
+ {...lateRule,id:'fictional-grid-b',
+ merchant:'Fictional Grid Utility',originalMerchant:'Fictional Grid Utility',
+ matchNames:['fictional grid utility'],anchorDate:'2026-10-16',amount:200}];
+const equalBank=[post('grid-post-a','Fictional Grid Utility',207,'2026-10-16'),
+ post('grid-post-b','Fictional Grid Utility',193,'2026-10-17')];
+const equalSettled=Core.materialize(liveSnap,equalBank,
+ {futureRecurringRules:equalRules},T,null,70,policy);
+assert.equal(equalSettled.overduePayments.length,0,
+ 'Two posted utility debits cover two independently confirmed bills');
+assert.equal(equalSettled.ledger.filter(e=>equalRules.some(r=>r.id===e.ruleId)&&
+ e.date==='2026-10-29').length,0,'Both paid bills are excluded from future cash');
+assert.equal(equalSettled.ledger.filter(e=>equalRules.some(r=>r.id===e.ruleId)&&
+ e.date.startsWith('2026-11')).length,2,'Both next monthly utility bills remain');
+assert.deepEqual(equalSettled.projection.diagnostics.balanceMismatches,[],
+ 'Group settlement preserves daily account arithmetic');
+assert.equal(Core.materialize(liveSnap,[equalBank[0]],
+ {futureRecurringRules:equalRules},T,null,70,policy).overduePayments.length,2,
+ 'One ambiguous bank payment cannot erase two bills');
+assert.equal(Core.materialize(liveSnap,[equalBank[0],
+ {...equalBank[1],merchant:'Unrelated Repair'}],
+ {futureRecurringRules:equalRules},T,null,70,policy).overduePayments.length,2,
+ 'An unrelated second debit does not establish two paid utility bills');
+const futureEqual=[{...equalRules[0],anchorDate:'2026-10-24'},
+ {...equalRules[1],anchorDate:'2026-10-25'}];
+const futureBank=[post('early-grid-a','Fictional Grid Utility',207,'2026-10-21'),
+ post('early-grid-b','Fictional Grid Utility',193,'2026-10-22')];
+const futureCovered=T.postedCoverage(T.generatedRecurring(futureEqual,
+ '2026-10-20','2026-11-30'),futureEqual,futureBank,accounts,asOf);
+assert.equal(futureCovered.events.filter(e=>e.date.startsWith('2026-10')).length,0,
+ 'Two posted bank debits each satisfy one future-dated same-merchant estimate');
+assert.equal(futureCovered.events.filter(e=>e.date.startsWith('2026-11')).length,2,
+ 'Next-month bills are not suppressed by prior postings');
+assert.equal(futureCovered.review.length,0,'Complete matched groups need no review');
+const futureSingle=T.postedCoverage(T.generatedRecurring(futureEqual,
+ '2026-10-20','2026-11-30'),futureEqual,[futureBank[0]],accounts,asOf);
+assert.equal(futureSingle.review.length,1,
+ 'One bank debit against two future scheduled bills remains ambiguous');
+
+// A shared descriptor word is not a payee identity: unrelated posted grocery
+// spending must never clear a separate near-date planned cash withdrawal.
+const collision=Core.materialize(liveSnap,
+ [post('grocery-near-bill','Fictional Grocery',40,'2026-10-27')],
+ {futureTransactionAdds:[{id:'fictional-unpaid-planned-bill',
+  merchant:'Fictional Planned Bill',accountId:'checking',type:'expense',
+  amount:60,date:'2026-10-30'}]},T,null,70,policy);
+assert.ok(collision.ledger.some(e=>e.merchant==='Fictional Planned Bill'),
+ 'Unrelated payees sharing generic description words cannot cancel a future bill');
+
 const changed={predictions:{futureRecurringRules:[{...lateRule,anchorDate:'2026-09-15'}]}},
  current=changed.predictions.futureRecurringRules[0],
  nextWhen=T.recurrenceDates(current,reviewDate,'2026-12-31')[0];
