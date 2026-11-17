@@ -545,7 +545,6 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   });
  }
  const adjusted=adjust(entries);
- if(entries.some(e=>e.merchant==='Fictional Planned Bill'))console.error('FUTURE_DIRECT_STAGE_A',JSON.stringify({asOf,end,extras:extras.map(e=>({date:e.date,merchant:e.merchant})),entries:entries.map(e=>({date:e.date,merchant:e.merchant})),adjusted:adjusted.map(e=>({date:e.date,merchant:e.merchant}))}));
  const payment=paymentEngine?.build?paymentEngine.build(snapshot,rows,adjusted,prefs,{days,effectiveDate:effective}):
   {plans:[],billEvents:[],warnings:[],statements:[],suppressedExpectedIds:[]};
  const suppressed=new Set((payment.suppressedExpectedIds||[]).map(String));
@@ -557,7 +556,6 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  const finalized=adjust(adjusted.filter(e=>!suppressed.has(String(e.id)))
   .concat((payment.billEvents||[]).filter(e=>!ownerFor(e))))
   .filter(e=>e.source==='manual'||!suppressedRecurrence(prefs,e));
- if(entries.some(e=>e.merchant==='Fictional Planned Bill'))console.error('FUTURE_DIRECT_STAGE_B',JSON.stringify({finalized:finalized.map(e=>({date:e.date,merchant:e.merchant})),suppressed:[...suppressed]}));
  const finalEvents=[];
  for(const e of finalized){
   if(e.type!=='transfer'){finalEvents.push(e);continue}
@@ -652,8 +650,14 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(!left||!right)return false;
   if(left===right)return true;
   const ignore=new Set(['payment','autopay','transfer','monthly','credit','card','bill','account','scheduled','estimated']);
-  const words=left.split(/\s+/).filter(w=>w.length>=5&&!ignore.has(w));
-  return words.length>0&&words.some(w=>right.split(/\s+/).includes(w));
+  const leftWords=left.split(/\s+/).filter(w=>w.length>=4&&!ignore.has(w));
+  const rightWords=right.split(/\s+/).filter(w=>w.length>=4&&!ignore.has(w));
+  const common=leftWords.filter(w=>rightWords.includes(w));
+  // A shared prefix, geographical term, or generic company token cannot
+  // identify a cash withdrawal by itself. Require an identifying phrase, or
+  // a distinctive single-name merchant (e.g. Verizon / Verizon Wireless).
+  return common.length>=2||(common.length===1&&common[0].length>=6&&
+   (leftWords.length===1||rightWords.length===1));
  };
  // Confirmed recurring rules already received their own posted-bank evidence
  // above. A later generic fallback must not reuse that bank debit to clear a
