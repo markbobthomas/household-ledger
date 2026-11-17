@@ -106,7 +106,10 @@ module.exports=(async()=>{
      for(const day of ['2026-10-17','2026-10-18']){
       const cell=page.locator('.summary-page .calendar-grid>[data-calendar-actual-day="'+day+'"]');
       assert.equal(await cell.count(),1,'Saturday and Sunday each get a dated cell');
-      assert.match(await cell.innerText(),/Fictional (saturday|sunday)/);
+      assert.match(await cell.textContent(),/Fictional (saturday|sunday)/);
+      if(device==='iPhone WebKit')
+       assert.match(await cell.innerText(),/1 txn/,
+        'The narrow weekend tile shows a legible bank transaction count');
       await cell.click();
       assert.equal(await selectedDay(),day,'Weekend drill preserves actual bank date');
       assert.match(await page.locator('[data-calendar-detail]').innerText(),/Fictional (saturday|sunday)/);
