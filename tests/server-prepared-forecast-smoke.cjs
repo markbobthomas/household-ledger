@@ -110,6 +110,8 @@ const request=(route,body,authorized=true)=>new Promise((resolve,reject)=>{
   const next=await request('/api/ledger');
   assert.ok(next.data.preparedForecast.generation>first.data.preparedForecast.generation,
    'A forecast-affecting edit invalidates server prepared projections');
+  if(!next.data.preparedForecast.bundle.ledger.some(row=>row.merchant==='Fictional Planned Bill'))
+   console.error('FICTIONAL FORECAST DEBUG',JSON.stringify({asOf,after,ledger:next.data.preparedForecast.bundle.ledger.map(row=>({merchant:row.merchant,date:row.date,source:row.source})).slice(0,25),savedForecastKeys:Object.keys(next.data.adjustments?.predictions||{}),savedAdds:next.data.adjustments?.predictions?.futureTransactionAdds}));
   assert.ok(next.data.preparedForecast.bundle.ledger.some(row=>row.merchant==='Fictional Planned Bill'),
    'Subsequent authenticated read sees updated planned payment');
   assert.deepEqual(next.data.transactions,first.data.transactions,
