@@ -60,6 +60,18 @@ module.exports=(async()=>{
      device+' should show the Pacific-local month at '+instant);
     assert.equal(await selectedDay(),localToday,
      device+' should select actual local today, including Saturday');
+    assert.deepEqual(await page.locator('.summary-page .calendar-grid>.calendar-weekday').allTextContents(),
+     ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+     device+' Calendar has all seven weekday columns');
+    const sevenColumnLayout=await page.evaluate(()=>{
+     const grid=document.querySelector('.summary-page .calendar-grid'),
+      rect=grid.getBoundingClientRect();
+     return {columns:getComputedStyle(grid).gridTemplateColumns.split(/\\s+/).length,
+      right:rect.right,viewport:document.documentElement.clientWidth};
+    });
+    assert.equal(sevenColumnLayout.columns,7,device+' should use seven equal date columns');
+    assert.ok(sevenColumnLayout.right<=sevenColumnLayout.viewport+1,
+     device+' seven-day Calendar must not spill horizontally: '+JSON.stringify(sevenColumnLayout));
     if(localToday==='2026-10-15'){
      // Fictional demo has posted pay and transfer records on the as-of day.
      // Activity and Calendar must display the same records, not just dates
@@ -87,12 +99,22 @@ module.exports=(async()=>{
     }
     if(localToday==='2026-10-31'){
      const beforeWeekend=await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds}));
+     assert.equal(await page.locator('.summary-page .calendar-grid>.calendar-day').count(),31,
+      'Every date in October has its own selectable calendar tile');
+     assert.equal(await page.locator('[data-calendar-weekend-activity]').count(),0,
+      'No detached weekend transaction strips remain');
      for(const day of ['2026-10-17','2026-10-18']){
-      await page.locator('[data-calendar-weekend-activity] [data-calendar-actual-day="'+day+'"]').click();
+      const cell=page.locator('.summary-page .calendar-grid>[data-calendar-actual-day="'+day+'"]');
+      assert.equal(await cell.count(),1,'Saturday and Sunday each get a dated cell');
+      assert.match(await cell.innerText(),/Fictional (saturday|sunday)/);
+      await cell.click();
       assert.equal(await selectedDay(),day,'Weekend drill preserves actual bank date');
       assert.match(await page.locator('[data-calendar-detail]').innerText(),/Fictional (saturday|sunday)/);
       assert.equal(await page.locator('[data-calendar-detail] .transaction-title-line').count()>0,true);
      }
+     await page.locator('[data-calendar-actual-day="2026-10-17"]').focus();
+     await page.keyboard.press('ArrowRight');
+     assert.equal(await selectedDay(),'2026-10-18','Arrow navigation includes Sunday bank history');
      assert.deepEqual(await page.evaluate(()=>({generation:HouseholdPreparedViewGeneration(),builds:HouseholdPlannerWorkStats().forecastBuilds})),beforeWeekend);
      await page.locator('[data-calendar-today]').click();
     }
