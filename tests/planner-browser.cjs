@@ -2434,8 +2434,10 @@ module.exports=(async()=>{
    await page.locator('[data-calendar-nav="1"]').click();
    const fictionalCardDay=page.locator('[data-calendar-day="2026-11-06"]');
    assert.equal(await fictionalCardDay.count(),1);
-   assert.match(await fictionalCardDay.innerText(),/Fictional Dairy Delivery/,
+   assert.match(await fictionalCardDay.textContent(),/Fictional Dairy Delivery/,
     'All accounts shows projected card purchases on the main checking calendar');
+   assert.match(await fictionalCardDay.getAttribute('aria-label'),/predicted transactions/,
+    'Compact calendar tiles still expose transaction context to assistive technology');
    await fictionalCardDay.click();
    const outsideRow=page.locator('[data-calendar-outside-activity] .calendar-monthly-row')
     .filter({hasText:'Fictional Dairy Delivery'}).first();
@@ -2458,7 +2460,7 @@ module.exports=(async()=>{
    assert.equal(await page.locator('#summary-account').inputValue(),visualAccount);
    assert.equal(await page.locator('.calendar-month-title').innerText(),'November 2026',
     'Changing display scope preserves the selected calendar month');
-   assert.doesNotMatch(await page.locator('[data-calendar-day="2026-11-06"]').innerText(),
+   assert.doesNotMatch(await page.locator('[data-calendar-day="2026-11-06"]').textContent(),
     /Fictional Dairy Delivery/,
     'Checking-only mode excludes a card purchase from the calendar cell');
    await page.locator('[data-calendar-day="2026-11-06"]').click();
@@ -2476,7 +2478,7 @@ module.exports=(async()=>{
    assert.equal(await page.locator('#summary-account').inputValue(),visualCard);
    assert.equal(await page.locator('[data-bank-current-value]').count(),1,
     'Credit-only mode shows card debt, not checking availability');
-   assert.match(await page.locator('[data-calendar-day="2026-11-06"]').innerText(),
+   assert.match(await page.locator('[data-calendar-day="2026-11-06"]').textContent(),
     /Fictional Dairy Delivery/,
     'Credit-only Calendar shows its own repeating charge');
    await page.locator('[data-calendar-day="2026-11-06"]').click();
@@ -2490,7 +2492,7 @@ module.exports=(async()=>{
    // Returning to All accounts restores the joint view, without recomputing
    // the three-year forecast or invalidating prepared navigation destinations.
    await page.locator('#summary-account').selectOption('all');
-   assert.match(await page.locator('[data-calendar-day="2026-11-06"]').innerText(),
+   assert.match(await page.locator('[data-calendar-day="2026-11-06"]').textContent(),
     /Fictional Dairy Delivery/);
    assert.equal(await page.locator('[data-bank-balance-value]').innerText(),mainCardLabel);
    const afterScope=await page.evaluate(()=>({
