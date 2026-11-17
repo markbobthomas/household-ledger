@@ -1095,12 +1095,12 @@ module.exports=(async()=>{
     assert.equal(Number(await remaining.getAttribute('data-budget-remaining-cents')),balanceCents,
      'Remaining balance equals all selected monthly targets minus posted, provisional and expected spending');
     if(balanceCents<0){
-     assert.match(await remaining.innerText(),/^Over by \\$/,
+     assert.match(await remaining.innerText(),/^Over by \$/,
       'Overspending is labeled as an overage, not a negative amount left');
      assert.equal(await remaining.evaluate(el=>getComputedStyle(el).color),
       'rgb(208, 0, 115)','Overall budget overage uses the existing vivid pink treatment');
     }else{
-     assert.match(await remaining.innerText(),/^\\$/,
+     assert.match(await remaining.innerText(),/^\$/,
       'Available budget is displayed as an ordinary dollar amount');
     }
     if(totals.limitCents<=0){
