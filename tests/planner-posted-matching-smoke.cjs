@@ -368,6 +368,16 @@ const futureSingle=T.postedCoverage(T.generatedRecurring(futureEqual,
 assert.equal(futureSingle.review.length,1,
  'One bank debit against two future scheduled bills remains ambiguous');
 
+// A shared descriptor word is not a payee identity: unrelated posted grocery
+// spending must never clear a separate near-date planned cash withdrawal.
+const collision=Core.materialize(liveSnap,
+ [post('grocery-near-bill','Fictional Grocery',40,'2026-10-27')],
+ {futureTransactionAdds:[{id:'fictional-unpaid-planned-bill',
+  merchant:'Fictional Planned Bill',accountId:'checking',type:'expense',
+  amount:60,date:'2026-10-30'}]},T,null,70,policy);
+assert.ok(collision.ledger.some(e=>e.merchant==='Fictional Planned Bill'),
+ 'Unrelated payees sharing generic description words cannot cancel a future bill');
+
 const changed={predictions:{futureRecurringRules:[{...lateRule,anchorDate:'2026-09-15'}]}},
  current=changed.predictions.futureRecurringRules[0],
  nextWhen=T.recurrenceDates(current,reviewDate,'2026-12-31')[0];
