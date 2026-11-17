@@ -523,13 +523,6 @@ function updateCalendarNavigation(){
  const header=document.querySelector('[data-calendar-header]');
  if(header)header.outerHTML=calendarNavigation();
 }
-function weekendActivity(dates,state){
- const rows=dates.filter(d=>(state.actual.get(d)||[]).length);
- return rows.length?'<div class="calendar-weekend-activity" style="grid-column:1 / -1" data-calendar-weekend-activity>'+rows.map(d=>
-  '<button type="button" class="btn" data-calendar-actual-day="'+d+'">'+esc(dateLabel(d))+': '+
-  state.actual.get(d).length+' weekend bank transaction'+(state.actual.get(d).length===1?'':'s')+'</button>').join(' ')+
-  '</div>':'';
-}
 function calendarGrid(){
  const state=calendarContext;
  if(!state||!state.points.length)return '';
@@ -539,39 +532,29 @@ function calendarGrid(){
  const currentPoints=state.points.filter(p=>p.date.startsWith(calendarMonth));
  const monthMinimum=displayedMonthLow();
  if(!currentPoints.length&&![...state.actual.keys()].some(d=>d.startsWith(calendarMonth)))return '';
- const weekday=iso=>iso&&![0,6].includes(new Date(iso+'T12:00:00Z').getUTCDay());
- // Even on a five-day grid, preserve a selected weekend as-of date in the day detail.
+ // Every calendar date has its own cell. Weekend actuals stay on their recorded
+ // date; the canonical forecast already shifts predicted weekend payments to Friday.
  if(calendarDate.slice(0,7)!==calendarMonth||
    !currentPoints.some(p=>p.date===calendarDate)&&!state.actual.has(calendarDate))
-  calendarDate=currentPoints.find(p=>weekday(p.date))?.date||
-   [...state.actual.keys()].find(d=>d.startsWith(calendarMonth)&&weekday(d));
+  calendarDate=currentPoints[0]?.date||
+   [...state.actual.keys()].find(d=>d.startsWith(calendarMonth));
  const start=calendarMonth+'-01',
   firstWeek=(new Date(start+'T12:00:00Z').getUTCDay()+6)%7,
   monthDays=new Date(Number(calendarMonth.slice(0,4)),
    Number(calendarMonth.slice(5,7)),0).getDate(),
-  // Use only weeks with a visible weekday; empty trailing/leading weeks waste space.
-  lastDayOfWeek=(new Date(calendarMonth+'-'+String(monthDays).padStart(2,'0')+'T12:00:00Z').getUTCDay()+6)%7,
-  lastBusinessDay=monthDays-(lastDayOfWeek===6?2:lastDayOfWeek===5?1:0),
-  weekdayOffset=firstWeek>=5?firstWeek-7:firstWeek,
-  weekCount=Math.ceil((weekdayOffset+lastBusinessDay)/7),
+  weekCount=Math.ceil((firstWeek+monthDays)/7),
   count=weekCount*7,
   points=new Map(currentPoints.map(p=>[p.date,p]));
- const header=['Mon','Tue','Wed','Thu','Fri'].map(d=>
+ const header=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>
   '<div class="calendar-weekday" aria-hidden="true">'+d+'</div>').join('');
  const cells=Array.from({length:count},(_,i)=>{
-  // Weekday-only rows, retaining the true day numbers.
-  if(i%7===5){
-   const dates=[i-weekdayOffset+1,i-weekdayOffset+2].filter(d=>d>=1&&d<=monthDays)
-    .map(d=>calendarMonth+'-'+String(d).padStart(2,'0'));
-   return weekendActivity(dates,state);
-  }
-  if(i%7===6)return '';
-  const dom=i-weekdayOffset+1;
+  const dom=i-firstWeek+1;
   if(dom<1||dom>monthDays)return '<div class="calendar-blank" aria-hidden="true"></div>';
-  const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso);
+  const iso=calendarMonth+'-'+String(dom).padStart(2,'0'),p=points.get(iso),
+   weekend=i%7>=5;
   if(!p&&state.actual.has(iso)){
    const rows=state.actual.get(iso)||[],history=state.history?.get(iso);
-   return '<button type="button" class="calendar-day actual'+
+   return '<button type="button" class="calendar-day actual'+(weekend?' weekend':'')+
     (monthMinimum?.date===iso?' month-minimum':'')+
     (calendarDate===iso?' selected':'')+
     '" data-calendar-actual-day="'+iso+'" aria-label="'+esc(dateLabel(iso)+', '+
@@ -626,7 +609,7 @@ function calendarGrid(){
      ' other-account predicted transactions':
     ', no predicted transactions')+
    (negative?', below zero':low?', below cash cushion':'');
-  return '<button type="button" class="calendar-day'+
+  return '<button type="button" class="calendar-day'+(weekend?' weekend':'')+
    (calendarDate===iso?' selected':'')+(monthMinimum?.date===iso?' month-minimum':'')+(iso===state.asOf?' today':'')+
    (calendarFocus?.dates?.includes(iso)?' coverage-highlight':'')+
    (negative?' negative':low?' low':'')+
@@ -646,18 +629,12 @@ function calendarGrid(){
   
   '<div class="calendar-grid" style="--calendar-weeks:'+weekCount+'" role="group" aria-label="'+
    esc(monthName(calendarMonth)+(isHistoricalMonth()?' posted-history calendar':' forecast calendar'))+'">'+
-   header+weekendActivity(Array.from({length:firstWeek>=5?7-firstWeek:0},(_,i)=>calendarMonth+'-'+String(i+1).padStart(2,'0')),state)+cells+'</div>'+ 
+   header+cells+'</div>'+ 
    (active?.date===calendarDate?dayDetail(active,state.card):postedDay(calendarDate))+
    monthlyPredictions(state)+'</div>';
 }
-function showCalendar(date,keepWeekend=false){
- // Only business-day grid navigation advances weekends. Direct month/date and
- // Today jumps must preserve genuine Saturday/Sunday observations.
- if(!keepWeekend&&date&&[0,6].includes(new Date(date+'T12:00:00Z').getUTCDay())){
-  const next=calendarContext?.points?.find(p=>p.date>=date&&
-   ![0,6].includes(new Date(p.date+'T12:00:00Z').getUTCDay()));
-  if(next)date=next.date;
- }
+function showCalendar(date){
+ // Navigation uses the actual date selected; presentation never changes posting dates.
  if(!calendarContext||!calendarContext.points.some(p=>p.date===date)&&
   !calendarContext.actual.has(date))return;
  // Switching the day should refocus the compact day view, not jump to or
@@ -1061,7 +1038,7 @@ document.addEventListener('click',e=>{
  const monthly=e.target.closest?.('[data-calendar-list-date]');
  if(monthly){
   if(monthly.hasAttribute('data-open-transaction'))return; // Open the SAME transaction panel everywhere.
-  showCalendar(monthly.dataset.calendarListDate,true);
+  showCalendar(monthly.dataset.calendarListDate);
   document.querySelector('[data-calendar-detail]')?.scrollIntoView({block:'nearest',behavior:'smooth'});
   return;
  }
@@ -1081,16 +1058,16 @@ document.addEventListener('click',e=>{
   return;
  }
  const actual=e.target.closest?.('[data-calendar-actual-day]');
- if(actual){showCalendar(actual.dataset.calendarActualDay,true);return;}
+ if(actual){showCalendar(actual.dataset.calendarActualDay);return;}
  const day=e.target.closest?.('[data-calendar-day]');
  if(day){showCalendar(day.dataset.calendarDay);return;}
  const monthLowButton=e.target.closest?.('[data-calendar-month-low]');
  if(monthLowButton?.dataset.calendarMonthLow){
-  showCalendar(monthLowButton.dataset.calendarMonthLow,true);return;
+  showCalendar(monthLowButton.dataset.calendarMonthLow);return;
  }
  const cardStatement=e.target.closest?.('[data-calendar-card-statement-date]');
  if(cardStatement?.dataset.calendarCardStatementDate){
-  showCalendar(cardStatement.dataset.calendarCardStatementDate,true);return;
+  showCalendar(cardStatement.dataset.calendarCardStatementDate);return;
  }
  const nav=e.target.closest?.('[data-calendar-nav]');
  if(nav&&calendarContext?.points?.length){
@@ -1098,24 +1075,24 @@ document.addEventListener('click',e=>{
   ...[...calendarContext.actual.keys()].map(d=>d.slice(0,7))])].sort(),
    index=keys.indexOf(calendarMonth),next=keys[index+Number(nav.dataset.calendarNav)];
   if(next)showCalendar(calendarContext.points.find(p=>p.date.startsWith(next))?.date||
-   [...calendarContext.actual.keys()].find(d=>d.startsWith(next)),true);
+   [...calendarContext.actual.keys()].find(d=>d.startsWith(next)));
 
   return;
  }
  if(e.target.closest?.('[data-calendar-today]')&&calendarContext?.points?.length)
-  showCalendar(calendarContext.asOf,true);
+  showCalendar(calendarContext.asOf);
 });
 document.addEventListener('keydown',e=>{
- const target=e.target.closest?.('[data-calendar-day]');
+ const target=e.target.closest?.('[data-calendar-day],[data-calendar-actual-day]');
  if(!target||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)||
   !calendarContext)return;
  const delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key],
-  days=calendarContext.points,idx=days.findIndex(p=>p.date===target.dataset.calendarDay);
- if(idx<0)return;
+  date=target.dataset.calendarDay||target.dataset.calendarActualDay,
+  next=addDay(date,delta);
+ if(!calendarContext.points.some(p=>p.date===next)&&!calendarContext.actual.has(next))return;
  e.preventDefault();
- const next=days[range(idx+delta,0,days.length-1)];
- if(showCalendar(next.date)!==false)
-  document.querySelector('[data-calendar-day="'+next.date+'"]')?.focus();
+ if(showCalendar(next)!==false)
+  document.querySelector('[data-calendar-day="'+next+'"],[data-calendar-actual-day="'+next+'"]')?.focus();
 });
 
 root.HouseholdPlannerSummary={render,getPoints,knownGaps,reconstructedHistory,
