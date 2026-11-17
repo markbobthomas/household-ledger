@@ -1127,9 +1127,15 @@ function postedCoverage(generated,rules,records,accounts,asOf){
  const usedItems=new Set(),usedPosted=new Set();
  // Two independent named debits can cover two equally plausible recurring
  // estimates, while one debit against two bills remains a Review conflict.
+ const resolvedBanks=new Set();
  for(const pair of completePostedAssignments(pairs,new Set([...unresolved].map(String)))){
   usedItems.add(pair.index);usedPosted.add(pair.p);unresolved.delete(pair.p);
+  resolvedBanks.add(String(posted[pair.p].id));
  }
+ // The earlier ambiguity notice is no longer actionable after a complete
+ // one-to-one match. Leave alerts for all genuinely unresolved bank debits.
+ for(let i=review.length-1;i>=0;i--)
+  if(resolvedBanks.has(String(review[i].bankId)))review.splice(i,1);
  for(const pair of pairs){
   if(unresolved.has(pair.p)||usedItems.has(pair.index)||usedPosted.has(pair.p))continue;
   usedItems.add(pair.index);usedPosted.add(pair.p);
