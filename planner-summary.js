@@ -565,7 +565,10 @@ function calendarGrid(){
     '<span class="calendar-day-balance">'+(history?
      '<span class="calendar-money-wide">'+money(history.balance)+'</span>'+
      '<span class="calendar-money-narrow">'+shortMoney(history.balance)+'</span>':
-     rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No balance data')+'</span>'+
+     '<span class="calendar-money-wide">'+
+      (rows.length?rows.every(t=>t.pending)?'Pending':'Bank activity':'No balance data')+
+     '</span><span class="calendar-money-narrow">'+
+      (rows.length?rows.length+' txn'+(rows.length===1?'':'s'):'—')+'</span>')+'</span>'+
     '<span class="calendar-day-events">'+rows.slice(0,2).map(t=>
      '<span class="calendar-event"><span class="calendar-event-name">'+
      esc(t.merchant||'Transaction')+'</span></span>').join('')+
