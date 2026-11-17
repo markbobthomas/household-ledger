@@ -649,15 +649,18 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   const left=norm(a),right=norm(b);
   if(!left||!right)return false;
   if(left===right)return true;
-  const ignore=new Set(['payment','autopay','transfer','monthly','credit','card','bill','account','scheduled','estimated']);
-  const leftWords=left.split(/\s+/).filter(w=>w.length>=4&&!ignore.has(w));
-  const rightWords=right.split(/\s+/).filter(w=>w.length>=4&&!ignore.has(w));
-  const common=leftWords.filter(w=>rightWords.includes(w));
-  // A shared prefix, geographical term, or generic company token cannot
-  // identify a cash withdrawal by itself. Require an identifying phrase, or
-  // a distinctive single-name merchant (e.g. Verizon / Verizon Wireless).
-  return common.length>=2||(common.length===1&&common[0].length>=6&&
-   (leftWords.length===1||rightWords.length===1));
+  // A generic shared word cannot establish that two payees are identical.
+  // Distinct single-word names can match a longer descriptor, while two
+  // multiword names require at least two significant matching words.
+  const ignore=new Set(['payment','autopay','transfer','monthly','credit','card',
+   'bill','account','scheduled','estimated','fictional','sample','demo',
+   'online','bank','banking','withdrawal','check','checking','ach','debit',
+   'transaction','services','service']);
+  const tokens=s=>[...new Set(s.split(/\s+/).filter(w=>w.length>=4&&!ignore.has(w)))];
+  const words=tokens(left),other=tokens(right);
+  if(!words.length||!other.length)return false;
+  const common=words.filter(w=>other.includes(w));
+  return common.length>=2||common.length===1&&(words.length===1||other.length===1);
  };
  // Confirmed recurring rules already received their own posted-bank evidence
  // above. A later generic fallback must not reuse that bank debit to clear a
