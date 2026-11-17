@@ -1,6 +1,6 @@
 # Household Ledger — persistent project ledger
 
-**Updated:** 2026-11-16 (Pacific)  
+**Updated:** 2026-11-17 (Pacific)  
 **Repository:** https://github.com/markbobthomas/household-ledger  
 **Working instructions:** [AGENTS.md](AGENTS.md)
 
@@ -23,7 +23,9 @@ Product priorities:
 
 **Banking safety:** Preserve the current GitHub, Plaid and private Render architecture. Actual source transactions/balances remain authoritative and unchanged by editable predictions. Do not use public fictional Demo data as if it were real bank data. This repository is public: do not put actual financial records, private amounts, authentication details, or private user messages in this ledger.
 
-## Current state (updated November 16, 2026)
+## Current state (updated November 17, 2026)
+
+**Posted recurring-bill matching — implementation pending CI:** Added conservative one-to-one group matching for multiple confirmed same-payee obligations and the same number of compatible posted withdrawals. One payment never clears two bills; named/account/date matching and an isolated, fully assignable group are mandatory. Existing forecasts, bank transactions and private state are not rewritten. See November 17 entry for checks and merge status.
 
 **Budget dollars remaining — released November 16:** Spending → Budget now puts selected-period remaining dollars (monthly targets less posted, provisional pending and expected spending) ahead of percent-used; overspending says **Over by $…** in pink. [PR #576](https://github.com/markbobthomas/household-ledger/pull/576) merged into main at `e4df3d7a550b1a0dd8c17bd86d1a630961299551`. Required financial [CI run #43990641370](https://github.com/markbobthomas/household-ledger/actions/runs/43990641370) and desktop Chromium/iPhone WebKit [browser run #43990641442](https://github.com/markbobthomas/household-ledger/actions/runs/43990641442) **passed**. Existing private Render deployment `dep-dbtq9q5ckfvc73bqifi0` was verified **live** at the exact code SHA. Independent HTTP `/healthz`, private authenticated visual check and GitHub Pages publish were not verified. No banking/forecast data changes.
 
@@ -3334,3 +3336,8 @@ Requested that the Spending → Budget balance show the amount left to spend. Up
 ### 2026-11-16 — Budget remaining presentation passed CI, merged and live
 
 Verified [PR #576](https://github.com/markbobthomas/household-ledger/pull/576) squash-merged at `e4df3d7a550b1a0dd8c17bd86d1a630961299551`; subsequent GitHub `main` lookup matched that code SHA. Banking/forecast [run #43990641370](https://github.com/markbobthomas/household-ledger/actions/runs/43990641370) **passed**, and the full Chromium and iPhone WebKit [run #43990641442](https://github.com/markbobthomas/household-ledger/actions/runs/43990641442) **passed** including Budget remaining and overage assertions. Render existing private service deployment `dep-dbtq9q5ckfvc73bqifi0` reported **live** at the exact merged code SHA; no service or disk changes were performed. Direct independent HTTP `/healthz` access was unavailable; authenticated live visual readback and GitHub Pages publishing were not independently verified. This docs-only `[skip render]` release handoff records the checks without redeploying the banking service.
+
+
+### 2026-11-17 — Posted utilities did not settle corresponding predictions
+
+Owner reported that posted utility withdrawals were not being recognized against multiple recurring estimates. Code review found that independently ambiguous bank-to-schedule matches were always skipped, even where a closed set of multiple same-payee posted debits could cover an equally sized set of obligations. Added a reusable bounded complete bipartite group matcher to `planner-transactions.js`, used in future `postedCoverage` and overdue cash-withdrawal reconciliation in `planner-core.js`. It can settle only fully assignable, named, same-account and same-direction groups; a solitary ambiguous posting, unrelated name, extra unexplained payment, or dollar-only renamed-ACH guess remains unresolved. Expanded the existing fictional `tests/planner-posted-matching-smoke.cjs` checks for differing actual amounts, separate monthly schedules, no repeated withdrawal, next-month preservation, incomplete/other-payee rejection, and balance integrity. The change modifies no source bank facts, owner preferences, credentials, Plaid connection, private encrypted files or Render configuration. Branch: `fix/posted-utility-batch-reconciliation-20261117`; financial CI, PR merge, private Render and GitHub Pages verification pending at the time of this entry.
