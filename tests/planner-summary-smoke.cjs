@@ -197,7 +197,7 @@ assert.match(shortForecast,/data-summary-month-low-value>Not projected<\/strong>
 const completeCurrentMonth=tool.render({...opts,days:30,derived:{...derived,series:rolling}});
 assert.match(completeCurrentMonth,/data-summary-month-low-value>\$5,000\.00<\/strong>/,
  'A completed current-month forecast does not need 90 days of future data');
-// A Saturday low counts even though the grid is Monday–Friday. The date link
+// A Saturday low counts independently of calendar display order. The date link
 // must still target the actual selected-month date rather than a weekday.
 const saturday=series.map((p,i)=>({...p,balance:i===10?250:p.balance}));
 const saturdayView=tool.render({...opts,days:1095,derived:{...derived,series:saturday}});
@@ -292,8 +292,10 @@ assert.match(weekendHTML,/class="calendar-day actual weekend" data-calendar-actu
 assert.match(weekendHTML,/class="calendar-day actual weekend" data-calendar-actual-day="2026-10-18"/);
 assert.doesNotMatch(weekendHTML,/data-calendar-weekend-activity/,
  'Weekend bank history appears in dated tiles, never a detached list');
-assert.match(weekendHTML,/>Sat<\/div><div class="calendar-weekday" aria-hidden="true">Sun<\/div>/,
- 'The calendar header includes both weekend columns');
+assert.match(weekendHTML,/>Sun<\/div><div class="calendar-weekday" aria-hidden="true">Mon<\/div>/,
+ 'Sunday appears first in the seven-day calendar');
+assert.match(weekendHTML,/>Fri<\/div><div class="calendar-weekday" aria-hidden="true">Sat<\/div>/,
+ 'Saturday appears last in the seven-day calendar');
 assert.equal(JSON.stringify(weekendRows),weekendBefore);
 assert.equal(JSON.stringify(series),balanceBefore,'Weekend navigation does not shift bank dates or forecast balances');
 const title=require('../planner-transactions.js').transactionTitle('<Shop>','bank:key','<Private note>');
