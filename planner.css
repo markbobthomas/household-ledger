@@ -4408,7 +4408,12 @@ a:hover{color:#166e61}
  display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap;margin-bottom:7px;
 }
 .history-page .history-budget-summary-head>span{font-size:12px;font-weight:700;color:#65796e}
-.history-page .history-budget-summary-head>strong{font:800 21px var(--mono)}
+.history-page .history-budget-summary-head>strong{
+ font:800 21px var(--mono);overflow-wrap:anywhere;
+}
+.history-page .history-budget-summary-head>strong.over{
+ color:var(--budget-over-pink-text);
+}
 .history-page .history-budget-summary-head small{
  display:inline;font-size:11px;color:#788a80;margin:0 0 0 auto;
 }
