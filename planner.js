@@ -2219,19 +2219,30 @@ function historyInsights(rows,view,options={}){
      '<strong class="history-budget-detail-amount">'+(item.cents<0?'−':'')+
       cash(Math.abs(item.cents)/100)+'</strong></div>').join('')+'</div>';
   };
+  // The balance is the saved monthly targets for all selected months minus
+  // posted, provisional and expected spending (including unbudgeted categories).
+  // Preserve the raw signed difference so an overage is never shown as $0 left.
+  const budgetRemainingCents=totalBudgetCents-usedCents,
+   overallOverBudget=budgetRemainingCents<0;
   const budgetSummary=
    '<div class="history-budget-summary" data-history-total-budget>'+
-    (totalBudgetPercent===null?
-     '<span class="history-budget-summary-empty">Set a budget to see progress.</span>':
-     '<div class="history-budget-summary-head"><span>'+(allAccounts?'Budget used':'Selected account / household budget')+'</span>'+ 
-      '<strong data-history-total-budget-percent>'+Math.round(totalBudgetPercent)+'%</strong>'+
-      '<small>'+cash(totalBudgetCents/100)+' budget</small></div>'+
-     '<div class="history-budget-summary-track'+(totalBudgetPercent>100?' over':'')+
-      '" role="img" aria-label="'+escapeHTML(
-       cash(usedCents/100)+' of '+cash(totalBudgetCents/100)+
-       ' budget used, including unbudgeted category spending and predictions, '+Math.round(totalBudgetPercent)+
-       ' percent')+'">'+
-      '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>')+'</div>';
+    (!totals.budgetSet?
+     '<span class="history-budget-summary-empty">Set a budget to see how much is left.</span>':
+     '<div class="history-budget-summary-head"><span>'+
+      (allAccounts?'Budget left':'Household budget less selected account spending')+'</span>'+
+      '<strong class="'+(overallOverBudget?'over':'')+
+       '" data-history-total-budget-remaining data-budget-remaining-cents="'+budgetRemainingCents+'">'+
+       (overallOverBudget?'Over by '+cash(-budgetRemainingCents/100):cash(budgetRemainingCents/100))+'</strong>'+
+      '<small>'+cash(totalBudgetCents/100)+' budget'+
+       (totalBudgetPercent===null?'':' · <span data-history-total-budget-percent>'+
+        Math.round(totalBudgetPercent)+'%</span> used')+'</small></div>'+
+      (totalBudgetPercent===null?'':'<div class="history-budget-summary-track'+
+       (totalBudgetPercent>100?' over':'')+
+       '" role="img" aria-label="'+escapeHTML(
+        cash(usedCents/100)+' of '+cash(totalBudgetCents/100)+
+        ' budget used, including unbudgeted category spending and predictions, '+Math.round(totalBudgetPercent)+
+        ' percent')+'">'+
+       '<span style="width:'+Math.max(0,Math.min(100,totalBudgetPercent)).toFixed(2)+'%"></span></div>'))+'</div>';
   const custom=model.categories(state()).filter(c=>c!=='Uncategorized');
   const spendingOverview='<div class="history-spending-overview" aria-label="'+
    escapeHTML(cash(usedCents/100)+' budget usage: '+cash((postedCents+pendingCents)/100)+
