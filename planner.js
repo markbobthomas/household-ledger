@@ -5219,6 +5219,24 @@ async function saveTransactionCategory(id,category,confirm=false,remember=true){
  }
 }
 // Use exactly the same forecast editor semantics for one or several Review bills.
+async function saveIncomingCreditKind(id,kind){
+ if(!['income','refund','transfer','reset'].includes(kind))throw Error('Choose a credit type');
+ const current=state(),before=JSON.stringify(current.reviews||{});
+ if(live()){
+  const saved=await window.HouseholdLiveSource.persistCreditKind(id,kind);
+  if(saved?.saved!==true)throw Error('Credit classification was not saved');
+ }
+ try{
+  current.reviews??={};
+  current.reviews.transactionKinds={...(current.reviews.transactionKinds||{})};
+  if(kind==='reset')delete current.reviews.transactionKinds[id];
+  else current.reviews.transactionKinds[id]=kind;
+  if(!live())savePlanning();
+  // Invalidate all financial interpretations only after the scoped save.
+  forecastCache=null;serverPreparedForecast=null;historyDataCache=null;
+  invalidatePreparedViews();
+ }catch(error){current.reviews=JSON.parse(before);throw error}
+}
 async function saveReviewPlanCategory(kind,id,chosen){
  await commitForecastChange(()=>{
   if(kind==='schedule')window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,chosen);
@@ -5258,6 +5276,26 @@ document.addEventListener('change',e=>{
   updateReviewBulkControls();return;
  }
  if(e.target.matches?.('[data-review-bulk-category]'))updateReviewBulkControls();
+});
+// Credit identity and spending category are separate owner decisions.
+document.addEventListener('change',async e=>{
+ const select=e.target;
+ if(!select.matches?.('[data-category-review-form] select[name="creditKind"],[data-actual-credit-kind]'))return;
+ const id=select.dataset.actualCreditKind||select.closest('[data-category-review-form]')?.dataset.categoryId;
+ const kind=String(select.value||''),status=select.closest('[data-category-review-form]')?.querySelector('[data-category-review-status]')||
+  select.closest('.transaction-actual-category')?.querySelector('[data-actual-credit-status]');
+ if(!id||!['income','refund','transfer','reset'].includes(kind))return;
+ if(select.disabled)return;
+ select.disabled=true;if(status){status.hidden=false;status.textContent='Saving…'}
+ try{
+  await saveIncomingCreditKind(id,kind);
+  reviewNotice=kind==='reset'?'Credit sent back to Review.':'Incoming credit confirmed as '+kind+'.';
+  render();
+ }catch(error){
+  select.disabled=false;
+  if(status){status.hidden=false;status.setAttribute('role','alert');
+   status.textContent='Could not save: '+String(error.message||error)}
+ }
 });
 // Selecting a category is explicit approval. The category issue remains
 // visible until its private bank override or forecast edit has been saved.
