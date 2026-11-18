@@ -830,6 +830,10 @@ async function start(port=Number(env.PORT||8788)){
     return respond(200,{link_token:t.link_token,mode:'create'});
    }
    if(requestPath==='/api/exchange'){
+    // Never attach new accounts while a former household's independent
+    // forecast file might still be present after an interrupted reset.
+    if(state.forecastResetRequired)
+     return respond(503,{error:'Previous household disconnect is still being finalized. Restart Ledger and try again.'});
     if(!body.publicToken||!Array.isArray(body.accountIds)&&!body.accountId)throw Error('Choose at least one account');
     const ids=[...new Set((Array.isArray(body.accountIds)?body.accountIds:[body.accountId]).map(String))];
     if(!ids.length||ids.length>30)throw Error('Choose 1–30 accounts');
