@@ -88,7 +88,11 @@ module.exports=(async()=>{
     id:'fictional-private-grocery',accountId:fakeAccount.id,
     itemId:fakeAccount.itemId,date:today,name:'Fictional Grocery',
     merchant:'Fictional Grocery',amount:27.75,pending:false
-   }],adjustments:{predictions:{warnBelow:500}}};
+   },{
+    id:'fictional-private-credit',accountId:fakeAccount.id,
+    itemId:fakeAccount.itemId,date:today,name:'ACH Credit',
+    merchant:'Fictional Store',amount:-35,pending:false
+   }],adjustments:{predictions:{warnBelow:500},reviews:{transactionKinds:{}}}};
   const calculated=serverPrepare(fixture,today);
   assert.equal(calculated.version,serverForecastVersion);
   await page.route('**/api/ledger',route=>route.fulfill({
@@ -96,6 +100,15 @@ module.exports=(async()=>{
    headers:{'cache-control':'no-store'},
    body:JSON.stringify({...fixture,preparedForecast:calculated})
   }));
+  const kindDecisions=[];
+  await page.route('**/api/ledger/credit-kind',route=>{
+   const choice=route.request().postDataJSON();
+   kindDecisions.push(choice);
+   if(choice.kind==='reset')delete fixture.adjustments.reviews.transactionKinds[choice.transactionId];
+   else fixture.adjustments.reviews.transactionKinds[choice.transactionId]=choice.kind;
+   return route.fulfill({status:200,contentType:'application/json',
+    body:JSON.stringify({saved:true,scope:'credit-kind'})});
+  });
   await page.evaluate(()=>localStorage.setItem('household-ledger-view-mode','real'));
   await page.reload({waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK'||
@@ -108,7 +121,20 @@ module.exports=(async()=>{
   assert.doesNotMatch(await page.locator('#planner-notice').innerText(),
    /Real bank information is not available yet|DataModel\\.migrate|null is not an object/,
    name+': no false bank disconnection from script order');
-  assert.deepEqual(errors,[],name+': no browser errors in authenticated Real startup');
+  // Both desktop and iPhone must offer one explicit decision for a credit
+  // whose description cannot distinguish paycheck, refund or transfer.
+  await page.evaluate(()=>document.querySelector('[data-view="reviews"]')?.click());
+  const creditSelect=page.locator('[data-category-id="fictional-private-credit"] select[name="creditKind"]');
+  await creditSelect.waitFor({state:'visible',timeout:20000});
+  assert.deepEqual(await creditSelect.locator('option').allTextContents(),
+   ['Choose credit type','Income','Refund','Transfer']);
+  await creditSelect.selectOption('refund');
+  await page.waitForFunction(()=>!document.querySelector(
+   '[data-category-id="fictional-private-credit"] select[name="creditKind"]'),null,{timeout:20000});
+  assert.deepEqual(kindDecisions,[{transactionId:'fictional-private-credit',kind:'refund'}],
+   name+': a credit kind is saved through only the scoped authenticated request');
+  assert.equal(fixture.adjustments.reviews.transactionKinds['fictional-private-credit'],'refund');
+  assert.deepEqual(errors,[],name+': no browser errors in authenticated Real startup or credit Review');
   await context.close();
  }
  console.log('PASS private inline classifier, blocked standalone fetch, and safe Plaid record processing in desktop Chromium and iPhone WebKit');
