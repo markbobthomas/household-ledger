@@ -49,6 +49,8 @@ try{
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
+  if(saved.reviews&&typeof saved.reviews==='object'&&!Array.isArray(saved.reviews))
+   demoState.reviews=saved.reviews;
   if(saved.learning&&typeof saved.learning==='object'&&!Array.isArray(saved.learning))
    demoState.learning={categoryRules:{...(saved.learning.categoryRules||{})},
     ruleHistory:Array.isArray(saved.learning.ruleHistory)?saved.learning.ruleHistory:[]};
@@ -125,7 +127,8 @@ function savePlanning(){
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
     recurringForecastMode:p.recurringForecastMode,transactionNotes:p.transactionNotes,
-    categoryOverrides:demoState.categoryOverrides||{},learning:demoState.learning||{}}));
+    categoryOverrides:demoState.categoryOverrides||{},learning:demoState.learning||{},
+    reviews:demoState.reviews||{}}));
   return true;
  }
 }
@@ -885,6 +888,20 @@ function detailHtml(bundle,s){
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(s))===transactionDetail.account),
    assigned=model.canonicalCategory(state(),resolved?.category||row.category)||'Other',
    selectCategories=categoryOptionsWithOther(model.categories(state())),
+   incomingCredit=resolved?.cashDirection==='in'&&resolved?.source?.provider==='plaid'&&
+    accountType(account||{})!=='credit'&&
+    (resolved.accountingKind==='unclassified_credit'||
+     Boolean(state().reviews?.transactionKinds?.[row.id])),
+   ownerCreditKind=state().reviews?.transactionKinds?.[row.id]||'',
+   creditTypeEditor=incomingCredit?
+    '<label class="transaction-actual-category minimal-control-label">Credit type'+
+     '<select data-actual-credit-kind="'+escapeHTML(String(row.id))+'" aria-label="Credit type for '+
+      escapeHTML(row.merchant||'Bank transaction')+'">'+
+      '<option value="" disabled'+(ownerCreditKind?'':' selected')+'>Choose credit type</option>'+
+      [['income','Income'],['refund','Refund'],['transfer','Transfer']].map(([v,label])=>
+       '<option value="'+v+'"'+(ownerCreditKind===v?' selected':'')+'>'+label+'</option>').join('')+
+      (ownerCreditKind?'<option value="reset">Review again</option>':'')+
+     '</select><small data-actual-credit-status role="status"></small></label>':'',
    categoryEditor='<label class="transaction-actual-category minimal-control-label"><span class="visually-hidden">Category</span>'+
     '<select data-actual-transaction-category="'+escapeHTML(String(row.id))+'" '+
      'aria-label="Category for '+escapeHTML(row.merchant||'Bank transaction')+'">'+
@@ -903,10 +920,10 @@ function detailHtml(bundle,s){
    '<div><span>Account</span><strong>'+escapeHTML(account?.name||transactionDetail.account)+'</strong></div>'+
    '<div><span>Bank amount</span><strong>'+cash(row.amount)+'</strong></div>'+
    '<div><span>Bank record</span><strong>'+escapeHTML(row.pending?'Pending':'Posted')+'</strong></div></div>'+
-   '<p class="transaction-detail-help">This is an actual bank record. Its amount, date and classification are read-only. To predict future occurrences, save a separate prediction below.</p>';
+   '<p class="transaction-detail-help">Bank amount and date are read-only. You can correct how an incoming credit is interpreted without changing the bank record. Future predictions are saved separately.</p>';
   return detailShell(row.merchant||'Bank transaction',
    'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
-   summary+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
+   summary+creditTypeEditor+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
     linkedActions+(linkedPlans.length?'':recurringDraft?repeatingReviewForm(s):
      '<p class="transaction-detail-help">This bank transaction is read-only and cannot create a repeating plan.</p>'),
    'ACTUAL · BANK-RECORDED');
