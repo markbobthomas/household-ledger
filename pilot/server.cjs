@@ -644,7 +644,8 @@ async function start(port=Number(env.PORT||8788)){
     return respond(409,{error:staleMessage,code:'STALE_LEDGER'});
    if(accountRemovalBusy&&[
     '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
-     '/api/ledger/category-rule','/api/ledger/categories/delete','/api/ledger/categories/rename','/api/exchange',
+     '/api/ledger/category-rule','/api/ledger/categories/delete','/api/ledger/categories/rename',
+    '/api/ledger/credit-kind','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
@@ -715,6 +716,29 @@ async function start(port=Number(env.PORT||8788)){
     }
     return respond(200,{saved:true,scope:'category-deletion',category:removed,
      unassigned:rows.filter(row=>decision.categoryOverrides[row.id]==='Uncategorized').length});
+   }
+   if(requestPath==='/api/ledger/credit-kind'){
+    // A scoped owner decision, never a mutation of Plaid transactions.
+    // An uncertain bank credit stays out of earned income until confirmed.
+    if(!state.items.length)return respond(409,{error:'No bank account connected'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+       Object.keys(body).sort().join(',')!=='kind,transactionId'||
+       !['income','refund','transfer','reset'].includes(body.kind)||
+       typeof body.transactionId!=='string'||!body.transactionId)
+      return respond(400,{error:'Choose a valid incoming credit type'});
+    const tx=state.transactions[body.transactionId],
+     account=state.accounts.find(a=>String(a.id)===String(tx?.accountId));
+    if(!tx||!account||!Number.isFinite(Number(tx.amount))||Number(tx.amount)>=0||
+       ['credit','loan'].includes(String(account.type||'').toLowerCase()))
+      return respond(400,{error:'Only incoming cash-account bank credits can be reviewed'});
+    const before=state.ledgerAdjustments||{},
+     reviews={...(before.reviews||{}),
+      transactionKinds:{...(before.reviews?.transactionKinds||{})}};
+    if(body.kind==='reset')delete reviews.transactionKinds[body.transactionId];
+    else reviews.transactionKinds[body.transactionId]=body.kind;
+    state.ledgerAdjustments={...before,reviews};
+    try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
+    return respond(200,{saved:true,scope:'credit-kind'});
    }
    if(requestPath==='/api/ledger/category'){
     // Scoped, read-only-source classification adjustment. Never upload entire
