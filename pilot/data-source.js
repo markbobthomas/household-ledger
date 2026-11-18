@@ -188,6 +188,18 @@ function panel(){
   '<p>Real data is stored on the private server, separate from fictional data. Only your mode preference is stored on this device.</p>'+
   '<a href="/bank-connect">Connect, sync or disconnect bank account</a>'+statusText()+'</section>';
 }
+function persistCreditKind(transactionId,kind){
+ if(!live)return Promise.reject(new Error('Connect Real Bank mode to review an incoming credit'));
+ const task=writeQueue.catch(()=>{}).then(()=>request('/credit-kind',{
+  transactionId:String(transactionId),kind:String(kind)
+ }));
+ writeQueue=task.catch(()=>{});
+ return task.then(result=>{
+  if(!result||result.saved!==true||result.scope!=='credit-kind')
+   throw Error('Incoming-credit decision was not acknowledged by the private server');
+  lastError='';return result;
+ });
+}
 function persistCategory(transactionId,category,remember=false){
  if(!live)return Promise.reject(new Error('Connect Real Bank mode to save a private category'));
  const task=writeQueue.catch(()=>{}).then(()=>request('/category',{
@@ -279,6 +291,6 @@ function bind(callbacks){
  if(localStorage.getItem(MODE)!=='demo')enter();
 }
 if(typeof module!=='undefined'&&module.exports)module.exports={record,prepare};
-root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCategory,deleteCategory,renameCategory,forgetCategoryRule,enterReal:enter,refresh,mode:selection,
+root.HouseholdLiveSource={bind,panel,warningBanner,persist,persistForecast,persistCreditKind,persistCategory,deleteCategory,renameCategory,forgetCategoryRule,enterReal:enter,refresh,mode:selection,
  get loading(){return loading},get error(){return lastError}};
 })(typeof window!=='undefined'?window:globalThis);
