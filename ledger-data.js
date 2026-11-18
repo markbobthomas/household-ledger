@@ -218,6 +218,8 @@ function migrate(input){
  const reviews=old.reviews&&typeof old.reviews==='object'&&!Array.isArray(old.reviews)?copy(old.reviews):{categoryConfirmed:{},predictionConfirmed:{}};
  reviews.categoryConfirmed=reviews.categoryConfirmed&&typeof reviews.categoryConfirmed==='object'?reviews.categoryConfirmed:{};
  reviews.predictionConfirmed=reviews.predictionConfirmed&&typeof reviews.predictionConfirmed==='object'?reviews.predictionConfirmed:{};
+ reviews.transactionKinds=reviews.transactionKinds&&typeof reviews.transactionKinds==='object'&&
+  !Array.isArray(reviews.transactionKinds)?reviews.transactionKinds:{};
  const learning=old.learning&&typeof old.learning==='object'&&!Array.isArray(old.learning)?copy(old.learning):{};
  learning.categoryRules=learning.categoryRules&&typeof learning.categoryRules==='object'&&!Array.isArray(learning.categoryRules)?learning.categoryRules:{};
  learning.ruleHistory=Array.isArray(learning.ruleHistory)?learning.ruleHistory:[];
@@ -395,7 +397,11 @@ function categoryReviewQueue(state){
   .map(t=>{
    // Known income/transfer kinds are safe to label in reporting without
    // changing the authoritative bank-derived record used for forecasting.
-   const knownKind=(t.type==='income'||t.type==='transfer')&&t.method!=='unassigned',
+   // Unidentified bank credits need an ACCOUNTING decision. A category
+   // assignment alone must never silently approve them as transfers or income.
+   const uncertainCredit=t.accountingKind==='unclassified_credit'&&
+     t.reconciliationStatus==='needs-review',
+    knownKind=(t.type==='income'||t.type==='transfer')&&!uncertainCredit&&t.method!=='unassigned',
     category=knownKind&&missingCategory(t.category)?
      (t.type==='income'?'Income':'Transfer'):
      String(t.category||'Other'),
@@ -407,8 +413,11 @@ function categoryReviewQueue(state){
     low=!manual&&(score!==null&&score<.7||
      ['merchant-match','suggested','unclassified'].includes(t.method)||
      ['merchant-match','unclassified'].includes(t.source?.categoryOrigin));
-   if(!missing&&!low)return null;
-   return {kind:'transaction',id:String(t.id),category,reason:missing?'Missing category':'Low-confidence automatic category',
+   if(!uncertainCredit&&!missing&&!low)return null;
+   return {kind:'transaction',id:String(t.id),category,
+    creditKind:uncertainCredit,
+    reason:uncertainCredit?'Incoming credit — choose Income, Refund, or Transfer':
+     missing?'Missing category':'Low-confidence automatic category',
     merchant:String(t.merchant||t.description||'Transaction'),date:String(t.date||''),
     amount:Number(t.amount)||0,accountId:String(t.accountId||t.account||''),
      suggested:t.suggested&&t.suggested!==category?String(t.suggested):null};
@@ -699,9 +708,12 @@ function applyPlaidSync(state,change){
   const meta=(staged.accounts||[]).find(a=>a.id===String(t.account_id));
   if(itemId&&meta?.itemId&&meta.itemId!==itemId)
    throw Error('Account belongs to a different Plaid Item');
+  const sourceType=Accounting.classifyPlaidSource({amount,
+   merchant:String(t.merchant_name||t.name||'Unknown'),description:String(t.name||''),pfc},
+   meta||{type:'unknown'},classifier()).type;
   const next={id,date:t.date,merchant:String(t.merchant_name||t.name||'Unknown'),
    description:String(t.name||''),amount:round(Math.abs(amount)),
-   type:amount>=0?'expense':'income',category:defaultCategory,
+   type:sourceType,category:defaultCategory,
    accountId:String(t.account_id),account:String(meta?.name||t.account_name||t.account_id),
    pending:Boolean(t.pending),source:{provider:'plaid',providerTransactionId:String(t.transaction_id),
     accountId:String(t.account_id),itemId:itemId||null,plaidAmount:amount,simulated:change.simulated===true,
@@ -746,6 +758,7 @@ function remapTransactionMetadata(adjustments,accountId,previous,id){
  if(!previous||previous===id)return adjustments;
  move(adjustments.categoryOverrides,previous,id);
  move(adjustments.reviews?.categoryConfirmed,previous,id);
+ move(adjustments.reviews?.transactionKinds,previous,id);
  const p=adjustments.predictions;
  move(p?.transactionNotes,'bank:'+JSON.stringify([String(accountId),String(previous)]),
   'bank:'+JSON.stringify([String(accountId),String(id)]));

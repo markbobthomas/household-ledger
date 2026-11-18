@@ -72,8 +72,9 @@ assert.equal(M.records(ambiguous).filter(t=>t.pairedTransactionId).length,0,'Amb
 assert.equal(M.accountingView(ambiguous).summary.spending,0,'Ambiguous transfers do not become spending');
 const incoming=M.migrate({accounts:[{id:'check',type:'checking',name:'Checking'}],
  transactions:[{id:'client-fee',date:'2026-10-10',accountId:'check',merchant:'Payment received',amount:125,type:'income'}]});
-assert.equal(M.records(incoming)[0].type,'income','An ordinary received payment to checking is not card settlement');
-assert.equal(M.accountingView(incoming).summary.income,125);
+assert.equal(M.records(incoming)[0].type,'transfer','An unlabeled checking credit is not proof of earned income');
+assert.equal(M.records(incoming)[0].reconciliationStatus,'needs-review');
+assert.equal(M.accountingView(incoming).summary.income,0);
 
 const unknown=M.migrate({transactions:[{id:'a',type:'income',date:'2026-10-01',amount:150,account:'Unverified Account',merchant:'Deposit'}]});
 assert.equal(M.accountsFor(unknown)[0].type,'unknown','Never invent verified account types');

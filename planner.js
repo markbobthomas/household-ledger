@@ -49,6 +49,8 @@ try{
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
+  if(saved.reviews&&typeof saved.reviews==='object'&&!Array.isArray(saved.reviews))
+   demoState.reviews=saved.reviews;
   if(saved.learning&&typeof saved.learning==='object'&&!Array.isArray(saved.learning))
    demoState.learning={categoryRules:{...(saved.learning.categoryRules||{})},
     ruleHistory:Array.isArray(saved.learning.ruleHistory)?saved.learning.ruleHistory:[]};
@@ -125,7 +127,8 @@ function savePlanning(){
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
     recurringForecastMode:p.recurringForecastMode,transactionNotes:p.transactionNotes,
-    categoryOverrides:demoState.categoryOverrides||{},learning:demoState.learning||{}}));
+    categoryOverrides:demoState.categoryOverrides||{},learning:demoState.learning||{},
+    reviews:demoState.reviews||{}}));
   return true;
  }
 }
@@ -885,6 +888,20 @@ function detailHtml(bundle,s){
    window.HouseholdPlannerHistory.accountOf(t,activeAccounts(s))===transactionDetail.account),
    assigned=model.canonicalCategory(state(),resolved?.category||row.category)||'Other',
    selectCategories=categoryOptionsWithOther(model.categories(state())),
+   incomingCredit=resolved?.cashDirection==='in'&&resolved?.source?.provider==='plaid'&&
+    accountType(account||{})!=='credit'&&
+    (resolved.accountingKind==='unclassified_credit'||
+     Boolean(state().reviews?.transactionKinds?.[row.id])),
+   ownerCreditKind=state().reviews?.transactionKinds?.[row.id]||'',
+   creditTypeEditor=incomingCredit?
+    '<label class="transaction-actual-category minimal-control-label">Credit type'+
+     '<select data-actual-credit-kind="'+escapeHTML(String(row.id))+'" aria-label="Credit type for '+
+      escapeHTML(row.merchant||'Bank transaction')+'">'+
+      '<option value="" disabled'+(ownerCreditKind?'':' selected')+'>Choose credit type</option>'+
+      [['income','Income'],['refund','Refund'],['transfer','Transfer']].map(([v,label])=>
+       '<option value="'+v+'"'+(ownerCreditKind===v?' selected':'')+'>'+label+'</option>').join('')+
+      (ownerCreditKind?'<option value="reset">Review again</option>':'')+
+     '</select><small data-actual-credit-status role="status"></small></label>':'',
    categoryEditor='<label class="transaction-actual-category minimal-control-label"><span class="visually-hidden">Category</span>'+
     '<select data-actual-transaction-category="'+escapeHTML(String(row.id))+'" '+
      'aria-label="Category for '+escapeHTML(row.merchant||'Bank transaction')+'">'+
@@ -903,10 +920,10 @@ function detailHtml(bundle,s){
    '<div><span>Account</span><strong>'+escapeHTML(account?.name||transactionDetail.account)+'</strong></div>'+
    '<div><span>Bank amount</span><strong>'+cash(row.amount)+'</strong></div>'+
    '<div><span>Bank record</span><strong>'+escapeHTML(row.pending?'Pending':'Posted')+'</strong></div></div>'+
-   '<p class="transaction-detail-help">This is an actual bank record. Its amount, date and classification are read-only. To predict future occurrences, save a separate prediction below.</p>';
+   '<p class="transaction-detail-help">Bank amount and date are read-only. You can correct how an incoming credit is interpreted without changing the bank record. Future predictions are saved separately.</p>';
   return detailShell(row.merchant||'Bank transaction',
    'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
-   summary+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
+   summary+creditTypeEditor+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
     linkedActions+(linkedPlans.length?'':recurringDraft?repeatingReviewForm(s):
      '<p class="transaction-detail-help">This bank transaction is read-only and cannot create a repeating plan.</p>'),
    'ACTUAL · BANK-RECORDED');
@@ -3148,6 +3165,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
   ],shownCategories=sortedReviewRows(categoryRows,item=>item.date,
    item=>item.merchant,item=>item.amount).slice(0,categoryReviewLimit),
+  selectableCategories=shownCategories.filter(item=>!item.creditKind),
   categoryRow=item=>{
    const label=item.isPlan?'Bill':'Transaction',key=reviewCategoryKey(item.kind,item.id);
    const openAttrs=item.isPlan?
@@ -3155,9 +3173,10 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     ' data-review-bank-id="'+escapeHTML(item.id)+'" data-review-bank-account="'+escapeHTML(item.accountId||'')+'"';
    return '<div class="category-review-row" data-category-review-form data-review-order-date="'+escapeHTML(item.date||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
+    (item.creditKind?'<span class="review-category-check" aria-hidden="true"></span>':
     '<label class="review-category-check"><input type="checkbox" data-review-select-row data-review-category-key="'+
      escapeHTML(key)+'" aria-label="Select '+escapeHTML(label.toLowerCase())+' '+escapeHTML(item.merchant)+'"'+
-     (reviewCategorySelected.has(key)?' checked':'')+'><span class="visually-hidden">Select</span></label>'+
+     (reviewCategorySelected.has(key)?' checked':'')+'><span class="visually-hidden">Select</span></label>')+
     '<button type="button" class="category-review-info category-review-open ledger-transaction-row"'+openAttrs+
      ' aria-label="Open '+escapeHTML(label.toLowerCase())+' details for '+escapeHTML(item.merchant)+'">'+
      '<span class="ledger-transaction-date">'+escapeHTML(item.date?dayLabel(item.date):'—')+'</span>'+
@@ -3165,15 +3184,23 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      (item.isPlan?'<span class="transaction-title-line"><strong class="transaction-merchant-title">'+
        escapeHTML(item.merchant)+'</strong></span>':
        transactionTitleWithNote(item.merchant,bankNoteKey(item.accountId||'',item.id)))+
-     '<small>'+label+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
+     '<small>'+(item.creditKind?'Incoming credit — type needs review':label)+
+      (item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
      '<strong class="ledger-transaction-amount">'+cash(item.amount)+'</strong>'+
      '<span class="ledger-transaction-action" aria-hidden="true">›</span></button>'+
-    '<label class="minimal-control-label"><span class="visually-hidden">Category</span><select name="category" aria-label="Category for '+
-     escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
+    (item.creditKind?
+     '<label class="minimal-control-label"><span class="visually-hidden">Credit type</span>'+
+      '<select name="creditKind" aria-label="Confirm incoming credit type for '+
+       escapeHTML(item.merchant)+' — saves when selected">'+
+       '<option value="" selected disabled>Choose credit type</option>'+
+       '<option value="income">Income</option><option value="refund">Refund</option>'+
+       '<option value="transfer">Transfer</option></select>':
+     '<label class="minimal-control-label"><span class="visually-hidden">Category</span><select name="category" aria-label="Category for '+
+      escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>')+
     '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
   };
  // A refreshed bank sync or resolved item must not leave a stale bulk choice.
- const activeKeys=new Set(categoryRows.map(item=>reviewCategoryKey(item.kind,item.id)));
+ const activeKeys=new Set(categoryRows.filter(item=>!item.creditKind).map(item=>reviewCategoryKey(item.kind,item.id)));
  for(const key of reviewCategorySelected)if(!activeKeys.has(key))reviewCategorySelected.delete(key);
  const reviewRecommendations=items=>sortedReviewRows(items,
   r=>r.lastDate||r.examples?.[0]?.date||r.nextDate,r=>r.merchant,r=>r.amount),
@@ -3215,12 +3242,12 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   pane('categories')+
   '<section class="panel category-review-panel" data-category-review>'+
-   '<div class="section-title"><h2>Categories to confirm</h2>'+
+   '<div class="section-title"><h2>Items to confirm</h2>'+
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
    (categoryCount?
     '<div class="review-bulk-toolbar" data-review-bulk-toolbar>'+
      '<button type="button" class="btn" data-review-select-all>'+
-      (shownCategories.length&&shownCategories.every(item=>reviewCategorySelected.has(
+      (selectableCategories.length&&selectableCategories.every(item=>reviewCategorySelected.has(
        reviewCategoryKey(item.kind,item.id)))?'Deselect shown':'Select all shown')+'</button>'+
      '<span data-review-bulk-count role="status" aria-live="polite">'+reviewCategorySelected.size+' selected</span>'+
      '<select data-review-bulk-category aria-label="Category for selected items"'+
@@ -4796,7 +4823,7 @@ document.addEventListener('click',async e=>{
    chosen=model.canonicalCategory(state(),categorySelect?.value);
   if(!chosen||chosen==='Uncategorized'||!reviewCategorySelected.size)return;
   const queue=model.categoryReviewQueue(state()),
-   items=[...queue.plans,...queue.transactions].filter(item=>
+   items=[...queue.plans,...queue.transactions].filter(item=>!item.creditKind&&
     reviewCategorySelected.has(reviewCategoryKey(item.kind,item.id)));
   if(!items.length){reviewCategorySelected.clear();render();return;}
   reviewBulkSaving=true;updateReviewBulkControls();
@@ -5192,6 +5219,24 @@ async function saveTransactionCategory(id,category,confirm=false,remember=true){
  }
 }
 // Use exactly the same forecast editor semantics for one or several Review bills.
+async function saveIncomingCreditKind(id,kind){
+ if(!['income','refund','transfer','reset'].includes(kind))throw Error('Choose a credit type');
+ const current=state(),before=JSON.stringify(current.reviews||{});
+ if(live()){
+  const saved=await window.HouseholdLiveSource.persistCreditKind(id,kind);
+  if(saved?.saved!==true)throw Error('Credit classification was not saved');
+ }
+ try{
+  current.reviews??={};
+  current.reviews.transactionKinds={...(current.reviews.transactionKinds||{})};
+  if(kind==='reset')delete current.reviews.transactionKinds[id];
+  else current.reviews.transactionKinds[id]=kind;
+  if(!live())savePlanning();
+  // Invalidate all financial interpretations only after the scoped save.
+  forecastCache=null;serverPreparedForecast=null;historyDataCache=null;
+  invalidatePreparedViews();
+ }catch(error){current.reviews=JSON.parse(before);throw error}
+}
 async function saveReviewPlanCategory(kind,id,chosen){
  await commitForecastChange(()=>{
   if(kind==='schedule')window.HouseholdPlannerTransactions.setScheduleCategory(state(),id,chosen);
@@ -5231,6 +5276,26 @@ document.addEventListener('change',e=>{
   updateReviewBulkControls();return;
  }
  if(e.target.matches?.('[data-review-bulk-category]'))updateReviewBulkControls();
+});
+// Credit identity and spending category are separate owner decisions.
+document.addEventListener('change',async e=>{
+ const select=e.target;
+ if(!select.matches?.('[data-category-review-form] select[name="creditKind"],[data-actual-credit-kind]'))return;
+ const id=select.dataset.actualCreditKind||select.closest('[data-category-review-form]')?.dataset.categoryId;
+ const kind=String(select.value||''),status=select.closest('[data-category-review-form]')?.querySelector('[data-category-review-status]')||
+  select.closest('.transaction-actual-category')?.querySelector('[data-actual-credit-status]');
+ if(!id||!['income','refund','transfer','reset'].includes(kind))return;
+ if(select.disabled)return;
+ select.disabled=true;if(status){status.hidden=false;status.textContent='Saving…'}
+ try{
+  await saveIncomingCreditKind(id,kind);
+  reviewNotice=kind==='reset'?'Credit sent back to Review.':'Incoming credit confirmed as '+kind+'.';
+  render();
+ }catch(error){
+  select.disabled=false;
+  if(status){status.hidden=false;status.setAttribute('role','alert');
+   status.textContent='Could not save: '+String(error.message||error)}
+ }
 });
 // Selecting a category is explicit approval. The category issue remains
 // visible until its private bank override or forecast edit has been saved.

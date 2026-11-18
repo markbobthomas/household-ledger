@@ -68,7 +68,7 @@ function recognizedIncome(t,account){
  if(!incoming||refundText.test(description)||cardPayment.test(description))return false;
  if(/\b(?:transfer (?:from|to) (?:my |own |the )?(?:checking|savings|account)|internal transfer|account transfer|savings transfer|cash advance)\b/i.test(description))return false;
  return /^INCOME$/.test(primary)||/^INCOME_(?:WAGES|OTHER_INCOME|SOCIAL_SECURITY|RETIREMENT|BENEFITS)/.test(detailed)||
-  /\b(?:payroll|salary|wages|paycheck|pay\s*check|direct\s+dep(?:osit)?|employer\s+deposit|social\s+security\s+(?:deposit|benefit)|pension\s+(?:payment|deposit))\b/i.test(description);
+  /\b(?:payroll|salary|wages|paycheck|pay\s*check|direct\s+dep(?:osit)?|employer\s+deposit|social\s+security\s+(?:deposit|benefit)|pension\s+(?:payment|deposit)|interest\s+(?:earned|paid)|dividend\s+(?:payment|deposit))\b/i.test(description);
 }
 function direction(t){
  const raw=t.source?.plaidAmount;
@@ -110,11 +110,13 @@ function initialKind(t,account){
  // Preserve explicit internal-transfer evidence while distinguishing a
  // generic merchant credit from a card settlement. A bank-coded TRANSFER_IN
  // with no return evidence remains a transfer until matched/reviewed.
- if(transferText.test(name)||isCard&&dir==='in'&&primary==='TRANSFER_IN')
-  return 'internal_transfer';
- if(t.type==='transfer'&&!isCard)return 'internal_transfer';
+ if(transferText.test(name)||/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(primary)||
+    isCard&&dir==='in'&&primary==='TRANSFER_IN')return 'internal_transfer';
+ // Legacy user-authored transfers have explicit intent. A provisional Plaid
+ // transfer type alone is NOT evidence that an unidentified credit is a transfer.
+ if(t.type==='transfer'&&!isCard&&t.source?.provider!=='plaid')return 'internal_transfer';
  if(isCard&&dir==='in')return 'unclassified_card_credit'; // Reconcile possible payment first.
- if(dir==='in')return 'income';
+ if(dir==='in')return 'unclassified_credit'; // Never silently invent earned income.
  if(dir==='out')return 'purchase';
  return 'unclassified';
 }
@@ -131,7 +133,7 @@ function reconcile(state){
    accountingKind:kind,cashDirection:direction(t),
    spendingAmount:0,earnedIncomeAmount:0,reconciliationStatus:'not-applicable',
    transferGroupId:null,pairedTransactionId:null,
-   classificationConfidence:kind==='unclassified'||kind==='unclassified_card_credit'?'Needs review':'Rule'};
+   classificationConfidence:['unclassified','unclassified_credit','unclassified_card_credit'].includes(kind)?'Needs review':'Rule'};
  });
  // Match conservatively: exact equal amounts, opposite direction, separate accounts,
  // within 5 days, at least one side has unmistakable transfer/payment semantics.
@@ -218,6 +220,18 @@ function reconcile(state){
    t.classificationConfidence='Matched single merchant purchase';
   }
  }
+ // Owner decisions are stored apart from immutable Plaid facts. Only an
+ // unpaired, genuinely uncertain incoming bank credit can use this override;
+ // unique paired settlements always win and cannot become earned income.
+ const kindDecisions=state?.reviews?.transactionKinds||{};
+ for(const t of output)if(t.accountingKind==='unclassified_credit'&&!t.pairedTransactionId){
+  const approved=kindDecisions[t.id];
+  if(['income','refund','transfer'].includes(approved)){
+   t.accountingKind=approved==='transfer'?'confirmed_transfer':approved;
+   t.reconciliationStatus='confirmed';
+   t.classificationConfidence='Owner confirmed';
+  }
+ }
  for(const t of output){
   if(['card_payment','internal_transfer'].includes(t.accountingKind)){
    if(t.reconciliationStatus!=='matched'){
@@ -237,6 +251,13 @@ function reconcile(state){
     if(possibilities.length===1)t.category=state?.categoryOverrides?.[possibilities[0].id]||possibilities[0].category||'Other';
     else if(possibilities.length>1){t.reconciliationStatus='needs-review';t.classificationConfidence='Multiple possible refund purchases';}
    }
+  }else if(t.accountingKind==='unclassified_credit'){
+   // Positive checking/savings activity remains visible in the actual cash
+   // balance, but is not earned income, a refund, or recurrence evidence.
+   t.type='transfer';t.reconciliationStatus='needs-review';
+   t.classificationConfidence='Incoming credit — confirm income, refund, or transfer';
+  }else if(t.accountingKind==='confirmed_transfer'){
+   t.type='transfer'; // Owner-confirmed, non-earning cash movement.
   }else if(t.accountingKind==='unclassified_card_credit'){
    // Still unproven after transfer pairing and merchant matching: surface
    // a positive credit for review, without guessing that it is a refund or
@@ -258,6 +279,7 @@ function reconcile(state){
   reason:t.reconciliationStatus==='ambiguous'?'Several plausible transfer counterparts: confirm manually':
    t.reconciliationStatus==='unmatched'?'Transfer counterpart not found: verify account coverage':
    t.accountingKind==='refund'?'Multiple possible source purchases: confirm refund category':
+   t.accountingKind==='unclassified_credit'?'Incoming credit: confirm income, refund, or transfer':
    'Accounting classification requires confirmation'
  }));
  return {accounts:registry,transactions:output,issues,summary:{
@@ -284,8 +306,13 @@ function classifyPlaidSource({amount,merchant,description,pfc},account,categoriz
  },account);
  const transfer=!earned&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
   lower.includes('transfer to ')||lower.includes('transfer from ')||payment);
+ const detailed=String(pfc?.detailed||'').toUpperCase();
+ const refund=incoming&&(refundText.test(bankNarrative)||
+  /(?:^|_)REFUND(?:_|$)|(?:^|_)RETURN(?:_|$)/.test(code+'_'+detailed)||obligation?.isBill);
+ // An unlabeled checking credit is real cash, NOT evidence of earned income.
+ // The derived accounting view will reconcile and queue it for Review.
  return {incoming,transfer,type:transfer?'transfer':
-  incoming&&(card||obligation?.isBill)?'refund':incoming?'income':'expense'};
+  refund||incoming&&card?'refund':incoming?(earned?'income':'transfer'):'expense'};
 }
 
 // One signed, integer-cent reporting contract. Reconciliation classifies
