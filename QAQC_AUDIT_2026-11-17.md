@@ -62,3 +62,28 @@
 - Actual private Plaid counts, institution coverage, account-by-account transaction reconciliation, card issuer statements, forecast-vs-posted accuracy in the owner's last 90 days, or live duplicate/category counts.
 - A successful offsite restore, private disk snapshot inventory, authenticated live browser layout, or independent direct HTTP `/healthz` response.
 - No discovered issue is proof that existing private financial records have been lost or altered. **No app code, private bank records, settings, tokens, disk or Render service was changed by this audit.**
+
+## Second-pass verification — 2026-11-17, ~16:19 Pacific
+
+This second pass **independently reran** the last exact application-code PR's two GitHub checks without modifying Ledger source or deploying the private service. GitHub Actions reruns used the PR head `c775932f027bc3b6c388d7d3915966f9f457d3e9`, whose application files are identical to the private Render live squash merge `ffb3933dc82e4dcfe1c4f1d25bb450c69e9974e6` (subsequent merged commits only changed documents).
+
+| Fresh check | Result | Evidence |
+| --- | --- | --- |
+| Mandatory finance / Plaid / canonical forecast / category parity | **PASS**, attempt 2, 51 distinct core scripts | [Real-account pilot safety run #44201444752](https://github.com/markbobthomas/household-ledger/actions/runs/44201444752); new job `134473773163`; log ends `PASS core regression suite (51 tests)` |
+| Desktop Chromium and iPhone WebKit | **PASS**, attempt 2, 7 distinct specs in both browser engines | [Browser interaction run #44201444693](https://github.com/markbobthomas/household-ledger/actions/runs/44201444693); new job `134473792785`; each of 7 spec outcomes shows PASS |
+| Private production source | **Live**, unchanged application code | Render existing deployment `dep-dbued82vcj2c738lfdgg` at `ffb3933dc82e4dcfe1c4f1d25bb450c69e9974e6` |
+| Isolated same-temp-path write collision reproduction | **Reproduced:** 100/100 concurrent write *pairs* encountered at least one failed rename | Independent local Node exercise of the exact `writeFile(file+'.tmp')` then `rename(file+'.tmp',file)` pattern used by `pilot/server.cjs` |
+| Inferred card month-end behavior | **Reproduced:** Jan 31 → Feb 28 → Mar 28 → Apr 28 under repeated clamped increment | Isolated date-helper calculation of `payment-obligations.js` inference pattern; anchored monthly offsets yield Mar 31, Apr 30 |
+| Authenticated live data readback / direct `/healthz` | **Not done** | No access to owner's private session or source files via this read-only audit |
+
+### F-09 — Missing server-side gzip response compression (new, confirmed source bug; P2 performance)
+
+`pilot/server.cjs` checks the browser's `Accept-Encoding` with a double-escaped regular expression in the response handler for large authenticated `GET /api/ledger` responses (around lines 426–433). It contains **literal double backslashes** in the source pattern, so the branch does not activate for the conventional header `gzip, deflate, br`. A direct Node comparison reproduced **false** for the production expression and **true** for the intended word-boundary matching. This is a network/performance issue (possibly mitigated separately by hosting-edge compression), **not a forecast arithmetic discrepancy**. Fix by correcting the expression and verifying the actual HTTP `Content-Encoding` response with a fictional payload and both gzip-accepting and identity clients; assess synchronous compression's event-loop impact before enabling it on large payloads.
+
+### What the tests do not prove
+
+- Green canonical-balance arithmetic and 58 scripts prove **internal calculation and scenario consistency on fictional data**, not the completeness of actual bank records, reliability of the linked financial institutions, exact recurrence coverage, or independently backed-up, recoverable encrypted state.
+- The temporary-file exercise demonstrates an actual concurrency hazard in the **same I/O pattern**. It does **not** prove two requests overlapped on production or that private records are corrupt. The code's shared `.tmp` pathname is the mechanism to fix; test the real server in a fault-injected fictional environment before production release.
+- Do not infer success or failure of private bank refresh from Render's four previously reported 502 responses: this response category alone cannot attribute the cause. No bank record, account configuration, secret, Render disk or production infrastructure was altered.
+- This is **QA/QC evidence and an implementation backlog**, not a claim that all defects were repaired. Future changes must be separately checked, merged and deployed; fix F-01/F-02 first because their consequences affect recoverability.
+
