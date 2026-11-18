@@ -118,7 +118,7 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[],optio
   includeAmount:true,
   eligible:t=>canPlan(t)&&!t.pending&&Number(t.amount)>0&&t.date<=asOf&&
    !t.pairedTransactionId&&
-   !['unclassified_credit','unclassified_card_credit'].includes(t.accountingKind),
+   !['unclassified_credit','unclassified_card_credit','confirmed_transfer'].includes(t.accountingKind),
   typeOf:(t,account)=>{
    const kind=t.type==='transfer'?
     (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':null):t.type;
@@ -197,7 +197,7 @@ function recommendedRepeating(records,accounts,asOf){
  const groups=shared.recurrenceEvidence(records,accounts,asOf,{
   eligible:t=>canPlan(t)&&!t.pending&&Number(t.amount)>0&&t.date<=asOf&&
    !t.pairedTransactionId&&
-   !['unclassified_credit','unclassified_card_credit'].includes(t.accountingKind),
+   !['unclassified_credit','unclassified_card_credit','confirmed_transfer'].includes(t.accountingKind),
   typeOf:(t,bank)=>{
    const kind=t.type==='transfer'?(t.cashDirection==='out'?'expense':
     t.cashDirection==='in'?'income':null):t.type;
