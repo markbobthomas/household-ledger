@@ -22,7 +22,7 @@ const {spawn}=require('node:child_process');
  assert.equal(JSON.stringify(metadata),once,'Replacement replay is idempotent');
 
  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'hl-plaid-flow-')),port=19849,pass=crypto.randomBytes(24).toString('hex'),store=path.join(folder,'pilot.enc');
- const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1',PILOT_INVALID_FIELD_TEST:'1',RENDER_GIT_COMMIT:'a'.repeat(40)};
+ const env={...process.env,LIVE_PLAID_ENABLED:'1',HOSTED_SANDBOX:'1',PORT:String(port),PILOT_PASSWORD:pass,PILOT_ENCRYPTION_KEY:crypto.randomBytes(32).toString('hex'),PLAID_CLIENT_ID:'test',PLAID_SECRET:'test',PLAID_ENV:'sandbox',PILOT_STATE_PATH:store,SANDBOX_TEST_PASSWORD:pass,PILOT_LOGIN_REQUIRED_TEST:'1',PILOT_INVALID_FIELD_TEST:'1',PILOT_SYNC_LATENCY_TEST:'1',RENDER_GIT_COMMIT:'a'.repeat(40)};
  const child=spawn(process.execPath,['--require','./tests/pilot-plaid-stub.cjs','sandbox/server.cjs'],{cwd:path.resolve(__dirname,'..'),env,stdio:'ignore'});
  const request=(route,body)=>{
   return new Promise((resolve,reject)=>{
@@ -340,6 +340,42 @@ const {spawn}=require('node:child_process');
   assert.deepEqual((await request('/api/ledger')).data.adjustments,beforeHeader.data.adjustments,
    'Header retry cannot change saved forecasts or categories');
   assert.equal(JSON.stringify(headerStatus).includes('secret-test-access-token'),false);
+  // A slow bank refresh, two overlapping refreshes and a category decision
+  // must commit in one order. A last-writer-wins stale bank snapshot would
+  // otherwise erase the category decision or lose a selected bank account.
+  const beforeRace=await request('/api/ledger');
+  const [refreshA,categoryDuringSync,refreshB]=await Promise.all([
+   request('/api/sync',{}),
+   request('/api/ledger/category',{transactionId:'posted-1',category:'Dining'}),
+   request('/api/sync',{})
+  ]);
+  assert.equal(refreshA.code,200,'First overlapping bank sync completes');
+  assert.equal(categoryDuringSync.code,200,'Category edit is serialized with sync');
+  assert.equal(refreshB.code,200,'Second overlapping bank sync completes');
+  const afterRace=await request('/api/ledger');
+  assert.equal(afterRace.data.adjustments.categoryOverrides['posted-1'],'Dining',
+   'Overlapping bank refreshes never erase the latest category decision');
+  assert.deepEqual(afterRace.data.accounts.map(a=>a.id),
+   beforeRace.data.accounts.map(a=>a.id),'Overlapping refreshes preserve all linked accounts');
+  assert.equal(afterRace.data.transactions.length,beforeRace.data.transactions.length,
+   'The same bank transactions stay deduplicated across simultaneous syncs');
+  assert.deepEqual(afterRace.data.adjustments.predictions,
+   beforeRace.data.adjustments.predictions,'Concurrent sync does not erase forecast settings');
+  // Verify the durable encrypted bank file, not only a still-running memory snapshot.
+  const sealed=JSON.parse(fs.readFileSync(store,'utf8'));
+  const secretKey=crypto.createHash('sha256').update(env.PILOT_ENCRYPTION_KEY).digest();
+  const decipher=crypto.createDecipheriv('aes-256-gcm',secretKey,Buffer.from(sealed.iv,'base64'));
+  decipher.setAuthTag(Buffer.from(sealed.tag,'base64'));
+  const durable=JSON.parse(Buffer.concat([
+   decipher.update(Buffer.from(sealed.data,'base64')),decipher.final()
+  ]).toString());
+  assert.equal(durable.ledgerAdjustments.categoryOverrides['posted-1'],'Dining',
+   'Category change survives in the encrypted bank snapshot');
+  assert.equal(durable.accounts.length,2,'Durable bank snapshot preserves the linked accounts');
+  assert.equal(durable.transactions['posted-1'].amount,10,
+   'Provider amount remains unchanged in the persisted source ledger');
+  assert.ok(!fs.existsSync(store+'.tmp'),
+   'No shared temporary bank state path remains after concurrent writes');
   await request('/api/disconnect',{});
   status=await request('/api/status');assert.equal(status.data.connected,false);assert.equal(status.data.transactions.length,0);
   console.log('PASS Plaid Link exchange, one selected account, exact reported bank balances, encrypted token, pending-posted sync and disconnect');
