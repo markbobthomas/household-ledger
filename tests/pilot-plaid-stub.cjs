@@ -155,6 +155,8 @@ global.fetch=async function(url,options){
    }
    break;
   case '/item/remove':
+   if(process.env.PILOT_TEST_REVOKE_MARKER)
+    require('node:fs').appendFileSync(process.env.PILOT_TEST_REVOKE_MARKER,'attempt\n');
    if(process.env.PILOT_REMOVE_FAIL_FIRST==='1'&&removals++===0)
     return {ok:false,status:400,json:async()=>({error_code:'ITEM_REMOVE_TEMPORARY_FAILURE'})};
    global.__testRevocationAcknowledged?.();
