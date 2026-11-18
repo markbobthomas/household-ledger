@@ -4,6 +4,8 @@
 // Every account, amount and transaction below is fictional.
 const assert=require('node:assert/strict');
 const Accounting=require('../accounting.js');
+const M=require('../ledger-data.js');
+const Core=require('../planner-core.js');
 const Categorization=require('../categorization.js');
 const History=require('../planner-history.js');
 const Shared=require('../planner-transactions.js');
@@ -30,6 +32,61 @@ assert.equal(Accounting.classifyPlaidSource({
  amount:-2000,merchant:'Employer Payroll',description:'Direct Deposit',
  pfc:{primary:'INCOME',detailed:'INCOME_WAGES'}
 },accounts[0],Categorization).type,'income','Bank payroll is earned income');
+// F-04: an unlabeled cash credit must not become earned income or a
+// repeating deposit without affirmative bank evidence or owner confirmation.
+const pfcWage={primary:'INCOME',detailed:'INCOME_WAGES'};
+const fictional=M.migrate({});
+const added=[
+ {transaction_id:'mystery-a',account_id:'cash',amount:-35,date:'2026-08-04',
+  merchant_name:'Fictional Store',name:'Fictional Store'},
+ {transaction_id:'mystery-b',account_id:'cash',amount:-35,date:'2026-09-04',
+  merchant_name:'Fictional Store',name:'Fictional Store'},
+ {transaction_id:'mystery-c',account_id:'cash',amount:-35,date:'2026-10-04',
+  merchant_name:'Fictional Store',name:'Fictional Store'},
+ {transaction_id:'payroll-credit',account_id:'cash',amount:-1200,date:'2026-10-05',
+  merchant_name:'Example Payroll',name:'Direct Deposit',personal_finance_category:pfcWage},
+ {transaction_id:'explicit-refund',account_id:'cash',amount:-17,date:'2026-10-06',
+  merchant_name:'Refund Fictional Market',name:'Refund Fictional Market'},
+ {transaction_id:'bank-transfer',account_id:'cash',amount:-70,date:'2026-10-07',
+  merchant_name:'Transfer from Savings',name:'Transfer from Savings',
+  personal_finance_category:{primary:'TRANSFER_IN',detailed:'TRANSFER_IN_ACCOUNT_TRANSFER'}}
+];
+M.applyPlaidSync(fictional,{itemId:'example-item',
+ accounts:[{account_id:'cash',name:'Example Checking',type:'depository',subtype:'checking'}],
+ added,modified:[],removed:[],nextCursor:'a'});
+const sourceBefore=JSON.stringify(fictional.transactions),creditId='plaid:example-item:mystery-c';
+const raw=f=>f.transactions.find(x=>x.id===creditId);
+assert.equal(raw(fictional).type,'transfer','Plaid import must not label unidentified cash credits income');
+const rows=M.records(fictional),mystery=rows.find(t=>t.id===creditId);
+assert.equal(mystery.type,'transfer');
+assert.equal(mystery.accountingKind,'unclassified_credit');
+assert.equal(mystery.reconciliationStatus,'needs-review');
+assert.equal(Accounting.reportingMeasures(mystery).postedIncomeCents,0);
+assert.equal(M.accountingView(fictional).summary.income,1200,'Only the recognized paycheck counts');
+assert.equal(rows.find(t=>t.source.providerTransactionId==='explicit-refund').type,'refund');
+assert.equal(rows.find(t=>t.source.providerTransactionId==='bank-transfer').type,'transfer');
+assert.equal(M.categoryReviewQueue(fictional).transactions.filter(t=>t.creditKind).length,3);
+const cashAccounts=[{id:'cash',name:'Example Checking',type:'checking',accountType:'checking'}];
+assert.equal(Core.analyze(rows,cashAccounts,'2026-10-20').automatic.filter(e=>
+ e.type==='income'&&e.merchant==='Fictional Store').length,0,
+ 'Three identical unidentified credits are not payroll evidence');
+assert.equal(History.recommendedRepeating(rows,cashAccounts,'2026-10-20').filter(e=>
+ e.type==='income'&&e.merchant==='Fictional Store').length,0,
+ 'An ambiguous cash inflow is not a proposed recurring paycheck');
+fictional.reviews.transactionKinds[creditId]='refund';
+assert.equal(M.records(fictional).find(t=>t.id===creditId).type,'refund');
+assert.equal(M.accountingView(fictional).summary.income,1200);
+fictional.reviews.transactionKinds[creditId]='income';
+assert.equal(M.accountingView(fictional).summary.income,1235,'Owner-approved income counts once');
+assert.equal(M.categoryReviewQueue(fictional).transactions.some(t=>t.id===creditId),false);
+fictional.reviews.transactionKinds[creditId]='transfer';
+assert.equal(M.records(fictional).find(t=>t.id===creditId).type,'transfer');
+assert.equal(M.accountingView(fictional).summary.income,1200,'Confirmed transfer is not earned income');
+delete fictional.reviews.transactionKinds[creditId];
+assert.equal(M.categoryReviewQueue(fictional).transactions.some(t=>t.id===creditId),true,
+ 'Resetting the decision returns the unidentified credit to Review');
+assert.equal(JSON.stringify(fictional.transactions),sourceBefore,
+ 'Credit review changes preferences only, not immutable bank source records');
 const expense=bank('purchase','2026-10-03','Purchase',85.12);
 const refund=bank('refund','2026-10-05','Refund',13.19,'refund','card');
 const pending=bank('pending','2026-10-06','Pending Grocery',22.25,'expense','checking',{pending:true});
