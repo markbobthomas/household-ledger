@@ -89,7 +89,7 @@ assert.equal(JSON.stringify(fictional.transactions),sourceBefore,
  'Credit review changes preferences only, not immutable bank source records');
 const Model=require('../ledger-data.js');
 const unknownFromBank=Accounting.classifyPlaidSource({
- amount:-43.17,merchant:'Shop refund without reference',description:'ACH CREDIT 8019',pfc:{primary:'OTHER'}
+ amount:-43.17,merchant:'Shop credit without reference',description:'ACH CREDIT 8019',pfc:{primary:'OTHER'}
 },accounts[0],Categorization);
 assert.equal(unknownFromBank.type,'transfer','An unidentified checking credit must not be called income');
 assert.equal(Accounting.classifyPlaidSource({
