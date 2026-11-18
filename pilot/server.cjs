@@ -64,6 +64,13 @@ function decrypted(text){
 async function load(){
  try{state=decrypted(await fs.readFile(file,'utf8'));normalizeState()}
  catch(e){if(e.code!=='ENOENT')throw e}
+ // A crash during an all-account disconnect must not import preferences
+ // from the former household into a new bank connection.
+ if(state.forecastResetRequired){
+  try{await fs.unlink(forecastFile)}catch(e){if(e.code!=='ENOENT')throw e}
+  const ready={...state};delete ready.forecastResetRequired;
+  await atomicEncryptedWrite(file,ready);state=ready;
+ }
  // Existing users start with their previous encrypted predictions in pilot.enc.
  // Once a forecast is saved separately, this tiny file is authoritative.
  try{
@@ -107,6 +114,30 @@ async function atomicEncryptedWrite(filename,value){
 }
 async function save(){
  await atomicEncryptedWrite(file,state);
+}
+// An Item is removed from the durable local bank snapshot before Plaid is
+// asked to revoke it. Encrypted pending entries survive any crash and make
+// external cleanup retryable without presenting a revoked Item as connected.
+function pendingRevocations(){return Array.isArray(state.pendingRevocations)?state.pendingRevocations:[]}
+async function finishPendingRevocation(itemId){
+ const pending=pendingRevocations().find(p=>p.id===itemId);
+ if(!pending)return;
+ try{await plaid('/item/remove',{access_token:pending.token})}
+ catch(error){
+  if(error.plaidCode!=='ITEM_NOT_FOUND')throw error;
+ }
+ const next={...state,pendingRevocations:pendingRevocations().filter(p=>p.id!==itemId)};
+ try{await atomicEncryptedWrite(file,next)}
+ catch(error){error.revocationAcknowledged=true;throw error}
+ state=next;
+}
+async function resumePendingRevocations(){
+ for(const pending of [...pendingRevocations()]){
+  try{await finishPendingRevocation(pending.id)}catch{
+   // Retain the encrypted retry token, not an apparently active Item.
+  }
+ }
+ return pendingRevocations().length;
 }
 // Session records are separately encrypted and persisted on the existing
 // private disk. Never store passwords, bank data or raw bearer IDs there.
@@ -897,6 +928,14 @@ async function start(port=Number(env.PORT||8788)){
  return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>{
   // Automatic server-side re-preparation, never a background Plaid sync.
   // A sleeping Render instance cannot execute hourly tasks until it wakes.
+  // Resume interrupted provider revocations without blocking health checks.
+  // Keep cleanup behind the same queue as bank sync and preference edits.
+  if(pendingRevocations().length){
+   const prior=householdEditQueue;
+   let release;
+   householdEditQueue=new Promise(done=>{release=done});
+   Promise.resolve(prior).then(()=>resumePendingRevocations()).catch(()=>{}).finally(release);
+  }
   schedulePrepared();
   const hourly=setInterval(()=>{invalidatePrepared();schedulePrepared()},60*60*1000);
   hourly.unref();
