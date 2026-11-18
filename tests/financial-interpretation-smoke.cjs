@@ -87,6 +87,43 @@ assert.equal(M.categoryReviewQueue(fictional).transactions.some(t=>t.id===credit
  'Resetting the decision returns the unidentified credit to Review');
 assert.equal(JSON.stringify(fictional.transactions),sourceBefore,
  'Credit review changes preferences only, not immutable bank source records');
+const Model=require('../ledger-data.js');
+const unknownFromBank=Accounting.classifyPlaidSource({
+ amount:-43.17,merchant:'Shop refund without reference',description:'ACH CREDIT 8019',pfc:{primary:'OTHER'}
+},accounts[0],Categorization);
+assert.equal(unknownFromBank.type,'transfer','An unidentified checking credit must not be called income');
+assert.equal(Accounting.classifyPlaidSource({
+ amount:-43.17,merchant:'Purchase Return Store',description:'Purchase Return Store',pfc:{primary:'OTHER'}
+},accounts[0],Categorization).type,'refund','Explicit merchant returns remain refunds');
+const possibleRefund=Model.migrate({
+ accounts:[{id:'checking',name:'Example Checking',type:'checking'}],
+ transactions:[bank('unknown-credit','2026-10-10','Shop credit',43.17,'transfer','checking',{
+  description:'ACH CREDIT 8019',cashDirection:'in',source:{provider:'plaid',plaidAmount:-43.17,verified:true}
+ })]
+});
+const untouched=JSON.stringify(possibleRefund.transactions);
+const ambiguousCredit=Model.records(possibleRefund)[0];
+assert.equal(ambiguousCredit.accountingKind,'unclassified_credit');
+assert.equal(ambiguousCredit.reconciliationStatus,'needs-review');
+assert.equal(ambiguousCredit.earnedIncomeAmount,0);
+assert.equal(Accounting.reportingMeasures(ambiguousCredit).postedIncomeCents,0);
+assert.ok(Model.categoryReviewQueue(possibleRefund).transactions.some(t=>
+ t.id==='unknown-credit'&&t.creditKind),'Uncertain checking credit is visible in Review');
+for(const [decision,expectedType,earned,spending] of [
+ ['income','income',43.17,0],['refund','refund',0,-43.17],['transfer','transfer',0,0]]){
+ possibleRefund.reviews.transactionKinds={'unknown-credit':decision};
+ const result=Model.records(possibleRefund)[0];
+ assert.equal(result.type,expectedType,'Owner chose '+decision);
+ assert.equal(result.earnedIncomeAmount,earned);
+ assert.equal(result.spendingAmount,spending);
+ assert.equal(result.reconciliationStatus,'confirmed');
+ assert.ok(!Model.categoryReviewQueue(possibleRefund).transactions.some(t=>
+  t.id==='unknown-credit'&&t.creditKind),'Confirmed credit does not remain an unclassified credit');
+}
+possibleRefund.reviews.transactionKinds={};
+assert.equal(Model.records(possibleRefund)[0].reconciliationStatus,'needs-review',
+ 'Clearing an owner decision returns the credit to Review');
+assert.equal(JSON.stringify(possibleRefund.transactions),untouched,'Classification decisions must never mutate source bank rows');
 const expense=bank('purchase','2026-10-03','Purchase',85.12);
 const refund=bank('refund','2026-10-05','Refund',13.19,'refund','card');
 const pending=bank('pending','2026-10-06','Pending Grocery',22.25,'expense','checking',{pending:true});
