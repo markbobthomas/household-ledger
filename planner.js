@@ -3449,6 +3449,9 @@ function settingsPage(bundle,s,chosen){
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
   auditPanel(chosen)+'</details>'+categoryLearning+
+   (available()?'<section class="panel" aria-label="Private recovery backup"><div class="section-title"><h2>Recovery backup</h2></div>'+
+    '<p>Keep an encrypted copy of your bank history and saved planning settings outside Render.</p>'+
+    '<a class="btn" href="/bank-connect#backup">Download encrypted backup</a></section>':'')+
    (available()?'<section class="panel" aria-label="Share Ledger"><div class="section-title"><h2>Share Ledger</h2></div>'+
     '<p>Use this same private website on both phones to see the same household data. Send the link privately; the password must be shared separately.</p>'+
     '<button type="button" class="btn" data-share-ledger>Share website link</button>'+

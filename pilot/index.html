@@ -25,7 +25,17 @@
 <div id="account-choices" class="panel" hidden><h2>Select accounts to add</h2><p>Choose every eligible account you want included from this institution.</p><form id="choices-form"><div id="choices-list"></div><button type="submit">Add selected accounts</button><button type="button" id="choices-cancel">Cancel</button></form></div>
 <div class="panel removal-help"><h2>Which duplicate should I remove?</h2><p>Household Ledger checks your saved forecast changes against each account’s unique Plaid ID—not its name. <strong>Keep the copy marked “Has saved links.”</strong> An account with saved predictions or category edits is protected from removal until those changes are reassigned. If neither copy has links, review its actual transactions before deciding. Automatic predictions from bank history are not saved edits.</p><p class="muted">Do not use “Disconnect everything” to remove a duplicate.</p></div>
 <div id="report"></div>
-<div class="panel"><h2>Disconnect everything</h2><p class="muted">This erases all connected bank tokens and imported bank transactions from this private Ledger. It is not required when adding an account.</p><button id="disconnect" class="danger">Disconnect and erase all banks</button></div>
+<div class="panel" id="backup"><h2>Encrypted recovery backup</h2>
+ <p>Download a portable encrypted copy of your bank history, forecast settings, categories, notes and saved sessions. The archive can be restored without the existing Render encryption key. <strong>Downloading does not disconnect or change any bank account.</strong></p>
+ <p class="muted">Choose a unique recovery passphrase of at least 20 characters (ideally five unrelated random words). Ledger never stores or remembers it. Without it, the archive cannot be recovered. Save the downloaded file somewhere <strong>outside Render</strong>, such as iCloud Drive or a separate encrypted drive, and keep the passphrase in your password manager.</p>
+ <form id="backup-form">
+  <label>Recovery passphrase <input id="backup-passphrase" type="password" autocomplete="new-password" minlength="20" maxlength="512" required style="width:100%;box-sizing:border-box;min-height:40px"></label>
+  <label>Confirm recovery passphrase <input id="backup-confirm" type="password" autocomplete="new-password" minlength="20" maxlength="512" required style="width:100%;box-sizing:border-box;min-height:40px"></label>
+  <button type="submit" id="download-backup">Download encrypted backup</button>
+ </form>
+ <p id="backup-result" role="status" aria-live="polite" class="muted">No independent backup has been verified on this device.</p>
+ </div>
+ <div class="panel"><h2>Disconnect everything</h2><p class="muted">This erases all connected bank tokens and imported bank transactions from this private Ledger. It is not required when adding an account.</p><button id="disconnect" class="danger">Disconnect and erase all banks</button></div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const money=n=>n==null?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
@@ -250,6 +260,40 @@ document.getElementById('report').addEventListener('click',async e=>{
  }catch(error){status.textContent='Account was not removed: '+error.message;button.disabled=false}
  finally{removalBusy=false}
 });
+document.getElementById('backup-form').onsubmit=async e=>{
+ e.preventDefault();
+ const pass=document.getElementById('backup-passphrase');
+ const confirmPass=document.getElementById('backup-confirm');
+ const result=document.getElementById('backup-result');
+ const button=document.getElementById('download-backup');
+ if(pass.value.length<20||pass.value!==confirmPass.value){
+  result.textContent='The passphrases must match and have at least 20 characters.';
+  return;
+ }
+ button.disabled=true;
+ result.textContent='Building and checking the encrypted backup…';
+ try{
+  const response=await fetch('/api/backup/export',{
+   method:'POST',credentials:'same-origin',
+   headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
+   body:JSON.stringify({passphrase:pass.value})
+  });
+  if(!response.ok){
+   const failure=await response.json().catch(()=>({}));
+   throw Error(failure.error||'The private backup could not be created');
+  }
+  const blob=await response.blob();
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='ledger-private-'+new Date().toISOString().slice(0,10)+'.ledgerbackup';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  result.textContent='Encrypted backup download initiated. Save the file outside Render and store its recovery passphrase separately. This page cannot verify where your device saved the file.';
+ }catch(error){
+  result.textContent='Backup failed: '+error.message+'. No bank data was changed.';
+ }finally{
+  pass.value='';confirmPass.value='';button.disabled=false;
+ }
+};
 document.getElementById('disconnect').onclick=async()=>{
  if(!confirm('Erase ALL connected institutions and imported bank data? This cannot be undone.'))return;
  try{status.textContent='Disconnecting…';await api('disconnect',{});await refresh()}catch(e){status.textContent=e.message}

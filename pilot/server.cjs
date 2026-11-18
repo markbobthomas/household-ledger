@@ -627,7 +627,8 @@ async function start(port=Number(env.PORT||8788)){
   // including Plaid staging, not merely the final rename: a sync must not
   // publish a snapshot computed before an overlapping user decision.
   const mutatesBankState=requestPath.startsWith('/api/ledger/')||
-   ['/api/sync','/api/exchange','/api/accounts/remove','/api/disconnect'].includes(requestPath);
+   ['/api/sync','/api/exchange','/api/accounts/remove','/api/disconnect',
+    '/api/backup/export'].includes(requestPath);
   let releaseEdit=null;
   if(mutatesBankState){
    const previousEdit=householdEditQueue;
@@ -811,6 +812,38 @@ async function start(port=Number(env.PORT||8788)){
     // app only writes future-ledger settings through /forecasts.
     if(body.predictions!==undefined)await saveForecast(body.predictions);
     return respond(200,{saved:true});
+   }
+   if(requestPath==='/api/backup/export'){
+    // A backup is a serialized, read-only snapshot. No archive or passphrase
+    // is written to the server filesystem or logged. Authentication, Origin,
+    // and the explicit action header were enforced above.
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+       Object.keys(body).length!==1||typeof body.passphrase!=='string'||
+       body.passphrase.length<20||body.passphrase.length>512)
+     return respond(400,{error:'Use a private recovery passphrase of at least 20 characters'});
+    await forecastWrites;
+    await auth.flush();
+    let archive;
+    try{
+     archive=await require('./portable-backup.cjs').capture({
+      statePath:file,secret:env.PILOT_ENCRYPTION_KEY,passphrase:body.passphrase
+     });
+    }catch(error){
+     // Authentication-tag or disk-integrity failure must fail closed.
+     // Do not reveal keys, existing filenames, tokens or private records.
+     return respond(503,{error:'Could not verify the encrypted Ledger data for backup. No backup was created.'});
+    }
+    const today=new Date().toISOString().slice(0,10);
+    res.writeHead(200,{
+     'Content-Type':'application/octet-stream',
+     'Content-Disposition':'attachment; filename="ledger-private-'+today+'.ledgerbackup"',
+     'Content-Length':archive.length,
+     'Cache-Control':'private, no-store, max-age=0',
+     'X-Content-Type-Options':'nosniff',
+     'Referrer-Policy':'no-referrer',
+     'Content-Security-Policy':"default-src 'none'"
+    });
+    return res.end(archive);
    }
    if(requestPath==='/api/link-token'){
     const id=body?.reconnectAccountId;

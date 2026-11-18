@@ -4,6 +4,7 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process'),{chromium,webkit}=require('./browser-harness.cjs');
+const Backup=require('../pilot/portable-backup.cjs');
 module.exports=(async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-remove-browser-')),
   port=19862,pass=crypto.randomBytes(24).toString('hex');
@@ -98,6 +99,25 @@ module.exports=(async()=>{
    }
    await page.goto('http://127.0.0.1:'+port+'/bank-connect',{waitUntil:'domcontentloaded'});
    await page.locator('[data-remove-account="acct-2"]').waitFor();
+   // An owner-held archive must actually download on Safari/WebKit as well
+   // as Chromium; merely returning an encrypted HTTP body is insufficient.
+   const phrase='fictional recovery phrase red apple tree mountain river';
+   await page.locator('#backup-passphrase').fill(phrase);
+   await page.locator('#backup-confirm').fill(phrase);
+   const downloadEvent=page.waitForEvent('download',{timeout:30000});
+   await page.locator('#download-backup').click();
+   const archiveDownload=await downloadEvent;
+   assert.match(archiveDownload.suggestedFilename(),/ledger-private-.*\.ledgerbackup$/,
+    'Portable archive has a recognizable encrypted file extension');
+   const file=await archiveDownload.path();
+   const archive=await Backup.open(fs.readFileSync(file),phrase);
+   assert.ok(archive.bank.items.length>0,
+    'Fictional bank accounts are present in the encrypted browser download');
+   assert.ok(archive.bank.transactions['posted-1']||archive.bank.transactions['pending-1'],
+    'Actual fictional bank history is included');
+   assert.match(await page.locator('#backup-result').innerText(),/download initiated/);
+   assert.equal(await page.locator('#backup-passphrase').inputValue(),'',
+    'Client clears the recovery passphrase after each export');
    await page.locator('#sync-issue').waitFor({state:'visible'});
    const diagnosticText=await page.locator('#private-diagnostics').innerText();
    assert.match(diagnosticText,/Plaid environment: Sandbox/,

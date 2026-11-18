@@ -98,5 +98,5 @@ module.exports=function createSessionAuth({password,secret,sessionFile,decrypted
  }
  return {TTL,COOKIE,authenticated,isSignedOut,cookie,clearCookie,
   signedOutCookie,clearSignedOut,upgradedCookie,wasUpgraded,
-  checkPassword,blocked,failed,successful,issue,revoke,load};
+  checkPassword,blocked,failed,successful,issue,revoke,load,flush:()=>writes};
 };
