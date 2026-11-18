@@ -139,6 +139,13 @@ async function resumePendingRevocations(){
  }
  return pendingRevocations().length;
 }
+function scheduleRevocationRecovery(){
+ if(!pendingRevocations().length)return;
+ const prior=householdEditQueue;
+ let release;
+ householdEditQueue=new Promise(done=>{release=done});
+ Promise.resolve(prior).then(()=>resumePendingRevocations()).catch(()=>{}).finally(release);
+}
 // Session records are separately encrypted and persisted on the existing
 // private disk. Never store passwords, bank data or raw bearer IDs there.
 const auth=require('./session-auth.cjs')({
@@ -408,7 +415,8 @@ async function html(){return fs.readFile(path.join(__dirname,'index.html'),'utf8
 // The same authenticated payload still owns all immutable bank facts. The
 // prepared projection is a derived, versioned extra attached atomically to it.
 function ledgerPayload(){
- if(!state.items.length)return {connected:false,account:null,accounts:[],transactions:[],adjustments:{}};
+ if(!state.items.length)return {connected:false,account:null,accounts:[],transactions:[],
+  adjustments:{},remoteDisconnectPending:pendingRevocations().length};
  return {connected:true,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,
   transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object')
    .sort((a,b)=>String(b.date).localeCompare(String(a.date))),
@@ -607,6 +615,7 @@ async function start(port=Number(env.PORT||8788)){
       needsReconnect:state.items.some(i=>i.reconnectRequired&&i.accountIds.includes(String(a.id))),
       syncIssue:state.items.find(i=>i.accountIds.includes(String(a.id)))?.syncIssue||null})),
     lastSync:state.lastSync,diagnostics:bankDiagnostics(),
+    remoteDisconnectPending:pendingRevocations().length,
     transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   }
   // Unknown browser navigation should be a 404, not a misleading bank-action error.
@@ -827,7 +836,8 @@ async function start(port=Number(env.PORT||8788)){
     const x=await plaid('/item/public_token/exchange',{public_token:body.publicToken});
     // Never revoke the original Item when the exchanged token refers to an
     // already-connected bank. This check must precede ANY cleanup.
-    if(state.items.some(i=>i.id===x.item_id||i.token===x.access_token))
+    if(state.items.some(i=>i.id===x.item_id||i.token===x.access_token)||
+       pendingRevocations().some(i=>i.id===x.item_id))
      return respond(409,{code:'ALREADY_CONNECTED',
       error:'Bank is already connected. Use Reconnect without losing saved data beside the original account.'});
     let retained=false,inserted=false;
@@ -952,14 +962,11 @@ async function start(port=Number(env.PORT||8788)){
   // A sleeping Render instance cannot execute hourly tasks until it wakes.
   // Resume interrupted provider revocations without blocking health checks.
   // Keep cleanup behind the same queue as bank sync and preference edits.
-  if(pendingRevocations().length){
-   const prior=householdEditQueue;
-   let release;
-   householdEditQueue=new Promise(done=>{release=done});
-   Promise.resolve(prior).then(()=>resumePendingRevocations()).catch(()=>{}).finally(release);
-  }
+  scheduleRevocationRecovery();
   schedulePrepared();
-  const hourly=setInterval(()=>{invalidatePrepared();schedulePrepared()},60*60*1000);
+  const hourly=setInterval(()=>{
+   invalidatePrepared();schedulePrepared();scheduleRevocationRecovery();
+  },60*60*1000);
   hourly.unref();
   server.once('close',()=>clearInterval(hourly));
   resolve(server);
