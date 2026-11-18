@@ -68,7 +68,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
  const groups=shared.recurrenceEvidence(rows,accounts,asOf,{
   eligible:t=>!t.pending&&valid(t.date)&&t.date<=asOf&&Number(t.amount)>0&&
    !t.pairedTransactionId&&
-   !['unclassified_credit','unclassified_card_credit'].includes(t.accountingKind),
+   !['unclassified_credit','unclassified_card_credit','confirmed_transfer'].includes(t.accountingKind),
   typeOf:(t,acct)=>{
    if(String(acct.type||acct.accountType||'').toLowerCase()==='loan')return null;
    return direction(t)||(t.type==='refund'?'refund':
