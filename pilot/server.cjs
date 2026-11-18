@@ -84,11 +84,26 @@ function remapPostedMetadata(adjustments,transactions=state.transactions){
  }
  return adjustments;
 }
+// Serialize writes to each encrypted file and stage them under a unique,
+// exclusive temporary name. Failed writes never replace the last good file.
+// Keep this small boundary shared by bank history, forecasts and sessions.
+const encryptedWriteQueues=new Map();
 async function atomicEncryptedWrite(filename,value){
- await fs.mkdir(path.dirname(filename),{recursive:true});
- const temporary=filename+'.tmp';
- await fs.writeFile(temporary,encrypted(value),{mode:0o600});
- await fs.rename(temporary,filename);
+ const ciphertext=encrypted(value);
+ const previous=encryptedWriteQueues.get(filename)||Promise.resolve();
+ const write=previous.catch(()=>{}).then(async()=>{
+  await fs.mkdir(path.dirname(filename),{recursive:true});
+  const temporary=filename+'.tmp-'+process.pid+'-'+crypto.randomBytes(12).toString('hex');
+  try{
+   await fs.writeFile(temporary,ciphertext,{mode:0o600,flag:'wx'});
+   await fs.rename(temporary,filename);
+  }finally{
+   try{await fs.unlink(temporary)}catch(error){if(error.code!=='ENOENT')throw error}
+  }
+ });
+ encryptedWriteQueues.set(filename,write);
+ try{await write}
+ finally{if(encryptedWriteQueues.get(filename)===write)encryptedWriteQueues.delete(filename)}
 }
 async function save(){
  await atomicEncryptedWrite(file,state);
@@ -567,10 +582,14 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
-  // Serialize every household preference mutation, including category renames,
-  // so a stale version is checked only AFTER the prior edit has committed.
+  // Bank sync and account connection changes share the same state and encrypted
+  // bank file as category/forecast edits. Serialize the entire mutation,
+  // including Plaid staging, not merely the final rename: a sync must not
+  // publish a snapshot computed before an overlapping user decision.
+  const mutatesBankState=requestPath.startsWith('/api/ledger/')||
+   ['/api/sync','/api/exchange','/api/accounts/remove','/api/disconnect'].includes(requestPath);
   let releaseEdit=null;
-  if(requestPath.startsWith('/api/ledger/')){
+  if(mutatesBankState){
    const previousEdit=householdEditQueue;
    householdEditQueue=new Promise(resolve=>{releaseEdit=resolve});
    await previousEdit;

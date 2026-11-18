@@ -34,6 +34,9 @@ global.fetch=async function(url,options){
    }
    data={accounts:[{account_id:'acct-1',name:'Test Checking',mask:'1234',type:'depository',subtype:'checking',balances:{current:321.45,available:300.10,iso_currency_code:'USD'}},{account_id:'acct-2',name:'Test Visa',mask:'5555',type:'credit',subtype:'credit card',balances:{current:900,available:null}}]};break;
   case '/transactions/sync':
+   // Simulate a real network stall so concurrent bank/client writes overlap.
+   if(process.env.PILOT_SYNC_LATENCY_TEST==='1')
+    await new Promise(resolve=>setTimeout(resolve,60));
    if(body.access_token==='secret-second-access-token'){
     data={added:secondStage++===0?[
      {transaction_id:'credit-charge-1',account_id:'acct-2',date:'2026-10-19',name:'Card groceries',amount:300,pending:false},
