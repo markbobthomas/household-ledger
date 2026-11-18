@@ -3165,6 +3165,7 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
    ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
   ],shownCategories=sortedReviewRows(categoryRows,item=>item.date,
    item=>item.merchant,item=>item.amount).slice(0,categoryReviewLimit),
+  selectableCategories=shownCategories.filter(item=>!item.creditKind),
   categoryRow=item=>{
    const label=item.isPlan?'Bill':'Transaction',key=reviewCategoryKey(item.kind,item.id);
    const openAttrs=item.isPlan?
@@ -3172,9 +3173,10 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     ' data-review-bank-id="'+escapeHTML(item.id)+'" data-review-bank-account="'+escapeHTML(item.accountId||'')+'"';
    return '<div class="category-review-row" data-category-review-form data-review-order-date="'+escapeHTML(item.date||'')+'" data-review-order-amount="'+escapeHTML(item.amount||0)+'" data-category-kind="'+
     escapeHTML(item.kind)+'" data-category-id="'+escapeHTML(item.id)+'">'+
+    (item.creditKind?'<span class="review-category-check" aria-hidden="true"></span>':
     '<label class="review-category-check"><input type="checkbox" data-review-select-row data-review-category-key="'+
      escapeHTML(key)+'" aria-label="Select '+escapeHTML(label.toLowerCase())+' '+escapeHTML(item.merchant)+'"'+
-     (reviewCategorySelected.has(key)?' checked':'')+'><span class="visually-hidden">Select</span></label>'+
+     (reviewCategorySelected.has(key)?' checked':'')+'><span class="visually-hidden">Select</span></label>')+
     '<button type="button" class="category-review-info category-review-open ledger-transaction-row"'+openAttrs+
      ' aria-label="Open '+escapeHTML(label.toLowerCase())+' details for '+escapeHTML(item.merchant)+'">'+
      '<span class="ledger-transaction-date">'+escapeHTML(item.date?dayLabel(item.date):'—')+'</span>'+
@@ -3182,15 +3184,23 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
      (item.isPlan?'<span class="transaction-title-line"><strong class="transaction-merchant-title">'+
        escapeHTML(item.merchant)+'</strong></span>':
        transactionTitleWithNote(item.merchant,bankNoteKey(item.accountId||'',item.id)))+
-     '<small>'+label+(item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
+     '<small>'+(item.creditKind?'Incoming credit — type needs review':label)+
+      (item.suggested?' · Suggested: '+escapeHTML(item.suggested):'')+'</small></span>'+
      '<strong class="ledger-transaction-amount">'+cash(item.amount)+'</strong>'+
      '<span class="ledger-transaction-action" aria-hidden="true">›</span></button>'+
-    '<label class="minimal-control-label"><span class="visually-hidden">Category</span><select name="category" aria-label="Category for '+
-     escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>'+ 
+    (item.creditKind?
+     '<label class="minimal-control-label"><span class="visually-hidden">Credit type</span>'+
+      '<select name="creditKind" aria-label="Confirm incoming credit type for '+
+       escapeHTML(item.merchant)+' — saves when selected">'+
+       '<option value="" selected disabled>Choose credit type</option>'+
+       '<option value="income">Income</option><option value="refund">Refund</option>'+
+       '<option value="transfer">Transfer</option></select>':
+     '<label class="minimal-control-label"><span class="visually-hidden">Category</span><select name="category" aria-label="Category for '+
+      escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>')+
     '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
   };
  // A refreshed bank sync or resolved item must not leave a stale bulk choice.
- const activeKeys=new Set(categoryRows.map(item=>reviewCategoryKey(item.kind,item.id)));
+ const activeKeys=new Set(categoryRows.filter(item=>!item.creditKind).map(item=>reviewCategoryKey(item.kind,item.id)));
  for(const key of reviewCategorySelected)if(!activeKeys.has(key))reviewCategorySelected.delete(key);
  const reviewRecommendations=items=>sortedReviewRows(items,
   r=>r.lastDate||r.examples?.[0]?.date||r.nextDate,r=>r.merchant,r=>r.amount),
@@ -3232,12 +3242,12 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   pane('categories')+
   '<section class="panel category-review-panel" data-category-review>'+
-   '<div class="section-title"><h2>Categories to confirm</h2>'+
+   '<div class="section-title"><h2>Items to confirm</h2>'+
     '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
    (categoryCount?
     '<div class="review-bulk-toolbar" data-review-bulk-toolbar>'+
      '<button type="button" class="btn" data-review-select-all>'+
-      (shownCategories.length&&shownCategories.every(item=>reviewCategorySelected.has(
+      (selectableCategories.length&&selectableCategories.every(item=>reviewCategorySelected.has(
        reviewCategoryKey(item.kind,item.id)))?'Deselect shown':'Select all shown')+'</button>'+
      '<span data-review-bulk-count role="status" aria-live="polite">'+reviewCategorySelected.size+' selected</span>'+
      '<select data-review-bulk-category aria-label="Category for selected items"'+
@@ -4813,7 +4823,7 @@ document.addEventListener('click',async e=>{
    chosen=model.canonicalCategory(state(),categorySelect?.value);
   if(!chosen||chosen==='Uncategorized'||!reviewCategorySelected.size)return;
   const queue=model.categoryReviewQueue(state()),
-   items=[...queue.plans,...queue.transactions].filter(item=>
+   items=[...queue.plans,...queue.transactions].filter(item=>!item.creditKind&&
     reviewCategorySelected.has(reviewCategoryKey(item.kind,item.id)));
   if(!items.length){reviewCategorySelected.clear();render();return;}
   reviewBulkSaving=true;updateReviewBulkControls();
