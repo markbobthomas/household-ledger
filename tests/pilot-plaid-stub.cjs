@@ -1,5 +1,34 @@
 'use strict';
 // Injected ONLY by offline test subprocess. Prevents all external network calls.
+// This fault hook lives in the fictional test stub, not in the private server.
+if(process.env.PILOT_DISCONNECT_DISK_FAILURE_TEST){
+ const fs=require('node:fs/promises'),crypto=require('node:crypto'),
+  oldRename=fs.rename.bind(fs);
+ let acknowledged=false,injected=false;
+ fs.rename=async(from,to)=>{
+  if(!injected&&to===process.env.PILOT_STATE_PATH){
+   const mode=process.env.PILOT_DISCONNECT_DISK_FAILURE_TEST;
+   let stagedRemoval=false;
+   if(mode==='before'){
+    const source=JSON.parse(await fs.readFile(from,'utf8')),
+     key=crypto.createHash('sha256').update(process.env.PILOT_ENCRYPTION_KEY).digest(),
+     dec=crypto.createDecipheriv('aes-256-gcm',key,Buffer.from(source.iv,'base64'));
+    dec.setAuthTag(Buffer.from(source.tag,'base64'));
+    const next=JSON.parse(Buffer.concat([
+     dec.update(Buffer.from(source.data,'base64')),dec.final()
+    ]).toString());
+    stagedRemoval=Array.isArray(next.pendingRevocations)&&
+     next.pendingRevocations.length>0;
+   }
+   if(mode==='before'&&stagedRemoval||mode==='after'&&acknowledged){
+    injected=true;const error=new Error('Fictional injected disk rename failure');
+    error.code='EIO';throw error;
+   }
+  }
+  return oldRename(from,to);
+ };
+ global.__testRevocationAcknowledged=()=>{acknowledged=true};
+}
 let stage=0,secondStage=0,removals=0,authorizedAgain=false,invalidFieldOnce=false,countRecovered=false,cursorRecovered=false,clientFieldDiagnosed=false,unknownCountRecovered=false,unknownFailureCalls=0,headerAuthRejected=false,headerAuthRecovered=false;
 global.fetch=async function(url,options){
  const p=new URL(url).pathname,body=JSON.parse(options.body||'{}');
@@ -126,8 +155,11 @@ global.fetch=async function(url,options){
    }
    break;
   case '/item/remove':
+   if(process.env.PILOT_TEST_REVOKE_MARKER)
+    require('node:fs').appendFileSync(process.env.PILOT_TEST_REVOKE_MARKER,'attempt\n');
    if(process.env.PILOT_REMOVE_FAIL_FIRST==='1'&&removals++===0)
     return {ok:false,status:400,json:async()=>({error_code:'ITEM_REMOVE_TEMPORARY_FAILURE'})};
+   global.__testRevocationAcknowledged?.();
    data={removed:true};break;
   default:throw Error('Unexpected Plaid route in mock '+p);
  }

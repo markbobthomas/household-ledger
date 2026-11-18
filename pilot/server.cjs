@@ -64,6 +64,13 @@ function decrypted(text){
 async function load(){
  try{state=decrypted(await fs.readFile(file,'utf8'));normalizeState()}
  catch(e){if(e.code!=='ENOENT')throw e}
+ // A crash during an all-account disconnect must not import preferences
+ // from the former household into a new bank connection.
+ if(state.forecastResetRequired){
+  try{await fs.unlink(forecastFile)}catch(e){if(e.code!=='ENOENT')throw e}
+  const ready={...state};delete ready.forecastResetRequired;
+  await atomicEncryptedWrite(file,ready);state=ready;
+ }
  // Existing users start with their previous encrypted predictions in pilot.enc.
  // Once a forecast is saved separately, this tiny file is authoritative.
  try{
@@ -107,6 +114,37 @@ async function atomicEncryptedWrite(filename,value){
 }
 async function save(){
  await atomicEncryptedWrite(file,state);
+}
+// An Item is removed from the durable local bank snapshot before Plaid is
+// asked to revoke it. Encrypted pending entries survive any crash and make
+// external cleanup retryable without presenting a revoked Item as connected.
+function pendingRevocations(){return Array.isArray(state.pendingRevocations)?state.pendingRevocations:[]}
+async function finishPendingRevocation(itemId){
+ const pending=pendingRevocations().find(p=>p.id===itemId);
+ if(!pending)return;
+ try{await plaid('/item/remove',{access_token:pending.token})}
+ catch(error){
+  if(error.plaidCode!=='ITEM_NOT_FOUND')throw error;
+ }
+ const next={...state,pendingRevocations:pendingRevocations().filter(p=>p.id!==itemId)};
+ try{await atomicEncryptedWrite(file,next)}
+ catch(error){error.revocationAcknowledged=true;throw error}
+ state=next;
+}
+async function resumePendingRevocations(){
+ for(const pending of [...pendingRevocations()]){
+  try{await finishPendingRevocation(pending.id)}catch{
+   // Retain the encrypted retry token, not an apparently active Item.
+  }
+ }
+ return pendingRevocations().length;
+}
+function scheduleRevocationRecovery(){
+ if(!pendingRevocations().length)return;
+ const prior=householdEditQueue;
+ let release;
+ householdEditQueue=new Promise(done=>{release=done});
+ Promise.resolve(prior).then(()=>resumePendingRevocations()).catch(()=>{}).finally(release);
 }
 // Session records are separately encrypted and persisted on the existing
 // private disk. Never store passwords, bank data or raw bearer IDs there.
@@ -377,7 +415,8 @@ async function html(){return fs.readFile(path.join(__dirname,'index.html'),'utf8
 // The same authenticated payload still owns all immutable bank facts. The
 // prepared projection is a derived, versioned extra attached atomically to it.
 function ledgerPayload(){
- if(!state.items.length)return {connected:false,account:null,accounts:[],transactions:[],adjustments:{}};
+ if(!state.items.length)return {connected:false,account:null,accounts:[],transactions:[],
+  adjustments:{},remoteDisconnectPending:pendingRevocations().length};
  return {connected:true,account:state.accounts[0]||null,accounts:state.accounts,lastSync:state.lastSync,
   transactions:Object.values(state.transactions).filter(t=>t&&typeof t==='object')
    .sort((a,b)=>String(b.date).localeCompare(String(a.date))),
@@ -576,6 +615,7 @@ async function start(port=Number(env.PORT||8788)){
       needsReconnect:state.items.some(i=>i.reconnectRequired&&i.accountIds.includes(String(a.id))),
       syncIssue:state.items.find(i=>i.accountIds.includes(String(a.id)))?.syncIssue||null})),
     lastSync:state.lastSync,diagnostics:bankDiagnostics(),
+    remoteDisconnectPending:pendingRevocations().length,
     transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   }
   // Unknown browser navigation should be a 404, not a misleading bank-action error.
@@ -790,13 +830,18 @@ async function start(port=Number(env.PORT||8788)){
     return respond(200,{link_token:t.link_token,mode:'create'});
    }
    if(requestPath==='/api/exchange'){
+    // Never attach new accounts while a former household's independent
+    // forecast file might still be present after an interrupted reset.
+    if(state.forecastResetRequired)
+     return respond(503,{error:'Previous household disconnect is still being finalized. Restart Ledger and try again.'});
     if(!body.publicToken||!Array.isArray(body.accountIds)&&!body.accountId)throw Error('Choose at least one account');
     const ids=[...new Set((Array.isArray(body.accountIds)?body.accountIds:[body.accountId]).map(String))];
     if(!ids.length||ids.length>30)throw Error('Choose 1–30 accounts');
     const x=await plaid('/item/public_token/exchange',{public_token:body.publicToken});
     // Never revoke the original Item when the exchanged token refers to an
     // already-connected bank. This check must precede ANY cleanup.
-    if(state.items.some(i=>i.id===x.item_id||i.token===x.access_token))
+    if(state.items.some(i=>i.id===x.item_id||i.token===x.access_token)||
+       pendingRevocations().some(i=>i.id===x.item_id))
      return respond(409,{code:'ALREADY_CONNECTED',
       error:'Bank is already connected. Use Reconnect without losing saved data beside the original account.'});
     let retained=false,inserted=false;
@@ -833,20 +878,15 @@ async function start(port=Number(env.PORT||8788)){
      return respond(400,{error:'Choose exactly one connected account'});
     accountRemovalBusy=true;
     try{
-     // Finish in-flight encrypted preference saves before checking references.
      await forecastWrites;
      const id=body.accountId,account=state.accounts.find(a=>String(a.id)===id),
       owners=state.items.filter(i=>i.accountIds.includes(id));
      if(!account||owners.length!==1||String(account.itemId)!==String(owners[0].id))
       return respond(404,{error:'This account is no longer connected. Refresh the list.'});
-     // Refuse the operation even from a stale browser or direct API call.
-     // Removing a card that funds a schedule (or its linked checking account)
-     // would otherwise silently strand the user's previously edited forecasts.
      const linked=accountForecastLinks(state).find(x=>x.id===id);
      if(!linked||linked.protected)
       return respond(409,{error:'This account has saved forecast settings or edited transactions. Reassign those edits before removing it.'});
      const item=owners[0],revoke=item.accountIds.length===1;
-     if(revoke)await plaid('/item/remove',{access_token:item.token});
      const previous=state,transactions={},removedIds=new Set();
      for(const [txId,t] of Object.entries(state.transactions)){
       if(String(t.accountId||'')===id||
@@ -855,22 +895,49 @@ async function start(port=Number(env.PORT||8788)){
      }
      const overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
      for(const txId of removedIds)delete overrides[txId];
-     state={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
+     const next={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
       items:state.items.flatMap(i=>i.id!==item.id?[i]:
        revoke?[]:[{...i,accountIds:i.accountIds.filter(a=>a!==id)}]),
-      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides}};
-     try{await save()}catch(error){state=previous;throw error}
+      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides},
+      ...(revoke?{pendingRevocations:[...pendingRevocations(),
+       {id:item.id,token:item.token}]}:{})};
+     // Commit FIRST. Failed disk persistence never triggers Plaid revocation.
+     await atomicEncryptedWrite(file,next);state=next;
+     if(revoke)try{await finishPendingRevocation(item.id)}
+     catch(error){
+      // Restore a failed provider removal only if a read-only Item check
+      // confirms the token is still valid AND that rollback itself is durable.
+      // An acknowledged revoke must never be rolled back locally.
+      if(!error.revocationAcknowledged){
+       let active=false;
+       try{await plaid('/item/get',{access_token:item.token});active=true}catch{}
+       if(active){
+        try{await atomicEncryptedWrite(file,previous);state=previous}catch{}
+        if(state===previous)throw error;
+       }
+      }
+      return respond(202,{removed:true,remainingAccounts:state.accounts.length,
+       disconnectedInstitution:false,remoteDisconnectPending:true});
+     }
      return respond(200,{removed:true,remainingAccounts:state.accounts.length,
       disconnectedInstitution:revoke});
     }finally{accountRemovalBusy=false}
    }
    if(requestPath==='/api/disconnect'){
-    for(const item of state.items)await plaid('/item/remove',{access_token:item.token});
     await forecastWrites;
-    state=freshState();await save();
-    // An old household's saved schedules must not attach to a new bank link.
+    // Commit removal of ALL active Items and the encrypted retry journal
+    // before the first irreversible remote revoke. The reset marker guards
+    // against replaying a former household's separate forecast file.
+    const queue=[...pendingRevocations(),...state.items.map(item=>({
+     id:item.id,token:item.token}))];
+    const next={...freshState(),pendingRevocations:queue,forecastResetRequired:true};
+    await atomicEncryptedWrite(file,next);state=next;
     try{await fs.unlink(forecastFile)}catch(e){if(e.code!=='ENOENT')throw e}
-    return respond(200,{ok:true});
+    const resetDone={...state};delete resetDone.forecastResetRequired;
+    await atomicEncryptedWrite(file,resetDone);state=resetDone;
+    const remaining=await resumePendingRevocations();
+    return respond(remaining?202:200,{ok:true,
+     ...(remaining?{remoteDisconnectPending:remaining}:{})});
    }
    return respond(404,{error:'Unknown action'});
   }catch(e){
@@ -897,8 +964,13 @@ async function start(port=Number(env.PORT||8788)){
  return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',()=>{
   // Automatic server-side re-preparation, never a background Plaid sync.
   // A sleeping Render instance cannot execute hourly tasks until it wakes.
+  // Resume interrupted provider revocations without blocking health checks.
+  // Keep cleanup behind the same queue as bank sync and preference edits.
+  scheduleRevocationRecovery();
   schedulePrepared();
-  const hourly=setInterval(()=>{invalidatePrepared();schedulePrepared()},60*60*1000);
+  const hourly=setInterval(()=>{
+   invalidatePrepared();schedulePrepared();scheduleRevocationRecovery();
+  },60*60*1000);
   hourly.unref();
   server.once('close',()=>clearInterval(hourly));
   resolve(server);
