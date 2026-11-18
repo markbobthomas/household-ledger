@@ -107,7 +107,7 @@ module.exports=(async()=>{
    const downloadEvent=page.waitForEvent('download',{timeout:30000});
    await page.locator('#download-backup').click();
    const archiveDownload=await downloadEvent;
-   assert.match(archiveDownload.suggestedFilename(),/ledger-private-.*\\.ledgerbackup$/,
+   assert.match(archiveDownload.suggestedFilename(),/ledger-private-.*\.ledgerbackup$/,
     'Portable archive has a recognizable encrypted file extension');
    const file=await archiveDownload.path();
    const archive=await Backup.open(fs.readFileSync(file),phrase);
