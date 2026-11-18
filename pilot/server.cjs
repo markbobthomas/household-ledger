@@ -864,20 +864,15 @@ async function start(port=Number(env.PORT||8788)){
      return respond(400,{error:'Choose exactly one connected account'});
     accountRemovalBusy=true;
     try{
-     // Finish in-flight encrypted preference saves before checking references.
      await forecastWrites;
      const id=body.accountId,account=state.accounts.find(a=>String(a.id)===id),
       owners=state.items.filter(i=>i.accountIds.includes(id));
      if(!account||owners.length!==1||String(account.itemId)!==String(owners[0].id))
       return respond(404,{error:'This account is no longer connected. Refresh the list.'});
-     // Refuse the operation even from a stale browser or direct API call.
-     // Removing a card that funds a schedule (or its linked checking account)
-     // would otherwise silently strand the user's previously edited forecasts.
      const linked=accountForecastLinks(state).find(x=>x.id===id);
      if(!linked||linked.protected)
       return respond(409,{error:'This account has saved forecast settings or edited transactions. Reassign those edits before removing it.'});
      const item=owners[0],revoke=item.accountIds.length===1;
-     if(revoke)await plaid('/item/remove',{access_token:item.token});
      const previous=state,transactions={},removedIds=new Set();
      for(const [txId,t] of Object.entries(state.transactions)){
       if(String(t.accountId||'')===id||
@@ -886,22 +881,49 @@ async function start(port=Number(env.PORT||8788)){
      }
      const overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
      for(const txId of removedIds)delete overrides[txId];
-     state={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
+     const next={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
       items:state.items.flatMap(i=>i.id!==item.id?[i]:
        revoke?[]:[{...i,accountIds:i.accountIds.filter(a=>a!==id)}]),
-      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides}};
-     try{await save()}catch(error){state=previous;throw error}
+      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides},
+      ...(revoke?{pendingRevocations:[...pendingRevocations(),
+       {id:item.id,token:item.token}]}:{})};
+     // Commit FIRST. Failed disk persistence never triggers Plaid revocation.
+     await atomicEncryptedWrite(file,next);state=next;
+     if(revoke)try{await finishPendingRevocation(item.id)}
+     catch(error){
+      // Restore a failed provider removal only if a read-only Item check
+      // confirms the token is still valid AND that rollback itself is durable.
+      // An acknowledged revoke must never be rolled back locally.
+      if(!error.revocationAcknowledged){
+       let active=false;
+       try{await plaid('/item/get',{access_token:item.token});active=true}catch{}
+       if(active){
+        try{await atomicEncryptedWrite(file,previous);state=previous}catch{}
+        if(state===previous)throw error;
+       }
+      }
+      return respond(202,{removed:true,remainingAccounts:state.accounts.length,
+       disconnectedInstitution:false,remoteDisconnectPending:true});
+     }
      return respond(200,{removed:true,remainingAccounts:state.accounts.length,
       disconnectedInstitution:revoke});
     }finally{accountRemovalBusy=false}
    }
    if(requestPath==='/api/disconnect'){
-    for(const item of state.items)await plaid('/item/remove',{access_token:item.token});
     await forecastWrites;
-    state=freshState();await save();
-    // An old household's saved schedules must not attach to a new bank link.
+    // Commit removal of ALL active Items and the encrypted retry journal
+    // before the first irreversible remote revoke. The reset marker guards
+    // against replaying a former household's separate forecast file.
+    const queue=[...pendingRevocations(),...state.items.map(item=>({
+     id:item.id,token:item.token}))];
+    const next={...freshState(),pendingRevocations:queue,forecastResetRequired:true};
+    await atomicEncryptedWrite(file,next);state=next;
     try{await fs.unlink(forecastFile)}catch(e){if(e.code!=='ENOENT')throw e}
-    return respond(200,{ok:true});
+    const resetDone={...state};delete resetDone.forecastResetRequired;
+    await atomicEncryptedWrite(file,resetDone);state=resetDone;
+    const remaining=await resumePendingRevocations();
+    return respond(remaining?202:200,{ok:true,
+     ...(remaining?{remoteDisconnectPending:remaining}:{})});
    }
    return respond(404,{error:'Unknown action'});
   }catch(e){
