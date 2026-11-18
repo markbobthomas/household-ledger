@@ -13,7 +13,7 @@ const s=M.migrate({accounts:[{id:'checking',name:'Fictional Checking',type:'chec
   row('low','Shopping',{categoryConfidence:.4}),
   row('high','Groceries',{categoryConfidence:.99}),
   row('suggested','Dining',{categoryConfidence:.65}),
-  row('income','Other',{type:'income',categoryConfidence:.2}),
+  row('income','Other',{type:'income',merchant:'Fictional Payroll',categoryConfidence:.2}),
   row('transfer','Other',{type:'transfer',categoryConfidence:.2}),
   row('pending','Other',{pending:true})
  ],
