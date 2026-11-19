@@ -1,51 +1,107 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ledger · AI Review</title>
+<title>Ledger · Financial outlook</title>
 <style>
-:root{font-family:system-ui,-apple-system,sans-serif;color:#21312c;background:#f7f9f6}
-body{margin:0}main{max-width:760px;margin:auto;padding:24px 16px 64px}
-a{color:#166f5b}header{display:flex;justify-content:space-between;align-items:center}
-section{background:white;border:1px solid #dce4df;border-radius:12px;padding:20px;margin:16px 0}
-button{background:#176b57;color:white;border:0;border-radius:8px;padding:12px 18px;font-weight:600;cursor:pointer}
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;color:#1d2927;background:#f8faf9;font-size:15px}
+*{box-sizing:border-box}body{margin:0}main{max-width:900px;margin:0 auto;padding:20px 16px 72px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
+a{color:#1b655b}h1{font-size:1.75rem;letter-spacing:-.025em;margin:0 0 8px}h2{font-size:1.18rem;margin:0 0 12px}
+p{line-height:1.55;margin:8px 0 12px}.muted,small{color:#5e706c}
+section{padding:20px;border:1px solid #e0e6e2;border-radius:12px;background:white;margin:14px 0}
+button{font:inherit;background:#205e53;color:white;border:0;padding:11px 18px;border-radius:8px;cursor:pointer;font-weight:650}
 button:disabled{opacity:.5;cursor:default}label{display:flex;gap:10px;align-items:flex-start;line-height:1.5}
-article{padding:14px 0;border-top:1px solid #e3e8e5}article:first-child{border:0}
-small,.muted{color:#5e7168}h1{font-size:26px}h2{font-size:19px}p{line-height:1.5}
-</style></head><body><main>
+input[type=checkbox]{margin-top:5px;accent-color:#205e53;width:17px;height:17px;flex:none}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{padding:13px 12px;background:#f5f7f6;border-radius:8px;min-width:0}
+.stat strong{display:block;font-size:1.38rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;margin:5px 0}
+.stat span{font-size:.82rem;color:#576a65}.stat small{display:block;font-size:.8rem}
+article{border-top:1px solid #e5e9e7;padding:16px 0}
+article:first-child{border:0;padding-top:4px}
+article h3{font-size:1.06rem;margin:0 0 6px}
+.kind{font-size:.75rem;font-weight:700;color:#47665c;text-transform:uppercase;letter-spacing:.035em}
+article p{margin:7px 0}.recommend{font-weight:500}
+details{margin-top:9px;color:#51645f}summary{cursor:pointer;font-size:.87rem}
+details ul{padding-left:18px;font-size:.83rem;line-height:1.55}
+.limits{font-size:.9rem;line-height:1.5;padding-left:20px}
+#status{min-height:1.3em}#results[hidden]{display:none}
+@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.stats .stat:last-child{grid-column:1/-1}
+section{padding:15px}main{padding:16px 12px 48px}}
+</style></head>
+<body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
-<h1>AI transaction review</h1>
-<p>Ask AI to review recent transactions for recurring patterns, timing and amount changes, possible transfers, and inconsistencies. Results are suggestions only; your calendar, balances, and confirmed predictions are not changed.</p>
-<section><h2>Analyze recent activity</h2>
-<p class="muted">Only dates, amounts, sanitized merchant descriptions and temporary account aliases are sent to OpenAI. No full account numbers, Plaid credentials or authentication information are included. Up to 240 recent transactions are examined. Existing predictions, budget rules, and all historical records are not included, so suggestions may already be addressed. Analysis is initiated only when you press the button.</p>
-<label><input id="consent" type="checkbox">I agree to send these limited transaction details to OpenAI for this analysis.</label>
-<p><button id="run" disabled>Analyze transactions</button></p><p id="status" role="status" aria-live="polite"></p></section>
-<section><h2>Findings</h2><div id="results"><p class="muted">No analysis has been run.</p></div></section>
-</main><script>
+<h1>AI financial outlook</h1>
+<p class="muted">An open-ended review of your future balances, ability to cover scheduled payments, historical patterns and financial risks. The AI chooses what warrants attention; Ledger's own calculations remain authoritative.</p>
+<section>
+<h2>Analyze your financial picture</h2>
+<p class="muted">Ledger scans its available bank history and canonical three-year forecast. For the AI review it sends temporary account aliases, current/available balances, dated forecast lows, expected payments and deposits, credit-card and payment reconciliation summaries, historical monthly/category/merchant totals, selected forecast events and up to 140 detailed recent transactions. Detailed records are sampled, not all sent. Sanitized merchant names can still be recognizable. No full account numbers, bank tokens, passwords or API credentials are sent. OpenAI receives the analysis data only after your consent below.</p>
+<label><input id="consent" type="checkbox"><span>I authorize this financial outlook analysis and the broader financial information described above to be sent to OpenAI for this run. The analysis makes no changes to accounts, transactions or forecasts.</span></label>
+<p><button id="run" disabled>Analyze financial outlook</button></p>
+<p id="status" class="muted" role="status" aria-live="polite"></p>
+</section>
+<div id="results" hidden>
+<section><h2>Financial outlook</h2><p id="asof" class="muted"></p><div id="stats" class="stats"></div><p id="narrative"></p><details><summary>Evidence for the overview</summary><ul id="overview-evidence"></ul></details></section>
+<section><h2>What deserves your attention</h2><div id="findings"></div></section>
+<section><h2>Scope and uncertainties</h2><p id="coverage" class="muted"></p><ul id="limitations" class="limits"></ul></section>
+</div>
+</main>
+<script>
 (function(){
- const consent=document.getElementById('consent'),run=document.getElementById('run'),
- status=document.getElementById('status'),results=document.getElementById('results');
+ const $=id=>document.getElementById(id),consent=$('consent'),run=$('run');
+ const money=n=>typeof n==='number'&&Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'Unavailable';
+ const line=(container,text,tag='li')=>{const e=document.createElement(tag);e.textContent=String(text||'');container.append(e);return e;};
+ const detailEvidence=(container,evidence)=>{
+  const details=document.createElement('details'),sum=document.createElement('summary'),ul=document.createElement('ul');
+  sum.textContent='View supporting Ledger records';
+  (evidence||[]).forEach(f=>line(ul,f.text));
+  details.append(sum,ul);container.append(details);
+ };
  consent.addEventListener('change',()=>{run.disabled=!consent.checked});
  run.addEventListener('click',async()=>{
   if(!consent.checked)return;
-  run.disabled=true;status.textContent='Analyzing…';results.replaceChildren();
+  run.disabled=true;$('results').hidden=true;$('status').textContent='Reviewing available balances, forecasts and history…';
   try{
-   const response=await fetch('/api/ai/analyze',{method:'POST',credentials:'same-origin',cache:'no-store',
-    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},body:JSON.stringify({consent:true})});
+   const response=await fetch('/api/ai/report',{method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
+    body:JSON.stringify({consent:true,scope:'financial-outlook-v1'})});
    const data=await response.json();
    if(!response.ok)throw Error((data.error||'Analysis unavailable')+(data.code?' (Code: '+data.code+')':''));
-   const proposals=data.proposals||[];
-   status.textContent=proposals.length+' suggestion(s) found. Nothing was changed.';
-   if(!proposals.length){results.textContent='No evidence-backed suggestions were returned.';return}
-   for(const item of proposals){
-    const card=document.createElement('article'),heading=document.createElement('strong'),desc=document.createElement('p'),
-    evidence=document.createElement('small');
-    heading.textContent=item.kind.replace(/-/g,' ')+' · '+Math.round(item.confidence*100)+'% model confidence';
-    desc.textContent=item.explanation;
-    evidence.textContent='Date: '+(item.predictedDate||'Unspecified')+
-     ' · Amount: '+(item.predictedAmount==null?'Unspecified':item.predictedAmount.toFixed(2))+
-     ' · Evidence: '+item.evidenceTransactionIds.length+' transaction(s) · Needs confirmation';
-    card.append(heading,desc,evidence);results.append(card);
+   $('asof').textContent='Based on Ledger records as of '+data.asOf;
+   $('stats').replaceChildren();
+   const main=data.primary;
+   const fields=main?[
+    ['Checking balance at forecast start',main.opening,'Source balance'],
+    ['Lowest projected next 30 days',main.low30?.balance,main.low30?.date],
+    ['Lowest projected next 90 days',main.low90?.balance,main.low90?.date]
+   ]:[['Primary checking information',null,'No verified checking-account forecast available']];
+   for(const [name,value,note] of fields){
+    const card=document.createElement('div');card.className='stat';
+    line(card,name,'span');line(card,money(value),'strong');line(card,note||'','small');$('stats').append(card);
    }
-  }catch(e){status.textContent=e.message||'Analysis unavailable'}
+   $('narrative').textContent=data.summary;
+   $('overview-evidence').replaceChildren();
+   for(const f of data.summaryEvidence||[])line($('overview-evidence'),f.text);
+   $('findings').replaceChildren();
+   if(!data.findings?.length)line($('findings'),'The analysis did not return any additional evidence-supported findings.','p');
+   for(const f of data.findings||[]){
+    const article=document.createElement('article');
+    line(article,f.kind+' · '+f.confidence+' confidence','div').className='kind';
+    line(article,f.title,'h3');line(article,f.assessment,'p');
+    if(f.recommendation)line(article,'Action: '+f.recommendation,'p').className='recommend';
+    detailEvidence(article,f.evidence);
+    $('findings').append(article);
+   }
+   const c=data.coverage||{};
+   $('coverage').textContent='Analyzed '+c.historicalTransactionsScanned+' historical records ('+
+    c.historicalMonthsScanned+' calendar months), all '+c.futureEventsScanned+
+    ' canonical forecast event legs, and '+c.accountCount+' account projections across '+
+    c.forecastHorizonDays+' days. '+c.detailedHistoricalTransactions+' historical and '+
+    c.futureEventsDetailed+' forecast event legs were provided as detailed evidence. Last bank sync: '+
+    (c.lastSync||'unknown')+'.';
+   $('limitations').replaceChildren();
+   for(const item of data.limitations||[])line($('limitations'),item);
+   $('status').textContent='Analysis complete. Nothing was changed.';
+   $('results').hidden=false;
+  }catch(error){$('status').textContent=error.message||'Analysis unavailable'}
   finally{run.disabled=!consent.checked}
  });
 })();
