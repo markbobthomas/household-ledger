@@ -1,6 +1,15 @@
 'use strict';
 // Fictional, privacy-safe demonstration of the read-only AI report boundary.
 const assert=require('node:assert/strict');
+const fs=require('node:fs'),vm=require('node:vm');
+const reportHtml=fs.readFileSync(require('node:path').join(__dirname,'../pilot/ai-review.html'),'utf8');
+const inlineScript=reportHtml.match(/<script>([\s\S]*?)<\/script>/);
+assert(inlineScript,'AI report page includes client logic');
+new vm.Script(inlineScript[1],{filename:'pilot/ai-review.html'});
+assert(reportHtml.includes('financial-outlook-v1'),'full financial context requires separate consent');
+assert(reportHtml.includes('/api/ai/report'),'the page uses the new report endpoint');
+assert(!reportHtml.includes('innerHTML'),'untrusted model prose must not be interpreted as HTML');
+
 const {financialContext,analyzeFinancialOutlook,verifyClaim}=require('../pilot/ai-financial-report.cjs');
 const asOf='2026-11-19',date=n=>{const d=new Date(asOf+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const accountId='fictional-sensitive-account-id-12345678';
