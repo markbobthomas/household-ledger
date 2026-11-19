@@ -662,7 +662,8 @@ async function start(port=Number(env.PORT||8788)){
    }catch(error){
     const code=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
      'provider_unavailable','provider_rejected','analysis_timeout','provider_connection_failed',
-     'invalid_provider_response','invalid_ai_findings'].includes(error?.safeCode)?error.safeCode:'analysis_failed';
+     'invalid_provider_response','invalid_ai_findings','invalid_ai_json',
+     'invalid_ai_schema','invalid_ai_evidence','invalid_ai_account'].includes(error?.safeCode)?error.safeCode:'analysis_failed';
     return respond(503,{error:'AI analysis could not complete. No financial data was changed.',code});
    }
   }

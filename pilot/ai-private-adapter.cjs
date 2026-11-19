@@ -3,6 +3,20 @@
 const {validateAdvisories}=require('./ai-advisory.cjs');
 const ID=/^[a-zA-Z0-9_.-]{1,80}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
+const RESPONSE_FORMAT={type:'json_schema',json_schema:{name:'ledger_advisories',strict:true,
+ schema:{type:'object',additionalProperties:false,required:['proposals'],properties:{
+  proposals:{type:'array',items:{type:'object',additionalProperties:false,
+   required:['kind','accountId','predictedDate','predictedAmount','confidence','evidenceTransactionIds','explanation'],
+   properties:{
+    kind:{type:'string',enum:['recurring','missing-payment','changed-amount','changed-date','possible-transfer','category']},
+    accountId:{type:'string'},
+    predictedDate:{type:['string','null']},
+    predictedAmount:{type:['number','null']},
+    confidence:{type:'number'},
+    evidenceTransactionIds:{type:'array',items:{type:'string'}},
+    explanation:{type:'string'}
+   }}}
+ }}}};
 function cleanDescription(value){
  let s=String(value??'').slice(0,180);
  // Remove email addresses, URL query strings, long identifiers and account-number-like digit groups.
@@ -42,7 +56,7 @@ async function analyze({transactions,accounts,consent,apiKey,model='gpt-4.1-mini
   method:'POST',signal:AbortSignal.timeout(60000),
   headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
   body:JSON.stringify({model,store:false,temperature:0,
-   response_format:{type:'json_object'},
+   response_format:RESPONSE_FORMAT,
    messages:[
     {role:'system',content:"Audit household transactions comprehensively for recurring payments and income, skipped or late cycles, changes in amounts or dates, possible internal transfers, category inconsistencies, and unusual duplicate-looking posted activity. Return JSON object with proposals array. Allowed kinds: recurring, missing-payment, changed-amount, changed-date, possible-transfer, category. Each proposal needs accountId, predictedDate (ISO date or null), predictedAmount (number or null), confidence (0 to 1), evidenceTransactionIds (array), explanation. Cite multiple dated examples for recurring claims and compare intervals and amounts. Similar merchants do not prove duplicate charges. Do not infer missing payments without repeated cycles. Do not suggest a rule solely because a payment repeated: the application may already have that rule, and existing forecast settings were not provided. Favor concrete anomalies over generic recurring observations. Never invent evidence or claim complete history was checked. Transfers are not proof of mortgage. Do not infer ownership or initiate transactions. Return at most 12 distinct high-value findings, or empty array if none supported. Every finding must use an accountId from the supplied accounts array and evidenceTransactionIds drawn verbatim from supplied transaction ids. All fields are mandatory, including explicit null for unknown predictedDate or predictedAmount. confidence must be a number between 0 and 1, not a string. Never create or modify ids."},
     {role:'user',content:JSON.stringify({accounts:scope.accountAliases,transactions:scope.rows})}
@@ -60,19 +74,26 @@ async function analyze({transactions,accounts,consent,apiKey,model='gpt-4.1-mini
  try{json=await response.json()}catch{const e=new Error('Invalid provider JSON');e.safeCode='invalid_provider_response';throw e}
  const message=json?.choices?.[0]?.message?.content;
  if(typeof message!=='string'||message.length>60000){const e=new Error('Invalid AI response');e.safeCode='invalid_provider_response';throw e}
- let validated;
- try{
-  const parsed=JSON.parse(message);
-  if(!Array.isArray(parsed?.proposals)||parsed.proposals.length>100)throw Error('Invalid advisory list');
-  // A model may return a mixture of valid and malformed suggestions.
-  // Retain only independently validated findings; never invent or repair evidence.
-  validated=[];
-  for(const item of parsed.proposals){
-   try{validated.push(...validateAdvisories([item],scope.rows,scope.accountAliases))}
-   catch(_invalid){/* Discard this untrusted proposal only. */}
+ let parsed;
+ try{parsed=JSON.parse(message)}catch{const e=new Error('AI JSON could not be parsed');e.safeCode='invalid_ai_json';throw e}
+ if(!Array.isArray(parsed?.proposals)||parsed.proposals.length>100){
+  const e=new Error('AI output shape rejected');e.safeCode='invalid_ai_schema';throw e;
+ }
+ const validated=[];
+ const failures=new Set();
+ for(const item of parsed.proposals){
+  try{validated.push(...validateAdvisories([item],scope.rows,scope.accountAliases))}
+  catch(error){
+   const reason=String(error?.message||'');
+   failures.add(/Evidence/.test(reason)?'evidence':/unknown account|Missing account/.test(reason)?'account':'fields');
   }
-  if(parsed.proposals.length&&validated.length===0)throw Error('No valid findings');
- }catch{const e=new Error('Invalid AI proposals');e.safeCode='invalid_ai_findings';throw e}
+ }
+ if(parsed.proposals.length&&validated.length===0){
+  const e=new Error('No verified AI findings');
+  e.safeCode=failures.has('evidence')?'invalid_ai_evidence':
+   failures.has('account')?'invalid_ai_account':'invalid_ai_schema';
+  throw e;
+ }
  return validated.map(p=>({...p,
   accountId:scope.sourceAccountIds[scope.accountAliases.indexOf(p.accountId)],
   evidenceTransactionIds:p.evidenceTransactionIds.map(id=>scope.sourceIds[Number(id.slice(3))-1])}));
