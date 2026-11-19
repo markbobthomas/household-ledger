@@ -37,8 +37,9 @@ async function analyze({transactions,accounts,consent,apiKey,model='gpt-4.1-mini
  if(!apiKey||typeof apiKey!=='string')throw Error('Server API key not configured');
  if(!ID.test(model))throw Error('Invalid model');
  const scope=safeSnapshot(transactions,accounts);
- const response=await fetchImpl('https://api.openai.com/v1/chat/completions',{
-  method:'POST',signal:AbortSignal.timeout(30000),
+ let response;
+ try{response=await fetchImpl('https://api.openai.com/v1/chat/completions',{
+  method:'POST',signal:AbortSignal.timeout(60000),
   headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
   body:JSON.stringify({model,store:false,temperature:0,
    response_format:{type:'json_object'},
@@ -46,7 +47,7 @@ async function analyze({transactions,accounts,consent,apiKey,model='gpt-4.1-mini
     {role:'system',content:"Audit household transactions comprehensively for recurring payments and income, skipped or late cycles, changes in amounts or dates, possible internal transfers, category inconsistencies, and unusual duplicate-looking posted activity. Return JSON object with proposals array. Allowed kinds: recurring, missing-payment, changed-amount, changed-date, possible-transfer, category. Each proposal needs accountId, predictedDate (ISO date or null), predictedAmount (number or null), confidence (0 to 1), evidenceTransactionIds (array), explanation. Cite multiple dated examples for recurring claims and compare intervals and amounts. Similar merchants do not prove duplicate charges. Do not infer missing payments without repeated cycles. Do not suggest a rule solely because a payment repeated: the application may already have that rule, and existing forecast settings were not provided. Favor concrete anomalies over generic recurring observations. Never invent evidence or claim complete history was checked. Transfers are not proof of mortgage. Do not infer ownership or initiate transactions. Return at most 12 distinct high-value findings, or empty array if none supported."},
     {role:'user',content:JSON.stringify({accounts:scope.accountAliases,transactions:scope.rows})}
    ]})
- });
+ });}catch(error){const e=new Error('AI request failed');e.safeCode=error?.name==='TimeoutError'||error?.name==='AbortError'?'analysis_timeout':'provider_connection_failed';throw e}
  if(!response.ok){
   // Only expose a bounded status category. Never log provider bodies, secrets or input rows.
   const status=Number(response.status);
@@ -55,11 +56,13 @@ async function analyze({transactions,accounts,consent,apiKey,model='gpt-4.1-mini
    status>=500?'provider_unavailable':'provider_rejected';
   const error=new Error('AI provider request failed');error.safeCode=code;throw error;
  }
- const json=await response.json();
+ let json;
+ try{json=await response.json()}catch{const e=new Error('Invalid provider JSON');e.safeCode='invalid_provider_response';throw e}
  const message=json?.choices?.[0]?.message?.content;
- if(typeof message!=='string'||message.length>60000)throw Error('Invalid AI response');
- const parsed=JSON.parse(message);
- const validated=validateAdvisories(parsed.proposals,scope.rows,scope.accountAliases);
+ if(typeof message!=='string'||message.length>60000){const e=new Error('Invalid AI response');e.safeCode='invalid_provider_response';throw e}
+ let validated;
+ try{const parsed=JSON.parse(message);validated=validateAdvisories(parsed.proposals,scope.rows,scope.accountAliases)}
+ catch{const e=new Error('Invalid AI proposals');e.safeCode='invalid_ai_findings';throw e}
  return validated.map(p=>({...p,
   accountId:scope.sourceAccountIds[scope.accountAliases.indexOf(p.accountId)],
   evidenceTransactionIds:p.evidenceTransactionIds.map(id=>scope.sourceIds[Number(id.slice(3))-1])}));

@@ -642,7 +642,7 @@ async function start(port=Number(env.PORT||8788)){
     t&&typeof t.id==='string'&&allowed.has(t.accountId)&&
     typeof t.amount==='number'&&Number.isFinite(t.amount)&&
     /^\d{4}-\d{2}-\d{2}$/.test(String(t.date||'')))
-    .sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,360)
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,240)
     .map(t=>({id:t.id,accountId:t.accountId,date:t.date,amount:t.amount,
       description:t.merchant||t.name||''}));
    if(!transactions.length)return respond(200,{proposals:[]});
@@ -661,7 +661,8 @@ async function start(port=Number(env.PORT||8788)){
     return respond(200,{proposals:visible});
    }catch(error){
     const code=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
-     'provider_unavailable','provider_rejected'].includes(error?.safeCode)?error.safeCode:'analysis_failed';
+     'provider_unavailable','provider_rejected','analysis_timeout','provider_connection_failed',
+     'invalid_provider_response','invalid_ai_findings'].includes(error?.safeCode)?error.safeCode:'analysis_failed';
     return respond(503,{error:'AI analysis could not complete. No financial data was changed.',code});
    }
   }
