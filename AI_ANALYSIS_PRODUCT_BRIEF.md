@@ -1,6 +1,6 @@
 # Ledger AI Analysis — adaptive financial analyst product brief
 
-**Decision date:** 2026-11-19. **Status:** product direction, not implemented. The 20-question questionnaire, if completed, expresses preferences rather than a rigid ruleset.
+**Decision date:** 2026-11-19. **Status:** first evidence-grounded AI outlook implementation merged in [PR #606](https://github.com/markbobthomas/household-ledger/pull/606). Full adaptive investigation over every raw source record, historical model backtesting, and private live acceptance remain future work. The 20-question questionnaire, if completed, expresses preferences rather than a rigid ruleset.
 
 ## Mandate
 
