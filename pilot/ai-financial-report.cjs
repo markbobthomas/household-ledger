@@ -10,7 +10,7 @@ const dollars=n=>'$'+amount(n).toFixed(2);
 const day=(date,n)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const safe=s=>cleanDescription(String(s||'')).slice(0,85);
 const normalizeType=t=>String(t||'').toLowerCase();
-function financialContext(prepared,{lastSync=null}={}){
+function financialContext(prepared,{lastSync=null,adjustments={}}={}){
  const projection=prepared?.bundle?.projection,ledger=prepared?.bundle?.ledger;
  const history=prepared?.bundle?.rows;
  if(!projection||!Array.isArray(projection.accounts)||!Array.isArray(projection.series)||
@@ -117,6 +117,23 @@ function financialContext(prepared,{lastSync=null}={}){
    '; not a confirmed missing bill');
  for(const message of (prepared.bundle.payments?.warnings||[]).slice(0,30))
   add('payment-warning','Forecast payment warning: '+safe(message));
+ const preferences=adjustments&&typeof adjustments==='object'&&!Array.isArray(adjustments)?adjustments:{},
+  decisions=preferences.predictions&&typeof preferences.predictions==='object'?preferences.predictions:{},
+  budgetTargets=decisions.categoryMonthlyBudgets||{};
+ for(const [category,target] of Object.entries(budgetTargets).slice(0,45))
+  if(number(target)&&target>=0)add('budget','Saved monthly budget goal for '+safe(category)+': '+dollars(target)+
+   ' (reporting target; not a scheduled checking withdrawal)');
+ const threshold=number(decisions.lowAlertThreshold)?decisions.lowAlertThreshold:
+  number(decisions.warnBelow)?decisions.warnBelow:null;
+ if(threshold!=null)add('owner-preference','Owner checking warning threshold '+dollars(threshold)+
+  ' (warning target, not a projected payment)');
+ add('owner-decisions','Saved owner instructions: '+(Array.isArray(decisions.futureRecurringRules)?
+  decisions.futureRecurringRules.length:0)+' explicit recurring rules, '+
+  (Array.isArray(decisions.futureTransactionAdds)?decisions.futureTransactionAdds.length:0)+
+  ' one-time future payments, '+
+  Object.keys(decisions.futureRecurrenceExclusions||{}).length+' excluded automatic recurrence identities, '+
+  Object.keys(decisions.historyPatternDecisions||{}).length+' reviewed historical patterns. '+
+  'Existing scheduled occurrences already appear in canonical future ledger facts.');
  const settled=(prepared.bundle.paymentReconciliations||[]),
   paid=settled.filter(x=>x.status==='posted').length,
   pending=settled.filter(x=>x.status==='pending').length;
