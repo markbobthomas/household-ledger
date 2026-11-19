@@ -90,7 +90,8 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
   const svg=svgEl('svg',{viewBox:'0 0 680 228',role:'img','aria-label':chart.title||'Ledger chart'});
   const w=680,h=228,L=61,R=18,T=19,B=42;
   const values=points.map(p=>p.value),lowest=Math.min(...values),highest=Math.max(...values);
-  const pad=Math.max(1,(highest-lowest)*.12),min=Math.min(0,lowest)-pad,max=highest+pad;
+  const pad=Math.max(1,(highest-lowest)*.12),min=chart.type==='line'?lowest-pad:Math.min(0,lowest)-pad,
+   max=chart.type==='line'?highest+pad:Math.max(0,highest)+pad;
   const y=v=>T+(max-v)/(max-min)*(h-B-T);
   const x=i=>L+i*(w-L-R)/(points.length-1);
   const selected=el('div','selected','Tap a point to see the calculated value');
