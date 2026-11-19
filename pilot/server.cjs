@@ -559,6 +559,14 @@ async function start(port=Number(env.PORT||8788)){
    try{upgradeCookie=[auth.cookie(await auth.issue()),auth.clearSignedOut(),auth.upgradedCookie()]}
    catch{ /* A transient session-disk failure must not take down the bank UI. */ }
   }
+  if(req.method==='GET'&&requestPath==='/ai-review'){
+   let page;try{page=await fs.readFile(path.join(__dirname,'ai-review.html'),'utf8')}
+   catch{return respond(503,{error:'AI review unavailable'})}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
+    'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
+    'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"});
+   return res.end(page);
+  }
   if(req.method==='GET'&&requestPath==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
   const staticPath=requestPath.slice(1);
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js|manifest[.]webmanifest|ledger-icon[.]png)$/;
@@ -622,6 +630,29 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  if(requestPath==='/api/ai/analyze'){
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).length!==1||body.consent!==true)
+    return respond(400,{error:'Explicit consent required for each AI analysis'});
+   if(!env.OPENAI_API_KEY)return respond(503,{error:'AI analysis is not configured on the private server'});
+   if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+   const accounts=state.accounts.filter(a=>a&&typeof a.id==='string').map(a=>({id:a.id}));
+   const allowed=new Set(accounts.map(a=>a.id));
+   const transactions=Object.values(state.transactions).filter(t=>
+    t&&typeof t.id==='string'&&allowed.has(t.accountId)&&
+    typeof t.amount==='number'&&Number.isFinite(t.amount)&&
+    /^\\d{4}-\\d{2}-\\d{2}$/.test(String(t.date||'')))
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,120)
+    .map(t=>({id:t.id,accountId:t.accountId,date:t.date,amount:t.amount,
+      description:t.merchant||t.name||''}));
+   if(!transactions.length)return respond(200,{proposals:[]});
+   try{
+    const proposals=await require('./ai-private-adapter.cjs').analyze({
+     transactions,accounts,consent:true,apiKey:env.OPENAI_API_KEY,
+     model:env.OPENAI_MODEL||'gpt-4.1-mini'});
+    return respond(200,{proposals});
+   }catch(_error){return respond(503,{error:'AI analysis could not complete. No financial data was changed.'})}
+  }
   // Bank sync and account connection changes share the same state and encrypted
   // bank file as category/forecast edits. Serialize the entire mutation,
   // including Plaid staging, not merely the final rename: a sync must not
