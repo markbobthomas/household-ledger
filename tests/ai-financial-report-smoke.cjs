@@ -6,8 +6,9 @@ const reportHtml=fs.readFileSync(require('node:path').join(__dirname,'../pilot/a
 const inlineScript=reportHtml.match(/<script>([\s\S]*?)<\/script>/);
 assert(inlineScript,'AI report page includes client logic');
 new vm.Script(inlineScript[1],{filename:'pilot/ai-review.html'});
-assert(reportHtml.includes('financial-chat-v1'),'financial conversation requires separate consent');
-assert(reportHtml.includes('/api/ai/chat'),'the page uses the financial chat endpoint');
+assert(reportHtml.includes('financial-analysis-v3'),'autonomous analysis requires separate consent');
+assert(reportHtml.includes('/api/ai/analyze'),'the page uses a one-click analysis endpoint');
+assert(!reportHtml.includes('<textarea'),'the analysis interface must not be a chatbot');
 assert(!reportHtml.includes('innerHTML'),'untrusted model prose must not be interpreted as HTML');
 
 const {financialContext,analyzeFinancialOutlook,verifyClaim}=require('../pilot/ai-financial-report.cjs');
