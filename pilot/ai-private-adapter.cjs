@@ -10,7 +10,8 @@ function cleanDescription(value){
   .replace(/https?:\/\/\S+/gi,'[redacted-url]')
   .replace(/\b(?:\d[ -]?){4,}\d\b/g,'[redacted-number]')
   .replace(/\b(?:password|passcode|token|secret|authorization|api[_ -]?key|client[_ -]?id)\s*[:=]\s*\S+/gi,'[redacted-credential]')
-  .replace(/\b[a-z0-9_-]{20,}\b/gi,'[redacted-identifier]');
+  .replace(/\b[a-z0-9_-]{20,}\b/gi,'[redacted-identifier]')
+  .replace(/\d+/g,'[number]');
  return s.trim();
 }
 function safeSnapshot(transactions,accounts){
