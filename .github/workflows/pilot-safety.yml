@@ -40,5 +40,10 @@ jobs:
           node --check tests/planner-legacy-invariants-smoke.cjs
           node --check tests/financial-interpretation-smoke.cjs
           node --check tests/transactional-storage-smoke.cjs
+      - name: Verify private AI analysis redaction and advisory boundary
+        run: |
+          node --check pilot/ai-private-adapter.cjs
+          node tests/ai-advisory-smoke.cjs
+          node tests/ai-private-adapter-smoke.cjs
       - name: Verify frozen output, banking safety, parity and reconciliation once
         run: node tests/ci-suite.cjs core
