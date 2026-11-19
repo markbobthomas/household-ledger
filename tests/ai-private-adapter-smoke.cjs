@@ -29,5 +29,18 @@ assert(!/\\d/.test(cleanDescription('Acct 123456789012 Store 24')));
  assert.equal(result[0].accountId,'private-account-123');
  assert.deepEqual(result[0].evidenceTransactionIds,['real-id-1']);
  assert.equal(result[0].status,'needs-confirmation');
+ const valid={kind:'category',accountId:'account-1',predictedDate:null,
+  predictedAmount:null,confidence:.7,evidenceTransactionIds:['tx-1'],explanation:'Review category'};
+ const mixed=await analyze({transactions,accounts,consent:true,apiKey:'test',
+  fetchImpl:async()=>({ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({proposals:[
+   {...valid,evidenceTransactionIds:['tx-999']},valid]})}}]})})});
+ assert.equal(mixed.length,1);
+ assert.equal(mixed[0].kind,'category');
+ await assert.rejects(()=>analyze({transactions,accounts,consent:true,apiKey:'test',
+  fetchImpl:async()=>({ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({proposals:[
+   {...valid,evidenceTransactionIds:['tx-999']}]})}}]})})}),e=>e.safeCode==='invalid_ai_findings');
+ const empty=await analyze({transactions,accounts,consent:true,apiKey:'test',
+  fetchImpl:async()=>({ok:true,json:async()=>({choices:[{message:{content:'{"proposals":[]}'}}]})})});
+ assert.deepEqual(empty,[]);
  console.log('Private AI adapter: passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
