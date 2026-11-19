@@ -47,7 +47,14 @@ async function analyze({transactions,accounts,consent,apiKey,model='gpt-4.1-mini
     {role:'user',content:JSON.stringify({accounts:scope.accountAliases,transactions:scope.rows})}
    ]})
  });
- if(!response.ok)throw Error('AI analysis unavailable');
+ if(!response.ok){
+  // Only expose a bounded status category. Never log provider bodies, secrets or input rows.
+  const status=Number(response.status);
+  const code=status===401?'invalid_api_key':status===403?'permission_denied':
+   status===429?'rate_limit_or_quota':status===400?'invalid_request':
+   status>=500?'provider_unavailable':'provider_rejected';
+  const error=new Error('AI provider request failed');error.safeCode=code;throw error;
+ }
  const json=await response.json();
  const message=json?.choices?.[0]?.message?.content;
  if(typeof message!=='string'||message.length>60000)throw Error('Invalid AI response');
