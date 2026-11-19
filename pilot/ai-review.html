@@ -128,6 +128,17 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
     'text-anchor':i===0?'start':i===points.length-1?'end':'middle'},
     String(points[i].label).slice(0,24)));
   }
+  // Make the whole plot a usable touch/click target, including the space
+  // between thin forecast-line points; this also works for keyboard focus
+  // on the individual marked values.
+  svg.addEventListener('click',event=>{
+   const rect=svg.getBoundingClientRect();
+   if(!rect.width)return;
+   const plotX=(event.clientX-rect.left)/rect.width*680;
+   const index=Math.max(0,Math.min(points.length-1,
+    Math.round((plotX-L)/(w-L-R)*(points.length-1))));
+   show(points[index]);
+  });
   fig.append(head,svg,selected,el('figcaption','',chart.subtitle||'Ledger-calculated values'));
   target.append(fig);
  }
