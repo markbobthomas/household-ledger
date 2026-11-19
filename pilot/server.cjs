@@ -651,7 +651,11 @@ async function start(port=Number(env.PORT||8788)){
      transactions,accounts,consent:true,apiKey:env.OPENAI_API_KEY,
      model:env.OPENAI_MODEL||'gpt-4.1-mini'});
     return respond(200,{proposals});
-   }catch(_error){return respond(503,{error:'AI analysis could not complete. No financial data was changed.'})}
+   }catch(error){
+    const code=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
+     'provider_unavailable','provider_rejected'].includes(error?.safeCode)?error.safeCode:'analysis_failed';
+    return respond(503,{error:'AI analysis could not complete. No financial data was changed.',code});
+   }
   }
   // Bank sync and account connection changes share the same state and encrypted
   // bank file as category/forecast edits. Serialize the entire mutation,
