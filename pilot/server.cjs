@@ -630,6 +630,44 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  if(requestPath==='/api/ai/chat'){
+   // Every turn explicitly authorizes scoped, read-only AI investigations.
+   // Client-supplied bank records and server-side financial writes are excluded.
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).sort().join(',')!=='consent,history,question,scope'||
+      body.consent!==true||body.scope!=='financial-chat-v1')
+    return respond(400,{error:'Explicit consent required for financial chat',code:'chat_consent_required'});
+   if(!env.OPENAI_API_KEY)return respond(503,{error:'AI chat is not configured on this private server'});
+   if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+   if(typeof body.question!=='string'||body.question.length>2000||
+      !Array.isArray(body.history)||body.history.length>12)
+    return respond(400,{error:'Invalid financial chat request',code:'invalid_chat_request'});
+   let context;
+   try{
+    const projection=preparedFor(ledgerPayload());
+    context=require('./ai-financial-report.cjs').financialContext(projection,{
+     lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
+   }catch{
+    return respond(409,{error:'Verified financial forecast context is unavailable',code:'forecast_context_unavailable'});
+   }
+   try{
+    const answer=await require('./ai-chat.cjs').chatTurn({
+     context,consent:'financial-chat-v1',question:body.question,
+     history:body.history,apiKey:env.OPENAI_API_KEY,
+     model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+    });
+    return respond(200,answer);
+   }catch(error){
+    const allowed=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
+     'provider_unavailable','provider_rejected','analysis_timeout','provider_connection_failed',
+     'invalid_provider_response','invalid_ai_json','invalid_ai_schema','invalid_ai_evidence'];
+    const code=allowed.includes(error?.safeCode)?error.safeCode:
+     error?.message==='Invalid conversation history'||error?.message==='Invalid conversation turn'||
+     error?.message==='Invalid question'?'invalid_chat_request':'analysis_failed';
+    return respond(code==='invalid_chat_request'?400:503,{
+     error:'Financial chat could not complete. No financial records were changed.',code});
+   }
+  }
   if(requestPath==='/api/ai/report'){
    // Broader, new data-sharing scope: explicit consent on every run.
    if(!body||typeof body!=='object'||Array.isArray(body)||
