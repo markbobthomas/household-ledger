@@ -13,9 +13,9 @@ small,.muted{color:#5e7168}h1{font-size:26px}h2{font-size:19px}p{line-height:1.5
 </style></head><body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <h1>AI transaction review</h1>
-<p>Ask AI to investigate unusual payments and recurring patterns. Results are suggestions only; your calendar, balances, and confirmed predictions are not changed.</p>
+<p>Ask AI to review recent transactions for recurring patterns, timing and amount changes, possible transfers, and inconsistencies. Results are suggestions only; your calendar, balances, and confirmed predictions are not changed.</p>
 <section><h2>Analyze recent activity</h2>
-<p class="muted">Only dates, amounts, sanitized merchant descriptions and temporary account aliases are sent to OpenAI. No full account numbers, Plaid credentials or authentication information are included. Analysis is initiated only when you press the button.</p>
+<p class="muted">Only dates, amounts, sanitized merchant descriptions and temporary account aliases are sent to OpenAI. No full account numbers, Plaid credentials or authentication information are included. Up to 360 recent transactions are examined. Existing predictions, budget rules, and all historical records are not included, so suggestions may already be addressed. Analysis is initiated only when you press the button.</p>
 <label><input id="consent" type="checkbox">I agree to send these limited transaction details to OpenAI for this analysis.</label>
 <p><button id="run" disabled>Analyze transactions</button></p><p id="status" role="status" aria-live="polite"></p></section>
 <section><h2>Findings</h2><div id="results"><p class="muted">No analysis has been run.</p></div></section>
