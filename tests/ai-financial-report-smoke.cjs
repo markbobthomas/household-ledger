@@ -6,11 +6,12 @@ const reportHtml=fs.readFileSync(require('node:path').join(__dirname,'../pilot/a
 const inlineScript=reportHtml.match(/<script>([\s\S]*?)<\/script>/);
 assert(inlineScript,'AI report page includes client logic');
 new vm.Script(inlineScript[1],{filename:'pilot/ai-review.html'});
-assert(reportHtml.includes('financial-outlook-v1'),'full financial context requires separate consent');
+assert(reportHtml.includes('financial-outlook-v2'),'full financial context requires separate consent');
 assert(reportHtml.includes('/api/ai/report'),'the page uses the new report endpoint');
 assert(!reportHtml.includes('innerHTML'),'untrusted model prose must not be interpreted as HTML');
 
 const {financialContext,analyzeFinancialOutlook,verifyClaim}=require('../pilot/ai-financial-report.cjs');
+const {planInvestigations,investigate,checkRequest}=require('../pilot/ai-report-investigator.cjs');
 const asOf='2026-11-19',date=n=>{const d=new Date(asOf+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const accountId='fictional-sensitive-account-id-12345678';
 const series=Array.from({length:96},(_,i)=>({
@@ -33,6 +34,8 @@ const prepared={bundle:{projection:{
  household:{conservationDifference:0},diagnostics:{balanceMismatches:[]}},
  ledger:[{id:'raw-future-id',accountId,date:date(7),amount:1200,kind:'event'}],
  rows:history,
+ payments:{statements:[{cardId:accountId,fromAccountId:accountId,dueDate:date(10),
+  amount:840,autopayEnabled:true,alreadyPaid:false,estimated:true}]},
  paymentReconciliations:[{status:'posted'},{status:'pending'}],
  overduePayments:[],duplicateChecks:[],postedMatchReview:[]}};
 const context=financialContext(prepared,{lastSync:'2026-11-19T17:00:00Z',
@@ -45,6 +48,24 @@ assert(context.facts.some(f=>f.kind==='owner-preference'&&f.text.includes('$6000
 assert.equal(context.primary.low90.balance,4500);
 assert.equal(context.primary.low90.date,date(30));
 assert.equal(context.scope.forecastHorizonDays,1095);
+assert(context.visuals.some(v=>v.id==='balance-90'&&v.points.some(p=>p.value===4500)));
+assert(context.visuals.some(v=>v.id==='monthly-spending'));
+assert(context.facts.some(f=>f.kind==='card-statement'&&f.text.includes('$840.00')));
+const baseRequest={kind:'historical-transactions',accountId:'account-1',
+ startDate:date(-50),endDate:asOf,query:'Fictional grocery',reason:'Check repeated expenses'};
+assert(checkRequest(baseRequest,context));
+assert(!checkRequest({...baseRequest,accountId:'raw-account-id'},context));
+assert(!checkRequest({...baseRequest,startDate:date(-1200)},context));
+const drilled=investigate(context,[baseRequest,{kind:'future-payments',
+ accountId:null,startDate:asOf,endDate:date(90),query:'',reason:'Verify future obligations'},
+ {kind:'daily-balances',accountId:'account-1',startDate:asOf,endDate:date(35),
+ query:'',reason:'Explain the low date'},
+ {kind:'card-statements',accountId:'account-1',startDate:asOf,endDate:date(35),
+ query:'',reason:'Check statement funding'}]);
+assert.equal(drilled.requestsExecuted,4);
+assert(drilled.facts.some(f=>f.text.includes('matched')));
+assert(drilled.facts.some(f=>f.text.includes('minimum $4500.00')));
+assert(drilled.facts.some(f=>f.text.includes('statement due')));
 const lowFact=context.facts.find(f=>f.text.includes('lowest projected 90 day balance'));
 assert(lowFact);
 assert(verifyClaim('Projected low $4500.00',[lowFact.id],context.factIndex));
@@ -53,7 +74,7 @@ assert(!verifyClaim('Something happened',['fake-fact'],context.factIndex));
 (async()=>{
  await assert.rejects(()=>analyzeFinancialOutlook({context,consent:false,apiKey:'test'}),/consent/);
  let request;
- const run=async(payload)=>analyzeFinancialOutlook({context,consent:'financial-outlook-v1',
+ const run=async(payload)=>analyzeFinancialOutlook({context,consent:'financial-outlook-v2',
   apiKey:'fake-api-key',fetchImpl:async(url,options)=>{
    assert.equal(url,'https://api.openai.com/v1/chat/completions');
    request=JSON.parse(options.body);
@@ -67,10 +88,15 @@ assert(!verifyClaim('Something happened',['fake-fact'],context.factIndex));
    confidence:'medium',evidenceIds:[lowFact.id]},
    {kind:'risk',title:'Invented evidence',assessment:'Unsupported.',
    recommendation:'Investigate.',confidence:'high',evidenceIds:['f9999']}],
+  sections:[{title:'Expected low balance',body:'The projected low is $4500.00.',
+   importance:'primary',evidenceIds:[lowFact.id],visualIds:['balance-90']}],
   limitations:[]};
  const report=await run(valid);
  assert.equal(report.primary.low90.balance,4500);
  assert.equal(report.findings.length,1,'invalid finding discarded without rejecting valid report');
+ assert.equal(report.sections.length,1);
+ assert.equal(report.sections[0].visuals[0].id,'balance-90');
+ assert(report.visuals[0].points.every(p=>typeof p.value==='number'));
  assert(report.limitations.some(x=>/variable/i.test(x)));
  assert(report.limitations.some(x=>/detailed/i.test(x)));
  assert.equal(report.reportStatus,'advisory-only');
@@ -87,9 +113,18 @@ assert(!verifyClaim('Something happened',['fake-fact'],context.factIndex));
  assert.equal(modelContext.coverage.historicalTransactionsScanned,300);
  assert.equal(modelContext.coverage.futureEventsScanned,2);
  assert(!JSON.stringify(modelContext).includes('Checking 12345678'));
- assert.deepEqual(Object.keys(modelContext).sort(),['accounts','asOf','coverage','facts','primary']);
+ assert.deepEqual(Object.keys(modelContext).sort(),['accounts','asOf','availableVisuals','coverage','facts','investigation','primary']);
  await assert.rejects(()=>run({...valid,summary:'The low is $1000000.00'}),
   e=>e.safeCode==='invalid_ai_evidence','model-invented dollar claim rejected');
+ const planning=await planInvestigations({context,apiKey:'fake-api-key',fetchImpl:async(_url,options)=>{
+  const sent=JSON.stringify(options.body);
+  assert(!sent.includes(accountId));assert(!sent.includes('secret-tx-'));
+  return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({requests:[baseRequest]})}}]})};
+ }});
+ assert.equal(planning.length,1);
+ assert.equal(planning[0].kind,'historical-transactions');
+ const filtered=await run({...valid,sections:[{...valid.sections[0],visualIds:['nonexistent-graph']}]});
+ assert.equal(filtered.sections.length,0,'the model cannot invent graph data');
  await assert.rejects(()=>run({...valid,summaryEvidenceIds:['made-up-evidence']}),
   e=>e.safeCode==='invalid_ai_evidence','unsupported summary evidence rejected');
  console.log('AI financial report: fictional proof, privacy, context and claim checks passed');
