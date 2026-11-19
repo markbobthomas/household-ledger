@@ -101,6 +101,24 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
    svg.append(svgEl('text',{x:L-7,y:py+4,'font-size':11,fill:'#6f8176','text-anchor':'end'},brief(value)));
   }
   const show=p=>{selected.textContent=String(p.label)+' · '+money(p.value)};
+  // Make the entire plot touch-selectable. Small SVG point markers alone
+  // are difficult to hit reliably on iPhone.
+  svg.setAttribute('tabindex','0');
+  let focusIndex=0;
+  svg.addEventListener('click',event=>{
+   const bounds=svg.getBoundingClientRect();
+   const plotX=(event.clientX-bounds.left)*w/Math.max(1,bounds.width);
+   focusIndex=Math.max(0,Math.min(points.length-1,
+    Math.round((plotX-L)/(w-L-R)*(points.length-1))));
+   show(points[focusIndex]);
+  });
+  svg.addEventListener('keydown',event=>{
+   if(!['ArrowLeft','ArrowRight','Enter',' '].includes(event.key))return;
+   event.preventDefault();
+   focusIndex=event.key==='ArrowLeft'?Math.max(0,focusIndex-1):
+    event.key==='ArrowRight'?Math.min(points.length-1,focusIndex+1):focusIndex;
+   show(points[focusIndex]);
+  });
   if(chart.type==='line'){
    const d=points.map((p,i)=>(i?'L':'M')+x(i).toFixed(2)+' '+y(p.value).toFixed(2)).join(' ');
    svg.append(svgEl('path',{d,fill:'none',stroke:'#286b5c','stroke-width':2.6,'stroke-linejoin':'round'}));
