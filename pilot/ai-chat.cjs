@@ -119,13 +119,13 @@ function providerError(status){
   status>=500?'provider_unavailable':'provider_rejected';
  return e;
 }
-async function complete({apiKey,model,messages,fetchImpl}){
+async function complete({apiKey,model,messages,fetchImpl,toolChoice='auto'}){
  let response;
  try{response=await fetchImpl('https://api.openai.com/v1/chat/completions',{
   method:'POST',signal:AbortSignal.timeout(90000),
   headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
   body:JSON.stringify({model,store:false,response_format:FORMAT,
-   tools:TOOLS,tool_choice:'auto',messages})
+   tools:TOOLS,tool_choice:toolChoice,messages})
  })}catch(error){
   const e=Error('AI request failed');e.safeCode=error?.name==='AbortError'||
    error?.name==='TimeoutError'?'analysis_timeout':'provider_connection_failed';throw e;
@@ -192,7 +192,9 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
   ...prior,{role:'user',content:question.trim()}];
  let toolCount=0,investigations=0;
  for(let round=0;round<5;round++){
-  const message=await complete({apiKey,model,messages,fetchImpl});
+  const requireInvestigation=round===0&&/(investigate|deep|complete|analy[sz]e|audit|financial outlook)/i.test(question);
+  const toolChoice=requireInvestigation?{type:'function',function:{name:'investigate_financial_data'}}:'auto';
+  const message=await complete({apiKey,model,messages,fetchImpl,toolChoice});
   const calls=message.tool_calls||[];
   if(!calls.length){
    let parsed;try{parsed=JSON.parse(message.content||'')}catch{
