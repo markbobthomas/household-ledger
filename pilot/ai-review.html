@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ledger · AI Review</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#21312c;background:#f7f9f6}
+body{margin:0}main{max-width:760px;margin:auto;padding:24px 16px 64px}
+a{color:#166f5b}header{display:flex;justify-content:space-between;align-items:center}
+section{background:white;border:1px solid #dce4df;border-radius:12px;padding:20px;margin:16px 0}
+button{background:#176b57;color:white;border:0;border-radius:8px;padding:12px 18px;font-weight:600;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}label{display:flex;gap:10px;align-items:flex-start;line-height:1.5}
+article{padding:14px 0;border-top:1px solid #e3e8e5}article:first-child{border:0}
+small,.muted{color:#5e7168}h1{font-size:26px}h2{font-size:19px}p{line-height:1.5}
+</style></head><body><main>
+<header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
+<h1>AI transaction review</h1>
+<p>Ask AI to investigate unusual payments and recurring patterns. Results are suggestions only; your calendar, balances, and confirmed predictions are not changed.</p>
+<section><h2>Analyze recent activity</h2>
+<p class="muted">Only dates, amounts, sanitized merchant descriptions and temporary account aliases are sent to OpenAI. No full account numbers, Plaid credentials or authentication information are included. Analysis is initiated only when you press the button.</p>
+<label><input id="consent" type="checkbox">I agree to send these limited transaction details to OpenAI for this analysis.</label>
+<p><button id="run" disabled>Analyze transactions</button></p><p id="status" role="status" aria-live="polite"></p></section>
+<section><h2>Findings</h2><div id="results"><p class="muted">No analysis has been run.</p></div></section>
+</main><script>
+(function(){
+ const consent=document.getElementById('consent'),run=document.getElementById('run'),
+ status=document.getElementById('status'),results=document.getElementById('results');
+ consent.addEventListener('change',()=>{run.disabled=!consent.checked});
+ run.addEventListener('click',async()=>{
+  if(!consent.checked)return;
+  run.disabled=true;status.textContent='Analyzing…';results.replaceChildren();
+  try{
+   const response=await fetch('/api/ai/analyze',{method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},body:JSON.stringify({consent:true})});
+   const data=await response.json();
+   if(!response.ok)throw Error(data.error||'Analysis unavailable');
+   const proposals=data.proposals||[];
+   status.textContent=proposals.length+' suggestion(s) found. Nothing was changed.';
+   if(!proposals.length){results.textContent='No evidence-backed suggestions were returned.';return}
+   for(const item of proposals){
+    const card=document.createElement('article'),heading=document.createElement('strong'),desc=document.createElement('p'),
+    evidence=document.createElement('small');
+    heading.textContent=item.kind.replace(/-/g,' ')+' · '+Math.round(item.confidence*100)+'% model confidence';
+    desc.textContent=item.explanation;
+    evidence.textContent='Date: '+(item.predictedDate||'Unspecified')+
+     ' · Amount: '+(item.predictedAmount==null?'Unspecified':item.predictedAmount.toFixed(2))+
+     ' · Evidence: '+item.evidenceTransactionIds.length+' transaction(s) · Needs confirmation';
+    card.append(heading,desc,evidence);results.append(card);
+   }
+  }catch(e){status.textContent=e.message||'Analysis unavailable'}
+  finally{run.disabled=!consent.checked}
+ });
+})();
+</script></body></html>
