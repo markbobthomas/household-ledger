@@ -1,7 +1,7 @@
 'use strict';
 // Explicit opt-in, server-only AI analysis. Never pass raw bank objects to a model.
 const {validateAdvisories}=require('./ai-advisory.cjs');
-const ID=/^[a-zA-Z0-9_-]{1,80}$/;
+const ID=/^[a-zA-Z0-9_.-]{1,80}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
 function cleanDescription(value){
  let s=String(value??'').slice(0,180);
