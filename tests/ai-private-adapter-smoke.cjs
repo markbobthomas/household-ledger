@@ -9,6 +9,7 @@ assert(!JSON.stringify(safe.rows).includes('123456789012'));
 assert(!JSON.stringify(safe.rows).includes('private-account-123'));
 assert(!JSON.stringify(safe.rows).includes('dont-send'));
 assert(cleanDescription('password:supersecret').includes('[redacted-credential]'));
+assert(!/\\d/.test(cleanDescription('Acct 123456789012 Store 24')));
 (async()=>{
  await assert.rejects(()=>analyze({transactions,accounts,consent:false,apiKey:'test'}),/consent/);
  let sent;
