@@ -1,6 +1,6 @@
 # Ledger AI Analysis — adaptive financial analyst product brief
 
-**Decision date:** 2026-11-19. **Status:** first evidence-grounded AI outlook implementation merged in [PR #606](https://github.com/markbobthomas/household-ledger/pull/606). Full adaptive investigation over every raw source record, historical model backtesting, and private live acceptance remain future work. The 20-question questionnaire, if completed, expresses preferences rather than a rigid ruleset.
+**Decision date:** 2026-11-19. **Status:** AI-directed, one-pass targeted investigation and flexible charts implemented after first evidence-grounded AI outlook merge in [PR #606](https://github.com/markbobthomas/household-ledger/pull/606). Full adaptive investigation over every raw source record, historical model backtesting, and private live acceptance remain future work. The 20-question questionnaire, if completed, expresses preferences rather than a rigid ruleset.
 
 ## Mandate
 
@@ -59,3 +59,7 @@ No forced risk count, fixed score, repeated generic spending tips, or "suggestio
 ## First implementation milestone
 
 Replace the 'only suggestions' output with an **AI financial outlook report** backed by a read-only deterministic 30/90-day coverage and low-balance summary; keep existing advisory findings as a supporting section. Before any expansion of OpenAI data sharing, update the per-run consent text to enumerate exactly what is disclosed. Next add deeper risk/sensitivity analysis and a complete recommendation-reconciliation pass.
+
+## 2026-11-19 extension: adaptive report and investigation
+
+The AI may plan up to five bounded, read-only follow-up queries against current Ledger history and canonical projections before composing a report. The model may select and order substantive narrative sections, supporting observations and precomputed balance/income/spending charts. Evidence and methods are expandable to keep primary presentation concise. This remains a consent-scoped investigation of available records, not a claim that every real-world bill or every individual raw record was examined by the model. Post-merge CI, private deployment and live quality validation are tracked in PROJECT_LEDGER.md.
