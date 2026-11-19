@@ -79,8 +79,8 @@ assert(low);
     {kind:'chart',title:'',text:'',evidenceIds:[],chartId:'analysis-chart-2'},
     {kind:'paragraph',title:'Made-up finding',text:'Expenses total $987654321.00',
      evidenceIds:[low.id],chartId:null},
-    {kind:'callout',title:'Variable spending',text:'Everyday spending is not forecast individually.',
-     evidenceIds:[],chartId:null}
+    {kind:'callout',title:'Variable spending',text:'The projected low is $4500.00.',
+     evidenceIds:[low.id],chartId:null}
    ],followUps:[],limitations:['Forecast omits some variable spending.']})};
   return {ok:true,json:async()=>({choices:[{message:m}]})};
  };
