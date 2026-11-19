@@ -1,0 +1,14 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {reconcile}=require('../pilot/ai-forecast-reconcile.cjs');
+const transactions=[{id:'t1',description:'Utility Co',accountId:'checking'}];
+const forecast=[{accountId:'checking',merchant:'Utility Co',amount:200,date:'2026-12-01',ruleId:'confirmed'}];
+const base={kind:'recurring',accountId:'checking',predictedAmount:200,predictedDate:null,evidenceTransactionIds:['t1']};
+assert.deepEqual(reconcile([base],transactions,forecast),[]);
+assert.equal(reconcile([{...base,predictedAmount:250}],transactions,forecast).length,1);
+assert.equal(reconcile([{...base,accountId:'other'}],transactions,forecast).length,1);
+assert.equal(reconcile([{...base,kind:'missing-payment',predictedDate:'2026-12-01'}],transactions,forecast).length,0);
+assert.equal(reconcile([{...base,kind:'missing-payment',predictedDate:'2026-12-20'}],transactions,forecast).length,1);
+assert.equal(reconcile([{...base,kind:'category'}],transactions,forecast).length,1);
+assert.equal(reconcile([base],transactions,[{...forecast,ruleId:null,source:'historical'}]).length,1);
+console.log('AI canonical forecast reconciliation passed');

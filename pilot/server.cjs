@@ -650,7 +650,15 @@ async function start(port=Number(env.PORT||8788)){
     const proposals=await require('./ai-private-adapter.cjs').analyze({
      transactions,accounts,consent:true,apiKey:env.OPENAI_API_KEY,
      model:env.OPENAI_MODEL||'gpt-4.1-mini'});
-    return respond(200,{proposals});
+    // Compare suggestions locally with Ledger's existing canonical expected events.
+    // The private forecast is never included in the external model request.
+    let visible=proposals;
+    try{
+     const prepared=preparedFor(ledgerPayload());
+     if(prepared?.bundle?.ledger)
+      visible=require('./ai-forecast-reconcile.cjs').reconcile(proposals,transactions,prepared.bundle.ledger);
+    }catch(_ignored){/* A failed optional comparison must not change financial data. */}
+    return respond(200,{proposals:visible});
    }catch(error){
     const code=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
      'provider_unavailable','provider_rejected'].includes(error?.safeCode)?error.safeCode:'analysis_failed';
