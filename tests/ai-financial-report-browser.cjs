@@ -58,7 +58,7 @@ module.exports=(async()=>{
     'financial scope remains expandable');
    assert.equal(requests[0].scope,'financial-chat-v1');
    assert.equal(requests[0].consent,true);
-   await page.locator('.graph svg circle').first().click({force:true});
+   await page.locator('.graph svg').first().click({position:{x:115,y:90}});
    assert.equal(await page.locator('.graph .selected').first().textContent().then(s=>s.includes('$')),true,
     'chart is directly interactive on both devices');
    await page.locator('#suggestions button').click();
