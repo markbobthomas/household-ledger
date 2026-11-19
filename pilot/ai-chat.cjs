@@ -211,7 +211,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
    if(toolCount<=9){
     let params=null;try{params=JSON.parse(call.function?.arguments||'')}catch{}
     if(call.function?.name==='investigate_financial_data'&&Array.isArray(params?.requests)){
-     const approved=params.requests.filter(r=>checkRequest(r,context)).slice(0,5);
+     const approved=params.requests.filter(r=>checkRequest(r,context)).slice(0,3);
      if(investigations+approved.length<=15){
       const result=investigate(context,approved);
       const serial=toolCount;
