@@ -29,7 +29,7 @@ assert(lowFact);
 assert.equal(makeChart(context,{kind:'daily-balance',accountId:'raw-id',
  startDate:asOf,endDate:date(90)},1),null);
 assert.equal(makeChart(context,{kind:'monthly-spending',accountId:null,
- startDate:date(-80),endDate:asOf},2).type,'bar');
+ startDate:date(-65),endDate:asOf},2).type,'bar');
 assert.equal(makeChart(context,{kind:'daily-balance',accountId:null,
  startDate:asOf,endDate:date(90)},3).points.some(p=>p.value===4500),true);
 assert.equal(makeChart(context,{kind:'monthly-spending',accountId:null,
@@ -44,7 +44,7 @@ assert.throws(()=>verifyAnswer({blocks:[{kind:'paragraph',title:'',text:'Proof',
  await assert.rejects(()=>chatTurn({context,consent:false,apiKey:'fake',
   question:'Analyze my finances'}),/consent/);
  const requests=[],tool1={kind:'historical-transactions',accountId:null,
-  startDate:date(-80),endDate:asOf,query:'',reason:'Compare recorded expense history'};
+  startDate:date(-65),endDate:asOf,query:'',reason:'Compare recorded expense history'};
  let turn=0;
  const fetchImpl=async(url,options)=>{
   assert.equal(url,'https://api.openai.com/v1/chat/completions');
