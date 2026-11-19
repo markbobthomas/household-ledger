@@ -259,7 +259,7 @@ function verifyClaim(text,ids,byId){
  return parseAmounts(text).every(n=>supported.has(amount(n)));
 }
 async function analyzeFinancialOutlook({context,consent,apiKey,model='gpt-4.1',fetchImpl=fetch}){
- if(consent!=='financial-outlook-v1')throw Error('Financial-context sharing consent required');
+ if(consent!=='financial-outlook-v2')throw Error('Financial-context sharing consent required');
  if(!apiKey||typeof apiKey!=='string')throw Error('AI API key is not configured');
  if(!ALIAS.test(model))throw Error('Invalid model');
  const facts=context?.facts;
