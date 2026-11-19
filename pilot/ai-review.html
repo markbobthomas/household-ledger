@@ -31,7 +31,7 @@ small,.muted{color:#5e7168}h1{font-size:26px}h2{font-size:19px}p{line-height:1.5
    const response=await fetch('/api/ai/analyze',{method:'POST',credentials:'same-origin',cache:'no-store',
     headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},body:JSON.stringify({consent:true})});
    const data=await response.json();
-   if(!response.ok)throw Error(data.error||'Analysis unavailable');
+   if(!response.ok)throw Error((data.error||'Analysis unavailable')+(data.code?' (Code: '+data.code+')':''));
    const proposals=data.proposals||[];
    status.textContent=proposals.length+' suggestion(s) found. Nothing was changed.';
    if(!proposals.length){results.textContent='No evidence-backed suggestions were returned.';return}
