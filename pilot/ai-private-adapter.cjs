@@ -9,7 +9,8 @@ function cleanDescription(value){
  s=s.replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[redacted-email]')
   .replace(/https?:\/\/\S+/gi,'[redacted-url]')
   .replace(/\b(?:\d[ -]?){4,}\d\b/g,'[redacted-number]')
-  .replace(/\b(?:password|passcode|token|secret|authorization|api[_ -]?key|client[_ -]?id)\s*[:=]\s*\S+/gi,'[redacted-credential]');
+  .replace(/\b(?:password|passcode|token|secret|authorization|api[_ -]?key|client[_ -]?id)\s*[:=]\s*\S+/gi,'[redacted-credential]')
+  .replace(/\b[a-z0-9_-]{20,}\b/gi,'[redacted-identifier]');
  return s.trim();
 }
 function safeSnapshot(transactions,accounts){
