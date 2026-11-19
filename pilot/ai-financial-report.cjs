@@ -31,7 +31,9 @@ function financialContext(prepared,{lastSync=null,adjustments={}}={}){
   through365=day(asOf,365),accountReports=[];
  const relevant=projection.accounts.filter(a=>a.valid&&a.type!=='credit'&&
   String(a.source?.accountType||a.source?.subtype||'')!=='savings');
- const primary=relevant[0]||projection.accounts.find(a=>a.valid&&a.type!=='credit');
+ const preferredId=String(adjustments?.predictions?.primaryAccountId||'');
+ const primary=relevant.find(a=>String(a.id)===preferredId)||relevant[0]||
+  projection.accounts.find(a=>a.valid&&a.type!=='credit');
  let selectedPrimary=null;
  for(const a of projection.accounts){
   const id=aliases.get(String(a.id)),classification=a.type==='credit'?'credit':
@@ -175,18 +177,19 @@ function financialContext(prepared,{lastSync=null,adjustments={}}={}){
  for(const [name,value] of [...merchants.entries()].sort((a,b)=>b[1]-a[1]).slice(0,35))
   add('merchant','All available historical expenses merchant '+name+': '+dollars(value));
  const sampledHistory=liveRows.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,140);
+ let historyDetailed=0;
  for(const r of sampledHistory){
   if(facts.length>=845)break;
   const aid=aliases.get(String(r.accountId))||'unknown account';
-  add('actual',aid+' '+r.date+' '+normalizeType(r.type)+' '+dollars(r.amount)+' '+
+  if(add('actual',aid+' '+r.date+' '+normalizeType(r.type)+' '+dollars(r.amount)+' '+
    safe(r.merchant)+'; category '+safe(r.category)+
-   (r.pending?'; pending (not posted)':''));
+   (r.pending?'; pending (not posted)':'')))historyDetailed++;
  }
  const coverage={
   historicalTransactionsScanned:liveRows.length,
   historicalMonthsScanned:months.length,
   historicalMonthsDetailed:Math.min(months.length,48),
-  detailedHistoricalTransactions:sampledHistory.length,
+  detailedHistoricalTransactions:historyDetailed,
   futureEventsScanned:future.length,
   futureEventsDetailed:futureIncluded,
   forecastHorizonDays:Number(projection.days)||1095,
@@ -256,7 +259,11 @@ function verifyClaim(text,ids,byId){
  // Reject unsupported exact-dollar claims; the source evidence, not the model,
  // must own any numbers it presents to a household.
  const supported=new Set(ids.flatMap(id=>parseAmounts(byId.get(id).text).map(n=>amount(n))));
- return parseAmounts(text).every(n=>supported.has(amount(n)));
+ if(!parseAmounts(text).every(n=>supported.has(amount(n))))return false;
+ const supportedDates=new Set(ids.flatMap(id=>
+  [...byId.get(id).text.matchAll(/\b20\d{2}-\d{2}-\d{2}\b/g)].map(m=>m[0])));
+ return [...text.matchAll(/\b20\d{2}-\d{2}-\d{2}\b/g)]
+  .every(m=>supportedDates.has(m[0]));
 }
 async function analyzeFinancialOutlook({context,consent,apiKey,model='gpt-4.1',fetchImpl=fetch}){
  if(consent!=='financial-outlook-v2')throw Error('Financial-context sharing consent required');
