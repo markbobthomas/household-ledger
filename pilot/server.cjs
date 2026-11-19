@@ -642,7 +642,7 @@ async function start(port=Number(env.PORT||8788)){
    try{
     const projection=preparedFor(ledgerPayload());
     context=require('./ai-financial-report.cjs').financialContext(projection,{
-     lastSync:state.lastSync});
+     lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
    }catch(_error){
     return respond(409,{error:'Verified financial forecast context is unavailable. The report was not generated.',code:'forecast_context_unavailable'});
    }
