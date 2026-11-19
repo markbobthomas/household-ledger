@@ -634,7 +634,7 @@ async function start(port=Number(env.PORT||8788)){
    // Broader, new data-sharing scope: explicit consent on every run.
    if(!body||typeof body!=='object'||Array.isArray(body)||
       Object.keys(body).sort().join(',')!=='consent,scope'||
-      body.consent!==true||body.scope!=='financial-outlook-v1')
+      body.consent!==true||body.scope!=='financial-outlook-v2')
     return respond(400,{error:'Explicit consent required for financial analysis',code:'report_consent_required'});
    if(!env.OPENAI_API_KEY)return respond(503,{error:'AI analysis is not configured on the private server'});
    if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
@@ -647,16 +647,30 @@ async function start(port=Number(env.PORT||8788)){
     return respond(409,{error:'Verified financial forecast context is unavailable. The report was not generated.',code:'forecast_context_unavailable'});
    }
    try{
-    const report=await require('./ai-financial-report.cjs').analyzeFinancialOutlook({
-     context,consent:'financial-outlook-v1',apiKey:env.OPENAI_API_KEY,
-     model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+    // One model-guided investigation pass. The model only asks bounded,
+    // allowlisted questions. Ledger answers from existing in-RAM authoritative
+    // source records, never direct model-selected APIs or database commands.
+    const investigator=require('./ai-report-investigator.cjs');
+    const model=env.OPENAI_REPORT_MODEL||'gpt-4.1';
+    const requests=await investigator.planInvestigations({
+     context,apiKey:env.OPENAI_API_KEY,model
     });
-    // The response contains only aliased references, never source IDs or raw records.
+    const investigation=investigator.investigate(context,requests);
+    for(const fact of investigation.facts){
+     context.facts.push(fact);context.factIndex.set(fact.id,fact);
+    }
+    context.investigation={details:investigation.requests,
+     factsExamined:investigation.facts.length,
+     requestsExecuted:investigation.requestsExecuted};
+    const report=await require('./ai-financial-report.cjs').analyzeFinancialOutlook({
+     context,consent:'financial-outlook-v2',apiKey:env.OPENAI_API_KEY,model
+    });
+    // Response remains read-only and uses aliased references, never source IDs.
     return respond(200,report);
    }catch(error){
     const code=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
      'provider_unavailable','provider_rejected','analysis_timeout','provider_connection_failed',
-     'invalid_provider_response','invalid_ai_json','invalid_ai_evidence'].includes(error?.safeCode)?
+     'invalid_provider_response','invalid_ai_json','invalid_ai_schema','invalid_ai_evidence'].includes(error?.safeCode)?
      error.safeCode:'analysis_failed';
     return respond(503,{error:'AI financial analysis could not complete. No financial data was changed.',code});
    }
