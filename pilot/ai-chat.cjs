@@ -3,6 +3,7 @@
 // Ledger supplies all figures, source evidence and verifiable calculations.
 const {investigate,checkRequest}=require('./ai-report-investigator.cjs');
 const {verifyClaim}=require('./ai-financial-report.cjs');
+const {cleanDescription}=require('./ai-private-adapter.cjs');
 const MODEL_NAME=/^[a-zA-Z0-9_.-]{1,80}$/;
 const ISO=/^\d{4}-\d{2}-\d{2}$/;
 const amount=n=>Math.round(n*100)/100;
@@ -94,7 +95,7 @@ function makeChart(context,request,index){
   for(const row of rows){
    if(String(row.type||'').toLowerCase()!==direction)continue;
    const key=kind.startsWith('monthly-')?row.date.slice(0,7):
-    String(kind==='category-spending'?row.category||'Unassigned':row.merchant||'Unknown').slice(0,65);
+    cleanDescription(kind==='category-spending'?row.category||'Unassigned':row.merchant||'Unknown').slice(0,65);
    grouped.set(key,amount((grouped.get(key)||0)+row.amount));
   }
   entries=[...grouped].map(([label,value])=>({label,value}));
