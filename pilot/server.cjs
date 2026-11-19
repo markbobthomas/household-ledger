@@ -641,7 +641,7 @@ async function start(port=Number(env.PORT||8788)){
    const transactions=Object.values(state.transactions).filter(t=>
     t&&typeof t.id==='string'&&allowed.has(t.accountId)&&
     typeof t.amount==='number'&&Number.isFinite(t.amount)&&
-    /^\\d{4}-\\d{2}-\\d{2}$/.test(String(t.date||'')))
+    /^\d{4}-\d{2}-\d{2}$/.test(String(t.date||'')))
     .sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,120)
     .map(t=>({id:t.id,accountId:t.accountId,date:t.date,amount:t.amount,
       description:t.merchant||t.name||''}));
