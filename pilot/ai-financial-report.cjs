@@ -64,7 +64,6 @@ function financialContext(prepared,{lastSync=null}={}){
    const points=series.filter(p=>p.date.startsWith(bucket));
    if(!points.length)continue;
    const low=points.reduce((b,p)=>p.balance<b.balance?p:b),last=points.at(-1);
-   if(points[0].date>through365&&points[0].date.slice(5,7)!=='01')continue;
    add('monthly-balance',id+' '+bucket+' projected low '+dollars(low.balance)+
     ' ('+low.date+'); projected end '+dollars(last.balance)+' ('+last.date+')');
   }
@@ -91,6 +90,33 @@ function financialContext(prepared,{lastSync=null}={}){
    (e.transferGroupId?'; linked transfer':''));
   if(ref)futureIncluded++;
  }
+ // Card statements are obligations, but only scheduled transfers reduce checking.
+ // Unscheduled projected card purchases must not be subtracted as cash twice.
+ const statements=prepared.bundle.payments?.statements||[];
+ for(const statement of statements.filter(x=>x&&DATE.test(String(x.dueDate||''))&&
+  x.dueDate>=asOf&&x.dueDate<=through365).slice(0,80)){
+  const card=aliases.get(String(statement.cardId))||'unmatched card',
+   from=aliases.get(String(statement.fromAccountId))||'unconfigured funding';
+  add('card-statement',card+' statement period '+String(statement.periodStart||'?')+
+   ' to '+String(statement.periodEnd||'?')+', due '+statement.dueDate+
+   ', expected withdrawal '+String(statement.withdrawalDate||'unknown')+
+   ', payment '+(number(statement.amount)?dollars(statement.amount):'unknown')+
+   ', statement estimate '+(number(statement.statementBalance)?dollars(statement.statementBalance):'unknown')+
+   ', funding '+from+', autopay '+Boolean(statement.autopayEnabled)+
+   ', paid '+Boolean(statement.alreadyPaid)+', estimated '+Boolean(statement.estimated)+
+   ', pending reserved '+Boolean(statement.pendingReserved));
+ }
+ for(const item of (prepared.bundle.payments?.cardEstimates||[]).slice(0,30))
+  add('card-coverage',(aliases.get(String(item.cardId))||'unmatched card')+
+   ' card payment settings '+(item.eligible?'inferred estimate available':'incomplete or unconfirmed')+
+   '; '+safe(item.reason||''));
+ for(const item of (prepared.bundle.historyCandidates||[]).slice(0,45))
+  add('review-candidate','Historical recurrence candidate '+(aliases.get(String(item.accountId))||'unknown account')+
+   ' '+safe(item.merchant)+' '+String(item.date||'')+
+   (number(item.amount)?' '+dollars(item.amount):'')+
+   '; not a confirmed missing bill');
+ for(const message of (prepared.bundle.payments?.warnings||[]).slice(0,30))
+  add('payment-warning','Forecast payment warning: '+safe(message));
  const settled=(prepared.bundle.paymentReconciliations||[]),
   paid=settled.filter(x=>x.status==='posted').length,
   pending=settled.filter(x=>x.status==='pending').length;
