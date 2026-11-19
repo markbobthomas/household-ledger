@@ -46,5 +46,7 @@ jobs:
           node tests/ai-advisory-smoke.cjs
           node tests/ai-private-adapter-smoke.cjs
           node tests/ai-forecast-reconcile-smoke.cjs
+          node --check pilot/ai-financial-report.cjs
+          node tests/ai-financial-report-smoke.cjs
       - name: Verify frozen output, banking safety, parity and reconciliation once
         run: node tests/ci-suite.cjs core

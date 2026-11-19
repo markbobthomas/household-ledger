@@ -630,6 +630,37 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  if(requestPath==='/api/ai/report'){
+   // Broader, new data-sharing scope: explicit consent on every run.
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).sort().join(',')!=='consent,scope'||
+      body.consent!==true||body.scope!=='financial-outlook-v1')
+    return respond(400,{error:'Explicit consent required for financial analysis',code:'report_consent_required'});
+   if(!env.OPENAI_API_KEY)return respond(503,{error:'AI analysis is not configured on the private server'});
+   if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+   let context;
+   try{
+    const projection=preparedFor(ledgerPayload());
+    context=require('./ai-financial-report.cjs').financialContext(projection,{
+     lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
+   }catch(_error){
+    return respond(409,{error:'Verified financial forecast context is unavailable. The report was not generated.',code:'forecast_context_unavailable'});
+   }
+   try{
+    const report=await require('./ai-financial-report.cjs').analyzeFinancialOutlook({
+     context,consent:'financial-outlook-v1',apiKey:env.OPENAI_API_KEY,
+     model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+    });
+    // The response contains only aliased references, never source IDs or raw records.
+    return respond(200,report);
+   }catch(error){
+    const code=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
+     'provider_unavailable','provider_rejected','analysis_timeout','provider_connection_failed',
+     'invalid_provider_response','invalid_ai_json','invalid_ai_evidence'].includes(error?.safeCode)?
+     error.safeCode:'analysis_failed';
+    return respond(503,{error:'AI financial analysis could not complete. No financial data was changed.',code});
+   }
+  }
   if(requestPath==='/api/ai/analyze'){
    if(!body||typeof body!=='object'||Array.isArray(body)||
       Object.keys(body).length!==1||body.consent!==true)
