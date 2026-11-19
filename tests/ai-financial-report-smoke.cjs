@@ -35,9 +35,13 @@ const prepared={bundle:{projection:{
  rows:history,
  paymentReconciliations:[{status:'posted'},{status:'pending'}],
  overduePayments:[],duplicateChecks:[],postedMatchReview:[]}};
-const context=financialContext(prepared,{lastSync:'2026-11-19T17:00:00Z'});
+const context=financialContext(prepared,{lastSync:'2026-11-19T17:00:00Z',
+ adjustments:{predictions:{categoryMonthlyBudgets:{Groceries:500},lowAlertThreshold:6000,
+ futureRecurringRules:[{id:'never-share-rule-key'}],futureRecurrenceExclusions:{'never-share-identity':true}}}});
 assert.equal(context.scope.historicalTransactionsScanned,300);
 assert.equal(context.scope.futureEventsScanned,2);
+assert(context.facts.some(f=>f.kind==='budget'&&f.text.includes('$500.00')));
+assert(context.facts.some(f=>f.kind==='owner-preference'&&f.text.includes('$6000.00')));
 assert.equal(context.primary.low90.balance,4500);
 assert.equal(context.primary.low90.date,date(30));
 assert.equal(context.scope.forecastHorizonDays,1095);
@@ -75,6 +79,7 @@ assert(!verifyClaim('Something happened',['fake-fact'],context.factIndex));
  assert(!transmitted.includes('secret-tx-'),'raw transaction ids must not cross model boundary');
  assert(!transmitted.includes('never-share-token'),'secrets must not cross model boundary');
  assert(!transmitted.includes('movement-private'),'internal linked transfer keys stay private');
+ assert(!transmitted.includes('never-share-rule-key'),'saved recurrence identities stay private');
  assert(transmitted.includes('"store":false'),'disable API storage per request');
  assert.equal(request.response_format.type,'json_schema');
  assert(request.messages[0].content.includes('open-ended investigation'));
