@@ -249,11 +249,18 @@ button{font:inherit;cursor:pointer}
   const explanation=el('p','',c.independentModel||'Posted-history recurrence method');
   content.append(explanation);
   content.append(el('p','',c.coverageNotice||'Coverage differs.'));
+  for(const item of (c.matched||[]).slice(0,15)){
+   if(item.shiftDays||Math.abs(item.ledgerAmount-item.independentAmount)>20){
+    content.append(el('p','',
+     'Ledger covers historical income on '+item.date+' with '+money(item.ledgerAmount)+
+     ' on '+item.ledgerDate+' ('+item.ledgerBasis+'). '+item.interpretation));
+   }
+  }
   for(const item of flags){
    const text=item.kind==='potential-uncovered-income'?'History suggests income not in Ledger':
     item.kind==='amount-difference'?'Amount disagrees':'Ledger income absent from history model';
    content.append(el('p','',text+' · '+item.date+' · '+money(item.amount??item.independentAmount)+
-    ' · '+(item.merchant||'Unknown')+'. '+item.reason));
+    ' · '+(item.merchant||'Unknown')+'. '+(item.ledgerBasis?item.ledgerBasis+'. ':'')+item.reason));
   }
   for(const stream of (c.streams||[])){
    content.append(el('p','',stream.kind+' pattern: '+stream.merchant+' · '+stream.cadence+
