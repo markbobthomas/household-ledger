@@ -71,11 +71,16 @@ function historicalStreams(context,{horizon=90}={}){
  const posted=(context.source.history||[]).filter(t=>t&&t.accountId!=null&&
   String(t.accountId)===sourceAccount&&valid(t.date)&&t.date<=asOf&&
   typeof t.amount==='number'&&Number.isFinite(t.amount)&&abs(t.amount)>0&&
-  !t.pending&&['income','expense'].includes(String(t.type||'').toLowerCase()));
+  !t.pending&&(['income','expense'].includes(String(t.type||'').toLowerCase())||
+   (String(t.type||'').toLowerCase()==='transfer'&&
+    String(t.cashDirection||'').toLowerCase()==='in'&&!t.pairedTransactionId)));
  for(const row of posted){
-  const kind=String(row.type).toLowerCase(),merchant=label(row.merchant||row.description);
+  const unpairedIncoming=String(row.type).toLowerCase()==='transfer';
+  const kind=unpairedIncoming?'income':String(row.type).toLowerCase(),
+   merchant=label(row.merchant||row.description);
   const group=kind+'|'+merchant.toLowerCase();
-  const rows=groups.get(group)||{kind,merchant,rows:[]};
+  const rows=groups.get(group)||{kind,merchant,unpairedIncoming,rows:[]};
+  rows.unpairedIncoming=Boolean(rows.unpairedIncoming||unpairedIncoming);
   rows.rows.push(row);groups.set(group,rows);
  }
  const streams=[];
@@ -104,7 +109,9 @@ function historicalStreams(context,{horizon=90}={}){
    predicted.push({date:next,amount,kind:g.kind,merchant:g.merchant,sourceCount:recent.length});
   }
   if(!predicted.length)continue;
-  streams.push({kind:g.kind,merchant:g.merchant,cadence:cadence.kind==='monthly'?'monthly':'every-'+cadence.days+'-days',
+  streams.push({kind:g.kind,merchant:g.merchant,
+   classification:g.unpairedIncoming?'unconfirmed-unpaired-incoming-transfer':'classified-income-or-expense',
+   cadence:cadence.kind==='monthly'?'monthly':'every-'+cadence.days+'-days',
    observations:recent.length,lastPosted:cadence.latest,alternating:amounts.alternating,
    amountPattern:amounts.amounts,predicted,firstDate:recent[0].date});
  }
@@ -177,8 +184,8 @@ function createComparison(context,{horizon=90}={}){
  const facts=[];
  const add=t=>facts.push({id:'independent-'+(facts.length+1),kind:'independent-validation',text:t.slice(0,500)});
  add('Independent posted-history model as of '+asOf+' for '+context.primary?.id+
-  ': uses '+inferred.postedExamined+' verified checking historical income/expense rows; inferred '+
-  inferred.streams.length+' regular streams ('+sampleCount+' income). No credit card transactions, transfers or unconfirmed incoming credits are treated as earnings.');
+  ': uses '+inferred.postedExamined+' settled checking historical income/expense and unpaired incoming credit rows; inferred '+
+  inferred.streams.length+' regular streams ('+sampleCount+' possible incoming streams). Credit card purchases and PAIRED internal transfers are excluded; unpaired incoming credits can be modeled provisionally but are NOT verified earned income.');
  add('Next '+horizon+' days: history-derived recurring income '+dollars(histIncome90)+
   ' vs Ledger already scheduled income '+dollars(ledgerIncome90)+'. Income matched '+
   matches.length+', history-pattern income with no Ledger match '+uncovered.length+
@@ -189,6 +196,7 @@ function createComparison(context,{horizon=90}={}){
   ' on '+ledgerLow.date+'. DIFFERENT COVERAGE: history model omits all unlearned one-time, card settlement, transfers and variable expenses; neither low validates the other.');
  for(const s of inferred.streams.slice(0,24)){
   add('Historical '+s.kind+' stream '+s.merchant+' '+s.cadence+
+   '; classification '+s.classification+
    '; observed '+s.observations+' posted examples from '+s.firstDate+' through '+s.lastPosted+
    '; predicted amounts '+s.amountPattern.map(dollars).join(' alternating ')+
    '; future occurrences '+s.predicted.length+' from '+s.predicted[0].date+
@@ -205,16 +213,19 @@ function createComparison(context,{horizon=90}={}){
  const sampled=data.filter((p,i)=>i%Math.max(1,Math.floor(horizon/70))===0||i===data.length-1||
   p.date===indieLow?.date||p.date===ledgerLow?.date);
  return {asOf,horizon,primary:context.primary?.id||null,modelStatus:reliability,
-  independentModel:'Posted-history recurring checking income and stable checking expenses. No Ledger future payments or recurring rules are inputs.',
-  coverageNotice:'The independent line is a recurrence-only stress check, NOT a complete alternative balance forecast. Ledger includes confirmed scheduled events, card settlements and transfers that the independent model cannot infer from repeating expenses. A difference does not establish which is correct.',
+  independentModel:'Posted-history recurring checking deposits and stable checking expenses. Unpaired ACH/transfer credits are provisional, not confirmed payroll. No Ledger future payments or recurring rules are inputs.',
+  coverageNotice:'The independent line is a recurrence-only stress check, NOT a complete alternative balance forecast. Unpaired incoming transfer patterns are provisional, not verified earnings. Ledger includes confirmed scheduled events, card settlements and transfers; differences do not establish which is correct.',
   ledgerIncome:ledgerIncome90,independentIncome:histIncome90,
   ledgerLow:ledgerLow?{amount:ledgerLow.ledger,date:ledgerLow.date}:null,
   independentLow:indieLow?{amount:indieLow.independent,date:indieLow.date}:null,
   anchor:initial,streams:inferred.streams.map(s=>({
-   kind:s.kind,cadence:s.cadence,merchant:s.merchant,observations:s.observations,
+   kind:s.kind,cadence:s.cadence,merchant:s.merchant,
+   classification:s.classification,observations:s.observations,
    alternating:s.alternating,amountPattern:s.amountPattern,lastPosted:s.lastPosted,
    projectedCount:s.predicted.length})),
   totals:{historicalStreams:inferred.streams.length,incomeStreams:sampleCount,
+   unconfirmedIncomeStreams:inferred.streams.filter(s=>s.kind==='income'&&
+    s.classification==='unconfirmed-unpaired-incoming-transfer').length,
    matchedIncome:matches.length,uncoveredIncome:uncovered.length,
    differingAmounts:amountDiff.length,ledgerOnlyIncome:ledgerOnly.length,
    incomeInferredOccurrences:estimatedIncome.length,postedExamined:inferred.postedExamined},
