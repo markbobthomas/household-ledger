@@ -1,70 +1,69 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ledger · Financial Chat</title>
+<title>Ledger · AI Analysis</title>
 <style>
 :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;color:#202c29;background:#f7f9f7;font-size:15px}
-*{box-sizing:border-box}body{margin:0}main{max-width:1020px;margin:0 auto;padding:17px 17px 105px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 25px}
-header a{font-size:.9rem;color:#386658;text-decoration:none}h1{font-size:1.65rem;letter-spacing:-.035em;margin:0 0 8px}
-h2{font-size:1.1rem;margin:0 0 10px}h3{font-size:1.03rem;margin:14px 0 7px}
-p{line-height:1.55;margin:10px 0}.muted,small{color:#64736d}
-.intro{padding:0 2px 12px}.intro p{max-width:740px}
-.consent{background:#fff;border:1px solid #e2e7e2;padding:14px 17px;border-radius:13px;margin:5px 0 22px}
-.consent label{display:flex;gap:11px;align-items:flex-start;line-height:1.45;font-size:.9rem}
-.consent input{width:17px;height:17px;margin-top:2px;flex:none;accent-color:#2c695d}
-details{margin-top:10px;color:#57665f}summary{cursor:pointer;font-size:.86rem;font-weight:570}
-details p,details li{line-height:1.48;font-size:.86rem}
-#thread{display:flex;flex-direction:column;gap:19px;min-height:120px}
-.message{max-width:100%;min-width:0}.message.user{align-self:flex-end;background:#e9f0eb;max-width:min(85%,690px);border-radius:16px 16px 3px 16px;padding:12px 17px}
-.message.user p{margin:0;white-space:pre-wrap}
-.message.assistant{align-self:stretch;background:white;border:1px solid #e1e8e2;border-radius:15px;padding:19px 24px}
-.message.assistant .who{font-size:.78rem;color:#5d7268;font-weight:650;margin-bottom:12px}
-.message.assistant p{max-width:810px;white-space:pre-line;font-size:1.01rem;line-height:1.65;margin:10px 0 18px}
-.message.assistant h3{padding-top:5px}
-.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin:12px 0 20px}
-.metric{border:1px solid #e0e8e1;background:#f7faf8;border-radius:11px;padding:14px}
-.metric .label{font-size:.8rem;color:#62746b}.metric strong{font-size:1.32rem;display:block;overflow-wrap:anywhere;line-height:1.3;margin-top:5px}
-.evidence{border-top:1px solid #edf0ed;margin:4px 0 14px;padding-top:6px}
+*{box-sizing:border-box}body{margin:0}main{max-width:1060px;margin:0 auto;padding:17px 17px 100px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:32px}
+header a{font-size:.9rem;color:#386658;text-decoration:none}
+h1{font-size:clamp(1.75rem,3.2vw,2.5rem);letter-spacing:-.04em;margin:0 0 8px}
+h2{font-size:1.3rem;letter-spacing:-.015em}h3{font-size:1.04rem;margin:18px 0 9px}
+p{line-height:1.6;margin:11px 0}.muted,small{color:#64736d}
+.intro{margin-bottom:22px}.intro p{max-width:760px}
+.consent{background:#fff;border:1px solid #e2e7e2;padding:14px 17px;border-radius:13px;margin:5px 0 16px}
+.consent label{display:flex;gap:11px;align-items:flex-start;line-height:1.5;font-size:.9rem}
+.consent input{width:18px;height:18px;margin-top:2px;flex:none;accent-color:#286b5c}
+details{margin-top:12px;color:#57665f}summary{cursor:pointer;font-size:.88rem;font-weight:570}
+details p,details li{line-height:1.55;font-size:.88rem}
+.control{display:flex;align-items:center;flex-wrap:wrap;gap:13px;margin:19px 0 28px}
+button{font:inherit;cursor:pointer}
+#run{border:0;border-radius:11px;padding:15px 23px;background:#286b5c;color:white;font-weight:650;min-width:210px}
+#run:disabled{background:#a7b3ac;cursor:default}
+#status{color:#5d7066;font-size:.89rem;max-width:690px;margin:0}
+#analysis:empty{min-height:55px}
+.analysis-report{background:#fff;border:1px solid #e1e8e2;border-radius:16px;padding:clamp(17px,3vw,31px);min-width:0}
+.analysis-report .who{font-size:.81rem;font-weight:660;color:#5d7268;margin:0 0 20px}
+.analysis-report p{max-width:890px;font-size:1.03rem;white-space:pre-line;line-height:1.7}
+.hero{padding:19px 0 22px;border-bottom:1px solid #e4ece5;margin:0 0 19px}
+.hero .eyebrow{font-size:.81rem;font-weight:680;color:#5f766c}
+.hero .headline{font-weight:730;font-size:clamp(1.5rem,3.1vw,2.35rem);line-height:1.18;letter-spacing:-.035em;max-width:780px;margin-top:8px}
+.callout{padding:15px 18px;margin:17px 0;border-left:4px solid #286b5c;background:#f6faf7;border-radius:3px 11px 11px 3px}
+.callout h3{margin:0 0 7px}.callout p{margin:0}
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:16px 0 22px}
+.metric{border:1px solid #e0e8e1;background:#f7faf8;border-radius:11px;padding:15px}
+.metric .label{font-size:.82rem;color:#62746b}
+.metric strong{font-size:1.38rem;display:block;overflow-wrap:anywhere;line-height:1.3;margin-top:6px}
+.evidence{border-top:1px solid #edf0ed;margin:8px 0 14px;padding-top:8px}
 .evidence ul{padding-left:19px;overflow-wrap:anywhere}.evidence li{margin:7px 0}
-.graph{margin:19px 0 22px;background:#fcfdfc;border:1px solid #e0e8e2;border-radius:11px;padding:13px;min-width:0}
-.graph strong{font-size:.94rem}.graph svg{width:100%;height:auto;display:block;touch-action:manipulation}
-.graph figcaption{font-size:.8rem;color:#65756d;margin-top:5px;line-height:1.5}
-.graph .selected{font-size:.86rem;color:#245f52;min-height:21px;margin-top:6px}
-.limits{margin-top:12px;border-top:1px solid #edf1ee;padding-top:8px}
-.followups{display:flex;gap:8px;flex-wrap:wrap;margin:9px 0 10px}
-button{font:inherit;cursor:pointer}.followups button{border:1px solid #d5e1d9;background:#f6faf7;border-radius:22px;color:#31594c;padding:8px 12px;font-size:.84rem;text-align:left}
-#composer{position:sticky;bottom:0;background:linear-gradient(to bottom,#f7f9f700,#f7f9f7 18%);padding:20px 0 5px;margin-top:10px}
-.composer-row{background:white;border:1px solid #c9d9ce;box-shadow:0 4px 20px #243f3210;border-radius:14px;padding:10px;display:flex;align-items:flex-end;gap:10px}
-textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;border:0;outline:0;padding:11px 7px;font:inherit;background:transparent}
-#run{border:0;border-radius:10px;padding:12px 18px;background:#27685a;color:white;font-weight:650;min-width:85px}
-#run:disabled{background:#9aaba3;cursor:default}
-#status{font-size:.82rem;min-height:20px;margin:7px 8px 0;color:#5e7066}
-#thread[hidden],#thread .message[hidden]{display:none}
-@media(max-width:650px){main{padding:14px 10px 80px}.message.assistant{padding:15px 13px}
- .message.user{max-width:94%}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
- .metric{padding:10px}.metric strong{font-size:1.05rem}.graph{padding:8px}
- .composer-row{padding:6px}#run{min-width:67px;padding:11px 13px}}
+.graph{margin:19px 0 25px;background:#fcfdfc;border:1px solid #e0e8e2;border-radius:11px;padding:15px;min-width:0}
+.graph strong{font-size:1rem}.graph svg{width:100%;height:auto;display:block;touch-action:manipulation}
+.graph figcaption{font-size:.81rem;color:#65756d;margin-top:5px;line-height:1.55}
+.graph .selected{font-size:.88rem;color:#245f52;min-height:22px;margin-top:6px}
+.limits{margin-top:25px;border-top:1px solid #edf1ee;padding-top:13px}
+.audit{color:#50675b;padding-left:18px}
+#analysis[hidden]{display:none}
+@media(max-width:650px){main{padding:13px 11px 70px}header{margin-bottom:21px}
+ .analysis-report{padding:16px 13px}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .metric{padding:11px}.metric strong{font-size:1.1rem}.graph{padding:8px}
+ .control{align-items:stretch}#run{width:100%}}
 </style></head><body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
-<div class="intro"><h1>Financial Chat</h1>
-<p class="muted">Ask questions or request a complete analysis. The AI investigates Ledger's recorded finances and predictions, chooses its own charts, and checks numerical claims against Ledger's calculations.</p></div>
+<div class="intro"><h1>AI Financial Analysis</h1>
+<p class="muted">One click starts an independent investigation of your full available Ledger data. The AI chooses which questions to examine, independently requests source-calculated comparisons, and builds the presentation best suited to its findings. Detailed evidence stays expandable.</p></div>
 <div class="consent">
-<label><input id="consent" type="checkbox"><span>For each message I send, I authorize Ledger to share sanitized financial evidence and AI-selected, read-only investigation results with OpenAI.</span></label>
-<details><summary>Exactly what can the AI access?</summary>
-<p>Ledger examines its available bank-history records, balances, saved budget targets, future transactions, expected bills, payment reconciliations, card statements and canonical three-year projected daily balances. Initial data sent to the AI includes account aliases, amounts, dates, summaries and selected individual merchant records. The AI can request further bounded searches of the complete relevant source, and can request Ledger-calculated charts. The AI does not automatically receive every individual raw record. Detailed descriptions may identify merchants. Full account numbers, original bank/transaction IDs, authentication information, bank tokens and encryption keys are not sent. Questions and returned evidence are sent to OpenAI. No financial records or predictions are changed.</p></details>
+<label><input id="consent" type="checkbox"><span>I authorize this analysis to share sanitized financial summaries and AI-selected investigation and calculation results with OpenAI. Optional external research uses generic public topics without sharing household details.</span></label>
+<details><summary>What information is shared, and what can the AI change?</summary>
+<p>Ledger reviews available bank history, account aliases, dates and balances, categorized merchants, budget targets, expected payments, card obligations, reconciliations and the canonical three-year forecast. The AI receives a bounded initial evidence summary and can request more source-calculated results. It does not receive full account numbers, raw transaction IDs, account access tokens, credentials or private server files. Some sanitized descriptions and dollar amounts may identify financial activity. OpenAI receives evidence for this run, with API storage disabled. External public research queries contain only a restricted generic topic.</p>
+<p>Automatically verified corrections can reject unsupported AI findings or fix derived analysis displays, with a per-run audit trail. Original bank records, user categories and forecast rules are not automatically modified: those require separate financial-integrity safeguards.</p></details>
 </div>
-<div id="thread" role="log" aria-label="Financial analysis conversation" aria-live="polite"></div>
-<div id="suggestions" class="followups" aria-label="Suggested follow-up questions"></div>
-<div id="composer">
-<div class="composer-row"><textarea id="question" rows="2" maxlength="2000" aria-label="Ask Ledger financial AI" placeholder="Ask about your finances and future balances…">Investigate my complete financial outlook in depth. Examine all available history and three-year predictions, challenge the assumptions, identify material risks and opportunities, show the most useful charts, and tell me what actually needs attention.</textarea><button id="run" type="button" disabled>Analyze</button></div>
-<p id="status" role="status" aria-live="polite">Authorize sharing above to start. Financial data stays read-only.</p>
-</div>
+<section class="control"><button id="run" type="button" disabled>Run full AI analysis</button>
+<p id="status" role="status" aria-live="polite">Authorize data sharing to start. This analysis cannot change source banking records.</p></section>
+<div id="analysis" role="region" aria-label="AI financial analysis results"></div>
 </main>
 <script>
 (function(){
- const $=id=>document.getElementById(id),consent=$('consent'),question=$('question'),
-  run=$('run'),thread=$('thread'),suggestions=$('suggestions'),status=$('status');
- const history=[];
+ const $=id=>document.getElementById(id),consent=$('consent'),run=$('run'),
+  analysis=$('analysis'),status=$('status');
  let pending=false;
  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;
   if(text!==undefined)n.textContent=String(text);return n};
@@ -94,13 +93,14 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
    max=chart.type==='line'?highest+pad:Math.max(0,highest)+pad;
   const y=v=>T+(max-v)/(max-min)*(h-B-T);
   const x=i=>L+i*(w-L-R)/(points.length-1);
+  const formatValue=chart.unit==='count'?n=>new Intl.NumberFormat('en-US').format(n):money;
   const selected=el('div','selected','Tap a point to see the calculated value');
   for(let k=0;k<=4;k++){
    const value=min+(max-min)*k/4,py=y(value);
    svg.append(svgEl('line',{x1:L,x2:w-R,y1:py,y2:py,stroke:'#e1e7e2','stroke-width':1}));
-   svg.append(svgEl('text',{x:L-7,y:py+4,'font-size':11,fill:'#6f8176','text-anchor':'end'},brief(value)));
+   svg.append(svgEl('text',{x:L-7,y:py+4,'font-size':11,fill:'#6f8176','text-anchor':'end'},(chart.unit==='count'?new Intl.NumberFormat('en-US').format(value):brief(value))));
   }
-  const show=p=>{selected.textContent=String(p.label)+' · '+money(p.value)};
+  const show=p=>{selected.textContent=String(p.label)+' · '+formatValue(p.value)};
   // Make the entire plot touch-selectable. Small SVG point markers alone
   // are difficult to hit reliably on iPhone.
   svg.setAttribute('tabindex','0');
@@ -125,7 +125,7 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
    const idx=points.findIndex(p=>p.value===lowest);
    for(const i of [...new Set([0,idx,Math.floor((points.length-1)/2),points.length-1])]){
     const p=points[i],dot=svgEl('circle',{cx:x(i),cy:y(p.value),r:5,fill:'#286b5c',stroke:'#fff','stroke-width':2,
-     role:'button',tabindex:0,'aria-label':p.label+' '+money(p.value)});
+     role:'button',tabindex:0,'aria-label':p.label+' '+formatValue(p.value)});
     dot.addEventListener('click',()=>show(p));
     dot.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show(p)}});
     svg.append(dot);
@@ -135,7 +135,7 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
    points.forEach((p,i)=>{
     const top=Math.min(zero,y(p.value)),height=Math.max(1,Math.abs(zero-y(p.value)));
     const rect=svgEl('rect',{x:L+bw*i+bw*.17,y:top,width:Math.max(2,bw*.66),height,
-     rx:2,fill:'#569386',role:'button',tabindex:0,'aria-label':p.label+' '+money(p.value)});
+     rx:2,fill:'#569386',role:'button',tabindex:0,'aria-label':p.label+' '+formatValue(p.value)});
     rect.addEventListener('click',()=>show(p));
     rect.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show(p)}});
     svg.append(rect);
@@ -161,7 +161,8 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
   target.append(fig);
  }
  function addAssistant(data){
-  const msg=el('article','message assistant'),who=el('div','who','Ledger financial analysis · '+data.asOf);
+  const msg=el('article','analysis-report'),who=el('div','who','Ledger independent analysis · '+data.asOf);
+  if(data.mode!=='autonomous-adaptive')throw Error('Unexpected analysis response');
   msg.append(who);
   let metrics=null;
   for(const block of data.blocks||[]){
@@ -173,6 +174,15 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
     continue;
    }
    metrics=null;
+   if(block.kind==='hero'){
+    const hero=el('section','hero');hero.append(el('div','eyebrow',block.title),
+     el('div','headline',block.text));addEvidence(hero,block.evidence);msg.append(hero);
+   }
+   if(block.kind==='callout'){
+    const callout=el('section','callout');
+    if(block.title)callout.append(el('h3','',block.title));
+    info(callout,block.text);addEvidence(callout,block.evidence);msg.append(callout);
+   }
    if(block.kind==='heading'){msg.append(el('h3','',block.title||block.text));addEvidence(msg,block.evidence)}
    if(block.kind==='paragraph'){
     if(block.title)msg.append(el('h3','',block.title));
@@ -194,39 +204,38 @@ textarea{flex:1;min-width:0;min-height:45px;max-height:160px;resize:vertical;bor
    (c.lastSync||'unknown')+'.');
   info(body,data.disclosure||'Original bank records were not all transmitted to the model.');
   for(const limit of data.limitations||[])info(body,limit);
-  meta.append(s,body);msg.append(meta);
-  thread.append(msg);
-  suggestions.replaceChildren();
-  for(const prompt of data.followUps||[]){
-   const chip=el('button','',prompt);chip.type='button';
-   chip.addEventListener('click',()=>{question.value=prompt;sync();question.focus();question.scrollIntoView({block:'nearest'})});
-   suggestions.append(chip);
+  if(data.auditTrail?.length){
+   const audit=el('ul','audit');for(const item of data.auditTrail)
+    audit.append(el('li','',item.action+(item.count?' ('+item.count+')':'')));
+   body.append(el('h3','','Verification and automatic correction log'),audit);
   }
+  if(data.publicResearch?.length){
+   body.append(el('h3','','External public research'));
+   for(const item of data.publicResearch){
+    info(body,item.topic+': '+(item.sources||[]).join(', '));
+   }
+  }
+  meta.append(s,body);msg.append(meta);
+  analysis.replaceChildren(msg);
   return msg;
  }
- const sync=()=>{run.disabled=pending||!consent.checked||!question.value.trim()};
- consent.addEventListener('change',sync);question.addEventListener('input',sync);
- question.addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){
-  event.preventDefault();run.click()}});
+ const sync=()=>{run.disabled=pending||!consent.checked};
+ consent.addEventListener('change',sync);
  run.addEventListener('click',async()=>{
-  if(pending||!consent.checked||!question.value.trim())return;
-  const prompt=question.value.trim(),user=el('div','message user');
-  info(user,prompt);thread.append(user);suggestions.replaceChildren();
-  pending=true;sync();status.textContent='Examining Ledger records and checking evidence…';
+  if(pending||!consent.checked)return;
+  pending=true;sync();run.textContent='Investigating…';
+  status.textContent='Analyzing source history, checking forecast assumptions and calculating independent comparisons…';
   try{
-   const response=await fetch('/api/ai/chat',{method:'POST',credentials:'same-origin',cache:'no-store',
+   const response=await fetch('/api/ai/analyze',{method:'POST',credentials:'same-origin',cache:'no-store',
     headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
-    body:JSON.stringify({scope:'financial-chat-v1',consent:true,question:prompt,history})});
+    body:JSON.stringify({scope:'financial-analysis-v3',consent:true})});
    const data=await response.json();
-   if(!response.ok)throw Error((data.error||'Financial chat unavailable')+
+   if(!response.ok)throw Error((data.error||'Financial analysis unavailable')+
     (data.code?' (Code: '+data.code+')':''));
    addAssistant(data);
-   history.push({role:'user',content:prompt},
-    {role:'assistant',content:(data.blocks||[]).map(b=>[b.title,b.text].filter(Boolean).join(': ')).join('\n').slice(0,3500)});
-   while(history.length>10)history.shift();
-   question.value='';status.textContent='Read-only analysis · No financial data was changed.';
-  }catch(error){user.remove();status.textContent=error.message||'Financial chat unavailable';}
-  finally{pending=false;sync()}
+   status.textContent='Analysis complete. Expand any finding or the verification log to inspect its source.';
+  }catch(error){status.textContent=error.message||'Financial analysis unavailable';}
+  finally{pending=false;run.textContent='Run analysis again';sync();}
  });
  sync();
 })();
