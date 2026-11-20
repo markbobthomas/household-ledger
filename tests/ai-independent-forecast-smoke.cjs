@@ -34,7 +34,7 @@ const historical=[...income,...stable,...grocery,
   merchant:'Fictional Employer',pending:true}];
 const scheduled=[14,28,56,70,84].map(n=>({
  accountId:checking,date:day(n+(n===14?-2:0)),
- kind:'income',amount:n===56?4100:n%28===0?3100:2500,
+ kind:'income',amount:n===56?4100:n%28===14?3100:2500,
  merchant:'Fictional Employer',recurringRuleId:'never-share-schedule-id'
 })); 
 scheduled.push({accountId:checking,date:day(21),kind:'income',
