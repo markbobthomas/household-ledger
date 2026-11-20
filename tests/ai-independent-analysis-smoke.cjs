@@ -59,6 +59,13 @@ assert(low);
   assert.equal(url,'https://api.openai.com/v1/chat/completions');
   calls++;
   assert.equal(body.store,false);
+  if(calls===7){
+   assert.equal(body.response_format.json_schema.name,'ledger_analysis_review_v1');
+   assert.equal(body.tools,undefined,'independent reviewer cannot perform tool calls');
+   assert(body.messages[0].content.includes('independent second-pass auditor'));
+   return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
+    rejectedIndices:[],concerns:[]})}}]})};
+  }
   assert.equal(body.tools.length,4,'deep analyst can calculate and research');
   assert(!JSON.stringify(body).includes(account),'full account IDs must stay private');
   assert(!JSON.stringify(body).includes('not-for-model'),'bank secrets must stay private');
