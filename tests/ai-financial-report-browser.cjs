@@ -6,7 +6,27 @@ module.exports=(async()=>{
  const port=19096,url='http://127.0.0.1:'+port+'/pilot/ai-review.html';
  const server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],{
   cwd:path.resolve(__dirname,'..'),stdio:'ignore'});
- const data={mode:'autonomous-adaptive',asOf:'2026-11-19',blocks:[
+ const data={mode:'autonomous-adaptive',asOf:'2026-11-19',
+  comparison:{
+   asOf:'2026-11-19',horizon:90,modelStatus:'limited-historical-recurrence',
+   coverageNotice:'Independent recurrence-only checking forecast. Ledger includes card settlement and one-off payments.',
+   independentModel:'Independent from posted bank history, without using Ledger forecasts.',
+   ledgerIncome:10500,independentIncome:9000,
+   ledgerLow:{amount:4500,date:'2026-12-19'},
+   independentLow:{amount:6800,date:'2026-12-22'},
+   totals:{matchedIncome:4,uncoveredIncome:1,differingAmounts:1,
+    ledgerOnlyIncome:1,incomeStreams:2},
+   differences:[
+    {kind:'potential-uncovered-income',date:'2026-12-19',amount:2500,
+     merchant:'Fictional Employer',reason:'No matching Ledger deposit'},
+    {kind:'ledger-only-income',date:'2026-12-26',amount:1500,
+     merchant:'Confirmed new income',reason:'Could be manually scheduled and correct'}],
+   streams:[{kind:'income',merchant:'Fictional Employer',cadence:'every-14-days',
+    observations:6,lastPosted:'2026-11-18'}],
+   dataPoints:[{label:'2026-11-19',value:9000,alternateValue:9000},
+    {label:'2026-12-02',value:4800,alternateValue:7800},
+    {label:'2026-12-19',value:4500,alternateValue:6800}]
+  },blocks:[
   {kind:'hero',title:'Forecast outlook',text:'Checking may reach $4500.00 on 2026-12-19',
    evidence:[{text:'Canonical low on 2026-12-19: $4500.00'}]},
   {kind:'paragraph',title:'What causes the low?',
@@ -53,9 +73,17 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.analysis-report img').count(),0,'model text must be literal text');
    assert.equal(await page.locator('.hero').count(),1);
    assert.equal(await page.locator('.callout').count(),1);
-   assert.equal(await page.locator('.graph svg').count(),2);
+   assert.equal(await page.locator('.glance-cards .glance-card').count(),4);
+   assert.equal(await page.locator('.glance-flag').count(),1,
+    'first screen highlights material income differences');
+   assert.equal(await page.locator('.graph svg').count(),3);
+   assert.equal(await page.locator('.legend').count(),1,
+    'compare Ledger and independent balance curves directly');
+   assert.equal(await page.locator('.analysis-detail').count()>0,true,
+    'longer model explanations remain expandable');
    assert.equal(await page.locator('.metric').count(),1);
-   assert.equal(await page.locator('.graph svg path').count()>0,true);
+   assert.equal(await page.locator('.graph svg path').count()>=3,true,
+    'two historical comparison paths and model charts visible');
    assert.equal(await page.locator('.graph svg rect').count()>0,true);
    assert.equal(await page.locator('.evidence').first().getAttribute('open'),null);
    assert.equal(await page.locator('.limits').getAttribute('open'),null);
