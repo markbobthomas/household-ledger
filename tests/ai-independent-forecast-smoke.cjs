@@ -22,7 +22,10 @@ const grocery=Array.from({length:5},(_,i)=>({
 }));
 const historical=[...income,...stable,...grocery,
  {accountId:checking,date:day(-7),type:'transfer',amount:6800,
-  merchant:'Internal household transfer',pending:false},
+  merchant:'Internal household transfer',cashDirection:'in',pairedTransactionId:'linked-personal-savings',pending:false},
+ ...Array.from({length:4},(_,i)=>({accountId:checking,
+  date:day(-84+28*i),type:'transfer',cashDirection:'in',amount:600,
+  merchant:'Possible payroll ACH',pending:false})),
  {accountId:card,date:day(-14),type:'expense',amount:3500,
   merchant:'Credit card purchase',pending:false},
  {accountId:checking,date:day(-14),type:'income',amount:8800,
@@ -31,7 +34,7 @@ const historical=[...income,...stable,...grocery,
   merchant:'Fictional Employer',pending:true}];
 const scheduled=[14,28,56,70,84].map(n=>({
  accountId:checking,date:day(n+(n===14?-2:0)),
- kind:'income',amount:n===56?3500:n%28===0?3100:2500,
+ kind:'income',amount:n===56?4100:n%28===0?3100:2500,
  merchant:'Fictional Employer',recurringRuleId:'never-share-schedule-id'
 })); 
 scheduled.push({accountId:checking,date:day(21),kind:'income',
@@ -52,9 +55,12 @@ const context=financialContext(prepared,{lastSync:asOf});
 const independ=historicalStreams(context);
 const incomes=independ.streams.filter(s=>s.kind==='income');
 const outflows=independ.streams.filter(s=>s.kind==='expense');
-assert.equal(incomes.length,1,'alternating 14-day income must be one alternating recurrence');
-assert.equal(incomes[0].alternating,true);
-assert.deepEqual(incomes[0].amountPattern,[2500,3100]);
+assert.equal(incomes.length,2,'bank-classified income and unpaired ACH credits are separate streams');
+assert(incomes.some(s=>s.classification==='unconfirmed-unpaired-incoming-transfer'),
+ 'unpaired incoming transfer should be examined as POSSIBLE payroll, not silently omitted');
+const payroll=incomes.find(s=>s.merchant.includes('Employer'));
+assert.equal(payroll.alternating,true);
+assert.deepEqual(payroll.amountPattern,[2500,3100]);
 assert.equal(outflows.length,1,'stable checking insurance is a distinct recurring outflow');
 assert.equal(independ.streams.some(x=>/Grocer/.test(x.merchant)),false,
  'everyday grocery purchases must not become recurring forecast obligations');
@@ -62,9 +68,10 @@ assert.equal(independ.streams.some(x=>/transfer|card purchase/i.test(x.merchant)
  'transfers and credit-card purchases are not earned income/primary checking outflows');
 const c=createComparison(context);
 assert.equal(c.horizon,90);
-assert.equal(c.totals.incomeInferredOccurrences,6);
+assert.equal(c.totals.incomeInferredOccurrences,9);
+assert.equal(c.totals.unconfirmedIncomeStreams,1);
 assert.equal(c.totals.matchedIncome,5);
-assert.equal(c.totals.uncoveredIncome,1,'one absent predicted paycheck is flagged for review');
+assert.equal(c.totals.uncoveredIncome,4,'one absent paycheck plus three provisional ACH credits are flagged');
 assert.equal(c.totals.differingAmounts,1,'different Ledger pay amount is separate from no income');
 assert.equal(c.totals.ledgerOnlyIncome,1,'Ledger-only confirmed income must be considered possibly correct');
 assert(c.matched.some(x=>x.shiftDays===2),'weekday/payday shift is not falsely missing income');
@@ -74,7 +81,7 @@ assert.equal(c.modelStatus,'limited-historical-recurrence');
 assert.equal(c.dataPoints.length>30,true);
 assert.equal(typeof c.dataPoints[0].value,'number');
 assert.equal(typeof c.dataPoints[0].alternateValue,'number');
-assert.equal(c.facts.some(x=>x.text.includes('No credit card')),true);
+assert.equal(c.facts.some(x=>x.text.includes('Credit card purchases')),true);
 assert(!JSON.stringify(c).includes(checking),'no original account ID in output');
 assert(!JSON.stringify(c).includes('secret-payroll'),'no raw source transaction ID in output');
 assert(!JSON.stringify(c).includes('never-share-schedule'),'no recurring rule key in output');
