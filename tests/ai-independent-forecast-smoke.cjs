@@ -75,7 +75,7 @@ assert.equal(c.totals.uncoveredIncome,4,'one absent paycheck plus three provisio
 assert.equal(c.totals.differingAmounts,1,'different Ledger pay amount is separate from no income');
 assert.equal(c.totals.ledgerOnlyIncome,1,'Ledger-only confirmed income must be considered possibly correct');
 assert(c.matched.some(x=>x.shiftDays===2),'weekday/payday shift is not falsely missing income');
-assert(c.differences.some(x=>x.kind==='ledger-only-income'&&/may be correct/.test(x.reason)),
+assert(c.differences.some(x=>x.kind==='ledger-only-income'&&/make Ledger correct/.test(x.reason)),
  'explain why Ledger can be right without matching historical evidence');
 assert.equal(c.modelStatus,'limited-historical-recurrence');
 assert.equal(c.dataPoints.length>30,true);
