@@ -72,8 +72,14 @@ assert(low);
    calls===2?{tool_calls:[{id:'t2',function:{
     name:'compute_financial_view',arguments:JSON.stringify(scope)}}]}:
    calls===3?{tool_calls:[{id:'t3',function:{
+    name:'investigate_financial_data',arguments:JSON.stringify({requests:[{
+     kind:'future-payments',accountId:null,startDate:asOf,endDate:date(90),
+     query:'',reason:'Reconcile forecast obligations'}]})}}]}:
+   calls===4?{tool_calls:[{id:'t4',function:{
+    name:'compute_financial_view',arguments:JSON.stringify(scope)}}]}:
+   calls===5?{tool_calls:[{id:'t5',function:{
     name:'research_public_context',arguments:JSON.stringify({topic:'inflation'})}}]}:
-   {content:JSON.stringify({blocks:[
+   calls===6?{content:JSON.stringify({blocks:[
     {kind:'hero',title:'Forecast downside',text:'Checking may reach $4500.00 on '+date(30),
      evidenceIds:[low.id],chartId:null},
     {kind:'chart',title:'',text:'',evidenceIds:[],chartId:'analysis-chart-2'},
@@ -81,7 +87,8 @@ assert(low);
      evidenceIds:[low.id],chartId:null},
     {kind:'callout',title:'Variable spending',text:'The projected low is $4500.00.',
      evidenceIds:[low.id],chartId:null}
-   ],followUps:[],limitations:['Forecast omits some variable spending.']})};
+   ],followUps:[],limitations:['Forecast omits some variable spending.']})}:
+   {content:JSON.stringify({rejectedIndices:[],concerns:[]})};
   return {ok:true,json:async()=>({choices:[{message:m}]})};
  };
  await assert.rejects(()=>analyzeOneClick({context,apiKey:'fictional',consent:'financial-chat-v1',
@@ -92,9 +99,12 @@ assert(low);
  assert.equal(result.followUps.length,0,'no conversational experience');
  assert.equal(result.blocks.length,3,'false monetary claim must be removed');
  assert.equal(result.blocks[1].chart.id,'analysis-chart-2');
- assert.equal(result.auditTrail[1].count,1,'derived misinformation corrected and logged');
+ assert.equal(result.auditTrail.find(x=>x.action.includes('unsupported AI presentation')).count,1,
+  'derived misinformation corrected and logged');
+ assert(result.auditTrail.some(x=>x.action.includes('Independently re-reviewed')),
+  'second analytical review must run');
  assert.equal(result.publicResearch.length,1);
  assert.equal(result.publicResearch[0].sources[0],'https://www.bls.gov/cpi/');
- assert.equal(calls,4);assert.equal(external,1);
+ assert.equal(calls,7);assert.equal(external,1);
  console.log('One-click autonomous AI: deep calculations, public research privacy, consent, audit and numeric verification passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
