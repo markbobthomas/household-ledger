@@ -33,7 +33,7 @@ assert(calc.facts.some(f=>f.text.includes('matched 9')),'all source records coun
 assert(calc.summary.previousCompared===false,'no out-of-range prior data is fabricated');
 assert.equal(computeFinancialView(context,{...scope,accountId:account},1).error,
  'Invalid calculation specification','raw bank account ids cannot query source');
-assert.equal(computeFinancialView(context,{...scope,startDate:date(-1500)},1).error,
+assert.equal(computeFinancialView(context,{...scope,startDate:date(-100)},1).error,
  'Calculation outside available source dates');
 assert(!JSON.stringify(calc).includes(account),'no original account id exposed');
 assert(!JSON.stringify(calc).includes('private-tx-'),'no raw transaction key exposed');
