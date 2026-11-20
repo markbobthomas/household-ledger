@@ -86,7 +86,7 @@ assert(!JSON.stringify(c).includes(checking),'no original account ID in output')
 assert(!JSON.stringify(c).includes('secret-payroll'),'no raw source transaction ID in output');
 assert(!JSON.stringify(c).includes('never-share-schedule'),'no recurring rule key in output');
 const noIncome=financialContext({...prepared,bundle:{...prepared.bundle,
- rows:historical.filter(r=>r.type!=='income')}});
+ rows:historical.filter(r=>r.type!=='income'&&r.merchant!=='Possible payroll ACH')}});
 const c2=createComparison(noIncome);
 assert.equal(c2.modelStatus,'insufficient-independent-income-evidence');
 assert.equal(c2.totals.uncoveredIncome,0,'insufficient sample cannot fabricate missing income');
