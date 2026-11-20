@@ -131,6 +131,10 @@ function createComparison(context,{horizon=90}={}){
   e.date>asOf&&e.date<=day(end,3)&&Number.isFinite(e.amount));
  const expectedIncome=events.filter(e=>String(e.kind).toLowerCase()==='income');
  const estimatedIncome=inferred.streams.filter(s=>s.kind==='income').flatMap(s=>s.predicted);
+ const ledgerBasis=e=>e.recurringRuleId?'Explicit saved recurring rule':
+  e.seriesKey?'Existing Ledger recurring pattern or series edit':
+  e.predictionKey?'Existing dated Ledger plan':
+  'Existing Ledger projected income event; provenance unavailable';
  const matchedEvents=new Set(),matches=[],uncovered=[],amountDiff=[];
  for(const p of estimatedIncome){
   const possible=expectedIncome.map((event,i)=>({event,i,diff:Math.abs(ms(event.date)-ms(p.date))/86400000}))
@@ -146,7 +150,7 @@ function createComparison(context,{horizon=90}={}){
   const discrepancy=abs(match.event.amount-p.amount)>Math.max(20,p.amount*.15);
   const detail={date:p.date,independentAmount:p.amount,
    ledgerDate:match.event.date,ledgerAmount:cents(abs(match.event.amount)),
-   merchant:p.merchant,shiftDays:match.diff,
+   merchant:p.merchant,shiftDays:match.diff,ledgerBasis:ledgerBasis(match.event),
    interpretation:match.diff?'Ledger may shift deposit dates for business-day scheduling':'Dates align'};
   matches.push(detail);
   if(discrepancy)amountDiff.push({...detail,
@@ -154,7 +158,8 @@ function createComparison(context,{horizon=90}={}){
  }
  const ledgerOnly=expectedIncome.map((e,i)=>({e,i})).filter(x=>!matchedEvents.has(x.i)&&x.e.date<=end)
   .map(({e})=>({date:e.date,amount:cents(abs(e.amount)),
-   merchant:label(e.merchant),reason:'Ledger forecasts income without enough matching repeated posted-history evidence; planned or manually confirmed income may be correct'}));
+   merchant:label(e.merchant),ledgerBasis:ledgerBasis(e),
+   reason:'Ledger forecasts income without enough matching repeated posted-history evidence; a confirmed rule, edited series or planned payment can make Ledger correct'}));
  const ledgerIncome90=cents(expectedIncome.filter(x=>x.date<=end).reduce((s,x)=>s+abs(x.amount),0));
  const histIncome90=cents(estimatedIncome.reduce((s,x)=>s+x.amount,0));
  const increments=new Map();
@@ -209,7 +214,7 @@ function createComparison(context,{horizon=90}={}){
   ' '+dollars(item.independentAmount)+' versus Ledger '+item.ledgerDate+' '+dollars(item.ledgerAmount)+
   '; a manual forecast or changed payroll may make Ledger correct.');
  for(const item of ledgerOnly.slice(0,20))add('Ledger-only income '+item.date+' '+dollars(item.amount)+
-  ' '+item.merchant+'; independent history has insufficient repeating evidence. This is NOT proof of an erroneous Ledger forecast.');
+  ' '+item.merchant+'; Ledger basis '+item.ledgerBasis+'; independent history has insufficient repeating evidence. This is NOT proof of an erroneous Ledger forecast.');
  const sampled=data.filter((p,i)=>i%Math.max(1,Math.floor(horizon/70))===0||i===data.length-1||
   p.date===indieLow?.date||p.date===ledgerLow?.date);
  return {asOf,horizon,primary:context.primary?.id||null,modelStatus:reliability,
