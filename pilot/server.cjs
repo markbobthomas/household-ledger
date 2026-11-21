@@ -491,7 +491,9 @@ const aiReports=require('./ai-report-cache.cjs').create({
 async function start(port=Number(env.PORT||8788)){
  await load();
  await auth.load();
- await aiReports.load();
+ // A damaged derived-report cache must never prevent access to bank records.
+ // Fail closed on standing external-sharing consent; leave the bank disk alone.
+ try{await aiReports.load()}catch{/* Optional AI cache unavailable; bank remains authoritative */}
  const server=http.createServer(async(req,res)=>{
   // Route on the URL pathname; tracking/query parameters are not bank actions.
   const requestPath=new URL(req.url,'http://localhost').pathname;
