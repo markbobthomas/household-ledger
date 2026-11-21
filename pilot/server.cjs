@@ -477,7 +477,7 @@ const aiReports=require('./ai-report-cache.cjs').create({
  read:async()=>decrypted(await fs.readFile(file+'.analysis','utf8')),
  write:value=>atomicEncryptedWrite(file+'.analysis',value),
  revision:aiSnapshotRevision,
- available:()=>!!state.items.length&&!!env.OPENAI_API_KEY,
+ available:()=>!!state.items.length,
  snapshot:()=>{
   const prepared=preparedFor(ledgerPayload());
   return require('./ai-financial-report.cjs').financialContext(prepared,{
