@@ -74,7 +74,7 @@ assert(!/interest/i.test(checked.blocks[0].title));
   assert.equal(url,'https://api.openai.com/v1/chat/completions');
   calls++;
   assert.equal(body.store,false);
-  if(calls===9){
+  if(calls===15){
    assert.equal(body.response_format.json_schema.name,'ledger_analysis_review_v1');
    assert.equal(body.tools,undefined,'independent reviewer cannot perform tool calls');
    assert(body.messages[0].content.includes('independent second-pass auditor'));
@@ -94,7 +94,7 @@ assert(!/interest/i.test(checked.blocks[0].title));
   const initial=JSON.parse(body.messages[1].content);
   assert.equal(initial.independentHistoryForecast,undefined,
    'independent forecast is not forced into every investigation');
-  if(calls<=6)assert.equal(body.tool_choice,'required','must investigate before concluding');
+  if(calls<=12)assert.equal(body.tool_choice,'required','must deeply investigate before concluding');
   const m=calls===1?{tool_calls:[{id:'t1',function:{
    name:'investigate_financial_data',arguments:JSON.stringify({requests:[{
     kind:'historical-transactions',accountId:null,startDate:date(-64),
@@ -113,9 +113,13 @@ assert(!/interest/i.test(checked.blocks[0].title));
      query:'',reason:'Test whether the account low is explained'}]})}}]}:
    calls===6?{tool_calls:[{id:'t6',function:{
     name:'compute_financial_view',arguments:JSON.stringify({...scope,groupBy:'category'})}}]}:
-   calls===7?{tool_calls:[{id:'t7',function:{
+   calls>=7&&calls<=12?{tool_calls:[{id:'t'+calls,function:{
+    name:'compute_financial_view',arguments:JSON.stringify({...scope,
+     groupBy:['day','week','month','account','direction','merchant'][calls-7],
+     measure:calls%2?'count':'sum'})}}]}:
+   calls===13?{tool_calls:[{id:'t13',function:{
     name:'research_public_context',arguments:JSON.stringify({topic:'inflation'})}}]}:
-   calls===8?{content:JSON.stringify({blocks:[
+   calls===14?{content:JSON.stringify({blocks:[
     {kind:'hero',title:'Forecast downside',text:'Checking may reach $4500.00 on '+date(30),
      evidenceIds:[low.id],chartId:null},
     {kind:'chart',title:'',text:'',evidenceIds:[],chartId:'analysis-chart-2'},
@@ -151,9 +155,9 @@ assert(!/interest/i.test(checked.blocks[0].title));
   'independent reviewer withheld an unconfirmed explanation');
  assert.equal(result.publicResearch.length,1);
  assert.equal(result.publicResearch[0].sources[0],'https://www.bls.gov/cpi/');
- assert.equal(result.sourceChecks,6,'six distinct checks completed before synthesis');
+ assert.equal(result.sourceChecks,12,'twelve distinct evidence checks before synthesis');
  assert.equal(result.comparison,undefined,'analysis can omit irrelevant forecast comparison');
- assert.equal(calls,9);assert.equal(external,1);
+ assert.equal(calls,15);assert.equal(external,1);
  // Second fictional scenario: the AI elects an independent comparison when useful.
  // This is not an always-on report section or required first-screen chart.
  let n=0;
@@ -161,14 +165,15 @@ assert(!/interest/i.test(checked.blocks[0].title));
   consent:'financial-analysis-v3',fetchImpl:async(url,options)=>{
    assert.equal(url,'https://api.openai.com/v1/chat/completions');
    const body=JSON.parse(options.body);n++;
-   if(n===8)return {ok:true,json:async()=>({choices:[{message:{content:
+   if(n===14)return {ok:true,json:async()=>({choices:[{message:{content:
     JSON.stringify({rejectedIndices:[],concerns:[]})}}]})};
    let message;
    if(n===1)message={tool_calls:[{id:'compare',function:{
     name:'compare_historical_forecast',arguments:'{}'}}]};
-   else if(n<=6)message={tool_calls:[{id:'compute-'+n,function:{
+   else if(n<=12)message={tool_calls:[{id:'compute-'+n,function:{
     name:'compute_financial_view',arguments:JSON.stringify({
-     ...scope,groupBy:['day','week','category','merchant','direction'][n-2]})}}]};
+     ...scope,groupBy:['day','week','category','merchant','direction','account','month'][(n-2)%7],
+     measure:n>8?'count':'sum'})}}]};
    else message={content:JSON.stringify({blocks:[
     {kind:'hero',title:'Forecast downside',
      text:'Checking may reach $4500.00 on '+date(30),
@@ -181,7 +186,7 @@ assert(!/interest/i.test(checked.blocks[0].title));
  assert(optional.comparison,'optional history model only appears when requested');
  assert(optional.blocks.some(b=>b.chart?.type==='comparison'),
   'requested independent comparison is available as an AI-selected chart');
- assert.equal(optional.sourceChecks,6);
- assert.equal(n,8);
+ assert.equal(optional.sourceChecks,12);
+ assert.equal(n,14);
  console.log('Autonomous analysis: unbiased source selection, minimum independent checks, optional comparison, reviewer context and privacy passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
