@@ -148,9 +148,16 @@ function createComparison(context,{horizon=90}={}){
   'Existing Ledger projected income event; provenance unavailable';
  const matchedEvents=new Set(),matches=[],uncovered=[],amountDiff=[];
  for(const p of estimatedIncome){
-  const possible=expectedIncome.map((event,i)=>({event,i,diff:Math.abs(ms(event.date)-ms(p.date))/86400000}))
-   .filter(x=>x.diff<=3&&!matchedEvents.has(x.i)).sort((a,b)=>a.diff-b.diff||
-    abs(a.event.amount-p.amount)-abs(b.event.amount-p.amount));
+  const possible=expectedIncome.map((event,i)=>({
+   event,i,diff:Math.abs(ms(event.date)-ms(p.date))/86400000),
+   samePayee:label(event.merchant).toLowerCase()===label(p.merchant).toLowerCase(),
+   closeAmount:abs(abs(event.amount)-p.amount)<=Math.max(100,p.amount*.50)
+  }))
+   // Timing alone is not evidence of coverage: a tiny interest credit cannot
+   // "cover" an unrelated payroll or ACH inflow just because the dates align.
+   .filter(x=>x.diff<=3&&!matchedEvents.has(x.i)&&(x.samePayee||x.closeAmount))
+   .sort((a,b)=>Number(b.samePayee)-Number(a.samePayee)||a.diff-b.diff||
+    abs(abs(a.event.amount)-p.amount)-abs(abs(b.event.amount)-p.amount));
   const match=possible[0];
   if(!match){
    uncovered.push({date:p.date,amount:p.amount,merchant:p.merchant,
