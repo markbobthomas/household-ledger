@@ -305,6 +305,9 @@ button{font:inherit;cursor:pointer}
    automatic.checked=!!state.enabled;
    if(state.report&&state.completedAt!==lastCompleted){
     addAssistant(state.report);lastCompleted=state.completedAt;
+   }else if(!state.report&&lastCompleted){
+    // Never leave stale numbers on screen while new bank data is analyzed.
+    analysis.replaceChildren();lastCompleted=null;
    }
    if(state.status==='running'||state.status==='queued'){
     status.textContent=state.report?
