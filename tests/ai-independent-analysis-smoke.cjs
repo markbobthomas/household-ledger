@@ -116,7 +116,7 @@ assert(!/interest/i.test(checked.blocks[0].title));
    calls>=7&&calls<=12?{tool_calls:[{id:'t'+calls,function:{
     name:'compute_financial_view',arguments:JSON.stringify({...scope,
      groupBy:['day','week','month','account','direction','merchant'][calls-7],
-     measure:calls%2?'count':'sum'})}}]}:
+     measure:calls===12?'maximum':calls%2?'count':'sum'})}}]}:
    calls===13?{tool_calls:[{id:'t13',function:{
     name:'research_public_context',arguments:JSON.stringify({topic:'inflation'})}}]}:
    calls===14?{content:JSON.stringify({blocks:[
