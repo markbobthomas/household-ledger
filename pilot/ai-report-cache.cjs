@@ -35,7 +35,8 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   const current=revision();
   if(!force&&lastFailedRevision===current)return false;
   if(!force&&saved.report&&saved.revision===current&&!running&&!queued)return false;
-  if(running||queued){requested=true;forceNext=forceNext||force;return true}
+  if(queued){forceNext=forceNext||force;return true}
+  if(running){requested=true;forceNext=forceNext||force;return true}
   queued=true;phase='queued';forceNext=forceNext||force;
   defer(()=>{queued=false;void run()});
   return true;
