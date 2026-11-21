@@ -6,7 +6,10 @@ const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('n
 const {promisify}=require('node:util'),scrypt=promisify(crypto.scrypt);
 const FORMAT='household-ledger-portable-v1',AAD=Buffer.from(FORMAT,'utf8');
 const MAX_SOURCE=40*1024*1024,MAX_BUNDLE=80*1024*1024;
-const PARTS=[['bank',''],['forecasts','.forecasts'],['sessions','.sessions']];
+// The optional derived analysis contains standing consent and private report
+// output. It must travel with the other encrypted files during recovery.
+const PARTS=[['bank',''],['forecasts','.forecasts'],['sessions','.sessions'],
+ ['analysis','.analysis']];
 function object(v){return !!v&&typeof v==='object'&&!Array.isArray(v)}
 function requiredSecret(secret){
  if(typeof secret!=='string'||!secret)throw Error('Source encryption key is required');
@@ -45,6 +48,11 @@ function validate(parts){
  if(parts.forecasts!==null&&!object(parts.forecasts))throw Error('Invalid forecast preferences');
  if(parts.sessions!==null&&(!object(parts.sessions)||parts.sessions.version!==1||
   !Array.isArray(parts.sessions.sessions)))throw Error('Invalid session state');
+ if(parts.analysis!==undefined&&parts.analysis!==null&&
+   (!object(parts.analysis)||parts.analysis.version!==1||
+    typeof parts.analysis.autoEnabled!=='boolean'||
+    (parts.analysis.report!==null&&!object(parts.analysis.report))))
+  throw Error('Invalid automatic AI analysis cache');
  for(const name of Object.keys(parts))if(!PARTS.some(([kind])=>kind===name))
   throw Error('Unexpected private file in recovery archive');
 }
@@ -122,6 +130,6 @@ async function restore({bundle,passphrase,destination,secret}){
   throw error;
  }
  return {verified:true,hasBank:true,hasForecasts:parts.forecasts!==null,
-  hasSessions:parts.sessions!==null};
+  hasSessions:parts.sessions!==null,hasAnalysis:parts.analysis!==null};
 }
 module.exports={capture,open,restore};
