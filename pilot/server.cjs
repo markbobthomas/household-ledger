@@ -523,7 +523,7 @@ async function start(port=Number(env.PORT||8788)){
     const encoded=JSON.stringify(data);
     // The authenticated forecast can be larger than the raw bank response.
     // Compress only when supported by the browser; never allow shared caches.
-    if(requestPath==='/api/ledger'&&req.method==='GET'&&status===200&&
+    if(['/api/ledger','/api/ai/report'].includes(requestPath)&&req.method==='GET'&&status===200&&
        encoded.length>4096&&/\\bgzip\\b/i.test(String(req.headers['accept-encoding']||''))){
      headers['Content-Encoding']='gzip';
      headers.Vary='Accept-Encoding';
