@@ -82,7 +82,7 @@ assert(!/interest/i.test(checked.blocks[0].title));
    assert(audit.otherSourceEvidence.length>0,'reviewer sees counterevidence beyond chosen citations');
    assert(audit.sourceCoverage,'reviewer sees scanned source scope');
    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
-    rejectedIndices:[],concerns:[]})}}]})};
+    rejectedIndices:[3],concerns:[]})}}]})};
   }
   assert.equal(body.tools.length,5,'analyst chooses from calculations, cross-check and research');
   assert(!JSON.stringify(body).includes(account),'full account IDs must stay private');
@@ -122,8 +122,11 @@ assert(!/interest/i.test(checked.blocks[0].title));
     {kind:'paragraph',title:'Made-up finding',text:'Expenses total $987654321.00',
      evidenceIds:[low.id],chartId:null},
     {kind:'callout',title:'Variable spending',text:'The projected low is $4500.00.',
+     evidenceIds:[low.id],chartId:null},
+    {kind:'paragraph',title:'Unconfirmed explanation',
+     text:'The balance difference was caused by a verified salary change.',
      evidenceIds:[low.id],chartId:null}
-   ],followUps:[],limitations:['Forecast omits some variable spending.']})}:
+   ],followUps:[],limitations:['Unsupported assertion that all future cash is covered.']})}:
    {content:JSON.stringify({rejectedIndices:[],concerns:[]})};
   return {ok:true,json:async()=>({choices:[{message:m}]})};
  };
@@ -133,12 +136,19 @@ assert(!/interest/i.test(checked.blocks[0].title));
   fetchImpl});
  assert.equal(result.mode,'autonomous-adaptive');
  assert.equal(result.followUps.length,0,'no conversational experience');
- assert.equal(result.blocks.length,3,'false monetary claim must be removed');
+ assert.equal(result.blocks.length,3,
+  'unsupported numeric claim and independent reviewer rejection are both removed');
+ assert(!result.blocks.some(b=>/verified salary change/.test(b.text)),
+  'unconfirmed causal explanation cannot survive independent review');
+ assert(!result.limitations.some(x=>/all future cash is covered/.test(x)),
+  'uncited model-authored limitations cannot become verified report content');
  assert.equal(result.blocks[1].chart.id,'analysis-chart-2');
  assert.equal(result.auditTrail.find(x=>x.action.includes('unsupported AI presentation')).count,1,
   'derived misinformation corrected and logged');
  assert(result.auditTrail.some(x=>x.action.includes('Independently re-reviewed')),
   'second analytical review must run');
+ assert(result.auditTrail.some(x=>x.action.includes('Independently re-reviewed')&&x.claimsRejected===1),
+  'independent reviewer withheld an unconfirmed explanation');
  assert.equal(result.publicResearch.length,1);
  assert.equal(result.publicResearch[0].sources[0],'https://www.bls.gov/cpi/');
  assert.equal(result.sourceChecks,6,'six distinct checks completed before synthesis');
