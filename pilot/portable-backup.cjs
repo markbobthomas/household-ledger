@@ -117,7 +117,7 @@ async function restore({bundle,passphrase,destination,secret}){
  await fs.mkdir(destination,{mode:0o700,recursive:false});
  try{
   for(const [kind,suffix] of PARTS){
-   if(parts[kind]===null)continue;
+   if(parts[kind]==null)continue;
    const target=path.join(destination,'pilot.enc'+suffix);
    await fs.writeFile(target,encodeForDisk(parts[kind],secret),{flag:'wx',mode:0o600});
    const checked=decodeExisting(await fs.readFile(target,'utf8'),secret);
@@ -130,6 +130,6 @@ async function restore({bundle,passphrase,destination,secret}){
   throw error;
  }
  return {verified:true,hasBank:true,hasForecasts:parts.forecasts!==null,
-  hasSessions:parts.sessions!==null,hasAnalysis:parts.analysis!==null};
+  hasSessions:parts.sessions!==null,hasAnalysis:parts.analysis!=null};
 }
 module.exports={capture,open,restore};
