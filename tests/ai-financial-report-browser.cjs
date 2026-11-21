@@ -51,6 +51,16 @@ module.exports=(async()=>{
    {action:'Automatically withheld unsupported AI presentation blocks',count:1}],
   publicResearch:[{topic:'inflation',sources:['https://www.bls.gov/cpi/']}],
   limitations:['Unknown everyday variable spending is outside the forecast.']};
+ // Two very different source-supported report shapes: nothing forces a
+ // forecast comparison, but an analyst can request it when warranted.
+ const withoutComparison={...data,comparison:undefined};
+ const withComparison={...data,blocks:[{
+  kind:'chart',title:'',text:'',chart:{
+   id:'analysis-independent-comparison',type:'comparison',unit:'USD',
+   title:'Independent balance sensitivity',subtitle:data.comparison.coverageNotice,
+   points:data.comparison.dataPoints},evidence:[]
+ },{kind:'callout',title:'Coverage caveat',
+   text:'The historical projection is incomplete.',evidence:[]}]};
  const ready=async()=>{for(let i=0;i<70;i++){try{if((await fetch(url)).ok)return}
   catch{}await new Promise(r=>setTimeout(r,100))}
   throw Error('Fictional analysis server did not start')};
@@ -62,7 +72,8 @@ module.exports=(async()=>{
    page.on('pageerror',e=>errors.push(e.message));
    await page.route('**/api/ai/analyze',async route=>{
     requests.push(route.request().postDataJSON());
-    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+    await route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify(requests.length===1?withoutComparison:withComparison)});
    });
    await page.goto(url);
    assert.equal(await page.locator('textarea').count(),0,'no chatbot composer');
@@ -73,17 +84,17 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.analysis-report img').count(),0,'model text must be literal text');
    assert.equal(await page.locator('.hero').count(),1);
    assert.equal(await page.locator('.callout').count(),1);
-   assert.equal(await page.locator('.glance-cards .glance-card').count(),4);
-   assert.equal(await page.locator('.glance-flag').count(),1,
-    'first screen highlights material income differences');
-   assert.equal(await page.locator('.graph svg').count(),3);
-   assert.equal(await page.locator('.legend').count(),1,
-    'compare Ledger and independent balance curves directly');
+   assert.equal(await page.locator('.glance-card').count(),0,
+    'no predetermined forecast cards are rendered');
+   assert.equal(await page.locator('.graph svg').count(),2,
+    'only AI-requested graphics are visible');
+   assert.equal(await page.locator('.legend').count(),0,
+    'no independent comparison without an explicit AI request');
    assert.equal(await page.locator('.analysis-detail').count()>0,true,
     'longer model explanations remain expandable');
    assert.equal(await page.locator('.metric').count(),1);
-   assert.equal(await page.locator('.graph svg path').count()>=3,true,
-    'two historical comparison paths and model charts visible');
+   assert.equal(await page.locator('.graph svg path').count()>=1,true,
+    'source-calculated AI-selected charts render');
    assert.equal(await page.locator('.graph svg rect').count()>0,true);
    assert.equal(await page.locator('.evidence').first().getAttribute('open'),null);
    assert.equal(await page.locator('.limits').getAttribute('open'),null);
@@ -97,6 +108,16 @@ module.exports=(async()=>{
    await page.locator('#run').click();
    assert.equal(requests.length,2,'rerunning starts a new independent one-click analysis');
    assert.equal(await page.locator('.analysis-report').count(),1,'no chat conversation stack');
+   assert.equal(await page.locator('.hero').count(),0,
+    'the second, different analysis has no prescribed hero metric');
+   assert.equal(await page.locator('.graph svg').count(),1,
+    'second analysis displays only its elected independent forecast chart');
+   assert.equal(await page.locator('.legend').count(),1,
+    'explicitly requested comparison shows both balance paths');
+   await page.locator('.limits').evaluate(el=>el.open=true);
+   assert.equal(await page.locator('.analysis-detail summary')
+    .filter({hasText:'Independent history cross-check'}).count(),1,
+    'optional cross-check details are expandable only when selected');
    assert.equal(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+2),true,
     'analysis fits narrow mobile width');
    assert.deepEqual(errors,[],name+' analysis should not throw');
