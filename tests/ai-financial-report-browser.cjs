@@ -106,6 +106,7 @@ module.exports=(async()=>{
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.audit li').count(),2);
    await page.locator('#run').click();
+   await page.locator('.legend').waitFor({state:'visible'});
    assert.equal(requests.length,2,'rerunning starts a new independent one-click analysis');
    assert.equal(await page.locator('.analysis-report').count(),1,'no chat conversation stack');
    assert.equal(await page.locator('.hero').count(),0,
