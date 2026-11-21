@@ -408,6 +408,9 @@ async function sync(){
  // the encrypted snapshot is durable. The forecast file is replayed on load.
  await atomicEncryptedWrite(file,committed);state=committed;
  lastSyncAttempt.outcome='success';
+ // An already-authorized analysis starts after the durable bank snapshot
+ // commits; setImmediate keeps Plaid sync acknowledgement nonblocking.
+ aiReports.schedule();
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
  }catch(error){lastSyncAttempt.outcome='failed';throw error}
 }
@@ -459,9 +462,53 @@ function schedulePrepared(){
   catch(_error){preparedCache=null}
  });
 }
+// This fingerprint is a private HMAC of the financial inputs, never an
+// exposed source record or a client-controlled cache key. Mere sync timestamps
+// do not force an expensive rerun when there was no substantive change.
+function aiSnapshotRevision(){
+ const accounts=state.accounts.map(a=>[a.id,a.type,a.current,a.available,a.currency]);
+ const canonicalDate=require('./prepared-forecast.cjs').pacificDate();
+ return crypto.createHmac('sha256',key).update(JSON.stringify({
+  accounts,transactions:state.transactions,adjustments:state.ledgerAdjustments,
+  asOf:canonicalDate
+ })).digest('hex');
+}
+// A deliberately partial private fallback bundle may omit optional AI
+// modules. Never make the core banking/health service depend on their presence.
+const aiCacheFactory=(()=>{
+ try{return require('./ai-report-cache.cjs').create}
+ catch(error){
+  if(error.code==='MODULE_NOT_FOUND'&&
+    String(error.message).includes("'./ai-report-cache.cjs'"))return null;
+  throw error;
+ }
+})();
+const aiReports=aiCacheFactory?aiCacheFactory({
+ read:async()=>decrypted(await fs.readFile(file+'.analysis','utf8')),
+ write:value=>atomicEncryptedWrite(file+'.analysis',value),
+ revision:aiSnapshotRevision,
+ available:()=>!!state.items.length,
+ snapshot:()=>{
+  const prepared=preparedFor(ledgerPayload());
+  return require('./ai-financial-report.cjs').financialContext(prepared,{
+   lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
+ },
+ analyze:context=>require('./ai-chat.cjs').analyzeOneClick({
+  context,consent:'financial-analysis-v3',apiKey:env.OPENAI_API_KEY,
+  model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+ })
+}):{
+ load:async()=>{},status:()=>({enabled:false,status:'unavailable',report:null}),
+ schedule:()=>false,
+ setEnabled:async()=>{throw Error('Optional AI analysis module unavailable')},
+ clear:async()=>{}
+};
 async function start(port=Number(env.PORT||8788)){
  await load();
  await auth.load();
+ // A damaged derived-report cache must never prevent access to bank records.
+ // Fail closed on standing external-sharing consent; leave the bank disk alone.
+ try{await aiReports.load()}catch{/* Optional AI cache unavailable; bank remains authoritative */}
  const server=http.createServer(async(req,res)=>{
   // Route on the URL pathname; tracking/query parameters are not bank actions.
   const requestPath=new URL(req.url,'http://localhost').pathname;
@@ -476,7 +523,7 @@ async function start(port=Number(env.PORT||8788)){
     const encoded=JSON.stringify(data);
     // The authenticated forecast can be larger than the raw bank response.
     // Compress only when supported by the browser; never allow shared caches.
-    if(requestPath==='/api/ledger'&&req.method==='GET'&&status===200&&
+    if(['/api/ledger','/api/ai/report'].includes(requestPath)&&req.method==='GET'&&status===200&&
        encoded.length>4096&&/\\bgzip\\b/i.test(String(req.headers['accept-encoding']||''))){
      headers['Content-Encoding']='gzip';
      headers.Vary='Accept-Encoding';
@@ -626,42 +673,43 @@ async function start(port=Number(env.PORT||8788)){
     remoteDisconnectPending:pendingRevocations().length,
     transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   }
+  if(req.method==='GET'&&requestPath==='/api/ai/report'){
+   // Private encrypted derived output, never stale bank details from a previous
+   // sync. Load does not itself call OpenAI unless recurring sharing is enabled.
+   const visible=aiReports.status();
+   if(visible.enabled&&['outdated','not_ready','failed'].includes(visible.status))
+    aiReports.schedule();
+   return respond(200,aiReports.status());
+  }
   // Unknown browser navigation should be a 404, not a misleading bank-action error.
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  if(requestPath==='/api/ai/settings'){
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).sort().join(',')!=='consent,enabled,scope'||
+      typeof body.enabled!=='boolean'||body.scope!=='financial-analysis-auto-v1'||
+      (body.enabled&&body.consent!==true))
+    return respond(400,{error:'Explicit ongoing financial-analysis sharing consent required',
+     code:'analysis_consent_required'});
+   if(body.enabled&&!env.OPENAI_API_KEY)
+    return respond(503,{error:'AI is not configured on this private server'});
+   if(body.enabled&&!state.items.length)return respond(409,{error:'Connect an account first'});
+   try{return respond(200,await aiReports.setEnabled(body.enabled))}
+   catch{return respond(503,{error:'Could not save encrypted AI analysis preferences'})}
+  }
   if(requestPath==='/api/ai/analyze'){
-   // User-triggered, consent-scoped one-click investigation. All source reads
-   // use the existing canonical prepared ledger; no model-derived record writes.
+   // Manual refresh remains opt-in, but never makes a browser wait for a
+   // multi-pass investigation. The same encrypted cache serves future views.
    if(!body||typeof body!=='object'||Array.isArray(body)||
       Object.keys(body).sort().join(',')!=='consent,scope'||
       body.consent!==true||body.scope!=='financial-analysis-v3')
-    return respond(400,{error:'Explicit consent required for autonomous financial analysis',
+    return respond(400,{error:'Explicit consent required for financial analysis',
      code:'analysis_consent_required'});
-   if(!env.OPENAI_API_KEY)return respond(503,{error:'AI analysis is not configured on the private server'});
-   if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
-   let context;
-   try{
-    const projection=preparedFor(ledgerPayload());
-    context=require('./ai-financial-report.cjs').financialContext(projection,{
-     lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
-   }catch{
-    return respond(409,{error:'Canonical financial context could not pass integrity checks',
-     code:'forecast_context_unavailable'});
-   }
-   try{
-    const result=await require('./ai-chat.cjs').analyzeOneClick({
-     context,consent:'financial-analysis-v3',apiKey:env.OPENAI_API_KEY,
-     model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
-    });
-    return respond(200,result);
-   }catch(error){
-    const allowed=['invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
-     'provider_unavailable','provider_rejected','analysis_timeout','provider_connection_failed',
-     'invalid_provider_response','invalid_ai_json','invalid_ai_schema','invalid_ai_evidence'];
-    const code=allowed.includes(error?.safeCode)?error.safeCode:'analysis_failed';
-    return respond(503,{error:'AI financial analysis could not complete. Source records were not changed.',code});
-   }
+   if(!env.OPENAI_API_KEY)return respond(503,{error:'AI not configured on this private server'});
+   if(!state.items.length)return respond(409,{error:'Connect an account first'});
+   aiReports.schedule({force:true});
+   return respond(202,aiReports.status());
   }
   if(requestPath==='/api/ai/chat'){
    // Every turn explicitly authorizes scoped, read-only AI investigations.
@@ -1153,6 +1201,9 @@ async function start(port=Number(env.PORT||8788)){
     try{await fs.unlink(forecastFile)}catch(e){if(e.code!=='ENOENT')throw e}
     const resetDone={...state};delete resetDone.forecastResetRequired;
     await atomicEncryptedWrite(file,resetDone);state=resetDone;
+    // Never retain a previous household's derived financial analysis or
+    // standing external-sharing authorization after disconnect.
+    await aiReports.clear();
     const remaining=await resumePendingRevocations();
     return respond(remaining?202:200,{ok:true,
      ...(remaining?{remoteDisconnectPending:remaining}:{})});
@@ -1186,6 +1237,9 @@ async function start(port=Number(env.PORT||8788)){
   // Keep cleanup behind the same queue as bank sync and preference edits.
   scheduleRevocationRecovery();
   schedulePrepared();
+  // On restart, resume authorized analysis only if the encrypted report no
+  // longer matches the canonical financial snapshot.
+  aiReports.schedule();
   const hourly=setInterval(()=>{
    invalidatePrepared();schedulePrepared();scheduleRevocationRecovery();
   },60*60*1000);

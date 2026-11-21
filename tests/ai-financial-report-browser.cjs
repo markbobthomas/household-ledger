@@ -70,58 +70,82 @@ module.exports=(async()=>{
    const browser=await engine.launch({headless:true}),context=await browser.newContext({
     viewport:{width,height:800}}),page=await context.newPage(),errors=[],requests=[];
    page.on('pageerror',e=>errors.push(e.message));
+   const settings=[],state={enabled:false,report:withoutComparison,completedAt:'2026-11-21T10:00:00Z'};
+   await page.route('**/api/ai/report',async route=>route.fulfill({
+    status:200,contentType:'application/json',body:JSON.stringify({
+     enabled:state.enabled,status:'ready',report:state.report,completedAt:state.completedAt})
+   }));
+   await page.route('**/api/ai/settings',async route=>{
+    const request=route.request().postDataJSON();settings.push(request);
+    state.enabled=request.enabled;
+    await route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify({enabled:state.enabled,status:'ready'})});
+   });
    await page.route('**/api/ai/analyze',async route=>{
     requests.push(route.request().postDataJSON());
-    await route.fulfill({status:200,contentType:'application/json',
-     body:JSON.stringify(requests.length===1?withoutComparison:withComparison)});
+    state.report=withComparison;
+    state.completedAt='2026-11-21T11:00:0'+requests.length+'Z';
+    await route.fulfill({status:202,contentType:'application/json',
+     body:JSON.stringify({enabled:state.enabled,status:'queued'})});
    });
    await page.goto(url);
    assert.equal(await page.locator('textarea').count(),0,'no chatbot composer');
-   assert.equal(await page.locator('#run').isDisabled(),true);
-   await page.locator('#consent').check();
-   await page.locator('#run').click();
    await page.locator('.analysis-report').waitFor({state:'visible'});
-   assert.equal(await page.locator('.analysis-report img').count(),0,'model text must be literal text');
+   assert.equal(requests.length,0,
+    'opening AI Analysis immediately displays the encrypted saved result, no model rerun');
+   assert.equal(await page.locator('#run').isDisabled(),true,
+    'manual analysis needs consent or saved ongoing sharing authorization');
+   assert.equal(await page.locator('#automatic').isChecked(),false);
+   assert.equal(await page.locator('.analysis-report img').count(),0,
+    'bank-sourced model text must be literal and never execute HTML');
    assert.equal(await page.locator('.hero').count(),1);
    assert.equal(await page.locator('.callout').count(),1);
+   assert.equal(await page.locator('.overview').count(),1,
+    'the main verified summary is visible rather than buried in a details toggle');
    assert.equal(await page.locator('.glance-card').count(),0,
     'no predetermined forecast cards are rendered');
-   assert.equal(await page.locator('.graph svg').count(),2,
-    'only AI-requested graphics are visible');
-   assert.equal(await page.locator('.legend').count(),0,
-    'no independent comparison without an explicit AI request');
-   assert.equal(await page.locator('.analysis-detail').count()>0,true,
-    'longer model explanations remain expandable');
+   assert.equal(await page.locator('.graph svg').count(),2);
+   assert.equal(await page.locator('.legend').count(),0);
    assert.equal(await page.locator('.metric').count(),1);
-   assert.equal(await page.locator('.graph svg path').count()>=1,true,
-    'source-calculated AI-selected charts render');
+   assert.equal(await page.locator('.graph svg path').count()>=1,true);
    assert.equal(await page.locator('.graph svg rect').count()>0,true);
    assert.equal(await page.locator('.evidence').first().getAttribute('open'),null);
    assert.equal(await page.locator('.limits').getAttribute('open'),null);
-   assert.equal(requests.length,1);
-   assert.deepEqual(requests[0],{scope:'financial-analysis-v3',consent:true});
    await page.locator('.graph svg').first().click({position:{x:115,y:90}});
-   assert.equal(await page.locator('.graph .selected').first().textContent().then(x=>x.includes('$')),true,
-    'charts support touch and click');
+   assert.equal(await page.locator('.graph .selected').first().textContent().then(x=>x.includes('$')),true);
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.audit li').count(),2);
+   await page.locator('#automatic').click();
+   assert.equal(await page.locator('#automatic').isChecked(),false,
+    'standing sharing cannot be enabled without explicit consent');
+   assert.equal(settings.length,0);
+   await page.locator('#consent').check();
+   await page.locator('#automatic').check();
+   await page.waitForFunction(()=>document.querySelector('#automatic')?.disabled===false);
+   assert.equal(settings.length,1);
+   assert.deepEqual(settings[0],{
+    enabled:true,scope:'financial-analysis-auto-v1',consent:true});
+   assert.equal(await page.locator('#automatic').isChecked(),true);
    await page.locator('#run').click();
    await page.locator('.legend').waitFor({state:'visible'});
-   assert.equal(requests.length,2,'rerunning starts a new independent one-click analysis');
-   assert.equal(await page.locator('.analysis-report').count(),1,'no chat conversation stack');
-   assert.equal(await page.locator('.hero').count(),0,
-    'the second, different analysis has no prescribed hero metric');
+   assert.equal(requests.length,1,'manual rerun enqueues background analysis');
+   assert.deepEqual(requests[0],{scope:'financial-analysis-v3',consent:true});
+   assert.equal(await page.locator('.analysis-report').count(),1,
+    'a new cached report replaces the old; no transcript or stacked duplicate results');
+   assert.equal(await page.locator('.hero').count(),0);
    assert.equal(await page.locator('.graph svg').count(),1,
-    'second analysis displays only its elected independent forecast chart');
-   assert.equal(await page.locator('.legend').count(),1,
-    'explicitly requested comparison shows both balance paths');
+    'the new report chooses entirely different graphs and topics');
+   assert.equal(await page.locator('.legend').count(),1);
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.analysis-detail summary')
-    .filter({hasText:'Independent history cross-check'}).count(),1,
-    'optional cross-check details are expandable only when selected');
+    .filter({hasText:'Independent history cross-check'}).count(),1);
+   await page.locator('#automatic').uncheck();
+   await page.waitForFunction(()=>document.querySelector('#automatic')?.disabled===false);
+   assert.equal(settings.length,2);
+   assert.equal(settings[1].enabled,false,'automatic data sharing can be withdrawn');
    assert.equal(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+2),true,
     'analysis fits narrow mobile width');
-   assert.deepEqual(errors,[],name+' analysis should not throw');
+   assert.deepEqual(errors,[],name+' AI analysis should not throw');
    await context.close();await browser.close();
   }
   console.log('One-click autonomous AI browser: desktop/iPhone adaptive visuals, audits and privacy passed');

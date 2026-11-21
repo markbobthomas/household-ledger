@@ -35,6 +35,14 @@ function post(route,body={},cookie='',extra={}){
    'Only the public deployed source commit is available without bank authentication');
   assert.ok(!health.body.includes(pass),'Private password never appears in deployment check');
   assert.equal((await get('/api/status',false)).status,401,'Bank metadata must not be accessible anonymously');
+  assert.equal((await get('/api/ai/report',false)).status,401,
+   'Encrypted derived financial reports require authentication');
+  assert.equal((await post('/api/ai/settings',{
+   scope:'financial-analysis-auto-v1',enabled:true,consent:true})).status,401,
+   'An anonymous browser cannot authorize recurring external financial sharing');
+  assert.equal((await post('/api/ai/analyze',{
+   scope:'financial-analysis-v3',consent:true})).status,401,
+   'An anonymous browser cannot trigger an AI investigation');
   assert.equal((await get('/',false)).status,303,'Unsigned browser navigates to private login screen');
   const loginPage=await get('/login',false);
   assert.equal(loginPage.status,200,'Sign-in screen is accessible without exposing protected bank data');
@@ -65,6 +73,20 @@ function post(route,body={},cookie='',extra={}){
   const third=await post('/auth/login',{password:pass});
   const persistentCookie=third.headers['set-cookie'].find(c=>c.startsWith('__Host-ledger_session='));
   assert.equal((await get('/api/status',false,persistentCookie)).status,200);
+  const privateAnalysis=await get('/api/ai/report',false,persistentCookie);
+  assert.equal(privateAnalysis.status,200,'The signed-in user can view cached AI status');
+  assert.deepEqual(JSON.parse(privateAnalysis.body).enabled,false,
+   'Recurring OpenAI financial sharing is OFF until explicitly enabled');
+  assert.equal((await post('/api/ai/settings',{
+   scope:'financial-analysis-auto-v1',enabled:true,consent:false},persistentCookie)).status,400,
+   'Consent-free recurring external sharing must be rejected');
+  assert.equal((await post('/api/ai/settings',{
+   scope:'financial-analysis-auto-v1',enabled:false,consent:false},persistentCookie)).status,200,
+   'Consent can be withdrawn without a bank connection');
+  const encryptedAnalysis=fs.readFileSync(path.join(dir,'pilot.enc.analysis'),'utf8');
+  assert(!encryptedAnalysis.includes('autoEnabled')&&!encryptedAnalysis.includes('report'),
+   'Persistent AI consent and report cache are encrypted, not plaintext');
+
   const upgradedMarker=third.headers['set-cookie']
     .find(c=>c.startsWith('__Host-ledger_upgraded='));
   assert.equal((await get('/api/status',true,upgradedMarker)).status,401,
