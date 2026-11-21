@@ -473,7 +473,17 @@ function aiSnapshotRevision(){
   asOf:canonicalDate
  })).digest('hex');
 }
-const aiReports=require('./ai-report-cache.cjs').create({
+// A deliberately partial private fallback bundle may omit optional AI
+// modules. Never make the core banking/health service depend on their presence.
+const aiCacheFactory=(()=>{
+ try{return require('./ai-report-cache.cjs').create}
+ catch(error){
+  if(error.code==='MODULE_NOT_FOUND'&&
+    String(error.message).includes("'./ai-report-cache.cjs'"))return null;
+  throw error;
+ }
+})();
+const aiReports=aiCacheFactory?aiCacheFactory({
  read:async()=>decrypted(await fs.readFile(file+'.analysis','utf8')),
  write:value=>atomicEncryptedWrite(file+'.analysis',value),
  revision:aiSnapshotRevision,
@@ -487,7 +497,12 @@ const aiReports=require('./ai-report-cache.cjs').create({
   context,consent:'financial-analysis-v3',apiKey:env.OPENAI_API_KEY,
   model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
  })
-});
+}):{
+ load:async()=>{},status:()=>({enabled:false,status:'unavailable',report:null}),
+ schedule:()=>false,
+ setEnabled:async()=>{throw Error('Optional AI analysis module unavailable')},
+ clear:async()=>{}
+};
 async function start(port=Number(env.PORT||8788)){
  await load();
  await auth.load();
