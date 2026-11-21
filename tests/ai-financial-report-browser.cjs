@@ -115,7 +115,7 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.graph .selected').first().textContent().then(x=>x.includes('$')),true);
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.audit li').count(),2);
-   await page.locator('#automatic').check();
+   await page.locator('#automatic').click();
    assert.equal(await page.locator('#automatic').isChecked(),false,
     'standing sharing cannot be enabled without explicit consent');
    assert.equal(settings.length,0);
