@@ -73,6 +73,20 @@ function post(route,body={},cookie='',extra={}){
   const third=await post('/auth/login',{password:pass});
   const persistentCookie=third.headers['set-cookie'].find(c=>c.startsWith('__Host-ledger_session='));
   assert.equal((await get('/api/status',false,persistentCookie)).status,200);
+  const privateAnalysis=await get('/api/ai/report',false,persistentCookie);
+  assert.equal(privateAnalysis.status,200,'The signed-in user can view cached AI status');
+  assert.deepEqual(JSON.parse(privateAnalysis.body).enabled,false,
+   'Recurring OpenAI financial sharing is OFF until explicitly enabled');
+  assert.equal((await post('/api/ai/settings',{
+   scope:'financial-analysis-auto-v1',enabled:true,consent:false},persistentCookie)).status,400,
+   'Consent-free recurring external sharing must be rejected');
+  assert.equal((await post('/api/ai/settings',{
+   scope:'financial-analysis-auto-v1',enabled:false,consent:false},persistentCookie)).status,200,
+   'Consent can be withdrawn without a bank connection');
+  const encryptedAnalysis=fs.readFileSync(path.join(dir,'pilot.enc.analysis'),'utf8');
+  assert(!encryptedAnalysis.includes('autoEnabled')&&!encryptedAnalysis.includes('report'),
+   'Persistent AI consent and report cache are encrypted, not plaintext');
+
   const upgradedMarker=third.headers['set-cookie']
     .find(c=>c.startsWith('__Host-ledger_upgraded='));
   assert.equal((await get('/api/status',true,upgradedMarker)).status,401,
