@@ -149,7 +149,7 @@ function createComparison(context,{horizon=90}={}){
  const matchedEvents=new Set(),matches=[],uncovered=[],amountDiff=[];
  for(const p of estimatedIncome){
   const possible=expectedIncome.map((event,i)=>({
-   event,i,diff:Math.abs(ms(event.date)-ms(p.date))/86400000),
+   event,i,diff:Math.abs(ms(event.date)-ms(p.date))/86400000,
    samePayee:label(event.merchant).toLowerCase()===label(p.merchant).toLowerCase(),
    closeAmount:abs(abs(event.amount)-p.amount)<=Math.max(100,p.amount*.50)
   }))
