@@ -130,7 +130,18 @@ function createComparison(context,{horizon=90}={}){
   e&&String(e.accountId)===String(inferred.sourceAccount)&&valid(e.date)&&
   e.date>asOf&&e.date<=day(end,3)&&Number.isFinite(e.amount));
  const expectedIncome=events.filter(e=>String(e.kind).toLowerCase()==='income');
- const estimatedIncome=inferred.streams.filter(s=>s.kind==='income').flatMap(s=>s.predicted);
+ // All posted activity remains available for exact accounting and balance maths.
+ // Only material 90-day income patterns become user-facing questions. This
+ // prevents recurring pennies (such as account interest) from masquerading as
+ // a missing paycheck or turning an otherwise weak model into 'income evidence'.
+ // The impact test uses the whole horizon and the local income scale rather
+ // than an arbitrary per-transaction anomaly count.
+ const incomeStreams=inferred.streams.filter(s=>s.kind==='income');
+ const referenceAmount=Math.max(0,...incomeStreams.flatMap(s=>s.amountPattern));
+ const materialIncomeImpact=Math.max(5,Math.min(50,referenceAmount*.01));
+ const relevantIncomeStreams=incomeStreams.filter(s=>
+  s.predicted.reduce((sum,p)=>sum+p.amount,0)>=materialIncomeImpact);
+ const estimatedIncome=relevantIncomeStreams.flatMap(s=>s.predicted);
  const ledgerBasis=e=>e.recurringRuleId?'Explicit saved recurring rule':
   e.seriesKey?'Existing Ledger recurring pattern or series edit':
   e.predictionKey?'Existing dated Ledger plan':
@@ -156,7 +167,14 @@ function createComparison(context,{horizon=90}={}){
   if(discrepancy)amountDiff.push({...detail,
    reason:'Same-date income has a materially different amount; a saved override or pay variability may explain it'});
  }
- const ledgerOnly=expectedIncome.map((e,i)=>({e,i})).filter(x=>!matchedEvents.has(x.i)&&x.e.date<=end)
+ const ledgerIncomeByPayee=new Map();
+ for(const event of expectedIncome){
+  const key=label(event.merchant).toLowerCase();
+  ledgerIncomeByPayee.set(key,(ledgerIncomeByPayee.get(key)||0)+abs(event.amount));
+ }
+ const ledgerOnly=expectedIncome.map((e,i)=>({e,i})).filter(x=>
+  !matchedEvents.has(x.i)&&x.e.date<=end&&
+  (ledgerIncomeByPayee.get(label(x.e.merchant).toLowerCase())||0)>=materialIncomeImpact)
   .map(({e})=>({date:e.date,amount:cents(abs(e.amount)),
    merchant:label(e.merchant),ledgerBasis:ledgerBasis(e),
    reason:'Ledger forecasts income without enough matching repeated posted-history evidence; a confirmed rule, edited series or planned payment can make Ledger correct'}));
@@ -177,13 +195,18 @@ function createComparison(context,{horizon=90}={}){
  const indieLow=data.length?data.reduce((a,b)=>a.independent<=b.independent?a:b):null;
  const ledgerLow=data.length?data.reduce((a,b)=>a.ledger<=b.ledger?a:b):null;
  const meaningfulHistory=inferred.streams.length>0;
- const sampleCount=inferred.streams.filter(s=>s.kind==='income').length;
+ const sampleCount=relevantIncomeStreams.length;
  const reliability=sampleCount>0?'limited-historical-recurrence':'insufficient-independent-income-evidence';
  const flags=[
   ...uncovered.map(x=>({...x,kind:'potential-uncovered-income'})),
   ...amountDiff.map(x=>({...x,kind:'amount-difference'})),
   ...ledgerOnly.map(x=>({...x,kind:'ledger-only-income'}))
- ];
+ ].sort((a,b)=>{
+  const priority=x=>x.kind==='ledger-only-income'?1:0;
+  return priority(a)-priority(b)||
+   abs(b.amount??b.independentAmount)-abs(a.amount??a.independentAmount)||
+   a.date.localeCompare(b.date);
+ });
  // These facts are safe: no raw account IDs, bank record IDs, hidden credentials,
  // or client-submitted forecast events appear in the independent presentation.
  const facts=[];
@@ -199,7 +222,8 @@ function createComparison(context,{horizon=90}={}){
  if(indieLow&&ledgerLow)add('Independent recurrence-only primary checking low '+dollars(indieLow.independent)+
   ' on '+indieLow.date+' versus Ledger projected low '+dollars(ledgerLow.ledger)+
   ' on '+ledgerLow.date+'. DIFFERENT COVERAGE: history model omits all unlearned one-time, card settlement, transfers and variable expenses; neither low validates the other.');
- for(const s of inferred.streams.slice(0,24)){
+ for(const s of inferred.streams.filter(s=>
+  s.kind==='expense'||relevantIncomeStreams.includes(s)).slice(0,24)){
   add('Historical '+s.kind+' stream '+s.merchant+' '+s.cadence+
    '; classification '+s.classification+
    '; observed '+s.observations+' posted examples from '+s.firstDate+' through '+s.lastPosted+
@@ -229,8 +253,9 @@ function createComparison(context,{horizon=90}={}){
    alternating:s.alternating,amountPattern:s.amountPattern,lastPosted:s.lastPosted,
    projectedCount:s.predicted.length})),
   totals:{historicalStreams:inferred.streams.length,incomeStreams:sampleCount,
-   unconfirmedIncomeStreams:inferred.streams.filter(s=>s.kind==='income'&&
+   unconfirmedIncomeStreams:relevantIncomeStreams.filter(s=>
     s.classification==='unconfirmed-unpaired-incoming-transfer').length,
+   minorIncomeStreamsSuppressed:incomeStreams.length-relevantIncomeStreams.length,
    matchedIncome:matches.length,uncoveredIncome:uncovered.length,
    differingAmounts:amountDiff.length,ledgerOnlyIncome:ledgerOnly.length,
    incomeInferredOccurrences:estimatedIncome.length,postedExamined:inferred.postedExamined},
