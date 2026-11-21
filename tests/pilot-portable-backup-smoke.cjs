@@ -45,6 +45,10 @@ const forecasts={cashCushion:6800,transactionNotes:{'fictional-bill':'Keep note'
  futureRecurringRules:[{id:'fictional-rule',accountId:'fictional-checking',merchant:'Fictional Bills',
   amount:140,frequency:'monthly'}]};
 const sessions={version:1,sessions:[]};
+const analysis={version:1,autoEnabled:true,revision:'fictional-revision',
+ completedAt:'2026-11-17T02:00:00.000Z',
+ report:{mode:'autonomous-adaptive',blocks:[{kind:'hero',title:'Budget observation',
+  text:'Fictional summary'}]}};
 function submit(route,body,options={}){
  return new Promise((resolve,reject)=>{
   const payload=JSON.stringify(body);
@@ -74,7 +78,8 @@ function get(route,authenticated=true){
   fs.writeFileSync(source,seal(bank,oldKey),{mode:0o600});
   fs.writeFileSync(source+'.forecasts',seal(forecasts,oldKey),{mode:0o600});
   fs.writeFileSync(source+'.sessions',seal(sessions,oldKey),{mode:0o600});
-  const originalFiles=[source,source+'.forecasts',source+'.sessions'].map(f=>
+  fs.writeFileSync(source+'.analysis',seal(analysis,oldKey),{mode:0o600});
+  const originalFiles=[source,source+'.forecasts',source+'.sessions',source+'.analysis'].map(f=>
    fs.readFileSync(f,'utf8'));
   const env={...process.env,PORT:String(port),PILOT_PASSWORD:login,
    PILOT_ENCRYPTION_KEY:oldKey,PILOT_STATE_PATH:source,
@@ -112,7 +117,8 @@ function get(route,authenticated=true){
   assert.deepEqual(restored.bank,bank,'All accounts and exact source facts are retained');
   assert.deepEqual(restored.forecasts,forecasts,'Independent forecast file is retained');
   assert.deepEqual(restored.sessions,sessions,'Independent session file is retained');
-  for(const [i,f] of [source,source+'.forecasts',source+'.sessions'].entries())
+  assert.deepEqual(restored.analysis,analysis,'Ongoing analysis consent and encrypted report retained');
+  for(const [i,f] of [source,source+'.forecasts',source+'.sessions',source+'.analysis'].entries())
    assert.equal(fs.readFileSync(f,'utf8'),originalFiles[i],
     'Making the backup does not change any original encrypted file');
   await assert.rejects(Backup.open(archive,'incorrect long phrase for this encrypted archive'),
@@ -124,9 +130,10 @@ function get(route,authenticated=true){
   const isolated=path.join(temp,'isolated-restore');
   const result=await Backup.restore({bundle:archive,passphrase:pass,
    destination:isolated,secret:newKey});
-  assert.deepEqual(result,{verified:true,hasBank:true,hasForecasts:true,hasSessions:true});
+  assert.deepEqual(result,{verified:true,hasBank:true,hasForecasts:true,hasSessions:true,hasAnalysis:true});
   for(const [name,document] of [
-   ['pilot.enc',bank],['pilot.enc.forecasts',forecasts],['pilot.enc.sessions',sessions]]){
+   ['pilot.enc',bank],['pilot.enc.forecasts',forecasts],['pilot.enc.sessions',sessions],
+   ['pilot.enc.analysis',analysis]]){
    const file=path.join(isolated,name);
    assert.deepEqual(unseal(file,newKey),document,'Verified isolated '+name+' with NEW encryption key');
    assert.equal(fs.statSync(file).mode&0o077,0,'Only owner may read restored '+name);
@@ -151,7 +158,7 @@ function get(route,authenticated=true){
     PILOT_ENCRYPTION_KEY:'another fictional deployment key'},encoding:'utf8'});
   assert.equal(cli.status,0,'Standalone isolated restore command works: '+cli.stderr);
   assert.deepEqual(unseal(path.join(cliDest,'pilot.enc'),'another fictional deployment key'),bank);
-  console.log('PASS portable Ledger recovery: authenticated private download, consistent 3-file snapshot, independent passphrase, tamper rejection, 0600 isolated restore with NEW key, immutable live files');
+  console.log('PASS portable Ledger recovery: authenticated private download, consistent 4-file snapshot, independent passphrase, tamper rejection, 0600 isolated restore with NEW key, immutable live files');
  }finally{
   if(child){
    child.kill('SIGTERM');
