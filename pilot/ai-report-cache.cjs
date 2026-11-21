@@ -4,7 +4,7 @@
 // exact canonical snapshot revision it examined.
 function create({read,write,revision,snapshot,analyze,available=()=>true,defer=setImmediate}){
  let saved={version:1,autoEnabled:false,report:null,revision:null,completedAt:null};
- let phase='idle',lastError=null,queued=false,running=false,requested=false,forceNext=false;
+ let phase='idle',lastError=null,lastFailedRevision=null,queued=false,running=false,requested=false,forceNext=false;
  const safeCode=e=>[
   'invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
   'provider_unavailable','provider_rejected','analysis_timeout',
@@ -33,6 +33,7 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
  function schedule({force=false}={}){
   if(!available()||!saved.autoEnabled&&!force)return false;
   const current=revision();
+  if(!force&&lastFailedRevision===current)return false;
   if(!force&&saved.report&&saved.revision===current&&!running&&!queued)return false;
   if(running||queued){requested=true;forceNext=forceNext||force;return true}
   queued=true;phase='queued';forceNext=forceNext||force;
@@ -53,11 +54,11 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
    if(available()&&revision()===examined&&
      (saved.autoEnabled||runForced)){
     await store({...saved,report,revision:examined,completedAt:new Date().toISOString()});
-    phase='ready';
+    phase='ready';lastFailedRevision=null;
    }else if(available()&&saved.autoEnabled){
     requested=true;phase='outdated';
    }else phase='idle';
-  }catch(e){lastError=safeCode(e);phase='failed'}
+  }catch(e){lastError=safeCode(e);lastFailedRevision=examined;phase='failed'}
   finally{
    running=false;
    if(requested){const again=forceNext;requested=false;forceNext=false;
@@ -72,7 +73,7 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
  }
  async function clear(){
   await store({version:1,autoEnabled:false,report:null,revision:null,completedAt:null});
-  requested=false;forceNext=false;lastError=null;phase='idle';
+  requested=false;forceNext=false;lastError=null;lastFailedRevision=null;phase='idle';
  }
  return {load,status,schedule,setEnabled,clear};
 }
