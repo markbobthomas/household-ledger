@@ -47,20 +47,6 @@ button{font:inherit;cursor:pointer}
  .metric{padding:11px}.metric strong{font-size:1.1rem}.graph{padding:8px}
  .control{align-items:stretch}#run{width:100%}}
 
-.glance{margin:0 0 22px;padding:0 0 19px;border-bottom:1px solid #e2e9e3}
-.glance-heading{font-size:.82rem;letter-spacing:.075em;text-transform:uppercase;font-weight:730;color:#586e63;margin:0 0 11px}
-.glance-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
-.glance-card{border:1px solid #dfebe2;background:#f6faf7;border-radius:12px;padding:13px 14px;min-width:0}
-.glance-card .k{font-size:.78rem;color:#597267}
-.glance-card strong{display:block;font-size:1.35rem;letter-spacing:-.02em;margin:7px 0 4px;overflow-wrap:anywhere;line-height:1.23}
-.glance-card .sub{font-size:.76rem;color:#63746a;line-height:1.35}
-.glance-caption{font-size:.79rem;color:#65766b;margin:11px 0 8px;line-height:1.5}
-.glance-flags{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:13px 0}
-.glance-flag{border:1px solid #e2e9e3;background:#fff;padding:10px 12px;border-radius:10px}
-.glance-flag .flag-label{font-size:.79rem;color:#66736b}
-.glance-flag strong{display:block;font-size:.98rem;margin-top:4px}
-.glance-flag .flag-detail{font-size:.78rem;color:#66736b;line-height:1.4}
-.glance .graph{margin:10px 0 12px}
 .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:.79rem;color:#55695e;margin:10px 0 0}
 .legend span{display:inline-flex;align-items:center;gap:7px}
 .legend i{width:18px;height:3px;display:inline-block;border-radius:2px;background:#286b5c}
@@ -70,13 +56,10 @@ button{font:inherit;cursor:pointer}
 .analysis-detail summary strong{font-size:1.01rem;color:#284c40}
 .analysis-detail .preview{font-size:.9rem;font-weight:400;color:#62736a;line-height:1.35}
 .analysis-detail .inside{padding:4px 0 9px}
-.findings-heading{font-size:1.05rem;margin:15px 0 7px}
-@media(max-width:700px){.glance-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.glance-card{padding:11px}
-.glance-card strong{font-size:1.12rem}.glance-flags{grid-template-columns:1fr}}
 </style></head><body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <div class="intro"><h1>AI Financial Analysis</h1>
-<p class="muted">One click starts an independent investigation of your full available Ledger data. The AI chooses which questions to examine, independently requests source-calculated comparisons, and builds the presentation best suited to its findings. Detailed evidence stays expandable.</p></div>
+<p class="muted">One click starts a deep, open-ended investigation of the financial records available to Ledger. The AI decides what deserves investigation and what to show based on what the evidence supports. Claims are checked against source calculations; detailed methods and unresolved questions remain expandable.</p></div>
 <div class="consent">
 <label><input id="consent" type="checkbox"><span>I authorize this analysis to share sanitized financial summaries and AI-selected investigation and calculation results with OpenAI. Optional external research uses generic public topics without sharing household details.</span></label>
 <details><summary>What information is shared, and what can the AI change?</summary>
@@ -202,77 +185,26 @@ button{font:inherit;cursor:pointer}
   fig.append(svg,selected,el('figcaption','',chart.subtitle||'Ledger-calculated values'));
   target.append(fig);
  }
- function showGlance(target,c){
-  if(!c)return;
-  const section=el('section','glance'),h=el('div','glance-heading','At a glance · Independent comparison');
-  const cards=el('div','glance-cards'),totals=c.totals||{};
-  const card=(name,value,detail)=>{
-   const node=el('div','glance-card');
-   node.append(el('div','k',name),el('strong','',value),el('div','sub',detail));cards.append(node);
-  };
-  const hasEvidence=totals.incomeStreams>0;
-  card('Ledger low · 90 days',c.ledgerLow?money(c.ledgerLow.amount):'Unavailable',
-   c.ledgerLow?.date||'No source balance range');
-  card('History-only low',hasEvidence&&c.independentLow?money(c.independentLow.amount):'Insufficient',
-   hasEvidence?(c.independentLow?.date||'Evidence incomplete'):'Not enough repeatable income');
-  card('Expected income · 90 days',hasEvidence?money(c.independentIncome):'Unverified',
-   'Ledger scheduled: '+money(c.ledgerIncome||0));
-  const review=(totals.uncoveredIncome||0)+(totals.differingAmounts||0);
-  card('Income to investigate',String(review),
-   (totals.matchedIncome||0)+' aligned dates · '+(totals.ledgerOnlyIncome||0)+' Ledger-only deposits');
-  section.append(h,cards);
-  const caption=el('p','glance-caption',c.coverageNotice||
-   'The independent projection is a history-only check, not the authoritative Ledger projection.');
-  section.append(caption);
-  if(hasEvidence&&c.dataPoints?.length>1){
-   drawGraph(section,{type:'comparison',unit:'USD',
-    title:'How the two balance paths compare',
-    subtitle:'Ledger includes saved predictions, card settlements and transfers. History-only includes detected repeating checking income and stable payments; unmodeled items can create large valid differences.',
-    points:c.dataPoints});
+ function optionalComparisonNotes(c){
+  const details=el('details','analysis-detail'),
+   summary=el('summary','','Independent history cross-check · methods and exceptions'),
+   inside=el('div','inside');
+  info(inside,c.coverageNotice||'This is a partial history-derived model, not a verified alternative forecast.');
+  info(inside,c.independentModel||'Only recurring items supported by posted history are inferred.');
+  for(const item of (c.differences||[]).slice(0,40)){
+   const label=item.kind==='potential-uncovered-income'?'Possibly unmatched history-derived income':
+    item.kind==='amount-difference'?'Different modeled and scheduled amounts':'Ledger-only scheduled income';
+   info(inside,label+' · '+item.date+' · '+money(item.amount??item.independentAmount)+
+    ' · '+(item.merchant||'Unknown')+'. '+(item.reason||'Requires corroboration.'));
   }
-  const flags=(c.differences||[]),critical=flags.filter(x=>x.kind!=='ledger-only-income').slice(0,3);
-  if(critical.length){
-   section.append(el('h3','findings-heading','Income differences worth checking'));
-   const box=el('div','glance-flags');
-   for(const item of critical){
-    const n=el('div','glance-flag'),name=item.kind==='potential-uncovered-income'?
-     'No matching Ledger income':item.kind==='amount-difference'?'Different scheduled amount':'Ledger-only income';
-    n.append(el('div','flag-label',name),
-     el('strong','',item.date+' · '+money(item.amount??item.independentAmount)),
-     el('div','flag-detail',item.merchant||'Recorded income pattern'));
-    box.append(n);
-   }
-   section.append(box);
-  }
-  const details=el('details','analysis-detail'),summary=el('summary','','All income comparisons and forecasting assumptions');
-  const content=el('div','inside');
-  const explanation=el('p','',c.independentModel||'Posted-history recurrence method');
-  content.append(explanation);
-  content.append(el('p','',c.coverageNotice||'Coverage differs.'));
-  for(const item of (c.matched||[]).slice(0,15)){
-   if(item.shiftDays||Math.abs(item.ledgerAmount-item.independentAmount)>20){
-    content.append(el('p','',
-     'Ledger covers historical income on '+item.date+' with '+money(item.ledgerAmount)+
-     ' on '+item.ledgerDate+' ('+item.ledgerBasis+'). '+item.interpretation));
-   }
-  }
-  for(const item of flags){
-   const text=item.kind==='potential-uncovered-income'?'History suggests income not in Ledger':
-    item.kind==='amount-difference'?'Amount disagrees':'Ledger income absent from history model';
-   content.append(el('p','',text+' · '+item.date+' · '+money(item.amount??item.independentAmount)+
-    ' · '+(item.merchant||'Unknown')+'. '+(item.ledgerBasis?item.ledgerBasis+'. ':'')+item.reason));
-  }
-  for(const stream of (c.streams||[])){
-   content.append(el('p','',stream.kind+' pattern: '+stream.merchant+' · '+stream.cadence+
-    ' · '+stream.observations+' posted observations · last observed '+stream.lastPosted));
-  }
-  details.append(summary,content);section.append(details);target.append(section);
+  if(!(c.differences||[]).length)info(inside,'No candidate income differences surfaced in this partial cross-check.');
+  details.append(summary,inside);
+  return details;
  }
  function addAssistant(data){
   const msg=el('article','analysis-report'),who=el('div','who','Independent financial review · '+data.asOf);
   if(data.mode!=='autonomous-adaptive')throw Error('Unexpected analysis response');
   msg.append(who);
-  showGlance(msg,data.comparison);
   let metrics=null;
   for(const block of data.blocks||[]){
    if(block.kind==='metric'){
@@ -321,10 +253,12 @@ button{font:inherit;cursor:pointer}
   info(body,'Source: '+(c.historicalTransactionsScanned||0)+' actual-history records scanned across '+
    (c.historicalMonthsScanned||0)+' months; '+(c.futureEventsScanned||0)+
    ' canonical future event legs; '+(c.forecastHorizonDays||0)+' days of projections. '+
-   (data.investigations||0)+' additional targeted source investigations. Last bank sync: '+
+   (data.sourceChecks||0)+' distinct source checks, including '+
+   (data.investigations||0)+' targeted record investigations. Last bank sync: '+
    (c.lastSync||'unknown')+'.');
   info(body,data.disclosure||'Original bank records were not all transmitted to the model.');
   for(const limit of data.limitations||[])info(body,limit);
+  if(data.comparison)body.append(optionalComparisonNotes(data.comparison));
   if(data.auditTrail?.length){
    const audit=el('ul','audit');for(const item of data.auditTrail)
     audit.append(el('li','',item.action+(item.count?' ('+item.count+')':'')));
@@ -345,7 +279,7 @@ button{font:inherit;cursor:pointer}
  run.addEventListener('click',async()=>{
   if(pending||!consent.checked)return;
   pending=true;sync();run.textContent='Investigating…';
-  status.textContent='Analyzing source history, checking forecast assumptions and calculating independent comparisons…';
+  status.textContent='Investigating the records, testing explanations and verifying material conclusions…';
   try{
    const response=await fetch('/api/ai/analyze',{method:'POST',credentials:'same-origin',cache:'no-store',
     headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
