@@ -20,7 +20,13 @@ const grocery=Array.from({length:5},(_,i)=>({
  accountId:checking,date:day(-35+7*i),type:'expense',amount:100,
  merchant:'Fictional Grocer',category:'Groceries',pending:false
 }));
-const historical=[...income,...stable,...grocery,
+// Four real but inconsequential posted interest payments must remain in the
+// source without turning into missing-paycheck or forecast-risk warnings.
+const tinyInterest=Array.from({length:4},(_,i)=>({
+ accountId:checking,date:day(-84+28*i),type:'income',amount:0.04,
+ merchant:'Fictional Account Interest',pending:false
+}));
+const historical=[...income,...stable,...grocery,...tinyInterest,
  {accountId:checking,date:day(-7),type:'transfer',amount:6800,
   merchant:'Internal household transfer',cashDirection:'in',pairedTransactionId:'linked-personal-savings',pending:false},
  ...Array.from({length:4},(_,i)=>({accountId:checking,
@@ -37,6 +43,10 @@ const scheduled=[14,28,56,70,84].map(n=>({
  kind:'income',amount:n===56?4100:n%28===14?3100:2500,
  merchant:'Fictional Employer',recurringRuleId:'never-share-schedule-id'
 })); 
+scheduled.push({accountId:checking,date:day(28),kind:'income',amount:0.04,
+ merchant:'Fictional Account Interest'});
+scheduled.push({accountId:checking,date:day(56),kind:'income',amount:0.04,
+ merchant:'Fictional Account Interest'});
 scheduled.push({accountId:checking,date:day(21),kind:'income',
  amount:7777,merchant:'Confirmed new salary',recurringRuleId:'private-flag'});
 scheduled.push({accountId:checking,date:day(25),kind:'transfer_out',
@@ -55,7 +65,7 @@ const context=financialContext(prepared,{lastSync:asOf});
 const independ=historicalStreams(context);
 const incomes=independ.streams.filter(s=>s.kind==='income');
 const outflows=independ.streams.filter(s=>s.kind==='expense');
-assert.equal(incomes.length,2,'bank-classified income and unpaired ACH credits are separate streams');
+assert.equal(incomes.length,3,'raw inference retains even trivial posted interest for accounting');
 assert(incomes.some(s=>s.classification==='unconfirmed-unpaired-incoming-transfer'),
  'unpaired incoming transfer should be examined as POSSIBLE payroll, not silently omitted');
 const payroll=incomes.find(s=>s.merchant.includes('Employer'));
@@ -70,6 +80,12 @@ const c=createComparison(context);
 assert.equal(c.horizon,90);
 assert.equal(c.totals.incomeInferredOccurrences,9);
 assert.equal(c.totals.unconfirmedIncomeStreams,1);
+assert.equal(c.totals.incomeStreams,2,'pennies of interest cannot constitute material income evidence');
+assert.equal(c.totals.minorIncomeStreamsSuppressed,1);
+assert(!c.differences.some(x=>x.merchant.includes('Interest')),
+ 'minor interest never becomes a leading uncovered-income or Ledger-only warning');
+assert(!c.facts.some(x=>x.text.includes('Fictional Account Interest')),
+ 'source-aligned analyst context avoids promoting trivial interest into a finding');
 assert.equal(c.totals.matchedIncome,5);
 assert.equal(c.totals.uncoveredIncome,4,'one absent paycheck plus three provisional ACH credits are flagged');
 assert.equal(c.totals.differingAmounts,1,'different Ledger pay amount is separate from no income');
