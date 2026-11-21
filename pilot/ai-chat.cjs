@@ -227,7 +227,12 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
    immaterialBlocksWithheld:microWithheld,
    unsupportedBlocksWithheld:parsed.blocks.length-blocks.length-microWithheld},
   followUps:parsed.followUps.filter(x=>typeof x==='string'&&x.length>5&&x.length<=140).slice(0,4),
-  limitations:parsed.limitations.filter(x=>typeof x==='string'&&x.length<=260).slice(0,8),
+  // Free-form model limitations have no citations. Do not elevate those into
+  // verified autonomous findings; use source-known constraints instead.
+  limitations:materialityGate?[
+   'Future balances are conditional on recorded and scheduled events; unscheduled future activity is unknown.',
+   ...(!context.scope?.lastSync?['The latest successful bank sync time is not available.']:[])
+  ]:parsed.limitations.filter(x=>typeof x==='string'&&x.length<=260).slice(0,8),
   coverage:context.scope,reportStatus:'advisory-only',
   disclosure:'Ledger scans all available canonical history and projections locally; the AI sees summarized evidence and any selected read-only investigations, not every raw record.'};
 }
@@ -295,7 +300,8 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
        count:result.evidenceAudit.unsupportedBlocksWithheld,scope:'derived analysis only'}]:[]),
      ...(result.evidenceAudit.immaterialBlocksWithheld?[{action:'Suppressed standalone financially immaterial micro-transaction observations',
        count:result.evidenceAudit.immaterialBlocksWithheld,scope:'derived analysis only'}]:[])];
-    result.limitations.push(...secondReview.concerns.slice(0,4));
+    result.limitations.push(...secondReview.concerns.slice(0,4)
+     .map(x=>'Unresolved reviewer question (not a confirmed finding): '+x));
     result.disclosure='Ledger checks its complete accessible history and canonical forecast locally. AI sees a selected evidence summary and the results of targeted source investigations and computations; it does not receive a literal raw banking dump. No source bank records, categorization decisions, or future prediction rules are automatically altered.';
    }
    return result;
