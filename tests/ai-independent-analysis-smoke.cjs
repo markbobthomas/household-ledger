@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const {financialContext}=require('../pilot/ai-financial-report.cjs');
 const {computeFinancialView,researchPublic}=require('../pilot/ai-independent-tools.cjs');
-const {analyzeOneClick}=require('../pilot/ai-chat.cjs');
+const {analyzeOneClick,verifyAnswer}=require('../pilot/ai-chat.cjs');
 const asOf='2026-11-19',date=n=>{
  const d=new Date(asOf+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);
  return d.toISOString().slice(0,10);
@@ -39,6 +39,21 @@ assert(!JSON.stringify(calc).includes(account),'no original account id exposed')
 assert(!JSON.stringify(calc).includes('private-tx-'),'no raw transaction key exposed');
 const low=context.facts.find(f=>f.text.includes('lowest projected 90 day balance'));
 assert(low);
+const centFact={id:'fictional-micro-interest',kind:'actual',text:
+ 'Fictional account earned $0.04 ordinary interest.'};
+const penny={kind:'paragraph',title:'Four cents of interest',
+ text:'This account earned $0.04 interest.',evidenceIds:[centFact.id],chartId:null};
+const material={kind:'hero',title:'Projected low',
+ text:'Checking could reach $4500.00.',evidenceIds:[low.id],chartId:null};
+const checked=verifyAnswer({blocks:[penny,material],followUps:[],limitations:[]},
+ [centFact,low],[],context,{materialityGate:true});
+assert.equal(checked.blocks.length,1,'penny-only finding should not reach the main report');
+assert.equal(checked.evidenceAudit.immaterialBlocksWithheld,1);
+assert.equal(checked.evidenceAudit.unsupportedBlocksWithheld,0);
+assert.equal(verifyAnswer({blocks:[penny,material],followUps:[],limitations:[]},
+ [centFact,low],[],context).blocks.length,2,
+ 'legacy chat response verification remains unchanged');
+assert(!/interest/i.test(checked.blocks[0].title));
 (async()=>{
  assert.deepEqual(await researchPublic('private-address',{apiKey:'fictional'}),
   {error:'Unsupported public topic'},'outside research does not accept arbitrary queries');
