@@ -12,7 +12,7 @@ const READ_TOOL={type:'function',function:{
  name:'read_financial_dataset',
  description:'Read the actual sanitized Ledger financial dataset, not a preselected summary. Pick any section and page through all records. Every returned row has a source evidence ID. The manifest reports the exact total record count and offsets; no bank data may be changed.',
  parameters:{type:'object',additionalProperties:false,required:['section','offset','limit'],properties:{
- section:{type:'string',enum:['history','future','balances','cards','evidence']},
+ section:{type:'string',enum:['history','future','balances','cards','indices','evidence']},
  offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:200}
  }}}};
 function createDataset(context){
@@ -20,7 +20,7 @@ function createDataset(context){
   !Array.isArray(context.facts)||!(context.privateIds instanceof Map))
   throw Error('Missing canonical financial data');
  const alias=id=>context.privateIds.get(String(id))||'unknown-account';
- const sections={history:[],future:[],balances:[],cards:[],evidence:[]};
+ const sections={history:[],future:[],balances:[],cards:[],indices:[],evidence:[]};
  const facts=[];
  // Every model-visible row gets a stable, opaque evidence ID. Actual IDs and
  // account references never leave the existing private backend.
@@ -77,6 +77,58 @@ function createDataset(context){
    ', funding '+funding+'; autopay '+!!row.autopayEnabled+
    ', paid '+!!row.alreadyPaid+', estimated '+!!row.estimated);
  }
+ // Build a neutral navigation index over ALL accessible records. The AI
+ // chooses what is interesting; these are standard data pivots, not diagnoses
+ // or suggested findings. Counts and totals stay tied to source evidence.
+ const grouped=new Map();
+ const group=(family,period,accountId,type,label,value)=>{
+  const key=JSON.stringify([family,period,accountId,type,label]);
+  const row=grouped.get(key)||{family,period,accountId,type,label,count:0,total:0};
+  row.count++;row.total+=Math.abs(value);grouped.set(key,row);
+ };
+ for(const row of sections.history){
+  const month=row.date.slice(0,7),kind=row.type;
+  group('monthly-flow',month,row.accountId,kind,'All records',row.amount);
+  group('merchant',null,null,kind,row.merchant,row.amount);
+  group('category',null,null,kind,row.category,row.amount);
+  group('merchant-month',month,null,kind,row.merchant,row.amount);
+  group('category-month',month,null,kind,row.category,row.amount);
+ }
+ for(const row of sections.future){
+  group('scheduled-month',row.date.slice(0,7),row.accountId,row.kind,
+   'Canonical projected event legs',row.amount);
+ }
+ for(const row of sections.cards){
+  if(finite(row.amount)&&row.dueDate)
+   group('card-obligations-month',row.dueDate.slice(0,7),row.funding,
+    row.estimated?'estimated':'recorded','Card statements',row.amount);
+ }
+ // Order within each dimension by absolute magnitude and interleave families
+ // so no particular analysis topic dominates the initial evidence.
+ const byFamily=new Map();
+ for(const row of grouped.values()){
+  row.total=money(row.total);
+  if(!byFamily.has(row.family))byFamily.set(row.family,[]);
+  byFamily.get(row.family).push(row);
+ }
+ for(const family of byFamily.keys())
+  byFamily.get(family).sort((a,b)=>b.total-a.total||
+   String(b.period||'').localeCompare(String(a.period||'')));
+ const families=[...byFamily.keys()],positions=new Map(families.map(k=>[k,0]));
+ let remaining=true;
+ while(remaining){
+  remaining=false;
+  for(const family of families){
+   const offset=positions.get(family),row=byFamily.get(family)[offset];
+   if(!row)continue;
+   remaining=true;positions.set(family,offset+1);
+   const text='Source index '+row.family+'; period '+(row.period||'all available')+
+    '; '+row.accountId+'; transaction kind '+row.type+'; '+
+    row.label+'; '+row.count+' normalized records; gross absolute amount $'+
+    row.total.toFixed(2)+'. Not net household spending or adjusted for transfers.';
+   add('indices',row,text);
+  }
+ }
  for(const f of context.facts){
   if(f?.id&&typeof f.text==='string')
    sections.evidence.push({id:f.id,kind:safe(f.kind),text:f.text.slice(0,340)});
@@ -94,7 +146,7 @@ function createDataset(context){
  function initial(maxChars=160000){
   // Give the model a genuine broad cross-section of *records* rather than
   // preselecting findings. Remaining records are all available through pages.
-  const orders=['history','future','balances','cards','evidence'];
+  const orders=['indices','history','future','balances','cards','evidence'];
   const cursors=Object.fromEntries(orders.map(k=>[k,0]));
   const records=Object.fromEntries(orders.map(k=>[k,[]]));
   let remaining=Math.max(3000,maxChars);
@@ -118,9 +170,10 @@ function createDataset(context){
     balances:['accountId','date','balance','income','outflow'],
     cards:['card','funding','dueDate','periodStart','periodEnd','withdrawalDate','amount',
      'statementBalance','autopay','alreadyPaid','estimated','pendingReserved'],
+    indices:['family','period','accountId','type','label','count','total'],
     evidence:['kind','text']
    },initialIncluded:cursors,
-   note:'Initial records are the beginning of each independently ordered section. Page all remaining records with read_financial_dataset. Historical rows newest first; future events and balances earliest first. These are normalized provider records, not raw bank credentials or original IDs.'},
+   note:'Initial records are the beginning of each independently ordered section. Page all remaining records with read_financial_dataset. Historical rows newest first; future events and balances earliest first. The index is an unbiased set of simple pivots over every eligible record, with gross absolute totals that must not be treated as net spending. These are normalized provider records, not raw bank credentials or original IDs.'},
    records};
  }
  return {manifest:counts,page,initial:initial(),facts};
