@@ -195,16 +195,6 @@ function cleanConversation(history){
   return {role:item.role,content:item.content};
  });
 }
-// Narrow hard backstop for standalone sub-dollar observations. This does not
-// remove any source transaction or hide minor amounts cited in a larger issue.
-function isStandaloneMicroObservation(block){
- if(!['hero','metric','callout','paragraph','heading'].includes(block.kind))return false;
- const message=(block.title+' '+block.text);
- const amounts=[...message.matchAll(/\$\s*([\d,]+(?:\.\d{1,2})?)/g)]
-  .map(m=>Number(m[1].replace(/,/g,'')));
- if(!amounts.length||amounts.some(n=>!Number.isFinite(n)||n>=1))return false;
- return !/\b(fraud|overdraft|negative balance|systemic|duplicate charge|unauthorized|fee escalation)\b/i.test(message);
-}
 function presentationChart(chart,style){
  if(!['line','bar','donut','ranked'].includes(style))return chart;
  if(chart.type==='comparison')return chart;
