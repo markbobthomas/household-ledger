@@ -77,5 +77,23 @@ const until=async(condition)=>{for(let i=0;i<150;i++){if(condition())return;awai
  assert.equal(reconsent.status().report,null,'prior summary model report cannot be reused');
  assert.equal(stored.dataAccessVersion,2,'new scope is tracked in encrypted persistence');
  assert.equal(reconsent.schedule(),false,'no expanded scope data goes to AI until renewed opt-in');
+ // A formatting-only upgrade should renew the analysis, not the consent.
+ stored={version:1,dataAccessVersion:2,autoEnabled:true,report:{
+  mode:'autonomous-adaptive',blocks:[{kind:'hero',title:'Obsolete report',
+   text:'Old wall of text'}]},revision:'D',
+  completedAt:'2026-11-19T00:00:00Z'};
+ const visual=await make();
+ await visual.load();
+ assert.equal(visual.status().enabled,true,
+  'current ongoing data sharing remains authorized after a visual-only upgrade');
+ assert.equal(visual.status().report,null,
+  'old text-heavy layout is invalidated');
+ assert.equal(stored.reportFormatVersion,3);
+ assert.equal(stored.report,null);
+ assert.equal(visual.schedule(),true,
+  'format upgrade allows a newly generated report under existing consent');
+ await until(()=>visual.status().status==='ready');
+ assert.equal(stored.reportFormatVersion,3);
+
  console.log('PASS encrypted AI cache: consent, dedup, bank-refresh snapshot, stale result rejection, restart, manual refresh and disconnect');
 })().catch(e=>{console.error(e);process.exitCode=1});

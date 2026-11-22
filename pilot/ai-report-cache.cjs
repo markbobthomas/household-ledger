@@ -5,7 +5,8 @@
 function create({read,write,revision,snapshot,analyze,available=()=>true,defer=setImmediate}){
  // Data-access version 2 shares broader sanitized record-level data with AI.
  // Prior summary-only consent does NOT authorize this expanded scope.
- let saved={version:1,dataAccessVersion:2,autoEnabled:false,report:null,revision:null,completedAt:null};
+ let saved={version:1,dataAccessVersion:2,reportFormatVersion:3,
+  autoEnabled:false,report:null,revision:null,completedAt:null};
  let phase='idle',lastError=null,lastFailedRevision=null,queued=false,running=false,requested=false,forceNext=false;
  const safeCode=e=>[
   'invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
@@ -22,9 +23,13 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
     (value.revision!==null&&typeof value.revision!=='string'))
    throw Error('Invalid encrypted AI report cache');
   if(value.dataAccessVersion!==2){
-   // A privacy-expanding release must not silently reuse older ongoing
-   // OpenAI-sharing authorization or an outdated result from a prior prompt.
+   // Expanded financial source access always requires renewed opt-in.
    await write({...saved});
+  }else if(value.reportFormatVersion!==3){
+   // An obsolete report layout is not a valid substitute for a freshly
+   // generated glance-first visual report. Preserve existing consent.
+   await store({...saved,...value,reportFormatVersion:3,
+    report:null,revision:null,completedAt:null});
   }else saved={...saved,...value};
  }
  async function store(next){await write(next);saved=next}
@@ -79,7 +84,8 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   return status();
  }
  async function clear(){
-  await store({version:1,dataAccessVersion:2,autoEnabled:false,report:null,revision:null,completedAt:null});
+  await store({version:1,dataAccessVersion:2,reportFormatVersion:3,
+   autoEnabled:false,report:null,revision:null,completedAt:null});
   requested=false;forceNext=false;lastError=null;lastFailedRevision=null;phase='idle';
  }
  return {load,status,schedule,setEnabled,clear};

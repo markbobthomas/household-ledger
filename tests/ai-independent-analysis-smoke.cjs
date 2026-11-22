@@ -53,8 +53,11 @@ const low=context.facts.find(f=>f.text.includes('lowest projected 90 day balance
 assert(low);
 const micro={kind:'paragraph',title:'Four cents of interest',text:'An account earned $0.04.',
  evidenceIds:['micro'],chartId:null};
-const material={kind:'hero',title:'Projected low',text:'Checking may reach $4500.00.',
- evidenceIds:[low.id],chartId:null};
+const material={kind:'hero',title:'Checking may reach $4500.00',
+ text:'The cash low is concentrated near scheduled bills.',
+ detail:'Ledger projects a low balance of $4500.00 on '+date(30)+
+  '; this excludes unscheduled spending.',
+ visualStyle:'auto',evidenceIds:[low.id],chartId:null};
 const checked=verifyAnswer({blocks:[micro,material],followUps:[],limitations:[]},
  [{id:'micro',kind:'actual',text:'Fictional account earned $0.04 ordinary interest.'},low],[],
  context,{materialityGate:true});
@@ -62,7 +65,29 @@ assert.equal(checked.blocks.length,2,
  'Ledger must not silently censor a verified observation using a fixed dollar threshold');
 const scope={source:'actual',direction:'expense',startDate:date(-179),endDate:asOf,
  accountId:null,groupBy:'merchant',measure:'sum',filter:'',comparePrevious:false,visualize:true};
-assert(computeFinancialView(context,scope,2).facts.length>0);
+const computed=computeFinancialView(context,scope,2);
+assert(computed.facts.length>0);
+assert(computed.chart?.type==='bar','source aggregation produces categorical bars');
+const styled=verifyAnswer({blocks:[
+ {kind:'chart',title:'',text:'',detail:'',visualStyle:'donut',
+  evidenceIds:[],chartId:computed.chart.id},
+ {kind:'chart',title:'',text:'',detail:'',visualStyle:'ranked',
+  evidenceIds:[],chartId:computed.chart.id}
+],followUps:[],limitations:[]},[],[computed.chart],context);
+assert.deepEqual(styled.blocks.map(b=>b.chart.type),['donut','ranked'],
+ 'the model, not fixed data categories, chooses meaningful visual forms');
+const timeChart=context.visuals.find(x=>x.type==='line');
+assert(timeChart,'fictional daily balance series is available');
+const notMisleading=verifyAnswer({blocks:[{kind:'chart',title:'',text:'',
+ detail:'',visualStyle:'donut',evidenceIds:[],chartId:timeChart.id}],
+ followUps:[],limitations:[]},[],[timeChart],context);
+assert.equal(notMisleading.blocks[0].chart.type,'line',
+ 'part-to-whole display cannot misrepresent temporal balance values');
+const badDetail=verifyAnswer({blocks:[
+ {...material,detail:'This definitely saves $987654321.00 every month.'},material
+],followUps:[],limitations:[]},[low],[],context);
+assert.equal(badDetail.blocks.length,1,
+ 'expanded reasoning is subject to the same exact-dollar evidence validation');
 (async()=>{
  assert.deepEqual(await researchPublic('private-address',{apiKey:'fictional'}),
   {error:'Unsupported public topic'},'external web research remains privacy-restricted');
@@ -75,12 +100,20 @@ assert(computeFinancialView(context,scope,2).facts.length>0);
   assert(!JSON.stringify(body).includes('private-tx-'));
   if(calls===4){
    assert(!body.tools,'reviewer cannot make private data requests');
+   const review=JSON.parse(body.messages[1].content);
+   assert(review.blocks.some(b=>b.detail&&b.detail.includes('unscheduled')),
+    'the second independent auditor inspects expanded analysis, not just headlines');
    assert.equal(body.response_format.json_schema.name,'ledger_analysis_review_v1');
    reviewed=true;
    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
     rejectedIndices:[2],concerns:[]})}}]})};
   }
   assert.equal(body.tool_choice,'auto','AI chooses whether to investigate, not a quota');
+  assert.equal(body.response_format.json_schema.name,'ledger_visual_insights_v1',
+   'automatic reviews request a separate glance/deep-detail report contract');
+  const blockSchema=body.response_format.json_schema.schema.properties.blocks.items;
+  assert(blockSchema.required.includes('detail')&&blockSchema.required.includes('visualStyle'),
+   'AI chooses its own visual form and supplies detailed source-backed reasoning');
   assert.equal(body.tools.length,6,'model can browse all source data and use calculations');
   const start=JSON.parse(body.messages[1].content);
   assert.equal(start.manifest.counts.history,1600,'AI receives the full source manifest');
@@ -95,14 +128,20 @@ assert(computeFinancialView(context,scope,2).facts.length>0);
    readToolResults++;
    m={tool_calls:[{id:'calc',function:{name:'compute_financial_view',arguments:JSON.stringify(scope)}}]};
   }else m={content:JSON.stringify({blocks:[
-   {kind:'hero',title:'Forecast outlook',text:'Checking may reach $4500.00 on '+date(30),
-    evidenceIds:[low.id],chartId:null},
-   {kind:'chart',title:'',text:'',evidenceIds:[],chartId:'analysis-chart-2'},
+   {kind:'hero',title:'Checking could fall to $4500.00 on '+date(30),
+    text:'A conditional forecast low, not a guaranteed future balance.',
+    detail:'Ledger projects $4500.00 on '+date(30)+
+      '; actual unscheduled purchases may change the outcome.',
+    visualStyle:'auto',evidenceIds:[low.id],chartId:null},
+   {kind:'chart',title:'',text:'',detail:'',visualStyle:'ranked',
+    evidenceIds:[],chartId:'analysis-chart-2'},
    {kind:'paragraph',title:'False causal explanation',
     text:'The projected low is caused by a confirmed change in pay.',
-    evidenceIds:[low.id],chartId:null},
+    detail:'No pay history actually establishes this.',
+    visualStyle:'auto',evidenceIds:[low.id],chartId:null},
    {kind:'paragraph',title:'Unsupported exact amount',
-    text:'Expenses total $987654321.00',evidenceIds:[low.id],chartId:null}
+    text:'Expenses total $987654321.00',detail:'',visualStyle:'auto',
+    evidenceIds:[low.id],chartId:null}
   ],followUps:[],limitations:[]})};
   return {ok:true,json:async()=>({choices:[{message:m}]})};
  };
@@ -116,6 +155,10 @@ assert(computeFinancialView(context,scope,2).facts.length>0);
  assert.equal(result.sourceChecks,2,'actual number of voluntary source reads is reported');
  assert.equal(result.blocks.length,2,'unsupported amount and overconfident cause are withheld');
  assert(result.blocks.some(b=>b.chart?.id==='analysis-chart-2'),'AI-requested calculation chart renders');
+ assert(result.blocks.some(b=>b.chart?.type==='ranked'),
+  'requested categorical chart is rendered as an AI-selected ranked comparison');
+ assert(result.blocks[0].detail.includes('unscheduled'),
+  'full evidence-backed reasoning is preserved separately from the brief takeaway');
  assert(result.auditTrail.some(x=>x.action.includes('Independently re-reviewed')));
  assert.equal(result.datasetCoverage.total.history,1600);
  assert(result.disclosure.includes('sanitized'));
