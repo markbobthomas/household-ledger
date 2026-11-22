@@ -17,9 +17,28 @@ details{margin-top:12px;color:#57665f}summary{cursor:pointer;font-size:.88rem;fo
 details p,details li{line-height:1.55;font-size:.88rem}
 .control{display:flex;align-items:center;flex-wrap:wrap;gap:13px;margin:19px 0 28px}
 .auto-opt{margin-top:12px;padding-top:12px;border-top:1px solid #e6ece7}
-.overview{padding:15px 0 17px;border-bottom:1px solid #e4ece5;margin-bottom:13px}
-.overview h3{margin:0 0 7px}
-.overview p{margin:0;line-height:1.65}
+.finding{padding:15px 0 17px;border-bottom:1px solid #e4ece5;margin-bottom:4px}
+.finding h3{margin:0 0 6px;font-size:1.17rem;letter-spacing:-.016em;line-height:1.3;color:#1d3e34}
+.finding p,.hero .keyline,.callout p{margin:0;color:#566c61;font-size:.95rem;line-height:1.45}
+.insight-depth{margin:8px 0 0;border:0;padding:0;color:#63766b}
+.insight-depth summary{display:inline-flex;align-items:center;color:#286b5c;font-size:.84rem;gap:6px}
+.insight-depth .inside{padding:9px 2px 3px}
+.insight-depth .inside p{color:#35473d;font-size:.94rem;line-height:1.65;margin:6px 0}
+.chart-insight{margin:16px 0;border-bottom:1px solid #e4ece5;padding-bottom:14px}
+.chart-insight h3{font-size:1.16rem;letter-spacing:-.018em;margin:0 0 5px;line-height:1.3}
+.chart-insight>p{color:#62736a;margin:0 0 9px;font-size:.92rem;line-height:1.45}
+.ranked-list{margin:13px 0 5px;display:grid;gap:12px}
+.ranked-row{display:grid;grid-template-columns:minmax(115px,1.1fr) minmax(100px,2fr) auto;align-items:center;column-gap:12px;font-size:.87rem}
+.ranked-name{overflow-wrap:anywhere;color:#354d40}
+.ranked-track{height:11px;background:#eaf0ec;border-radius:7px;overflow:hidden}
+.ranked-fill{height:100%;background:#358878;border-radius:7px}
+.ranked-value{font-variant-numeric:tabular-nums;font-weight:650;color:#245c4d}
+.donut-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:7px 13px;margin-top:2px}
+.donut-legend-item{font-size:.84rem;color:#344d40;display:flex;align-items:center;gap:8px}
+.donut-dot{width:10px;height:10px;display:inline-block;border-radius:50%;flex:none}
+.donut-legend-item .amount{margin-left:auto;font-weight:650;font-variant-numeric:tabular-nums}
+@media(max-width:650px){.ranked-row{grid-template-columns:minmax(70px,1fr) minmax(64px,1.4fr) auto;gap:7px;font-size:.78rem}
+ .donut-legend{grid-template-columns:1fr}}
 button{font:inherit;cursor:pointer}
 #run{border:0;border-radius:11px;padding:15px 23px;background:#286b5c;color:white;font-weight:650;min-width:210px}
 #run:disabled{background:#a7b3ac;cursor:default}
@@ -30,8 +49,8 @@ button{font:inherit;cursor:pointer}
 .analysis-report p{max-width:890px;font-size:1.03rem;white-space:pre-line;line-height:1.7}
 .hero{padding:19px 0 22px;border-bottom:1px solid #e4ece5;margin:0 0 19px}
 .hero .eyebrow{font-size:.81rem;font-weight:680;color:#5f766c}
-.hero .headline{font-weight:730;font-size:clamp(1.5rem,3.1vw,2.35rem);line-height:1.18;letter-spacing:-.035em;max-width:780px;margin-top:8px}
-.callout{padding:15px 18px;margin:17px 0;border-left:4px solid #286b5c;background:#f6faf7;border-radius:3px 11px 11px 3px}
+.hero .headline{font-weight:730;font-size:clamp(1.48rem,3vw,2.25rem);line-height:1.2;letter-spacing:-.035em;max-width:780px;margin:0 0 7px}
+.callout{padding:13px 17px;margin:13px 0;border-left:3px solid #286b5c;background:#f6faf7;border-radius:3px 11px 11px 3px}
 .callout h3{margin:0 0 7px}.callout p{margin:0}
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:16px 0 22px}
 .metric{border:1px solid #e0e8e1;background:#f7faf8;border-radius:11px;padding:15px}
@@ -39,9 +58,9 @@ button{font:inherit;cursor:pointer}
 .metric strong{font-size:1.38rem;display:block;overflow-wrap:anywhere;line-height:1.3;margin-top:6px}
 .evidence{border-top:1px solid #edf0ed;margin:8px 0 14px;padding-top:8px}
 .evidence ul{padding-left:19px;overflow-wrap:anywhere}.evidence li{margin:7px 0}
-.graph{margin:19px 0 25px;background:#fcfdfc;border:1px solid #e0e8e2;border-radius:11px;padding:15px;min-width:0}
+.graph{margin:9px 0 10px;background:#fcfdfc;border:1px solid #e0e8e2;border-radius:11px;padding:15px;min-width:0}
 .graph strong{font-size:1rem}.graph svg{width:100%;height:auto;display:block;touch-action:manipulation}
-.graph figcaption{font-size:.81rem;color:#65756d;margin-top:5px;line-height:1.55}
+.graph figcaption{font-size:.81rem;color:#65756d;margin-top:5px;line-height:1.4}
 .graph .selected{font-size:.88rem;color:#245f52;min-height:22px;margin-top:6px}
 .limits{margin-top:25px;border-top:1px solid #edf1ee;padding-top:13px}
 .audit{color:#50675b;padding-left:18px}
@@ -92,12 +111,98 @@ button{font:inherit;cursor:pointer}
   for(const f of facts.slice(0,30))ul.append(el('li','',f.text));
   d.append(s,ul);parent.append(d);
  }
+ const clipText=(value,max=155)=>{
+  const s=String(value||'').trim();
+  if(s.length<=max)return {lead:s,full:''};
+  const cut=s.slice(0,max-1).replace(/\\s+\\S*$/,'').trim();
+  return {lead:(cut||s.slice(0,max-1))+'…',full:s};
+ };
+ function detailsFor(parent,block,extra=''){
+  const text=String(block.detail||'').trim();
+  const oldLong=clipText(block.text||'').full;
+  if(!text&&!oldLong&&!extra&&!(block.evidence||[]).length)return;
+  const d=el('details','insight-depth'),
+   summary=el('summary','','How this was assessed');
+  const inside=el('div','inside');
+  if(text)info(inside,text);
+  else if(oldLong)info(inside,oldLong);
+  if(extra)info(inside,extra);
+  addEvidence(inside,block.evidence);
+  d.append(summary,inside);parent.append(d);
+ }
  const NS='http://www.w3.org/2000/svg';
  const svgEl=(tag,attrs,txt)=>{const n=document.createElementNS(NS,tag);
   for(const [k,v] of Object.entries(attrs||{}))n.setAttribute(k,String(v));
   if(txt!==undefined)n.textContent=String(txt);return n};
+ // Graph shapes and quantities come only from server-calculated source
+ // points. The model may select an appropriate presentation, not its values.
+ function drawDistribution(target,chart){
+  const points=chart.points.filter(p=>typeof p.value==='number'&&
+   Number.isFinite(p.value)&&p.value>=0);
+  if(points.length<2||!points.length)return;
+  const fmt=chart.unit==='count'?n=>new Intl.NumberFormat('en-US').format(n):money;
+  const fig=el('figure','graph'),heading=el('strong','',chart.title||'Source comparison');
+  fig.append(heading);
+  if(chart.type==='ranked'){
+   const max=Math.max(...points.map(p=>p.value),1),list=el('div','ranked-list');
+   for(const p of points){
+    const row=el('div','ranked-row'),name=el('span','ranked-name',p.label),
+     track=el('div','ranked-track'),fill=el('div','ranked-fill'),
+     value=el('span','ranked-value',fmt(p.value));
+    fill.style.width=(100*p.value/max).toFixed(3)+'%';
+    track.append(fill);row.append(name,track,value);
+    row.setAttribute('aria-label',p.label+' '+fmt(p.value));list.append(row);
+   }
+   fig.append(list);
+  }else{
+   const values=points.map(p=>p.value),total=values.reduce((a,b)=>a+b,0);
+   if(!(total>0))return;
+   const colors=['#286b5c','#619388','#a2bfae','#b7833b','#8b8eb4',
+    '#d6a792','#7b9f76','#cfbb78','#85b9bf','#b8a9cd','#8cbb9b','#b7a58a'];
+   const svg=svgEl('svg',{viewBox:'0 0 440 230',role:'img',
+    'aria-label':chart.title||'Part-to-whole chart'});
+   const cx=150,cy=110,outer=96,inner=52;
+   const coord=(rad,ang)=>[cx+rad*Math.cos(ang),cy+rad*Math.sin(ang)];
+   const polar=(radius,angle)=>coord(radius,angle).map(n=>n.toFixed(2)).join(' ');
+   const selected=el('div','selected','Select a segment to see its value');
+   let angle=-Math.PI/2;
+   points.forEach((p,i)=>{
+    const portion=p.value/total;
+    if(portion===0)return;
+    const next=angle+2*Math.PI*Math.min(.999999,portion),large=next-angle>Math.PI?1:0;
+    const path='M '+polar(outer,angle)+' A '+outer+' '+outer+' 0 '+large+' 1 '+
+     polar(outer,next)+' L '+polar(inner,next)+' A '+inner+' '+inner+' 0 '+large+' 0 '+
+     polar(inner,angle)+' Z';
+    const piece=svgEl('path',{d:path,fill:colors[i%colors.length],role:'button',
+     tabindex:0,'aria-label':p.label+' '+fmt(p.value)});
+    const show=()=>{selected.textContent=String(p.label)+' · '+fmt(p.value)+
+     ' · '+(portion*100).toFixed(1)+'% of this chart'};
+    piece.addEventListener('click',show);
+    piece.addEventListener('keydown',e=>{
+     if(e.key==='Enter'||e.key===' '){e.preventDefault();show()}
+    });svg.append(piece);angle=next;
+   });
+   svg.append(svgEl('text',{x:cx,y:cy-4,'font-size':16,
+    'font-weight':700,fill:'#244a3b','text-anchor':'middle'},fmt(total)));
+   svg.append(svgEl('text',{x:cx,y:cy+16,'font-size':11,
+    fill:'#678074','text-anchor':'middle'},'Shown total'));
+   const legend=el('div','donut-legend');
+   points.forEach((p,i)=>{
+    const line=el('div','donut-legend-item'),dot=el('i','donut-dot'),
+     name=el('span','',p.label),value=el('span','amount',fmt(p.value));
+    dot.style.backgroundColor=colors[i%colors.length];
+    line.append(dot,name,value);legend.append(line);
+   });
+   fig.append(svg,legend,selected);
+  }
+  target.append(fig);
+ }
  function drawGraph(target,chart){
-  if(!chart||!['line','bar','comparison'].includes(chart.type)||!Array.isArray(chart.points))return;
+  if(!chart||!Array.isArray(chart.points))return;
+  if(chart.type==='donut'||chart.type==='ranked'){
+   drawDistribution(target,chart);return;
+  }
+  if(!['line','bar','comparison'].includes(chart.type))return;
   const points=chart.points.filter(p=>typeof p.value==='number'&&Number.isFinite(p.value)).slice(0,130);
   if(points.length<2)return;
   const fig=el('figure','graph'),head=el('strong','',chart.title||'Ledger chart');
@@ -187,7 +292,7 @@ button{font:inherit;cursor:pointer}
    b.append(el('i'),el('span','','Independent history-only'));
    legend.append(a,b);fig.append(legend);
   }
-  fig.append(svg,selected,el('figcaption','',chart.subtitle||'Ledger-calculated values'));
+  fig.append(svg,selected);
   target.append(fig);
  }
  function optionalComparisonNotes(c){
@@ -207,84 +312,71 @@ button{font:inherit;cursor:pointer}
   return details;
  }
  function addAssistant(data){
-  const msg=el('article','analysis-report'),who=el('div','who','Independent financial review · '+data.asOf);
+  const msg=el('article','analysis-report'),
+   who=el('div','who','AI review · '+data.asOf);
   if(data.mode!=='autonomous-adaptive')throw Error('Unexpected analysis response');
   msg.append(who);
-  let metrics=null,shownParagraphs=0;
+  let metrics=null;
   for(const block of data.blocks||[]){
+   const brief=clipText(block.text||'');
    if(block.kind==='metric'){
     if(!metrics){metrics=el('div','metric-grid');msg.append(metrics)}
     const card=el('div','metric');
-    card.append(el('div','label',block.title),el('strong','',block.text));
-    addEvidence(card,block.evidence);metrics.append(card);
-    continue;
+    card.append(el('div','label',block.title),el('strong','',brief.lead));
+    detailsFor(card,block);metrics.append(card);continue;
    }
    metrics=null;
    if(block.kind==='hero'){
-    const hero=el('section','hero');hero.append(el('div','eyebrow',block.title),
-     el('div','headline',block.text));addEvidence(hero,block.evidence);msg.append(hero);
-   }
-   if(block.kind==='callout'){
+    const hero=el('section','hero');
+    if(block.title)hero.append(el('h2','headline',block.title));
+    if(brief.lead)hero.append(el('p','keyline',brief.lead));
+    detailsFor(hero,block);msg.append(hero);
+   }else if(block.kind==='callout'){
     const callout=el('section','callout');
     if(block.title)callout.append(el('h3','',block.title));
-    if(block.text.length>155){
-     const d=el('details','analysis-detail');
-     d.append(el('summary','',block.text.slice(0,120)+'…'));
-     const inner=el('div','inside');info(inner,block.text);addEvidence(inner,block.evidence);
-     d.append(inner);callout.append(d);
-    }else {info(callout,block.text);addEvidence(callout,block.evidence)}
-    msg.append(callout);
-   }
-   if(block.kind==='heading'){
-    if(block.title)msg.append(el('h3','',block.title||block.text));
-    addEvidence(msg,block.evidence);
-   }
-   if(block.kind==='paragraph'){
-    shownParagraphs++;
-    if(shownParagraphs<=2){
-     const main=el('section','overview');
-     if(block.title)main.append(el('h3','',block.title));
-     info(main,block.text);addEvidence(main,block.evidence);msg.append(main);
-    }else{
-     const d=el('details','analysis-detail');
-     const title=el('summary'),preview=block.text.slice(0,130)+(block.text.length>130?'…':'');
-     title.append(el('strong','',block.title||'Additional finding'),el('span','preview',preview));
-     const inside=el('div','inside');info(inside,block.text);addEvidence(inside,block.evidence);
-     d.append(title,inside);msg.append(d);
-    }
-   }
-   if(block.kind==='chart'){
-    drawGraph(msg,block.chart);
-    if(block.text)info(msg,block.text);
-    addEvidence(msg,block.evidence);
+    if(brief.lead)info(callout,brief.lead);
+    detailsFor(callout,block);msg.append(callout);
+   }else if(block.kind==='heading'){
+    const heading=el('section','finding');
+    heading.append(el('h3','',block.title||brief.lead));
+    if(block.title&&brief.lead)info(heading,brief.lead);
+    detailsFor(heading,block);msg.append(heading);
+   }else if(block.kind==='paragraph'){
+    const card=el('section','finding');
+    if(block.title)card.append(el('h3','',block.title));
+    if(brief.lead)info(card,brief.lead);
+    detailsFor(card,block);msg.append(card);
+   }else if(block.kind==='chart'){
+    const card=el('section','chart-insight');
+    const headline=block.title||block.chart?.title||'Source-calculated chart';
+    card.append(el('h3','',headline));
+    if(brief.lead)info(card,brief.lead);
+    if(block.chart)drawGraph(card,{...block.chart,title:''});
+    detailsFor(card,block,block.chart?.subtitle||'');
+    msg.append(card);
    }
   }
-  const meta=el('details','limits'),s=el('summary','','Data coverage and limitations');
-  const c=data.coverage||{};
-  const body=el('div');
-  info(body,'Source: '+(c.historicalTransactionsScanned||0)+' actual-history records scanned across '+
-   (c.historicalMonthsScanned||0)+' months; '+(c.futureEventsScanned||0)+
-   ' canonical future event legs; '+(c.forecastHorizonDays||0)+' days of projections. '+
-   (data.sourceChecks||0)+' distinct source checks, including '+
-   (data.investigations||0)+' targeted record investigations. Last bank sync: '+
-   (c.lastSync||'unknown')+'.');
-  info(body,data.disclosure||'Original bank records were not all transmitted to the model.');
+  const meta=el('details','limits'),s=el('summary','','Sources, checks and limits'),
+   c=data.coverage||{},body=el('div');
+  info(body,'Based on '+(c.historicalTransactionsScanned||0)+' recorded transactions, '+
+   (c.futureEventsScanned||0)+' projected payment entries and '+(c.forecastHorizonDays||0)+
+   ' days of forecast coverage. Last sync: '+(c.lastSync||'unknown')+'.');
+  info(body,data.disclosure||'AI source access varies by analysis and available data.');
   for(const limit of data.limitations||[])info(body,limit);
   if(data.comparison)body.append(optionalComparisonNotes(data.comparison));
   if(data.auditTrail?.length){
-   const audit=el('ul','audit');for(const item of data.auditTrail)
+   const audit=el('ul','audit');
+   for(const item of data.auditTrail)
     audit.append(el('li','',item.action+(item.count?' ('+item.count+')':'')));
-   body.append(el('h3','','Verification and automatic correction log'),audit);
+   body.append(el('h3','','Evidence verification'),audit);
   }
   if(data.publicResearch?.length){
    body.append(el('h3','','External public research'));
-   for(const item of data.publicResearch){
+   for(const item of data.publicResearch)
     info(body,item.topic+': '+(item.sources||[]).join(', '));
-   }
   }
   meta.append(s,body);msg.append(meta);
-  analysis.replaceChildren(msg);
-  return msg;
+  analysis.replaceChildren(msg);return msg;
  }
  const sync=()=>{run.disabled=pending||!(consent.checked||automatic.checked);
   automatic.disabled=pending};
