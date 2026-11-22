@@ -11,7 +11,7 @@ const asOf='2026-11-19',date=n=>{
  return d.toISOString().slice(0,10);
 };
 const account='fictional-raw-bank-account-1234';
-const rows=Array.from({length:420},(_,i)=>({
+const rows=Array.from({length:1600},(_,i)=>({
  id:'private-tx-'+i,accountId:account,date:date(-(i%180)),amount:50+i,
  type:'expense',merchant:i%3?'Fictional Grocer':'Fictional Streaming Subscription',
  category:'Groceries',pending:i===0,token:'not-for-model'
@@ -32,22 +32,22 @@ const prepared={bundle:{projection:{asOf,days:1095,
  paymentReconciliations:[],overduePayments:[],duplicateChecks:[],postedMatchReview:[]}};
 const context=financialContext(prepared,{lastSync:asOf});
 const dataset=createDataset(context);
-assert.equal(dataset.manifest.history,420,'complete posted history is available without source sampling');
+assert.equal(dataset.manifest.history,1600,'complete posted history is available without source sampling');
 assert.equal(dataset.manifest.future,1);
 assert.equal(dataset.manifest.balances,120);
 assert.equal(dataset.manifest.cards,1);
 assert.equal(dataset.page('history',0,200).rows.length,200);
-assert.equal(dataset.page('history',400,200).rows.length,20);
-assert.deepEqual(dataset.page('history',420,200).rows,[]);
+assert.equal(dataset.page('history',1500,200).rows.length,100);
+assert.deepEqual(dataset.page('history',1600,200).rows,[]);
 assert.equal(dataset.page('history',-1,50).error,'Invalid dataset page request');
 assert.equal(dataset.page('raw-private-file',0,10).error,'Invalid dataset page request');
-assert(dataset.initial.manifest.counts.history===420);
+assert(dataset.initial.manifest.counts.history===1600);
 const visible=JSON.stringify(dataset.initial)+JSON.stringify(dataset.page('history',0,200));
 for(const secret of [account,'private-tx-','private-future-id','private-rule-','not-for-model','12345678901234'])
  assert(!visible.includes(secret),'Unredacted private ID was in the AI source data: '+secret);
 assert(visible.includes('dataset-history-1'),'each raw-derived row is traceable via an alias evidence ID');
 const facts=dataset.facts.filter(f=>f.kind==='dataset-history');
-assert.equal(facts.length,420,'each history record supports an evidence citation');
+assert.equal(facts.length,1600,'each history record supports an evidence citation');
 assert(facts[0].text.includes('$50.00'),'model evidence includes exact amounts');
 const low=context.facts.find(f=>f.text.includes('lowest projected 90 day balance'));
 assert(low);
@@ -83,14 +83,14 @@ assert(computeFinancialView(context,scope,2).facts.length>0);
   assert.equal(body.tool_choice,'auto','AI chooses whether to investigate, not a quota');
   assert.equal(body.tools.length,6,'model can browse all source data and use calculations');
   const start=JSON.parse(body.messages[1].content);
-  assert.equal(start.manifest.counts.history,420,'AI receives the full source manifest');
+  assert.equal(start.manifest.counts.history,1600,'AI receives the full source manifest');
   assert(start.records.history.length>100,'large initial dump has actual records, not only a short summary');
-  assert(start.manifest.initialIncluded.history<420,'remaining rows are available through paging');
+  assert(start.manifest.initialIncluded.history<1600,'remaining rows are available through paging');
   let m;
   if(calls===1)m={tool_calls:[{id:'read',function:{name:'read_financial_dataset',
-   arguments:JSON.stringify({section:'history',offset:200,limit:200})}}]};
+   arguments:JSON.stringify({section:'history',offset:1400,limit:200})}}]};
   else if(calls===2){
-   assert(body.messages.some(x=>x.role==='tool'&&x.content.includes('dataset-history-400')),
+   assert(body.messages.some(x=>x.role==='tool'&&x.content.includes('dataset-history-1600')),
     'AI can access source records beyond the initial selection');
    readToolResults++;
    m={tool_calls:[{id:'calc',function:{name:'compute_financial_view',arguments:JSON.stringify(scope)}}]};
@@ -117,7 +117,7 @@ assert(computeFinancialView(context,scope,2).facts.length>0);
  assert.equal(result.blocks.length,2,'unsupported amount and overconfident cause are withheld');
  assert(result.blocks.some(b=>b.chart?.id==='analysis-chart-2'),'AI-requested calculation chart renders');
  assert(result.auditTrail.some(x=>x.action.includes('Independently re-reviewed')));
- assert.equal(result.datasetCoverage.total.history,420);
+ assert.equal(result.datasetCoverage.total.history,1600);
  assert(result.disclosure.includes('sanitized'));
  // A strong analyst may conclude without extra tool calls when the supplied
  // data is already sufficient; it should not be forced through irrelevant checks.
