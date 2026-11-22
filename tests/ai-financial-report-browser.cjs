@@ -77,7 +77,7 @@ module.exports=(async()=>{
  // Two very different source-supported report shapes: nothing forces a
  // forecast comparison, but an analyst can request it when warranted.
  const withoutComparison={...data,comparison:undefined};
- const withComparison={...data,blocks:[{
+ const withComparison={...data,analysisQuality:{status:'limited'},blocks:[{
   kind:'chart',title:'',text:'',chart:{
    id:'analysis-independent-comparison',type:'comparison',unit:'USD',
    title:'Independent balance sensitivity',subtitle:data.comparison.coverageNotice,
@@ -121,6 +121,8 @@ module.exports=(async()=>{
    assert.equal(await page.locator('#automatic').isChecked(),false);
    assert.equal(await page.locator('.analysis-report img').count(),0,
     'bank-sourced model text must be literal and never execute HTML');
+   assert.equal(await page.locator('.quality-note').count(),0,
+    'a source-reviewed substantive report has no false quality warning');
    assert.equal(await page.locator('.hero').count(),1);
    assert.equal(await page.locator('.callout').count(),1);
    assert.equal(await page.locator('.finding').count(),1,
@@ -171,6 +173,8 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.analysis-report').count(),1,
     'a new cached report replaces the old; no transcript or stacked duplicate results');
    assert.equal(await page.locator('.hero').count(),0);
+   assert.match(await page.locator('.quality-note').innerText(),/Limited analysis/,
+    'a shallow but verified report is visibly labelled incomplete');
    assert.equal(await page.locator('.graph svg').count(),1,
     'the new report chooses entirely different graphs and topics');
    assert.equal(await page.locator('.legend').count(),1);
