@@ -46,6 +46,11 @@ button{font:inherit;cursor:pointer}
 #analysis:empty{min-height:55px}
 .analysis-report{background:#fff;border:1px solid #e1e8e2;border-radius:16px;padding:clamp(17px,3vw,31px);min-width:0}
 .analysis-report .who{font-size:.81rem;font-weight:660;color:#5d7268;margin:0 0 20px}
+.analysis-report .finding>p,.analysis-report .hero>.keyline,
+.analysis-report .callout>p,.analysis-report .chart-insight>p{
+ font-size:.93rem;line-height:1.45;color:#566c61;margin:0 0 4px}
+.analysis-report .insight-depth .inside p{font-size:.9rem;line-height:1.62}
+.analysis-report .graph{margin:8px 0 9px}
 .analysis-report p{max-width:890px;font-size:1.03rem;white-space:pre-line;line-height:1.7}
 .hero{padding:19px 0 22px;border-bottom:1px solid #e4ece5;margin:0 0 19px}
 .hero .eyebrow{font-size:.81rem;font-weight:680;color:#5f766c}
@@ -114,7 +119,7 @@ button{font:inherit;cursor:pointer}
  const clipText=(value,max=155)=>{
   const s=String(value||'').trim();
   if(s.length<=max)return {lead:s,full:''};
-  const cut=s.slice(0,max-1).replace(/\\s+\\S*$/,'').trim();
+  const cut=s.slice(0,max-1).replace(/\s+\S*$/,'').trim();
   return {lead:(cut||s.slice(0,max-1))+'…',full:s};
  };
  function detailsFor(parent,block,extra=''){
@@ -141,8 +146,8 @@ button{font:inherit;cursor:pointer}
    Number.isFinite(p.value)&&p.value>=0);
   if(points.length<2||!points.length)return;
   const fmt=chart.unit==='count'?n=>new Intl.NumberFormat('en-US').format(n):money;
-  const fig=el('figure','graph'),heading=el('strong','',chart.title||'Source comparison');
-  fig.append(heading);
+  const fig=el('figure','graph');
+  if(chart.title)fig.append(el('strong','',chart.title));
   if(chart.type==='ranked'){
    const max=Math.max(...points.map(p=>p.value),1),list=el('div','ranked-list');
    for(const p of points){
@@ -164,7 +169,7 @@ button{font:inherit;cursor:pointer}
    const cx=150,cy=110,outer=96,inner=52;
    const coord=(rad,ang)=>[cx+rad*Math.cos(ang),cy+rad*Math.sin(ang)];
    const polar=(radius,angle)=>coord(radius,angle).map(n=>n.toFixed(2)).join(' ');
-   const selected=el('div','selected','Select a segment to see its value');
+   const selected=el('div','selected','');
    let angle=-Math.PI/2;
    points.forEach((p,i)=>{
     const portion=p.value/total;
@@ -205,7 +210,7 @@ button{font:inherit;cursor:pointer}
   if(!['line','bar','comparison'].includes(chart.type))return;
   const points=chart.points.filter(p=>typeof p.value==='number'&&Number.isFinite(p.value)).slice(0,130);
   if(points.length<2)return;
-  const fig=el('figure','graph'),head=el('strong','',chart.title||'Ledger chart');
+  const fig=el('figure','graph');
   const svg=svgEl('svg',{viewBox:'0 0 680 228',role:'img','aria-label':chart.title||'Ledger chart'});
   const w=680,h=228,L=61,R=18,T=19,B=42;
   const values=points.flatMap(p=>chart.type==='comparison'&&Number.isFinite(p.alternateValue)?
@@ -215,7 +220,7 @@ button{font:inherit;cursor:pointer}
   const y=v=>T+(max-v)/(max-min)*(h-B-T);
   const x=i=>L+i*(w-L-R)/(points.length-1);
   const formatValue=chart.unit==='count'?n=>new Intl.NumberFormat('en-US').format(n):money;
-  const selected=el('div','selected','Tap a point to see the calculated value');
+  const selected=el('div','selected','');
   for(let k=0;k<=4;k++){
    const value=min+(max-min)*k/4,py=y(value);
    svg.append(svgEl('line',{x1:L,x2:w-R,y1:py,y2:py,stroke:'#e1e7e2','stroke-width':1}));
@@ -285,7 +290,7 @@ button{font:inherit;cursor:pointer}
     Math.round((plotX-L)/(w-L-R)*(points.length-1))));
    show(points[index]);
   });
-  fig.append(head);
+  if(chart.title)fig.append(el('strong','',chart.title));
   if(chart.type==='comparison'){
    const legend=el('div','legend');const a=el('span','ledger'),b=el('span','history');
    a.append(el('i'),el('span','','Ledger scheduled forecast'));
