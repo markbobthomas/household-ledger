@@ -67,5 +67,15 @@ const until=async(condition)=>{for(let i=0;i<150;i++){if(condition())return;awai
  assert.equal(stored.autoEnabled,false);
  assert.equal(stored.report,null,'disconnect erases previous household report and authorization');
  assert.equal(waiting.status().report,null);
+ // Previous release only authorized selected source summaries; a new
+ // record-level data scope requires explicit renewed authorization.
+ stored={version:1,autoEnabled:true,report:{mode:'autonomous-adaptive',
+  blocks:[{kind:'hero',title:'Old model result',text:'Old'}]},
+  revision:'D',completedAt:'2026-11-19T00:00:00Z'};
+ const reconsent=await make();await reconsent.load();
+ assert.equal(reconsent.status().enabled,false,'old consent never extends to broader data sharing');
+ assert.equal(reconsent.status().report,null,'prior summary model report cannot be reused');
+ assert.equal(stored.dataAccessVersion,2,'new scope is tracked in encrypted persistence');
+ assert.equal(reconsent.schedule(),false,'no expanded scope data goes to AI until renewed opt-in');
  console.log('PASS encrypted AI cache: consent, dedup, bank-refresh snapshot, stale result rejection, restart, manual refresh and disconnect');
 })().catch(e=>{console.error(e);process.exitCode=1});

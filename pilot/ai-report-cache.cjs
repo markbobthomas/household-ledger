@@ -3,7 +3,9 @@
 // the browser, or an unencrypted on-disk file. A result is valid only for the
 // exact canonical snapshot revision it examined.
 function create({read,write,revision,snapshot,analyze,available=()=>true,defer=setImmediate}){
- let saved={version:1,autoEnabled:false,report:null,revision:null,completedAt:null};
+ // Data-access version 2 shares broader sanitized record-level data with AI.
+ // Prior summary-only consent does NOT authorize this expanded scope.
+ let saved={version:1,dataAccessVersion:2,autoEnabled:false,report:null,revision:null,completedAt:null};
  let phase='idle',lastError=null,lastFailedRevision=null,queued=false,running=false,requested=false,forceNext=false;
  const safeCode=e=>[
   'invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
@@ -19,7 +21,11 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
     (value.report!==null&&(typeof value.report!=='object'||Array.isArray(value.report)))||
     (value.revision!==null&&typeof value.revision!=='string'))
    throw Error('Invalid encrypted AI report cache');
-  saved={...saved,...value};
+  if(value.dataAccessVersion!==2){
+   // A privacy-expanding release must not silently reuse older ongoing
+   // OpenAI-sharing authorization or an outdated result from a prior prompt.
+   await write({...saved});
+  }else saved={...saved,...value};
  }
  async function store(next){await write(next);saved=next}
  function status(){
@@ -73,7 +79,7 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   return status();
  }
  async function clear(){
-  await store({version:1,autoEnabled:false,report:null,revision:null,completedAt:null});
+  await store({version:1,dataAccessVersion:2,autoEnabled:false,report:null,revision:null,completedAt:null});
   requested=false;forceNext=false;lastError=null;lastFailedRevision=null;phase='idle';
  }
  return {load,status,schedule,setEnabled,clear};
