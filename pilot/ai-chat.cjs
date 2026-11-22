@@ -34,9 +34,14 @@ autoItem.properties.detail={type:'string'};
 autoItem.properties.visualStyle={type:'string',
  enum:['auto','line','bar','donut','ranked']};
 const REVIEW_FORMAT={type:'json_schema',json_schema:{name:'ledger_analysis_review_v1',strict:true,
- schema:{type:'object',additionalProperties:false,required:['rejectedIndices','concerns'],properties:{
+ schema:{type:'object',additionalProperties:false,
+ required:['rejectedIndices','concerns','quality','reason'],properties:{
   rejectedIndices:{type:'array',items:{type:'integer'}},
-  concerns:{type:'array',items:{type:'string'}}}}}};
+  concerns:{type:'array',items:{type:'string'}},
+  quality:{type:'string',enum:['substantive','reconsider','limited-source']},
+  reason:{type:'string'}}}}};
+// The independent auditor judges accuracy AND usefulness. It cannot
+// prescribe a finding count, topic, or visualization.
 // Open-ended analyst; only security and factual grounding are prescribed.
 const ANALYST_PROMPT=[
  'You are investigating a household financial dataset to discover what matters to the actual people living with these finances. Think like an exceptional independent analyst with the freedom to explore unexpected patterns, potential improvements, financial opportunities, and inconsistencies. Do not accept one narrow observation as an examination of a rich financial dataset. Choose topics, depth, presentation and degree of confidence yourself; no finding category or preset checklist is required. Use the source index, read-only record pages and calculations as your research desk, and distinguish what you have seen from what remains unexplored.',
@@ -174,7 +179,7 @@ async function reviewPresentation({apiKey,model,fetchImpl,blocks,facts=[],contex
     alternateValue:p.alternateValue}))}:null,
   citedEvidence:(b.evidence||[]).slice(0,16).map(e=>e.text)}));
  const messages=[{role:'system',content:
-  'You are an independent evidence auditor, not the analyst. Check claims against cited evidence and other supplied source context. Reject demonstrably inaccurate figures, invented comparisons, contradictions, unfounded causes, false certainty and misreading of linked transfers or card payments. Do not impose your own preferred financial topics, confidence threshold, magnitude cutoff or output structure. A proportionately qualified, evidence-supported interpretation is permitted. Reject only misleading or unsupported blocks; record genuinely unresolved questions as concerns. Make no financial changes. Return required JSON.'},
+  'You are an independent evidence auditor, not the analyst. Check claims against cited evidence and other supplied source context. Reject demonstrably inaccurate figures, invented comparisons, contradictions, unfounded causes, false certainty and misreading of linked transfers or card payments. Do not impose your own preferred financial topics, confidence threshold, magnitude cutoff or output structure. A proportionately qualified, evidence-supported interpretation is permitted. Reject only misleading or unsupported blocks; record genuinely unresolved questions as concerns. Separately judge whether the proposed analysis would help this household make better financial decisions. Compare what it explores against the supplied source coverage and source leads: if important source-backed questions remain unexplored, including when the report only offers a generic cash-safety status, choose quality=reconsider with a specific research lead. If the available records truly cannot support more, choose limited-source; otherwise choose substantive. No universal finding count, required subject, required chart, or confidence floor. Never ask for padding or invented recommendations. Make no financial changes. Return required JSON.'},
   {role:'user',content:JSON.stringify({blocks:supplied,
    sourceCoverage:context?.scope||{},
    // Audit against other independently sampled source facts as well as citations.
@@ -184,11 +189,14 @@ async function reviewPresentation({apiKey,model,fetchImpl,blocks,facts=[],contex
  let parsed;try{parsed=JSON.parse(message.content||'')}catch{
   const e=Error('Independent review invalid');e.safeCode='invalid_ai_json';throw e;
  }
- if(!Array.isArray(parsed.rejectedIndices)||!Array.isArray(parsed.concerns)){
+ if(!Array.isArray(parsed.rejectedIndices)||!Array.isArray(parsed.concerns)||
+   !['substantive','reconsider','limited-source'].includes(parsed.quality)||
+   typeof parsed.reason!=='string'){
   const e=Error('Independent review schema invalid');e.safeCode='invalid_ai_schema';throw e;
  }
  const rejected=new Set(parsed.rejectedIndices.filter(i=>Number.isInteger(i)&&i>=0&&i<blocks.length));
- return {rejected,concerns:parsed.concerns.filter(x=>typeof x==='string'&&x.length<=260).slice(0,8)};
+ return {rejected,concerns:parsed.concerns.filter(x=>typeof x==='string'&&x.length<=260).slice(0,8),
+  quality:parsed.quality,reason:parsed.reason.slice(0,260)};
 }
 function cleanConversation(history){
  if(!Array.isArray(history)||history.length>12)throw Error('Invalid conversation history');
@@ -384,7 +392,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
     secondReview=await reviewPresentation({apiKey,model,fetchImpl,blocks:result.blocks,facts:allFacts,context});
     const preAuditCount=result.blocks.length;
     result.blocks=result.blocks.filter((_,i)=>!secondReview.rejected.has(i));
-    if(preAuditCount>=3&&result.blocks.length<=1&&reviewRetries<1){
+    if(preAuditCount>=2&&result.blocks.length<=1&&reviewRetries<2){
      reviewRetries++;
      messages.push({role:'assistant',content:message.content||''});
      messages.push({role:'user',content:JSON.stringify({
@@ -395,11 +403,26 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      })});
      continue;
     }
-    if(!result.blocks.length&&reviewRetries<1){
+    if(!result.blocks.length&&reviewRetries<2){
      reviewRetries++;
      messages.push({role:'assistant',content:message.content||''});
      messages.push({role:'user',content:
       'The independent evidence auditor rejected the displayed analysis for unsupported or misleading claims. Revise it with stronger corroboration and accurate qualification using your read-only tools. Keep the broad independent discoveries where sources support them; do not replace the entire report with a negative-balance yes/no check.'});
+     continue;
+    }
+    if(result.blocks.length&&secondReview.quality==='reconsider'&&reviewRetries<2){
+     // A factually supportable report can still be too shallow to be useful.
+     // Let the model select further inquiries, without enforcing categories
+     // or an arbitrary minimum number of findings.
+     reviewRetries++;
+     messages.push({role:'assistant',content:message.content||''});
+     messages.push({role:'user',content:JSON.stringify({
+      request:'The independent review found this report too shallow to answer the most important questions raised by the available records. Investigate the specific gaps and re-synthesize the report with real source evidence, relevant comparisons and useful recommendations where justified. Choose your own subjects, charts and depth. Do not pad or invent findings.',
+      independentReview:secondReview.reason,
+      citedEvidenceAvailable:allFacts.length,
+      sourceCoverage:context.scope,
+      candidateFindings:drafts.map(d=>d.blocks.length)
+     })});
      continue;
     }
     if(!result.blocks.length){const e=Error('Independent review rejected all model claims');
@@ -407,6 +430,11 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
    }
    if(mode==='autonomous'){
     result.followUps=[];result.mode='autonomous-adaptive';result.reportStatus='evidence-checked';
+    result.analysisQuality=secondReview.quality==='substantive'?
+     {status:'substantive'}:
+     {status:'limited',reason:secondReview.quality==='limited-source'?
+      'The source evidence did not support a broader assessment.':
+      'An independent reviewer still identified unanswered financial questions after further investigation.'};
     result.sourceChecks=successfulSourceChecks.size;
     result.independentExplorations=drafts.length;
     result.editorialRevisions=editorialRetries+reviewRetries;
