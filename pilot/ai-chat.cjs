@@ -210,7 +210,7 @@ function presentationChart(chart,style){
  if(chart.type==='comparison')return chart;
  const points=chart.points||[];
  if(points.length<2)return chart;
- const timeSeries=points.every(p=>/^\\d{4}-\\d{2}(?:-\\d{2})?$/.test(String(p.label)));
+ const timeSeries=points.every(p=>/^\d{4}-\d{2}(?:-\d{2})?$/.test(String(p.label)));
  const categorical=chart.type==='bar'&&!timeSeries;
  const nonnegative=points.every(p=>typeof p.value==='number'&&
   Number.isFinite(p.value)&&p.value>=0);
