@@ -168,7 +168,10 @@ async function complete({apiKey,model,messages,fetchImpl,toolChoice='auto',tools
 }
 async function reviewPresentation({apiKey,model,fetchImpl,blocks,facts=[],context}){
  const supplied=blocks.map((b,index)=>({index,kind:b.kind,title:b.title,text:b.text,
-  detail:b.detail||'',chart:b.chart?{title:b.chart.title,subtitle:b.chart.subtitle,kind:b.chart.kind}:null,
+  detail:b.detail||'',chart:b.chart?{title:b.chart.title,subtitle:b.chart.subtitle,
+   kind:b.chart.kind,type:b.chart.type,unit:b.chart.unit,
+   points:(b.chart.points||[]).slice(0,45).map(p=>({label:p.label,value:p.value,
+    alternateValue:p.alternateValue}))}:null,
   citedEvidence:(b.evidence||[]).slice(0,16).map(e=>e.text)}));
  const messages=[{role:'system',content:
   'You are an independent evidence auditor, not the analyst. Check claims against cited evidence and other supplied source context. Reject demonstrably inaccurate figures, invented comparisons, contradictions, unfounded causes, false certainty and misreading of linked transfers or card payments. Do not impose your own preferred financial topics, confidence threshold, magnitude cutoff or output structure. A proportionately qualified, evidence-supported interpretation is permitted. Reject only misleading or unsupported blocks; record genuinely unresolved questions as concerns. Make no financial changes. Return required JSON.'},
