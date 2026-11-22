@@ -227,16 +227,31 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
     b.text.length>1700||!Array.isArray(b.evidenceIds)||b.evidenceIds.length>20||
     (b.detail!==undefined&&(typeof b.detail!=='string'||b.detail.length>1700)))continue;
   const detail=b.detail||'';
-  if(detail&&!verifyClaim(detail,b.evidenceIds,byId))continue;
-  // Analyst judgment, not a hard-coded dollar threshold, determines significance.
+  // An approved chart carries immutable, source-calculated point values.
+  // Its own proof counts as a citation, even when the AI omitted an
+  // otherwise redundant text evidence ID. Exact figures/dates are checked.
   if(b.kind==='chart'){
    const chart=plotIds.get(b.chartId);
-   if(!chart||b.title&&!verifyClaim(b.title,b.evidenceIds,byId)||
-      b.text&&!verifyClaim(b.text,b.evidenceIds,byId))continue;
+   if(!chart)continue;
+   const formatValue=v=>chart.unit==='count'?String(v):
+    '$'+amount(Number(v)).toFixed(2);
+   const proof={id:'chart-source-'+chart.id,kind:'source-chart',
+    text:(String(chart.title||'')+'; '+String(chart.subtitle||'')+'; '+
+     (chart.points||[]).filter(p=>p&&Number.isFinite(p.value)).map(p=>
+      String(p.label)+': '+formatValue(p.value)+
+      (Number.isFinite(p.alternateValue)?' versus '+formatValue(p.alternateValue):'')
+     ).join('; ')).slice(0,15000)};
+   const chartEvidence=new Map(byId);
+   chartEvidence.set(proof.id,proof);
+   const ids=[...b.evidenceIds,proof.id];
+   if((b.title&&!verifyClaim(b.title,ids,chartEvidence))||
+      (b.text&&!verifyClaim(b.text,ids,chartEvidence))||
+      (detail&&!verifyClaim(detail,ids,chartEvidence)))continue;
    blocks.push({kind:'chart',title:b.title||chart.title,text:b.text,detail,
     chart:presentationChart(chart,b.visualStyle),
-    evidence:b.evidenceIds.map(id=>byId.get(id))});
+    evidence:[...b.evidenceIds.map(id=>byId.get(id)),proof]});
   }else{
+   if(detail&&!verifyClaim(detail,b.evidenceIds,byId))continue;
    if(!verifyClaim(b.text||b.title,b.evidenceIds,byId)||
       b.title&&!verifyClaim(b.title,b.evidenceIds,byId))continue;
    blocks.push({kind:b.kind,title:b.title,text:b.text,detail,
