@@ -27,23 +27,46 @@ module.exports=(async()=>{
     {label:'2026-12-02',value:4800,alternateValue:7800},
     {label:'2026-12-19',value:4500,alternateValue:6800}]
   },blocks:[
-  {kind:'hero',title:'Forecast outlook',text:'Checking may reach $4500.00 on 2026-12-19',
+  {kind:'hero',title:'Checking could fall to $4,500 on December 19',
+   text:'The lowest scheduled balance is concentrated around upcoming bills.',
+   detail:'Ledger calculates a projected low of $4500.00 on 2026-12-19. This is not a guarantee because unscheduled spending is not forecast.',
    evidence:[{text:'Canonical low on 2026-12-19: $4500.00'}]},
-  {kind:'paragraph',title:'What causes the low?',
-   text:'Expected expense clusters create the low. <img src=x onerror=alert(1)>',
+  {kind:'paragraph',title:'Bills are concentrated around the low-balance date',
+   text:'The forecast shows a tighter cash window than at the start of the month.',
+   detail:'Check the underlying scheduled transactions. <img src=x onerror=alert(1)> The timing is conditional on payments posting as expected.',
    evidence:[{text:'Source-calculated expected payments'}]},
-  {kind:'metric',title:'Projected lowest balance',text:'$4500.00',
+  {kind:'metric',title:'Projected cash low',text:'$4500.00',
+   detail:'A source-calculated daily balance, excluding unscheduled transactions.',
    evidence:[{text:'Verified $4500.00 balance'}]},
-  {kind:'chart',title:'',text:'',chart:{id:'analysis-chart-1',type:'line',unit:'USD',
-   title:'Expected checking balance',subtitle:'Canonical daily projections',
-   points:[{label:'2026-11-19',value:9000},{label:'2026-12-02',value:4800},
-    {label:'2026-12-19',value:4500}]},evidence:[]},
-  {kind:'chart',title:'',text:'',chart:{id:'analysis-chart-2',type:'bar',unit:'count',
-   title:'Recorded transaction count',subtitle:'Actual source records',
-   points:[{label:'September',value:28},{label:'October',value:35},
-    {label:'November',value:17}]},evidence:[]},
-  {kind:'callout',title:'Known forecast limitation',
-   text:'Variable discretionary spending is not individually projected.',
+  {kind:'chart',title:'The scheduled checking balance slopes down through December',
+   text:'A daily view shows the risk window.',
+   detail:'The chart uses the canonical projected end-of-day cash balance.',
+   chart:{id:'analysis-chart-1',type:'line',unit:'USD',
+    title:'Expected checking balance',subtitle:'Canonical daily projections',
+    points:[{label:'2026-11-19',value:9000},{label:'2026-12-02',value:4800},
+     {label:'2026-12-19',value:4500}]},evidence:[]},
+  {kind:'chart',title:'Recorded activity peaked in October',
+   text:'Transaction count by month.',
+   chart:{id:'analysis-chart-2',type:'bar',unit:'count',
+    title:'Recorded transaction count',subtitle:'Actual source records',
+    points:[{label:'September',value:28},{label:'October',value:35},
+     {label:'November',value:17}]},evidence:[]},
+  {kind:'chart',title:'Groceries are the largest share of these expenses',
+   text:'Compare categories by proportion.',
+   detail:'The portions come from the same source-calculated breakdown.',
+   chart:{id:'analysis-chart-3',type:'donut',unit:'USD',
+    title:'Fictional category split',subtitle:'Only expenses in this analysis scope',
+    points:[{label:'Groceries',value:900},{label:'Housing',value:600},
+     {label:'Transport',value:300}]},evidence:[]},
+  {kind:'chart',title:'A few merchants account for the biggest individual totals',
+   text:'Ranked merchant totals.',
+   chart:{id:'analysis-chart-4',type:'ranked',unit:'USD',
+    title:'Fictional merchant totals',subtitle:'Source-calculated grouping',
+    points:[{label:'Merchant A',value:800},{label:'Merchant B',value:460},
+     {label:'Merchant C',value:200}]},evidence:[]},
+  {kind:'callout',title:'Unscheduled spending could lower the forecast',
+   text:'Ordinary future purchases are not individually projected.',
+   detail:'This is a limitation on the conditional balance projection, not a verified future expense.',
    evidence:[{text:'Forecast scope metadata'}]}],
   coverage:{historicalTransactionsScanned:372,historicalMonthsScanned:12,
    futureEventsScanned:115,accountCount:2,forecastHorizonDays:1095,lastSync:'2026-11-19'},
@@ -100,15 +123,30 @@ module.exports=(async()=>{
     'bank-sourced model text must be literal and never execute HTML');
    assert.equal(await page.locator('.hero').count(),1);
    assert.equal(await page.locator('.callout').count(),1);
-   assert.equal(await page.locator('.overview').count(),1,
-    'the main verified summary is visible rather than buried in a details toggle');
+   assert.equal(await page.locator('.finding').count(),1,
+    'the AI chooses how to present an individual finding');
+   assert.match(await page.locator('.hero .headline').innerText(),/could fall to/);
+   assert((await page.locator('.hero .keyline').innerText()).length<160,
+    'the glance summary is short, not the entire analyst narrative');
+   assert.equal(await page.locator('.insight-depth').first().getAttribute('open'),null,
+    'full explanation stays collapsed by default');
+   await page.locator('.insight-depth').first().evaluate(el=>el.open=true);
+   assert.match(await page.locator('.insight-depth .inside').first().innerText(),/2026-12-19/,
+    'expandable detail retains the exact sourced reasoning');
    assert.equal(await page.locator('.glance-card').count(),0,
     'no predetermined forecast cards are rendered');
-   assert.equal(await page.locator('.graph svg').count(),2);
+   assert.equal(await page.locator('.graph svg').count(),3,
+    'source-derived line, bar, and AI-selected donut graphics render');
+   assert.equal(await page.locator('.donut-legend-item').count(),3,
+    'the donut explains its source categories and amounts');
+   assert.equal(await page.locator('.ranked-row').count(),3,
+    'the AI can request a ranked comparison rather than a generic bar chart');
    assert.equal(await page.locator('.legend').count(),0);
    assert.equal(await page.locator('.metric').count(),1);
    assert.equal(await page.locator('.graph svg path').count()>=1,true);
    assert.equal(await page.locator('.graph svg rect').count()>0,true);
+   assert.equal(await page.locator('.graph svg path').count()>2,true,
+    'chart selection includes multiple sourced donut wedges');
    assert.equal(await page.locator('.evidence').first().getAttribute('open'),null);
    assert.equal(await page.locator('.limits').getAttribute('open'),null);
    await page.locator('.graph svg').first().click({position:{x:115,y:90}});
