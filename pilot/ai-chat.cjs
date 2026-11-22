@@ -364,7 +364,19 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
    let secondReview=null;
    if(mode==='autonomous'){
     secondReview=await reviewPresentation({apiKey,model,fetchImpl,blocks:result.blocks,facts:allFacts,context});
+    const preAuditCount=result.blocks.length;
     result.blocks=result.blocks.filter((_,i)=>!secondReview.rejected.has(i));
+    if(preAuditCount>=3&&result.blocks.length<=1&&reviewRetries<1){
+     reviewRetries++;
+     messages.push({role:'assistant',content:message.content||''});
+     messages.push({role:'user',content:JSON.stringify({
+      request:'Rebuild the report from evidence. Independent audit found most of the analysis misleading or unsupported; use original source and calculation tools to correct rather than abandon the independent discoveries. Preserve meaningful distinct insights only where supported, and identify genuine limits.',
+      auditedBefore:preAuditCount,auditedAfter:result.blocks.length,
+      rejectedIndices:[...secondReview.rejected],
+      auditorQuestions:secondReview.concerns
+     })});
+     continue;
+    }
     if(!result.blocks.length&&reviewRetries<1){
      reviewRetries++;
      messages.push({role:'assistant',content:message.content||''});
