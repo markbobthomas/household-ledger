@@ -230,7 +230,8 @@ function financialContext(prepared,{lastSync=null,adjustments={}}={}){
  }
  return {asOf,scope:coverage,accounts:accountReports,primary:selectedPrimary,
   facts,visuals,privateIds:aliases,
-  source:{projection,ledger,history,payments:prepared.bundle.payments||{}},factIndex:byId};
+  source:{projection,ledger,history,payments:prepared.bundle.payments||{},
+   ownerPreferences:adjustments},factIndex:byId};
 }
 const RESPONSE_FORMAT={type:'json_schema',json_schema:{name:'ledger_financial_outlook',strict:true,
  schema:{type:'object',additionalProperties:false,required:['summary','summaryEvidenceIds','findings','sections','limitations'],
