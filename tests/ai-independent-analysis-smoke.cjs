@@ -72,6 +72,20 @@ const scope={source:'actual',direction:'expense',startDate:date(-179),endDate:as
 const computed=computeFinancialView(context,scope,2);
 assert(computed.facts.length>0);
 assert(computed.chart?.type==='bar','source aggregation produces categorical bars');
+const autoCited=verifyAnswer({blocks:[{
+ kind:'chart',title:'Merchants differ in their source-calculated totals',
+ text:'',detail:'Source-based comparison of posted transactions.',
+ visualStyle:'ranked',evidenceIds:[],chartId:computed.chart.id
+}],followUps:[],limitations:[]},[],[computed.chart],context);
+assert.equal(autoCited.blocks[0].chart.type,'ranked');
+assert(autoCited.blocks[0].evidence.some(x=>x.id.startsWith('chart-source-')),
+ 'verified chart calculations supply their own evidence rather than being silently discarded');
+assert.throws(()=>verifyAnswer({blocks:[{
+ kind:'chart',title:'Huge imaginary savings of $987654321.00',
+ text:'',detail:'',visualStyle:'ranked',evidenceIds:[],chartId:computed.chart.id
+}],followUps:[],limitations:[]},[],[computed.chart],context),/supported/,
+ 'chart proof never permits a fabricated monetary headline');
+
 const styled=verifyAnswer({blocks:[
  {kind:'chart',title:'',text:'',detail:'',visualStyle:'donut',
   evidenceIds:[],chartId:computed.chart.id},
