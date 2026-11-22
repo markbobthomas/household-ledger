@@ -95,94 +95,122 @@ assert.equal(badDetail.blocks.length,1,
 (async()=>{
  assert.deepEqual(await researchPublic('private-address',{apiKey:'fictional'}),
   {error:'Unsupported public topic'},'external web research remains privacy-restricted');
- let calls=0,readToolResults=0,reviewed=false;
+ let calls=0,reviewed=false,repair=false;
+ const indexFact=dataset.facts.find(f=>f.kind==='dataset-indices'&&f.text.includes('merchant'));
+ assert(indexFact,'aggregated history facts are citeable');
+ const firstDraft={blocks:[material],followUps:[],limitations:[]};
+ const secondDraft={blocks:[{kind:'paragraph',title:'Merchant totals differ',
+  text:'Recorded merchant totals are uneven.',
+  detail:'Compare these historical charges before deciding what to change.',
+  visualStyle:'auto',evidenceIds:[indexFact.id],chartId:null}],
+  followUps:[],limitations:[]};
+ const sourceReport=[
+  {kind:'hero',title:'Checking may reach $4500.00 on '+date(30),
+   text:'A conditional cash projection, not a guaranteed balance.',
+   detail:'Ledger projects a balance of $4500.00 on '+date(30)+
+    ', excluding unplanned purchases.',
+   visualStyle:'auto',evidenceIds:[low.id],chartId:null},
+  {kind:'chart',title:'Merchant totals differ significantly',text:'',
+   detail:'A source-calculated, historical comparison.',
+   visualStyle:'ranked',evidenceIds:[],chartId:'analysis-chart-2'},
+  {kind:'paragraph',title:'Posted spending concentrates at some merchants',
+   text:'The record suggests several useful comparisons.',
+   detail:'This is not proof that those charges are unnecessary.',
+   visualStyle:'auto',evidenceIds:[indexFact.id],chartId:null},
+  {kind:'callout',title:'Consider reviewing merchant concentration',
+   text:'A review may find meaningful choices.',
+   detail:'Amounts are source-derived but their necessity is unknown.',
+   visualStyle:'auto',evidenceIds:[indexFact.id],chartId:null}
+ ];
+ const badReport=[...sourceReport,
+  {kind:'paragraph',title:'Fake savings',text:'Save $987654321.00 now.',
+   detail:'',visualStyle:'auto',evidenceIds:[low.id],chartId:null},
+  {kind:'paragraph',title:'Imaginary income',
+   text:'Income rises $999999999.00 tomorrow.',
+   detail:'',visualStyle:'auto',evidenceIds:[low.id],chartId:null}];
  const mock=async(url,options)=>{
   assert.equal(url,'https://api.openai.com/v1/chat/completions');
   const body=JSON.parse(options.body);calls++;
   assert.equal(body.store,false);
   assert(!JSON.stringify(body).includes(account));
   assert(!JSON.stringify(body).includes('private-tx-'));
-  if(calls===4){
-   assert(!body.tools,'reviewer cannot make private data requests');
-   const review=JSON.parse(body.messages[1].content);
-   assert(review.blocks.some(b=>b.detail&&b.detail.includes('unscheduled')),
-    'the second independent auditor inspects expanded analysis, not just headlines');
+  if(calls===8){
+   assert.equal(body.tools,undefined,'auditor has no tool access');
    assert.equal(body.response_format.json_schema.name,'ledger_analysis_review_v1');
+   const audit=JSON.parse(body.messages[1].content);
+   assert(audit.blocks.some(x=>x.detail?.includes('unplanned')),
+    'auditor examines the full explanation, not just headline');
    reviewed=true;
    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
-    rejectedIndices:[2],concerns:[]})}}]})};
+    rejectedIndices:[3],concerns:[]})}}]})};
   }
-  assert.equal(body.tool_choice,'auto','AI chooses whether to investigate, not a quota');
-  assert.equal(body.response_format.json_schema.name,'ledger_visual_insights_v1',
-   'automatic reviews request a separate glance/deep-detail report contract');
-  const blockSchema=body.response_format.json_schema.schema.properties.blocks.items;
-  assert(blockSchema.required.includes('detail')&&blockSchema.required.includes('visualStyle'),
-   'AI chooses its own visual form and supplies detailed source-backed reasoning');
-  assert.equal(body.tools.length,6,'model can browse all source data and use calculations');
-  const start=JSON.parse(body.messages[1].content);
-  assert.equal(start.manifest.counts.history,1600,'AI receives the full source manifest');
-  assert(start.records.history.length>100,'large initial dump has actual records, not only a short summary');
-  assert(start.manifest.initialIncluded.history<1600,'remaining rows are available through paging');
+  assert.equal(body.tool_choice,'auto','no arbitrary minimum tool count');
+  assert.equal(body.tools.length,6);
+  assert.equal(body.response_format.json_schema.name,'ledger_visual_insights_v1');
+  assert.equal(JSON.parse(body.messages[1].content).manifest.counts.history,1600);
   let m;
-  if(calls===1)m={tool_calls:[{id:'read',function:{name:'read_financial_dataset',
-   arguments:JSON.stringify({section:'history',offset:1400,limit:200})}}]};
+  if(calls===1)m={tool_calls:[{id:'read',function:{
+    name:'read_financial_dataset',arguments:JSON.stringify({
+     section:'history',offset:1400,limit:200})}}]};
   else if(calls===2){
-   assert(body.messages.some(x=>x.role==='tool'&&x.content.includes('dataset-history-1600')),
-    'AI can access source records beyond the initial selection');
-   readToolResults++;
-   m={tool_calls:[{id:'calc',function:{name:'compute_financial_view',arguments:JSON.stringify(scope)}}]};
-  }else m={content:JSON.stringify({blocks:[
-   {kind:'hero',title:'Checking could fall to $4500.00 on '+date(30),
-    text:'A conditional forecast low, not a guaranteed future balance.',
-    detail:'Ledger projects $4500.00 on '+date(30)+
-      '; actual unscheduled purchases may change the outcome.',
-    visualStyle:'auto',evidenceIds:[low.id],chartId:null},
-   {kind:'chart',title:'',text:'',detail:'',visualStyle:'ranked',
-    evidenceIds:[],chartId:'analysis-chart-2'},
-   {kind:'paragraph',title:'False causal explanation',
-    text:'The projected low is caused by a confirmed change in pay.',
-    detail:'No pay history actually establishes this.',
-    visualStyle:'auto',evidenceIds:[low.id],chartId:null},
-   {kind:'paragraph',title:'Unsupported exact amount',
-    text:'Expenses total $987654321.00',detail:'',visualStyle:'auto',
-    evidenceIds:[low.id],chartId:null}
-  ],followUps:[],limitations:[]})};
+   assert(body.messages.some(x=>x.role==='tool'&&x.content.includes('dataset-history-1600')));
+   m={tool_calls:[{id:'calc',function:{name:'compute_financial_view',
+    arguments:JSON.stringify(scope)}}]};
+  }else if(calls===3)m={content:JSON.stringify(firstDraft)};
+  else if(calls===4){
+   assert(body.messages[0].content.includes('independent second investigator'));
+   assert(!body.messages.some(x=>x.content?.includes('Merchant totals differ')),
+    'independent inquiry is not primed with the first report');
+   m={tool_calls:[{id:'second',function:{name:'compute_financial_view',
+    arguments:JSON.stringify({...scope,groupBy:'category'})}}]};
+  }else if(calls===5)m={content:JSON.stringify(secondDraft)};
+  else if(calls===6){
+   assert(body.messages[0].content.includes('final independent editor'));
+   const synthesis=JSON.parse(body.messages.at(-1).content);
+   assert.equal(synthesis.candidates.length,2,'two exploratory source readings feed synthesis');
+   assert(synthesis.citedEvidence.some(f=>f.id===indexFact.id));
+   m={content:JSON.stringify({blocks:badReport,followUps:[],limitations:[]})};
+  }else if(calls===7){
+   assert(body.messages.at(-1).content.includes('discardedForInsufficientSourceEvidence'));
+   repair=true;
+   m={content:JSON.stringify({blocks:sourceReport,followUps:[],limitations:[]})};
+  }else throw Error('Unexpected model response '+calls);
   return {ok:true,json:async()=>({choices:[{message:m}]})};
  };
  await assert.rejects(()=>analyzeOneClick({context,apiKey:'fictional',
   consent:'financial-chat-v1',fetchImpl:mock}),/consent/);
  const result=await analyzeOneClick({context,apiKey:'fictional',
   consent:'financial-analysis-v3',fetchImpl:mock});
- assert(reviewed);
- assert.equal(calls,4,'AI chose two investigations, not twelve mandatory calls');
- assert.equal(readToolResults,1);
- assert.equal(result.sourceChecks,2,'actual number of voluntary source reads is reported');
- assert.equal(result.blocks.length,2,'unsupported amount and overconfident cause are withheld');
- assert(result.blocks.some(b=>b.chart?.id==='analysis-chart-2'),'AI-requested calculation chart renders');
- assert(result.blocks.some(b=>b.chart?.type==='ranked'),
-  'requested categorical chart is rendered as an AI-selected ranked comparison');
- assert(result.blocks[0].detail.includes('unscheduled'),
-  'full evidence-backed reasoning is preserved separately from the brief takeaway');
- assert(result.auditTrail.some(x=>x.action.includes('Independently re-reviewed')));
- assert.equal(result.datasetCoverage.total.history,1600);
+ assert(reviewed&&repair);
+ assert.equal(calls,8,'two explorations and an editorial correction precede final audit');
+ assert.equal(result.sourceChecks,3);
+ assert.equal(result.independentExplorations,2);
+ assert.equal(result.editorialRevisions,1);
+ assert.equal(result.blocks.length,3,'rejected and invented conclusions are not shown');
+ assert(result.blocks.some(b=>b.chart?.type==='ranked'),'AI chooses source-backed visuals');
+ assert(result.blocks.some(b=>b.title.includes('Posted spending')),
+  'an independent non-overdraft insight is retained');
  assert(result.disclosure.includes('sanitized'));
- // A strong analyst may conclude without extra tool calls when the supplied
- // data is already sufficient; it should not be forced through irrelevant checks.
- let second=0;
+ assert.equal(result.datasetCoverage.total.history,1600);
+ // Even an insistently sparse AI must reconsider the whole record before a
+ // one-line answer is published. It must not fabricate five findings.
+ let n=0;
  const direct=await analyzeOneClick({context,apiKey:'fictional',
   consent:'financial-analysis-v3',fetchImpl:async(_url,options)=>{
-   const body=JSON.parse(options.body);second++;
-   if(second===1){
+   const body=JSON.parse(options.body);n++;
+   if(n<=5){
     assert.equal(body.tool_choice,'auto');
-    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
-     blocks:[material],followUps:[],limitations:[]})}}]})};
+    return {ok:true,json:async()=>({choices:[{message:{
+     content:JSON.stringify(firstDraft)}}]})};
    }
    assert.equal(body.tools,undefined);
    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
     rejectedIndices:[],concerns:[]})}}]})};
   }});
- assert.equal(direct.blocks.length,1);
- assert.equal(direct.sourceChecks,0,'no minimum investigative tool count');
- assert.equal(second,2);
- console.log('Autonomous freeform AI: full sanitized dataset/pagination, independent tools, zero quotas, evidence checks, reviewer, privacy and optional direct conclusion passed');
+ assert.equal(n,6,'two independent readings, synthesis and two editorial rechecks');
+ assert.equal(direct.blocks.length,1,'absence of evidence cannot force fabricated claims');
+ assert.equal(direct.independentExplorations,2);
+ assert.equal(direct.editorialRevisions,2);
+ assert.equal(direct.sourceChecks,0,'zero tool calls remains allowed');
+ console.log('AI deep discovery: full-source pivots, separate independent explorations, synthesis, cited-numbers repair, broad finding retention, privacy and sparse retry passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
