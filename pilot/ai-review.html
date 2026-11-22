@@ -46,6 +46,7 @@ button{font:inherit;cursor:pointer}
 #analysis:empty{min-height:55px}
 .analysis-report{background:#fff;border:1px solid #e1e8e2;border-radius:16px;padding:clamp(17px,3vw,31px);min-width:0}
 .analysis-report .who{font-size:.81rem;font-weight:660;color:#5d7268;margin:0 0 20px}
+.quality-note{font-size:.87rem!important;color:#78542d!important;max-width:800px;border-bottom:1px solid #e9eee9;padding:0 0 15px;margin:-7px 0 14px!important;line-height:1.5!important}
 .analysis-report .finding>p,.analysis-report .hero>.keyline,
 .analysis-report .callout>p,.analysis-report .chart-insight>p{
  font-size:.93rem;line-height:1.45;color:#566c61;margin:0 0 4px}
@@ -321,6 +322,10 @@ button{font:inherit;cursor:pointer}
    who=el('div','who','AI review · '+data.asOf);
   if(data.mode!=='autonomous-adaptive')throw Error('Unexpected analysis response');
   msg.append(who);
+  if(data.analysisQuality?.status==='limited'){
+   msg.append(el('p','quality-note',
+    'Limited analysis: the independent reviewer could not confirm that this run explored enough of the material financial questions. The evidence-checked findings below may be incomplete.'));
+  }
   let metrics=null;
   for(const block of data.blocks||[]){
    const brief=clipText(block.text||'');

@@ -156,7 +156,7 @@ assert.equal(badDetail.blocks.length,1,
     'auditor examines the full explanation, not just headline');
    reviewed=true;
    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
-    rejectedIndices:[3],concerns:[]})}}]})};
+    rejectedIndices:[3],concerns:[],quality:'substantive',reason:'Distinct evidence-led findings and useful comparisons.'})}}]})};
   }
   assert.equal(body.tool_choice,'auto','no arbitrary minimum tool count');
   assert.equal(body.tools.length,6);
@@ -219,12 +219,55 @@ assert.equal(badDetail.blocks.length,1,
    }
    assert.equal(body.tools,undefined);
    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
-    rejectedIndices:[],concerns:[]})}}]})};
+    rejectedIndices:[],concerns:[],quality:'substantive',reason:'No further verifiable finding identified.'})}}]})};
   }});
  assert.equal(n,6,'two independent readings, synthesis and two editorial rechecks');
  assert.equal(direct.blocks.length,1,'absence of evidence cannot force fabricated claims');
  assert.equal(direct.independentExplorations,2);
  assert.equal(direct.editorialRevisions,2);
  assert.equal(direct.sourceChecks,0,'zero tool calls remains allowed');
- console.log('AI deep discovery: full-source pivots, separate independent explorations, synthesis, cited-numbers repair, broad finding retention, privacy and sparse retry passed');
+ // No forced topical checklist: an independent quality auditor can require
+ // further investigation even when two supported observations pass accuracy checks.
+ let qaCalls=0,qaWasRevised=false;
+ const tooShallow={blocks:[material,secondDraft.blocks[0]],followUps:[],limitations:[]};
+ const improved={blocks:[...tooShallow.blocks,{
+  kind:'callout',title:'Explore concentration before changing spending',
+  text:'Source totals suggest useful comparisons, not a proven unnecessary charge.',
+  detail:'Merchant records reveal where further investigation may help.',
+  visualStyle:'auto',evidenceIds:[indexFact.id],chartId:null
+ }],followUps:[],limitations:[]};
+ const quality=await analyzeOneClick({context,apiKey:'fictional',
+  consent:'financial-analysis-v3',fetchImpl:async(_url,opts)=>{
+   const body=JSON.parse(opts.body);qaCalls++;
+   if(qaCalls===1)return {ok:true,json:async()=>({choices:[{message:{
+    content:JSON.stringify(firstDraft)}}]})};
+   if(qaCalls===2)return {ok:true,json:async()=>({choices:[{message:{
+    content:JSON.stringify(secondDraft)}}]})};
+   if(qaCalls===3)return {ok:true,json:async()=>({choices:[{message:{
+    content:JSON.stringify(tooShallow)}}]})};
+   if(qaCalls===4){
+    assert.equal(body.tools,undefined);
+    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({
+     rejectedIndices:[],concerns:[],quality:'reconsider',
+     reason:'The two observations omit decision-useful questions raised by merchant patterns.'})}}]})};
+   }
+   if(qaCalls===5){
+    const request=JSON.parse(body.messages.at(-1).content);
+    assert.match(request.independentReview,/merchant patterns/);
+    assert.match(request.request,/source evidence/);
+    qaWasRevised=true;
+    return {ok:true,json:async()=>({choices:[{message:{
+     content:JSON.stringify(improved)}}]})};
+   }
+   if(qaCalls===6)return {ok:true,json:async()=>({choices:[{message:{
+    content:JSON.stringify({rejectedIndices:[],concerns:[],
+     quality:'substantive',reason:'Source-supported distinct findings retained.'})}}]})};
+   throw Error('Unexpected independent quality review '+qaCalls);
+  }});
+ assert(qaWasRevised,'an independent usefulness verdict triggers research and editorial revision');
+ assert.equal(qaCalls,6);
+ assert.equal(quality.blocks.length,3);
+ assert.equal(quality.analysisQuality.status,'substantive');
+ assert.equal(quality.editorialRevisions,1);
+ console.log('AI deep discovery: full-source pivots, separate independent explorations, synthesis, cited-numbers repair, broad finding retention, privacy, sparse retry and usefulness review passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
