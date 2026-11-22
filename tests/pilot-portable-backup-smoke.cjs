@@ -45,7 +45,7 @@ const forecasts={cashCushion:6800,transactionNotes:{'fictional-bill':'Keep note'
  futureRecurringRules:[{id:'fictional-rule',accountId:'fictional-checking',merchant:'Fictional Bills',
   amount:140,frequency:'monthly'}]};
 const sessions={version:1,sessions:[]};
-const analysis={version:1,autoEnabled:true,revision:'fictional-revision',
+const analysis={version:1,dataAccessVersion:2,autoEnabled:true,revision:'fictional-revision',
  completedAt:'2026-11-17T02:00:00.000Z',
  report:{mode:'autonomous-adaptive',blocks:[{kind:'hero',title:'Budget observation',
   text:'Fictional summary'}]}};
