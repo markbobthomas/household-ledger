@@ -60,7 +60,7 @@ const checked=verifyAnswer({blocks:[micro,material],followUps:[],limitations:[]}
  context,{materialityGate:true});
 assert.equal(checked.blocks.length,2,
  'Ledger must not silently censor a verified observation using a fixed dollar threshold');
-const scope={source:'actual',direction:'expense',startDate:date(-180),endDate:asOf,
+const scope={source:'actual',direction:'expense',startDate:date(-179),endDate:asOf,
  accountId:null,groupBy:'merchant',measure:'sum',filter:'',comparePrevious:false,visualize:true};
 assert(computeFinancialView(context,scope,2).facts.length>0);
 (async()=>{
