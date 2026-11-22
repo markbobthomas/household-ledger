@@ -36,6 +36,10 @@ assert.equal(dataset.manifest.history,1600,'complete posted history is available
 assert.equal(dataset.manifest.future,1);
 assert.equal(dataset.manifest.balances,120);
 assert.equal(dataset.manifest.cards,1);
+assert(dataset.manifest.indices>30,'neutral pivots are calculated from the full source record');
+assert(dataset.initial.records.indices.length>0);
+assert(dataset.page('indices',0,200).rows.every(x=>x.id&&Number.isFinite(x.total)));
+
 assert.equal(dataset.page('history',0,200).rows.length,200);
 assert.equal(dataset.page('history',1500,200).rows.length,100);
 assert.deepEqual(dataset.page('history',1600,200).rows,[]);
