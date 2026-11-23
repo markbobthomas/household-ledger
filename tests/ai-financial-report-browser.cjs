@@ -185,7 +185,7 @@ module.exports=(async()=>{
     enabled:true,scope:'financial-analysis-auto-v1',consent:true});
    assert.equal(await page.locator('#automatic').isChecked(),true);
    await page.locator('#run').click();
-   await page.locator('.legend').waitFor({state:'visible'});
+   await page.locator('.quality-note').waitFor({state:'visible'});
    assert.equal(requests.length,1,'manual rerun enqueues background analysis');
    assert.deepEqual(requests[0],{scope:'financial-analysis-v3',consent:true});
    assert.equal(await page.locator('.analysis-report').count(),1,
