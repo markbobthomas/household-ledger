@@ -26,7 +26,7 @@ const extras=[
   {id:'newyear-debit',date:'2027-01-01',accountId:'checking',type:'expense',
    amount:50,merchant:'New Year debit'},
   {id:'newyear-deposit',date:'2027-01-01',accountId:'checking',type:'income',
-   amount:70,merchant:'New Year deposit'
+   amount:70,merchant:'New Year deposit'}
 ];
 const prefs={
  futureTransactionAdds:extras,
