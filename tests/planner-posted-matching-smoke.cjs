@@ -461,8 +461,8 @@ assert.equal(rolled.overduePayments.length,1,
  'The missed recurring October debit is recognized from historical evidence');
 assert.equal(rolled.overduePayments[0].expectedDate,'2026-10-26');
 assert.deepEqual(rolled.ledger.filter(e=>e.ruleId===recoveredRule.id).map(e=>e.date).slice(0,2),
- ['2026-10-29','2026-11-26'],
- 'Missing cash debit reserved once, next month original date unchanged');
+ ['2026-10-29','2026-11-25'],
+ 'Missing cash debit reserved once, Thanksgiving debit moved to prior banking day without changing the saved recurrence anchor');
 const paidRecovery=Core.materialize(liveSnap,[...historicalEvidence,
  post('paid-recovery','Fictional Monthly Provider',1210,'2026-10-27')],
  {futureRecurringRules:[recoveredRule]},T,null,75,policy);
