@@ -5,7 +5,7 @@
 function create({read,write,revision,snapshot,analyze,available=()=>true,defer=setImmediate}){
  // Data-access version 2 shares broader sanitized record-level data with AI.
  // Prior summary-only consent does NOT authorize this expanded scope.
- let saved={version:1,dataAccessVersion:2,reportFormatVersion:4,
+ let saved={version:1,dataAccessVersion:2,reportFormatVersion:5,
   autoEnabled:false,report:null,revision:null,completedAt:null};
  let phase='idle',lastError=null,lastFailedRevision=null,queued=false,running=false,requested=false,forceNext=false;
  const safeCode=e=>[
@@ -25,10 +25,10 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   if(value.dataAccessVersion!==2){
    // Expanded financial source access always requires renewed opt-in.
    await write({...saved});
-  }else if(value.reportFormatVersion!==4){
+  }else if(value.reportFormatVersion!==5){
    // An obsolete single-pass analysis is not a substitute for the
    // more thorough independent exploration + synthesis release. Preserve existing consent.
-   await store({...saved,...value,reportFormatVersion:4,
+   await store({...saved,...value,reportFormatVersion:5,
     report:null,revision:null,completedAt:null});
   }else saved={...saved,...value};
  }
@@ -84,7 +84,7 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   return status();
  }
  async function clear(){
-  await store({version:1,dataAccessVersion:2,reportFormatVersion:4,
+  await store({version:1,dataAccessVersion:2,reportFormatVersion:5,
    autoEnabled:false,report:null,revision:null,completedAt:null});
   requested=false;forceNext=false;lastError=null;lastFailedRevision=null;phase='idle';
  }
