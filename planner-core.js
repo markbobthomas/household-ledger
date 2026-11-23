@@ -271,7 +271,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  });
  // User rules are filtered for posted coverage using existing bank facts.
  const covered=tools.postedCoverage({events:ownerEntries,plans:generated.plans},rules,rows,accounts,asOf);
- // Weekend-shifted scheduled payments may have a future recurrence anchor
+ // Weekend/holiday-adjusted scheduled payments may have a future recurrence anchor
  // but a past effective Friday posting. Treat those as overdue, not as a
  // future entry which would shadow the carried-forward payment's stable ID.
  const expectedPosting=e=>options.weekendPolicy==='friday'?
@@ -281,11 +281,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // if the bank has not posted it, or the future checking projection is too
  // optimistic. Never rewrite the bank observation or the recurrence anchor.
  // Every independent overdue occurrence is eligible, bounded to the last 90 days.
- const nextBusiness=from=>{
-  let day=add(from,1);
-  while([0,6].includes(new Date(day+'T12:00:00Z').getUTCDay()))day=add(day,1);
-  return day;
- };
+ const nextBusiness=from=>tools.nextBankBusinessDate(from);
  const overduePayments=[],nextPosting=nextBusiness(asOf),
   cashIds=new Set(accounts.filter(a=>
    String(a.accountType||a.type||'').toLowerCase()!=='credit')
@@ -531,7 +527,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // effective dated occurrence moves. Card statements read these same dates.
  // Explicitly opt in at the application's single forecast entry point. The
  // historical frozen reference remains available for exact regression parity.
- const effective=when=>options.weekendPolicy==='friday'?tools.forecastBusinessDate(when,asOf):when;
+ const effective=(when,entry)=>options.weekendPolicy==='friday'?
+  tools.forecastBusinessDate(when,asOf,
+   entry&&(entry.type==='income'||entry.type==='refund'||
+    entry.type==='transfer'&&entry.cashDirection==='in')?'in':'out'):when;
  function adjust(list){
   return list.flatMap(e=>{
    const edit=edits[eventKey(tools,e)];
@@ -541,7 +540,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    // never silently discard an unpaid mortgage after its revised day passes.
    if(e._unpostedEstimated&&result.date<=asOf)result.date=nextPosting;
    if(result.date<=asOf||result.date>end)return [];
-   const date=effective(result.date);
+   const date=effective(result.date,result);
    return date>asOf&&date<=end?[date===result.date?result:{...result,date}]:[];
   });
  }
@@ -606,7 +605,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   // A manually postponed but still-unpaid card transfer must not expire.
   if(v._unpostedEstimated&&v.date<=asOf)v.date=nextPosting;
   if(v.date>asOf&&v.date<=end){
-   const date=effective(v.date);
+   const date=effective(v.date,v);
    if(date>asOf&&date<=end)finalPlans.push(date===v.date?v:{...v,date});
   }
  }
