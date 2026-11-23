@@ -545,7 +545,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   });
  }
  const adjusted=adjust(entries);
- const payment=paymentEngine?.build?paymentEngine.build(snapshot,rows,adjusted,prefs,{days,effectiveDate:effective}):
+ const payment=paymentEngine?.build?paymentEngine.build(snapshot,rows,adjusted,prefs,{days,effectiveDate:effective,
+  bankBusinessDay:tools.bankBusinessDay}):
   {plans:[],billEvents:[],warnings:[],statements:[],suppressedExpectedIds:[]};
  const suppressed=new Set((payment.suppressedExpectedIds||[]).map(String));
  // Direction-confirmed, single-account Zelle/ACH transfers to an external
