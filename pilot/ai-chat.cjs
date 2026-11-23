@@ -386,7 +386,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
     editorialRetries++;
     messages.push({role:'assistant',content:message.content||''});
     messages.push({role:'user',content:JSON.stringify({
-     request:'Editorial quality review: reconsider the dataset as a whole. Is this genuinely a useful financial analysis, or did the synthesis miss important insights discovered by the two researchers? Recheck source citations and gather new evidence where helpful. Supply a substantially stronger, diverse report if the data supports it. Do not invent or require findings to hit a quota.',
+     request:qaMode?'Editorial QA review: investigate Ledger computation and source coverage rather than household spending. Recheck the independent calculation failures and user-saved schedule evidence. Build a stronger source-cited defect investigation where supported; do not invent software errors.':'Editorial quality review: reconsider the dataset as a whole. Is this genuinely a useful financial analysis, or did the synthesis miss important insights discovered by the two researchers? Recheck source citations and gather new evidence where helpful. Supply a substantially stronger, diverse report if the data supports it. Do not invent or require findings to hit a quota.',
      proposedBlocks:parsed.blocks.length,sourceVerifiedBlocks:result.blocks.length,
      discardedForInsufficientSourceEvidence:result.evidenceAudit.unsupportedBlocksWithheld,
      supportedExploratoryCandidates:drafts.map(x=>x.blocks.length),
@@ -403,7 +403,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      reviewRetries++;
      messages.push({role:'assistant',content:message.content||''});
      messages.push({role:'user',content:JSON.stringify({
-      request:'Rebuild the report from evidence. Independent audit found most of the analysis misleading or unsupported; use original source and calculation tools to correct rather than abandon the independent discoveries. Preserve meaningful distinct insights only where supported, and identify genuine limits.',
+      request:qaMode?'Repair Ledger QA/QC from independent arithmetic checks and recorded evidence. Reject unsupported defect claims, explain genuine unexplained differences, and preserve coverage limitations. Do not pivot to financial advice.':'Rebuild the report from evidence. Independent audit found most of the analysis misleading or unsupported; use original source and calculation tools to correct rather than abandon the independent discoveries. Preserve meaningful distinct insights only where supported, and identify genuine limits.',
       auditedBefore:preAuditCount,auditedAfter:result.blocks.length,
       rejectedIndices:[...secondReview.rejected],
       auditorQuestions:secondReview.concerns
@@ -414,7 +414,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      reviewRetries++;
      messages.push({role:'assistant',content:message.content||''});
      messages.push({role:'user',content:
-      'The independent evidence auditor rejected the displayed analysis for unsupported or misleading claims. Revise it with stronger corroboration and accurate qualification using your read-only tools. Keep the broad independent discoveries where sources support them; do not replace the entire report with a negative-balance yes/no check.'});
+      (qaMode?'The QA findings were unsupported or misleading. Recalculate source event and account logic, separate confirmed mismatches from suspicion, and rebuild an evidence-backed software-quality audit without household financial advice.':'The independent evidence auditor rejected the displayed analysis for unsupported or misleading claims. Revise it with stronger corroboration and accurate qualification using your read-only tools. Keep the broad independent discoveries where sources support them; do not replace the entire report with a negative-balance yes/no check.')});
      continue;
     }
     if(result.blocks.length&&secondReview.quality==='reconsider'&&reviewRetries<2){
@@ -424,7 +424,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      reviewRetries++;
      messages.push({role:'assistant',content:message.content||''});
      messages.push({role:'user',content:JSON.stringify({
-      request:'The independent review found this report too shallow to answer the most important questions raised by the available records. Investigate the specific gaps and re-synthesize the report with real source evidence, relevant comparisons and useful recommendations where justified. Choose your own subjects, charts and depth. Do not pad or invent findings.',
+      request:qaMode?'The independent QA review found important unanswered calculation, reconciliation, or coverage questions. Examine the source event legs, saved schedules, and exact mismatches, then report only justified software-quality findings and what remains unverified.':'The independent review found this report too shallow to answer the most important questions raised by the available records. Investigate the specific gaps and re-synthesize the report with real source evidence, relevant comparisons and useful recommendations where justified. Choose your own subjects, charts and depth. Do not pad or invent findings.',
       independentReview:secondReview.reason,
       citedEvidenceAvailable:allFacts.length,
       sourceCoverage:context.scope,
