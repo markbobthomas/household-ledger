@@ -77,6 +77,21 @@ function direction(t){
  if(['out','in'].includes(t.cashDirection))return t.cashDirection;
  return t.type==='expense'?'out':t.type==='income'?'in':'unknown';
 }
+// A settlement has a direction: repayment ENTERS a credit account and
+// LEAVES a depository account. Generic "PYMT" in an insurance or app
+// merchant's name is not proof of a credit-card repayment.
+function cardSettlementEvidence(name,pfc,account,dir){
+ const isCard=account?.type==='credit';
+ if(isCard?dir!=='in':dir!=='out')return false;
+ const code=String(pfc?.detailed||'').toUpperCase();
+ const bankIdentified=/(?:^|_)(?:CREDIT_CARD_PAYMENT|CARD_PAYMENT)(?:_|$)/.test(code);
+ const explicit=isCard?
+   (cardPayment.test(name)||/\b(?:card\s+pymt|card\s+pmt|payment\s+received|payment\s+posted)\b/i.test(name)):
+   /\b(?:credit card payment|card payment|payment to (?:card|credit)|autopay (?:card|credit)|card autopay|credit card autopay|cardmember payment|cc payment|cc pymt)\b/i.test(name);
+ const issuerNamed=cardIssuer.test(name)&&
+   /\b(?:payment|autopay|pymt|pmt|epay)\b/i.test(name);
+ return bankIdentified||explicit||(isCard&&issuerNamed);
+}
 function initialKind(t,account){
  const name=String(t.merchant||'')+' '+String(t.description||'');
  const dir=direction(t),isCard=account?.type==='credit',
@@ -87,8 +102,7 @@ function initialKind(t,account){
  // refund. That provisional type must NEVER override payment evidence:
  // card settlements are linked transfers, excluded from card purchases and
  // used to infer the next bill. Preserve confirmed merchant returns below.
- const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
-   cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
+ const payment=cardSettlementEvidence(name,pfc,account,dir);
  if(payment)return 'card_payment';
  // Only bank-direction-confirmed returns count as statement credits. For
  // credit cards, a generic imported type='refund' is not proof: it may be
@@ -192,8 +206,17 @@ function reconcile(state){
   // leg of a checking-to-card settlement, even if a coincidentally equal
   // transfer posted on another account within the matching window.
   if(a.accountingKind==='refund'||b.accountingKind==='refund')continue;
-  const aCard=a.accountType==='credit',bCard=b.accountType==='credit';
-  const card=a.accountingKind==='card_payment'||b.accountingKind==='card_payment'||aCard!==bCard&&(aCard||bCard);
+  const aCard=a.accountType==='credit',bCard=b.accountType==='credit',
+   cashCardPair=aCard!==bCard;
+  // No credit-card repayment can have the credit account as its
+  // outgoing leg. Do not mispair a merchant charge with a coincidentally
+  // equal incoming checking transfer.
+  if(cashCardPair){
+   const cardSide=aCard?a:b,cashSide=aCard?b:a;
+   if(cardSide.cashDirection!=='in'||cashSide.cashDirection!=='out'||
+      !['checking','savings'].includes(cashSide.accountType))continue;
+  }
+  const card=cashCardPair;
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
   candidates.push({a,b,card,priority,delta:days(a.date,b.date)});
   }
@@ -338,8 +361,7 @@ function classifyPlaidSource({amount,merchant,description,pfc},account,categoriz
   code=String(pfc?.primary||'').toUpperCase(),lower=bankNarrative.toLowerCase(),
   incoming=Number(amount)<0,card=account?.type==='credit';
  const obligation=categorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
- const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(bankNarrative)||
-   code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
+ const payment=cardSettlementEvidence(bankNarrative,pfc,account,incoming?'in':'out');
  const earned=incoming&&!card&&recognizedIncome({
   merchant:name,personal_finance_category:pfc,source:{plaidAmount:amount}
  },account);
