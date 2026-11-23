@@ -90,7 +90,7 @@ function cardSettlementEvidence(name,pfc,account,dir){
    /\b(?:credit card payment|card payment|payment to (?:card|credit)|autopay (?:card|credit)|card autopay|credit card autopay|cardmember payment|cc payment|cc pymt)\b/i.test(name);
  const issuerNamed=cardIssuer.test(name)&&
    /\b(?:payment|autopay|pymt|pmt|epay)\b/i.test(name);
- return bankIdentified||explicit||issuerNamed;
+ return bankIdentified||explicit||(isCard&&issuerNamed);
 }
 function initialKind(t,account){
  const name=String(t.merchant||'')+' '+String(t.description||'');
