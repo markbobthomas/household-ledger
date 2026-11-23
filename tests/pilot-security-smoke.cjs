@@ -43,6 +43,8 @@ function post(route,body={},cookie='',extra={}){
   assert.equal((await post('/api/ai/analyze',{
    scope:'financial-analysis-v3',consent:true})).status,401,
    'An anonymous browser cannot trigger an AI investigation');
+  assert.equal((await post('/api/analysis/export',{})).status,401,
+   'An anonymous browser must never download private analysis data');
   assert.equal((await get('/',false)).status,303,'Unsigned browser navigates to private login screen');
   const loginPage=await get('/login',false);
   assert.equal(loginPage.status,200,'Sign-in screen is accessible without exposing protected bank data');
@@ -75,6 +77,12 @@ function post(route,body={},cookie='',extra={}){
   assert.equal((await get('/api/status',false,persistentCookie)).status,200);
   const privateAnalysis=await get('/api/ai/report',false,persistentCookie);
   assert.equal(privateAnalysis.status,200,'The signed-in user can view cached AI status');
+  assert.equal((await get('/api/analysis/export',false,persistentCookie)).status,404,
+   'Data export requires explicit POST, never a speculative GET');
+  assert.equal((await post('/api/analysis/export',{unknown:true},persistentCookie)).status,400,
+   'Export rejects unrecognized options before touching bank data');
+  assert.equal((await post('/api/analysis/export',{},persistentCookie)).status,409,
+   'A signed-in but unconnected household cannot receive a fabricated export');
   assert.deepEqual(JSON.parse(privateAnalysis.body).enabled,false,
    'Recurring OpenAI financial sharing is OFF until explicitly enabled');
   assert.equal((await post('/api/ai/settings',{
