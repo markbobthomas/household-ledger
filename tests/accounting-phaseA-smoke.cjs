@@ -78,6 +78,34 @@ assert.equal(M.accountingView(incoming).summary.income,0);
 
 const unknown=M.migrate({transactions:[{id:'a',type:'income',date:'2026-10-01',amount:150,account:'Unverified Account',merchant:'Deposit'}]});
 assert.equal(M.accountsFor(unknown)[0].type,'unknown','Never invent verified account types');
+// Multiple real purchases at one merchant must not make a subsequent
+// source-evidenced card credit disappear from net spending. Do not change the
+// source transactions or turn a genuine card settlement into a refund.
+const storeCreditState=M.migrate({});
+M.applyPlaidSync(storeCreditState,{itemId:'refund-item',
+ accounts:[{account_id:'card-refunds',type:'credit',subtype:'credit card',name:'Test Card'}],
+ added:[
+  tx('store-first','card-refunds',80,'Example Superstore','2026-10-01'),
+  tx('store-second','card-refunds',35,'Example Superstore','2026-10-04'),
+  tx('store-credit','card-refunds',-18.5,'Example Superstore','2026-10-09'),
+  tx('card-settlement','card-refunds',-50,'Payment Thank You','2026-10-10'),
+  tx('unknown-credit','card-refunds',-3,'Statement Adjustment','2026-10-11')
+ ],modified:[],removed:[],nextCursor:'ref-credit'});
+const beforeStoreCredit=JSON.stringify(storeCreditState.transactions);
+const storeCreditRows=new Map(M.records(storeCreditState).map(t=>[t.source.providerTransactionId,t]));
+const storeRefund=storeCreditRows.get('store-credit');
+assert.equal(storeRefund.type,'refund','Merchant credit offsets spending despite several prior purchases');
+assert.equal(storeRefund.spendingAmount,-18.5);
+assert.equal(storeRefund.reconciliationStatus,'needs-review','Ambiguous original purchase/category stays in review');
+assert.equal(storeCreditRows.get('card-settlement').type,'transfer','Card settlement must remain a transfer');
+assert.equal(storeCreditRows.get('card-settlement').spendingAmount,0);
+assert.equal(storeCreditRows.get('unknown-credit').type,'transfer','Unidentified statement credit stays under review');
+assert.equal(storeCreditRows.get('unknown-credit').spendingAmount,0);
+assert.equal(M.accountingView(storeCreditState).summary.spending,96.5,
+ 'Two charges less the supported merchant credit, without card payment duplication');
+assert.equal(JSON.stringify(storeCreditState.transactions),beforeStoreCredit,
+ 'Refund reconciliation must not mutate raw source transactions');
+
 async function browserCase(browser,opts,mobile){
  const page=await browser.newPage(opts),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{const Base=Date;class Fixed extends Base{

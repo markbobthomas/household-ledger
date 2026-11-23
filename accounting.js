@@ -215,9 +215,17 @@ function reconcile(state){
   const candidates=original?purchases.filter(p=>
    p.accountId===t.accountId&&cleanedRefundMerchant(p.merchant)===original&&
    p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending):[];
-  if(candidates.length===1){
+  // A merchant-issued card credit can be a refund even if that merchant
+  // appears on several prior purchases. Requiring a UNIQUE source purchase
+  // mislabels routine multi-purchase store refunds as card transfers and
+  // prevents those credits from reducing net spending. Payment pairing and
+  // unmistakable card-payment descriptions are resolved BEFORE this check.
+  // An ambiguous purchase match stays flagged for category review.
+  if(candidates.length>=1){
    t.accountingKind='refund';
-   t.classificationConfidence='Matched single merchant purchase';
+   t.classificationConfidence=candidates.length===1?
+    'Matched single merchant purchase':'Merchant credit; multiple possible purchases';
+   if(candidates.length>1)t.reconciliationStatus='needs-review';
   }
  }
  // Owner decisions are stored apart from immutable Plaid facts. Only an
