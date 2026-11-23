@@ -63,4 +63,36 @@ assert.deepEqual(payments.statementPeriodFor(
 assert.equal(payments.statementPeriodFor({},'2026-10-01'),null,
  'No guessed statement period on an unconfigured card');
 assert.equal(payments.statementPeriodFor(cycle,'not-a-date'),null);
+// Statement comparisons remain advisory. A period-matched issuer amount
+// cannot silently overwrite a calculated payment or source card history.
+const issuerSnapshot={...snapshot,mode:'connected',connected:true,accounts:[
+ {...snapshot.accounts[0]}, {...snapshot.accounts[1],
+  liabilities:{last_statement_balance:55,last_statement_issue_date:'2026-10-18',
+   next_payment_due_date:'2026-11-12'}}]};
+const cardRows=[
+ {id:'premium',accountId:'visa',date:'2026-10-03',
+  amount:27.25,type:'expense',merchant:'Fictional Insurance PYMT',accountingKind:'purchase'},
+ {id:'app',accountId:'visa',date:'2026-10-05',
+  amount:19.40,type:'expense',merchant:'Fictional App PYMT',accountingKind:'purchase'}];
+const issuerRule={paymentRules:{visa:{
+ fromAccountId:'checking-1',billingStartDate:'2026-09-19',
+ billingEndDate:'2026-10-18',closingDay:18,nextPaymentDate:'2026-11-12',
+ method:'statement'}}};
+const discrepancy=payments.build(issuerSnapshot,cardRows,[],issuerRule,{days:45});
+assert.equal(discrepancy.statements[0].bankPurchases,46.65);
+assert.equal(discrepancy.plans[0].amount,46.65,'The issuer comparison must not silently change a forecast');
+assert.equal(discrepancy.statements[0].statementReconciliation.status,'difference');
+assert.equal(discrepancy.statements[0].statementReconciliation.source,'issuer-reported');
+assert.equal(discrepancy.statements[0].statementReconciliation.difference,8.35);
+assert.ok(discrepancy.warnings.some(w=>w.includes('issuer-reported')&&w.includes('identified card activity')),
+ 'Issuer mismatch must be visible in forecast warnings');
+assert.ok(discrepancy.warningActions.some(w=>w.kind==='card-statement-difference'));
+const noMatchedIssuer=payments.build({...issuerSnapshot,accounts:[
+ issuerSnapshot.accounts[0],
+ {...issuerSnapshot.accounts[1],liabilities:{
+  ...issuerSnapshot.accounts[1].liabilities,last_statement_issue_date:'2026-09-18'}}
+]},cardRows,[],issuerRule,{days:45});
+assert.equal(noMatchedIssuer.statements[0].statementReconciliation.status,'no-period-matched-issued-amount',
+ 'Old statements must not be compared with the wrong cycle');
+
 console.log('PASS card purchases never debit checking; statement autopay debits checking and debt once; mortgage dedupe; future estimated statements; missing funding warnings; model validation');

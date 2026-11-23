@@ -113,6 +113,49 @@ assert.equal(M.accountingView(storeCreditState).summary.spending,96.5,
 assert.equal(JSON.stringify(storeCreditState.transactions),beforeStoreCredit,
  'Refund reconciliation must not mutate raw source transactions');
 
+// Reclassification is derived from the signed provider amount, even for
+// historical source records previously imported as transfers.
+const DirectionAccounting=require('../accounting.js');
+const categoryEngine=require('../categorization.js');
+const insuranceCode={primary:'INSURANCE',detailed:'INSURANCE_OTHER',confidence_level:'HIGH'};
+assert.equal(DirectionAccounting.classifyPlaidSource({
+ amount:27.25,merchant:'Fictional Insurance PYMT',description:'PREMIUM PYMT',pfc:insuranceCode
+ },{type:'credit'},categoryEngine).type,'expense','A card debit containing PYMT is a purchase, not a transfer');
+assert.equal(DirectionAccounting.classifyPlaidSource({
+ amount:19.40,merchant:'Fictional App PYMT',description:'SUBSCRIPTION PYMT'
+ },{type:'credit'},categoryEngine).type,'expense','App charges containing PYMT remain spending');
+assert.equal(DirectionAccounting.classifyPlaidSource({
+ amount:-100,merchant:'Payment Thank You',description:'Payment Received'
+ },{type:'credit'},categoryEngine).type,'transfer','An incoming card settlement is still a transfer');
+const directionState=M.migrate({accounts:[
+ {id:'checking-direction',name:'Checking',type:'checking'},
+ {id:'card-direction',name:'Card',type:'credit'}],transactions:[
+ {id:'insurance-pymt',accountId:'card-direction',date:'2026-10-02',
+  merchant:'Fictional Insurance PYMT',description:'PREMIUM PYMT',type:'transfer',amount:27.25,
+  category:'Insurance',source:{provider:'plaid',plaidAmount:27.25}},
+ {id:'app-pymt',accountId:'card-direction',date:'2026-10-03',
+  merchant:'Fictional App PYMT',type:'transfer',amount:19.40,
+  category:'Subscriptions',source:{provider:'plaid',plaidAmount:19.40}},
+ {id:'cash-card-repayment',accountId:'checking-direction',date:'2026-10-04',
+  merchant:'Credit Card Payment',type:'transfer',amount:100,
+  source:{provider:'plaid',plaidAmount:100}},
+ {id:'issuer-card-repayment',accountId:'card-direction',date:'2026-10-04',
+  merchant:'Payment Thank You',type:'transfer',amount:100,
+  source:{provider:'plaid',plaidAmount:-100}}]});
+const directionOriginal=JSON.stringify(directionState.transactions);
+const corrected=M.records(directionState),correctedById=new Map(corrected.map(x=>[x.id,x]));
+for(const id of ['insurance-pymt','app-pymt']){
+ assert.equal(correctedById.get(id).type,'expense','Card charge now counts toward spending: '+id);
+ assert.equal(correctedById.get(id).pairedTransactionId,null);
+}
+assert.equal(correctedById.get('cash-card-repayment').accountingKind,'card_payment');
+assert.equal(correctedById.get('issuer-card-repayment').accountingKind,'card_payment');
+assert.equal(correctedById.get('cash-card-repayment').pairedTransactionId,'issuer-card-repayment');
+assert.equal(M.accountingView(directionState).summary.spending,46.65,
+ 'Recomputed historical spending includes the two falsely excluded card purchases');
+assert.equal(JSON.stringify(directionState.transactions),directionOriginal,
+ 'Reclassification cannot rewrite original bank transactions');
+
 async function browserCase(browser,opts,mobile){
  const page=await browser.newPage(opts),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{const Base=Date;class Fixed extends Base{
