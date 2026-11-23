@@ -1046,6 +1046,40 @@ async function start(port=Number(env.PORT||8788)){
     if(body.predictions!==undefined)await saveForecast(body.predictions);
     return respond(200,{saved:true});
    }
+   if(requestPath==='/api/analysis/export'){
+    // Explicit first-party user action, fully authenticated and same-origin.
+    // Never call OpenAI, sync a bank, write a file or expose provider secrets.
+    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length)
+     return respond(400,{error:'Unexpected analysis export options'});
+    if(!state.items.length)return respond(409,{error:'Connect a bank account before exporting'});
+    if(accountRemovalBusy)return respond(409,{error:'Account changes are in progress. Retry shortly.'});
+    await forecastWrites;
+    let document;
+    try{
+     const prepared=preparedFor(ledgerPayload());
+     document=require('./analysis-export.cjs').build({
+      prepared,adjustments:state.ledgerAdjustments,lastSync:state.lastSync
+     });
+    }catch{
+     return respond(503,{error:'The complete canonical analysis dataset is not available. No data was changed.'});
+    }
+    const bytes=Buffer.from(JSON.stringify(document));
+    // Never silently truncate the transaction or projection source.
+    if(bytes.length>50*1024*1024)return respond(413,{
+     error:'Analysis export exceeds the safe download size. No partial file was generated.'
+    });
+    const today=require('./prepared-forecast.cjs').pacificDate();
+    res.writeHead(200,{
+     'Content-Type':'application/json; charset=utf-8',
+     'Content-Disposition':'attachment; filename="ledger-analysis-'+today+'.json"',
+     'Content-Length':bytes.length,
+     'Cache-Control':'private, no-store, max-age=0',
+     'Pragma':'no-cache','X-Content-Type-Options':'nosniff',
+     'Referrer-Policy':'no-referrer',
+     'Content-Security-Policy':"default-src 'none'"
+    });
+    return res.end(bytes);
+   }
    if(requestPath==='/api/backup/export'){
     // A backup is a serialized, read-only snapshot. No archive or passphrase
     // is written to the server filesystem or logged. Authentication, Origin,

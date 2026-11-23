@@ -44,6 +44,12 @@ button{font:inherit;cursor:pointer}
 #run:disabled{background:#a7b3ac;cursor:default}
 #status{color:#5d7066;font-size:.89rem;max-width:690px;margin:0}
 #analysis:empty{min-height:55px}
+.export-panel{margin:0 0 23px;padding:0 0 21px;border-bottom:1px solid #dde5df}
+.export-panel h2{font-size:1.18rem;margin:0 0 6px}
+.export-panel p{max-width:820px;font-size:.89rem;color:#596c61;line-height:1.55;margin:7px 0 12px}
+#export-data{border:1px solid #286b5c;background:white;color:#286b5c;border-radius:10px;padding:11px 17px;font-weight:650}
+#export-data:disabled{opacity:.55;cursor:wait}
+#export-status{font-size:.84rem!important;margin:10px 0 0!important}
 .analysis-report{background:#fff;border:1px solid #e1e8e2;border-radius:16px;padding:clamp(17px,3vw,31px);min-width:0}
 .analysis-report .who{font-size:.81rem;font-weight:660;color:#5d7268;margin:0 0 20px}
 .quality-note{font-size:.87rem!important;color:#78542d!important;max-width:800px;border-bottom:1px solid #e9eee9;padding:0 0 15px;margin:-7px 0 14px!important;line-height:1.5!important}
@@ -89,6 +95,11 @@ button{font:inherit;cursor:pointer}
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <div class="intro"><h1>AI Financial Analysis</h1>
 <p class="muted">Ledger prepares an independent, open-ended analysis of your financial data. The AI decides what stands out, investigates what interests it, and chooses what to present. Completed reports are saved privately for immediate viewing.</p></div>
+<section class="export-panel"><h2>Export data for analysis in ChatGPT</h2>
+<p>Download all normalized transactions, income, current account balances, Ledger's full daily forecast and expected payments, card statements, budgets, saved schedules and review evidence in one JSON file. <strong>No OpenAI API call is made.</strong> This file contains private financial information in plain text—keep it private and upload it only where you choose.</p>
+<button id="export-data" type="button">Export data (.json)</button>
+<p id="export-status" role="status" aria-live="polite">No file has been downloaded from this page.</p>
+</section>
 <div class="consent">
 <label><input id="consent" type="checkbox"><span>I authorize Ledger to share sanitized financial records, balances, future payments, and source-derived calculations with OpenAI for independent analysis. External public research uses generic topics without household details.</span></label>
 <label class="auto-opt"><input id="automatic" type="checkbox"><span>Automatically investigate when bank data changes, and keep the latest verified report encrypted on Ledger's private server. This is ongoing authorization until I turn it off; each new run may send sanitized financial data to OpenAI.</span></label>
@@ -103,7 +114,8 @@ button{font:inherit;cursor:pointer}
 <script>
 (function(){
  const $=id=>document.getElementById(id),consent=$('consent'),automatic=$('automatic'),
-  run=$('run'),analysis=$('analysis'),status=$('status');
+  run=$('run'),analysis=$('analysis'),status=$('status'),
+  exportDataButton=$('export-data'),exportStatus=$('export-status');
  let pending=false,lastCompleted=null,pollTimer=null;
  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;
   if(text!==undefined)n.textContent=String(text);return n};
@@ -436,6 +448,30 @@ button{font:inherit;cursor:pointer}
   }catch(error){status.textContent=error.message||'Saved analysis unavailable';}
   finally{sync()}
  }
+ exportDataButton.addEventListener('click',async()=>{
+  if(exportDataButton.disabled)return;
+  exportDataButton.disabled=true;exportStatus.textContent='Preparing your complete financial data export…';
+  try{
+   const response=await fetch('/api/analysis/export',{
+    method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
+    body:'{}'
+   });
+   if(!response.ok){
+    const failure=await response.json().catch(()=>({}));
+    throw Error(failure.error||'Analysis export is unavailable');
+   }
+   const blob=await response.blob(),url=URL.createObjectURL(blob),
+    link=document.createElement('a');
+   link.href=url;
+   link.download='ledger-analysis-'+new Date().toISOString().slice(0,10)+'.json';
+   document.body.append(link);link.click();link.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   exportStatus.textContent='Download initiated. The JSON file contains sensitive financial data. Upload it to this ChatGPT conversation when you choose.';
+  }catch(error){
+   exportStatus.textContent='Export failed: '+(error.message||'Unknown error')+'. No financial data was changed.';
+  }finally{exportDataButton.disabled=false}
+ });
  consent.addEventListener('change',sync);
  automatic.addEventListener('change',async()=>{
   const enabled=automatic.checked;

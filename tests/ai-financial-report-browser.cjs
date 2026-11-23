@@ -111,6 +111,16 @@ module.exports=(async()=>{
     await route.fulfill({status:202,contentType:'application/json',
      body:JSON.stringify({enabled:state.enabled,status:'queued'})});
    });
+   const exports=[];
+   await page.route('**/api/analysis/export',async route=>{
+    const request=route.request();
+    exports.push({method:request.method(),body:request.postDataJSON(),
+     header:request.headers()['x-pilot-action']});
+    await route.fulfill({status:200,contentType:'application/json',
+     headers:{'Content-Disposition':'attachment; filename="ledger-analysis-2026-11-23.json"'},
+     body:JSON.stringify({format:'ledger-manual-analysis-export',
+      actualTransactions:[{date:'2026-11-20',amount:250,merchant:'Fictional Merchant'}]})});
+   });
    await page.goto(url);
    assert.equal(await page.locator('textarea').count(),0,'no chatbot composer');
    await page.locator('.analysis-report').waitFor({state:'visible'});
@@ -119,6 +129,15 @@ module.exports=(async()=>{
    assert.equal(await page.locator('#run').isDisabled(),true,
     'manual analysis needs consent or saved ongoing sharing authorization');
    assert.equal(await page.locator('#automatic').isChecked(),false);
+   const fileDownload=page.waitForEvent('download');
+   await page.locator('#export-data').click();
+   const exported=await fileDownload;
+   assert.equal(exported.suggestedFilename().endsWith('.json'),true,
+    'Safari and Chromium download a standalone JSON file');
+   assert.deepEqual(exports,[{method:'POST',body:{},header:'1'}],
+    'Manual export is an authenticated first-party action with no OpenAI consent or model request');
+   assert.match(await page.locator('#export-status').innerText(),/Download initiated/);
+   assert.equal(requests.length,0,'Export does not trigger OpenAI analysis');
    assert.equal(await page.locator('.analysis-report img').count(),0,
     'bank-sourced model text must be literal and never execute HTML');
    assert.equal(await page.locator('.quality-note').count(),0,
