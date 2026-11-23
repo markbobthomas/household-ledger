@@ -87,9 +87,11 @@ M.applyPlaidSync(storeCreditState,{itemId:'refund-item',
  added:[
   tx('store-first','card-refunds',80,'Example Superstore','2026-10-01'),
   tx('store-second','card-refunds',35,'Example Superstore','2026-10-04'),
-  tx('store-credit','card-refunds',-18.5,'Example Superstore','2026-10-09'),
+  {...tx('store-credit','card-refunds',-18.5,'Example Superstore','2026-10-09'),
+   personal_finance_category:{primary:'SHOPPING',detailed:'SHOPPING_SUPERSTORES',confidence_level:'VERY_HIGH'}},
   tx('card-settlement','card-refunds',-50,'Payment Thank You','2026-10-10'),
-  tx('unknown-credit','card-refunds',-3,'Statement Adjustment','2026-10-11')
+  tx('unknown-credit','card-refunds',-3,'Statement Adjustment','2026-10-11'),
+  tx('unverified-credit','card-refunds',-2,'Example Superstore','2026-10-12')
  ],modified:[],removed:[],nextCursor:'ref-credit'});
 const beforeStoreCredit=JSON.stringify(storeCreditState.transactions);
 const storeCreditRows=new Map(M.records(storeCreditState).map(t=>[t.source.providerTransactionId,t]));
@@ -101,6 +103,11 @@ assert.equal(storeCreditRows.get('card-settlement').type,'transfer','Card settle
 assert.equal(storeCreditRows.get('card-settlement').spendingAmount,0);
 assert.equal(storeCreditRows.get('unknown-credit').type,'transfer','Unidentified statement credit stays under review');
 assert.equal(storeCreditRows.get('unknown-credit').spendingAmount,0);
+assert.equal(storeCreditRows.get('unverified-credit').type,'transfer',
+ 'Without independent bank category evidence, repeated merchant matches do not prove a refund');
+assert.ok(M.categoryReviewQueue(storeCreditState).transactions.some(t=>
+ t.id===storeCreditRows.get('unverified-credit').id&&t.creditKind),
+ 'Unverified card credit remains reviewable');
 assert.equal(M.accountingView(storeCreditState).summary.spending,96.5,
  'Two charges less the supported merchant credit, without card payment duplication');
 assert.equal(JSON.stringify(storeCreditState.transactions),beforeStoreCredit,
