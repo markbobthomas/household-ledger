@@ -77,6 +77,29 @@ function build({prepared,adjustments={},lastSync=null}){
    accountId:aid(r.accountId),fromAccountId:aid(r.fromAccountId),toAccountId:aid(r.toAccountId),
    merchant:safe(r.merchant),category:safe(r.category),amount:value(r.amount)
   }));
+ const cardPaymentRules=Object.entries(object(decisions.paymentRules)).map(([cardId,r])=>{
+  const p=object(r);
+  return {
+   cardId:aid(cardId),fromAccountId:aid(p.fromAccountId),
+   autopayEnabled:p.autopayEnabled===true,
+   method:permitted(p.method,['statement','full','minimum','fixed']),
+   billingStartDate:fieldDate(p.billingStartDate),
+   billingEndDate:fieldDate(p.billingEndDate),
+   lastStatementClose:fieldDate(p.lastStatementClose),
+   nextPaymentDate:fieldDate(p.nextPaymentDate),
+   nextDueDate:fieldDate(p.nextDueDate),
+   closingDay:Number.isInteger(p.closingDay)?p.closingDay:null,
+   lastStatementBalance:value(p.lastStatementBalance),
+   minimumAmount:value(p.minimumAmount),fixedAmount:value(p.fixedAmount)
+  };
+ });
+ const paymentBills=(Array.isArray(decisions.paymentBills)?decisions.paymentBills:[])
+  .filter(x=>x&&typeof x==='object').map((r,i)=>({
+   id:'saved-bill-'+(i+1),fromAccountId:aid(r.fromAccountId),
+   name:safe(r.name),category:safe(r.category),date:fieldDate(r.date),
+   amount:value(r.amount),frequency:permitted(r.frequency,['once','monthly']),
+   enabled:r.enabled!==false
+  }));
  const budget=Object.entries(object(decisions.categoryMonthlyBudgets))
   .filter(([,v])=>num(v)&&v>=0)
   .map(([category,amount])=>({category:safe(category),monthlyTarget:money(amount)}));
@@ -134,7 +157,8 @@ function build({prepared,adjustments={},lastSync=null}){
    accountIds:'Opaque account-1, account-2 aliases; raw bank IDs and account numbers are deliberately excluded.',
    exclusions:'Plaid tokens, bank account numbers, logins, credentials, sessions, raw transaction IDs, unrecognized private settings and file encryption keys are excluded.'
   },
-  counts:{...ds.manifest,recurringSchedules:rules.length,oneOffPayments:oneOffs.length},
+  counts:{...ds.manifest,recurringSchedules:rules.length,oneOffPayments:oneOffs.length,
+   cardPaymentRules:cardPaymentRules.length,paymentBills:paymentBills.length},
   coverage,accounts,primaryAccount:ctx.primary?.id||null,
   actualTransactions:actual,
   expectedTransactions:data.future,
@@ -143,7 +167,8 @@ function build({prepared,adjustments={},lastSync=null}){
   sourceIndices:data.indices,
   sourceEvidence:data.evidence,
   savedDecisions:{
-   recurringSchedules:rules,oneOffPayments:oneOffs,monthlyBudgetTargets:budget,
+   recurringSchedules:rules,oneOffPayments:oneOffs,cardPaymentRules,paymentBills,
+   monthlyBudgetTargets:budget,
    categoryOverrides:overrides,transactionNotes:notes,
    learnedCategoryRules:categoryRules,notRecurringChoices:exclusions,
    alertThreshold:value(decisions.lowAlertThreshold??decisions.warnBelow),
