@@ -43,6 +43,12 @@ const adjustments={
  predictions:{
   primaryAccountId:bank,lowAlertThreshold:6000,
   categoryMonthlyBudgets:{Groceries:800,'Home & Maintenance':1200},
+  paymentRules:{[bank]:{fromAccountId:bank,autopayEnabled:true,
+   method:'statement',billingStartDate:date(-30),billingEndDate:date(-1),
+   nextPaymentDate:date(10),nextDueDate:date(11),closingDay:22,
+   lastStatementBalance:620,minimumAmount:0,fixedAmount:0}},
+  paymentBills:[{id:'private-bill',fromAccountId:bank,name:'Fictional Tuition',
+   category:'Education',date:date(22),amount:480,frequency:'monthly',enabled:true}],
   futureRecurringRules:[{id:'raw-private-rule',kind:'event',type:'expense',
    accountId:bank,amount:1280,merchant:'Fictional Housing',category:'Housing',
    frequency:'monthly',anchorDate:date(15),exampleIds:[history[1].id],
@@ -72,6 +78,11 @@ assert.equal(report.accounts[0].opening,9300);
 assert.equal(report.savedDecisions.recurringSchedules[0].accountId,'account-1');
 assert.equal(report.savedDecisions.recurringSchedules[0].amount,1280);
 assert.equal(report.savedDecisions.oneOffPayments[0].amount,3000);
+assert.equal(report.savedDecisions.cardPaymentRules.length,1);
+assert.equal(report.savedDecisions.cardPaymentRules[0].cardId,'account-1');
+assert.equal(report.savedDecisions.cardPaymentRules[0].lastStatementBalance,620);
+assert.equal(report.savedDecisions.paymentBills[0].amount,480);
+assert.equal(report.savedDecisions.paymentBills[0].fromAccountId,'account-1');
 assert.equal(report.savedDecisions.monthlyBudgetTargets[0].monthlyTarget,800);
 assert.equal(report.savedDecisions.categoryOverrides[0].category,'Home & Maintenance');
 assert.equal(report.savedDecisions.transactionNotes[0].transactionId,
