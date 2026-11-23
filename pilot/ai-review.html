@@ -91,10 +91,34 @@ button{font:inherit;cursor:pointer}
 .analysis-detail summary strong{font-size:1.01rem;color:#284c40}
 .analysis-detail .preview{font-size:.9rem;font-weight:400;color:#62736a;line-height:1.35}
 .analysis-detail .inside{padding:4px 0 9px}
+
+.glance-heading{font-size:1.17rem;letter-spacing:-.02em;margin:0 0 11px}
+.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:7px 0 15px}
+.metric{margin:0;min-width:0;padding:11px 9px;background:#fafbfa}
+.metric summary{display:block;list-style:none;cursor:pointer}
+.metric summary::-webkit-details-marker,.insight-card summary::-webkit-details-marker{display:none}
+.metric .label{font-size:.74rem}.metric strong{font-size:clamp(.99rem,2vw,1.32rem);margin-top:4px;line-height:1.2;overflow-wrap:anywhere}
+.metric .metric-detail{padding-top:8px;margin-top:8px;border-top:1px solid #e6ece7}
+.metric-detail p{font-size:.86rem!important;line-height:1.45!important}
+.insight-list{display:grid;gap:0}
+.insight-card{margin:0;border:0;border-top:1px solid #e8eee9;padding:0;color:#2b4037}
+.insight-card summary{display:grid;grid-template-columns:minmax(0,1fr) 17px;gap:8px;list-style:none;align-items:start;padding:12px 1px}
+.insight-card summary::after{content:'+';font-size:1.1rem;color:#527466;text-align:center;font-weight:400}
+.insight-card[open] summary::after{content:'−'}
+.insight-head{font-size:.96rem;font-weight:690;color:#213e32;line-height:1.3}
+.insight-preview{display:block;margin-top:3px;font-size:.88rem;color:#53675e;font-weight:400;line-height:1.35}
+.insight-body{padding:0 22px 14px 1px}
+.analysis-report .insight-body p{font-size:.91rem;line-height:1.55;margin:6px 0 10px;white-space:pre-line;overflow-wrap:anywhere;color:#394d42}
+.more-insights{border-top:1px solid #e8eee9;margin-top:0;padding:10px 0}
+.more-insights>summary{color:#286b5c}
+@media(max-width:650px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.metric{padding:8px 6px}.metric .label{font-size:.65rem}.metric strong{font-size:.97rem}.insight-head{font-size:.92rem}.insight-preview{font-size:.84rem}}
 </style></head><body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <div class="intro"><h1>AI Financial Analysis</h1>
-<p class="muted">Ledger prepares an independent, open-ended analysis of your financial data. The AI decides what stands out, investigates what interests it, and chooses what to present. Completed reports are saved privately for immediate viewing.</p></div>
+<p class="muted">A short assessment first. Expand any finding for evidence and practical options.</p></div>
+<section class="control"><button id="run" type="button" disabled>Refresh analysis</button>
+<p id="status" role="status" aria-live="polite">Checking for your saved financial analysis…</p></section>
+<div id="analysis" role="region" aria-label="AI financial analysis results"></div>
 <section class="export-panel"><h2>Export data for analysis in ChatGPT</h2>
 <p>Download all normalized transactions, income, current account balances, Ledger's full daily forecast and expected payments, card statements, budgets, saved schedules and review evidence in one JSON file. <strong>No OpenAI API call is made.</strong> This file contains private financial information in plain text—keep it private and upload it only where you choose.</p>
 <button id="export-data" type="button">Export data (.json)</button>
@@ -107,9 +131,7 @@ button{font:inherit;cursor:pointer}
 <p>Ledger makes its complete normalized financial history, expected events, forecast balances, card statement obligations and derived supporting evidence available through a broad starting snapshot and a page-by-page read-only source tool. The AI decides what additional records and calculations to examine. It does not receive full account numbers, raw transaction IDs, account access tokens, credentials or private server files. Some sanitized descriptions and dollar amounts may identify financial activity. OpenAI receives evidence for this run, with API storage disabled. External public research queries contain only a restricted generic topic.</p>
 <p>Automatically verified corrections can reject unsupported AI findings or fix derived analysis displays, with a per-run audit trail. Original bank records, user categories and forecast rules are not automatically modified: those require separate financial-integrity safeguards.</p></details>
 </div>
-<section class="control"><button id="run" type="button" disabled>Refresh analysis</button>
-<p id="status" role="status" aria-live="polite">Checking for your saved financial analysis…</p></section>
-<div id="analysis" role="region" aria-label="AI financial analysis results"></div>
+
 </main>
 <script>
 (function(){
@@ -338,45 +360,50 @@ button{font:inherit;cursor:pointer}
    msg.append(el('p','quality-note',
     'Limited analysis: the independent reviewer could not confirm that this run explored enough of the material financial questions. The evidence-checked findings below may be incomplete.'));
   }
-  let metrics=null;
-  for(const block of data.blocks||[]){
-   const brief=clipText(block.text||'');
-   if(block.kind==='metric'){
-    if(!metrics){metrics=el('div','metric-grid');msg.append(metrics)}
-    const card=el('div','metric');
-    card.append(el('div','label',block.title),el('strong','',brief.lead));
-    detailsFor(card,block);metrics.append(card);continue;
+  msg.append(el('h2','glance-heading','At a glance'));
+  const blocks=(data.blocks||[]).filter(b=>b&&typeof b==='object');
+  const metrics=blocks.filter(b=>b.kind==='metric').slice(0,3);
+  if(metrics.length){
+   const grid=el('div','metric-grid');
+   for(const block of metrics){
+    const card=el('details','metric'),label=el('summary','metric-summary'),body=el('div','metric-detail');
+    label.append(el('div','label',block.title||'Source-backed metric'),
+     el('strong','',clipText(block.text||'',62).lead));
+    if(block.detail)info(body,block.detail);
+    else if(clipText(block.text||'',62).full)info(body,block.text);
+    addEvidence(body,block.evidence);
+    if(!body.hasChildNodes())info(body,'No further evidence supplied.');
+    card.append(label,body);grid.append(card);
    }
-   metrics=null;
-   if(block.kind==='hero'){
-    const hero=el('section','hero');
-    if(block.title)hero.append(el('h2','headline',block.title));
-    if(brief.lead)hero.append(el('p','keyline',brief.lead));
-    detailsFor(hero,block);msg.append(hero);
-   }else if(block.kind==='callout'){
-    const callout=el('section','callout');
-    if(block.title)callout.append(el('h3','',block.title));
-    if(brief.lead)info(callout,brief.lead);
-    detailsFor(callout,block);msg.append(callout);
-   }else if(block.kind==='heading'){
-    const heading=el('section','finding');
-    heading.append(el('h3','',block.title||brief.lead));
-    if(block.title&&brief.lead)info(heading,brief.lead);
-    detailsFor(heading,block);msg.append(heading);
-   }else if(block.kind==='paragraph'){
-    const card=el('section','finding');
-    if(block.title)card.append(el('h3','',block.title));
-    if(brief.lead)info(card,brief.lead);
-    detailsFor(card,block);msg.append(card);
-   }else if(block.kind==='chart'){
-    const card=el('section','chart-insight');
-    const headline=block.title||block.chart?.title||'Source-calculated chart';
-    card.append(el('h3','',headline));
-    if(brief.lead)info(card,brief.lead);
-    if(block.chart)drawGraph(card,{...block.chart,title:''});
-    detailsFor(card,block,block.chart?.subtitle||'');
-    msg.append(card);
-   }
+   msg.append(grid);
+  }
+  const findings=blocks.filter(b=>!metrics.includes(b));
+  const addInsight=(target,block)=>{
+   const card=el('details','insight-card'),label=el('summary','insight-summary'),
+    copy=el('span'),body=el('div','insight-body'),short=clipText(block.text||'',135);
+   copy.append(el('span','insight-head',block.title||block.chart?.title||'Financial finding'));
+   if(short.lead)copy.append(el('span','insight-preview',short.lead));
+   label.append(copy);
+   if(short.full)info(body,short.full);
+   if(block.detail)info(body,block.detail);
+   if(block.chart?.subtitle)info(body,block.chart.subtitle);
+   addEvidence(body,block.evidence);
+   if(block.kind==='chart'&&block.chart){
+    let drawn=false;
+    card.addEventListener('toggle',()=>{
+     if(card.open&&!drawn){drawn=true;drawGraph(body,{...block.chart,title:''});}
+    });
+   }else if(!body.hasChildNodes())info(body,'No additional supporting details.');
+   card.append(label,body);target.append(card);
+  };
+  const list=el('div','insight-list');
+  for(const block of findings.slice(0,7))addInsight(list,block);
+  msg.append(list);
+  if(findings.length>7){
+   const more=el('details','more-insights'),inside=el('div','insight-list');
+   for(const block of findings.slice(7))addInsight(inside,block);
+   more.append(el('summary','','More findings ('+(findings.length-7)+')'),inside);
+   msg.append(more);
   }
   const meta=el('details','limits'),s=el('summary','','Sources, checks and limits'),
    c=data.coverage||{},body=el('div');
@@ -430,7 +457,7 @@ button{font:inherit;cursor:pointer}
     armPoll();
    }else if(state.status==='ready'){
     status.textContent='Verified saved analysis · completed '+(state.completedAt||'recently')+
-      '. Expand the evidence under each finding.';
+      '. Expand any finding for evidence and options.';
    }else if(state.status==='failed'){
     status.textContent='Last analysis could not complete ('+
       (state.errorCode||'analysis_failed')+'). The existing bank data was not changed.';

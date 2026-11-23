@@ -160,7 +160,7 @@ assert.equal(badDetail.blocks.length,1,
   }
   assert.equal(body.tool_choice,'auto','no arbitrary minimum tool count');
   assert.equal(body.tools.length,6);
-  assert.equal(body.response_format.json_schema.name,'ledger_visual_insights_v1');
+  assert.equal(body.response_format.json_schema.name,'ledger_glance_expand_v2');
   assert.equal(JSON.parse(body.messages[1].content).manifest.counts.history,1600);
   let m;
   if(calls===1)m={tool_calls:[{id:'read',function:{

@@ -142,32 +142,33 @@ module.exports=(async()=>{
     'bank-sourced model text must be literal and never execute HTML');
    assert.equal(await page.locator('.quality-note').count(),0,
     'a source-reviewed substantive report has no false quality warning');
-   assert.equal(await page.locator('.hero').count(),1);
-   assert.equal(await page.locator('.callout').count(),1);
-   assert.equal(await page.locator('.finding').count(),1,
-    'the AI chooses how to present an individual finding');
-   assert.match(await page.locator('.hero .headline').innerText(),/could fall to/);
-   assert((await page.locator('.hero .keyline').innerText()).length<160,
-    'the glance summary is short, not the entire analyst narrative');
-   assert.equal(await page.locator('.insight-depth').first().getAttribute('open'),null,
-    'full explanation stays collapsed by default');
-   await page.locator('.insight-depth').first().evaluate(el=>el.open=true);
-   assert.match(await page.locator('.insight-depth .inside').first().innerText(),/2026-12-19/,
-    'expandable detail retains the exact sourced reasoning');
-   assert.equal(await page.locator('.glance-card').count(),0,
-    'no predetermined forecast cards are rendered');
+   assert.equal(await page.locator('.glance-heading').innerText(),'At a glance');
+   assert.equal(await page.locator('.metric-grid .metric').count(),1);
+   assert.equal(await page.locator('.insight-card').count(),7,
+    'all model-selected findings remain accessible');
+   assert.equal(await page.locator('.insight-card[open]').count(),0,
+    'analysis starts as a compact at-a-glance view');
+   assert.match(await page.locator('.insight-card').first().locator('.insight-head').innerText(),/could fall to/);
+   assert((await page.locator('.insight-card').first().locator('.insight-preview').innerText()).length<160);
+   assert.equal(await page.locator('.graph svg').count(),0,
+    'charts are lazy until the relevant finding is expanded');
+   await page.locator('.metric > summary.metric-summary').click();
+   assert.match(await page.locator('.metric-detail').innerText(),/source-calculated/);
+   await page.locator('.insight-card').first().locator('summary.insight-summary').click();
+   assert.match(await page.locator('.insight-card').first().locator('.insight-body').innerText(),/2026-12-19/,
+    'single expansion reveals source-backed details');
+   assert.equal(await page.locator('.analysis-report img').count(),0,
+    'expanded bank descriptions remain literal text, not HTML');
+   for(const i of [2,3,4,5])await page.locator('.insight-card').nth(i).locator('summary.insight-summary').click();
    assert.equal(await page.locator('.graph svg').count(),3,
-    'source-derived line, bar, and AI-selected donut graphics render');
-   assert.equal(await page.locator('.donut-legend-item').count(),3,
-    'the donut explains its source categories and amounts');
-   assert.equal(await page.locator('.ranked-row').count(),3,
-    'the AI can request a ranked comparison rather than a generic bar chart');
-   assert.equal(await page.locator('.legend').count(),0);
-   assert.equal(await page.locator('.metric').count(),1);
+    'model-selected line, bar and donut graphs render when expanded');
+   assert.equal(await page.locator('.donut-legend-item').count(),3);
+   await page.locator('.ranked-row').first().waitFor({state:'visible'});
+   await page.locator('.ranked-row').first().waitFor({state:'visible'});
+   assert.equal(await page.locator('.ranked-row').count(),3);
    assert.equal(await page.locator('.graph svg path').count()>=1,true);
    assert.equal(await page.locator('.graph svg rect').count()>0,true);
-   assert.equal(await page.locator('.graph svg path').count()>2,true,
-    'chart selection includes multiple sourced donut wedges');
+   assert.equal(await page.locator('.graph svg path').count()>2,true);
    assert.equal(await page.locator('.evidence').first().getAttribute('open'),null);
    assert.equal(await page.locator('.limits').getAttribute('open'),null);
    await page.locator('.graph svg').first().click({position:{x:115,y:90}});
@@ -186,16 +187,19 @@ module.exports=(async()=>{
     enabled:true,scope:'financial-analysis-auto-v1',consent:true});
    assert.equal(await page.locator('#automatic').isChecked(),true);
    await page.locator('#run').click();
-   await page.locator('.legend').waitFor({state:'visible'});
+   await page.locator('.quality-note').waitFor({state:'visible'});
    assert.equal(requests.length,1,'manual rerun enqueues background analysis');
    assert.deepEqual(requests[0],{scope:'financial-analysis-v3',consent:true});
    assert.equal(await page.locator('.analysis-report').count(),1,
     'a new cached report replaces the old; no transcript or stacked duplicate results');
-   assert.equal(await page.locator('.hero').count(),0);
+   assert.equal(await page.locator('.insight-card').count(),2);
    assert.match(await page.locator('.quality-note').innerText(),/Limited analysis/,
     'a shallow but verified report is visibly labelled incomplete');
-   assert.equal(await page.locator('.graph svg').count(),1,
-    'the new report chooses entirely different graphs and topics');
+   assert.equal(await page.locator('.graph svg').count(),0,
+    'the changed report starts collapsed too');
+   await page.locator('.insight-card').first().locator('summary.insight-summary').click();
+   await page.locator('.graph svg').first().waitFor({state:'visible'});
+   assert.equal(await page.locator('.graph svg').count(),1);
    assert.equal(await page.locator('.legend').count(),1);
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.analysis-detail summary')
