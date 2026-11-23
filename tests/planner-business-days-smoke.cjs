@@ -77,7 +77,10 @@ assert.ok(business.payments.warnings.some(w=>w.includes('Fictional ambiguous tra
 const zelleFriday=business.projection.accounts.find(a=>a.id==='checking').series
  .find(p=>p.date==='2026-10-30');
 assert.ok(zelleFriday.events.some(e=>e.merchant==='Fictional Zelle outgoing'&&e.kind==='expense'));
-assert.ok(zelleFriday.events.some(e=>e.merchant==='Fictional Zelle incoming'&&e.kind==='income'));
+const zelleMonday=business.projection.accounts.find(a=>a.id==='checking').series
+ .find(p=>p.date==='2026-11-02');
+assert.ok(zelleMonday.events.some(e=>e.merchant==='Fictional Zelle incoming'&&e.kind==='income'),
+ 'Incoming money cannot be forecast before the following bank business day');
 assert.deepEqual(where(business,'Card Saturday'),['2026-10-30']);
 assert.deepEqual(where(business,'Card Sunday'),['2026-10-30']);
 for(const [name,date] of [
