@@ -28,12 +28,18 @@ const prepared={bundle:{
  payments:{statements:[]},overduePayments:[],duplicateChecks:[],postedMatchReview:[]}};
 assert.throws(()=>financialContext(prepared),/integrity audit/,
  'Ordinary financial analysis must still refuse known inconsistent projections');
-const context=buildContext(prepared,{lastSync:asOf});
+const context=buildContext(prepared,{lastSync:asOf,adjustments:{predictions:{
+ futureRecurringRules:[{id:'private-recurring-rule',accountId:bank,
+  merchant:'Fictional Housing',amount:500,type:'expense',category:'Housing',
+  frequency:'monthly',anchorDate:date(1)}]}}});
 const audit=inspect(context);
 assert.equal(audit.checks.accounts,1);
 assert.equal(audit.checks.daysRecomputed,2);
 assert.equal(audit.checks.daysUnverifiable,0);
 assert.equal(audit.checks.expectedEventLegs,2);
+assert.equal(audit.checks.savedDecisionsReviewed,1,
+ 'User-confirmed rules are available for QA omission checks');
+assert(context.facts.some(f=>f.kind==='qaqc-saved-decision'&&f.text.includes('Fictional Housing')));
 assert(audit.checks.confirmed>=2,'Mismatch and unpaired transfer are independently detected');
 assert(audit.issues.some(x=>x.title==='Daily balance does not reconcile'));
 assert(audit.issues.some(x=>x.title==='Unbalanced transfer legs'));
@@ -41,7 +47,7 @@ assert(audit.issues.some(x=>x.title==='Ledger detected forecast calculation erro
 assert(audit.issues.some(x=>x.title==='Repeated posted transaction identities'));
 assert(audit.issues.some(x=>x.title==='Unclassified actual transactions'));
 const visible=JSON.stringify(audit)+JSON.stringify(context.facts.map(f=>f.text));
-for(const id of [bank,'private-deposit-identifier','private-transfer-group','private-bank-tx-1'])
+for(const id of [bank,'private-deposit-identifier','private-transfer-group','private-bank-tx-1','private-recurring-rule'])
  assert(!visible.includes(id),'Private source IDs must not leak into QA facts: '+id);
 const sourceFact=context.facts.find(x=>x.id==='qaqc-coverage');
 assert(sourceFact);
