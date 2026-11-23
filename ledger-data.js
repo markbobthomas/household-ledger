@@ -22,7 +22,7 @@ const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date
 // Each assignment stores only a name; custom definitions are saved exactly once
 // under predictions.scheduleCategories with the other planning preferences.
 const categorySet=new Set(['Uncategorized','Groceries','Shopping','Housing','Mortgage','Rent',
- 'Utility','Transportation','Dining','Health','Healthcare','Entertainment','Kids & Family',
+ 'Utility','Transportation','Gas','Dining','Health','Healthcare','Entertainment','Kids & Family',
  'Childcare','Insurance','Subscriptions','Loan','Tax','Income','Savings','Transfer','Other']);
 const aliases=Object.freeze({utility:'Utility',utilities:'Utility',subscription:'Subscriptions'});
 const builtinsByName=new Map([...categorySet].map(name=>[name.toLocaleLowerCase(),name]));
@@ -340,6 +340,17 @@ function resolution(state,t,index,recurringCategories){
  const explicit=state.categoryOverrides?.[t.id];
  if(explicit==='Uncategorized'||explicit&&removedCategory(state,explicit))
   return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
+ // Explicit bank fuel descriptions supersede legacy Groceries assignments,
+ // including earlier grocery overrides for mixed-use stores. Preserve other
+ // deliberate manual classifications and the original immutable bank data.
+ if(explicit&&explicit!=='Groceries')
+  return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
+ if(['expense','refund'].includes(t.type)&&classifier().fuelEvidence(t)&&
+    !removedCategory(state,'Gas'))
+  return {category:'Gas',method:'fuel-description',confidence:'Explicit fuel description',
+   ruleKey:null,explanation:explicit==='Groceries'?
+    'Clear bank fuel evidence supersedes an earlier groceries assignment':
+    'Clear bank fuel evidence'};
  if(explicit)return {category:explicit,method:'manual',confidence:'Confirmed',ruleKey:null};
  const confirmed=confirmedRepeatCategory(t,recurringCategories);
  if(confirmed)return {category:confirmed,method:'recurring',confidence:'Saved repeating plan',ruleKey:null};
@@ -405,7 +416,7 @@ function categoryReviewQueue(state){
     category=knownKind&&missingCategory(t.category)?
      (t.type==='income'?'Income':'Transfer'):
      String(t.category||'Other'),
-    manual=knownKind||Boolean(state.categoryOverrides?.[t.id]&&state.categoryOverrides[t.id]!=='Uncategorized')||
+    manual=knownKind||t.method==='fuel-description'||Boolean(state.categoryOverrides?.[t.id]&&state.categoryOverrides[t.id]!=='Uncategorized')||
      ['manual','learned','recurring'].includes(t.method),
     // An explicitly saved Other category is a reviewed choice, not a gap.
     missing=missingCategory(category)&&!manual,
