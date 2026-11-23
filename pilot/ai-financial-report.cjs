@@ -16,8 +16,8 @@ function financialContext(prepared,{lastSync=null,adjustments={},allowIntegrityF
  if(!projection||!Array.isArray(projection.accounts)||!Array.isArray(projection.series)||
   !Array.isArray(ledger)||!Array.isArray(history)||!DATE.test(String(projection.asOf||'')))
   throw Error('Canonical financial projection is not available');
- if(projection.diagnostics?.balanceMismatches?.length||
-  Math.abs(Number(projection.household?.conservationDifference||0))>.001)
+ if(!allowIntegrityFailures&&(projection.diagnostics?.balanceMismatches?.length||
+  Math.abs(Number(projection.household?.conservationDifference||0))>.001))
   throw Error('Canonical financial calculation failed its integrity audit');
  const aliases=new Map(projection.accounts.map((a,i)=>[String(a.id),'account-'+(i+1)]));
  const facts=[],byId=new Map();
