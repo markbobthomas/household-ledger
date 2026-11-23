@@ -124,6 +124,27 @@ function cleanedRefundMerchant(name){
  return norm(name).replace(/^(?:refund|reversal|return|returned|credit|purchase return)\s*[:#-]?\s*/,'')
   .replace(/\s*(?:refund|return|reversal)$/,'').trim();
 }
+// An unlabeled card credit from a frequent merchant is not automatically
+// a refund. Multiple-purchase matching needs independent high-confidence
+// purchase-category evidence from the bank and sufficient earlier spending.
+// Payment, transfer, cashback and adjustment descriptors remain excluded.
+const purchaseCategoryCredits=new Set(['SHOPPING','GROCERIES','SERVICES','FAMILY_KIDS',
+ 'HEALTH_WELLNESS','DINING_DRINKS','ENTERTAINMENT','BILLS_UTILITIES','PETS',
+ 'TRANSPORTATION','HOUSING','EDUCATION','GIFTS_DONATIONS','TRAVEL']);
+function supportedMerchantRefund(t,priorPurchases){
+ if(!priorPurchases.length||t.accountType!=='credit'||t.cashDirection!=='in')return false;
+ const pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{};
+ const primary=String(pfc.primary||'').toUpperCase();
+ const confidence=String(pfc.confidence_level||pfc.confidenceLevel||'').toUpperCase();
+ if(!purchaseCategoryCredits.has(primary)||!['HIGH','VERY_HIGH'].includes(confidence))return false;
+ const label=cleanedRefundMerchant(t.merchant);
+ if(label.length<3||/\b(?:payment|autopay|pymt|transfer|cashback|rewards?|adjustment)\b/i
+  .test(label+' '+String(t.description||'')))return false;
+ const cents=Math.round(Number(t.amount)*100);
+ const priorCents=priorPurchases.reduce((sum,p)=>sum+Math.round(Number(p.amount)*100),0);
+ return cents>0&&cents<=priorCents;
+}
+
 function reconcile(state){
  const registry=accountsFor(state),accountMap=new Map(registry.map(a=>[a.id,a]));
  const output=(state?.transactions||[]).filter(t=>t&&typeof t==='object').map(t=>{
@@ -215,17 +236,27 @@ function reconcile(state){
   const candidates=original?purchases.filter(p=>
    p.accountId===t.accountId&&cleanedRefundMerchant(p.merchant)===original&&
    p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending):[];
-  // A merchant-issued card credit can be a refund even if that merchant
-  // appears on several prior purchases. Requiring a UNIQUE source purchase
-  // mislabels routine multi-purchase store refunds as card transfers and
-  // prevents those credits from reducing net spending. Payment pairing and
-  // unmistakable card-payment descriptions are resolved BEFORE this check.
-  // An ambiguous purchase match stays flagged for category review.
-  if(candidates.length>=1){
+  // Explicitly described returns and uniquely matched card merchant returns
+  // remain supported. With multiple same-merchant purchases, also require
+  // high-confidence bank category evidence and no card-payment counterpart.
+  const evidenced=candidates.length>1&&supportedMerchantRefund(t,candidates);
+  if(candidates.length===1||evidenced){
    t.accountingKind='refund';
-   t.classificationConfidence=candidates.length===1?
-    'Matched single merchant purchase':'Merchant credit; multiple possible purchases';
-   if(candidates.length>1)t.reconciliationStatus='needs-review';
+   t.classificationConfidence=evidenced?'Bank category and matching merchant purchases':
+    'Matched single merchant purchase';
+   const categories=[...new Set(candidates.map(p=>state?.categoryOverrides?.[p.id]||p.category)
+    .filter(c=>c&&!['Uncategorized','Transfer','Income','Savings'].includes(c)))];
+   const pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{};
+   const providerCategory=root.HouseholdCategorization?.pfcCategory?.(pfc);
+   if(categories.length===1&&categories[0]!=='Other')
+    t.refundSuggestedCategory=categories[0];
+   else if(providerCategory)t.refundSuggestedCategory=providerCategory;
+   const manual=state?.categoryOverrides?.[t.id];
+   const invalid=['Transfer','Income','Savings'].includes(manual||t.category);
+   const reviewed=!!manual&&!['Transfer','Income','Savings','Uncategorized'].includes(manual);
+   if(invalid||candidates.length>1&&
+      (categories.length!==1||categories[0]==='Other')&&!reviewed)
+    t.reconciliationStatus='needs-review';
   }
  }
  // Owner decisions are stored apart from immutable Plaid facts. Only an
