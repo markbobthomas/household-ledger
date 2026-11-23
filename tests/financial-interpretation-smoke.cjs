@@ -188,4 +188,73 @@ assert.equal(Shared.recurrenceCadence(['2026-08-01','2026-09-01','2026-10-01'],'
 assert.equal(Shared.recurrenceCadence(['2026-08-02','2026-09-03','2026-10-02'],'coverage'),'monthly');
 assert.equal(Shared.recurrenceCadence(['2026-09-04','2026-09-18'],'forecast'),'biweekly');
 assert.equal(JSON.stringify(wageRows),source,'Recurrence evidence does not rewrite historical rows');
+// Regression: the word PYMT in an outgoing insurance or subscription card
+// purchase is not evidence of a credit-card settlement, even on older source
+// records imported as transfers. Equal-dollar checking credits cannot pair
+// with a card purchase in the wrong direction.
+const safetyTx=(transaction_id,account_id,amount,merchant_name,date)=>
+ ({transaction_id,account_id,amount,merchant_name,date,pending:false});
+const safety=M.migrate({});
+const safetyBank=[
+ safetyTx('insurance-1','safety-card',28.37,'Example Life Insurance ACH PYMT','2026-11-07'),
+ safetyTx('insurance-2','safety-card',28.37,'Example Life Insurance ACH PYMT','2026-11-14'),
+ safetyTx('subscription','safety-card',12.42,'Example Finance App PYMT','2026-11-18'),
+ safetyTx('subscription-credit','safety-card',-12.42,'Refund Example Finance App','2026-11-19'),
+ safetyTx('settlement-credit','safety-card',-100,'Payment Thank You','2026-11-19'),
+ safetyTx('settlement-debit','safety-checking',100,'Credit Card Payment','2026-11-19'),
+ safetyTx('checking-premium','safety-checking',15.25,'Insurance Monthly PYMT','2026-11-10'),
+ safetyTx('checking-credit','safety-checking',-28.37,'Transfer From Savings','2026-11-14')
+];
+M.applyPlaidSync(safety,{itemId:'safety-item',accounts:[
+ {account_id:'safety-card',type:'credit',subtype:'credit card',name:'Example Card'},
+ {account_id:'safety-checking',type:'depository',subtype:'checking',name:'Example Checking'}
+],added:safetyBank,modified:[],removed:[],nextCursor:'done'});
+const safetyRaw=JSON.stringify(safety.transactions),safetyRows=M.records(safety),
+ safetyById=new Map(safetyRows.map(t=>[t.source.providerTransactionId,t]));
+for(const id of ['insurance-1','insurance-2','subscription','checking-premium']){
+ const row=safetyById.get(id),raw=safety.transactions.find(x=>x.id===row.id);
+ assert.equal(raw.type,'expense',id+' source import is an expense');
+ assert.equal(row.type,'expense',id+' is not a card transfer');
+ assert.equal(row.accountingKind,'purchase',id+' remains purchase activity');
+ assert.equal(row.pairedTransactionId,null,id+' cannot be paired as a payment');
+}
+assert.equal(safetyById.get('subscription-credit').type,'refund','Real merchant credit offsets spending');
+assert.equal(safetyById.get('settlement-credit').type,'transfer','Real issuer credit is a settlement');
+assert.equal(safetyById.get('settlement-debit').type,'transfer','Funding debit is a settlement');
+assert.ok(safetyById.get('settlement-debit').pairedTransactionId,'Card settlement is still paired');
+assert.equal(safetyById.get('insurance-2').pairedTransactionId,null,
+ 'A matching checking credit is not a card purchase settlement');
+assert.equal(Math.round(M.accountingView(safety).summary.spending*100),7199,
+ 'Insurance and app charge count, refund nets out, card payment is excluded');
+assert.equal(JSON.stringify(safety.transactions),safetyRaw,'Derived classification cannot alter bank rows');
+const oldCard=M.migrate({accounts:[{id:'old-card',name:'Old card',type:'credit'}],
+ transactions:[{id:'old-premium',accountId:'old-card',account:'Old card',
+  date:'2026-11-08',merchant:'Insurance ACH PYMT',amount:28.37,type:'transfer',
+  source:{provider:'plaid',plaidAmount:28.37}}]});
+assert.equal(M.records(oldCard)[0].type,'expense',
+ 'Previously imported false transfers are corrected in the read-only view');
+
+const Payment=require('../payment-obligations.js');
+const statement=Payment.build({asOf:'2026-11-23',accounts:[
+ {id:'safety-card',name:'Example Card',type:'credit',current:250,
+  liabilities:{last_statement_balance:73.50,last_statement_issue_date:'2026-11-21',
+   next_payment_due_date:'2026-12-10'}},
+ {id:'safety-checking',name:'Example Checking',type:'checking',current:4000}
+]},safetyRows,[],{paymentRules:{'safety-card':{
+ fromAccountId:'safety-checking',billingStartDate:'2026-11-01',
+ billingEndDate:'2026-11-20',closingDay:20,nextPaymentDate:'2026-12-10',
+ nextDueDate:'2026-12-10',method:'statement',lastStatementBalance:62
+}}},{days:60});
+const nextStatement=statement.statements.find(t=>t.periodEnd==='2026-11-20');
+assert.equal(nextStatement.bankPurchases,56.74,'Outgoing PYMT charges enter card statement activity');
+assert.equal(nextStatement.statementReconciliation.status,'difference',
+ 'Same-cycle connected issuer amount is compared to posted card activity');
+assert.equal(nextStatement.statementReconciliation.source,'issuer');
+assert.equal(nextStatement.statementReconciliation.difference,16.76);
+assert.equal(nextStatement.amount,62,'Issuer difference must not silently change saved autopay');
+assert.ok(statement.warnings.some(x=>x.includes('identified card activity')),
+ 'Statement discrepancy is visible without guessing a new withdrawal');
+assert.ok(statement.warnings.some(x=>x.includes('differs from the saved statement')),
+ 'Same-cycle connected issuer amount is reconciled against the saved issued amount');
+
 console.log('PASS phase-2 shared classification, signed reporting, card settlement, stream identity, policy-specific cadence and immutable facts');

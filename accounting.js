@@ -55,6 +55,30 @@ const cardIssuer=/\b(?:amex|american express|discover card|capital one card|chas
 const transferText=/\b(?:transfer (?:to|from)|internal transfer|account transfer|xfer (?:to|from)|transfer between|savings transfer|moving money)\b/i;
 const refundText=/\b(?:refund|reversal|chargeback|return credit|purchase return|merchant credit|returned purchase|credit adjustment)\b/i;
 const payrollText=/\b(?:payroll|salary|wages|paycheck|direct deposit|interest earned|dividend|deposit from employer)\b/i;
+// A merchant bill can contain PYMT without being a credit-card settlement.
+// Require a directionally valid card credit or funding-account withdrawal
+// AND evidence identifying the card/payment, not an arbitrary payment token.
+const genericPaymentToken=/\b(?:payment|autopay|pymt|pmt|epay|epayment)\b/i;
+const otherBill=/\b(?:insurance|premium|mortgage|home loan|tuition|utilities|utility bill|rent|property tax)\b/i;
+function cardSettlementEvidence(name,account,dir,pfc={}){
+ const category=String(pfc?.detailed||'').toUpperCase();
+ const classifiedAsCardPayment=/(?:CREDIT_CARD_PAYMENT|CARD_PAYMENT)/.test(category);
+ const explicitCard=cardPayment.test(name);
+ const issuerPayment=(cardIssuer.test(name)||
+  /\b(?:visa|mastercard|amex|discover|apple card)\b/i.test(name))&&
+  genericPaymentToken.test(name)&&!otherBill.test(name);
+ if(account?.type==='credit'){
+  if(dir!=='in')return false; // A card debit increases debt; it never repays that card.
+  return explicitCard||issuerPayment||classifiedAsCardPayment&&
+   !otherBill.test(name)||/^\s*(?:ach\s+|online\s+|automatic\s+)?(?:payment|pymt|pmt|autopay)\b/i.test(name)&&
+   !otherBill.test(name);
+ }
+ // A generic issuer ACH/PMT checking debit is only a payment CANDIDATE
+ // until a corresponding incoming issuer credit is matched. It may suppress
+ // duplicate predictions separately, but does not prove a settled transfer.
+ return dir==='out'&&account?.type!=='loan'&&
+  (explicitCard||classifiedAsCardPayment&&!otherBill.test(name));
+}
 /* Strong external income evidence takes priority over a generic Plaid
  * TRANSFER_IN label, but never promotes ordinary account-to-account money. */
 function recognizedIncome(t,account){
@@ -87,9 +111,7 @@ function initialKind(t,account){
  // refund. That provisional type must NEVER override payment evidence:
  // card settlements are linked transfers, excluded from card purchases and
  // used to infer the next bill. Preserve confirmed merchant returns below.
- const payment=cardPayment.test(name)||isCard&&/\b(?:payment|autopay|pymt)\b/i.test(name)||
-   cardIssuer.test(name)&&/\b(?:payment|autopay|pymt)\b/i.test(name);
- if(payment)return 'card_payment';
+ if(cardSettlementEvidence(name,account,dir,pfc))return 'card_payment';
  // Only bank-direction-confirmed returns count as statement credits. For
  // credit cards, a generic imported type='refund' is not proof: it may be
  // a card payment. Keep explicit refund descriptors/provider codes, and
@@ -110,6 +132,13 @@ function initialKind(t,account){
  // Preserve explicit internal-transfer evidence while distinguishing a
  // generic merchant credit from a card settlement. A bank-coded TRANSFER_IN
  // with no return evidence remains a transfer until matched/reviewed.
+ // Unpaired outgoing card activity is debt-incurring activity, even when an
+ // importer uses TRANSFER_OUT or the merchant descriptor says PYMT. Do not
+ // erase these charges from spending or statement calculations.
+ if(isCard&&dir==='out'){
+  if(transferText.test(name))return 'unclassified'; // Cash advances need review.
+  return 'purchase';
+ }
  if(transferText.test(name)||/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(primary)||
     isCard&&dir==='in'&&primary==='TRANSFER_IN')return 'internal_transfer';
  // Legacy user-authored transfers have explicit intent. A provisional Plaid
@@ -193,6 +222,13 @@ function reconcile(state){
   // transfer posted on another account within the matching window.
   if(a.accountingKind==='refund'||b.accountingKind==='refund')continue;
   const aCard=a.accountType==='credit',bCard=b.accountType==='credit';
+  // Only checking/savings OUT -> credit-card IN can be a card settlement.
+  // A coincidental checking credit cannot pair with a card PURCHASE debit.
+  if(aCard!==bCard){
+   const cardLeg=aCard?a:b,cashLeg=aCard?b:a;
+   if(cardLeg.cashDirection!=='in'||cashLeg.cashDirection!=='out'||
+      ![cardLeg,cashLeg].some(t=>t.accountingKind==='card_payment'))continue;
+  }
   const card=a.accountingKind==='card_payment'||b.accountingKind==='card_payment'||aCard!==bCard&&(aCard||bCard);
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
   candidates.push({a,b,card,priority,delta:days(a.date,b.date)});
@@ -338,19 +374,21 @@ function classifyPlaidSource({amount,merchant,description,pfc},account,categoriz
   code=String(pfc?.primary||'').toUpperCase(),lower=bankNarrative.toLowerCase(),
   incoming=Number(amount)<0,card=account?.type==='credit';
  const obligation=categorization?.loanBill?.({merchant:name,personal_finance_category:pfc});
- const payment=/\b(payment thank you|autopay payment|payment received|credit card payment|card payment|payment to .*card)\b/i.test(bankNarrative)||
-   code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement;
+ const payment=cardSettlementEvidence(bankNarrative,account,incoming?'in':'out',pfc)||
+  !card&& !incoming&&code==='LOAN_PAYMENTS'&&obligation?.isCardSettlement&&
+  !otherBill.test(bankNarrative);
  const earned=incoming&&!card&&recognizedIncome({
   merchant:name,personal_finance_category:pfc,source:{plaidAmount:amount}
  },account);
- const transfer=!earned&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
-  lower.includes('transfer to ')||lower.includes('transfer from ')||payment);
+ const transfer=!earned&&(payment||card&&incoming&&code==='TRANSFER_IN'||
+  !card&&(/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(code)||
+   lower.includes('transfer to ')||lower.includes('transfer from ')));
  const detailed=String(pfc?.detailed||'').toUpperCase();
  const refund=incoming&&(refundText.test(bankNarrative)||
   /(?:^|_)REFUND(?:_|$)|(?:^|_)RETURN(?:_|$)/.test(code+'_'+detailed)||obligation?.isBill);
  // An unlabeled checking credit is real cash, NOT evidence of earned income.
  // The derived accounting view will reconcile and queue it for Review.
- return {incoming,transfer,type:transfer?'transfer':
+ return {incoming,transfer,type:card&&!incoming?'expense':transfer?'transfer':
   refund||incoming&&card?'refund':incoming?(earned?'income':'transfer'):'expense'};
 }
 
@@ -413,11 +451,16 @@ function budgetCardSettlementIds(rows){
   isOut=t=>t.cashDirection==='out'&&t.accountType!=='credit'&&
    t.accountType!=='loan'&&['expense','transfer'].includes(t.type),
   paymentHint=t=>{
-   const source=String(t.merchant||'')+' '+String(t.description||'') ,
-    pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{},
-    category=String(pfc.detailed||'').toUpperCase();
-   return /\b(?:payment|pmt|pymt|autopay|auto\s?pay|bill\s?pay|paybill|e-?pay)\b/i.test(source)||
-    /CREDIT_CARD_PAYMENT|CARD_PAYMENT/.test(category);
+   const source=String(t.merchant||'')+' '+String(t.description||''),
+    pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{};
+   // Generic ACH PMT may be a settlement, but only when an exact
+   // opposite-side card credit uniquely corroborates it below. Never infer
+   // settlement from a merchant bill containing PYMT.
+   return cardSettlementEvidence(source,{type:t.accountType},t.cashDirection,pfc)||
+    t.cashDirection==='out'&&!otherBill.test(source)&&
+    ((genericPaymentToken.test(source)&&
+      (cardIssuer.test(source)||/\b(?:visa|mastercard|amex|discover|apple card)\b/i.test(source)))||
+     /\b(?:ach|epay|e-pay|billpay|cc)\s*(?:pmt|pymt|payment)\b/i.test(source));
   };
  for(const row of rows||[]){
   if(!row||matched(row)||!Number.isFinite(cents(row))||cents(row)<=0||

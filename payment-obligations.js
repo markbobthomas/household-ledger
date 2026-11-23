@@ -468,6 +468,35 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // posted-and-scheduled transaction sum.
    const confirmedFirst=n===0&&hasIssued&&cycleClose<=asOf;
    const statementAmount=round(confirmedFirst?Number(rule.lastStatementBalance):calculated);
+   // Compare a connected issuer amount only for the same close/due cycle.
+   // An issued statement can include carried debt, interest, missing history
+   // or adjustments; any discrepancy is diagnostic, never an automatic edit.
+   const liabilities=card.liabilities||card.liability||{},
+    issuedValue=liabilities.last_statement_balance??liabilities.lastStatementBalance,
+    issuedAt=String(liabilities.last_statement_issue_date||liabilities.lastStatementIssueDate||''),
+    issuerDue=String(liabilities.next_payment_due_date||liabilities.nextPaymentDueDate||''),
+    closeGap=date(issuedAt)?Math.round((Date.parse(issuedAt)-Date.parse(cycleClose))/86400000):null,
+    sameCycle=n===0&&cycleClose<=asOf&&validAmount(issuedValue)&&
+     closeGap!==null&&closeGap>=0&&closeGap<=5&&
+     (!date(issuerDue)||issuerDue===actualDue);
+   const issuerAmount=sameCycle?round(Number(issuedValue)):null;
+   // A saved estimate alone is not an independent issuer observation.
+   // Do not create speculative comparison warnings from incomplete history.
+   const reconciliationBase=issuerAmount;
+   const statementDifference=reconciliationBase===null?null:round(reconciliationBase-calculated);
+   const statementReconciliation=statementDifference===null?{status:'not-comparable'}:
+    {status:Math.abs(statementDifference)>.01?'difference':'matched',
+     source:issuerAmount!==null?'issuer':'saved-issued-statement',
+     issuedAmount:reconciliationBase,calculated,difference:statementDifference,
+     periodStart:cycleStart,periodEnd:cycleClose};
+   if(statementReconciliation.status==='difference')
+    warnings.push(card.name+': issued statement '+reconciliationBase.toFixed(2)+
+     ' and identified card activity '+calculated.toFixed(2)+' differ by '+
+     Math.abs(statementDifference).toFixed(2)+' for '+cycleStart+' to '+
+     cycleClose+'. Check missing charges, refunds, adjustments and carried balances; the scheduled payment was not changed.');
+   if(issuerAmount!==null&&confirmedFirst&&
+      Math.abs(issuerAmount-Number(rule.lastStatementBalance))>.01)
+    warnings.push(card.name+': connected issuer statement differs from the saved statement amount for '+cycleClose+'. Review the source before changing autopay.');
    // Full current balance means the modeled card debt that would exist at
    // withdrawal, including forecast charges up to that date, minus any earlier
    // planned card payments. It is not a bank-issued payoff quotation.
@@ -546,7 +575,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
     dueDate:actualDue,withdrawalDate:expectedWithdrawal(due),closingDate:cycleClose,amount,
-    statementBalance:statementAmount,bankPurchases,purchases,refunds,
+    statementBalance:statementAmount,statementReconciliation,bankPurchases,purchases,refunds,
     actualPeriodNet,periodComplete,postedTransactions,predictedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
@@ -568,7 +597,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     paymentDetails.push({id:plan.id,cardId:id,cardName:card.name,
      fromAccountId:from.id,withdrawalDate:expectedWithdrawal(due),
      periodStart:cycleStart,periodEnd:cycleClose,periodSource:'configured-statement',
-     method,amount,calculated,postedTransactions,predictedTransactions,
+     method,amount,calculated,statementReconciliation,postedTransactions,predictedTransactions,
      confirmed:confirmedFirst,issuedAmount:confirmedFirst?Number(rule.lastStatementBalance):null,
      periodComplete,pendingExcluded:pendingRows.length,
      caveat:method==='statement'?'This statement estimate uses identified posted and scheduled card activity only.':
