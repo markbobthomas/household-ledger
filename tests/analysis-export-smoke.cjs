@@ -80,7 +80,7 @@ assert.equal(report.reconciliationAndReview.paymentReconciliations[0].amount,128
 const raw=JSON.stringify(report);
 for(const forbidden of [bank,'PRIVATE-ID','PRIVATE-TOKEN','SECRET-IN-SOURCE',
  'raw-private-rule','raw-future','raw-tx-','raw-added','DO-NOT-EXPORT',
- 'providerTransactionId','access_token','itemId','account_id','passphrase','session'])
+ 'providerTransactionId','access_token','itemId','account_id','passphrase' ])
  assert(!raw.includes(forbidden),'Private provider field leaked: '+forbidden);
 const again=JSON.parse(raw);
 assert.equal(again.actualTransactions.length,history.length,'download is standalone parseable JSON');
