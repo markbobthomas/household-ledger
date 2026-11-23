@@ -396,7 +396,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
    result.investigations=investigations;
    let secondReview=null;
    if(autonomous){
-    secondReview=await reviewPresentation({apiKey,model,fetchImpl,blocks:result.blocks,facts:allFacts,context});
+    secondReview=await reviewPresentation({apiKey,model,fetchImpl,blocks:result.blocks,facts:allFacts,context,qaMode});
     const preAuditCount=result.blocks.length;
     result.blocks=result.blocks.filter((_,i)=>!secondReview.rejected.has(i));
     if(preAuditCount>=2&&result.blocks.length<=1&&reviewRetries<2){
@@ -436,7 +436,8 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      e.safeCode='invalid_ai_evidence';throw e;}
    }
    if(autonomous){
-    result.followUps=[];result.mode='autonomous-adaptive';result.reportStatus='evidence-checked';
+    result.followUps=[];result.mode=qaMode?'ledger-qaqc':'autonomous-adaptive';result.reportStatus='evidence-checked';
+    if(qaMode)result.qaAudit=context.qaAudit;
     result.analysisQuality=secondReview.quality==='substantive'?
      {status:'substantive'}:
      {status:'limited',reason:secondReview.quality==='limited-source'?
@@ -461,7 +462,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
        count:result.evidenceAudit.immaterialBlocksWithheld,scope:'derived analysis only'}]:[])];
     result.limitations.push(...secondReview.concerns.slice(0,4)
      .map(x=>'Unresolved reviewer question (not a confirmed finding): '+x));
-    result.disclosure='The AI receives a broad sanitized private financial dataset and may read every remaining page of posted history, future events, projected balances, card obligations and source evidence. It never receives original bank or transaction IDs, credentials or raw files. The analysis cannot edit banking records or forecasts.';
+    result.disclosure=qaMode?'This QA/QC independently checks all available normalized transactions, source event legs and available daily balances, then runs bounded source-evidenced AI investigation. It is not a full source-code review or external bank statement reconciliation. Nothing is modified.':'The AI receives a broad sanitized private financial dataset and may read every remaining page of posted history, future events, projected balances, card obligations and source evidence. It never receives original bank or transaction IDs, credentials or raw files. The analysis cannot edit banking records or forecasts.';
     result.datasetCoverage={total:dataset.manifest,initialIncluded:dataset.initial.manifest.initialIncluded};
    }
    return result;
