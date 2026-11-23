@@ -88,12 +88,12 @@ const until=async(condition)=>{for(let i=0;i<150;i++){if(condition())return;awai
   'current ongoing data sharing remains authorized after a visual-only upgrade');
  assert.equal(visual.status().report,null,
   'old text-heavy layout is invalidated');
- assert.equal(stored.reportFormatVersion,4);
+ assert.equal(stored.reportFormatVersion,5);
  assert.equal(stored.report,null);
  assert.equal(visual.schedule(),true,
   'format upgrade allows a newly generated report under existing consent');
  await until(()=>visual.status().status==='ready');
- assert.equal(stored.reportFormatVersion,4);
+ assert.equal(stored.reportFormatVersion,5);
 
  console.log('PASS encrypted AI cache: consent, dedup, bank-refresh snapshot, stale result rejection, restart, manual refresh and disconnect');
 })().catch(e=>{console.error(e);process.exitCode=1});
