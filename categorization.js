@@ -4,12 +4,21 @@
  */
 (function(root){
 'use strict';
-const CATEGORIES=['Groceries','Shopping','Housing','Utilities','Transportation','Dining','Health',
+const CATEGORIES=['Groceries','Shopping','Housing','Utilities','Transportation','Gas','Dining','Health',
  'Entertainment','Kids & Family','Insurance','Subscriptions','Other'];
 const confidence={VERY_HIGH:0.99,HIGH:0.93,MEDIUM:0.75,LOW:0.4,UNKNOWN:0};
 const nameOf=t=>String(t?.merchant_name||t?.merchant||t?.name||t?.description||'').toLowerCase().trim()
  .replace(/^(?:refund|reversal|return|returned|credit|purchase return)\s*[:#-]?\s*/,'');
 const safeWord=(s,r)=>r.test(s);
+// Prefer explicit item purpose in the bank's original description to a
+// generic merchant label. The original bank record remains read-only.
+function fuelEvidence(t){
+ const src=t?.source||{};
+ const text=[t?.merchant_name,t?.merchant,t?.name,t?.description,
+  t?.originalName,t?.original_name,src.bankName,src.description]
+  .filter(v=>typeof v==='string').join(' ').toLowerCase();
+ return /\b(?:fuel|gasoline|gas\s*(?:station|pump|fuel|center)|(?:costco|fred\s+meyer|sam'?s\s+club)\s+gas)\b/i.test(text);
+}
 
 /* Bank-coded loan repayments are withdrawals, not internal transfers.
  * Card settlements and explicit own-account transfers are different: never
@@ -41,6 +50,8 @@ function pfcCategory(pfc){
  }
  if(primary==='RESTAURANTS')return 'Dining';
  if(primary==='GROCERIES')return 'Groceries';
+ if(/(?:^|_)(?:GAS|GASOLINE|FUEL)(?:_|$)/.test(detailed)&&
+  (primary==='TRANSPORTATION'||primary==='AUTO_AND_TRANSPORT'))return 'Gas';
  if(primary==='TRANSPORTATION'||primary==='AUTO_AND_TRANSPORT')return 'Transportation';
  if(primary==='TRAVEL')return 'Transportation';
  if(primary==='RENT_AND_UTILITIES'){
@@ -60,6 +71,7 @@ function pfcCategory(pfc){
  return null;
 }
 function merchantCategory(t){
+ if(fuelEvidence(t))return 'Gas';
  const name=nameOf(t);
  // Do not infer a grocery category from a multipurpose merchant.
  // Plaid can still provide an explicit groceries PFC above this fallback.
@@ -84,6 +96,8 @@ function merchantCategory(t){
 function classify(t){
  const obligation=loanBill(t);
  if(obligation.isMortgage)return {category:'Housing',method:'mortgage-payment',confidence:.93,confidenceLevel:'RULE'};
+ if(fuelEvidence(t)&&['expense','refund'].includes(String(t?.type||'expense')))
+  return {category:'Gas',method:'fuel-description',confidence:.99,confidenceLevel:'RULE'};
  const src=t?.source||{};
  const pfc=t?.personal_finance_category||t?.personalFinanceCategory||
   src.personalFinanceCategory||src.personal_finance_category;
@@ -96,7 +110,7 @@ function classify(t){
   confidenceLevel:'RULE'};
  return {category:'Other',method:'unclassified',confidence:0,confidenceLevel:'UNKNOWN'};
 }
-const api={classify,pfcCategory,merchantCategory,loanBill,CATEGORIES};
+const api={classify,pfcCategory,merchantCategory,loanBill,fuelEvidence,CATEGORIES};
 root.HouseholdCategorization=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

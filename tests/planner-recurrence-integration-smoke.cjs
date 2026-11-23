@@ -178,7 +178,11 @@ const merchantOccurrences=name=>canonicalRows().filter(row=>row.merchant.include
  const genericAfter=future();
  assert.equal(merchantOccurrences('ABC Draft 984'),35,
   'Owner-modified generic payment occurs once per month through the entire modeled period');
- assert.ok(canonicalRows().some(row=>row.date==='2026-11-26'&&row.merchant.includes('ABC Draft 984')));
+ assert.ok(canonicalRows().some(row=>row.date==='2026-11-25'&&row.merchant.includes('ABC Draft 984')),
+   'Thanksgiving bank holiday moves the debit to the prior workday');
+  assert.ok(genericSaved.futureRecurringRules.some(rule=>rule.anchorDate==='2026-11-26'&&
+   (rule.merchant||rule.scheduleLabel)==='ABC Draft 984'),
+   'The original calendar recurrence anchor is not rewritten');
  assert.equal(canonicalRows().filter(row=>row.date==='2026-11-09'&&row.merchant.includes('ABC Draft 984')).length,0);
  // A changed starting bank balance must invalidate the forecast even though
  // the saved schedule state and selected view have not changed.

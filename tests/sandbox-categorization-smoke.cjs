@@ -5,7 +5,7 @@ const classify=(primary,detailed,confidence_level='VERY_HIGH',name='Unrecognized
 assert.equal(classify('FOOD_AND_DRINK','FOOD_AND_DRINK_GROCERIES').category,'Groceries');
 assert.equal(classify('FOOD_AND_DRINK','FOOD_AND_DRINK_FAST_FOOD').category,'Dining');
 assert.equal(classify('GENERAL_MERCHANDISE','GENERAL_MERCHANDISE_SUPERSTORES','HIGH').category,'Shopping');
-assert.equal(classify('TRANSPORTATION','TRANSPORTATION_GAS','MEDIUM').category,'Transportation');
+assert.equal(classify('TRANSPORTATION','TRANSPORTATION_GAS','MEDIUM').category,'Gas');
 assert.equal(classify('RENT_AND_UTILITIES','RENT_AND_UTILITIES_RENT').category,'Housing');
 assert.equal(classify('RENT_AND_UTILITIES','RENT_AND_UTILITIES_INTERNET_AND_CABLE').category,'Utilities');
 assert.equal(classify('MEDICAL','MEDICAL_PHARMACIES_AND_SUPPLEMENTS').category,'Health');
@@ -16,6 +16,19 @@ assert.equal(classify('GENERAL_MERCHANDISE','GENERAL_MERCHANDISE_SUPERSTORES','L
  'Low confidence generic merchant remains Other');
 assert.equal(C.classify({name:'Amazon'}).category,'Other','Do not guess mixed-use merchant categories');
 assert.equal(C.classify({name:'Costco Warehouse'}).category,'Other','Costco is mixed use');
+assert.equal(C.classify({merchant:'Costco',description:'WAREHOUSE FUEL #214',
+ type:'expense',personal_finance_category:{primary:'FOOD_AND_DRINK',
+  detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'VERY_HIGH'}}).category,'Gas',
+ 'Specific fuel bank description overrides an ambiguous merchant and even a high-confidence grocery provider category');
+assert.equal(C.classify({merchant:'Costco',description:'WAREHOUSE FUEL #214',
+ type:'expense'}).method,'fuel-description');
+assert.equal(C.classify({merchant:'Costco',description:'WAREHOUSE PURCHASE',
+ type:'expense'}).category,'Other','Generic warehouse purchases are not assumed to be fuel');
+assert.equal(C.classify({merchant:'Fictional Natural Gas Utility',type:'expense',
+ personal_finance_category:{primary:'RENT_AND_UTILITIES',
+  detailed:'RENT_AND_UTILITIES_GAS_AND_ELECTRICITY',confidence_level:'HIGH'}}).category,'Utilities',
+ 'Home natural gas utility is not a gas-station transaction');
+assert.equal(C.classify({merchant:'Fred Meyer Fuel Center',type:'expense'}).category,'Gas');
 assert.equal(C.classify({name:'Safeway Groceries'}).category,'Groceries');
 assert.equal(C.classify({name:'Refund Market Grocery'}).category,'Groceries');
 assert.equal(C.classify({name:'Pending Merchant'}).category,'Other','Unclear merchant remains visible for review');
@@ -86,6 +99,23 @@ assert.equal(JSON.stringify(older.transactions),before,
  'Backfill prior Sandbox records in presentation without rewriting source rows');
 M.setCategory(older,'plaid:fixtureA:legacy','Dining');
 assert.equal(M.records(older)[0].category,'Dining');
+ const fuelRecord={id:'fictional-fuel-old',date:'2026-10-06',merchant:'Costco',
+  description:'COSTCO FUEL 1022',amount:34,type:'expense',accountId:'card',
+  category:'Groceries',source:{provider:'plaid',verified:true}};
+ const fuelOld=M.migrate({transactions:[fuelRecord],
+  categoryOverrides:{'fictional-fuel-old':'Groceries'},predictions:{}});
+ assert.equal(M.records(fuelOld)[0].category,'Gas',
+  'Legacy manually assigned Groceries cannot hide clear fuel purchase evidence');
+ assert.equal(fuelOld.categoryOverrides['fictional-fuel-old'],'Groceries',
+  'Original private decisions are not destructively rewritten');
+ assert.equal(M.categoryFor(fuelOld,'fictional-fuel-old'),'Gas');
+ assert(M.categories(fuelOld).includes('Gas'),'Gas is a canonical selectable budget category');
+ assert.equal(M.categoryReviewQueue(fuelOld).transactions.filter(x=>x.id==='fictional-fuel-old').length,0,
+  'Clear fuel evidence requires no low-confidence category review');
+ const fuelOverride=M.migrate({transactions:[fuelRecord],
+  categoryOverrides:{'fictional-fuel-old':'Transportation'},predictions:{}});
+ assert.equal(M.records(fuelOverride)[0].category,'Transportation',
+  'A deliberate other-category manual override remains authoritative');
 const demo=M.migrate({transactions:[{id:'demo-generic',date:'2026-10-11',merchant:'Demo Purchase',
  amount:16,type:'expense',category:'Other',account:'Checking',
  source:{provider:'demo',verified:false}}]});

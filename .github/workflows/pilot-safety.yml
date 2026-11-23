@@ -60,4 +60,5 @@ jobs:
           node --check pilot/ai-independent-forecast.cjs
           node tests/ai-independent-forecast-smoke.cjs
       - name: Verify frozen output, banking safety, parity and reconciliation once
-        run: node tests/ci-suite.cjs core
+        run: |
+          node tests/ci-suite.cjs core

@@ -210,16 +210,56 @@ const seriesPlan=p=>{
  return null;
 };
 const shift=(date,offset)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10)};
-/* A future occurrence is modeled on the Friday before a weekend, without
- * mutating its stable recurrence anchor or bank-posted historical source date.
- * If Friday is already inside the authoritative bank snapshot (<= asOf), it
- * cannot be inserted retroactively: use Monday instead of losing the charge. */
-const forecastBusinessDate=(iso,asOf='')=>{
- if(!validDate(iso))return iso;
- const day=new Date(iso+'T12:00:00Z').getUTCDay();
- if(day!==0&&day!==6)return iso;
- const prior=shift(iso,day===6?-1:-2);
- return prior>asOf?prior:shift(iso,day===6?2:1);
+/* Federal Reserve Bank operating days, not federal employee observed days.
+ * A fixed-date holiday on Saturday does NOT close the preceding Friday;
+ * on Sunday the following Monday IS closed. Weekend/holiday transactions
+ * are projected, never rewritten in posted bank history or recurrence anchors.
+ * See Federal Reserve Financial Services: /about/holiday-schedules/ */
+const weekday=iso=>new Date(iso+'T12:00:00Z').getUTCDay();
+const nthWeekday=(iso,nth,day)=>Math.floor((Number(iso.slice(8))-1)/7)===nth-1&&weekday(iso)===day;
+const lastWeekday=(iso,day)=>{
+ const d=Number(iso.slice(8)),max=new Date(Date.UTC(Number(iso.slice(0,4)),
+  Number(iso.slice(5)),0)).getUTCDate();
+ return weekday(iso)===day&&d+7>max;
+};
+function federalReserveHoliday(iso){
+ if(!validDate(iso))return false;
+ const m=Number(iso.slice(5,7)),d=Number(iso.slice(8)),dow=weekday(iso);
+ const fixed= (m===1&&d===1)||(m===6&&d===19)||(m===7&&d===4)||
+  (m===11&&d===11)||(m===12&&d===25);
+ if(fixed)return true;
+ // Fixed-date Sundays close the following Monday. Friday remains open when
+ // the actual holiday falls on a Saturday (different from federal staff leave).
+ if(dow===1){
+  const previous=shift(iso,-1),pm=Number(previous.slice(5,7)),pd=Number(previous.slice(8));
+  if((pm===1&&pd===1)||(pm===6&&pd===19)||(pm===7&&pd===4)||
+     (pm===11&&pd===11)||(pm===12&&pd===25))return true;
+ }
+ return m===1&&nthWeekday(iso,3,1)||  // Martin Luther King Jr
+  m===2&&nthWeekday(iso,3,1)||        // Washington's Birthday
+  m===5&&lastWeekday(iso,1)||          // Memorial Day
+  m===9&&nthWeekday(iso,1,1)||        // Labor Day
+  m===10&&nthWeekday(iso,2,1)||       // Columbus Day
+  m===11&&nthWeekday(iso,4,4);        // Thanksgiving
+}
+const bankBusinessDay=iso=>validDate(iso)&&![0,6].includes(weekday(iso))&&!federalReserveHoliday(iso);
+const nextBankBusinessDate=from=>{
+ if(!validDate(from))return from;
+ let date=shift(from,1);
+ while(!bankBusinessDay(date))date=shift(date,1);
+ return date;
+};
+/* Cash outflows move to the previous bank business day; cash inflows
+ * (payroll, refunds, incoming transfers) move to the next business day.
+ * If a debit's preceding business day is already in the bank snapshot,
+ * move the forecast to the next future business day rather than double-count
+ * an earlier withdrawal or silently dropping the obligation. */
+const forecastBusinessDate=(iso,asOf='',direction='out')=>{
+ if(!validDate(iso)||bankBusinessDay(iso))return iso;
+ if(direction==='in')return nextBankBusinessDate(iso);
+ let prior=shift(iso,-1);
+ while(!bankBusinessDay(prior))prior=shift(prior,-1);
+ return prior>asOf?prior:nextBankBusinessDate(iso);
 };
 const monthEnd=m=>new Date(Date.UTC(Number(m.slice(0,4)),Number(m.slice(5,7)),0)).getUTCDate();
 function applySeries(source,baseDate,seriesKey,rules){
@@ -1270,6 +1310,7 @@ const api={transactionTitle,ensure,keyEvent,keyMovement,normalFields,transferFie
  // Shared primitives only; scheduling, recommendation and payment policies stay
  // separate. Preserve unknown/ambiguous account references unchanged.
  merchantKey,accountRef,daysBetween,shift,monthAt,forecastBusinessDate,
+ federalReserveHoliday,bankBusinessDay,nextBankBusinessDate,
  recurrenceEvidence,recurrenceCadence};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;

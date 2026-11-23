@@ -14,7 +14,19 @@ const extras=[
  {id:'sat-income',date:'2026-10-24',accountId:'checking',type:'income',amount:200,merchant:'Saturday income'},
  {id:'sun-out',date:'2026-10-25',accountId:'checking',type:'expense',amount:75,merchant:'Sunday bill'},
  {id:'card-sat',date:'2026-10-31',accountId:'visa',type:'expense',amount:100,merchant:'Card Saturday'},
- {id:'card-sun',date:'2026-11-01',accountId:'visa',type:'expense',amount:200,merchant:'Card Sunday'}
+ {id:'card-sun',date:'2026-11-01',accountId:'visa',type:'expense',amount:200,merchant:'Card Sunday'},
+  {id:'thanksgiving-debit',date:'2026-11-26',accountId:'checking',type:'expense',
+   amount:40,merchant:'Thanksgiving debit'},
+  {id:'thanksgiving-deposit',date:'2026-11-26',accountId:'checking',type:'income',
+   amount:65,merchant:'Thanksgiving deposit'},
+  {id:'christmas-debit',date:'2026-12-25',accountId:'checking',type:'expense',
+   amount:45,merchant:'Christmas debit'},
+  {id:'christmas-deposit',date:'2026-12-25',accountId:'checking',type:'income',
+   amount:60,merchant:'Christmas deposit'},
+  {id:'newyear-debit',date:'2027-01-01',accountId:'checking',type:'expense',
+   amount:50,merchant:'New Year debit'},
+  {id:'newyear-deposit',date:'2027-01-01',accountId:'checking',type:'income',
+   amount:70,merchant:'New Year deposit'}
 ];
 const prefs={
  futureTransactionAdds:extras,
@@ -42,13 +54,13 @@ const prefs={
 const business=Core.materialize(snapshot,posted,prefs,Tools,Payments,80,{weekendPolicy:'friday'});
 const calendarDay=Core.materialize(snapshot,posted,prefs,Tools,Payments,80);
 const where=(bundle,name)=>bundle.ledger.filter(e=>e.merchant===name).map(e=>e.date);
-assert.deepEqual(where(business,'Saturday income'),['2026-10-23']);
+assert.deepEqual(where(business,'Saturday income'),['2026-10-26']);
 assert.deepEqual(where(business,'Sunday bill'),['2026-10-23']);
 assert.deepEqual(where(calendarDay,'Saturday income'),['2026-10-24'],
  'The frozen legacy model still retains its original fixture cadence');
 assert.deepEqual(where(business,'Weekly payroll').slice(0,4),
- ['2026-10-23','2026-10-30','2026-11-06','2026-11-13'],
- 'Each weekly anchor moves independently to its Friday; no accumulating drift');
+ ['2026-10-26','2026-11-02','2026-11-09','2026-11-16'],
+ 'Each weekly income anchor moves to the following bank business day; no accumulating drift');
 assert.deepEqual(where(business,'Monthly utility').slice(0,2),
  ['2026-10-30','2026-12-01'],
  'A monthly first-of-month Sunday moves into prior Friday, but December stays December 1');
@@ -56,8 +68,8 @@ assert.deepEqual(where(business,'Fictional Zelle outgoing').slice(0,2),
  ['2026-10-30','2026-12-01'],
  'Outgoing Zelle repeats debit checking on Friday but do not drift subsequent months');
 assert.deepEqual(where(business,'Fictional Zelle incoming').slice(0,2),
- ['2026-10-30','2026-12-01'],
- 'Single-account incoming transfers also post on the correct business day');
+ ['2026-11-02','2026-12-01'],
+ 'Incoming transfers use the following business day');
 assert.deepEqual(where(business,'Fictional ambiguous transfer'),[],
  'A bank transfer with no cash direction is not silently guessed as a debit');
 assert.ok(business.payments.warnings.some(w=>w.includes('Fictional ambiguous transfer')&&
@@ -65,11 +77,28 @@ assert.ok(business.payments.warnings.some(w=>w.includes('Fictional ambiguous tra
 const zelleFriday=business.projection.accounts.find(a=>a.id==='checking').series
  .find(p=>p.date==='2026-10-30');
 assert.ok(zelleFriday.events.some(e=>e.merchant==='Fictional Zelle outgoing'&&e.kind==='expense'));
-assert.ok(zelleFriday.events.some(e=>e.merchant==='Fictional Zelle incoming'&&e.kind==='income'));
+const zelleMonday=business.projection.accounts.find(a=>a.id==='checking').series
+ .find(p=>p.date==='2026-11-02');
+assert.ok(zelleMonday.events.some(e=>e.merchant==='Fictional Zelle incoming'&&e.kind==='income'),
+ 'Incoming money cannot be forecast before the following bank business day');
 assert.deepEqual(where(business,'Card Saturday'),['2026-10-30']);
 assert.deepEqual(where(business,'Card Sunday'),['2026-10-30']);
-assert.equal(business.ledger.filter(e=>[0,6].includes(new Date(e.date+'T12:00:00Z').getUTCDay())).length,0,
- 'No modeled future event or linked transfer posts on a weekend');
+for(const [name,date] of [
+ ['Thanksgiving debit','2026-11-25'],['Thanksgiving deposit','2026-11-27'],
+ ['Christmas debit','2026-12-24'],['Christmas deposit','2026-12-28'],
+ ['New Year debit','2026-12-31'],['New Year deposit','2027-01-04']])
+ assert.deepEqual(where(business,name),[date],name+' uses the correct bank business day');
+assert.equal(Tools.federalReserveHoliday('2026-11-26'),true);
+assert.equal(Tools.federalReserveHoliday('2026-12-25'),true);
+assert.equal(Tools.federalReserveHoliday('2027-07-05'),true,'Sunday July 4 closes Monday');
+assert.equal(Tools.bankBusinessDay('2027-06-18'),true,'Reserve Banks open Friday before Saturday Juneteenth');
+assert.equal(Tools.bankBusinessDay('2027-12-31'),true,'Reserve Banks open Friday before Saturday New Year');
+assert.equal(Tools.forecastBusinessDate('2027-07-05','2027-07-01'),'2027-07-02');
+assert.equal(Tools.forecastBusinessDate('2027-07-05','2027-07-01','in'),'2027-07-06');
+assert.equal(Tools.forecastBusinessDate('2026-12-25','2026-12-24'),'2026-12-28',
+ 'Do not retroactively debit a bank balance already observed');
+assert.equal(business.ledger.filter(e=>!Tools.bankBusinessDay(e.date)).length,0,
+ 'No modeled future event or linked transfer posts on a weekend or bank holiday');
 const statement=business.payments.statements.find(s=>s.cardId==='visa');
 assert.ok(statement,'Card statement is calculated');
 assert.equal(statement.statementBalance,300,
@@ -82,7 +111,10 @@ const linked=business.ledger.filter(x=>x.kind==='movement'&&x.toAccountId==='vis
 assert.equal(linked.length,1);
 assert.equal(linked[0].date,'2026-11-20');
 const friday=business.projection.accounts.find(a=>a.id==='checking').series.find(p=>p.date==='2026-10-23');
-assert.ok(friday.events.some(x=>x.merchant==='Sunday bill'),'Friday actual forecast cash has the shifted debit');
+assert.ok(friday.events.some(x=>x.merchant==='Sunday bill'),'Friday forecast cash includes the early debit');
+const monday=business.projection.accounts.find(a=>a.id==='checking').series.find(p=>p.date==='2026-10-26');
+assert.ok(monday.events.some(x=>x.merchant==='Saturday income'),
+ 'Weekend payroll does not artificially raise Friday balance');
 const sat=business.projection.accounts.find(a=>a.id==='checking').series.find(p=>p.date==='2026-10-24');
 assert.equal(sat.events.length,0);
 assert.equal(friday.balance,sat.balance,'Weekend has no new predicted cash changes');
@@ -91,4 +123,4 @@ assert.equal(JSON.stringify(posted),immutable,'Actual Sunday bank transactions s
 assert.deepEqual(prefs.futureTransactionAdds,extras,'Saved predicted dates remain unmodified');
 assert.equal(Tools.forecastBusinessDate('2026-10-24','2026-10-23'),'2026-10-26',
  'If Friday is already included in an actual bank snapshot, do not retroactively debit or drop it');
-console.log('PASS Friday forecast posting: independent anchors, Monday cutoff safeguard, 5-day events, credit statement and linked payment, immutable real history');
+console.log('PASS bank-day forecasts: earlier debits, later deposits, Fed holidays, weekend cutoff, card settlement and immutable history');
