@@ -32,9 +32,11 @@ const retail=M.migrate({});
 M.applyPlaidSync(retail,{itemId:'retail',accounts:[{account_id:'retail-card',type:'credit'}],
  added:[tx('buy-a','retail-card',80,'Example Retail','2026-10-01'),
   tx('buy-b','retail-card',35,'Example Retail','2026-10-04'),
-  tx('return','retail-card',-18.5,'Example Retail','2026-10-09'),
+   {...tx('return','retail-card',-18.5,'Example Retail','2026-10-09'),
+   personal_finance_category:{primary:'SHOPPING',detailed:'SHOPPING_SUPERSTORES',confidence_level:'HIGH'}},
   tx('payment','retail-card',-50,'Payment Thank You','2026-10-10'),
-  tx('unknown','retail-card',-3,'Statement Adjustment','2026-10-11')],
+  tx('unknown','retail-card',-3,'Statement Adjustment','2026-10-11'),
+  tx('unsupported','retail-card',-4,'Example Retail','2026-10-12')],
  modified:[],removed:[],nextCursor:'r'});
 const originalRetail=JSON.stringify(retail.transactions);
 const mapped=new Map(M.records(retail).map(t=>[t.source.providerTransactionId,t]));
@@ -44,6 +46,17 @@ assert.equal(mapped.get('return').reconciliationStatus,'needs-review',
  'Multiple possible purchase categories remain in Review');
 assert.equal(mapped.get('payment').type,'transfer','Card settlement is still a transfer');
 assert.equal(mapped.get('unknown').type,'transfer','Unknown adjustment is not assumed a refund');
+assert.equal(mapped.get('unsupported').type,'transfer','Repeated retail merchant without provider purpose is still uncertain');
+assert.ok(M.categoryReviewQueue(retail).transactions.some(t=>
+ t.id===mapped.get('unsupported').id&&t.creditKind),
+ 'Unproven incoming card credit must appear in Review');
+M.setCategory(retail,mapped.get('return').id,'Transfer');
+const merchantReview=M.categoryReviewQueue(retail).transactions.find(t=>t.id===mapped.get('return').id);
+assert.ok(merchantReview&&/Merchant refund/.test(merchantReview.reason),
+ 'Manual Transfer category conflicting with refund is reviewable');
+assert.equal(merchantReview.suggested,'Shopping','Bank-derived purchase category suggested without overwriting owner choice');
+assert.equal(M.records(retail).find(t=>t.id===mapped.get('return').id).category,'Transfer',
+ 'Reconciliation leaves source and explicit owner category untouched');
 assert.equal(M.accountingView(retail).summary.spending,96.5,
  'Purchases minus evidenced refund without double-counting card payment');
 assert.equal(JSON.stringify(retail.transactions),originalRetail,'Read-only provider state');

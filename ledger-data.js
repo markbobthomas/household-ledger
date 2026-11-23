@@ -410,8 +410,11 @@ function categoryReviewQueue(state){
    // changing the authoritative bank-derived record used for forecasting.
    // Unidentified bank credits need an ACCOUNTING decision. A category
    // assignment alone must never silently approve them as transfers or income.
-   const uncertainCredit=t.accountingKind==='unclassified_credit'&&
+   const uncertainCredit=['unclassified_credit','unclassified_card_credit'].includes(t.accountingKind)&&
      t.reconciliationStatus==='needs-review',
+    refundConflict=t.type==='refund'&&(
+     ['Transfer','Income','Savings'].includes(t.category)||
+     t.reconciliationStatus==='needs-review'&&!state.categoryOverrides?.[t.id]),
     knownKind=(t.type==='income'||t.type==='transfer')&&!uncertainCredit&&t.method!=='unassigned',
     category=knownKind&&missingCategory(t.category)?
      (t.type==='income'?'Income':'Transfer'):
@@ -424,14 +427,19 @@ function categoryReviewQueue(state){
     low=!manual&&(score!==null&&score<.7||
      ['merchant-match','suggested','unclassified'].includes(t.method)||
      ['merchant-match','unclassified'].includes(t.source?.categoryOrigin));
-   if(!uncertainCredit&&!missing&&!low)return null;
+   if(!uncertainCredit&&!refundConflict&&!missing&&!low)return null;
    return {kind:'transaction',id:String(t.id),category,
     creditKind:uncertainCredit,
-    reason:uncertainCredit?'Incoming credit — choose Income, Refund, or Transfer':
+    reason:uncertainCredit?(t.accountType==='credit'?
+     'Card credit — confirm Refund or Card Payment / Transfer':
+     'Incoming credit — choose Income, Refund, or Transfer'):
+     refundConflict?'Merchant refund — confirm the purchase category':
      missing?'Missing category':'Low-confidence automatic category',
     merchant:String(t.merchant||t.description||'Transaction'),date:String(t.date||''),
     amount:Number(t.amount)||0,accountId:String(t.accountId||t.account||''),
-     suggested:t.suggested&&t.suggested!==category?String(t.suggested):null};
+    suggested:t.refundSuggestedCategory&&t.refundSuggestedCategory!==category?
+     String(t.refundSuggestedCategory):
+     t.suggested&&t.suggested!==category?String(t.suggested):null};
   }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
  const prefs=state.predictions||{},plans=[];
  const add=(rows,kind)=>{
