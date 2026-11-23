@@ -74,7 +74,9 @@ assert.equal(report.savedDecisions.recurringSchedules[0].amount,1280);
 assert.equal(report.savedDecisions.oneOffPayments[0].amount,3000);
 assert.equal(report.savedDecisions.monthlyBudgetTargets[0].monthlyTarget,800);
 assert.equal(report.savedDecisions.categoryOverrides[0].category,'Home & Maintenance');
-assert.equal(report.savedDecisions.transactionNotes[0].transactionId,'dataset-history-2');
+assert.equal(report.savedDecisions.transactionNotes[0].transactionId,
+ report.savedDecisions.categoryOverrides[0].transactionId,
+ 'Notes and category overrides must refer to the same export-local transaction despite sorting');
 assert.equal(report.savedDecisions.alertThreshold,6000);
 assert.equal(report.reconciliationAndReview.paymentReconciliations[0].amount,1280);
 const raw=JSON.stringify(report);
