@@ -152,7 +152,7 @@ module.exports=(async()=>{
    assert((await page.locator('.insight-card').first().locator('.insight-preview').innerText()).length<160);
    assert.equal(await page.locator('.graph svg').count(),0,
     'charts are lazy until the relevant finding is expanded');
-   await page.locator('.metric summary').click();
+   await page.locator('.metric > summary.metric-summary').click();
    assert.match(await page.locator('.metric-detail').innerText(),/source-calculated/);
    await page.locator('.insight-card').first().locator('summary').click();
    assert.match(await page.locator('.insight-card').first().locator('.insight-body').innerText(),/2026-12-19/,
