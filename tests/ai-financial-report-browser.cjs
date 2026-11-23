@@ -154,12 +154,12 @@ module.exports=(async()=>{
     'charts are lazy until the relevant finding is expanded');
    await page.locator('.metric > summary.metric-summary').click();
    assert.match(await page.locator('.metric-detail').innerText(),/source-calculated/);
-   await page.locator('.insight-card').first().locator('summary').click();
+   await page.locator('.insight-card').first().locator('summary.insight-summary').click();
    assert.match(await page.locator('.insight-card').first().locator('.insight-body').innerText(),/2026-12-19/,
     'single expansion reveals source-backed details');
    assert.equal(await page.locator('.analysis-report img').count(),0,
     'expanded bank descriptions remain literal text, not HTML');
-   for(const i of [2,3,4,5])await page.locator('.insight-card').nth(i).locator('summary').click();
+   for(const i of [2,3,4,5])await page.locator('.insight-card').nth(i).locator('summary.insight-summary').click();
    assert.equal(await page.locator('.graph svg').count(),3,
     'model-selected line, bar and donut graphs render when expanded');
    assert.equal(await page.locator('.donut-legend-item').count(),3);
@@ -195,7 +195,7 @@ module.exports=(async()=>{
     'a shallow but verified report is visibly labelled incomplete');
    assert.equal(await page.locator('.graph svg').count(),0,
     'the changed report starts collapsed too');
-   await page.locator('.insight-card').first().locator('summary').click();
+   await page.locator('.insight-card').first().locator('summary.insight-summary').click();
    assert.equal(await page.locator('.graph svg').count(),1);
    assert.equal(await page.locator('.legend').count(),1);
    await page.locator('.limits').evaluate(el=>el.open=true);
