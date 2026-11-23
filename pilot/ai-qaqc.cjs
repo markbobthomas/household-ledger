@@ -2,6 +2,7 @@
 // Independently recalculate source-visible forecast legs and classify gaps.
 // Read-only: no bank changes, forecast changes, provider calls or disk writes.
 const {financialContext}=require('./ai-financial-report.cjs');
+const {cleanDescription}=require('./ai-private-adapter.cjs');
 const cents=n=>Math.round(Number(n)*100);
 const money=n=>'$'+(n/100).toFixed(2);
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
@@ -158,6 +159,62 @@ function buildContext(prepared,options={}){
  // an internal arithmetic failure. Ordinary financial advice remains fail-closed.
  const context=financialContext(prepared,{...options,allowIntegrityFailures:true});
  const audit=inspect(context);
+ // The QA investigator must be able to compare explicit saved decisions
+ // against generated occurrences. These are opaque aliases and safe fields,
+ // not the underlying raw preference objects or provider IDs.
+ const decisions=options.adjustments?.predictions||{};
+ const alias=id=>context.privateIds.get(String(id||''))||'unmatched-account';
+ const safe=s=>cleanDescription(String(s??'')).slice(0,90);
+ const dollars=n=>finite(n)?'
+  text:item.title+'. '+item.detail}));
+ facts.unshift({id:'qaqc-coverage',kind:'qaqc-coverage',
+  text:'Independent QA scan: '+audit.checks.accounts+' accounts; '+
+  audit.checks.daysRecomputed+' daily balances independently recomputed; '+
+  audit.checks.daysUnverifiable+' days not verifiable; '+
+  audit.checks.expectedEventLegs+' expected event legs; '+
+  audit.checks.historyRows+' posted records; '+
+  audit.checks.confirmed+' confirmed check failures; '+
+  audit.checks.investigate+' questions require investigation.'});
+ context.facts=[...facts,...decisionFacts,...context.facts];
+ context.qaAudit=audit;
+ return context;
+}
+module.exports={inspect,buildContext};
++Number(n).toFixed(2):'unknown amount';
+ const decisionFacts=[];
+ const addDecision=description=>{
+  const id='qaqc-decision-'+(decisionFacts.length+1);
+  decisionFacts.push({id,kind:'qaqc-saved-decision',text:description.slice(0,450)});
+ };
+ for(const rule of Array.isArray(decisions.futureRecurringRules)?decisions.futureRecurringRules:[]){
+  if(!rule||typeof rule!=='object')continue;
+  addDecision('User-saved recurrence: '+alias(rule.accountId||rule.fromAccountId)+
+   ' '+safe(rule.merchant||rule.scheduleLabel)+
+   '; type '+safe(rule.type)+'; category '+safe(rule.category)+
+   '; amount '+dollars(rule.amount)+'; cadence '+safe(rule.frequency)+
+   '; anchor '+safe(rule.anchorDate)+'. Compare planned occurrences with the projected event legs; exclusions or posted matches may justify an apparent absence.');
+ }
+ for(const rule of Array.isArray(decisions.futureTransactionAdds)?decisions.futureTransactionAdds:[]){
+  if(!rule||typeof rule!=='object')continue;
+  addDecision('User-saved one-off: '+alias(rule.accountId||rule.fromAccountId)+
+   ' '+safe(rule.merchant)+'; type '+safe(rule.type)+'; date '+safe(rule.date)+
+   '; amount '+dollars(rule.amount)+'. Weekend shifts or confirmed occurrences can change the projected date.');
+ }
+ for(const bill of Array.isArray(decisions.paymentBills)?decisions.paymentBills:[]){
+  if(!bill||typeof bill!=='object')continue;
+  addDecision('User-saved payment bill: '+alias(bill.fromAccountId)+
+   ' '+safe(bill.name)+'; enabled '+(bill.enabled!==false)+
+   '; due '+safe(bill.date)+'; cadence '+safe(bill.frequency)+
+   '; amount '+dollars(bill.amount)+'.');
+ }
+ for(const [card,rule] of Object.entries(decisions.paymentRules||{})){
+  if(!rule||typeof rule!=='object')continue;
+  addDecision('User-saved card payment: card '+alias(card)+
+   ', funding '+alias(rule.fromAccountId)+'; autopay '+!!rule.autopayEnabled+
+   '; method '+safe(rule.method)+'; payment date '+safe(rule.nextPaymentDate)+
+   '; last statement '+dollars(rule.lastStatementBalance)+'.');
+ }
+ audit.checks.savedDecisionsReviewed=decisionFacts.length;
  const facts=audit.issues.map(item=>({id:item.id,kind:'qaqc-'+item.severity,
   text:item.title+'. '+item.detail}));
  facts.unshift({id:'qaqc-coverage',kind:'qaqc-coverage',
