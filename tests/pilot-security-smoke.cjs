@@ -101,6 +101,9 @@ function post(route,body={},cookie='',extra={}){
    scope:'financial-analysis-auto-v1',enabled:true,consent:false},persistentCookie)).status,400,
    'Consent-free recurring external sharing must be rejected');
   assert.equal((await post('/api/ai/settings',{
+    scope:'financial-analysis-auto-v1',enabled:true,consent:true},persistentCookie)).status,410,
+    'Old pages cannot enable recurring AI analysis even with previous consent');
+   assert.equal((await post('/api/ai/settings',{
    scope:'financial-analysis-auto-v1',enabled:false,consent:false},persistentCookie)).status,200,
    'Consent can be withdrawn without a bank connection');
   const encryptedAnalysis=fs.readFileSync(path.join(dir,'pilot.enc.analysis'),'utf8');
