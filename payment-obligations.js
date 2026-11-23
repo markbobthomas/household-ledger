@@ -467,6 +467,46 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // Only a user-confirmed ISSUED amount after closing supersedes the
    // posted-and-scheduled transaction sum.
    const confirmedFirst=n===0&&hasIssued&&cycleClose<=asOf;
+   // Compare like-for-like issued and reconstructed statement periods.
+   // A provider balance is usable only with its issue date and matching
+   // due date; account current debt is NOT an issued statement balance.
+   const issuer=card.liabilities||card.statement||{};
+   const issueDate=String(issuer.last_statement_issue_date||issuer.lastStatementIssueDate||'');
+   const issuerDue=String(issuer.next_payment_due_date||issuer.nextPaymentDueDate||'');
+   const issuerRaw=issuer.last_statement_balance??issuer.lastStatementBalance;
+   const issueLag=date(issueDate)?
+    Math.round((Date.parse(issueDate)-Date.parse(cycleClose))/86400000):null;
+   const issuerMatches=n===0&&periodComplete&&validAmount(issuerRaw)&&
+    issueLag!==null&&issueLag>=0&&issueLag<=5&&
+    (!date(issuerDue)||issuerDue===actualDue);
+   const reference=issuerMatches?round(Number(issuerRaw)):
+    confirmedFirst?round(Number(rule.lastStatementBalance)):null;
+   const statementReconciliation={
+    status:reference===null?'no-period-matched-issued-amount':
+     cycleRows.length===0?'history-not-covered':
+     Math.abs(reference-calculated)>.011?'difference':'matched',
+    source:issuerMatches?'issuer-reported':confirmedFirst?'user-entered':null,
+    sourceAmount:reference,calculated,periodStart:cycleStart,periodEnd:cycleClose,
+    difference:reference===null?null:round(reference-calculated),
+    observedTransactions:cycleRows.length
+   };
+   if(reference!==null&&cycleRows.length&&Math.abs(reference-calculated)>.011){
+    const message=card.name+': '+(issuerMatches?'issuer-reported':'entered issued')+
+     ' statement '+reference.toFixed(2)+' differs from identified card activity '+
+     calculated.toFixed(2)+' for '+cycleStart+' to '+cycleClose+
+     ' (difference '+Math.abs(round(reference-calculated)).toFixed(2)+
+     '). Check missing purchases, credits, fees and prior balances before changing payment.';
+    warnings.unshift(message);
+    warningActions.push({message,kind:'card-statement-difference',
+     cardId:id,periodEnd:cycleClose,difference:round(reference-calculated),
+     signature:[cycleStart,cycleClose,reference.toFixed(2),calculated.toFixed(2),
+      statementReconciliation.source].join('|')});
+   }
+   if(issuerMatches&&confirmedFirst&&
+      Math.abs(Number(rule.lastStatementBalance)-Number(issuerRaw))>.011){
+    warnings.unshift(card.name+': issuer-reported and saved issued statement amounts disagree for '+
+     cycleClose+'. Verify the saved amount; Ledger did not change the forecast automatically.');
+   }
    const statementAmount=round(confirmedFirst?Number(rule.lastStatementBalance):calculated);
    // Full current balance means the modeled card debt that would exist at
    // withdrawal, including forecast charges up to that date, minus any earlier
@@ -547,7 +587,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
     dueDate:actualDue,withdrawalDate:expectedWithdrawal(due),closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
-    actualPeriodNet,periodComplete,postedTransactions,predictedTransactions,
+    actualPeriodNet,periodComplete,statementReconciliation,postedTransactions,predictedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
     historicalAverage:null,fullBalanceEstimate:fullAmount,
@@ -568,7 +608,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     paymentDetails.push({id:plan.id,cardId:id,cardName:card.name,
      fromAccountId:from.id,withdrawalDate:expectedWithdrawal(due),
      periodStart:cycleStart,periodEnd:cycleClose,periodSource:'configured-statement',
-     method,amount,calculated,postedTransactions,predictedTransactions,
+     method,amount,calculated,statementReconciliation,postedTransactions,predictedTransactions,
      confirmed:confirmedFirst,issuedAmount:confirmedFirst?Number(rule.lastStatementBalance):null,
      periodComplete,pendingExcluded:pendingRows.length,
      caveat:method==='statement'?'This statement estimate uses identified posted and scheduled card activity only.':
