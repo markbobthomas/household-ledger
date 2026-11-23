@@ -22,7 +22,7 @@ const prepared={bundle:{
   household:{conservationDifference:0}},
  ledger:[],
  rows:[{id:'private-bank-tx-1',accountId:bank,date:date(-1),type:'expense',
-  amount:75,category:'Unassigned',merchant:'Fictional Store'},
+  amount:75,category:'Groceries',merchant:'Fictional Store',name:'FICTIONAL FUEL PUMP'},
   {id:'private-bank-tx-1',accountId:bank,date:date(-1),type:'expense',
    amount:75,category:'Unassigned',merchant:'Fictional Store'}],
  payments:{statements:[]},overduePayments:[],duplicateChecks:[],postedMatchReview:[]}};
@@ -46,6 +46,10 @@ assert(audit.issues.some(x=>x.title==='Unbalanced transfer legs'));
 assert(audit.issues.some(x=>x.title==='Ledger detected forecast calculation errors'));
 assert(audit.issues.some(x=>x.title==='Repeated posted transaction identities'));
 assert(audit.issues.some(x=>x.title==='Unclassified actual transactions'));
+ assert.equal(audit.checks.explicitFuelTransactions,1);
+ assert.equal(audit.checks.fuelCategoryConflicts,1,
+  'An explicit Fuel bank description cannot silently be counted as Groceries');
+ assert(audit.issues.some(x=>x.title==='Fuel description/category mismatch'));
 const visible=JSON.stringify(audit)+JSON.stringify(context.facts.map(f=>f.text));
 for(const id of [bank,'private-deposit-identifier','private-transfer-group','private-bank-tx-1','private-recurring-rule'])
  assert(!visible.includes(id),'Private source IDs must not leak into QA facts: '+id);
