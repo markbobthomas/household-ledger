@@ -35,6 +35,10 @@ function post(route,body={},cookie='',extra={}){
    'Only the public deployed source commit is available without bank authentication');
   assert.ok(!health.body.includes(pass),'Private password never appears in deployment check');
   assert.equal((await get('/api/status',false)).status,401,'Bank metadata must not be accessible anonymously');
+  assert.equal((await get('/api/ai/qaqc',false)).status,401,
+   'Separate QA results require private authentication');
+  assert.equal((await post('/api/ai/qaqc',{scope:'ledger-qaqc-v1',consent:true})).status,401,
+   'Anonymous browsers cannot start QA');
   assert.equal((await get('/api/ai/report',false)).status,401,
    'Encrypted derived financial reports require authentication');
   assert.equal((await post('/api/ai/settings',{
@@ -77,6 +81,14 @@ function post(route,body={},cookie='',extra={}){
   assert.equal((await get('/api/status',false,persistentCookie)).status,200);
   const privateAnalysis=await get('/api/ai/report',false,persistentCookie);
   assert.equal(privateAnalysis.status,200,'The signed-in user can view cached AI status');
+  assert.equal((await get('/api/ai/qaqc',false,persistentCookie)).status,200,
+   'A signed-in browser can inspect QA status without an OpenAI request');
+  assert.equal((await post('/api/ai/qaqc',{scope:'ledger-qaqc-v1',consent:false},persistentCookie)).status,400,
+   'QA requires one-run consent');
+  assert.equal((await post('/api/ai/qaqc',{scope:'financial-analysis-v3',consent:true},persistentCookie)).status,400,
+   'Financial-analysis consent does not silently authorize QA');
+  assert.equal((await post('/api/ai/qaqc',{scope:'ledger-qaqc-v1',consent:true},persistentCookie)).status,503,
+   'The unconfigured server must not claim QA completed');
   assert.equal((await get('/api/analysis/export',false,persistentCookie)).status,404,
    'Data export requires explicit POST, never a speculative GET');
   assert.equal((await post('/api/analysis/export',{unknown:true},persistentCookie)).status,400,

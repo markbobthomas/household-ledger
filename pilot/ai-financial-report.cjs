@@ -10,14 +10,14 @@ const dollars=n=>'$'+amount(n).toFixed(2);
 const day=(date,n)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const safe=s=>cleanDescription(String(s||'')).slice(0,85);
 const normalizeType=t=>String(t||'').toLowerCase();
-function financialContext(prepared,{lastSync=null,adjustments={}}={}){
+function financialContext(prepared,{lastSync=null,adjustments={},allowIntegrityFailures=false}={}){
  const projection=prepared?.bundle?.projection,ledger=prepared?.bundle?.ledger;
  const history=prepared?.bundle?.rows;
  if(!projection||!Array.isArray(projection.accounts)||!Array.isArray(projection.series)||
   !Array.isArray(ledger)||!Array.isArray(history)||!DATE.test(String(projection.asOf||'')))
   throw Error('Canonical financial projection is not available');
- if(projection.diagnostics?.balanceMismatches?.length||
-  Math.abs(Number(projection.household?.conservationDifference||0))>.001)
+ if(!allowIntegrityFailures&&(projection.diagnostics?.balanceMismatches?.length||
+  Math.abs(Number(projection.household?.conservationDifference||0))>.001))
   throw Error('Canonical financial calculation failed its integrity audit');
  const aliases=new Map(projection.accounts.map((a,i)=>[String(a.id),'account-'+(i+1)]));
  const facts=[],byId=new Map();

@@ -111,6 +111,32 @@ module.exports=(async()=>{
     await route.fulfill({status:202,contentType:'application/json',
      body:JSON.stringify({enabled:state.enabled,status:'queued'})});
    });
+   const qaCalls=[],qaState={status:'not_ready',report:null,completedAt:null};
+   await page.route('**/api/ai/qaqc',async route=>{
+    const request=route.request();
+    if(request.method()==='POST'){
+     qaCalls.push({body:request.postDataJSON(),header:request.headers()['x-pilot-action']});
+     qaState.report={mode:'ledger-qaqc',asOf:'2026-11-19',
+      qaAudit:{checks:{accounts:1,daysRecomputed:1096,expectedEventLegs:20,
+       confirmed:1,investigate:1,daysUnverifiable:0},
+       issues:[{id:'qaqc-1',severity:'confirmed',title:'Daily balance does not reconcile',
+        detail:'account-1 on 2026-12-19: expected $4500.00, Ledger recorded $4700.00'},
+        {id:'qaqc-2',severity:'investigate',title:'Review unmatched payment',
+         detail:'A source payment may not yet be represented in the forecast.'}],
+       limitations:['No access to an external bank statement.']},
+      blocks:[{kind:'paragraph',title:'Forecast math needs investigation',
+       text:'An independently recomputed balance differs from Ledger.',
+       detail:'Check 2026-12-19. <img src=x onerror=alert(1)> The transfer leg should be reviewed.',
+       evidence:[{text:'Account-1 daily balance independent audit'}]}],
+      coverage:{historicalTransactionsScanned:300,futureEventsScanned:20,
+       forecastHorizonDays:1095,lastSync:'2026-11-19'},auditTrail:[],limitations:[]};
+     qaState.status='ready';qaState.completedAt='2026-11-23T10:00:00Z';
+     return route.fulfill({status:202,contentType:'application/json',
+      body:JSON.stringify({...qaState,report:null,status:'queued'})});
+    }
+    return route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify({...qaState,enabled:false})});
+   });
    const exports=[];
    await page.route('**/api/analysis/export',async route=>{
     const request=route.request();
@@ -208,6 +234,25 @@ module.exports=(async()=>{
    await page.waitForFunction(()=>document.querySelector('#automatic')?.disabled===false);
    assert.equal(settings.length,2);
    assert.equal(settings[1].enabled,false,'automatic data sharing can be withdrawn');
+   assert.equal(await page.locator('#run-qaqc').isDisabled(),true,
+    'a separate QA/QC run needs its own one-time authorization');
+   assert.equal(qaCalls.length,0,'QA/QC does not auto-run with ordinary financial analysis');
+   await page.locator('#qaqc-consent').check();
+   assert.equal(await page.locator('#run-qaqc').isDisabled(),false);
+   await page.locator('#run-qaqc').click();
+   await page.locator('#qaqc-analysis .quality-audit').waitFor({state:'visible'});
+   assert.deepEqual(qaCalls,[{body:{scope:'ledger-qaqc-v1',consent:true},header:'1'}],
+    'QA/QC has separate explicit consent and uses an authenticated action');
+   assert.equal(requests.length,1,'QA/QC does not trigger ordinary AI Analysis');
+   assert.equal(await page.locator('#qaqc-analysis .qaqc-issues details').count(),2);
+   assert.match(await page.locator('#qaqc-analysis .qaqc-metrics').innerText(),/1096 days recalculated/);
+   await page.locator('#qaqc-analysis .qaqc-issues details').first().locator('summary').click();
+   assert.match(await page.locator('#qaqc-analysis .qaqc-issues details').first().innerText(),/2026-12-19/);
+   await page.locator('#qaqc-analysis .insight-card').first().locator('summary.insight-summary').click();
+   assert.equal(await page.locator('#qaqc-analysis img').count(),0,
+    'expanded QA findings do not execute untrusted HTML');
+   assert.equal(await page.locator('#analysis .analysis-report').count(),1,
+    'ordinary analysis remains separate from QA/QC');
    assert.equal(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+2),true,
     'analysis fits narrow mobile width');
    assert.deepEqual(errors,[],name+' AI analysis should not throw');
