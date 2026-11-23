@@ -106,9 +106,13 @@ function post(route,body={},cookie='',extra={}){
    assert.equal((await post('/api/ai/settings',{
    scope:'financial-analysis-auto-v1',enabled:false,consent:false},persistentCookie)).status,200,
    'Consent can be withdrawn without a bank connection');
-  const encryptedAnalysis=fs.readFileSync(path.join(dir,'pilot.enc.analysis'),'utf8');
-  assert(!encryptedAnalysis.includes('autoEnabled')&&!encryptedAnalysis.includes('report'),
-   'Persistent AI consent and report cache are encrypted, not plaintext');
+  const analysisPath=path.join(dir,'pilot.enc.analysis');
+  // Manual-only mode does not need to create a cache file on legacy opt-out.
+  if(fs.existsSync(analysisPath)){
+   const encryptedAnalysis=fs.readFileSync(analysisPath,'utf8');
+   assert(!encryptedAnalysis.includes('autoEnabled')&&!encryptedAnalysis.includes('report'),
+    'Any persisted AI report and preferences remain encrypted');
+  }
 
   const upgradedMarker=third.headers['set-cookie']
     .find(c=>c.startsWith('__Host-ledger_upgraded='));
