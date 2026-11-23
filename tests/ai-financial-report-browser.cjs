@@ -163,6 +163,7 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.graph svg').count(),3,
     'model-selected line, bar and donut graphs render when expanded');
    assert.equal(await page.locator('.donut-legend-item').count(),3);
+   await page.locator('.ranked-row').first().waitFor({state:'visible'});
    assert.equal(await page.locator('.ranked-row').count(),3);
    assert.equal(await page.locator('.graph svg path').count()>=1,true);
    assert.equal(await page.locator('.graph svg rect').count()>0,true);
@@ -196,6 +197,7 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.graph svg').count(),0,
     'the changed report starts collapsed too');
    await page.locator('.insight-card').first().locator('summary.insight-summary').click();
+   await page.locator('.graph svg').first().waitFor({state:'visible'});
    assert.equal(await page.locator('.graph svg').count(),1);
    assert.equal(await page.locator('.legend').count(),1);
    await page.locator('.limits').evaluate(el=>el.open=true);
