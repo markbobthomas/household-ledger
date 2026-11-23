@@ -135,7 +135,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  const postingDate=typeof options.effectiveDate==='function'?options.effectiveDate:d=>d;
  const nextBusiness=from=>{
   let d=shift(from,1);
-  while([0,6].includes(new Date(d+'T12:00:00Z').getUTCDay()))d=shift(d,1);
+  while(typeof options.bankBusinessDay==='function'?!options.bankBusinessDay(d):
+   [0,6].includes(new Date(d+'T12:00:00Z').getUTCDay()))d=shift(d,1);
   return d;
  };
  const overdueSince=shift(asOf,-90);
