@@ -124,6 +124,26 @@ function cleanedRefundMerchant(name){
  return norm(name).replace(/^(?:refund|reversal|return|returned|credit|purchase return)\s*[:#-]?\s*/,'')
   .replace(/\s*(?:refund|return|reversal)$/,'').trim();
 }
+// A bank can label a retailer return as an ordinary incoming card credit.
+// Require confident purchase-category evidence, an existing same-card
+// merchant purchase, and no payment/transfer indicators.
+const purchaseCategoryCredits=new Set(['SHOPPING','GROCERIES','SERVICES','FAMILY_KIDS',
+ 'HEALTH_WELLNESS','DINING_DRINKS','ENTERTAINMENT','BILLS_UTILITIES','PETS',
+ 'TRANSPORTATION','HOUSING','EDUCATION','GIFTS_DONATIONS','TRAVEL']);
+function supportedMerchantRefund(t,priorPurchases){
+ if(!priorPurchases.length||t.accountType!=='credit'||t.cashDirection!=='in')return false;
+ const pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{};
+ const primary=String(pfc.primary||'').toUpperCase();
+ const confidence=String(pfc.confidence_level||pfc.confidenceLevel||'').toUpperCase();
+ if(!purchaseCategoryCredits.has(primary)||!['HIGH','VERY_HIGH'].includes(confidence))return false;
+ const label=cleanedRefundMerchant(t.merchant);
+ if(label.length<3||/\b(?:payment|autopay|pymt|transfer|cashback|rewards?|adjustment)\b/i
+  .test(label+' '+String(t.description||'')))return false;
+ const cents=Math.round(Number(t.amount)*100);
+ const priorCents=priorPurchases.reduce((sum,p)=>sum+Math.round(Number(p.amount)*100),0);
+ return cents>0&&cents<=priorCents;
+}
+
 function reconcile(state){
  const registry=accountsFor(state),accountMap=new Map(registry.map(a=>[a.id,a]));
  const output=(state?.transactions||[]).filter(t=>t&&typeof t==='object').map(t=>{
@@ -215,9 +235,22 @@ function reconcile(state){
   const candidates=original?purchases.filter(p=>
    p.accountId===t.accountId&&cleanedRefundMerchant(p.merchant)===original&&
    p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending):[];
-  if(candidates.length===1){
+  const evidenced=candidates.length>1&&supportedMerchantRefund(t,candidates);
+  if(candidates.length===1||evidenced){
    t.accountingKind='refund';
-   t.classificationConfidence='Matched single merchant purchase';
+   t.classificationConfidence=evidenced?'Provider category and matching merchant purchases':
+    'Matched single merchant purchase';
+   // Several purchases at one merchant can support the return without
+   // uniquely identifying its purchase category. Keep owner choices intact.
+   const categories=[...new Set(candidates.map(p=>state?.categoryOverrides?.[p.id]||p.category)
+    .filter(c=>c&&!['Uncategorized','Transfer','Income','Savings'].includes(c)))];
+   if(categories.length===1)t.refundSuggestedCategory=categories[0];
+   const manual=state?.categoryOverrides?.[t.id];
+   const category=manual||t.category;
+   const invalid=['Transfer','Income','Savings'].includes(category);
+   const reviewed=!!manual&&!['Transfer','Income','Savings','Uncategorized'].includes(manual);
+   if(invalid||categories.length>1&&!reviewed)
+    t.reconciliationStatus='needs-review';
   }
  }
  // Owner decisions are stored apart from immutable Plaid facts. Only an
