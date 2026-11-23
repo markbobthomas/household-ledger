@@ -408,9 +408,7 @@ async function sync(){
  // the encrypted snapshot is durable. The forecast file is replayed on load.
  await atomicEncryptedWrite(file,committed);state=committed;
  lastSyncAttempt.outcome='success';
- // An already-authorized analysis starts after the durable bank snapshot
- // commits; setImmediate keeps Plaid sync acknowledgement nonblocking.
- aiReports.schedule();
+ // No paid AI request on bank synchronization.
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
  }catch(error){lastSyncAttempt.outcome='failed';throw error}
 }
@@ -700,29 +698,23 @@ async function start(port=Number(env.PORT||8788)){
   }
   if(req.method==='GET'&&requestPath==='/api/ai/qaqc')return respond(200,qaReports.status());
   if(req.method==='GET'&&requestPath==='/api/ai/report'){
-   // Private encrypted derived output, never stale bank details from a previous
-   // sync. Load does not itself call OpenAI unless recurring sharing is enabled.
-   const visible=aiReports.status();
-   if(visible.enabled&&['outdated','not_ready','failed'].includes(visible.status))
-    aiReports.schedule();
+   // Read-only status never queues an external API request.
    return respond(200,aiReports.status());
   }
-  // Unknown browser navigation should be a 404, not a misleading bank-action error.
+ // Unknown browser navigation should be a 404, not a misleading bank-action error.
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
   let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   if(requestPath==='/api/ai/settings'){
+   // Backward-compatible opt-out: old clients cannot re-enable automatic calls.
    if(!body||typeof body!=='object'||Array.isArray(body)||
       Object.keys(body).sort().join(',')!=='consent,enabled,scope'||
-      typeof body.enabled!=='boolean'||body.scope!=='financial-analysis-auto-v1'||
-      (body.enabled&&body.consent!==true))
-    return respond(400,{error:'Explicit ongoing financial-analysis sharing consent required',
-     code:'analysis_consent_required'});
-   if(body.enabled&&!env.OPENAI_API_KEY)
-    return respond(503,{error:'AI is not configured on this private server'});
-   if(body.enabled&&!state.items.length)return respond(409,{error:'Connect an account first'});
-   try{return respond(200,await aiReports.setEnabled(body.enabled))}
-   catch{return respond(503,{error:'Could not save encrypted AI analysis preferences'})}
+      typeof body.enabled!=='boolean'||body.scope!=='financial-analysis-auto-v1')
+    return respond(400,{error:'Invalid legacy AI Analysis settings'});
+   if(body.enabled)return respond(410,{
+    error:'Automatic AI Analysis has been retired. Run Analysis or QA/QC manually.'});
+   try{return respond(200,await aiReports.setEnabled(false))}
+   catch{return respond(503,{error:'Could not retire automatic AI Analysis preferences'})}
   }
   if(requestPath==='/api/ai/qaqc'){
    // One-time owner authorization, never automatic sharing or a bank mutation.
@@ -1311,9 +1303,7 @@ async function start(port=Number(env.PORT||8788)){
   // Keep cleanup behind the same queue as bank sync and preference edits.
   scheduleRevocationRecovery();
   schedulePrepared();
-  // On restart, resume authorized analysis only if the encrypted report no
-  // longer matches the canonical financial snapshot.
-  aiReports.schedule();
+  // Server restart never makes a paid AI call.
   const hourly=setInterval(()=>{
    invalidatePrepared();schedulePrepared();scheduleRevocationRecovery();
   },60*60*1000);
