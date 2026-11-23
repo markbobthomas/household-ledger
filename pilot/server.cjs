@@ -505,10 +505,16 @@ const aiReports=aiCacheFactory?aiCacheFactory({
 };
 // A separate, manual-only encrypted QA report. The banking snapshot
 // remains read-only, and the ordinary analysis report/consent are unaffected.
+// QA freshness also includes last successful sync and sync warnings, even when
+// a bank refresh produced no changed transactions.
+const qaSnapshotRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify({
+ financial:aiSnapshotRevision(),lastSync:state.lastSync,
+ syncIssues:state.items.map(i=>i.syncIssue?.code||null)
+})).digest('hex');
 const qaReports=aiCacheFactory?aiCacheFactory({
  read:async()=>decrypted(await fs.readFile(file+'.qaqc','utf8')),
  write:value=>atomicEncryptedWrite(file+'.qaqc',value),
- revision:aiSnapshotRevision,
+ revision:qaSnapshotRevision,
  available:()=>!!state.items.length,
  snapshot:()=>{
   const prepared=preparedFor(ledgerPayload());
