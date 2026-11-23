@@ -503,12 +503,31 @@ const aiReports=aiCacheFactory?aiCacheFactory({
  setEnabled:async()=>{throw Error('Optional AI analysis module unavailable')},
  clear:async()=>{}
 };
+// A separate, manual-only encrypted QA report. The banking snapshot
+// remains read-only, and the ordinary analysis report/consent are unaffected.
+const qaReports=aiCacheFactory?aiCacheFactory({
+ read:async()=>decrypted(await fs.readFile(file+'.qaqc','utf8')),
+ write:value=>atomicEncryptedWrite(file+'.qaqc',value),
+ revision:aiSnapshotRevision,
+ available:()=>!!state.items.length,
+ snapshot:()=>{
+  const prepared=preparedFor(ledgerPayload());
+  return require('./ai-qaqc.cjs').buildContext(prepared,{
+   lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
+ },
+ analyze:context=>require('./ai-chat.cjs').analyzeQualityCheck({
+  context,consent:'ledger-qaqc-v1',apiKey:env.OPENAI_API_KEY,
+  model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+ })
+}):{load:async()=>{},status:()=>({enabled:false,status:'unavailable',report:null}),
+ schedule:()=>false,clear:async()=>{}};
 async function start(port=Number(env.PORT||8788)){
  await load();
  await auth.load();
  // A damaged derived-report cache must never prevent access to bank records.
  // Fail closed on standing external-sharing consent; leave the bank disk alone.
  try{await aiReports.load()}catch{/* Optional AI cache unavailable; bank remains authoritative */}
+ try{await qaReports.load()}catch{/* Optional QA cache never blocks bank startup */}
  const server=http.createServer(async(req,res)=>{
   // Route on the URL pathname; tracking/query parameters are not bank actions.
   const requestPath=new URL(req.url,'http://localhost').pathname;
@@ -523,7 +542,7 @@ async function start(port=Number(env.PORT||8788)){
     const encoded=JSON.stringify(data);
     // The authenticated forecast can be larger than the raw bank response.
     // Compress only when supported by the browser; never allow shared caches.
-    if(['/api/ledger','/api/ai/report'].includes(requestPath)&&req.method==='GET'&&status===200&&
+    if(['/api/ledger','/api/ai/report','/api/ai/qaqc'].includes(requestPath)&&req.method==='GET'&&status===200&&
        encoded.length>4096&&/\\bgzip\\b/i.test(String(req.headers['accept-encoding']||''))){
      headers['Content-Encoding']='gzip';
      headers.Vary='Accept-Encoding';
@@ -673,6 +692,7 @@ async function start(port=Number(env.PORT||8788)){
     remoteDisconnectPending:pendingRevocations().length,
     transactions:Object.values(state.transactions).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,500)});
   }
+  if(req.method==='GET'&&requestPath==='/api/ai/qaqc')return respond(200,qaReports.status());
   if(req.method==='GET'&&requestPath==='/api/ai/report'){
    // Private encrypted derived output, never stale bank details from a previous
    // sync. Load does not itself call OpenAI unless recurring sharing is enabled.
@@ -697,6 +717,19 @@ async function start(port=Number(env.PORT||8788)){
    if(body.enabled&&!state.items.length)return respond(409,{error:'Connect an account first'});
    try{return respond(200,await aiReports.setEnabled(body.enabled))}
    catch{return respond(503,{error:'Could not save encrypted AI analysis preferences'})}
+  }
+  if(requestPath==='/api/ai/qaqc'){
+   // One-time owner authorization, never automatic sharing or a bank mutation.
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).sort().join(',')!=='consent,scope'||
+      body.consent!==true||body.scope!=='ledger-qaqc-v1')
+    return respond(400,{error:'Explicit consent required for Ledger AI QA/QC',
+     code:'analysis_consent_required'});
+   if(!env.OPENAI_API_KEY)return respond(503,{error:'AI QA/QC is not configured'});
+   if(!state.items.length)return respond(409,{error:'Connect an account before running QA/QC'});
+   if(accountRemovalBusy)return respond(409,{error:'Account changes are in progress'});
+   qaReports.schedule({force:true});
+   return respond(202,qaReports.status());
   }
   if(requestPath==='/api/ai/analyze'){
    // Manual refresh remains opt-in, but never makes a browser wait for a
@@ -1238,6 +1271,7 @@ async function start(port=Number(env.PORT||8788)){
     // Never retain a previous household's derived financial analysis or
     // standing external-sharing authorization after disconnect.
     await aiReports.clear();
+     await qaReports.clear();
     const remaining=await resumePendingRevocations();
     return respond(remaining?202:200,{ok:true,
      ...(remaining?{remoteDisconnectPending:remaining}:{})});
