@@ -206,8 +206,17 @@ function reconcile(state){
   // leg of a checking-to-card settlement, even if a coincidentally equal
   // transfer posted on another account within the matching window.
   if(a.accountingKind==='refund'||b.accountingKind==='refund')continue;
-  const aCard=a.accountType==='credit',bCard=b.accountType==='credit';
-  const card=a.accountingKind==='card_payment'||b.accountingKind==='card_payment'||aCard!==bCard&&(aCard||bCard);
+  const aCard=a.accountType==='credit',bCard=b.accountType==='credit',
+   cashCardPair=aCard!==bCard;
+  // No credit-card repayment can have the credit account as its
+  // outgoing leg. Do not mispair a merchant charge with a coincidentally
+  // equal incoming checking transfer.
+  if(cashCardPair){
+   const cardSide=aCard?a:b,cashSide=aCard?b:a;
+   if(cardSide.cashDirection!=='in'||cashSide.cashDirection!=='out'||
+      !['checking','savings'].includes(cashSide.accountType))continue;
+  }
+  const card=cashCardPair;
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
   candidates.push({a,b,card,priority,delta:days(a.date,b.date)});
   }

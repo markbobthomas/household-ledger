@@ -136,6 +136,9 @@ const directionState=M.migrate({accounts:[
  {id:'app-pymt',accountId:'card-direction',date:'2026-10-03',
   merchant:'Fictional App PYMT',type:'transfer',amount:19.40,
   category:'Subscriptions',source:{provider:'plaid',plaidAmount:19.40}},
+ {id:'unrelated-cash-credit',accountId:'checking-direction',date:'2026-10-02',
+  merchant:'Transfer from savings',type:'transfer',amount:27.25,
+  source:{provider:'plaid',plaidAmount:-27.25}},
  {id:'cash-card-repayment',accountId:'checking-direction',date:'2026-10-04',
   merchant:'Credit Card Payment',type:'transfer',amount:100,
   source:{provider:'plaid',plaidAmount:100}},
@@ -148,6 +151,8 @@ for(const id of ['insurance-pymt','app-pymt']){
  assert.equal(correctedById.get(id).type,'expense','Card charge now counts toward spending: '+id);
  assert.equal(correctedById.get(id).pairedTransactionId,null);
 }
+assert.equal(correctedById.get('unrelated-cash-credit').pairedTransactionId,null,
+ 'An incoming checking transfer cannot be matched to an outgoing card purchase');
 assert.equal(correctedById.get('cash-card-repayment').accountingKind,'card_payment');
 assert.equal(correctedById.get('issuer-card-repayment').accountingKind,'card_payment');
 assert.equal(correctedById.get('cash-card-repayment').pairedTransactionId,'issuer-card-repayment');
