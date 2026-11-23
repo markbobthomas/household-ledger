@@ -37,7 +37,7 @@ assert.equal(audit.checks.accounts,1);
 assert.equal(audit.checks.daysRecomputed,2);
 assert.equal(audit.checks.daysUnverifiable,0);
 assert.equal(audit.checks.expectedEventLegs,2);
-assert.equal(audit.checks.savedDecisionsReviewed,1,
+assert.equal(context.qaAudit.checks.savedDecisionsReviewed,1,
  'User-confirmed rules are available for QA omission checks');
 assert(context.facts.some(f=>f.kind==='qaqc-saved-decision'&&f.text.includes('Fictional Housing')));
 assert(audit.checks.confirmed>=2,'Mismatch and unpaired transfer are independently detected');
