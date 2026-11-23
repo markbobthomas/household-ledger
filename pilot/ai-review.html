@@ -384,7 +384,7 @@ button{font:inherit;cursor:pointer}
   msg.append(who);
   if(data.analysisQuality?.status==='limited'){
    msg.append(el('p','quality-note',
-    'Limited analysis: the independent reviewer could not confirm that this run explored enough of the material financial questions. The evidence-checked findings below may be incomplete.'));
+    isQa?'Limited QA/QC: the reviewer could not verify that all significant calculation and reconciliation gaps were investigated. Some checks remain incomplete.':'Limited analysis: the independent reviewer could not confirm that this run explored enough of the material financial questions. The evidence-checked findings below may be incomplete.'));
   }
   if(isQa&&data.qaAudit){
    const qa=data.qaAudit,checks=qa.checks||{},audit=el('section','quality-audit');
