@@ -711,6 +711,7 @@ async function start(port=Number(env.PORT||8788)){
       Object.keys(body).sort().join(',')!=='consent,enabled,scope'||
       typeof body.enabled!=='boolean'||body.scope!=='financial-analysis-auto-v1')
     return respond(400,{error:'Invalid legacy AI Analysis settings'});
+   if(body.enabled&&body.consent!==true)return respond(400,{error:'Explicit consent required for any external AI sharing'});
    if(body.enabled)return respond(410,{
     error:'Automatic AI Analysis has been retired. Run Analysis or QA/QC manually.'});
    try{return respond(200,await aiReports.setEnabled(false))}
