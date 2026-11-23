@@ -10,7 +10,7 @@ const dollars=n=>'$'+amount(n).toFixed(2);
 const day=(date,n)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const safe=s=>cleanDescription(String(s||'')).slice(0,85);
 const normalizeType=t=>String(t||'').toLowerCase();
-function financialContext(prepared,{lastSync=null,adjustments={}}={}){
+function financialContext(prepared,{lastSync=null,adjustments={},allowIntegrityFailures=false}={}){
  const projection=prepared?.bundle?.projection,ledger=prepared?.bundle?.ledger;
  const history=prepared?.bundle?.rows;
  if(!projection||!Array.isArray(projection.accounts)||!Array.isArray(projection.series)||
