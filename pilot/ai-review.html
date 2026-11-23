@@ -112,6 +112,22 @@ button{font:inherit;cursor:pointer}
 .more-insights{border-top:1px solid #e8eee9;margin-top:0;padding:10px 0}
 .more-insights>summary{color:#286b5c}
 @media(max-width:650px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.metric{padding:8px 6px}.metric .label{font-size:.65rem}.metric strong{font-size:.97rem}.insight-head{font-size:.92rem}.insight-preview{font-size:.84rem}}
+
+.qaqc-panel{margin:23px 0 30px;padding:15px 0;border-top:1px solid #dbe4dc;border-bottom:1px solid #dbe4dc}
+.qaqc-panel h2{font-size:1.18rem;letter-spacing:-.015em;margin:0 0 5px}
+.qaqc-panel p{font-size:.9rem;color:#607066;line-height:1.45;margin:6px 0 12px}
+.qaqc-panel label{display:flex;align-items:flex-start;gap:9px;font-size:.88rem;line-height:1.4}
+.qaqc-panel label input{width:18px;height:18px;flex:none;margin-top:2px;accent-color:#286b5c}
+#run-qaqc{border:1px solid #286b5c;background:white;color:#286b5c;border-radius:10px;padding:12px 16px;font-weight:650}
+#run-qaqc:disabled{opacity:.5;cursor:default}
+#qaqc-status{font-size:.85rem!important}
+.qaqc-metrics{display:flex;gap:15px;flex-wrap:wrap;margin:10px 0 13px}
+.qaqc-metrics span{font-size:.87rem;color:#40574b}
+.qaqc-issues{border-top:1px solid #e8eee9;margin:10px 0 12px}
+.qaqc-issues details{margin:0;border-bottom:1px solid #e8eee9;padding:10px 0}
+.qaqc-issues summary{font-weight:650;font-size:.9rem;color:#294a3d}
+.qaqc-issues p{font-size:.86rem!important;line-height:1.5!important;color:#526459!important;margin:7px 0!important}
+.qaqc-panel .analysis-report{margin-top:13px}
 </style></head><body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <div class="intro"><h1>AI Financial Analysis</h1>
@@ -119,6 +135,14 @@ button{font:inherit;cursor:pointer}
 <section class="control"><button id="run" type="button" disabled>Refresh analysis</button>
 <p id="status" role="status" aria-live="polite">Checking for your saved financial analysis…</p></section>
 <div id="analysis" role="region" aria-label="AI financial analysis results"></div>
+<section class="qaqc-panel" aria-label="Ledger quality assurance">
+<h2>AI QA/QC · Check Ledger for errors</h2>
+<p>Separate from financial advice. Independently audit recorded and expected transactions, forecast math, reconciliations and coverage. No changes are made.</p>
+<label><input id="qaqc-consent" type="checkbox"><span>I authorize one read-only AI QA/QC run using the same sanitized financial records and calculations described below. This is not recurring authorization.</span></label>
+<div class="control"><button id="run-qaqc" type="button" disabled>Run AI QA/QC</button>
+<p id="qaqc-status" role="status" aria-live="polite">Checking for a previous QA/QC result…</p></div>
+<div id="qaqc-analysis" role="region" aria-label="Ledger QA/QC results"></div>
+</section>
 <section class="export-panel"><h2>Export data for analysis in ChatGPT</h2>
 <p>Download all normalized transactions, income, current account balances, Ledger's full daily forecast and expected payments, card statements, budgets, saved schedules and review evidence in one JSON file. <strong>No OpenAI API call is made.</strong> This file contains private financial information in plain text—keep it private and upload it only where you choose.</p>
 <button id="export-data" type="button">Export data (.json)</button>
@@ -137,8 +161,10 @@ button{font:inherit;cursor:pointer}
 (function(){
  const $=id=>document.getElementById(id),consent=$('consent'),automatic=$('automatic'),
   run=$('run'),analysis=$('analysis'),status=$('status'),
-  exportDataButton=$('export-data'),exportStatus=$('export-status');
- let pending=false,lastCompleted=null,pollTimer=null;
+  exportDataButton=$('export-data'),exportStatus=$('export-status'),
+  qaConsent=$('qaqc-consent'),qaRun=$('run-qaqc'),qaStatus=$('qaqc-status'),qaResults=$('qaqc-analysis');
+ let pending=false,lastCompleted=null,pollTimer=null,
+  qaPending=false,qaLastCompleted=null,qaPollTimer=null;
  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;
   if(text!==undefined)n.textContent=String(text);return n};
  const info=(parent,text)=>{const p=el('p','',text);parent.append(p);return p};
@@ -351,16 +377,41 @@ button{font:inherit;cursor:pointer}
   details.append(summary,inside);
   return details;
  }
- function addAssistant(data){
+ function addAssistant(data,target=analysis,isQa=false){
   const msg=el('article','analysis-report'),
-   who=el('div','who','AI review · '+data.asOf);
-  if(data.mode!=='autonomous-adaptive')throw Error('Unexpected analysis response');
+   who=el('div','who',(isQa?'Ledger QA/QC':'AI review')+' · '+data.asOf);
+  if(data.mode!==(isQa?'ledger-qaqc':'autonomous-adaptive'))throw Error('Unexpected analysis response');
   msg.append(who);
   if(data.analysisQuality?.status==='limited'){
    msg.append(el('p','quality-note',
     'Limited analysis: the independent reviewer could not confirm that this run explored enough of the material financial questions. The evidence-checked findings below may be incomplete.'));
   }
-  msg.append(el('h2','glance-heading','At a glance'));
+  if(isQa&&data.qaAudit){
+   const qa=data.qaAudit,checks=qa.checks||{},audit=el('section','quality-audit');
+   audit.append(el('h2','glance-heading','Independent calculation checks'));
+   const metrics=el('div','qaqc-metrics');
+   for(const title of [
+    (checks.daysRecomputed||0)+' days recalculated',
+    (checks.expectedEventLegs||0)+' scheduled event legs',
+    (checks.confirmed||0)+' failed checks',
+    (checks.investigate||0)+' questions to investigate',
+    (checks.daysUnverifiable||0)+' days not independently verified'])
+    metrics.append(el('span','',title));
+   audit.append(metrics);
+   if((qa.issues||[]).length){
+    const list=el('div','qaqc-issues');
+    for(const item of qa.issues){
+     const d=el('details'),head=el('summary','',
+      (item.severity==='confirmed'?'Failed check: ':'Review: ')+item.title);
+     d.append(head,el('p','',item.detail));list.append(d);
+    }
+    audit.append(list);
+   }
+   const limits=el('details','limits'),h=el('summary','','Coverage and limits'),inside=el('div');
+   for(const note of qa.limitations||[])info(inside,note);
+   limits.append(h,inside);audit.append(limits);msg.append(audit);
+  }
+  msg.append(el('h2','glance-heading',isQa?'AI investigation':'At a glance'));
   const blocks=(data.blocks||[]).filter(b=>b&&typeof b==='object');
   const metrics=blocks.filter(b=>b.kind==='metric').slice(0,3);
   if(metrics.length){
@@ -425,10 +476,10 @@ button{font:inherit;cursor:pointer}
     info(body,item.topic+': '+(item.sources||[]).join(', '));
   }
   meta.append(s,body);msg.append(meta);
-  analysis.replaceChildren(msg);return msg;
+  target.replaceChildren(msg);return msg;
  }
  const sync=()=>{run.disabled=pending||!(consent.checked||automatic.checked);
-  automatic.disabled=pending};
+  automatic.disabled=pending;qaRun.disabled=qaPending||!qaConsent.checked};
  const api=async(url,opts)=>{
   const response=await fetch(url,{credentials:'same-origin',cache:'no-store',...opts});
   const data=await response.json();
@@ -475,6 +526,49 @@ button{font:inherit;cursor:pointer}
   }catch(error){status.textContent=error.message||'Saved analysis unavailable';}
   finally{sync()}
  }
+ const armQaPoll=()=>{
+  if(qaPollTimer)clearTimeout(qaPollTimer);
+  qaPollTimer=setTimeout(()=>{void loadQa()},4500);
+ };
+ async function loadQa(){
+  try{
+   const state=await api('/api/ai/qaqc');
+   if(state.report&&state.completedAt!==qaLastCompleted){
+    addAssistant(state.report,qaResults,true);qaLastCompleted=state.completedAt;
+   }else if(!state.report&&qaLastCompleted){
+    qaResults.replaceChildren();qaLastCompleted=null;
+   }
+   if(state.status==='running'||state.status==='queued'){
+    qaStatus.textContent='Independent QA/QC is running. The saved result, if any, is shown below.';
+    armQaPoll();
+   }else if(state.status==='ready'){
+    qaStatus.textContent='QA/QC completed · '+(state.completedAt||'recently')+
+     '. Expand failures and investigation findings for evidence.';
+   }else if(state.status==='failed'){
+    qaStatus.textContent='QA/QC could not complete ('+(state.errorCode||'analysis_failed')+
+     '). No financial records were changed.';
+   }else if(state.status==='outdated'){
+    qaResults.replaceChildren();qaLastCompleted=null;
+    qaStatus.textContent='Records changed. Run a fresh QA/QC on the new financial snapshot.';
+   }else{
+    qaResults.replaceChildren();
+    qaStatus.textContent='No QA/QC result for these records. Authorize a single run, then select Run AI QA/QC.';
+   }
+  }catch(error){qaStatus.textContent=error.message||'QA/QC status unavailable'}
+  finally{sync()}
+ }
+ qaConsent.addEventListener('change',sync);
+ qaRun.addEventListener('click',async()=>{
+  if(qaPending||!qaConsent.checked)return;
+  qaPending=true;sync();qaStatus.textContent='Starting independent Ledger QA/QC…';
+  try{
+   await api('/api/ai/qaqc',{method:'POST',
+    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
+    body:JSON.stringify({scope:'ledger-qaqc-v1',consent:true})});
+   await loadQa();
+  }catch(error){qaStatus.textContent=error.message||'QA/QC unavailable'}
+  finally{qaPending=false;sync()}
+ });
  exportDataButton.addEventListener('click',async()=>{
   if(exportDataButton.disabled)return;
   exportDataButton.disabled=true;exportStatus.textContent='Preparing your complete financial data export…';
@@ -528,6 +622,6 @@ button{font:inherit;cursor:pointer}
   }catch(error){status.textContent=error.message||'Analysis unavailable'}
   finally{pending=false;run.textContent='Refresh analysis';sync()}
  });
- sync();void loadSaved();
+ sync();void loadSaved();void loadQa();
 })();
 </script></body></html>
