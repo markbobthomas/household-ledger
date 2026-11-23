@@ -153,8 +153,8 @@ module.exports=(async()=>{
    assert.equal(requests.length,0,
     'opening AI Analysis immediately displays the encrypted saved result, no model rerun');
    assert.equal(await page.locator('#run').isDisabled(),true,
-    'manual analysis needs consent or saved ongoing sharing authorization');
-   assert.equal(await page.locator('#automatic').isChecked(),false);
+    'manual analysis requires one-time consent');
+   assert.equal(await page.locator('#automatic').count(),0,'automatic option was removed');
    const fileDownload=page.waitForEvent('download');
    await page.locator('#export-data').click();
    const exported=await fileDownload;
@@ -201,21 +201,13 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.graph .selected').first().textContent().then(x=>x.includes('$')),true);
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.audit li').count(),2);
-   await page.locator('#automatic').click();
-   assert.equal(await page.locator('#automatic').isChecked(),false,
-    'standing sharing cannot be enabled without explicit consent');
-   assert.equal(settings.length,0);
+   assert.equal(settings.length,0,'no automatic settings calls');
    await page.locator('#consent').check();
-   await page.locator('#automatic').check();
-   await page.waitForFunction(()=>document.querySelector('#automatic')?.disabled===false);
-   assert.equal(settings.length,1);
-   assert.deepEqual(settings[0],{
-    enabled:true,scope:'financial-analysis-auto-v1',consent:true});
-   assert.equal(await page.locator('#automatic').isChecked(),true);
    await page.locator('#run').click();
    await page.locator('.quality-note').waitFor({state:'visible'});
    assert.equal(requests.length,1,'manual rerun enqueues background analysis');
    assert.deepEqual(requests[0],{scope:'financial-analysis-v3',consent:true});
+   assert.equal(await page.locator('#consent').isChecked(),false,'consent resets after every paid run');
    assert.equal(await page.locator('.analysis-report').count(),1,
     'a new cached report replaces the old; no transcript or stacked duplicate results');
    assert.equal(await page.locator('.insight-card').count(),2);
@@ -230,10 +222,8 @@ module.exports=(async()=>{
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.analysis-detail summary')
     .filter({hasText:'Independent history cross-check'}).count(),1);
-   await page.locator('#automatic').uncheck();
-   await page.waitForFunction(()=>document.querySelector('#automatic')?.disabled===false);
-   assert.equal(settings.length,2);
-   assert.equal(settings[1].enabled,false,'automatic data sharing can be withdrawn');
+   assert.equal(settings.length,0,'manual Analysis never activates standing consent');
+   assert.equal(await page.locator('#run').isDisabled(),true,'another run needs a new click and consent');
    assert.equal(await page.locator('#run-qaqc').isDisabled(),true,
     'a separate QA/QC run needs its own one-time authorization');
    assert.equal(qaCalls.length,0,'QA/QC does not auto-run with ordinary financial analysis');
@@ -244,6 +234,7 @@ module.exports=(async()=>{
    assert.deepEqual(qaCalls,[{body:{scope:'ledger-qaqc-v1',consent:true},header:'1'}],
     'QA/QC has separate explicit consent and uses an authenticated action');
    assert.equal(requests.length,1,'QA/QC does not trigger ordinary AI Analysis');
+   assert.equal(await page.locator('#qaqc-consent').isChecked(),false,'QA/QC consent resets after each run');
    assert.equal(await page.locator('#qaqc-analysis .qaqc-issues details').count(),2);
    assert.match(await page.locator('#qaqc-analysis .qaqc-metrics').innerText(),/1096 days recalculated/);
    await page.locator('#qaqc-analysis .qaqc-issues details').first().locator('summary').click();

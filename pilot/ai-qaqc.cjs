@@ -143,6 +143,19 @@ function inspect(context){
  const unassigned=history.filter(x=>!x.category||/^(unassigned|uncategorized)$/i.test(String(x.category))).length;
  if(unassigned)flag('investigate','Unclassified actual transactions',
   unassigned+' normalized recorded transactions have no resolved spending category. Determine whether excluded transfers or user decisions explain them.');
+ // Independently inspect original bank descriptions, not just the displayed
+ // merchant or a possibly stale category. This catches the original Fuel bug.
+ const fuelEvidence=require('../categorization.js').fuelEvidence;
+ let explicitFuel=0,conflictingFuel=0;
+ for(const h of history){
+  if(!['expense','refund'].includes(String(h.type||''))||!fuelEvidence(h))continue;
+  explicitFuel++;
+  if(String(h.category||'').toLowerCase()!=='gas')conflictingFuel++;
+ }
+ checks.explicitFuelTransactions=explicitFuel;
+ checks.fuelCategoryConflicts=conflictingFuel;
+ if(conflictingFuel)flag('investigate','Fuel description/category mismatch',
+  conflictingFuel+' recorded fuel-labeled expenses or refunds are not shown as Gas. Check saved category overrides and the derived classification path before changing any financial record.');
  for(const [name,values] of [
   ['overdue payment review',context.source.projection?.overduePayments||[]],
   ['duplicate payment review',context.source.projection?.duplicateChecks||[]]]){void name;void values}

@@ -32,11 +32,14 @@ function createDataset(context){
  for(const row of [...context.source.history].filter(x=>x&&date(x.date)&&finite(x.amount))
   .sort((a,b)=>b.date.localeCompare(a.date))){
   const accountId=alias(row.accountId),amount=money(row.amount),
-   merchant=safe(row.merchant||row.description||row.name),category=safe(row.category||'Unassigned'),
-   type=safe(row.type||'unclassified');
-  const fields={accountId,date:row.date,amount,merchant,category,type,pending:!!row.pending};
+   merchant=safe(row.merchant||row.description||row.name),
+   original=safe(row.name||row.description||row.originalName||row.source?.bankName||''),
+   description=original&&original.toLowerCase()!==merchant.toLowerCase()?original:null,
+   category=safe(row.category||'Unassigned'),type=safe(row.type||'unclassified');
+  const fields={accountId,date:row.date,amount,merchant,description,category,type,pending:!!row.pending};
   add('history',fields,
    accountId+' '+row.date+' '+type+' $'+amount.toFixed(2)+' '+merchant+
+   (description?'; original bank description '+description:'')+
    '; category '+category+(row.pending?'; pending':''));
  }
  for(const row of [...(context.source.projection.events||[])]
@@ -165,7 +168,7 @@ function createDataset(context){
   return {source:'Private Ledger sanitized financial data',
    asOf:context.asOf,accounts:context.accounts,primary:context.primary,
    coverage:context.scope,manifest:{counts,columns:{
-    history:['accountId','date','amount','merchant','category','type','pending'],
+    history:['accountId','date','amount','merchant','description','category','type','pending'],
     future:['accountId','date','amount','merchant','kind','transfer','recurring'],
     balances:['accountId','date','balance','income','outflow'],
     cards:['card','funding','dueDate','periodStart','periodEnd','withdrawalDate','amount',

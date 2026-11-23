@@ -79,7 +79,7 @@ function get(route,authenticated=true){
   fs.writeFileSync(source+'.forecasts',seal(forecasts,oldKey),{mode:0o600});
   fs.writeFileSync(source+'.sessions',seal(sessions,oldKey),{mode:0o600});
   fs.writeFileSync(source+'.analysis',seal(analysis,oldKey),{mode:0o600});
-  const originalFiles=[source,source+'.forecasts',source+'.sessions',source+'.analysis'].map(f=>
+  let originalFiles=[source,source+'.forecasts',source+'.sessions',source+'.analysis'].map(f=>
    fs.readFileSync(f,'utf8'));
   const env={...process.env,PORT:String(port),PILOT_PASSWORD:login,
    PILOT_ENCRYPTION_KEY:oldKey,PILOT_STATE_PATH:source,
@@ -91,6 +91,11 @@ function get(route,authenticated=true){
    await new Promise(resolve=>setTimeout(resolve,40));
   }
   assert.ok(ready,'Fictional private server booted');
+  const manualOnlyAnalysis={...analysis,autoEnabled:false};
+  assert.deepEqual(unseal(source+'.analysis',oldKey),manualOnlyAnalysis,
+   'Server startup revokes old automatic AI consent, preserving encrypted report content');
+  originalFiles=[source,source+'.forecasts',source+'.sessions',source+'.analysis'].map(f=>
+   fs.readFileSync(f,'utf8'));
   const bankPage=await get('/bank-connect');
   assert.equal(bankPage.status,200);
   assert.match(bankPage.body.toString(),/Download encrypted backup/);
@@ -117,7 +122,7 @@ function get(route,authenticated=true){
   assert.deepEqual(restored.bank,bank,'All accounts and exact source facts are retained');
   assert.deepEqual(restored.forecasts,forecasts,'Independent forecast file is retained');
   assert.deepEqual(restored.sessions,sessions,'Independent session file is retained');
-  assert.deepEqual(restored.analysis,analysis,'Ongoing analysis consent and encrypted report retained');
+  assert.deepEqual(restored.analysis,manualOnlyAnalysis,'Saved encrypted report retained without ongoing AI consent');
   for(const [i,f] of [source,source+'.forecasts',source+'.sessions',source+'.analysis'].entries())
    assert.equal(fs.readFileSync(f,'utf8'),originalFiles[i],
     'Making the backup does not change any original encrypted file');
@@ -133,7 +138,7 @@ function get(route,authenticated=true){
   assert.deepEqual(result,{verified:true,hasBank:true,hasForecasts:true,hasSessions:true,hasAnalysis:true});
   for(const [name,document] of [
    ['pilot.enc',bank],['pilot.enc.forecasts',forecasts],['pilot.enc.sessions',sessions],
-   ['pilot.enc.analysis',analysis]]){
+   ['pilot.enc.analysis',manualOnlyAnalysis]]){
    const file=path.join(isolated,name);
    assert.deepEqual(unseal(file,newKey),document,'Verified isolated '+name+' with NEW encryption key');
    assert.equal(fs.statSync(file).mode&0o077,0,'Only owner may read restored '+name);

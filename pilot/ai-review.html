@@ -132,7 +132,7 @@ button{font:inherit;cursor:pointer}
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <div class="intro"><h1>AI Financial Analysis</h1>
 <p class="muted">A short assessment first. Expand any finding for evidence and practical options.</p></div>
-<section class="control"><button id="run" type="button" disabled>Refresh analysis</button>
+<section class="control"><button id="run" type="button" disabled>Run AI Analysis</button>
 <p id="status" role="status" aria-live="polite">Checking for your saved financial analysis…</p></section>
 <div id="analysis" role="region" aria-label="AI financial analysis results"></div>
 <section class="qaqc-panel" aria-label="Ledger quality assurance">
@@ -149,8 +149,8 @@ button{font:inherit;cursor:pointer}
 <p id="export-status" role="status" aria-live="polite">No file has been downloaded from this page.</p>
 </section>
 <div class="consent">
-<label><input id="consent" type="checkbox"><span>I authorize Ledger to share sanitized financial records, balances, future payments, and source-derived calculations with OpenAI for independent analysis. External public research uses generic topics without household details.</span></label>
-<label class="auto-opt"><input id="automatic" type="checkbox"><span>Automatically investigate when bank data changes, and keep the latest verified report encrypted on Ledger's private server. This is ongoing authorization until I turn it off; each new run may send sanitized financial data to OpenAI.</span></label>
+<label><input id="consent" type="checkbox"><span>I authorize one AI Analysis run to share sanitized financial records, balances, future payments, and source-derived calculations with OpenAI. External public research uses generic topics without household details.</span></label>
+<p class="muted">Analysis and QA/QC run only when you select their separate buttons. Bank sync, page loads, and restarts never incur paid AI calls.</p>
 <details><summary>What information is shared, and what can the AI change?</summary>
 <p>Ledger makes its complete normalized financial history, expected events, forecast balances, card statement obligations and derived supporting evidence available through a broad starting snapshot and a page-by-page read-only source tool. The AI decides what additional records and calculations to examine. It does not receive full account numbers, raw transaction IDs, account access tokens, credentials or private server files. Some sanitized descriptions and dollar amounts may identify financial activity. OpenAI receives evidence for this run, with API storage disabled. External public research queries contain only a restricted generic topic.</p>
 <p>Automatically verified corrections can reject unsupported AI findings or fix derived analysis displays, with a per-run audit trail. Original bank records, user categories and forecast rules are not automatically modified: those require separate financial-integrity safeguards.</p></details>
@@ -159,12 +159,12 @@ button{font:inherit;cursor:pointer}
 </main>
 <script>
 (function(){
- const $=id=>document.getElementById(id),consent=$('consent'),automatic=$('automatic'),
+ const $=id=>document.getElementById(id),consent=$('consent'),
   run=$('run'),analysis=$('analysis'),status=$('status'),
   exportDataButton=$('export-data'),exportStatus=$('export-status'),
   qaConsent=$('qaqc-consent'),qaRun=$('run-qaqc'),qaStatus=$('qaqc-status'),qaResults=$('qaqc-analysis');
- let pending=false,lastCompleted=null,pollTimer=null,
-  qaPending=false,qaLastCompleted=null,qaPollTimer=null;
+ let pending=false,lastCompleted=null,pollTimer=null,analysisBusy=false,
+  qaPending=false,qaLastCompleted=null,qaPollTimer=null,qaBusy=false;
  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;
   if(text!==undefined)n.textContent=String(text);return n};
  const info=(parent,text)=>{const p=el('p','',text);parent.append(p);return p};
@@ -478,8 +478,8 @@ button{font:inherit;cursor:pointer}
   meta.append(s,body);msg.append(meta);
   target.replaceChildren(msg);return msg;
  }
- const sync=()=>{run.disabled=pending||!(consent.checked||automatic.checked);
-  automatic.disabled=pending;qaRun.disabled=qaPending||!qaConsent.checked};
+ const sync=()=>{run.disabled=pending||analysisBusy||!consent.checked;
+  qaRun.disabled=qaPending||qaBusy||!qaConsent.checked};
  const api=async(url,opts)=>{
   const response=await fetch(url,{credentials:'same-origin',cache:'no-store',...opts});
   const data=await response.json();
@@ -494,7 +494,7 @@ button{font:inherit;cursor:pointer}
  async function loadSaved(){
   try{
    const state=await api('/api/ai/report');
-   automatic.checked=!!state.enabled;
+   analysisBusy=state.status==='running'||state.status==='queued';
    if(state.report&&state.completedAt!==lastCompleted){
     addAssistant(state.report);lastCompleted=state.completedAt;
    }else if(!state.report&&lastCompleted){
@@ -504,7 +504,7 @@ button{font:inherit;cursor:pointer}
    if(state.status==='running'||state.status==='queued'){
     status.textContent=state.report?
      'New financial analysis is running; the saved report is shown above.':
-     'Ledger is investigating updated bank records in the background.';
+     'The requested one-time AI Analysis is running.';
     armPoll();
    }else if(state.status==='ready'){
     status.textContent='Verified saved analysis · completed '+(state.completedAt||'recently')+
@@ -512,16 +512,12 @@ button{font:inherit;cursor:pointer}
    }else if(state.status==='failed'){
     status.textContent='Last analysis could not complete ('+
       (state.errorCode||'analysis_failed')+'). The existing bank data was not changed.';
-   }else if(state.status==='outdated'){
+    }else if(state.status==='outdated'){
     analysis.replaceChildren();lastCompleted=null;
-    status.textContent='Bank data has changed; the previous analysis is outdated.'+
-      (state.enabled?' A new analysis is being prepared.':' Enable automatic analysis or refresh manually.');
-    if(state.enabled)armPoll();
+    status.textContent='Bank data changed. Request a fresh AI Analysis only when you choose.';
    }else{
     if(!state.report){analysis.replaceChildren();lastCompleted=null;}
-    status.textContent=state.enabled?
-      'Automatic analysis is enabled. The first verified report is being prepared.':
-      'No current saved analysis. Authorize and enable automatic analysis, or refresh manually.';
+    status.textContent='No current saved analysis. Authorize one run, then select Run AI Analysis.';
    }
   }catch(error){status.textContent=error.message||'Saved analysis unavailable';}
   finally{sync()}
@@ -538,7 +534,8 @@ button{font:inherit;cursor:pointer}
    }else if(!state.report&&qaLastCompleted){
     qaResults.replaceChildren();qaLastCompleted=null;
    }
-   if(state.status==='running'||state.status==='queued'){
+   qaBusy=state.status==='running'||state.status==='queued';
+   if(qaBusy){
     qaStatus.textContent='Independent QA/QC is running. The saved result, if any, is shown below.';
     armQaPoll();
    }else if(state.status==='ready'){
@@ -565,6 +562,7 @@ button{font:inherit;cursor:pointer}
    await api('/api/ai/qaqc',{method:'POST',
     headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
     body:JSON.stringify({scope:'ledger-qaqc-v1',consent:true})});
+   qaConsent.checked=false;
    await loadQa();
   }catch(error){qaStatus.textContent=error.message||'QA/QC unavailable'}
   finally{qaPending=false;sync()}
@@ -594,33 +592,18 @@ button{font:inherit;cursor:pointer}
   }finally{exportDataButton.disabled=false}
  });
  consent.addEventListener('change',sync);
- automatic.addEventListener('change',async()=>{
-  const enabled=automatic.checked;
-  if(enabled&&!consent.checked){
-   automatic.checked=false;
-   status.textContent='Check the data-sharing authorization before enabling automatic analysis.';
-   return sync();
-  }
-  pending=true;sync();
-  try{
-   await api('/api/ai/settings',{method:'POST',
-    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
-    body:JSON.stringify({enabled,scope:'financial-analysis-auto-v1',consent:enabled})});
-   await loadSaved();
-  }catch(error){automatic.checked=!enabled;status.textContent=error.message}
-  finally{pending=false;sync()}
- });
  run.addEventListener('click',async()=>{
-  if(pending||!(consent.checked||automatic.checked))return;
+  if(pending||analysisBusy||!consent.checked)return;
   pending=true;sync();run.textContent='Analysis requested…';
-  status.textContent='Starting an independent, background financial investigation…';
+  status.textContent='Starting the requested one-time financial investigation…';
   try{
    await api('/api/ai/analyze',{method:'POST',
     headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
     body:JSON.stringify({scope:'financial-analysis-v3',consent:true})});
+   consent.checked=false;
    await loadSaved();
   }catch(error){status.textContent=error.message||'Analysis unavailable'}
-  finally{pending=false;run.textContent='Refresh analysis';sync()}
+  finally{pending=false;run.textContent='Run AI Analysis';sync()}
  });
  sync();void loadSaved();void loadQa();
 })();

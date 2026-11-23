@@ -1,19 +1,17 @@
 'use strict';
-// Encrypted, server-side AI result cache. Never stores a source record in Git,
-// the browser, or an unencrypted on-disk file. A result is valid only for the
-// exact canonical snapshot revision it examined.
+// Encrypted per-request AI result cache. Bank sync, navigation, and startup must
+// never enqueue a paid model call. No standing AI consent is accepted.
 function create({read,write,revision,snapshot,analyze,available=()=>true,defer=setImmediate}){
- // Data-access version 2 shares broader sanitized record-level data with AI.
- // Prior summary-only consent does NOT authorize this expanded scope.
- let saved={version:1,dataAccessVersion:2,reportFormatVersion:5,
-  autoEnabled:false,report:null,revision:null,completedAt:null};
- let phase='idle',lastError=null,lastFailedRevision=null,queued=false,running=false,requested=false,forceNext=false;
+ const empty=()=>({version:1,dataAccessVersion:2,reportFormatVersion:5,
+  autoEnabled:false,report:null,revision:null,completedAt:null});
+ let saved=empty(),phase='idle',lastError=null,queued=false,running=false,generation=0;
  const safeCode=e=>[
   'invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
   'provider_unavailable','provider_rejected','analysis_timeout',
   'provider_connection_failed','invalid_provider_response','invalid_ai_json',
   'invalid_ai_schema','invalid_ai_evidence','forecast_context_unavailable'
  ].includes(e?.safeCode)?e.safeCode:'analysis_failed';
+ async function store(next){await write(next);saved=next}
  async function load(){
   let value;
   try{value=await read()}
@@ -23,70 +21,56 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
     (value.revision!==null&&typeof value.revision!=='string'))
    throw Error('Invalid encrypted AI report cache');
   if(value.dataAccessVersion!==2){
-   // Expanded financial source access always requires renewed opt-in.
-   await write({...saved});
+   await store(empty()); // Old summary-only consent is not valid for broad data.
   }else if(value.reportFormatVersion!==5){
-   // An obsolete single-pass analysis is not a substitute for the
-   // more thorough independent exploration + synthesis release. Preserve existing consent.
-   await store({...saved,...value,reportFormatVersion:5,
+   await store({...empty(),...value,autoEnabled:false,reportFormatVersion:5,
     report:null,revision:null,completedAt:null});
-  }else saved={...saved,...value};
+  }else if(value.autoEnabled){
+   // Migrate any previously authorized automatic runs to manual-only.
+   await store({...empty(),...value,autoEnabled:false});
+  }else saved={...empty(),...value,autoEnabled:false};
  }
- async function store(next){await write(next);saved=next}
  function status(){
   const current=available()?revision():null;
   const fresh=!!(current&&saved.report&&saved.revision===current);
-  return {enabled:saved.autoEnabled,status:running?'running':queued?'queued':
+  return {enabled:false,status:running?'running':queued?'queued':
    fresh?'ready':phase==='failed'?'failed':saved.report?'outdated':'not_ready',
    report:fresh?saved.report:null,completedAt:fresh?saved.completedAt:null,
    ...(phase==='failed'&&lastError?{errorCode:lastError}:{})};
  }
  function schedule({force=false}={}){
-  if(!available()||!saved.autoEnabled&&!force)return false;
-  const current=revision();
-  if(!force&&lastFailedRevision===current)return false;
-  if(!force&&saved.report&&saved.revision===current&&!running&&!queued)return false;
-  if(queued){forceNext=forceNext||force;return true}
-  if(running){requested=true;forceNext=forceNext||force;return true}
-  queued=true;phase='queued';forceNext=forceNext||force;
-  defer(()=>{queued=false;void run()});
+  // An explicit authenticated POST is the only allowed entry point.
+  // Concurrent or repeated clicks do not add another billable job.
+  if(!force||!available()||queued||running)return false;
+  queued=true;phase='queued';const runGeneration=generation;
+  defer(()=>{queued=false;void run(runGeneration)});
   return true;
  }
- async function run(){
-  if(running||!available())return;
-  const runForced=forceNext;forceNext=false;
-  if(!runForced&&!saved.autoEnabled)return;
+ async function run(runGeneration){
+  if(running||!available()||runGeneration!==generation)return;
   running=true;phase='running';lastError=null;
-  let examined=null;
   try{
-   examined=revision();
-   const context=await snapshot();
-   const report=await analyze(context);
-   // A concurrent bank sync or forecast edit cannot publish stale results.
-   if(available()&&revision()===examined&&
-     (saved.autoEnabled||runForced)){
-    await store({...saved,report,revision:examined,completedAt:new Date().toISOString()});
-    phase='ready';lastFailedRevision=null;
-   }else if(available()&&saved.autoEnabled){
-    requested=true;phase='outdated';
-   }else phase='idle';
-  }catch(e){lastError=safeCode(e);lastFailedRevision=examined;phase='failed'}
-  finally{
-   running=false;
-   if(requested){const again=forceNext;requested=false;forceNext=false;
-    if(saved.autoEnabled||again)schedule({force:again});}
-  }
+   const examined=revision(),context=await snapshot(),report=await analyze(context);
+   // A changed financial snapshot or a disconnect cancels publication, not
+   // a second automatic provider run. The next request must be a new click.
+   if(available()&&revision()===examined&&runGeneration===generation){
+    await store({...saved,autoEnabled:false,report,revision:examined,
+     completedAt:new Date().toISOString()});
+    phase='ready';
+   }else phase='outdated';
+  }catch(e){lastError=safeCode(e);phase='failed'}
+  finally{running=false}
  }
  async function setEnabled(enabled){
-  if(typeof enabled!=='boolean')throw Error('Invalid automatic analysis preference');
-  await store({...saved,autoEnabled:enabled});
-  if(enabled)schedule();
+  // Allow only retirement of a legacy saved setting; never a new auto opt-in.
+  if(enabled!==false)throw Error('Automatic AI Analysis is no longer supported');
+  if(saved.autoEnabled)await store({...saved,autoEnabled:false});
   return status();
  }
  async function clear(){
-  await store({version:1,dataAccessVersion:2,reportFormatVersion:5,
-   autoEnabled:false,report:null,revision:null,completedAt:null});
-  requested=false;forceNext=false;lastError=null;lastFailedRevision=null;phase='idle';
+  generation++;
+  await store(empty());
+  lastError=null;phase='idle';
  }
  return {load,status,schedule,setEnabled,clear};
 }

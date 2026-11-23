@@ -17,6 +17,7 @@ const rows=Array.from({length:1600},(_,i)=>({
  category:'Groceries',pending:i===0,token:'not-for-model'
 }));
 rows[0].merchant='Fictional Service 12345678901234';
+ rows[0].name='FICTIONAL FUEL STATION';
 const prepared={bundle:{projection:{asOf,days:1095,
  accounts:[{id:account,valid:true,type:'cash',openingCurrent:9000,openingAvailable:9000,
   source:{accountType:'checking'},balanceStatus:'fresh',
@@ -41,6 +42,9 @@ assert(dataset.initial.records.indices.length>0);
 assert(dataset.page('indices',0,200).rows.every(x=>x.id&&Number.isFinite(x.total)));
 
 assert.equal(dataset.page('history',0,200).rows.length,200);
+ const bankDescription=dataset.page('history',0,200).rows.find(x=>x.description==='FICTIONAL FUEL STATION');
+ assert(bankDescription,'Original bank descriptions remain separately visible to AI in sanitized data');
+ assert(bankDescription.merchant,'Original evidence does not replace the normalized merchant');
 assert.equal(dataset.page('history',1500,200).rows.length,100);
 assert.deepEqual(dataset.page('history',1600,200).rows,[]);
 assert.equal(dataset.page('history',-1,50).error,'Invalid dataset page request');
