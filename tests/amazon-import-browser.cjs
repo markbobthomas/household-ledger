@@ -25,10 +25,13 @@ module.exports=(async()=>{
    const page=await context.newPage(),requests=[],errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.route('**/api/ledger/amazon-import',async route=>{
-    const d=route.request().postDataJSON();requests.push(d);
-    assert.equal(d.fileName,'Amazon-browser-sync.csv');
-    assert.equal(Buffer.from(d.base64,'base64').toString('utf8'),csv);
-    if(requests.length===2)assert.equal(route.request().headers()['x-ledger-revision'],'fictional-revision');
+    const request=route.request(),headers=request.headers();
+    assert.equal(headers['content-type'],'application/octet-stream');
+    assert.equal(decodeURIComponent(headers['x-amazon-filename']),'Amazon-browser-sync.csv');
+    assert.equal(request.postDataBuffer().toString('utf8'),csv);
+    const d={fileName:'Amazon-browser-sync.csv',dryRun:headers['x-amazon-dry-run']==='1'};
+    requests.push(d);
+    if(requests.length===2)assert.equal(headers['x-ledger-revision'],'fictional-revision');
     await route.fulfill({status:200,contentType:'application/json',
      headers:{'x-ledger-revision':'fictional-revision'},
      body:JSON.stringify({importedItems:1,matches:1,ready:d.dryRun?1:0,applied:d.dryRun?0:1,
