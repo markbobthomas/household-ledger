@@ -13,7 +13,7 @@ const until=async condition=>{for(let i=0;i<160;i++){if(condition())return;await
   write:async value=>{stored=structuredClone(value)},
   revision:()=>rev,
   snapshot:async()=>{reads++;return {revision:rev}},
-  analyze:async context=>{calls++;return analyze(context)}
+  analyze:async(context,options)=>{calls++;return analyze(context,options)}
  });
  let cache=make();await cache.load();
  assert.equal(cache.status().enabled,false);
@@ -94,5 +94,48 @@ const until=async condition=>{for(let i=0;i<160;i++){if(condition())return;await
  await cache.clear();
  assert.equal(stored.report,null);assert.equal(stored.autoEnabled,false);
  assert.equal(calls,4);
+ // Synthetic encrypted checkpoint storage and manual-only recovery across
+ // restart. Source records, account revisions and the old report are untouched.
+ rev='E';
+ const state={version:1,mode:'autonomous',model:'gpt-6.2-astra',
+  progress:'discovery-two',stage:'discovery-two',nextRound:4};
+ const interrupted=make(async(_ctx,{onCheckpoint})=>{
+  await onCheckpoint(state);
+  const error=Error('fictional provider timeout');
+  error.safeCode='analysis_timeout';throw error;
+ });
+ await interrupted.load();
+ assert.equal(interrupted.schedule({force:true}),true);
+ await until(()=>interrupted.status().status==='failed');
+ assert.equal(interrupted.status().resumeAvailable,true);
+ assert.equal(interrupted.status().analysisStage,'discovery-two');
+ assert.deepEqual(stored.checkpoint.state,state);
+ assert.equal(interrupted.schedule(),false,'provider failure cannot enable automatic resume');
+ const resumedCache=make(async(_ctx,{resumeState})=>{
+  assert.deepEqual(resumeState,state,
+   'new server instance receives completed work without repeating stages');
+  return {sourceRevision:'E',blocks:[]};
+ });
+ await resumedCache.load();
+ assert.equal(resumedCache.status().status,'paused');
+ assert.equal(resumedCache.status().resumeAvailable,true);
+ assert.equal(resumedCache.schedule(),false,'GET and startup never pay for a resumed run');
+ assert.equal(resumedCache.schedule({force:true}),true);
+ await until(()=>resumedCache.status().status==='ready');
+ assert.equal(resumedCache.status().resumeAvailable,false);
+ assert.equal(stored.checkpoint,null,'successful report clears private checkpoint');
+ assert.equal(stored.report.sourceRevision,'E');
+ // A changed source revision must never feed stale evidence into the model.
+ stored.checkpoint={revision:'E',state};
+ rev='F';
+ const changedSnapshot=make(async(_ctx,{resumeState})=>{
+  assert.equal(resumeState,null,'stale financial checkpoint cannot be resumed');
+  return {sourceRevision:'F',blocks:[]};
+ });
+ await changedSnapshot.load();
+ assert.equal(changedSnapshot.status().resumeAvailable,false);
+ assert.equal(changedSnapshot.schedule({force:true}),true);
+ await until(()=>changedSnapshot.status().status==='ready');
+ console.log('PASS paid AI cache: stored intermediate research resumes manually only on matching financial snapshot');
  console.log('PASS paid AI cache: persisted successful reports after refresh, sync and failed rerun');
 })().catch(e=>{console.error(e);process.exitCode=1});

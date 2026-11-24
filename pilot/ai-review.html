@@ -634,6 +634,13 @@ button{font:inherit;cursor:pointer}
   if(pollTimer)clearTimeout(pollTimer);
   pollTimer=setTimeout(()=>{void loadSaved()},4500);
  };
+ const analysisStageLabel=value=>({
+  preparing:'preparing source evidence',
+  'discovery-one':'first independent investigation',
+  'discovery-two':'second independent investigation',
+  report:'full financial outlook synthesis and revisions',
+  review:'independent evidence and usefulness review'
+ })[value]||'financial investigation';
  async function loadSaved(){
   try{
    const state=await api('/api/ai/report');
@@ -645,11 +652,16 @@ button{font:inherit;cursor:pointer}
     analysis.replaceChildren();lastCompleted=null;
    }
    if(state.status==='running'||state.status==='queued'){
-    status.textContent=state.report?
+    status.textContent=(state.report?
      'New analysis is running. Your last successful report remains below'+
-      (state.isCurrent?'':' (earlier financial snapshot)')+'.':
-     'The requested one-time AI Analysis is running.';
+      (state.isCurrent?'':' (earlier financial snapshot)')+'. ':
+     'The requested one-time AI Analysis is running. ')+
+     'Current stage: '+analysisStageLabel(state.analysisStage)+'.';
     armPoll();
+   }else if(state.status==='paused'){
+    status.textContent='The independent analysis is paused after '+
+     analysisStageLabel(state.analysisStage)+'. Its completed research is safely saved. '+
+     'Authorize Run AI Analysis to resume without repeating completed research.';
    }else if(state.status==='ready'){
     status.textContent='Saved analysis · completed '+(state.completedAt||'recently')+
      '. Expand any finding for evidence and options.';
@@ -658,6 +670,9 @@ button{font:inherit;cursor:pointer}
      (state.errorCode||'analysis_failed')+'). '+
      (state.report?'The last successful analysis is preserved below'+
       (state.isCurrent?'':' (earlier financial snapshot)')+'. ':'')+
+     (state.resumeAvailable?'Completed research is saved after '+
+      analysisStageLabel(state.analysisStage)+
+      '. Authorize Run AI Analysis to resume the remaining steps. ':'')+
      'The existing bank data was not changed.';
    }else if(state.status==='outdated'){
     status.textContent='Saved analysis from '+(state.completedAt||'an earlier date')+
