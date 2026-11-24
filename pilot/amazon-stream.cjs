@@ -5,6 +5,7 @@ const zlib=require('node:zlib');
 const {Readable}=require('node:stream');
 const {StringDecoder}=require('node:string_decoder');
 const {isoDate,usdCents,ORDER_CSV}=require('./amazon-import.cjs');
+const {selectedEntries}=require('./amazon-zip.cjs');
 const MAX_FILE=79*1024*1024,MAX_EXPANDED=384*1024*1024,
  MAX_ROWS=90000,MAX_SCANNED_ROWS=2000000;
 const nameHeader=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -145,34 +146,9 @@ async function readFile(fileName,buffer,window={}){
  if(/\.csv$/i.test(fileName)){
   await decode(chunks(buffer),buffer.length);
  }else if(/\.zip$/i.test(fileName)){
-  let eocd=-1;
-  for(let i=buffer.length-22;i>=Math.max(0,buffer.length-65557);i--){
-   if(buffer.readUInt32LE(i)===0x06054b50){eocd=i;break}
-  }
-  if(eocd<0)throw Error('Invalid Amazon ZIP');
-  const count=buffer.readUInt16LE(eocd+10),offset=buffer.readUInt32LE(eocd+16);
-  if(count>500||offset>=buffer.length)throw Error('Invalid Amazon ZIP entries');
-  const files=[];let ptr=offset;
-  for(let i=0;i<count;i++){
-   if(ptr+46>buffer.length||buffer.readUInt32LE(ptr)!==0x02014b50)
-    throw Error('Invalid Amazon ZIP directory');
-   const method=buffer.readUInt16LE(ptr+10),compressed=buffer.readUInt32LE(ptr+20),
-    uncompressed=buffer.readUInt32LE(ptr+24),n=buffer.readUInt16LE(ptr+28),
-    e=buffer.readUInt16LE(ptr+30),c=buffer.readUInt16LE(ptr+32),
-    local=buffer.readUInt32LE(ptr+42);
-   if(ptr+46+n+e+c>buffer.length)throw Error('Invalid ZIP filename');
-   const name=buffer.subarray(ptr+46,ptr+46+n).toString('utf8');
-   ptr+=46+n+e+c;
-   if(!ORDER_CSV.test(name))continue;
-   if(files.length>=30||uncompressed>MAX_EXPANDED)
-    throw Error('Amazon ZIP contains too much order history');
-   if(local+30>buffer.length||buffer.readUInt32LE(local)!==0x04034b50)
-    throw Error('Invalid ZIP entry');
-   const start=local+30+buffer.readUInt16LE(local+26)+buffer.readUInt16LE(local+28);
-   if(start+compressed>buffer.length)throw Error('Truncated Amazon ZIP');
-   if(method!==0&&method!==8)throw Error('Unsupported Amazon ZIP compression');
-   files.push({start,compressed,uncompressed,method});
-  }
+  const files=selectedEntries(buffer,name=>ORDER_CSV.test(name),{
+   maxSelected:30,maxUncompressed:MAX_EXPANDED
+  });
   if(!files.length)throw Error('No supported Amazon order-history CSV found in ZIP');
   for(const f of files){
    const part=buffer.subarray(f.start,f.start+f.compressed);
