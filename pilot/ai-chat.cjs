@@ -333,7 +333,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
  const initial=selectContextFacts(context),allFacts=[...initial],
   charts=[...(context.visuals||[])];
  const external=[],tools=autonomous?[...TOOLS,READ_TOOL,COMPUTE_TOOL,
-  AUDIT_TOOL,COMPARE_TOOL,...(qaMode?[]:[RESEARCH_TOOL])]:TOOLS;
+  ...(qaMode?[]:[AUDIT_TOOL]),COMPARE_TOOL,...(qaMode?[]:[RESEARCH_TOOL])]:TOOLS;
  const successfulSourceChecks=new Set();
  const analysisStarted=Date.now();
  const dataset=autonomous?createDataset(context):null;
