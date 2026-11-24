@@ -28,11 +28,16 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
    await store({...empty(),...value,autoEnabled:false,reportFormatVersion:5,
     report:null,revision:null,completedAt:null});
   }else if(value.autoEnabled){
-   // Migrate any previously authorized automatic runs to manual-only.
-   await store({...empty(),...value,autoEnabled:false});
-  }else saved={...empty(),...value,autoEnabled:false,
-   checkpoint:value.checkpoint&&typeof value.checkpoint.revision==='string'&&
-    value.checkpoint.state?.version===1?value.checkpoint:null};
+   // Revoke old standing consent without rewriting unrelated private cache
+   // fields or adding a new checkpoint key to a legacy saved report.
+   await store({...value,autoEnabled:false});
+  }else{
+   saved={...empty(),...value,autoEnabled:false};
+   if(!Object.prototype.hasOwnProperty.call(value,'checkpoint'))
+    delete saved.checkpoint; // Preserve the existing encrypted report shape.
+   else if(!value.checkpoint||typeof value.checkpoint.revision!=='string'||
+     value.checkpoint.state?.version!==1)saved.checkpoint=null;
+  }
  }
  function status(){
   const current=available()?revision():null;
