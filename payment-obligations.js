@@ -531,17 +531,6 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const limitEstimated=estimatedOverpayment&&method==='statement'&&!confirmedFirst&&
     due>asOf&&!unreconciledOverdue;
    const amount=limitEstimated?round(Math.max(0,fullAmount)):requestedAmount;
-   if(estimatedOverpayment){
-    const message=card.name+': '+(limitEstimated?'limited':'review')+
-     ' a projected card payment '+requestedAmount.toFixed(2)+
-     ' against modeled available card debt '+fullAmount.toFixed(2)+
-     ' for '+actualDue+'. Confirm issuer balance and missing card activity.';
-    warnings.push(message);
-    warningActions.push({message,kind:'card-payment-overbalance',
-     cardId:id,periodEnd:cycleClose,difference:round(requestedAmount-fullAmount),
-     signature:[cycleClose,requestedAmount.toFixed(2),fullAmount.toFixed(2),
-      confirmedFirst?'issued':'estimated',method].join('|')});
-   }
    if(method==='full'&&fullAmount===null){
     warnings.push(card.name+': full balance needs a current bank-reported card balance');continue;
    }
@@ -568,6 +557,18 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // One matching posted payment is enough to require reconciliation. Never
    // schedule the full amount again when part/all may already have been paid.
    const paid=postedForCycle.length>0;
+   if(!paid&&estimatedOverpayment){
+    const message=card.name+': '+(limitEstimated?'limited':'review')+
+     ' a projected card payment '+requestedAmount.toFixed(2)+
+     ' against modeled available card debt '+fullAmount.toFixed(2)+
+     ' for '+actualDue+'. Confirm issuer balance and missing card activity.';
+    warnings.push(message);
+    warningActions.push({message,kind:'card-payment-overbalance',
+     cardId:id,periodEnd:cycleClose,difference:round(requestedAmount-fullAmount),
+     signature:[cycleClose,requestedAmount.toFixed(2),fullAmount.toFixed(2),
+      confirmedFirst?'issued':'estimated',method].join('|')});
+   }
+
    // An earlier overdue statement may be reconciled later by the canonical
    // bank-match pass. Until then its planned payment is still counted in this
    // engine, so subtracting it from current card debt a second time would
