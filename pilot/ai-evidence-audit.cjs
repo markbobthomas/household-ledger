@@ -51,10 +51,10 @@ function auditFinancialEvidence(context,r,index){
    const m=x.date.slice(0,7),v=months.get(m)||blank(),n=Math.abs(x.amount);
    const kind=String(x.accountingKind||'').toLowerCase();
    const typ=String(x.type||'').toLowerCase();
-   if(typ==='expense'&&!['card_payment','internal_transfer'].includes(kind)){
-    v.expense+=n;v.expenseCount++;
-   }else if(typ==='refund'||kind==='refund'){
+   if(typ==='refund'||kind==='refund'){
     v.refund+=n;v.refundCount++;
+   }else if(typ==='expense'&&!['card_payment','internal_transfer'].includes(kind)){
+    v.expense+=n;v.expenseCount++;
    }else if(typ==='income'){
     v.income+=n;v.incomeCount++;
    }else if(typ==='transfer'||['card_payment','internal_transfer'].includes(kind)){
