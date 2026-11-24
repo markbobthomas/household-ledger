@@ -93,10 +93,10 @@ module.exports=(async()=>{
    const browser=await engine.launch({headless:true}),context=await browser.newContext({
     viewport:{width,height:800}}),page=await context.newPage(),errors=[],requests=[];
    page.on('pageerror',e=>errors.push(e.message));
-   const settings=[],state={enabled:false,report:withoutComparison,completedAt:'2026-11-21T10:00:00Z'};
+   const settings=[],state={enabled:false,status:'ready',isCurrent:true,
+    report:withoutComparison,completedAt:'2026-11-21T10:00:00Z'};
    await page.route('**/api/ai/report',async route=>route.fulfill({
-    status:200,contentType:'application/json',body:JSON.stringify({
-     enabled:state.enabled,status:'ready',report:state.report,completedAt:state.completedAt})
+    status:200,contentType:'application/json',body:JSON.stringify(state)
    }));
    await page.route('**/api/ai/settings',async route=>{
     const request=route.request().postDataJSON();settings.push(request);
@@ -108,6 +108,7 @@ module.exports=(async()=>{
     requests.push(route.request().postDataJSON());
     state.report=withComparison;
     state.completedAt='2026-11-21T11:00:0'+requests.length+'Z';
+    state.status='ready';state.isCurrent=true;delete state.errorCode;
     await route.fulfill({status:202,contentType:'application/json',
      body:JSON.stringify({enabled:state.enabled,status:'queued'})});
    });
@@ -207,6 +208,23 @@ module.exports=(async()=>{
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.audit li').count(),2);
    assert.equal(settings.length,0,'no automatic settings calls');
+   // Persisted results remain visible across refresh, source changes and
+   // failed AI reruns; GET never makes a paid provider request.
+   state.status='outdated';state.isCurrent=false;
+   await page.reload();
+   await page.locator('.analysis-report').waitFor({state:'visible'});
+   assert.match(await page.locator('#status').innerText(),/remains viewable/);
+   assert.equal(await page.locator('.insight-graphic').count(),4);
+   assert.equal(requests.length,0);
+   state.status='failed';state.errorCode='invalid_ai_evidence';
+   await page.reload();
+   await page.locator('.analysis-report').waitFor({state:'visible'});
+   assert.match(await page.locator('#status').innerText(),/last successful analysis is preserved/i);
+   assert.match(await page.locator('#status').innerText(),/invalid_ai_evidence/);
+   assert.equal(requests.length,0);
+   state.status='ready';state.isCurrent=true;delete state.errorCode;
+   await page.reload();
+   await page.locator('.analysis-report').waitFor({state:'visible'});
    await page.locator('#consent').check();
    await page.locator('#run').click();
    await page.locator('.quality-note').waitFor({state:'visible'});
