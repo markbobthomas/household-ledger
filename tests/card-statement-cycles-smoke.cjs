@@ -630,8 +630,8 @@ const stale=Payments.build({...limitSnapshot,asOf:'2026-11-23'},
  [{...limitPosted,date:'2026-09-08'}],
  [{id:'future-usage',date:'2026-11-30',accountId:'limit-card',
  type:'expense',amount:250,merchant:'Fictional Scheduled Service'}],
- stalePrefs,{days:50});
-const later=stale.statements.find(x=>x.dueDate==='2026-12-12');
+ stalePrefs,{days:70});
+const later=stale.statements.find(x=>x.dueDate==='2027-01-12');
 assert.ok(later);
 assert.equal(later.amount,250,'Preserve estimated payment when earlier overdue cash debit remains unreconciled');
 assert.equal(later.estimatedPaymentLimited,undefined,
