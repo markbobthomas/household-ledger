@@ -212,6 +212,27 @@ assert.ok(conflicted.suggestions.every(x=>!x.suggestedCategory),
 assert.equal(Apply.prepare(conflicted,{}).report.confidentCategories,0);
 assert.equal(Apply.prepare(doubleChoice,{}).report.confidentCategories,0,
  'Competing product candidates stay unclassified');
+
+const sameCategoryAlternatives=A.match([
+ {orderId:'home-1',date:'2026-10-10',shipmentDate:'2026-10-11',
+  title:'Laundry detergent',cents:2000},
+ {orderId:'home-2',date:'2026-10-10',shipmentDate:'2026-10-11',
+  title:'Kitchen sponge',cents:2000}
+],{
+ home:{id:'home',accountId:'credit-one',name:'AMAZON',
+  date:'2026-10-13',amount:20.5}
+},{},categories);
+assert.equal(sameCategoryAlternatives.matches.length,0,
+ 'Uncertain product identity remains unconfirmed');
+assert.match(sameCategoryAlternatives.suggestions[0].note,/ OR /);
+assert.equal(sameCategoryAlternatives.suggestions[0].suggestedCategory,
+ 'Home & Maintenance',
+ 'Two plausible items of the same category can yield that category safely');
+assert.equal(Apply.prepare(sameCategoryAlternatives,{}).next.categoryOverrides.home,
+ 'Home & Maintenance');
+assert.equal(Apply.prepare(sameCategoryAlternatives,{}).next.amazonAllocations.home,
+ undefined,'Common category does not invent a product/amount allocation');
+
 assert.equal(Apply.prepare(broad,{}).report.confidentCategories,0,
  'Date-only or large-discrepancy hints must not change categories');
 
