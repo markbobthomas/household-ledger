@@ -1090,7 +1090,12 @@ async function start(port=Number(env.PORT||8788)){
     try{
      const prepared=preparedFor(ledgerPayload());
      document=require('./analysis-export.cjs').build({
-      prepared,adjustments:state.ledgerAdjustments,lastSync:state.lastSync
+      prepared,adjustments:state.ledgerAdjustments,lastSync:state.lastSync,
+      // Restrict the manual download to sync outcomes and codes. Never
+      // include account IDs, Item identifiers, provider messages or request IDs.
+      syncDiagnostics:{lastAttempt:lastSyncAttempt,
+       issues:state.items.filter(i=>i.syncIssue).map(i=>({
+        code:i.syncIssue.code,observedAt:i.syncIssue.observedAt}))}
      });
     }catch{
      return respond(503,{error:'The complete canonical analysis dataset is not available. No data was changed.'});
