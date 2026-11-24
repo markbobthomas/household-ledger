@@ -32,7 +32,10 @@ function createDataset(context){
  const add=(section,fields,description)=>{
   const id='dataset-'+section+'-'+(sections[section].length+1);
   sections[section].push({id,...fields});
-  facts.push({id,kind:'dataset-'+section,text:description.slice(0,460)});
+  // Extra source review records may contain several dates/amounts. Retain
+  // enough approved evidence text to cite any visible value, not just its heading.
+  facts.push({id,kind:'dataset-'+section,text:description.slice(0,
+   ['savedDecisions','reconciliation','bankSync','accounts'].includes(section)?1500:520)});
  };
  for(const row of [...context.source.history].filter(x=>x&&date(x.date)&&finite(x.amount))
   .sort((a,b)=>b.date.localeCompare(a.date))){
