@@ -1,6 +1,7 @@
 'use strict';
 // Private Amazon order-history importer. Never creates, deletes or edits a bank transaction.
 const zlib=require('node:zlib');
+const {selectedEntries}=require('./amazon-zip.cjs');
 const MAX_FILE=6*1024*1024,MAX_TEXT=24*1024*1024,MAX_ROWS=90000;
 // Shared with the 79 MB streaming importer. Amazon's 2026 ZIP uses
 // "Order History.csv" (with a space); earlier exports use Retail.OrderHistory.
@@ -82,29 +83,13 @@ function isoDate(value){
  return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===iso?iso:'';
 }
 function zipTexts(buf){
- let eocd=-1;
- for(let i=buf.length-22;i>=Math.max(0,buf.length-65557);i--){
-  if(buf.readUInt32LE(i)===0x06054b50){eocd=i;break}
- }
- if(eocd<0)throw Error('Invalid Amazon ZIP');
- const count=buf.readUInt16LE(eocd+10),offset=buf.readUInt32LE(eocd+16);
- if(count>500||offset>=buf.length)throw Error('Invalid Amazon ZIP entries');
- const files=[];let ptr=offset,total=0;
- for(let i=0;i<count;i++){
-  if(ptr+46>buf.length||buf.readUInt32LE(ptr)!==0x02014b50)throw Error('Invalid Amazon ZIP directory');
-  const method=buf.readUInt16LE(ptr+10),compressed=buf.readUInt32LE(ptr+20),
-   uncompressed=buf.readUInt32LE(ptr+24),
-   n=buf.readUInt16LE(ptr+28),e=buf.readUInt16LE(ptr+30),c=buf.readUInt16LE(ptr+32),
-   local=buf.readUInt32LE(ptr+42);
-  if(ptr+46+n+e+c>buf.length)throw Error('Invalid ZIP filename');
-  const name=buf.subarray(ptr+46,ptr+46+n).toString('utf8');
-  ptr+=46+n+e+c;
-  if(!ORDER_CSV.test(name))continue;
-  if(files.length>=30||uncompressed>MAX_TEXT||total+uncompressed>MAX_TEXT)
-   throw Error('Amazon ZIP contains too much order history');
-  if(local+30>buf.length||buf.readUInt32LE(local)!==0x04034b50)throw Error('Invalid ZIP entry');
-  const start=local+30+buf.readUInt16LE(local+26)+buf.readUInt16LE(local+28);
-  if(start+compressed>buf.length)throw Error('Truncated Amazon ZIP');
+ const files=[],entries=selectedEntries(buf,name=>ORDER_CSV.test(name),{
+  maxSelected:30,maxUncompressed:MAX_TEXT
+ });
+ if(!entries.length)throw Error('No supported Amazon order-history CSV found in ZIP');
+ let total=0;
+ for(const entry of entries){
+  const {start,compressed,uncompressed,method}=entry;
   let text;
   if(method===0)text=buf.subarray(start,start+compressed);
   else if(method===8)text=zlib.inflateRawSync(buf.subarray(start,start+compressed),{maxOutputLength:MAX_TEXT-total});
@@ -112,7 +97,6 @@ function zipTexts(buf){
   if(text.length!==uncompressed)throw Error('Invalid ZIP entry length');
   total+=text.length;files.push(text.toString('utf8'));
  }
- if(!files.length)throw Error('No supported Amazon order-history CSV found in ZIP');
  return files;
 }
 function readFile(fileName,base64){
