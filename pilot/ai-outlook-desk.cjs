@@ -47,7 +47,7 @@ function buildOutlookDesk(context){
    group(v.merchants,label,Number(tx.amount));
    if(category.toLowerCase()==='other')group(v.retailOther,label,Number(tx.amount));
    if(category.toLowerCase().startsWith('subscription'))group(v.subMerchants,label,Number(tx.amount));
-   if(/\\b(?:service fee|monthly fee|maintenance fee|bank fee)\\b/i.test(label+' '+(tx.description||'')))
+   if(/\b(?:service fee|monthly fee|maintenance fee|bank fee)\b/i.test(label+' '+(tx.description||'')))
     v.fees+=amount;
   }else if(type==='income'){
    // Income split is descriptive; saved paycheck rules establish annual cadence.
