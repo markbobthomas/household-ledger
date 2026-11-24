@@ -100,6 +100,15 @@ button{font:inherit;cursor:pointer}
 .metric .label{font-size:.74rem}.metric strong{font-size:clamp(.99rem,2vw,1.32rem);margin-top:4px;line-height:1.2;overflow-wrap:anywhere}
 .metric .metric-detail{padding-top:8px;margin-top:8px;border-top:1px solid #e6ece7}
 .metric-detail p{font-size:.86rem!important;line-height:1.45!important}
+.analysis-lead{padding:9px 0 16px;border-bottom:1px solid #e0e8e2;margin:0 0 10px}
+.analysis-lead h2{font-size:clamp(1.3rem,2.6vw,1.85rem);letter-spacing:-.025em;color:#223d33;margin:0 0 7px;line-height:1.3}
+.analysis-lead>p{font-size:.98rem;line-height:1.48;color:#4d6657;margin:0 0 8px}
+.forecast-boundary{font-size:.82rem!important;line-height:1.45!important;color:#627268;margin:2px 0 15px!important}
+.insight-graphic{padding:15px 0 17px;border-top:1px solid #e8eee9}
+.insight-graphic h3{font-size:1.01rem;line-height:1.35;color:#213e32;margin:0 0 4px}
+.insight-graphic>p{font-size:.9rem!important;color:#53675e;margin:0 0 8px!important;line-height:1.4!important}
+.insight-graphic .graph{margin:8px 0}
+.insight-graphic .insight-depth{margin:2px 0 0}
 .insight-list{display:grid;gap:0}
 .insight-card{margin:0;border:0;border-top:1px solid #e8eee9;padding:0;color:#2b4037}
 .insight-card summary{display:grid;grid-template-columns:minmax(0,1fr) 17px;gap:8px;list-style:none;align-items:start;padding:12px 1px}
@@ -413,7 +422,15 @@ button{font:inherit;cursor:pointer}
   }
   msg.append(el('h2','glance-heading',isQa?'AI investigation':'At a glance'));
   const blocks=(data.blocks||[]).filter(b=>b&&typeof b==='object');
-  const metrics=blocks.filter(b=>b.kind==='metric').slice(0,3);
+  const lead=blocks.find(b=>b.kind==='hero'&&b.title);
+  if(lead){
+   const section=el('section','analysis-lead');
+   section.append(el('h2','',lead.title));
+   if(lead.text)info(section,clipText(lead.text,280).lead);
+   detailsFor(section,lead);
+   msg.append(section);
+  }
+  const metrics=blocks.filter(b=>b.kind==='metric').slice(0,6);
   if(metrics.length){
    const grid=el('div','metric-grid');
    for(const block of metrics){
@@ -428,8 +445,20 @@ button{font:inherit;cursor:pointer}
    }
    msg.append(grid);
   }
-  const findings=blocks.filter(b=>!metrics.includes(b));
+  if(!isQa&&data.coverage?.variableSpendingExplicitlyEstimated===false)
+   msg.append(el('p','forecast-boundary',
+    'Forecast scope: scheduled payments and deposits only. Ordinary variable purchases are not independently projected.'));
+  const findings=blocks.filter(b=>b!==lead&&!metrics.includes(b));
   const addInsight=(target,block)=>{
+   if(block.kind==='chart'&&block.chart){
+    const graphic=el('section','insight-graphic');
+    graphic.append(el('h3','',block.title||block.chart.title||'Financial comparison'));
+    if(block.text)info(graphic,clipText(block.text,240).lead);
+    drawGraph(graphic,block.chart);
+    detailsFor(graphic,block);
+    target.append(graphic);
+    return;
+   }
    const card=el('details','insight-card'),label=el('summary','insight-summary'),
     copy=el('span'),body=el('div','insight-body'),short=clipText(block.text||'',135);
    copy.append(el('span','insight-head',block.title||block.chart?.title||'Financial finding'));
@@ -439,21 +468,16 @@ button{font:inherit;cursor:pointer}
    if(block.detail)info(body,block.detail);
    if(block.chart?.subtitle)info(body,block.chart.subtitle);
    addEvidence(body,block.evidence);
-   if(block.kind==='chart'&&block.chart){
-    let drawn=false;
-    card.addEventListener('toggle',()=>{
-     if(card.open&&!drawn){drawn=true;drawGraph(body,{...block.chart,title:''});}
-    });
-   }else if(!body.hasChildNodes())info(body,'No additional supporting details.');
+   if(!body.hasChildNodes())info(body,'No additional supporting details.');
    card.append(label,body);target.append(card);
   };
   const list=el('div','insight-list');
-  for(const block of findings.slice(0,7))addInsight(list,block);
+  for(const block of findings.slice(0,9))addInsight(list,block);
   msg.append(list);
-  if(findings.length>7){
+  if(findings.length>9){
    const more=el('details','more-insights'),inside=el('div','insight-list');
-   for(const block of findings.slice(7))addInsight(inside,block);
-   more.append(el('summary','','More findings ('+(findings.length-7)+')'),inside);
+   for(const block of findings.slice(9))addInsight(inside,block);
+   more.append(el('summary','','More findings ('+(findings.length-9)+')'),inside);
    msg.append(more);
   }
   const meta=el('details','limits'),s=el('summary','','Sources, checks and limits'),
