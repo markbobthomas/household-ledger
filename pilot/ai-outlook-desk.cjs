@@ -83,6 +83,7 @@ function buildOutlookDesk(context){
   otherTransferAverage:mean(windows,'otherTransferOut')/100,
   payrollObservedAverage:mean(windows,'payroll')/100,
   otherIncomeAverage:mean(windows,'otherIncome')/100,
+  observedBankFeesAverage:mean(windows,'fees')/100,
   largePurchaseCount:windows.reduce((s,x)=>s+x.high100Count,0),
   largePurchaseTotal:windows.reduce((s,x)=>s+x.high100,0)/100};
  // Deliberately distinct series: the checking transfer may be a mortgage,
@@ -156,6 +157,17 @@ function buildOutlookDesk(context){
  if(windows.length&&normalizedPayroll!==null){
   const combined=money(averaged.netPurchaseAverage+averaged.obligationTransferAverage),
    difference=money(normalizedPayroll-combined);
+  charts.push({id:'outlook-income-versus-observed-outflows',type:'bar',unit:'USD',
+   title:'Typical monthly income versus observed outflow proxy',
+   subtitle:'Complete-month net purchases plus owner-categorized housing/utility transfers; transfer purpose is not externally verified',
+   points:[{label:'Normalized saved payroll',value:normalizedPayroll},
+    {label:'Observed purchase + housing/utility transfers',value:combined}]});
+  charts.push({id:'outlook-adjustment-scenarios',type:'bar',unit:'USD',
+   title:'How reducing optional purchases could change the monthly margin',
+   subtitle:'Illustrative arithmetic, not a prediction of achievable savings; all other source assumptions held constant',
+   points:[0,250,500,750].map(reduction=>({
+    label:reduction?'Monthly reduction $'+reduction:'Current observed proxy',
+    value:money(difference+reduction)}))});
   add('Conditional normalized cash-flow sustainability comparison',
    'Normalized saved recurring income '+dollar(normalizedPayroll)+
    ' per month versus observed net purchase charges plus owner-categorized housing/utility withdrawal candidates '+
@@ -194,6 +206,15 @@ function buildOutlookDesk(context){
   'Across '+windows.length+' complete months, '+safe(item.label)+
   ' gross recorded purchase charges '+dollar(item.total)+
   ', monthly average '+dollar(item.monthlyAverage)+'. Receipts/items are unavailable; merchant totals are not proven discretionary.');
+ for(const item of subscriptions.slice(0,18))add('Observed subscription-category merchant '+item.label,
+  'Across '+windows.length+' complete months, '+safe(item.label)+
+  ' charges categorized as Subscriptions total '+dollar(item.total)+
+  ', arithmetic monthly average '+dollar(item.monthlyAverage)+
+  '. A single annual renewal can drive the average; do not infer monthly cadence, duplicate billing or waste from the name alone.');
+ if(windows.length&&averaged.observedBankFeesAverage>0)add('Possible bank-service fee charges',
+  'Bank, monthly or service-fee-named purchase transactions averaged '+
+  dollar(averaged.observedBankFeesAverage)+
+  ' per complete observed month. Validate that they are actual bank-maintenance fees and check whether a waiver is available before declaring savings.');
  for(const item of other.slice(0,15))add('Unbudgeted or Other merchant '+item.label,
   'Of the Other category, '+safe(item.label)+' recorded '+dollar(item.total)+
   ' across '+windows.length+' complete months, an average '+dollar(item.monthlyAverage)+
