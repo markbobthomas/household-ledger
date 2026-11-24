@@ -72,7 +72,7 @@ function prepare(result,before={},context={}){
    needsReview:(result.matches||[]).filter(m=>m.needsReview).length,
    alreadyImported:(result.matches||[]).filter(m=>m.alreadyImported).length,
    ambiguousOrders:result.ambiguousOrders,unmatchedOrders:result.unmatchedOrders,
-   bankCharges:result.bankCharges??noteAnalysis.stats.amazonCharges??0,
+   bankCharges:result.bankCharges||noteAnalysis.stats.amazonCharges||0,
    verifiedBankCharges:result.verifiedBankCharges||0,
    possibleBankCharges:result.possibleBankCharges||0,
    unmatchedBankCharges:result.unmatchedBankCharges||0,
