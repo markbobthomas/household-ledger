@@ -54,6 +54,7 @@ const ANALYST_PROMPT=[
  'This is the SAME sanitized full financial evidence used by the owner manual Export Data: complete recorded history, future balances, saved schedules/one-offs, card rules, budgets, category choices, transaction notes, bank sync, reconciliation and source-review diagnostics. Initial rows are only a cross-section; retrieve more pages when needed. audit_financial_evidence independently computes posted expenses net identified refunds and compares schedules, card settlements, category review and source reconciliation. These are optional methods, NOT a mandatory findings checklist. Never confuse gross index totals with actual net expense or treat a review hint as a confirmed defect.',
  'You may put compact Markdown pipe tables in the expanded section detail when a side-by-side comparison materially clarifies the analysis (e.g., complete months, merchant totals, recurring obligations, sensitivity scenarios, and prioritized actions). A standard pipe table has a header row, a separator row, and data rows. Include verified citations for all numeric/date table claims in the surrounding block evidence IDs. This is optional: choose prose, metrics, tables, or charts according to the actual financial discoveries.',
  'Quality bar: produce a genuinely useful independent financial review, not isolated alerts. First form a clearly supported overall financial judgment; then investigate the strongest evidence wherever it leads. Possible research directions include comparable completed-month purchase and income trends, near-term cash-flow timing, card obligations and payment reconciliation, category/source uncertainty, recurring charges and concrete opportunities to save. These are examples, never a mandatory checklist or finding quota. Distinguish an incoming transfer from earnings and a mortgage-like transfer to an unconnected account from a verified mortgage expense. Distinguish biweekly annualized income from ordinary two-paycheck months, and full months from partial ones. Investigate any disconnect between actual historical card use and the deliberately scheduled-only forecast without adding variable purchases to Ledger predictions. Include well-chosen comparative charts and calculations when they materially clarify a finding. Do not manufacture exact deficits, savings or averages: obtain computed evidence with read-only tools and cite it, or qualify what cannot be established. Lead with WHY the most important discovery matters; provide specific, evidence-linked next actions or an explicit unresolved question in each substantive expansion.'
+ 'Write for an intelligent person who is not trained in finance. Use short, direct sentences and familiar words. Say cash available instead of liquidity, money coming in or going out instead of inflows and outflows, and payment due instead of obligation when accurate. Explain essential finance terms in everyday language. Use clear, specific headings. Explain what happened, why it matters, how certain it is, and what the reader can do. Keep ALL the original research, amounts, dates, comparisons, charts, tables, reasoning, caveats and recommendations. Plain language must NEVER mean a shorter or shallower analysis, fewer research passes, vague advice, or less source evidence. The expanded sections should still give a thorough explanation in easy-to-follow prose, without dense jargon or a patronizing tone.'
 ].join(' ');
 const QA_PROMPT=[
  'You are an independent quality-assurance auditor of Ledger financial software output, NOT a financial adviser. Investigate whether Ledger faithfully recorded, categorized, reconciled, summed and projected the available transactions. Look for arithmetic defects, missing/duplicated expected payments, stale or absent source data, invalid assumptions, incorrect income timing, inconsistent budgets or card statements, and silent omissions. These are examples, not a fixed checklist. Challenge the software rather than simply summarize the household money.',
@@ -234,7 +235,7 @@ async function reviewPresentation({apiKey,model,fetchImpl,blocks,facts=[],contex
     alternateValue:p.alternateValue}))}:null,
   citedEvidence:(b.evidence||[]).slice(0,16).map(e=>e.text)}));
  const messages=[{role:'system',content:
-  (qaMode?'You independently audit Ledger QA/QC conclusions, not the household budget. Compare each alleged software failure against the independent QA diagnostics and cited transaction/forecast facts. Reject incorrect or unproven assertions of defects, wrong amounts, misleading transfer interpretations and unsupported claims of full verification. Distinguish confirmed arithmetic mismatch from suspicion, intended forecast policy, unknown coverage, and no way to verify. If important contradictory evidence remains unexplored, return quality=reconsider with a testable source-specific question. No fixed finding count. Never suggest spending savings as the purpose of QA/QC. Do not change data. Return required JSON.':'You are an independent evidence auditor, not the analyst. Check claims against cited evidence and other supplied source context. Reject demonstrably inaccurate figures, invented comparisons, contradictions, unfounded causes, false certainty and misreading of linked transfers or card payments. Do not impose your own preferred financial topics, confidence threshold, magnitude cutoff or output structure. A proportionately qualified, evidence-supported interpretation is permitted. Reject only misleading or unsupported blocks; record genuinely unresolved questions as concerns. Separately judge whether the proposed analysis would help this household make better financial decisions. Compare what it explores against the supplied source coverage and source leads: if important source-backed questions remain unexplored, including when the report only offers a generic cash-safety status, choose quality=reconsider with a specific research lead. If the available records truly cannot support more, choose limited-source; otherwise choose substantive. No universal finding count, required subject, required chart, or confidence floor. Never ask for padding or invented recommendations. Make no financial changes. Return required JSON.')},
+  (qaMode?'You independently audit Ledger QA/QC conclusions, not the household budget. Compare each alleged software failure against the independent QA diagnostics and cited transaction/forecast facts. Reject incorrect or unproven assertions of defects, wrong amounts, misleading transfer interpretations and unsupported claims of full verification. Distinguish confirmed arithmetic mismatch from suspicion, intended forecast policy, unknown coverage, and no way to verify. If important contradictory evidence remains unexplored, return quality=reconsider with a testable source-specific question. No fixed finding count. Never suggest spending savings as the purpose of QA/QC. Do not change data. Return required JSON.':'You are an independent evidence auditor, not the analyst. Check claims against cited evidence and other supplied source context. Reject demonstrably inaccurate figures, invented comparisons, contradictions, unfounded causes, false certainty and misreading of linked transfers or card payments. Do not impose your own preferred financial topics, confidence threshold, magnitude cutoff or output structure. A proportionately qualified, evidence-supported interpretation is permitted. Reject only misleading or unsupported blocks; record genuinely unresolved questions as concerns. Separately judge whether the proposed analysis would help this household make better financial decisions. Compare what it explores against the supplied source coverage and source leads: if an important question grounded in a specific source remains unanswered, including when the report only offers a generic cash-safety status, choose quality=reconsider. In concerns, identify the exact question, the source lead where available and why the answer would help a real financial decision. Do not label a detailed, well-supported report incomplete merely because it does not discuss every single transaction or every possible subject. If the records cannot answer a relevant question, choose limited-source and identify the missing evidence; otherwise choose substantive. Do not require a fixed topic list or proof that every imaginable question was investigated. No universal finding count, required subject, required chart, or confidence floor. Never ask for padding or invented recommendations. Make no financial changes. Return required JSON.')},
   {role:'user',content:JSON.stringify({blocks:supplied,
    sourceCoverage:context?.scope||{},
    // Audit against other independently sampled source facts as well as citations.
@@ -560,7 +561,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      await saveCheckpoint(round+1);
      continue;
     }
-    if(result.blocks.length&&secondReview.quality==='reconsider'&&reviewRetries<2){
+    if(result.blocks.length&&secondReview.quality==='reconsider'&&reviewRetries<3){
      // A factually supportable report can still be too shallow to be useful.
      // Let the model select further inquiries, without enforcing categories
      // or an arbitrary minimum number of findings.
@@ -569,6 +570,8 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      messages.push({role:'user',content:JSON.stringify({
       request:qaMode?'The independent QA review found important unanswered calculation, reconciliation, or coverage questions. Examine the source event legs, saved schedules, and exact mismatches, then report only justified software-quality findings and what remains unverified.':'The independent review found this report too shallow to answer the most important questions raised by the available records. Investigate the specific gaps and re-synthesize the report with real source evidence, relevant comparisons and useful recommendations where justified. Choose your own subjects, charts and depth. Do not pad or invent findings.',
       independentReview:secondReview.reason,
+      reviewerQuestions:secondReview.concerns,
+      action:'Answer each specific unanswered question with read-only source research, or explain what records are missing. Keep all the already verified findings and their detail. Use plain everyday language throughout.',
       citedEvidenceAvailable:allFacts.length,
       sourceCoverage:context.scope,
       candidateFindings:drafts.map(d=>d.blocks.length)
@@ -592,9 +595,18 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
     if(qaMode)result.qaAudit=context.qaAudit;
     result.analysisQuality=!sourceOnly&&secondReview.quality==='substantive'?
      {status:'substantive'}:
-     {status:'limited',reason:secondReview.quality==='limited-source'?
-      'The source evidence did not support a broader assessment.':
-      'An independent reviewer still identified unanswered financial questions after further investigation.'};
+     {status:'limited',
+      cause:sourceOnly?'source-proof':secondReview.quality==='limited-source'?
+       'missing-records':'open-questions',
+      reason:sourceOnly?
+       'The AI could not support all of its conclusions with source records. Only directly verified facts are shown.':
+       secondReview.quality==='limited-source'?
+       'Some questions cannot be answered from the financial records available.':
+       'The reviewer identified specific questions that remain unanswered.',
+      questions:sourceOnly?[]:
+       [...secondReview.concerns,...(secondReview.quality==='reconsider'?[secondReview.reason]:[])]
+        .filter(x=>typeof x==='string'&&x.trim())
+        .filter((x,i,a)=>a.indexOf(x)===i).slice(0,5)};
     result.sourceChecks=successfulSourceChecks.size;
     result.independentExplorations=drafts.length;
     result.editorialRevisions=editorialRetries+reviewRetries;
@@ -604,8 +616,9 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      matched:comparison.matched.slice(0,30),differences:comparison.differences.slice(0,50)};
     result.auditTrail=[{action:'Verified numerical and dated report claims against cited evidence',
      evidenceFacts:allFacts.length,verifiedBlocks:result.evidenceAudit.blocksVerified},
-     {action:'Independently re-reviewed all displayed claims against their cited source evidence',
-      claimsRejected:secondReview.rejected.size},
+     ...(!sourceOnly?[{action:'Independently re-reviewed all displayed claims against their cited source evidence',
+      claimsRejected:secondReview.rejected.size}]:
+      [{action:'The AI narrative failed citation checks; displayed source-only facts were verified locally'}]),
      ...(secondReview.rejected.size?[{action:'Automatically withheld claims rejected in independent evidence audit',
       count:secondReview.rejected.size,scope:'derived analysis only'}]:[]),
      ...(result.evidenceAudit.unsupportedBlocksWithheld?[{action:'Automatically withheld unsupported AI presentation blocks',
@@ -614,7 +627,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
        count:result.evidenceAudit.immaterialBlocksWithheld,scope:'derived analysis only'}]:[])];
     if(sourceOnly)result.limitations.push('The full AI-generated report failed its evidence review. Only directly verifiable source facts are shown.');
     result.limitations.push(...secondReview.concerns.slice(0,4)
-     .map(x=>'Unresolved reviewer question (not a confirmed finding): '+x));
+     .map(x=>'Still to check (not a confirmed problem): '+x));
     result.disclosure=qaMode?'This QA/QC independently checks all available normalized transactions, source event legs and available daily balances, then runs bounded source-evidenced AI investigation. It is not a full source-code review or external bank statement reconciliation. Nothing is modified.':'The AI receives a broad sanitized private financial dataset and may read every remaining page of posted history, future events, projected balances, card obligations and source evidence. It never receives original bank or transaction IDs, credentials or raw files. The analysis cannot edit banking records or forecasts.';
     result.datasetCoverage={total:dataset.manifest,initialIncluded:dataset.initial.manifest.initialIncluded};
    }
