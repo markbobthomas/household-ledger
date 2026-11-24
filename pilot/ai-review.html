@@ -137,10 +137,23 @@ button{font:inherit;cursor:pointer}
 .qaqc-issues summary{font-weight:650;font-size:.9rem;color:#294a3d}
 .qaqc-issues p{font-size:.86rem!important;line-height:1.5!important;color:#526459!important;margin:7px 0!important}
 .qaqc-panel .analysis-report{margin-top:13px}
+.outlook-report .who{margin-bottom:10px}
+.outlook-report .outlook-summary{border-bottom:1px solid #e1e8e2;padding:4px 0 15px;margin-bottom:16px}
+.outlook-report .outlook-summary h2{font-size:clamp(1.42rem,3.4vw,2.2rem);line-height:1.26;letter-spacing:-.03em;color:#233e33;margin:7px 0}
+.outlook-report .outlook-summary p{font-size:1.02rem;line-height:1.62;color:#3d584a}
+.outlook-report .outlook-section{padding:13px 0 17px;border-bottom:1px solid #e8eee9}
+.outlook-report .outlook-section h2{font-size:1.28rem;line-height:1.33;margin:3px 0 10px;color:#243f34}
+.outlook-report .outlook-section p{font-size:.97rem;line-height:1.72;margin:7px 0 12px;white-space:pre-line;overflow-wrap:anywhere;color:#33483b}
+.outlook-report .outlook-chart{padding:15px 0 19px}
+.outlook-report .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0 22px}
+.outlook-report .metric{background:#fafbfa}
+.outlook-report .metric>strong{font-size:clamp(1.18rem,2.8vw,1.55rem);font-variant-numeric:tabular-nums}
+@media(max-width:650px){.outlook-report .metric-grid{gap:8px}
+.outlook-report .outlook-section h2{font-size:1.14rem}}
 </style></head><body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <div class="intro"><h1>AI Financial Analysis</h1>
-<p class="muted">A short assessment first. Expand any finding for evidence and practical options.</p></div>
+<p class="muted">An independent financial outlook, based on all connected source records. Financial reasoning and charts are shown in full; source evidence is expandable.</p></div>
 <section class="control"><button id="run" type="button" disabled>Run AI Analysis</button>
 <p id="status" role="status" aria-live="polite">Checking for your saved financial analysis…</p></section>
 <div id="analysis" role="region" aria-label="AI financial analysis results"></div>
@@ -422,6 +435,64 @@ button{font:inherit;cursor:pointer}
   }
   msg.append(el('h2','glance-heading',isQa?'AI investigation':'At a glance'));
   const blocks=(data.blocks||[]).filter(b=>b&&typeof b==='object');
+  // Financial outlook is readable long-form by default. QA retains compact UI.
+  if(!isQa&&data.presentation==='independent-financial-outlook'){
+   msg.classList.add('outlook-report');
+   const hero=blocks.find(b=>b.kind==='hero');
+   if(hero){
+    const section=el('section','outlook-summary');
+    section.append(el('h2','',hero.title||'Independent household outlook'));
+    if(hero.text)info(section,hero.text);
+    if(hero.detail)info(section,hero.detail);
+    addEvidence(section,hero.evidence);msg.append(section);
+   }
+   const metrics=blocks.filter(b=>b.kind==='metric');
+   if(metrics.length){
+    const grid=el('section','metric-grid');
+    for(const block of metrics){
+     const card=el('section','metric');
+     card.append(el('div','label',block.title||'Financial metric'),
+      el('strong','',block.text||''));
+     if(block.detail)info(card,block.detail);
+     addEvidence(card,block.evidence);grid.append(card);
+    }
+    msg.append(grid);
+   }
+   if(data.coverage?.variableSpendingExplicitlyEstimated===false)
+    msg.append(el('p','forecast-boundary',
+     'Ledger forecasts scheduled items only. This independent outlook also examines past purchasing; future cash and variable spending are not guaranteed.'));
+   for(const block of blocks){
+    if(block===hero||block.kind==='metric')continue;
+    const section=el('section','outlook-section');
+    if(block.kind==='chart'&&block.chart){
+     section.classList.add('outlook-chart');
+     section.append(el('h2','',block.title||block.chart.title||'Source-based comparison'));
+     if(block.text)info(section,block.text);
+     drawGraph(section,block.chart);
+     if(block.detail)info(section,block.detail);
+    }else{
+     section.append(el('h2','',block.title||'Financial finding'));
+     if(block.text)info(section,block.text);
+     if(block.detail)info(section,block.detail);
+    }
+    addEvidence(section,block.evidence);msg.append(section);
+   }
+   const meta=el('details','limits'),
+    summary=el('summary','','Evidence coverage and limitations'),
+    inside=el('div'),c=data.coverage||{};
+   info(inside,'Source: '+(c.historicalTransactionsScanned||0)+
+    ' historical transactions, '+(c.futureEventsScanned||0)+
+    ' expected events and '+(c.forecastHorizonDays||0)+
+    ' forecast days. Last sync '+(c.lastSync||'unknown')+'.');
+   if(data.researchCoverage?.completeMonths?.length)
+    info(inside,'Historical comparison includes complete months: '+
+     data.researchCoverage.completeMonths.join(', ')+'.');
+   for(const note of data.limitations||[])info(inside,note);
+   if(data.disclosure)info(inside,data.disclosure);
+   meta.append(summary,inside);msg.append(meta);
+   target.replaceChildren(msg);return msg;
+  }
+
   const lead=blocks.find(b=>b.kind==='hero'&&b.title);
   if(lead){
    const section=el('section','analysis-lead');
