@@ -79,7 +79,12 @@ function build({prepared,adjustments={},lastSync=null,syncDiagnostics={},context
    merchant:safe(r.merchant),originalMerchant:safe(r.originalMerchant),
    scheduleLabel:safe(r.scheduleLabel),
    category:safe(r.category),amount:value(r.amount),amountBasis:safe(r.amountBasis),
-   frequency:safe(r.frequency),anchorDate:fieldDate(r.anchorDate),
+   // Frequency is a trusted schedule enum, not freeform bank text. Preserve
+   // significant cadence digits (e.g., every-4-weeks) for annualizing income.
+   frequency:permitted(r.frequency,['weekly','biweekly','every-2-weeks',
+    'every-4-weeks','every-3-weeks','monthly','twice-monthly',
+    'semi-monthly','quarterly','annual','annually','once'])||safe(r.frequency),
+   anchorDate:fieldDate(r.anchorDate),
    reconciliationAnchorDate:fieldDate(r.reconciliationAnchorDate),
    sourceAnchorDate:fieldDate(r.sourceAnchorDate),secondDay:num(r.secondDay)?r.secondDay:null,
    cashDirection:permitted(r.cashDirection,['in','out']),
