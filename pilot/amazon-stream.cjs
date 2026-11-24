@@ -52,9 +52,17 @@ function parser(window={}){
     };
     const date=isoDate(col('order date','order placed date','purchase date')),
      shipmentDate=isoDate(col('shipment date','ship date','shipped date'));
-    if(eligible(date)||eligible(shipmentDate)){
-     const id=col('order id','amazon order id'),
-      title=col('product name','product title','item title','item description','item name','title');
+    const id=col('order id','amazon order id');
+    if(window._targetOrders){
+     // Second pass: include EVERY line of a relevant order, not just the
+     // in-window shipment. Partial orders could allocate incorrect amounts.
+    }else if(id&&(eligible(date)||eligible(shipmentDate))){
+     if(window._discoverOrders.size>=MAX_ROWS)
+      throw Error('Too many relevant Amazon orders');
+     window._discoverOrders.add(id);
+    }
+    if(window._targetOrders?.has(id)){
+     const title=col('product name','product title','item description','item name','title');
      const qty=Number(col('quantity','quantity ordered')||1);
      if(id&&title&&date&&Number.isFinite(qty)&&qty>=1&&qty<=1000){
       const total=usdCents(col('item total','item total amount','item price total','item charged','item total charged')),
@@ -111,8 +119,10 @@ async function readFile(fileName,buffer,window={}){
  if(typeof fileName!=='string'||!Buffer.isBuffer(buffer)||!buffer.length||
     buffer.length>MAX_FILE)throw Error('Choose an Amazon CSV or ZIP of 79 MB or less');
  let aggregate=[],expanded=0;
+ const targetOrders=window._targetOrders||null,
+  discoverOrders=targetOrders?null:new Set();
  const decode=async (stream,expected)=>{
-  const csv=parser(window),decoder=new StringDecoder('utf8');let bytes=0;
+  const csv=parser({...window,_discoverOrders:discoverOrders}),decoder=new StringDecoder('utf8');let bytes=0;
   for await (const chunk of stream){
    bytes+=chunk.length;expanded+=chunk.length;
    if(bytes>expected||expanded>MAX_EXPANDED)
@@ -169,6 +179,13 @@ async function readFile(fileName,buffer,window={}){
    catch(e){output.destroy?.();throw e}
   }
  }else throw Error('Choose a CSV or ZIP exported from Amazon');
+ // Two streaming passes avoid accidentally splitting a single multi-shipment
+ // order across the date cutoff. The first pass retains only eligible order
+ // IDs; the second retains all line items belonging to those IDs.
+ if(discoverOrders){
+  if(!discoverOrders.size)return [];
+  return readFile(fileName,buffer,{...window,_targetOrders:discoverOrders});
+ }
  return aggregate;
 }
 module.exports={readFile,targetWindow,MAX_FILE};
