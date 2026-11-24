@@ -996,7 +996,10 @@ async function start(port=Number(env.PORT||8788)){
      result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
       savedCategoryChoices(state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories));
     }catch(error){return respond(400,{error:String(error.message||'Invalid Amazon export').slice(0,150)})}
-    const before=state.ledgerAdjustments||{},
+    // Snapshot the original preferences before saveForecast writes the new
+    // encrypted Note overlay. A later category-store failure must restore
+    // the ORIGINAL notes, not the partially updated in-memory object.
+    const before=structuredClone(state.ledgerAdjustments||{}),
      plan=require('./amazon-apply.cjs').prepare(result,before),
      {report,next,nextPredictions,hasNotes,categoryChanged}=plan;
     if(body.dryRun||!plan.ready)return respond(200,report);
