@@ -32,6 +32,9 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 <p class="muted">Only clear one-to-one Amazon charge matches are applied. Manual category decisions are preserved. Unrecognized items remain Unassigned for Review. Bank payments and balances are never edited.</p>
 <details><summary>Show matched purchases</summary><div id="details"></div></details>
 </section>
+<section class="panel"><h2>Sync Amazon orders from your browser</h2>
+<p>On a desktop computer, you can use the <a href="https://github.com/markbobthomas/household-ledger/tree/main/browser/amazon-ledger" target="_blank" rel="noopener noreferrer">Ledger Amazon browser extension (Chrome / Edge)</a> to read orders while signed in to Amazon and open this same preview automatically—without waiting for an Amazon data export.</p>
+<p class="muted">This initial browser sync is deliberately conservative: it handles clearly priced single-item orders from up to five order-history pages. Multi-item orders and uncertain totals still need an Amazon CSV/ZIP export. Nothing is saved until you press Apply categories. Desktop browser required; iPhone/iPad browser extensions are not supported.</p></section>
 <section class="panel"><h2>How matching works</h2>
 <ul><li>Finds Amazon charges in your existing bank history using the exact charged amount and a reasonable order-to-posting window.</li>
 <li>Splits one charge across budget categories when multiple different items were purchased.</li>
