@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Ledger Amazon sync</title><style>
+body{font:14px system-ui,-apple-system,sans-serif;width:330px;margin:0;padding:18px;color:#202c2b;background:#fff}
+h1{font-size:18px;margin:0 0 8px}p{line-height:1.5;color:#405950}label{font-weight:600}
+input{width:100%;padding:10px;margin:8px 0 12px;box-sizing:border-box;border:1px solid #a6b9ae;border-radius:7px}
+button{padding:10px 12px;border:1px solid #175f50;border-radius:7px;background:white;color:#175f50;font:inherit;cursor:pointer}
+button.primary{background:#175f50;color:white}button:disabled{opacity:.5}
+.actions{display:flex;gap:8px;flex-wrap:wrap}#message{min-height:28px;white-space:pre-wrap}
+small{color:#63746e;line-height:1.45;display:block;margin-top:13px}
+</style></head><body>
+<h1>Amazon → Ledger</h1>
+<p>Open <strong>Your Orders</strong> at amazon.com while signed in, then sync recent order pages into Ledger for review.</p>
+<label for="ledger">Your private Ledger address</label>
+<input id="ledger" type="url" placeholder="https://your-ledger.onrender.com" autocomplete="off" spellcheck="false">
+<div class="actions"><button id="save" type="button">Connect Ledger</button>
+<button id="sync" class="primary" type="button">Sync Amazon orders</button></div>
+<p id="message" role="status" aria-live="polite"></p>
+<small>Reads up to five Amazon order pages only when you click Sync. Orders with uncertain item prices are skipped. No password, Amazon cookies, or purchase history is kept by this extension. Ledger opens a preview; you decide whether to apply it.</small>
+<script src="popup.js"></script></body></html>

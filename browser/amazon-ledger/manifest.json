@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Ledger Amazon Orders Sync",
+  "version": "0.1.0",
+  "description": "Privately read Amazon order pages and preview item categories in your signed-in Ledger.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "action": {"default_title": "Sync Amazon orders to Ledger", "default_popup": "popup.html"},
+  "background": {"service_worker": "background.js"}
+}
