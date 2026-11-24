@@ -36,7 +36,8 @@ assert.equal(b.lines[0].category,'Uncategorized');
 assert.ok(!analysis.matches.some(m=>m.transactionId==='c'||m.transactionId==='cash'||m.transactionId==='unrelated'));
 assert.deepEqual(Object.keys(tx),['a','b','c','unrelated','cash'],'matching cannot mutate bank facts');
 const manual=A.match(items,tx,{categoryOverrides:{a:'Groceries'}},categories);
-assert.ok(!manual.matches.some(m=>m.transactionId==='a'),'manual category not replaced');
+assert.ok(manual.matches.some(m=>m.transactionId==='a'&&m.notesOnly),
+  'Existing manual category remains authoritative but item Note can still be added');
 const unassigned=A.match(items,tx,{categoryOverrides:{a:'Uncategorized'}},categories);
 assert.ok(unassigned.matches.some(m=>m.transactionId==='a'),'unassigned Amazon charges can be classified');
 const reimport=A.match(items,tx,{amazonAllocations:{a:{orderId:a.orderId,lines:a.lines,amountCents:12000}}},categories);
@@ -62,6 +63,57 @@ end.writeUInt32LE(central.length+name.length,12);
 end.writeUInt32LE(local.length+name.length+zipped.length,16);
 const zip=Buffer.concat([local,name,zipped,central,name,end]);
 assert.equal(A.readFile('my-amazon-export.zip',zip.toString('base64')).length,5);
+const Pair=require('../pilot/amazon-pairing.cjs');
+assert.equal(Pair.keyFor(tx.a),'bank:'+JSON.stringify(['credit-one','a']));
+assert.ok(a.note.startsWith('Amazon: Laundry detergent, 100 oz'),
+ 'A matched charge includes the real Amazon item in the transaction Note');
+assert(a.note.includes('Kids jacket'),'Short multi-product Notes include multiple actual item names');
+assert(a.note.length<=160);
+assert.equal(Pair.itemNote([{title:'x'.repeat(240)},{title:'Other item'}]).length<=160,true,
+ 'Even long titles fit the 160-character existing Note control');
+const shipItems=[
+ {orderId:'113-split',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Kitchen sponge',cents:1200},
+ {orderId:'113-split',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Coffee beans',cents:1100},
+ {orderId:'113-split',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Bicycle helmet',cents:2000}
+];
+const posted={
+ small:{id:'small',accountId:'credit-one',name:'AMZN MKTPLACE',date:'2026-10-14',amount:23,pending:false},
+ other:{id:'other',accountId:'credit-one',name:'AMZN MKTPLACE',date:'2026-10-14',amount:20,pending:false}
+};
+const split= A.match(shipItems,posted,{},categories);
+assert.equal(split.matches.length,2,'Different charges can map to distinct same-day shipment subsets');
+assert.equal(split.matches.find(m=>m.transactionId==='small').lines.length,2);
+assert.equal(split.matches.find(m=>m.transactionId==='other').lines.length,1);
+assert(split.matches.every(m=>m.note.startsWith('Amazon: ')));
+const overlappingItems=[
+ {orderId:'113-overlap',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Kids jacket',cents:2000},
+ {orderId:'113-overlap',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Laundry detergent',cents:1000}
+];
+const overlapping=A.match(overlappingItems,{
+ whole:{id:'whole',accountId:'a',name:'Amazon',date:'2026-10-14',amount:30},
+ partial:{id:'partial',accountId:'a',name:'Amazon',date:'2026-10-14',amount:20}
+},{},categories);
+assert.equal(overlapping.matches.length,0,
+ 'A single physical product cannot be applied to a whole charge and a partial charge');
+const near=A.match([{orderId:'113-near',date:'2026-10-10',shipmentDate:'2026-10-11',
+ title:'Coffee beans',cents:1999}],{
+ near:{id:'near',accountId:'credit-one',name:'Amazon',date:'2026-10-13',amount:20}
+},{},categories);
+assert.equal(near.matches.length,0,'Near amounts never create unverified category allocations');
+assert.equal(near.suggestions.length,1);
+assert.match(near.suggestions[0].note,/^Possible Amazon: Coffee beans/);
+assert.equal(near.suggestions[0].confidence,'possible');
+const manualNotes=A.match(items,tx,{categoryOverrides:{a:'Groceries'},
+ predictions:{transactionNotes:{[Pair.keyFor(tx.a)]:'My own note'}}},categories);
+assert(manualNotes.matches.find(m=>m.transactionId==='a').notesOnly);
+assert.equal(manualNotes.matches.find(m=>m.transactionId==='a').note.startsWith('Amazon:'),true,
+ 'Matcher proposes exact item titles but server preserves user-entered Note');
+const repeated=A.match([
+ {orderId:'order-1',date:'2026-10-12',shipmentDate:'2026-10-12',title:'Kids jacket',cents:2000},
+ {orderId:'order-2',date:'2026-10-12',shipmentDate:'2026-10-12',title:'Coffee beans',cents:2000}
+],{charge:{id:'charge',accountId:'bank',name:'AMAZON',date:'2026-10-13',amount:20}}, {},categories);
+assert.equal(repeated.matches.length,0,'Two equal-value purchases are ambiguous');
+
 console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, manual priority, ambiguity PASS');
 
 
@@ -71,12 +123,17 @@ console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, 
  const S=require('../pilot/amazon-stream.cjs'),zlib=require('node:zlib');
  assert.equal(S.MAX_FILE,79*1024*1024);
  const window=S.targetWindow(tx,{categoryOverrides:{b:'Groceries'}});
- assert(window&&window.outstandingAmazonCharges===1,
-  'Manually categorized charges do not enlarge required order-history range');
- assert.equal(window.minDate,'2026-09-24');
+ assert(window&&window.outstandingAmazonCharges===2,
+  'Previously categorized charges still need their Amazon item Notes');
+ assert.equal(window.minDate,'2026-09-23');
  assert.equal(window.maxDate,'2026-10-17');
- assert.equal(S.targetWindow(tx,{categoryOverrides:{a:'Shopping',b:'Groceries'}}),null,
-  'No unresolved Amazon charges means there is no history to process');
+ assert(S.targetWindow(tx,{categoryOverrides:{a:'Shopping',b:'Groceries'}}),
+  'Manually categorized Amazon charges remain eligible for Note enrichment');
+ assert.equal(S.targetWindow(tx,{categoryOverrides:{a:'Shopping',b:'Groceries'},
+  predictions:{transactionNotes:{
+   ['bank:'+JSON.stringify(['credit-one','a'])]:'Already annotated',
+   ['bank:'+JSON.stringify(['credit-one','b'])]:'Already annotated'
+  }}}),null,'Charges with existing notes and categories do not enlarge scan range');
  const old='113-0000000-0000001,2018-01-01,Old clothing,20.00,20.00,2018-01-02';
  const recent='113-1111111-1111111,2026-10-10,"Laundry detergent, 100 oz",25.00,120.00,2026-10-11';
  const header='Order ID,Order Date,Product Name,Item Total,Total Charged,Shipment Date';
