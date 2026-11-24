@@ -180,15 +180,16 @@ function responsesInput(messages){
  }
  return input;
 }
-async function complete({apiKey,model,messages,fetchImpl,toolChoice='auto',tools=TOOLS,responseFormat=FORMAT}){
+async function complete({apiKey,model,messages,fetchImpl,toolChoice='auto',tools=TOOLS,
+ responseFormat=FORMAT,reasoningEffort='high',requestTimeoutMs}){
  const isReasoning=String(model).startsWith('gpt-6');
  let response;
  try{response=await fetchImpl(isReasoning?'https://api.openai.com/v1/responses':
   'https://api.openai.com/v1/chat/completions',{
-  method:'POST',signal:AbortSignal.timeout(isReasoning?180000:90000),
+  method:'POST',signal:AbortSignal.timeout(requestTimeoutMs??(isReasoning?300000:90000)),
   headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
   body:JSON.stringify(isReasoning?{
-   model,store:false,reasoning:{effort:'high'},
+   model,store:false,reasoning:{effort:reasoningEffort},
    include:['reasoning.encrypted_content'],
    text:{format:{type:'json_schema',name:responseFormat.json_schema.name,
     strict:true,schema:responseFormat.json_schema.schema}},
@@ -239,7 +240,9 @@ async function reviewPresentation({apiKey,model,fetchImpl,blocks,facts=[],contex
    // Audit against other independently sampled source facts as well as citations.
    otherSourceEvidence:selectContextFacts({facts}).slice(0,160).map(f=>({
     id:f.id,kind:f.kind,text:f.text.slice(0,500)}))})}];
- const message=await complete({apiKey,model,fetchImpl,messages,tools:[],responseFormat:REVIEW_FORMAT});
+ const message=await complete({apiKey,model,fetchImpl,messages,tools:[],
+  responseFormat:REVIEW_FORMAT,reasoningEffort:qaMode?'high':'medium',
+  requestTimeoutMs:qaMode?undefined:120000});
  let parsed;try{parsed=JSON.parse(message.content||'')}catch{
   const e=Error('Independent review invalid');e.safeCode='invalid_ai_json';throw e;
  }
@@ -369,6 +372,11 @@ function citationProblems(parsed,facts){
 }
 async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4.1',fetchImpl=fetch,mode='chat'}){
  const qaMode=mode==='qaqc',autonomous=mode==='autonomous'||qaMode;
+ // The GPT-6 financial outlook already has a full independently computed
+ // research desk. Do not pay for two serial exploratory model reports before
+ // starting the actual report; that path could exhaust the analysis deadline.
+ // Keep QA/QC and legacy models on their existing independent audit protocol.
+ const singlePassOutlook=mode==='autonomous'&&String(model).startsWith('gpt-6');
  if(consent!==(qaMode?'ledger-qaqc-v1':autonomous?'financial-analysis-v3':'financial-chat-v1'))
   throw Error('Separate financial analysis consent required');
  if(!apiKey||!MODEL_NAME.test(model))throw Error('AI not configured');
@@ -405,14 +413,16 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
  // Separate exploratory investigation from publication: a single model
  // response is not an adequate report on a large, unfamiliar dataset.
  // These are independent open-ended investigations, not issue checklists.
- let stage=autonomous?'discovery-one':'report';
+ let stage=autonomous&&!singlePassOutlook?'discovery-one':'report';
  let drafts=[],editorialRetries=0,reviewRetries=0,sourceOnly=false;
- let messages=autonomous?[
+ let messages=autonomous&&!singlePassOutlook?[
   {...seedMessages[0],content:seedMessages[0].content+
    (qaMode?' This is a first independent QA pass. Challenge the software with recomputed source checks and detailed records. Avoid spending advice.':' This is an exploratory draft for another analyst, NOT a public report. Explore source data, do calculations and make tentative evidence-linked observations. No topic is preselected. Submit candidate blocks when ready; final editorial synthesis happens later.')},
   ...seedMessages.slice(1),
   {role:'user',content:'Begin open-ended reconnaissance. You can ask source tools, inspect the records, and form evidence-linked candidate discoveries. Do not submit a one-line bank safety status in place of understanding the finances.'}
  ]:seedMessages;
+ if(singlePassOutlook)messages.push({role:'user',content:
+  'Produce the complete publication-ready independent financial outlook in this investigation, not a draft for serial follow-up analysts. The privately calculated research desk already covers the full sanitized export. Investigate material ambiguities with read-only tools where useful, choose your own substantive findings, citations, visuals and prioritized actions, and deliver the full cited JSON report.'});
  const independentMessages=()=>[
   {...seedMessages[0],content:seedMessages[0].content+
    (qaMode?' You are a second independent QA investigator. Investigate source-supported forecast and reconciliation defects afresh, without reading the first pass.':' You are an independent second investigator. You have not seen anyone else\'s findings. Explore this dataset afresh, using your own hypotheses and source tools. Submit your best supported discoveries as candidate blocks; final editorial synthesis happens later.')},
@@ -440,8 +450,14 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
    const timeout=Error('Deep investigation exceeded its safe processing budget');
    timeout.safeCode='analysis_timeout';throw timeout;
   }
+  // Allow exploratory source-tool use, but force publication after two tool
+  // rounds in the full-desk GPT-6 path. The precomputed desk is already complete.
+  // This caps open-ended serial provider calls without scripting report topics.
+  if(singlePassOutlook&&round===2)messages.push({role:'user',content:
+   'Finish the complete, source-cited financial outlook now using the records and calculations already provided. No further tool calls are needed. Do not substitute a single cash-safety alert for a substantive household assessment.'});
+  const roundTools=singlePassOutlook&&round>=2?[]:tools;
   const toolChoice='auto';
-  const message=await complete({apiKey,model,messages,fetchImpl,toolChoice,tools,
+  const message=await complete({apiKey,model,messages,fetchImpl,toolChoice,tools:roundTools,
    responseFormat:autonomous?AUTO_FORMAT:FORMAT});
   const calls=message.tool_calls||[];
   if(!calls.length){
@@ -495,11 +511,24 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
     continue;
    }
    result.investigations=investigations;
-   let secondReview=null;
+   let secondReview=null,secondaryReviewCompleted=false;
    if(autonomous){
-    secondReview=sourceOnly?
-     {rejected:new Set(),concerns:[],quality:'limited-source',reason:'Only verified Ledger source records were retained.'}:
-     await reviewPresentation({apiKey,model,fetchImpl,blocks:result.blocks,facts:allFacts,context,qaMode});
+    if(sourceOnly){
+     secondReview={rejected:new Set(),concerns:[],quality:'limited-source',
+      reason:'Only verified Ledger source records were retained.'};
+    }else{
+     try{
+      secondReview=await reviewPresentation({apiKey,model,fetchImpl,
+       blocks:result.blocks,facts:allFacts,context,qaMode});
+      secondaryReviewCompleted=true;
+     }catch(error){
+      // A second, optional AI critique must not destroy a complete report
+      // whose amounts, dates, and citations already passed local verification.
+      if(!singlePassOutlook||error?.safeCode!=='analysis_timeout')throw error;
+      secondReview={rejected:new Set(),concerns:[],quality:'limited-source',
+       reason:'The secondary AI review timed out after local source verification.'};
+     }
+    }
     const preAuditCount=result.blocks.length;
     result.blocks=result.blocks.filter((_,i)=>!secondReview.rejected.has(i));
     if(preAuditCount>=2&&result.blocks.length<=1&&reviewRetries<2){
@@ -551,7 +580,9 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
     if(qaMode)result.qaAudit=context.qaAudit;
     result.analysisQuality=!sourceOnly&&secondReview.quality==='substantive'?
      {status:'substantive'}:
-     {status:'limited',reason:secondReview.quality==='limited-source'?
+     {status:'limited',reason:!secondaryReviewCompleted&&!sourceOnly?
+      'The separate AI critique timed out; all displayed claims still passed local source and citation checks.':
+      secondReview.quality==='limited-source'?
       'The source evidence did not support a broader assessment.':
       'An independent reviewer still identified unanswered financial questions after further investigation.'};
     result.sourceChecks=successfulSourceChecks.size;
@@ -563,8 +594,9 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      matched:comparison.matched.slice(0,30),differences:comparison.differences.slice(0,50)};
     result.auditTrail=[{action:'Verified numerical and dated report claims against cited evidence',
      evidenceFacts:allFacts.length,verifiedBlocks:result.evidenceAudit.blocksVerified},
-     {action:'Independently re-reviewed all displayed claims against their cited source evidence',
-      claimsRejected:secondReview.rejected.size},
+     ...(secondaryReviewCompleted?[{action:'Independently re-reviewed all displayed claims against their cited source evidence',
+      claimsRejected:secondReview.rejected.size}]:
+      [{action:'Secondary model review unavailable; displayed claims locally checked against source evidence'}]),
      ...(secondReview.rejected.size?[{action:'Automatically withheld claims rejected in independent evidence audit',
       count:secondReview.rejected.size,scope:'derived analysis only'}]:[]),
      ...(result.evidenceAudit.unsupportedBlocksWithheld?[{action:'Automatically withheld unsupported AI presentation blocks',
