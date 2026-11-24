@@ -985,29 +985,27 @@ async function start(port=Number(env.PORT||8788)){
      verifiedBankCharges:0,possibleBankCharges:0,unmatchedBankCharges:0};
     if(!savedNotesOnly){
      const window=stream.targetWindow(state.transactions,state.ledgerAdjustments||{});
-     if(!window)return respond(200,{
-      importedItems:0,orderGroups:0,matches:0,ready:0,needsReview:0,
-      alreadyImported:0,ambiguousOrders:0,unmatchedOrders:0,
-      bankCharges:0,verifiedBankCharges:0,possibleBankCharges:0,
-      unmatchedBankCharges:0,notesReady:0,confidentCategories:0,
-      noUncategorizedAmazonCharges:true,examples:[],suggestions:[],applied:0
-     });
-     try{
-      // Filtering by required posted-bank dates happens locally before
-      // grouping. No order history or private Note goes to OpenAI.
-      const rows=isBinary?
-       await stream.readFile(body.fileName,body.fileBytes,window):
-       amazon.readFile(body.fileName,body.base64);
-      const relevant=isBinary?null:new Set(rows.filter(item=>
-       item.date>=window.minDate&&item.date<=window.maxDate||
-       item.shipmentDate>=window.minDate&&item.shipmentDate<=window.maxDate)
-        .map(item=>item.orderId));
-      const items=isBinary?rows:rows.filter(item=>relevant.has(item.orderId));
-      result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
-       validCategories);
-     }catch(error){return respond(400,{
-      error:String(error.message||'Invalid Amazon export').slice(0,150)
-     })}
+     // Previous imports may have already added Notes and category overlays
+     // for every Amazon charge. That does not mean those Notes have been
+     // classified correctly. Never exit before the separate saved-Note pass.
+     if(window){
+      try{
+       // Filter irrelevant archive rows before matching bank charges.
+       // No order history or private Note goes to OpenAI.
+       const rows=isBinary?
+        await stream.readFile(body.fileName,body.fileBytes,window):
+        amazon.readFile(body.fileName,body.base64);
+       const relevant=isBinary?null:new Set(rows.filter(item=>
+        item.date>=window.minDate&&item.date<=window.maxDate||
+        item.shipmentDate>=window.minDate&&item.shipmentDate<=window.maxDate)
+         .map(item=>item.orderId));
+       const items=isBinary?rows:rows.filter(item=>relevant.has(item.orderId));
+       result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
+        validCategories);
+      }catch(error){return respond(400,{
+       error:String(error.message||'Invalid Amazon export').slice(0,150)
+      })}
+     }
     }
     // Snapshot before saving; a failed write must never lose personal Notes.
     const before=structuredClone(state.ledgerAdjustments||{}),
