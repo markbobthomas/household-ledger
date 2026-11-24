@@ -202,7 +202,7 @@ async function analyzeQualityCheck({context,consent,apiKey,fetchImpl=fetch}){
    if(blocks.length===6)break;
   }
  }
- const validatedResponse=Array.isArray(parsed?.findings);
+ const validatedResponse=Array.isArray(parsed?.findings),verifiedFindings=blocks.length;
  if(!blocks.length)blocks.push(confirmedBlock(packet,{
   incomplete:!validatedResponse||parsed.findings.length>0}));
  return {asOf:context.asOf,mode:'ledger-qaqc',presentation:'quick-data-quality',
@@ -210,8 +210,7 @@ async function analyzeQualityCheck({context,consent,apiKey,fetchImpl=fetch}){
    'All available normalized history and account-day source events were checked locally. The AI reviewed a selected sample, not every transaction.',
    'No external bank statement comparison or full source-code review was performed.',
    'AI-identified discrepancies are possible issues, not confirmed software defects.'
-  ],qaAudit:context.qaAudit,analysisQuality:validatedResponse&&(parsed.findings.length===0||
-   blocks.some(b=>b.evidence?.[0]?.kind!=='coverage'))?
+  ],qaAudit:context.qaAudit,analysisQuality:validatedResponse&&(parsed.findings.length===0||verifiedFindings>0)?
    {status:'substantive'}:{status:'limited',cause:'source-proof',
     reason:'The one paid model response could not be fully validated; local checks remain available.'},
   tokenUsage:{model:MODEL,requests:1,inputTokens:Number.isFinite(input)?input:null,
