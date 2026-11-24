@@ -17,29 +17,29 @@ button.primary{color:white;background:#175f50;border-color:#175f50}button:disabl
 summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 </style></head>
 <body><main><a href="/">← Ledger</a><h1>Amazon purchase import</h1>
-<p>Automatically assign budget categories using the items you bought, not just the bank's generic “Amazon” description. This imports <strong>categories only</strong>—not new expenses or changes to balances.</p>
+<p>Match Amazon purchases to your existing bank charges, <strong>add the actual product names to transaction Notes</strong>, and assign categories when confident. Existing personal notes and bank balances are never changed.</p>
 <section class="panel">
 <h2>Upload Amazon order history</h2>
 <p>In Amazon, request your personal information for <strong>Orders</strong>, download the resulting ZIP, then upload it here. A CSV containing item-level order history also works. Select the file named <code>Retail.OrderHistory</code> if uploading a single CSV.</p>
 <label for="file">Amazon CSV or ZIP file
 <input id="file" type="file" accept=".csv,.zip,text/csv,application/zip"></label>
-<p class="muted">Private: your file is processed only by Ledger's authenticated server. No Amazon password is needed, and nothing is sent to an AI provider. Maximum file size: 79 MB. Ledger uses only orders near Amazon charges that still need categorization.</p>
-<div class="actions"><button type="button" id="check" class="primary">Check matches</button><button type="button" id="apply" disabled>Apply categories</button></div>
+<p class="muted">Private: your file is processed only by Ledger's authenticated server. No Amazon password is needed, and nothing is sent to an AI provider. Maximum file size: 79 MB. Ledger checks posted Amazon charges missing an item Note or a category.</p>
+<div class="actions"><button type="button" id="check" class="primary">Check matches</button><button type="button" id="apply" disabled>Apply item Notes &amp; categories</button></div>
 <p id="message" role="status" aria-live="polite"></p>
 </section>
 <section class="panel" id="preview" hidden>
 <h2>Preview</h2><div id="stats"></div>
-<p class="muted">Only clear one-to-one Amazon charge matches are applied. Manual category decisions are preserved. Unrecognized items remain Unassigned for Review. Bank payments and balances are never edited.</p>
+<p class="muted">Exact, unique purchase matches receive item Notes and confident categories. Possible matches receive Notes beginning <strong>“Possible Amazon:”</strong> to show they need verification; they never set a category. Existing personal Notes and manual categories are preserved. No bank transactions or balances are edited.</p>
 <details><summary>Show matched purchases</summary><div id="details"></div></details>
 </section>
 <section class="panel"><h2>Sync Amazon orders from your browser</h2>
 <p>On a desktop computer, you can use the <a href="https://github.com/markbobthomas/household-ledger/tree/main/browser/amazon-ledger" target="_blank" rel="noopener noreferrer">Ledger Amazon browser extension (Chrome / Edge)</a> to read orders while signed in to Amazon and open this same preview automatically—without waiting for an Amazon data export.</p>
 <p class="muted">This initial browser sync is deliberately conservative: it handles clearly priced single-item orders from up to five order-history pages. Multi-item orders and uncertain totals still need an Amazon CSV/ZIP export. Nothing is saved until you press Apply categories. Desktop browser required; iPhone/iPad browser extensions are not supported.</p></section>
 <section class="panel"><h2>How matching works</h2>
-<ul><li>Finds Amazon charges in your existing bank history using the exact charged amount and a reasonable order-to-posting window.</li>
+<ul><li>Matches whole orders, individual items and combinations of items shipped on the same day. Near-amount or date-only suggestions are clearly marked as unverified in Notes.</li>
 <li>Splits one charge across budget categories when multiple different items were purchased.</li>
-<li>Does not guess when charges, shipping splits, refunds, or multiple matching orders make a match uncertain.</li>
-<li>Reimporting the same history will not add expenses or duplicate category allocations.</li></ul></section>
+<li>Never assigns an uncertain item to a budget category. If several purchases plausibly fit a charge, Ledger leaves it unmatched instead of claiming a specific purchase.</li>
+<li>Existing personal Notes are never overwritten. Reimporting does not add expenses or duplicate allocations.</li></ul></section>
 </main>
 <script>
 (function(){
@@ -68,16 +68,25 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
  }
  function show(data){
   const stats=[
-   ['Relevant product items',data.importedItems],['Charge matches',data.matches],
-   ['Ready to categorize',data.ready],['Need item review',data.needsReview],
-   ['Ambiguous order groups',data.ambiguousOrders],['Not matched',data.unmatchedOrders],
-   ['Previously imported',data.alreadyImported]
+   ['Amazon bank charges',data.bankCharges??0],
+   ['Confirmed item matches',data.verifiedBankCharges??data.matches],
+   ['Possible item Notes (verify)',data.possibleBankCharges??0],
+   ['Still unmatched',data.unmatchedBankCharges??0],
+   ['Notes to add',data.notesReady??0],
+   ['Confident categories to assign',data.confidentCategories??0],
+   ['Changes ready to save',data.ready],
+   ['Unrecognized item categories',data.needsReview],
+   ['Ambiguous bank charges',data.ambiguousOrders]
   ];
   $('stats').innerHTML=stats.map(([label,value])=>'<div class="row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>').join('');
-  $('details').innerHTML=(data.examples||[]).map(x=>
+  const confirmed=(data.examples||[]).map(x=>
    '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+'</strong> · '+esc(x.orderId)+
-   '<span>'+esc(x.categories.join(', '))+(x.needsReview?' · Needs review':'')+'</span></div>').join('')||
-   '<p>No safe matches found.</p>';
+   '<span>'+esc(x.note||'')+'</span><span>'+esc((x.categories||[]).join(', '))+
+   (x.notesOnly?' · Note only (manual category kept)':x.needsReview?' · Category needs review':'')+'</span></div>');
+  const possible=(data.suggestions||[]).map(x=>
+   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+' · Possible match</strong>'+
+   '<span>'+esc(x.note||'')+'</span><span>Check the product before relying on this Note. No automatic category.</span></div>');
+  $('details').innerHTML=[...confirmed,...possible].join('')||'<p>No item matches found.</p>';
   $('preview').hidden=false;
  }
  $('file').addEventListener('change',()=>{payload=null;revision='';ready=0;$('apply').disabled=true;$('preview').hidden=true;message('')});
@@ -89,7 +98,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
   try{
    payload={fileName:file.name,file};
    const data=await request(true);
-   show(data);ready=data.ready;message(data.ready?'Matches checked. Review the totals, then apply categories.':data.noUncategorizedAmazonCharges?'There are no outstanding Amazon charges requiring categorization.':'No new safe matches found.');
+   show(data);ready=data.ready;message(data.ready?'Matches checked. Review the totals, then apply categories.':data.noUncategorizedAmazonCharges?'There are no outstanding Amazon charges requiring Notes or categories.':'No new safe matches found.');
    $('apply').disabled=!data.ready;
   }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}
@@ -99,7 +108,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
   setBusy(true);message('Saving category assignments…');
   try{
    const data=await request(false);show(data);
-   message('Saved '+data.applied+' bank transaction categorization'+(data.applied===1?'':'s')+'. Return to Ledger to see updated Budget and Review.');
+   message('Updated '+data.applied+' Amazon transaction'+(data.applied===1?'':'s')+' with item Notes and/or confident categories. Return to Ledger to review their Notes.');
    payload=null;ready=0;$('apply').disabled=true;
   }catch(e){message(e.message,true)}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}
