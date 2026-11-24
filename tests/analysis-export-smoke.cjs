@@ -151,4 +151,54 @@ for(const forbidden of [bank,'PRIVATE-ID','PRIVATE-TOKEN','SECRET-IN-SOURCE',
 const again=JSON.parse(raw);
 assert.equal(again.actualTransactions.length,history.length,'download is standalone parseable JSON');
 assert.equal(again.expectedTransactions[0].merchant,'Fictional Housing');
+
+// Private source QA: distinguish posted from genuinely paired issuer payments.
+const {inspect}=require('../pilot/reconciliation-inspection.cjs');
+const auditDay='2026-11-12';
+const fictionalRows=[
+ {id:'cash-a',accountId:'private-fake-check',accountType:'checking',date:auditDay,
+  amount:188.37,type:'transfer',accountingKind:'card_payment',
+  reconciliationStatus:'matched',cashDirection:'out',pairedTransactionId:'credit-a',
+  merchant:'Private details intentionally omitted',source:{access_token:'secret'}},
+ {id:'credit-a',accountId:'private-fake-card',accountType:'credit',date:auditDay,
+  amount:188.37,type:'transfer',accountingKind:'card_payment',
+  reconciliationStatus:'matched',cashDirection:'in',pairedTransactionId:'cash-a'},
+ {id:'posted-only',accountId:'private-fake-check',accountType:'checking',
+  date:auditDay,amount:72.90,type:'transfer',accountingKind:'card_payment',
+  reconciliationStatus:'unmatched',cashDirection:'out',pairedTransactionId:null},
+ {id:'unknown-credit',accountId:'private-fake-card',accountType:'credit',
+  date:auditDay,amount:72.90,type:'transfer',accountingKind:'unclassified_card_credit',
+  reconciliationStatus:'needs-review',cashDirection:'in',pairedTransactionId:null},
+ {id:'one-way',accountId:'private-fake-check',accountType:'checking',
+  date:auditDay,amount:33.21,type:'transfer',accountingKind:'card_payment',
+  reconciliationStatus:'matched',cashDirection:'out',pairedTransactionId:'incorrect'},
+ {id:'incorrect',accountId:'private-fake-card',accountType:'credit',
+  date:auditDay,amount:33.21,type:'transfer',accountingKind:'card_payment',
+  reconciliationStatus:'matched',cashDirection:'in',pairedTransactionId:null},
+ {id:'different-date',accountId:'private-fake-check',accountType:'checking',
+  date:'2026-11-13',amount:199.95,type:'transfer',
+  accountingKind:'card_payment',reconciliationStatus:'unmatched',
+  cashDirection:'out',pairedTransactionId:null}
+];
+const inspected=inspect({asOf:auditDay,bundle:{rows:fictionalRows}},auditDay);
+assert.equal(inspected.rowsOnDate,6);
+assert.equal(inspected.verifiedCardPaymentLegs,2,
+ 'A unique reciprocal card settlement contributes precisely two verified source legs');
+const verified=inspected.entries.filter(x=>x.amount===188.37);
+assert.equal(verified.length,2);
+assert(verified.every(x=>x.paired&&x.reciprocal&&x.verifiedCardPayment));
+const posted=inspected.entries.filter(x=>x.amount===72.90);
+assert.equal(posted.length,2);
+assert(posted.every(x=>!x.paired&&!x.verifiedCardPayment),
+ 'Two posted same-amount legs are not evidence of pairing');
+const oneWay=inspected.entries.filter(x=>x.amount===33.21);
+assert(oneWay.every(x=>!x.verifiedCardPayment),
+ 'One-sided or stale link cannot be reported as verified');
+assert.equal(inspect({bundle:{rows:fictionalRows}},'2026-11-14').rowsOnDate,0);
+assert.throws(()=>inspect({bundle:{rows:fictionalRows}},'2026-11-32'));
+const serialized=JSON.stringify(inspected);
+for(const forbidden of ['private-fake-check','private-fake-card','cash-a','credit-a',
+ 'Private details intentionally omitted','access_token','secret','pairedTransactionId'])
+ assert(!serialized.includes(forbidden),'Audit endpoint leaked underlying IDs or descriptions: '+forbidden);
+
 console.log('Analysis export: complete fictional source, budgets, schedule decisions, forecasts, no secrets');
