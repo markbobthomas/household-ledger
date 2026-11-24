@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Amazon order import · Ledger</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#202c2b;background:#f7f9f6}
+*{box-sizing:border-box}body{margin:0}main{max-width:760px;margin:24px auto;padding:0 18px 48px}
+a{color:#126e62}h1{font-size:1.65rem;letter-spacing:-.04em}h2{font-size:1.1rem;margin-top:0}
+.panel{background:#fff;border:1px solid #dce6e0;border-radius:12px;padding:22px;margin:16px 0}
+p,li{line-height:1.55}small,.muted{color:#586d66}label{display:block;font-weight:600;margin:20px 0 12px}
+input[type=file]{display:block;width:100%;padding:14px;border:1px dashed #97b3a5;border-radius:8px;margin-top:8px}
+button{font:inherit;cursor:pointer;padding:11px 18px;border:1px solid #a5b6ae;border-radius:8px;background:#fff}
+button.primary{color:white;background:#175f50;border-color:#175f50}button:disabled{opacity:.45;cursor:default}
+.actions{display:flex;flex-wrap:wrap;gap:10px}.row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e8ece9;padding:12px 0}
+.row strong{text-align:right}ul{padding-left:23px}.warn{color:#805000}.ok{color:#126144}
+#message{min-height:24px;font-weight:600}#message.error{color:#ab2935}#preview[hidden]{display:none}
+.item{border-top:1px solid #e8ece9;padding:12px 0}.item span{display:block;font-size:.9rem;color:#546660}
+summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
+</style></head>
+<body><main><a href="/">← Ledger</a><h1>Amazon purchase import</h1>
+<p>Automatically assign budget categories using the items you bought, not just the bank's generic “Amazon” description. This imports <strong>categories only</strong>—not new expenses or changes to balances.</p>
+<section class="panel">
+<h2>Upload Amazon order history</h2>
+<p>In Amazon, request your personal information for <strong>Orders</strong>, download the resulting ZIP, then upload it here. A CSV containing item-level order history also works. Select the file named <code>Retail.OrderHistory</code> if uploading a single CSV.</p>
+<label for="file">Amazon CSV or ZIP file
+<input id="file" type="file" accept=".csv,.zip,text/csv,application/zip"></label>
+<p class="muted">Private: your file is processed only by Ledger's authenticated server. No Amazon password is needed, and nothing is sent to an AI provider. Maximum file size: 6 MB.</p>
+<div class="actions"><button type="button" id="check" class="primary">Check matches</button><button type="button" id="apply" disabled>Apply categories</button></div>
+<p id="message" role="status" aria-live="polite"></p>
+</section>
+<section class="panel" id="preview" hidden>
+<h2>Preview</h2><div id="stats"></div>
+<p class="muted">Only clear one-to-one Amazon charge matches are applied. Manual category decisions are preserved. Unrecognized items remain Unassigned for Review. Bank payments and balances are never edited.</p>
+<details><summary>Show matched purchases</summary><div id="details"></div></details>
+</section>
+<section class="panel"><h2>How matching works</h2>
+<ul><li>Finds Amazon charges in your existing bank history using the exact charged amount and a reasonable order-to-posting window.</li>
+<li>Splits one charge across budget categories when multiple different items were purchased.</li>
+<li>Does not guess when charges, shipping splits, refunds, or multiple matching orders make a match uncertain.</li>
+<li>Reimporting the same history will not add expenses or duplicate category allocations.</li></ul></section>
+</main>
+<script>
+(function(){
+ 'use strict';
+ const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','\'':'&#39;'}[c]));
+ const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
+ let payload=null,revision='';
+ function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
+ function setBusy(b){$('check').disabled=b;$('apply').disabled=b||!payload}
+ async function readFile(file){
+  return await new Promise((resolve,reject)=>{
+   const r=new FileReader();
+   r.onerror=()=>reject(Error('Could not read the selected file'));
+   r.onload=()=>resolve(String(r.result||'').split(',')[1]||'');
+   r.readAsDataURL(file);
+  });
+ }
+ async function request(dryRun){
+  const response=await fetch('/api/ledger/amazon-import',{method:'POST',credentials:'same-origin',
+   headers:{'Content-Type':'application/json','X-Pilot-Action':'1',...(revision?{'X-Ledger-Revision':revision}:{})},
+   body:JSON.stringify({...payload,dryRun}),cache:'no-store'});
+  const type=response.headers.get('content-type')||'';
+  if(!type.includes('application/json'))throw Error('Private Ledger server is unavailable. Reload and retry.');
+  const data=await response.json();
+  if(!response.ok)throw Error(data.error||'Amazon import failed');
+  revision=response.headers.get('x-ledger-revision')||revision;
+  return data;
+ }
+ function show(data){
+  const stats=[
+   ['Product items read',data.importedItems],['Charge matches',data.matches],
+   ['Ready to categorize',data.ready],['Need item review',data.needsReview],
+   ['Ambiguous order groups',data.ambiguousOrders],['Not matched',data.unmatchedOrders],
+   ['Previously imported',data.alreadyImported]
+  ];
+  $('stats').innerHTML=stats.map(([label,value])=>'<div class="row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>').join('');
+  $('details').innerHTML=(data.examples||[]).map(x=>
+   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+'</strong> · '+esc(x.orderId)+
+   '<span>'+esc(x.categories.join(', '))+(x.needsReview?' · Needs review':'')+'</span></div>').join('')||
+   '<p>No safe matches found.</p>';
+  $('preview').hidden=false;
+ }
+ $('file').addEventListener('change',()=>{payload=null;revision='';$('apply').disabled=true;$('preview').hidden=true;message('')});
+ $('check').addEventListener('click',async()=>{
+  const file=$('file').files?.[0];
+  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
+  if(file.size>6*1024*1024){message('This file exceeds the 6 MB limit.',true);return}
+  setBusy(true);message('Checking item descriptions against your existing charges…');
+  try{
+   payload={fileName:file.name,base64:await readFile(file)};
+   const data=await request(true);
+   show(data);message(data.ready?'Matches checked. Review the totals, then apply categories.':'No new safe matches found.');
+   $('apply').disabled=!data.ready;
+  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
+  finally{setBusy(false);if(!payload)$('apply').disabled=true}
+ });
+ $('apply').addEventListener('click',async()=>{
+  if(!payload)return;
+  setBusy(true);message('Saving category assignments…');
+  try{
+   const data=await request(false);show(data);
+   message('Saved '+data.applied+' bank transaction categorization'+(data.applied===1?'':'s')+'. Return to Ledger to see updated Budget and Review.');
+   payload=null;$('apply').disabled=true;
+  }catch(e){message(e.message,true)}
+  finally{setBusy(false);if(!payload)$('apply').disabled=true}
+ });
+})();
+</script></body></html>
