@@ -113,7 +113,7 @@ function buildOutlookDesk(context){
   'Analysis as of '+asOf+'; full months with source coverage '+(months.join(', ')||'none')+
   '; comparison window '+(windows.map(x=>x.month).join(', ')||'none')+
   '. The ongoing '+asMonth+' month is incomplete; never project it as a full month.',{});
- const summaryWindow=windows.length?add('Observed monthly household purchase run rate',
+ const summaryWindow=add('Observed monthly household purchase run rate',windows.length?
   windows.length+' available complete months: gross purchases '+dollar(averaged.purchaseAverage)+
   ' per month, separately identified refunds '+dollar(averaged.refundAverage)+
   ' per month, purchases net identified refunds '+dollar(averaged.netPurchaseAverage)+
