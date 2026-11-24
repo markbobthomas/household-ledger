@@ -146,6 +146,71 @@ assert.equal(report.reconciliationAndReview.recurringAmountReview[0].ruleCount,2
 assert.equal(report.reconciliationAndReview.categoryConsistency.length,1);
 assert.equal(report.reconciliationAndReview.categoryConsistency[0].suggestedCategory,'Subscriptions');
 assert.equal(report.reconciliationAndReview.categoryConsistency[0].category,'Groceries');
+// One-click AI must have full parity with the same de-identified manual export,
+// not only sampled history and a small set of forecast facts.
+const {financialContext}=require('../pilot/ai-financial-report.cjs');
+const {createDataset}=require('../pilot/ai-open-data.cjs');
+const {auditFinancialEvidence}=require('../pilot/ai-evidence-audit.cjs');
+const aiContext=financialContext(prepared,{lastSync:'2026-11-23T11:00:00Z',adjustments});
+aiContext.reportEvidence=report;
+const aiDataset=createDataset(aiContext);
+for(const [name,expected] of [['history',report.actualTransactions.length],
+ ['future',report.expectedTransactions.length],
+ ['balances',report.projectedDailyBalances.length],
+ ['cards',report.cardStatements.length],
+ ['indices',report.sourceIndices.length]]){
+ assert.equal(aiDataset.manifest[name],expected,'AI dataset has complete '+name+' parity');
+ const total=aiDataset.manifest[name];
+ const all=[];for(let offset=0;offset<total;offset+=200)
+  all.push(...aiDataset.page(name,offset,200).rows);
+ assert.equal(all.length,expected,'all '+name+' rows remain pageable');
+}
+const rulesPage=aiDataset.page('savedDecisions',0,200);
+assert(rulesPage.rows.some(x=>x.group==='recurringSchedules'&&x.merchant==='Fictional Electric Utility'));
+assert(rulesPage.rows.some(x=>x.group==='transactionNotes'),
+ 'Owner sanitized transaction notes are explicitly included, as in Export Data');
+assert(rulesPage.rows.some(x=>x.group==='categoryOverrides'));
+assert(rulesPage.rows.some(x=>x.group==='cardPaymentRules'));
+assert(rulesPage.rows.some(x=>x.group==='oneOffPayments'));
+assert(aiDataset.page('reconciliation',0,200).rows.some(x=>
+ x.group==='sourceReconciliationAudit'&&x.totalPosted===629));
+assert(aiDataset.page('reconciliation',0,200).rows.some(x=>
+ x.group==='recurringAmountReview'&&x.ruleCount===2));
+assert(aiDataset.page('bankSync',0,10).rows.some(x=>
+ x.group==='bankSync'&&x.lastAttemptOutcome==='failed'));
+for(const section of ['savedDecisions','reconciliation','bankSync','accounts'])
+ assert(aiDataset.initial.manifest.counts[section]>0,
+  'Every full-export section is advertised from the opening data manifest');
+const qaRequest=(focus,merchant='')=>({
+ focus,startDate:null,endDate:null,merchant,accountId:null
+});
+const netAudit=auditFinancialEvidence(aiContext,qaRequest('net-spending'),2);
+assert(netAudit.facts.some(x=>x.text.includes('purchase expenses less identified refunds')));
+assert(netAudit.facts.some(x=>x.text.includes('transfer/payment legs excluded')));
+const scheduleAudit=auditFinancialEvidence(aiContext,
+ qaRequest('recurring-obligations','Fictional Electric Utility'),3);
+assert(scheduleAudit.facts.some(x=>x.text.includes('saved occurrence $200.00')));
+assert(scheduleAudit.facts.some(x=>x.text.includes('2026-10')));
+const cardAudit=auditFinancialEvidence(aiContext,qaRequest('card-reconciliation'),4);
+assert(cardAudit.facts.some(x=>x.text.includes('source reconciliation')));
+assert(cardAudit.facts.some(x=>x.text.includes('statement due')));
+const sourceAudit=auditFinancialEvidence(aiContext,qaRequest('source-reconciliation'),5);
+assert(sourceAudit.facts.some(x=>x.text.includes('totalPosted 629')));
+const categoryAudit=auditFinancialEvidence(aiContext,qaRequest('category-quality'),6);
+assert(categoryAudit.facts.some(x=>x.text.includes('Chevron')));
+assert(categoryAudit.facts.some(x=>x.text.includes('Fictional Electric Utility')));
+assert.deepEqual(auditFinancialEvidence(aiContext,{...qaRequest('category-quality'),
+ accountId:'PRIVATE-ACCOUNT-ID'},7),{error:'Invalid read-only audit request'});
+const modelPayload=JSON.stringify(aiDataset.initial)+
+ Object.keys(aiDataset.manifest).map(name=>{
+  const parts=[];for(let offset=0;offset<aiDataset.manifest[name];offset+=200)
+   parts.push(...aiDataset.page(name,offset,200).rows);
+  return JSON.stringify(parts);
+ }).join('')+JSON.stringify([netAudit,scheduleAudit,sourceAudit,categoryAudit]);
+for(const secret of [bank,'PRIVATE-TOKEN','PRIVATE-ID','raw-tx-','raw-private-rule',
+ 'DO-NOT-EXPORT','SECRET-IN-SOURCE','NEVER-EXPORT-REQUEST-ID'])
+ assert(!modelPayload.includes(secret),'New AI source leaked private raw identifiers: '+secret);
+
 const raw=JSON.stringify(report);
 for(const forbidden of [bank,'PRIVATE-ID','PRIVATE-TOKEN','SECRET-IN-SOURCE',
  'raw-private-rule','raw-future','raw-tx-','raw-added','DO-NOT-EXPORT',
