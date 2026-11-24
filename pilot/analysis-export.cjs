@@ -9,7 +9,7 @@ const {cleanDescription}=require('./ai-private-adapter.cjs');
 
 const isDate=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x);
 const num=x=>typeof x==='number'&&Number.isFinite(x);
-const money=x=>Math.round(x*100)/100;
+const money=x=>Math.money(x*100)/100;
 const safe=x=>cleanDescription(String(x??'')).slice(0,140);
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
 const permitted=(v,allowed)=>allowed.includes(String(v))?String(v):null;
@@ -179,7 +179,7 @@ function build({prepared,adjustments={},lastSync=null,syncDiagnostics={}}){
  // convenience-store purchase was fuel. Never override user categories.
  const possibleFuelCategories=actual.filter(r=>!r.pending&&r.type==='expense'&&
   r.category==='Groceries'&&
-  /^(?:chevron|shell|texaco|exxon|mobil|arco|cenex|bp|76)(?:\\b|\\s)/i.test(r.merchant))
+  /^(?:chevron|shell|texaco|exxon|mobil|arco|cenex|bp|76)(?:\b|\s)/i.test(r.merchant))
   .map(r=>({transactionId:r.id,accountId:r.accountId,date:r.date,
    merchant:r.merchant,category:r.category,suggestedCategory:'Gas',
    reason:'Fuel retailer may have charged for gas or convenience-store items; verify before changing a category'}));
@@ -201,13 +201,13 @@ function build({prepared,adjustments={},lastSync=null,syncDiagnostics={}}){
     row.merchant.toLowerCase().trim()!==exemplar.merchant.toLowerCase().trim()||
     row.date.slice(0,7)>=ctx.asOf.slice(0,7))continue;
    const month=row.date.slice(0,7);
-   monthAmounts.set(month,round((monthAmounts.get(month)||0)+Number(row.amount||0)));
+   monthAmounts.set(month,money((monthAmounts.get(month)||0)+Number(row.amount||0)));
   }
   // At least three observed prior calendar months avoid first-month/noise bias.
   const observed=[...monthAmounts.values()];
   if(observed.length<3)continue;
-  const pastAverage=round(observed.reduce((s,v)=>s+v,0)/observed.length);
-  const expectedAmount=round(group.reduce((s,r)=>s+Number(r.amount),0));
+  const pastAverage=money(observed.reduce((s,v)=>s+v,0)/observed.length);
+  const expectedAmount=money(group.reduce((s,r)=>s+Number(r.amount),0));
   if(pastAverage>0&&expectedAmount>pastAverage*1.4&&
    expectedAmount-pastAverage>=50)
    recurringAmountReview.push({accountId:exemplar.accountId,
