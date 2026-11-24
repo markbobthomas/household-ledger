@@ -74,6 +74,14 @@ const adjustments={
  learning:{categoryRules:{rule:{merchant:'Fictional Grocer',category:'Groceries',
   mode:'auto',accountId:bank,privateId:'DO-NOT-EXPORT'}}}
 };
+// Private ambiguous transfer is NOT household expense. Separately classify an
+// owner-labeled housing-related outgoing transfer as a conditional proxy.
+history[82].type='transfer';history[82].category='Other';
+history[82].cashDirection='out';history[82].accountingKind='internal_transfer';
+history[82].amount=120;
+history[83].type='transfer';history[83].category='Mortgage';
+history[83].cashDirection='out';history[83].accountingKind='internal_transfer';
+history[83].amount=1000;
 // Export-only QA should surface, not rewrite, suspicious manual merchant
 // categories and two distinct fixed utilities above recent actual totals.
 history[20].merchant='Chevron';
@@ -227,6 +235,12 @@ assert(research.briefing.comparisonMonths.length>=2,
  'The outlook compares fully covered historic months rather than partial November');
 assert(research.briefing.categories.some(x=>x.label==='Groceries'));
 assert(research.briefing.merchants.some(x=>x.label==='Fictional Store'));
+assert(research.briefing.monthByMonth.some(m=>
+ m.unclassifiedOrOtherTransfers>=120),
+ 'Unverified Other transfer is reported separately rather than treated as spending');
+assert(research.briefing.monthByMonth.some(m=>
+ m.ownerCategorizedHousingUtilityTransfers>=1000),
+ 'Owner-labeled housing transfer is available as conditional proxy');
 assert(research.briefing.savedIncome.recognizedSchedules===2,
  'Two independent saved payroll schedules are counted individually');
 assert.equal(research.briefing.savedIncome.unrecognizedCadence,0);
