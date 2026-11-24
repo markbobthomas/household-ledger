@@ -975,7 +975,9 @@ async function start(port=Number(env.PORT||8788)){
     if(!window)return respond(200,{
      importedItems:0,orderGroups:0,matches:0,ready:0,needsReview:0,
      alreadyImported:0,ambiguousOrders:0,unmatchedOrders:0,
-     noUncategorizedAmazonCharges:true,examples:[],applied:0
+     bankCharges:0,verifiedBankCharges:0,possibleBankCharges:0,
+     unmatchedBankCharges:0,notesReady:0,confidentCategories:0,
+     noUncategorizedAmazonCharges:true,examples:[],suggestions:[],applied:0
     });
     let result;
     try{
@@ -994,35 +996,27 @@ async function start(port=Number(env.PORT||8788)){
      result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
       savedCategoryChoices(state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories));
     }catch(error){return respond(400,{error:String(error.message||'Invalid Amazon export').slice(0,150)})}
-    const before=state.ledgerAdjustments||{},
-     allocations={...(before.amazonAllocations||{})},overrides={...(before.categoryOverrides||{})},
-     changed=result.matches.filter(match=>{
-      const prior=allocations[match.transactionId];
-      return !prior||prior.orderId!==match.orderId||
-       JSON.stringify(prior.lines)!==JSON.stringify(match.lines);
-     });
-    const report={importedItems:result.importedItems,orderGroups:result.orderGroups,
-     matches:result.matches.length,ready:changed.length,
-     needsReview:changed.filter(m=>m.needsReview).length,
-     alreadyImported:result.matches.length-changed.length,
-     ambiguousOrders:result.ambiguousOrders,unmatchedOrders:result.unmatchedOrders,
-     examples:changed.slice(0,35).map(m=>({date:m.date,amountCents:m.amountCents,
-      orderId:m.orderId,categories:m.categories,needsReview:m.needsReview})),
-     applied:0};
-    if(body.dryRun||!changed.length)return respond(200,report);
-    for(const proposal of changed){
-     const id=proposal.transactionId,selected=proposal.categories.find(c=>c!=='Uncategorized')||'Uncategorized';
-     // No bank amount, transaction, or forecast is created or rewritten.
-     // A mixed Amazon purchase is itemized for reporting. The base category
-     // remains a display fallback for screens without an item-level breakdown.
-     overrides[id]=proposal.needsReview?'Uncategorized':selected;
-     allocations[id]={orderId:proposal.orderId,amountCents:proposal.amountCents,
-      lines:proposal.lines};
+    // Snapshot the original preferences before saveForecast writes the new
+    // encrypted Note overlay. A later category-store failure must restore
+    // the ORIGINAL notes, not the partially updated in-memory object.
+    const before=structuredClone(state.ledgerAdjustments||{}),
+     plan=require('./amazon-apply.cjs').prepare(result,before),
+     {report,next,nextPredictions,hasNotes,categoryChanged}=plan;
+    if(body.dryRun||!plan.ready)return respond(200,report);
+    try{
+     // Notes are private encrypted preference overlays; never mutate the
+     // authoritative bank history, and do not recompute the forecast for a
+     // note-only save. Save the two independent encrypted stores carefully.
+     if(hasNotes)await saveForecast(nextPredictions);
+     state.ledgerAdjustments=next;
+     await save();
+    }catch(error){
+     state.ledgerAdjustments=before;
+     if(hasNotes)try{await saveForecast(before.predictions||{})}catch{}
+     throw error;
     }
-    state.ledgerAdjustments={...before,categoryOverrides:overrides,amazonAllocations:allocations};
-    try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
-    report.applied=changed.length;
-    invalidatePrepared();schedulePrepared();
+    report.applied=plan.ready;
+    if(categoryChanged){invalidatePrepared();schedulePrepared()}
     return respond(200,report);
    }
    if(requestPath==='/api/ledger/categories/rename'){

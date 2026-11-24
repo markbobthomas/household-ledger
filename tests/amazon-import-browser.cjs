@@ -53,9 +53,11 @@ module.exports=(async()=>{
     await route.fulfill({status:200,contentType:'application/json',
      headers:{'x-ledger-revision':'fictional-revision'},
      body:JSON.stringify({importedItems:1,matches:1,ready:d.dryRun?1:0,applied:d.dryRun?0:1,
-      needsReview:0,ambiguousOrders:0,unmatchedOrders:0,alreadyImported:0,
+      bankCharges:2,verifiedBankCharges:1,possibleBankCharges:1,unmatchedBankCharges:0,
+      notesReady:1,confidentCategories:1,needsReview:0,ambiguousOrders:0,unmatchedOrders:0,alreadyImported:0,
       examples:[{date:'2026-11-24',amountCents:2950,orderId:'113-1234567-7654321',
-       categories:['Home & Maintenance'],needsReview:false}]})});
+       note:'Amazon: Laundry detergent, 50 oz',categories:['Home & Maintenance'],needsReview:false}],
+      suggestions:[{date:'2026-11-23',amountCents:1400,confidence:'possible',note:'Possible Amazon: Coffee beans'}]})});
    });
    await page.goto(url);
    assert.equal(await page.locator('#apply').isDisabled(),true,'No category write before preview');
@@ -69,11 +71,15 @@ module.exports=(async()=>{
     document.getElementById('check').click();
    },csv);
    await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Matches checked'));
+   await page.locator('#preview details summary').click();
+   assert.match(await page.locator('#details').innerText(),/Amazon: Laundry detergent/);
+   assert.match(await page.locator('#details').innerText(),/Possible Amazon: Coffee beans/);
+   assert.match(await page.locator('#stats').innerText(),/Possible item Notes/);
    assert.equal(requests.length,1,name+' previews exactly once');
    assert.equal(requests[0].dryRun,true,name+' does not save automatically');
    assert.equal(await page.locator('#apply').isDisabled(),false,name+' can approve reviewed match');
    await page.locator('#apply').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Saved 1'));
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Updated 1'));
    assert.equal(requests.length,2,name+' explicitly applies exactly once');
    assert.equal(requests[1].dryRun,false);
    const uploads=await page.evaluate(()=>window.__amazonUploads);

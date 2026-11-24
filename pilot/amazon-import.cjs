@@ -172,39 +172,7 @@ function allocate(items,total,categories){
   .filter(line=>line.cents>0);
 }
 function match(rows,transactions,adjustments,validCategories){
- const groups=groupsOf(rows),overrides=adjustments.categoryOverrides||{},
-  existing=adjustments.amazonAllocations||{},
-  txs=Object.values(transactions||{}).filter(t=>t&&t.pending!==true&&Number(t.amount)>0&&
-   /(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.merchant||t.name||''))&&
-   Number.isSafeInteger(Math.round(Number(t.amount)*100)));
- const matches=[],attempted=[],ambiguous=new Set(),used=new Set();
- const days=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
- for(const g of groups){
-  // Do not trust ambiguous same-value charges across cards or same-day orders.
-  const options=txs.filter(t=>Math.round(Number(t.amount)*100)===g.amount&&
-   days(t.date,g.date)>=-2&&days(t.date,g.date)<=21&&
-   (overrides[t.id]===undefined||overrides[t.id]==='Uncategorized'||existing[t.id]));
-  if(options.length===1)attempted.push({g,t:options[0]});
-  else if(options.length>1)ambiguous.add(g.id);
- }
- const byTx=new Map();
- for(const a of attempted){
-  if(!byTx.has(a.t.id))byTx.set(a.t.id,[]);
-  byTx.get(a.t.id).push(a);
- }
- for(const a of attempted){
-  if(byTx.get(a.t.id).length!==1){ambiguous.add(a.g.id);continue}
-  if(used.has(a.t.id))continue;
-  const lines=allocate(a.g.items,a.g.amount,validCategories);
-  if(!lines||lines.reduce((n,l)=>n+l.cents,0)!==a.g.amount)continue;
-  used.add(a.t.id);
-  const categoryNames=[...new Set(lines.map(x=>x.category))],needsReview=categoryNames.includes('Uncategorized');
-  const proposed={transactionId:a.t.id,orderId:a.g.id,
-   date:a.t.date,amountCents:a.g.amount,lines,categories:categoryNames,
-   needsReview,alreadyImported:Boolean(existing[a.t.id])};
-  matches.push(proposed);
- }
- return {matches,importedItems:rows.length,orderGroups:groups.length,
-  ambiguousOrders:ambiguous.size,unmatchedOrders:Math.max(0,groups.length-matches.length-ambiguous.size)};
+ return require('./amazon-pairing.cjs').match(
+  rows,transactions,adjustments,validCategories,allocate);
 }
 module.exports={readFile,match,extractCSV,csvRows,usdCents,isoDate,classify,ORDER_CSV};
