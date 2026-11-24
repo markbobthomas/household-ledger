@@ -549,7 +549,7 @@ async function start(port=Number(env.PORT||8788)){
   const respond=(status,data)=>{const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
     if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
     if(req.method==='POST'&&status>=200&&status<300&&
-       (requestPath.startsWith('/api/ledger/')&&requestPath!=='/api/ledger/forecasts'||
+       (requestPath.startsWith('/api/ledger/')&&!['/api/ledger/forecasts','/api/ledger/amazon-import'].includes(requestPath)||
         ['/api/sync','/api/exchange','/api/disconnect'].includes(requestPath))){
      invalidatePrepared();
      schedulePrepared();
@@ -978,6 +978,7 @@ async function start(port=Number(env.PORT||8788)){
     state.ledgerAdjustments={...before,categoryOverrides:overrides,amazonAllocations:allocations};
     try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
     report.applied=changed.length;
+    invalidatePrepared();schedulePrepared();
     return respond(200,report);
    }
    if(requestPath==='/api/ledger/categories/rename'){
