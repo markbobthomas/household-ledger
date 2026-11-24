@@ -250,6 +250,10 @@ assert(report.savedDecisions.recurringSchedules.filter(x=>x.type==='income')
  .every(x=>x.frequency==='every-4-weeks'));
 assert(research.charts.some(x=>x.id==='outlook-near-term-checking'));
 assert(research.charts.some(x=>x.id==='outlook-purchase-categories'));
+assert(research.charts.some(x=>x.id==='outlook-income-versus-observed-outflows'),
+ 'Comparable monthly normal income vs purchase/obligation outflow chart available');
+assert(research.charts.some(x=>x.id==='outlook-adjustment-scenarios'),
+ 'Spending reduction illustration is independent, sourced and explicitly conditional');
 const researchText=JSON.stringify(research);
 for(const secret of [bank,'PRIVATE-ID','PRIVATE-TOKEN','raw-tx-',
  'private-payroll-','DO-NOT-EXPORT','SECRET-IN-SOURCE'])
