@@ -177,7 +177,9 @@ assert.equal(rejectedLong.blocks[0].detail,'',
     rejectedIndices:[3],concerns:[],quality:'substantive',reason:'Distinct evidence-led findings and useful comparisons.'})}}]})};
   }
   assert.equal(body.tool_choice,'auto','no arbitrary minimum tool count');
-  assert.equal(body.tools.length,6);
+  assert.equal(body.tools.length,7);
+  assert(body.tools.some(x=>x.function?.name==='audit_financial_evidence'),
+   'the model can invoke the new independent source-audit tool');
   assert.equal(body.response_format.json_schema.name,'ledger_glance_expand_v2');
   assert.equal(JSON.parse(body.messages[1].content).manifest.counts.history,1600);
   let m;
