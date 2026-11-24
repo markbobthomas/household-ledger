@@ -750,7 +750,31 @@ async function start(port=Number(env.PORT||8788)){
  // Unknown browser navigation should be a 404, not a misleading bank-action error.
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
-  let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>(requestPath==='/api/ledger/amazon-import'?9*1024*1024:524288))return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  // Large Amazon exports use raw binary, not base64-in-JSON. Size limits remain
+  // scoped to this authenticated endpoint and checked before buffering.
+  const amazonBinary=requestPath==='/api/ledger/amazon-import'&&
+   /^application\/octet-stream(?:;|$)/i.test(String(req.headers['content-type']||''));
+  const maxBody=amazonBinary?79*1024*1024:
+   requestPath==='/api/ledger/amazon-import'?9*1024*1024:524288;
+  if(Number(req.headers['content-length'])>maxBody)
+   return respond(413,{error:amazonBinary?'Amazon file exceeds 79 MB':'Adjustments too large'});
+  let body={};try{
+   let n=0;const chunks=[];
+   for await(const chunk of req){
+    n+=chunk.length;
+    if(n>maxBody)return respond(413,{error:amazonBinary?'Amazon file exceeds 79 MB':'Adjustments too large'});
+    chunks.push(chunk);
+   }
+   if(amazonBinary){
+    const encoded=req.headers['x-amazon-filename'];
+    if(typeof encoded!=='string'||encoded.length>600||
+       !['0','1'].includes(req.headers['x-amazon-dry-run']))
+     return respond(400,{error:'Select a valid Amazon CSV or ZIP'});
+    body={fileName:decodeURIComponent(encoded),
+     dryRun:req.headers['x-amazon-dry-run']==='1',
+     fileBytes:Buffer.concat(chunks)};
+   }else body=JSON.parse(Buffer.concat(chunks).toString()||'{}');
+  }catch{return respond(400,{error:amazonBinary?'Invalid Amazon upload':'Invalid JSON'})}
   if(requestPath==='/api/ai/settings'){
    // Backward-compatible opt-out: old clients cannot re-enable automatic calls.
    if(!body||typeof body!=='object'||Array.isArray(body)||
@@ -938,15 +962,31 @@ async function start(port=Number(env.PORT||8788)){
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
    if(requestPath==='/api/ledger/amazon-import'){
     if(!state.items.length)return respond(409,{error:'Connect a bank account before importing Amazon orders'});
+    const isBinary=Buffer.isBuffer(body?.fileBytes);
     if(!body||typeof body!=='object'||Array.isArray(body)||
-       Object.keys(body).sort().join(',')!=='base64,dryRun,fileName'||
-       typeof body.fileName!=='string'||typeof body.base64!=='string'||
-       typeof body.dryRun!=='boolean')
+       Object.keys(body).sort().join(',')!==
+        (isBinary?'dryRun,fileBytes,fileName':'base64,dryRun,fileName')||
+       typeof body.fileName!=='string'||body.fileName.length>240||
+       typeof body.dryRun!=='boolean'||
+       (isBinary?body.fileBytes.length===0:typeof body.base64!=='string'))
      return respond(400,{error:'Select a valid Amazon order CSV or ZIP'});
-    const amazon=require('./amazon-import.cjs');
+    const amazon=require('./amazon-import.cjs'),stream=require('./amazon-stream.cjs');
+    const window=stream.targetWindow(state.transactions,state.ledgerAdjustments||{});
+    if(!window)return respond(200,{
+     importedItems:0,orderGroups:0,matches:0,ready:0,needsReview:0,
+     alreadyImported:0,ambiguousOrders:0,unmatchedOrders:0,
+     noUncategorizedAmazonCharges:true,examples:[],applied:0
+    });
     let result;
     try{
-     const items=amazon.readFile(body.fileName,body.base64);
+     // Filtering by required posted-bank dates happens locally before grouping;
+     // neither the source file nor any imported product title goes to OpenAI.
+     const rows=isBinary?
+      await stream.readFile(body.fileName,body.fileBytes,window):
+      amazon.readFile(body.fileName,body.base64);
+     const items=rows.filter(item=>
+      item.date>=window.minDate&&item.date<=window.maxDate||
+      item.shipmentDate>=window.minDate&&item.shipmentDate<=window.maxDate);
      result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
       savedCategoryChoices(state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories));
     }catch(error){return respond(400,{error:String(error.message||'Invalid Amazon export').slice(0,150)})}
