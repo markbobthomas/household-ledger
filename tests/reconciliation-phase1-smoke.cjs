@@ -103,6 +103,73 @@ assert.equal(JSON.stringify(twoCards.transactions),twoCardsSource,
  'Read-only reconciliation never changes bank source or owner decisions');
 
 
+// The private Plaid adapter supplies raw bank types (depository/credit) to
+// migrate(), not normalized account types from the sync registrar. Reconcile
+// these source rows at read time, without writing to the source snapshot.
+const rawBank=M.migrate({accounts:[
+ {id:'raw-cash',name:'Checking',type:'depository',subtype:'checking'},
+ {id:'raw-savings',name:'Savings',type:'depository',subtype:'savings'},
+ {id:'raw-card-a',name:'Card A',type:'credit'},
+ {id:'raw-card-b',name:'Card B',type:'credit'}
+],transactions:[
+ {id:'posted-cash-payment',accountId:'raw-cash',date:'2026-10-12',
+  merchant:'Fictional Card Autopay',amount:142.31,type:'transfer',
+  source:{provider:'plaid',plaidAmount:142.31}},
+ {id:'generic-issuer-receipt',accountId:'raw-card-a',date:'2026-10-11',
+  merchant:'ONLINE/MOBILE RECURRING',amount:142.31,type:'refund',
+  source:{provider:'plaid',plaidAmount:-142.31}},
+ {id:'savings-payment',accountId:'raw-savings',date:'2026-10-13',
+  merchant:'Fictional Card Payment',amount:88.49,type:'transfer',
+  source:{provider:'plaid',plaidAmount:88.49}},
+ {id:'savings-card-receipt',accountId:'raw-card-b',date:'2026-10-14',
+  merchant:'Payment Thank You',amount:88.49,type:'refund',
+  source:{provider:'plaid',plaidAmount:-88.49}},
+ {id:'ordinary-transfer',accountId:'raw-cash',date:'2026-10-14',
+  merchant:'Transfer to savings',amount:64.17,type:'transfer',
+  source:{provider:'plaid',plaidAmount:64.17}},
+ {id:'unrelated-issuer-credit',accountId:'raw-card-a',date:'2026-10-14',
+  merchant:'STATEMENT CREDIT',amount:64.17,type:'refund',
+  source:{provider:'plaid',plaidAmount:-64.17}},
+ {id:'unpaired-cash-payment',accountId:'raw-cash',date:'2026-10-15',
+  merchant:'Credit Card Payment',amount:71.93,type:'transfer',
+  source:{provider:'plaid',plaidAmount:71.93}},
+ {id:'merchant-refund',accountId:'raw-card-a',date:'2026-10-15',
+  merchant:'Refund Fictional Store',amount:71.93,type:'refund',
+  source:{provider:'plaid',plaidAmount:-71.93}},
+ {id:'ambiguous-payment',accountId:'raw-cash',date:'2026-10-16',
+  merchant:'Card Payment',amount:48.90,type:'transfer',
+  source:{provider:'plaid',plaidAmount:48.90}},
+ {id:'ambiguous-credit-a',accountId:'raw-card-a',date:'2026-10-16',
+  merchant:'ONLINE/MOBILE RECURRING',amount:48.90,type:'refund',
+  source:{provider:'plaid',plaidAmount:-48.90}},
+ {id:'ambiguous-credit-b',accountId:'raw-card-b',date:'2026-10-16',
+  merchant:'ONLINE/MOBILE RECURRING',amount:48.90,type:'refund',
+  source:{provider:'plaid',plaidAmount:-48.90}}
+]});
+const untouchedRaw=JSON.stringify(rawBank.transactions),rawTypes=new Map(M.accountsFor(rawBank).map(a=>[a.id,a.type]));
+assert.equal(rawTypes.get('raw-cash'),'checking','Raw Plaid depository checking normalized before matching');
+assert.equal(rawTypes.get('raw-savings'),'savings','Raw Plaid depository savings normalized before matching');
+const rawRows=new Map(M.records(rawBank).map(row=>[row.id,row]));
+assert.equal(rawRows.get('posted-cash-payment').pairedTransactionId,'generic-issuer-receipt');
+assert.equal(rawRows.get('generic-issuer-receipt').pairedTransactionId,'posted-cash-payment');
+assert.equal(rawRows.get('generic-issuer-receipt').accountingKind,'card_payment',
+ 'Unique generic card issuer credit closes a posted cash payment');
+assert.equal(rawRows.get('generic-issuer-receipt').reconciliationStatus,'matched');
+assert.equal(rawRows.get('savings-payment').pairedTransactionId,'savings-card-receipt',
+ 'Savings-funded issuer payment is treated as a paired transfer');
+assert.equal(rawRows.get('ordinary-transfer').pairedTransactionId,null,
+ 'Generic savings transfer must not be mistaken for a card payment');
+assert.equal(rawRows.get('unrelated-issuer-credit').accountingKind,'unclassified_card_credit',
+ 'Coincidentally equal unknown card credit remains reviewable');
+assert.equal(rawRows.get('merchant-refund').type,'refund',
+ 'Explicit merchant refund cannot become a card payment on equal amount alone');
+assert.equal(rawRows.get('merchant-refund').pairedTransactionId,null);
+for(const id of ['ambiguous-payment','ambiguous-credit-a','ambiguous-credit-b'])
+ assert.equal(rawRows.get(id).pairedTransactionId,null,
+  'Competing equal-dollar card credits never get a guessed counterpart');
+assert.equal(JSON.stringify(rawBank.transactions),untouchedRaw,
+ 'Source account and transaction records remain immutable during reconciliation');
+
 // Many identical-merchant purchases need not block a refund when only ONE
 // earlier charge has the same amount. Collisions stay in Review.
 const exactRefunds=M.migrate({});

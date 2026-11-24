@@ -42,7 +42,7 @@ function registerAccounts(state,provided){
 }
 function accountsFor(state){
  const byId=new Map((Array.isArray(state?.accounts)?state.accounts:[])
-  .filter(a=>a?.id).map(a=>[String(a.id),{...a}]));
+  .filter(a=>a?.id).map(a=>[String(a.id),{...a,type:accountType(a)}]));
  for(const t of state?.transactions||[]){
   const id=key(t);
   if(!byId.has(id))byId.set(id,{id,name:safe(t.account||id),type:'unknown',
@@ -230,6 +230,10 @@ function reconcile(state){
    const cardSide=aCard?a:b,cashSide=aCard?b:a;
    if(cardSide.cashDirection!=='in'||cashSide.cashDirection!=='out'||
       !['checking','savings'].includes(cashSide.accountType))continue;
+   // A generic checking transfer plus an unrelated card credit is not proof
+   // of a card repayment, even when amounts and dates happen to coincide.
+   if(cardSide.accountingKind!=='card_payment'&&
+      cashSide.accountingKind!=='card_payment')continue;
   }
   const card=cashCardPair;
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
