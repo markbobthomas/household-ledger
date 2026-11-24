@@ -127,7 +127,7 @@ function classify(title,categories){
  const name=String(title).toLowerCase();
  const pick=options=>options.map(o=>categories.find(c=>c.toLowerCase()===o.toLowerCase())).find(Boolean);
  const rules=[
-  [/(\bdiapers?\b|\bwipes?\b.*\bbaby\b|\bbaby\b.*\bwipes?\b|\btoddler\b|\bstroller\b|\bcrib\b|\bchildren'?s\b|\bkids?\b.*\b(toy|clothes|pajama|shoe|book)\b|\bpreschool\b|\blego\b|\bformula\b)/i,['Kids & Family','Kids','Children']],
+  [/(\bdiapers?\b|\bwipes?\b.*\bbaby\b|\bbaby\b.*\bwipes?\b|\btoddler\b|\bstroller\b|\bcrib\b|\bchildren'?s\b|\bkids?\b.*\b(toy|clothes|pajama|shoe|book|jacket|shirt|dress|pants|clothing)\b|\bpreschool\b|\blego\b|\bformula\b)/i,['Kids & Family','Kids','Children']],
   [/(\bcoffee\b|\bcereal\b|\bsnack\b|\bfood\b|\bprotein bar\b|\bpasta\b|\brice\b|\btea bags?\b|\bspices?\b|\bgranola\b|\bchocolate\b|\bcandy\b|\bbeverage\b|\bdrink mix\b|\boatmeal\b|\bpantry\b|\bolive oil\b|\bnuts?\b)/i,['Groceries','Food']],
   [/(\bvitamin\b|\bsupplements?\b|\bmedicine\b|\bibuprofen\b|\bfirst aid\b|\bbandages?\b|\bthermometer\b|\bskin care\b|\btoothpaste\b|\btoothbrush\b|\bdental floss\b|\bshampoo\b|\blotion\b|\bsunscreen\b|\bprescription\b)/i,['Health','Medical']],
   [/(\bauto\b|\bautomotive\b|\bcar battery\b|\bengine\b|\boil filter\b|\bwiper blade\b|\btires?\b|\bbrake pads?\b|\bvehicle\b|\bcar seat cover\b)/i,['Transportation','Auto']],
