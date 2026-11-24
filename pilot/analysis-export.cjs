@@ -6,6 +6,7 @@
 const {financialContext}=require('./ai-financial-report.cjs');
 const {createDataset}=require('./ai-open-data.cjs');
 const {cleanDescription}=require('./ai-private-adapter.cjs');
+const {auditAll:sourceReconciliationAudit}=require('./reconciliation-inspection.cjs');
 
 const isDate=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x);
 const num=x=>typeof x==='number'&&Number.isFinite(x);
@@ -266,7 +267,7 @@ function build({prepared,adjustments={},lastSync=null,syncDiagnostics={}}){
    alertThreshold:value(decisions.lowAlertThreshold??decisions.warnBelow),
    deletedCategories:(Array.isArray(decisions.deletedCategories)?decisions.deletedCategories:[]).map(safe)
   },
-  reconciliationAndReview:reviews
+  reconciliationAndReview:{...reviews,sourceReconciliationAudit:sourceReconciliationAudit(prepared)}
  };
 }
 module.exports={build};

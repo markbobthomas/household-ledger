@@ -223,8 +223,23 @@ const historicalCardSettlements=[
 const unpairedCard=C.analyze(historicalCardSettlements,accounts,snapshot.asOf);
 assert.equal(unpairedCard.automatic.length,0,
  'A payment to a linked card is never fabricated as an additional ordinary expense');
-assert.equal(unpairedCard.review.length,1,
- 'Ambiguous historical card payments may be reviewed but not charged twice');
+assert.equal(unpairedCard.review.length,0,
+ 'Card payment rows are reconciliation evidence, never duplicate bill suggestions');
+const cardAutopaySource=[
+ tx('card-pmt-a','2026-09-10','Visa Autopay',600,'transfer','checking',
+  {cashDirection:'out',accountingKind:'card_payment'}),
+ tx('card-pmt-b','2026-10-10','Visa Autopay',600,'transfer','checking',
+  {cashDirection:'out',accountingKind:'card_payment'}),
+ tx('utility-a','2026-09-09','Example Utility Autopay',72),
+ tx('utility-b','2026-10-09','Example Utility Autopay',72)
+];
+const configuredCard={paymentRules:{visa:{autopayEnabled:true,fromAccountId:'checking'}}};
+const noDuplicates=C.analyze(cardAutopaySource,accounts,snapshot.asOf,configuredCard);
+assert.equal(noDuplicates.review.filter(x=>/Visa Autopay/i.test(x.merchant)).length,0,
+ 'Already modeled card autopay cannot also enter recurring Review');
+assert.equal(noDuplicates.automatic.filter(x=>/Visa Autopay/i.test(x.merchant)).length,0);
+assert(noDuplicates.automatic.some(x=>x.merchant==='Example Utility Autopay'),
+ 'Normal scheduled utility autopay remains eligible');
 const cardState={predictions:{paymentRules:{visa:{
  fromAccountId:'checking',method:'statement',closingDay:18,
  billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
