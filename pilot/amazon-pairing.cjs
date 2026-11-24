@@ -30,10 +30,14 @@ function itemNote(items,prefix='Amazon: '){
  return note.slice(0,160);
 }
 function match(rows,transactions,adjustments,validCategories,allocate){
- const txs=Object.values(transactions||{}).filter(amazon);
  const notes=adjustments?.predictions?.transactionNotes||{},
   overrides=adjustments?.categoryOverrides||{},
   existing=adjustments?.amazonAllocations||{};
+ // Only count charges where an item Note or a category is still useful.
+ // Already completed manual notes/categories must not consume an order match.
+ const txs=Object.values(transactions||{}).filter(amazon).filter(t=>
+  !String(notes[keyFor(t)]||'').trim()||
+  overrides[t.id]===undefined||overrides[t.id]==='Uncategorized');
  const needed=[...new Set(txs.map(cents))].sort((a,b)=>a-b);
  const nearby=(amount)=>{
   if(needed.includes(amount))return true;
