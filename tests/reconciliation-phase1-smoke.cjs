@@ -195,4 +195,60 @@ assert.equal(exactRows.get('unrelated-credit').accountingKind,'unclassified_card
 assert.equal(JSON.stringify(exactRefunds.transactions),exactOriginal,
  'Refund reconciliation never rewrites bank data');
 
+// Unlabeled SAME-card merchant credits may be partial refunds only up to the
+// documented purchase amount. Loan outflows remain separate from cash transfers.
+const partial=M.migrate({accounts:[
+ {id:'check-qa',name:'Checking',type:'checking'},
+ {id:'save-qa',name:'Savings',type:'savings'},
+ {id:'credit-qa',name:'Card',type:'credit'}
+],transactions:[
+ {id:'purchase-only',accountId:'credit-qa',date:'2026-09-01',
+  merchant:'Fictional Boutique',amount:70,type:'expense',
+  source:{provider:'plaid',plaidAmount:70}},
+ {id:'refund-one',accountId:'credit-qa',date:'2026-09-08',
+  merchant:'Fictional Boutique',amount:30,type:'refund',
+  source:{provider:'plaid',plaidAmount:-30}},
+ {id:'refund-two',accountId:'credit-qa',date:'2026-09-12',
+  merchant:'Fictional Boutique',amount:30,type:'refund',
+  source:{provider:'plaid',plaidAmount:-30}},
+ {id:'refund-excess',accountId:'credit-qa',date:'2026-09-20',
+  merchant:'Fictional Boutique',amount:30,type:'refund',
+  source:{provider:'plaid',plaidAmount:-30}},
+ {id:'loan-out',accountId:'check-qa',date:'2026-10-01',
+  merchant:'Fictional Mortgage Loan Payment',amount:220,type:'expense',
+  source:{provider:'plaid',plaidAmount:220,
+    personalFinanceCategory:{primary:'LOAN_PAYMENTS'}}},
+ {id:'incoming-xfer',accountId:'save-qa',date:'2026-10-01',
+  merchant:'Transfer from checking',amount:220,type:'transfer',
+  source:{provider:'plaid',plaidAmount:-220}},
+ {id:'savings-out',accountId:'check-qa',date:'2026-10-03',
+  merchant:'Transfer to savings',amount:115,type:'transfer',
+  source:{provider:'plaid',plaidAmount:115}},
+ {id:'savings-in',accountId:'save-qa',date:'2026-10-04',
+  merchant:'Transfer from checking',amount:115,type:'transfer',
+  source:{provider:'plaid',plaidAmount:-115}}
+]});
+const beforePartial=JSON.stringify(partial.transactions);
+const checked=new Map(M.records(partial).map(x=>[x.id,x]));
+assert.equal(checked.get('refund-one').accountingKind,'refund');
+assert.equal(checked.get('refund-two').accountingKind,'refund');
+assert.equal(checked.get('refund-excess').accountingKind,'unclassified_card_credit',
+ 'Refunds totaling more than the purchase cannot be inferred automatically');
+assert.equal(checked.get('loan-out').pairedTransactionId,null,
+ 'External mortgage cannot be erased by a coincidentally equal savings deposit');
+assert.equal(checked.get('incoming-xfer').pairedTransactionId,null);
+assert.equal(checked.get('savings-out').pairedTransactionId,'savings-in');
+assert.equal(checked.get('savings-in').pairedTransactionId,'savings-out');
+assert.equal(checked.get('loan-out').type,'expense');
+assert.equal(JSON.stringify(partial.transactions),beforePartial,
+ 'Derived reconciliation cannot rewrite posted bank transactions');
+const {auditAll}=require('../pilot/reconciliation-inspection.cjs');
+const sourceAudit=auditAll({asOf:'2026-10-20',bundle:{rows:M.records(partial)}});
+assert.equal(sourceAudit.matchedInternalTransferPairs,1);
+assert.equal(sourceAudit.unclassifiedCardCredits,1);
+assert.equal(sourceAudit.missingOrBrokenPairLinks,0);
+assert.equal(sourceAudit.duplicateSourceIds,0);
+assert(!JSON.stringify(sourceAudit).includes('Fictional'),
+ 'Full-history audit must not expose merchants or source identifiers');
+
 console.log('PASS Phase 1 atomic duplicate/cross-account safeguards and human review flags');

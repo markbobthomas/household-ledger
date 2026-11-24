@@ -54,6 +54,8 @@ const billName=/\b(?:mortgage|mtg|home loan|rent|lease payment|loan payment|auto
 const variableName=/\b(?:safeway|costco|walmart|amazon|grocery|supermarket|target|restaurant|coffee|starbucks|fuel|gas station|shell|chevron|uber|lyft)\b/i;
 const internalName=/\b(?:transfer to|transfer from|savings transfer|account transfer|xfer|credit card payment|payment to visa|payment to mastercard)\b/i;
 const metadata=t=>t.personal_finance_category||t.source?.personalFinanceCategory||{};
+// Shared card-payment filter is used by the forecast and History/Review.
+const cardSettlementHistory=t=>shared.cardPaymentSource(t);
 const trusted=t=>billName.test(String(t.merchant||''))||
  /(?:MORTGAGE|SUBSCRIPTION|RECURRING|RENT_PAYMENT|RENT_AND_UTILITIES_RENT|AUTO_LOAN|LOAN_PAYMENT)/.test(String(metadata(t).detailed||'').toUpperCase());
 const cadence=(a,b)=>shared.recurrenceCadence([a,b],'forecast');
@@ -67,8 +69,13 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
   dismiss=prefs.historyPatternDecisions||{},rules=prefs.futureRecurringRules||[];
  const groups=shared.recurrenceEvidence(rows,accounts,asOf,{
   eligible:t=>!t.pending&&valid(t.date)&&t.date<=asOf&&Number(t.amount)>0&&
-   !t.pairedTransactionId&&
-   !['unclassified_credit','unclassified_card_credit','confirmed_transfer'].includes(t.accountingKind),
+   !t.pairedTransactionId&&!cardSettlementHistory(t)&&
+   !['unclassified_credit','unclassified_card_credit','confirmed_transfer',
+    'internal_transfer'].includes(t.accountingKind)&&
+   // Unpaired transfers without a known bill kind need reconciliation, not
+   // a new inferred bill. Bank-evidenced loans normalize to expense upstream.
+   !(t.type==='transfer'&&t.accountingKind!=='loan_payment'&&
+     !/\b(?:mortgage|mtg|home\s+loan)\b/i.test(t.merchant||'')),
   typeOf:(t,acct)=>{
    if(String(acct.type||acct.accountType||'').toLowerCase()==='loan')return null;
    return direction(t)||(t.type==='refund'?'refund':

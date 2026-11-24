@@ -41,8 +41,15 @@ function registerAccounts(state,provided){
  return state.accounts;
 }
 function accountsFor(state){
+ // Accept both normalized private account IDs and raw Plaid account_id
+ // records. Without this, legacy read-only audits can silently treat cards
+ // and checking accounts as unknown and mislabel a card payment as a
+ // depository transfer. Never modify the source account array.
  const byId=new Map((Array.isArray(state?.accounts)?state.accounts:[])
-  .filter(a=>a?.id).map(a=>[String(a.id),{...a,type:accountType(a)}]));
+  .filter(a=>a?.id||a?.account_id).map(a=>{
+   const id=String(a.id||a.account_id);
+   return [id,{...a,id,type:accountType(a)}];
+  }));
  for(const t of state?.transactions||[]){
   const id=key(t);
   if(!byId.has(id))byId.set(id,{id,name:safe(t.account||id),type:'unknown',
@@ -234,6 +241,16 @@ function reconcile(state){
    // of a card repayment, even when amounts and dates happen to coincide.
    if(cardSide.accountingKind!=='card_payment'&&
       cashSide.accountingKind!=='card_payment')continue;
+  }else{
+   // Depository transfers require an actual OUTGOING internal transfer.
+   // An incoming savings transfer and an equal external loan/merchant debit
+   // cannot erase a real expense, even if both happened on the same date.
+   const outgoing=a.cashDirection==='out'?a:b,incoming=a.cashDirection==='in'?a:b;
+   if(!['checking','savings'].includes(outgoing.accountType)||
+      !['checking','savings'].includes(incoming.accountType)||
+      outgoing.accountingKind!=='internal_transfer'||
+      !['internal_transfer','unclassified_credit'].includes(incoming.accountingKind))
+    continue;
   }
   const card=cashCardPair;
   const priority=(aTransfer?2:0)+(bTransfer?2:0)+(card?2:0);
@@ -268,16 +285,29 @@ function reconcile(state){
   }
  }
  const purchases=output.filter(t=>t.accountingKind==='purchase');
+ // Track how much of each uniquely identified source purchase has already
+ // been credited. A single real purchase cannot justify more refund dollars
+ // than were spent, even when multiple partial credits arrive separately.
+ const creditedCents=new Map();
  // A bank credit may have no literal 'refund' in its merchant description.
  // Identify it only against a UNIQUE same-card posted purchase by merchant
  // within 120 days; a generic adjustment without return evidence remains
  // unclassified and cannot silently lower the next card payment.
- for(const t of output)if(t.accountingKind==='unclassified_card_credit'&&
-  iso(t.date)&&!t.pending){
-  const original=cleanedRefundMerchant(t.merchant);
-  const candidates=original?purchases.filter(p=>
+ for(const t of output.filter(r=>r.accountingKind==='unclassified_card_credit'&&
+  iso(r.date)&&!r.pending).sort((a,b)=>a.date.localeCompare(b.date)||
+  String(a.id).localeCompare(String(b.id)))){
+  const original=cleanedRefundMerchant(t.merchant),creditCents=Math.round(Number(t.amount)*100);
+  // Reconcile only earlier purchases on the SAME card and merchant.
+  // A positive credit exceeding an original purchase (or its uncredited
+  // remainder) is not proof of that merchant's refund.
+  const merchantPurchases=original&&creditCents>0?purchases.filter(p=>
    p.accountId===t.accountId&&cleanedRefundMerchant(p.merchant)===original&&
    p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending):[];
+  const candidates=merchantPurchases.filter(p=>
+   Math.round(Number(p.amount)*100)-(creditedCents.get(String(p.id))||0)>=creditCents);
+  // Exhausting other purchases does NOT turn a repeated merchant into a
+  // single original purchase: partial credits still need independent proof.
+  const singlePurchase=merchantPurchases.length===1&&candidates.length===1;
   // Explicitly described returns and uniquely matched card merchant returns
   // remain supported. With multiple same-merchant purchases, also require
   // high-confidence bank category evidence and no card-payment counterpart.
@@ -288,11 +318,16 @@ function reconcile(state){
   const exact=candidates.filter(p=>days(p.date,t.date)<=35&&
    Math.abs(Number(p.amount)-Number(t.amount))<.011);
   const exactMatch=exact.length===1?exact[0]:null;
-  const evidenced=candidates.length>1&&supportedMerchantRefund(t,candidates);
-  if(candidates.length===1||exactMatch||evidenced){
+  const evidenced=merchantPurchases.length>1&&supportedMerchantRefund(t,candidates);
+  if(singlePurchase||exactMatch||evidenced){
    t.accountingKind='refund';
    t.classificationConfidence=exactMatch?'Unique same-amount merchant return':
     evidenced?'Bank category and matching merchant purchases':'Matched single merchant purchase';
+   // Attribute a credit allowance only when ONE source purchase is known.
+   // Multiple-purchase bank-supported returns do not invent allocation.
+   const uniqueSource=exactMatch||singlePurchase?exactMatch||candidates[0]:null;
+   if(uniqueSource)creditedCents.set(String(uniqueSource.id),
+    (creditedCents.get(String(uniqueSource.id))||0)+creditCents);
    const sourcePurchases=exactMatch?[exactMatch]:candidates;
    const categories=[...new Set(sourcePurchases.map(p=>state?.categoryOverrides?.[p.id]||p.category)
     .filter(c=>c&&!['Uncategorized','Transfer','Income','Savings'].includes(c)))];
@@ -304,7 +339,7 @@ function reconcile(state){
    const manual=state?.categoryOverrides?.[t.id];
    const invalid=['Transfer','Income','Savings'].includes(manual||t.category);
    const reviewed=!!manual&&!['Transfer','Income','Savings','Uncategorized'].includes(manual);
-   if(invalid||!exactMatch&&candidates.length>1&&
+   if(invalid||!exactMatch&&merchantPurchases.length>1&&
       (categories.length!==1||categories[0]==='Other')&&!reviewed)
     t.reconciliationStatus='needs-review';
   }

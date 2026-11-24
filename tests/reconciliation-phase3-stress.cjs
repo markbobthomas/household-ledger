@@ -50,5 +50,14 @@ assert.equal(s.transactions.length,rows.length,'Repeated sync idempotent');
 assert.equal(M.records(s).find(t=>t.id==='plaid:bank-two:other-card').category,'Shopping','Manual choice survives sync');
 const changed=M.migrate(s);changed.transactions.find(t=>t.id===issue.targetId).amount+=1;
 assert.ok(R.build(changed,null,'2026-10-19').tasks.find(t=>t.id===issue.id),'Changed source reopens acknowledged review');
-assert.ok(audit.summary.matchedTransfers*2===M.records(M.migrate({accounts:ac,transactions:s.transactions.filter(t=>!['posted','pending'].includes(t.source?.providerTransactionId))})).filter(t=>t.pairedTransactionId).length);
+const rawPlaidAudit=M.migrate({accounts:ac,transactions:s.transactions.filter(t=>
+ !['posted','pending'].includes(t.source?.providerTransactionId))});
+assert.deepEqual(M.accountsFor(rawPlaidAudit).map(a=>a.type).sort(),
+ ['checking','checking','savings','credit','credit','credit'].sort(),
+ 'Read-only source audit normalizes raw Plaid account_id and type fields');
+const normalized=M.records(rawPlaidAudit);
+assert.equal(normalized.filter(t=>t.pairedTransactionId).length,
+ audit.summary.matchedTransfers*2);
+assert(normalized.some(t=>t.accountingKind==='card_payment'&&t.accountType==='credit'&&
+ t.pairedTransactionId),'Bank card payment must remain a card settlement, not a generic transfer');
 console.log('PASS: 6-account cross-bank conservation, pending posting, uncertainty review, manual choices, immutable source');

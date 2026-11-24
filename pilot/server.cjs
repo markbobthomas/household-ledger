@@ -687,9 +687,16 @@ async function start(port=Number(env.PORT||8788)){
    return respond(200,ready?{...payload,preparedForecast:ready}:payload);
   }
   if(req.method==='GET'&&requestPath==='/api/ledger/reconciliation-audit'){
-   // Private, derived, one-day read-only evidence. An ordinary posted badge is
-   // not proof of a symmetrically matched checking/card source transfer.
+   // Private, read-only. The full-history option reports aggregate counts,
+   // never transaction identifiers, merchant labels or banking secrets.
    const params=new URL(req.url,'http://localhost').searchParams;
+   if(params.get('scope')==='all'&&[...params.keys()].every(k=>k==='scope')){
+    if(!state.items.length)return respond(409,{error:'No bank account connected'});
+    try{return respond(200,require('./reconciliation-inspection.cjs').auditAll(
+      preparedFor(ledgerPayload())));}
+    catch{return respond(503,{error:'Source reconciliation audit unavailable'});}
+   }
+   // The existing one-day source-pair inspection remains supported.
    const dates=params.getAll('date');
    if(dates.length!==1||[...params.keys()].some(k=>k!=='date')||
       !/^\d{4}-\d{2}-\d{2}$/.test(dates[0]))

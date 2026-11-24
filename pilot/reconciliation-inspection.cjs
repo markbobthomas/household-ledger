@@ -42,4 +42,80 @@ function inspect(prepared,date){
   verifiedCardPaymentLegs:entries.filter(x=>x.verifiedCardPayment).length,
   entries};
 }
-module.exports={inspect};
+// Full-history conservative source audit. Source identifiers remain in server
+// memory; authenticated callers receive only aggregate counts and warnings.
+// A bank's Posted label alone is NEVER evidence of a paired transfer.
+function auditAll(prepared){
+ const records=prepared?.bundle?.rows;
+ if(!Array.isArray(records))throw Error('Canonical derived source records are unavailable');
+ const posted=records.filter(t=>t&&!t.pending&&iso(t.date)&&
+  Number.isSafeInteger(cents(t.amount))&&cents(t.amount)>0);
+ const byId=new Map(posted.filter(t=>t.id!=null).map(t=>[String(t.id),t]));
+ const seen=new Set();
+ const bankCash=t=>t&&['checking','savings'].includes(t.accountType);
+ const isCard=t=>t&&t.accountType==='credit';
+ const kind=(a,b)=>{
+  if(!a||!b||String(a.accountId)===String(b.accountId)||
+     a.cashDirection===b.cashDirection||
+     cents(a.amount)!==cents(b.amount)||
+     Math.abs(epoch(a.date)-epoch(b.date))>5*86400000||
+     a.type!=='transfer'||b.type!=='transfer')return null;
+  if(Boolean(isCard(a))!==Boolean(isCard(b))){
+   const card=isCard(a)?a:b,cash=isCard(a)?b:a;
+   return card.accountingKind==='card_payment'&&
+    cash.accountingKind==='card_payment'&&
+    card.cashDirection==='in'&&cash.cashDirection==='out'&&
+    bankCash(cash)?'card':null;
+  }
+  const out=a.cashDirection==='out'?a:b,incoming=a.cashDirection==='in'?a:b;
+  return bankCash(out)&&bankCash(incoming)&&
+   out.accountingKind==='internal_transfer'&&
+   incoming.accountingKind==='internal_transfer'?'internal':null;
+ };
+ let matchedCardPaymentPairs=0,matchedInternalTransferPairs=0,missingOrBrokenPairLinks=0;
+ for(const t of posted){
+  if(t.pairedTransactionId==null||seen.has(String(t.id)))continue;
+  const other=byId.get(String(t.pairedTransactionId));
+  const reciprocal=other&&other.pairedTransactionId!=null&&
+   String(other.pairedTransactionId)===String(t.id);
+  const classification=reciprocal?kind(t,other):null;
+  if(!classification){
+   missingOrBrokenPairLinks++;seen.add(String(t.id));continue;
+  }
+  seen.add(String(t.id));seen.add(String(other.id));
+  if(classification==='card')matchedCardPaymentPairs++;
+  else matchedInternalTransferPairs++;
+ }
+ const unpaired=posted.filter(t=>t.pairedTransactionId==null);
+ const outgoing=unpaired.filter(t=>bankCash(t)&&t.cashDirection==='out'&&
+  ['card_payment','internal_transfer'].includes(t.accountingKind));
+ const incoming=unpaired.filter(t=>t.cashDirection==='in'&&
+  (isCard(t)?['unclassified_card_credit','card_payment'].includes(t.accountingKind):
+   bankCash(t)&&['unclassified_credit','internal_transfer'].includes(t.accountingKind)));
+ const candidates=new Map();
+ for(const debit of outgoing){
+  const possibilities=incoming.filter(credit=>credit.accountId!==debit.accountId&&
+   cents(credit.amount)===cents(debit.amount)&&
+   Math.abs(epoch(credit.date)-epoch(debit.date))<=5*86400000&&
+   (isCard(credit)&&debit.accountingKind==='card_payment'||
+    bankCash(credit)&&debit.accountingKind==='internal_transfer'));
+  if(possibilities.length!==1)continue;
+  const id=String(possibilities[0].id);
+  if(!candidates.has(id))candidates.set(id,[]);
+  candidates.get(id).push(debit);
+ }
+ // These are not automatically promoted: same amount/date can coincide.
+ const possibleMissedPairs=[...candidates.values()].filter(x=>x.length===1).length;
+ return {source:'canonical-derived-posted',asOf:String(prepared.asOf||''),
+  totalPosted:posted.length,
+  matchedCardPaymentPairs,matchedInternalTransferPairs,
+  unmatchedCardPaymentLegs:unpaired.filter(t=>t.accountingKind==='card_payment').length,
+  unmatchedInternalTransferLegs:unpaired.filter(t=>t.accountingKind==='internal_transfer').length,
+  unclassifiedCardCredits:unpaired.filter(t=>t.accountingKind==='unclassified_card_credit').length,
+  unclassifiedCashCredits:unpaired.filter(t=>t.accountingKind==='unclassified_credit').length,
+  refunds:posted.filter(t=>t.accountingKind==='refund').length,
+  duplicateSourceIds:posted.length-byId.size,
+  missingOrBrokenPairLinks,possibleMissedPairs,
+  note:'Possible matching legs are review hints only; no financial data was edited'};
+}
+module.exports={inspect,auditAll};

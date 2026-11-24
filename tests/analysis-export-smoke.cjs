@@ -101,6 +101,10 @@ assert.equal(report.bankSync.lastAttemptAt,'2026-11-23T12:00:00Z');
 assert.equal(report.bankSync.itemIssues[0].code,'INVALID_FIELD');
 assert.equal(report.bankSync.itemIssues[0].observedAt,'2026-11-23T12:00:01Z');
 assert.equal(report.format,'ledger-manual-analysis-export');
+assert.equal(report.reconciliationAndReview.sourceReconciliationAudit.totalPosted,629,
+ 'Export includes complete posted source reconciliation coverage');
+assert.equal(report.reconciliationAndReview.sourceReconciliationAudit.duplicateSourceIds,0);
+assert.equal(report.reconciliationAndReview.sourceReconciliationAudit.missingOrBrokenPairLinks,0);
 assert.equal(report.counts.history,630,'all history, not the last 500 or 140');
 assert.equal(report.actualTransactions.length,630);
 assert.equal(report.expectedTransactions.length,1);
