@@ -1167,7 +1167,8 @@ async function start(port=Number(env.PORT||8788)){
      if(Object.entries(body.categoryOverrides).some(([id,category])=>!ids.has(id)||!allowedCats.has(category)))return respond(400,{error:'Invalid category override'});
     }
     // Never permit source records, Plaid tokens, or provider balances in adjustment writes.
-    state.ledgerAdjustments=Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]]));
+    state.ledgerAdjustments={...Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]])),
+     amazonAllocations:state.ledgerAdjustments?.amazonAllocations||{}};
     await save();
     // Keep compatibility with the older adjustments route, while the new
     // app only writes future-ledger settings through /forecasts.
