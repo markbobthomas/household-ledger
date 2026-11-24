@@ -518,6 +518,7 @@ const aiReports=aiCacheFactory?aiCacheFactory({
 // a bank refresh produced no changed transactions.
 const qaSnapshotRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify({
  financial:aiSnapshotRevision(),lastSync:state.lastSync,
+ qaqcEngine:'one-pass-terra-v1',
  syncIssues:state.items.map(i=>i.syncIssue?.code||null)
 })).digest('hex');
 const qaReports=aiCacheFactory?aiCacheFactory({
