@@ -502,7 +502,7 @@ const aiReports=aiCacheFactory?aiCacheFactory({
  },
  analyze:context=>require('./ai-chat.cjs').analyzeOneClick({
   context,consent:'financial-analysis-v3',apiKey:env.OPENAI_API_KEY,
-  model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+  model:env.OPENAI_OUTLOOK_MODEL||env.OPENAI_REPORT_MODEL||'gpt-6.2-astra'
  })
 }):{
  load:async()=>{},status:()=>({enabled:false,status:'unavailable',report:null}),
@@ -569,8 +569,8 @@ async function start(port=Number(env.PORT||8788)){
    ok:true,mode:'multi-account-private',
    commit:deployedCommit,
    // Harmless model identifier, never a provider key or private financial data.
-   analysisModel:env.OPENAI_REPORT_MODEL||'gpt-4.1',
-   analysisModelSource:env.OPENAI_REPORT_MODEL?'environment-override':'default'
+   analysisModel:env.OPENAI_OUTLOOK_MODEL||env.OPENAI_REPORT_MODEL||'gpt-6.2-astra',
+   analysisModelSource:env.OPENAI_OUTLOOK_MODEL?'outlook-override':env.OPENAI_REPORT_MODEL?'environment-override':'default'
   });
   const origin=req.headers.origin,host=req.headers.host;
   // Reject cross-origin writes including sign in/out. Other mutations also
@@ -735,7 +735,7 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method==='GET'&&requestPath==='/api/ai/report'){
    // Read-only status never queues an external API request.
    return respond(200,{...aiReports.status(),
-    analysisModel:env.OPENAI_REPORT_MODEL||'gpt-4.1'});
+    analysisModel:env.OPENAI_OUTLOOK_MODEL||env.OPENAI_REPORT_MODEL||'gpt-6.2-astra'});
   }
  // Unknown browser navigation should be a 404, not a misleading bank-action error.
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});

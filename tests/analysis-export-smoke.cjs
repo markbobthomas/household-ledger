@@ -74,6 +74,14 @@ const adjustments={
  learning:{categoryRules:{rule:{merchant:'Fictional Grocer',category:'Groceries',
   mode:'auto',accountId:bank,privateId:'DO-NOT-EXPORT'}}}
 };
+// Private ambiguous transfer is NOT household expense. Separately classify an
+// owner-labeled housing-related outgoing transfer as a conditional proxy.
+history[82].type='transfer';history[82].category='Other';history[82].merchant='Fictional Merchant A';
+history[82].cashDirection='out';history[82].accountingKind='internal_transfer';
+history[82].amount=120;
+history[83].type='transfer';history[83].category='Mortgage';history[83].merchant='Fictional Merchant B';
+history[83].cashDirection='out';history[83].accountingKind='internal_transfer';
+history[83].amount=1000;
 // Export-only QA should surface, not rewrite, suspicious manual merchant
 // categories and two distinct fixed utilities above recent actual totals.
 history[20].merchant='Chevron';
@@ -90,6 +98,12 @@ adjustments.predictions.futureRecurringRules.push(
  ...[0,1].map(i=>({id:'private-electric-'+i,kind:'event',type:'expense',
   accountId:bank,merchant:'Fictional Electric Utility',category:'Utilities',
   frequency:'monthly',anchorDate:date(12),amount:200})));
+// Two fictional independent four-week payroll streams: preserve exact
+// cadence rather than redacting the digit or inferring 3 paychecks/month.
+adjustments.predictions.futureRecurringRules.push(
+ ...[2042.25,2187.75].map((amount,i)=>({id:'private-payroll-'+i,
+  kind:'event',type:'income',accountId:bank,merchant:'Fictional Employer',
+  frequency:'every-4-weeks',amount,anchorDate:date(7+i*14)})));
 const report=build({prepared,adjustments,lastSync:'2026-11-23T11:00:00Z',
  syncDiagnostics:{lastAttempt:{at:'2026-11-23T12:00:00Z',outcome:'failed',
   requestId:'NEVER-EXPORT-REQUEST-ID'},
@@ -210,6 +224,40 @@ const modelPayload=JSON.stringify(aiDataset.initial)+
 for(const secret of [bank,'PRIVATE-TOKEN','PRIVATE-ID','raw-tx-','raw-private-rule',
  'DO-NOT-EXPORT','SECRET-IN-SOURCE','NEVER-EXPORT-REQUEST-ID'])
  assert(!modelPayload.includes(secret),'New AI source leaked private raw identifiers: '+secret);
+
+// Compare the independent outlook research against the SAME full sanitized
+// manual download. Do not ever use owner's real figures in the public tests.
+const {buildOutlookDesk}=require('../pilot/ai-outlook-desk.cjs');
+const research=buildOutlookDesk(aiContext);
+assert(research?.briefing,'Independent outlook research is available');
+assert(research.facts.length>12,'Independent research supplies multiple source-grounded household observations');
+assert(research.briefing.comparisonMonths.length>=2,
+ 'The outlook compares fully covered historic months rather than partial November');
+assert(research.briefing.categories.some(x=>x.label==='Groceries'));
+assert(research.briefing.merchants.some(x=>x.label==='Fictional Store'));
+assert(research.briefing.monthByMonth.some(m=>
+ m.unclassifiedOrOtherTransfers>=120),
+ 'Unverified Other transfer is reported separately rather than treated as spending');
+assert(research.briefing.monthByMonth.some(m=>
+ m.ownerCategorizedHousingUtilityTransfers>=1000),
+ 'Owner-labeled housing transfer is available as conditional proxy');
+assert(research.briefing.savedIncome.recognizedSchedules===2,
+ 'Two independent saved payroll schedules are counted individually');
+assert.equal(research.briefing.savedIncome.unrecognizedCadence,0);
+assert.equal(research.briefing.savedIncome.normalizedMonthly,
+ Math.round((2042.25+2187.75)*13/12*100)/100);
+assert(report.savedDecisions.recurringSchedules.filter(x=>x.type==='income')
+ .every(x=>x.frequency==='every-4-weeks'));
+assert(research.charts.some(x=>x.id==='outlook-near-term-checking'));
+assert(research.charts.some(x=>x.id==='outlook-purchase-categories'));
+assert(research.charts.some(x=>x.id==='outlook-income-versus-observed-outflows'),
+ 'Comparable monthly normal income vs purchase/obligation outflow chart available');
+assert(research.charts.some(x=>x.id==='outlook-adjustment-scenarios'),
+ 'Spending reduction illustration is independent, sourced and explicitly conditional');
+const researchText=JSON.stringify(research);
+for(const secret of [bank,'PRIVATE-ID','PRIVATE-TOKEN','raw-tx-',
+ 'private-payroll-','DO-NOT-EXPORT','SECRET-IN-SOURCE'])
+ assert(!researchText.includes(secret),'Research desk leaked a raw identity '+secret);
 
 const raw=JSON.stringify(report);
 for(const forbidden of [bank,'PRIVATE-ID','PRIVATE-TOKEN','SECRET-IN-SOURCE',
