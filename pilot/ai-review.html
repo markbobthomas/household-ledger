@@ -527,21 +527,26 @@ button{font:inherit;cursor:pointer}
    }
    if(state.status==='running'||state.status==='queued'){
     status.textContent=state.report?
-     'New financial analysis is running; the saved report is shown above.':
+     'New analysis is running. Your last successful report remains below'+
+      (state.isCurrent?'':' (earlier financial snapshot)')+'.':
      'The requested one-time AI Analysis is running.';
     armPoll();
    }else if(state.status==='ready'){
-    status.textContent='Verified saved analysis · completed '+(state.completedAt||'recently')+
-      '. Expand any finding for evidence and options.';
+    status.textContent='Saved analysis · completed '+(state.completedAt||'recently')+
+     '. Expand any finding for evidence and options.';
    }else if(state.status==='failed'){
     status.textContent='Last analysis could not complete ('+
-      (state.errorCode||'analysis_failed')+'). The existing bank data was not changed.';
-    }else if(state.status==='outdated'){
-    analysis.replaceChildren();lastCompleted=null;
-    status.textContent='Bank data changed. Request a fresh AI Analysis only when you choose.';
+     (state.errorCode||'analysis_failed')+'). '+
+     (state.report?'The last successful analysis is preserved below'+
+      (state.isCurrent?'':' (earlier financial snapshot)')+'. ':'')+
+     'The existing bank data was not changed.';
+   }else if(state.status==='outdated'){
+    status.textContent='Saved analysis from '+(state.completedAt||'an earlier date')+
+     ' · financial records or date have changed since this analysis.'+
+     ' It remains viewable below; rerun only when you choose.';
    }else{
     if(!state.report){analysis.replaceChildren();lastCompleted=null;}
-    status.textContent='No current saved analysis. Authorize one run, then select Run AI Analysis.';
+    status.textContent='No saved analysis yet. Authorize one run, then select Run AI Analysis.';
    }
   }catch(error){status.textContent=error.message||'Saved analysis unavailable';}
   finally{sync()}
@@ -567,13 +572,14 @@ button{font:inherit;cursor:pointer}
      '. Expand failures and investigation findings for evidence.';
    }else if(state.status==='failed'){
     qaStatus.textContent='QA/QC could not complete ('+(state.errorCode||'analysis_failed')+
-     '). No financial records were changed.';
+     '). '+(state.report?'The last successful QA/QC remains visible below. ':'')+
+     'No financial records were changed.';
    }else if(state.status==='outdated'){
-    qaResults.replaceChildren();qaLastCompleted=null;
-    qaStatus.textContent='Records changed. Run a fresh QA/QC on the new financial snapshot.';
+    qaStatus.textContent='Saved QA/QC from '+(state.completedAt||'an earlier date')+
+     ' · financial records have changed. The previous audit remains visible but is not current.';
    }else{
-    qaResults.replaceChildren();
-    qaStatus.textContent='No QA/QC result for these records. Authorize a single run, then select Run AI QA/QC.';
+    if(!state.report)qaResults.replaceChildren();
+    qaStatus.textContent='No saved QA/QC yet. Authorize a single run, then select Run AI QA/QC.';
    }
   }catch(error){qaStatus.textContent=error.message||'QA/QC status unavailable'}
   finally{sync()}
