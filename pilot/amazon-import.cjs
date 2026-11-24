@@ -193,7 +193,7 @@ function match(rows,transactions,adjustments,validCategories){
   // Do not trust ambiguous same-value charges across cards or same-day orders.
   const options=txs.filter(t=>Math.round(Number(t.amount)*100)===g.amount&&
    days(t.date,g.date)>=-2&&days(t.date,g.date)<=21&&
-   (overrides[t.id]===undefined||existing[t.id]));
+   (overrides[t.id]===undefined||overrides[t.id]==='Uncategorized'||existing[t.id]));
   if(options.length===1)attempted.push({g,t:options[0]});
   else if(options.length>1)ambiguous.add(g.id);
  }
