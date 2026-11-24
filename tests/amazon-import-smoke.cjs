@@ -366,6 +366,15 @@ console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, 
 (async()=>{
  const S=require('../pilot/amazon-stream.cjs'),zlib=require('node:zlib');
  assert.equal(S.MAX_FILE,79*1024*1024);
+ const alreadyHandled={coffee:fromNotes.coffee,child:fromNotes.child};
+ assert.equal(S.targetWindow(alreadyHandled,otherState),null,
+  'An existing product Note and specific category prevent an unnecessary ZIP scan');
+ const savedEvenWithoutWindow=Apply.prepare(emptyImport,otherState,{
+  transactions:alreadyHandled,categories,replaceOther:true
+ });
+ assert.equal(savedEvenWithoutWindow.ready,1,
+  'No ZIP scan window must never suppress category improvements from saved Notes');
+
  const window=S.targetWindow(tx,{categoryOverrides:{b:'Groceries'}});
  assert(window&&window.outstandingAmazonCharges===2,
   'Previously categorized charges still need their Amazon item Notes');
