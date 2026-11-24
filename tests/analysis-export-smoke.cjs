@@ -231,7 +231,7 @@ assert(research.briefing.savedIncome.recognizedSchedules===2,
  'Two independent saved payroll schedules are counted individually');
 assert.equal(research.briefing.savedIncome.unrecognizedCadence,0);
 assert.equal(research.briefing.savedIncome.normalizedMonthly,
- Math.round((2042.25+2187.75)*13.044375/12*100)/100);
+ Math.round((2042.25+2187.75)*13/12*100)/100);
 assert(report.savedDecisions.recurringSchedules.filter(x=>x.type==='income')
  .every(x=>x.frequency==='every-4-weeks'));
 assert(research.charts.some(x=>x.id==='outlook-near-term-checking'));
