@@ -3,8 +3,10 @@
 // never enqueue a paid model call. No standing AI consent is accepted.
 function create({read,write,revision,snapshot,analyze,available=()=>true,defer=setImmediate}){
  const empty=()=>({version:1,dataAccessVersion:2,reportFormatVersion:5,
-  autoEnabled:false,report:null,revision:null,completedAt:null});
- let saved=empty(),phase='idle',lastError=null,queued=false,running=false,generation=0;
+  autoEnabled:false,report:null,revision:null,completedAt:null,
+  checkpoint:null});
+ let saved=empty(),phase='idle',lastError=null,queued=false,running=false,generation=0,
+  activeStage=null;
  const safeCode=e=>[
   'invalid_api_key','permission_denied','rate_limit_or_quota','invalid_request',
   'provider_unavailable','provider_rejected','analysis_timeout',
@@ -28,13 +30,20 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   }else if(value.autoEnabled){
    // Migrate any previously authorized automatic runs to manual-only.
    await store({...empty(),...value,autoEnabled:false});
-  }else saved={...empty(),...value,autoEnabled:false};
+  }else saved={...empty(),...value,autoEnabled:false,
+   checkpoint:value.checkpoint&&typeof value.checkpoint.revision==='string'&&
+    value.checkpoint.state?.version===1?value.checkpoint:null};
  }
  function status(){
   const current=available()?revision():null;
   const fresh=!!(current&&saved.report&&saved.revision===current);
+  const canResume=!!(current&&saved.checkpoint?.revision===current);
   return {enabled:false,status:running?'running':queued?'queued':
    phase==='failed'?'failed':saved.report?(fresh?'ready':'outdated'):'not_ready',
+   // A durable encrypted checkpoint never triggers a paid call by itself.
+   resumeAvailable:canResume,
+   analysisStage:running?(activeStage||'preparing'):
+    canResume?(saved.checkpoint.state.progress||saved.checkpoint.state.stage):null,
    // Successful paid results remain viewable after sync, rollover or failed rerun.
    report:saved.report,completedAt:saved.completedAt,isCurrent:!!fresh,
    ...(phase==='failed'&&lastError?{errorCode:lastError}:{})};
@@ -51,17 +60,27 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   if(running||!available()||runGeneration!==generation)return;
   running=true;phase='running';lastError=null;
   try{
-   const examined=revision(),context=await snapshot(),report=await analyze(context);
+   const examined=revision(),context=await snapshot();
+   const prior=saved.checkpoint?.revision===examined?saved.checkpoint.state:null;
+   activeStage=prior?.progress||prior?.stage||'preparing';
+   const report=await analyze(context,{
+    resumeState:prior,
+    onCheckpoint:async state=>{
+     if(!available()||runGeneration!==generation)return;
+     await store({...saved,checkpoint:{revision:examined,state}});
+     activeStage=state.progress||state.stage||'investigating';
+    }
+   });
    // A date rollover or sync during this authorized run does not erase the
    // completed analysis; it will be labelled historical. A disconnect or
    // explicit clear invalidates generation and still prevents publication.
    if(available()&&runGeneration===generation){
     await store({...saved,autoEnabled:false,report,revision:examined,
-     completedAt:new Date().toISOString()});
+     checkpoint:null,completedAt:new Date().toISOString()});
     phase=revision()===examined?'ready':'outdated';
    }else phase='outdated';
   }catch(e){lastError=safeCode(e);phase='failed'}
-  finally{running=false}
+  finally{running=false;activeStage=null}
  }
  async function setEnabled(enabled){
   // Allow only retirement of a legacy saved setting; never a new auto opt-in.
@@ -72,7 +91,7 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
  async function clear(){
   generation++;
   await store(empty());
-  lastError=null;phase='idle';
+  lastError=null;phase='idle';activeStage=null;
  }
  return {load,status,schedule,setEnabled,clear};
 }
