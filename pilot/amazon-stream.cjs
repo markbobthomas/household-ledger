@@ -10,7 +10,8 @@ const MAX_FILE=79*1024*1024,MAX_EXPANDED=384*1024*1024,
  MAX_ROWS=90000,MAX_SCANNED_ROWS=2000000;
 const nameHeader=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const amazonCharge=t=>t&&t.pending!==true&&Number(t.amount)>0&&
- /(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.merchant||t.name||''))&&
+ (/(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.merchant||''))||
+ /(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.name||'')))&&
  Number.isSafeInteger(Math.round(Number(t.amount)*100));
 function targetWindow(transactions,adjustments={}){
  const overrides=adjustments.categoryOverrides||{},
