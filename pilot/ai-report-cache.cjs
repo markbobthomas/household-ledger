@@ -34,8 +34,9 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   const current=available()?revision():null;
   const fresh=!!(current&&saved.report&&saved.revision===current);
   return {enabled:false,status:running?'running':queued?'queued':
-   fresh?'ready':phase==='failed'?'failed':saved.report?'outdated':'not_ready',
-   report:fresh?saved.report:null,completedAt:fresh?saved.completedAt:null,
+   phase==='failed'?'failed':saved.report?(fresh?'ready':'outdated'):'not_ready',
+   // Successful paid results remain viewable after sync, rollover or failed rerun.
+   report:saved.report,completedAt:saved.completedAt,isCurrent:!!fresh,
    ...(phase==='failed'&&lastError?{errorCode:lastError}:{})};
  }
  function schedule({force=false}={}){
@@ -51,12 +52,13 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   running=true;phase='running';lastError=null;
   try{
    const examined=revision(),context=await snapshot(),report=await analyze(context);
-   // A changed financial snapshot or a disconnect cancels publication, not
-   // a second automatic provider run. The next request must be a new click.
-   if(available()&&revision()===examined&&runGeneration===generation){
+   // A date rollover or sync during this authorized run does not erase the
+   // completed analysis; it will be labelled historical. A disconnect or
+   // explicit clear invalidates generation and still prevents publication.
+   if(available()&&runGeneration===generation){
     await store({...saved,autoEnabled:false,report,revision:examined,
      completedAt:new Date().toISOString()});
-    phase='ready';
+    phase=revision()===examined?'ready':'outdated';
    }else phase='outdated';
   }catch(e){lastError=safeCode(e);phase='failed'}
   finally{running=false}

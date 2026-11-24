@@ -234,7 +234,7 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
    !Array.isArray(parsed.followUps)||!Array.isArray(parsed.limitations))throw Error('Invalid chat response');
  const byId=new Map(facts.map(f=>[f.id,f]));
  const plotIds=new Map(charts.map(c=>[c.id,c]));
- const blocks=[];let microWithheld=0;
+ const blocks=[];let microWithheld=0,unsupportedDetailsWithheld=0;
  for(const b of parsed.blocks){
   if(!b||!['paragraph','heading','metric','chart','hero','callout'].includes(b.kind)||
     typeof b.title!=='string'||b.title.length>120||typeof b.text!=='string'||
@@ -257,18 +257,23 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
      ).join('; ')).slice(0,15000)};
    const chartEvidence=new Map(byId);
    chartEvidence.set(proof.id,proof);
-   const ids=[...b.evidenceIds,proof.id];
+   // Chart source proofs remain authoritative, not invalid model IDs.
+   const validChartIds=b.evidenceIds.filter(id=>byId.has(id));
+   const ids=[...validChartIds,proof.id];
    if((b.title&&!verifyClaim(b.title,ids,chartEvidence))||
-      (b.text&&!verifyClaim(b.text,ids,chartEvidence))||
-      (detail&&!verifyClaim(detail,ids,chartEvidence,4200)))continue;
-   blocks.push({kind:'chart',title:b.title||chart.title,text:b.text,detail,
+      (b.text&&!verifyClaim(b.text,ids,chartEvidence)))continue;
+   const verifiedDetail=detail&&verifyClaim(detail,ids,chartEvidence,4200)?detail:'';
+   if(detail&&!verifiedDetail)unsupportedDetailsWithheld++;
+   blocks.push({kind:'chart',title:b.title||chart.title,text:b.text,detail:verifiedDetail,
     chart:presentationChart(chart,b.visualStyle),
-    evidence:[...b.evidenceIds.map(id=>byId.get(id)),proof]});
+    evidence:[...validChartIds.map(id=>byId.get(id)),proof]});
   }else{
-   if(detail&&!verifyClaim(detail,b.evidenceIds,byId,4200))continue;
    if(!verifyClaim(b.text||b.title,b.evidenceIds,byId)||
       b.title&&!verifyClaim(b.title,b.evidenceIds,byId))continue;
-   blocks.push({kind:b.kind,title:b.title,text:b.text,detail,
+   // Withhold ONLY an unsupported explanation; keep valid sourced findings.
+   const verifiedDetail=detail&&verifyClaim(detail,b.evidenceIds,byId,4200)?detail:'';
+   if(detail&&!verifiedDetail)unsupportedDetailsWithheld++;
+   blocks.push({kind:b.kind,title:b.title,text:b.text,detail:verifiedDetail,
     evidence:b.evidenceIds.map(id=>byId.get(id))});
   }
  }
@@ -276,7 +281,8 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
  return {asOf:context.asOf,blocks,
   evidenceAudit:{blocksRequested:parsed.blocks.length,blocksVerified:blocks.length,
    immaterialBlocksWithheld:microWithheld,
-   unsupportedBlocksWithheld:parsed.blocks.length-blocks.length-microWithheld},
+   unsupportedBlocksWithheld:parsed.blocks.length-blocks.length-microWithheld,
+   unsupportedDetailsWithheld},
   followUps:parsed.followUps.filter(x=>typeof x==='string'&&x.length>5&&x.length<=140).slice(0,4),
   // Free-form model limitations have no citations. Do not elevate those into
   // verified autonomous findings; use source-known constraints instead.
@@ -286,6 +292,32 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
   ]:parsed.limitations.filter(x=>typeof x==='string'&&x.length<=260).slice(0,8),
   coverage:context.scope,reportStatus:'advisory-only',
   disclosure:'Ledger scans all available canonical history and projections locally; the AI sees summarized evidence and any selected read-only investigations, not every raw record.'};
+}
+// Produce a transparent, verified partial report rather than publishing
+// unverified analysis or losing every result when citation repair fails.
+function sourceOnlyReport(context){
+ const picks=['balance','history-month','coverage'].map(kind=>
+  context.facts.find(f=>f.kind===kind&&
+   (kind!=='balance'||f.text.includes('lowest projected 90 day balance')))).filter(Boolean);
+ if(!picks.length)picks.push(context.facts.find(f=>typeof f?.text==='string'));
+ const blocks=picks.filter(Boolean).map((f,i)=>({
+  kind:i?'paragraph':'hero',
+  title:i?'Ledger source evidence':'Limited source-verified financial snapshot',
+  text:f.text,
+  detail:'The model-generated report could not pass citation review. This is a limited observation from Ledger source records, not a complete independent financial assessment.',
+  evidenceIds:[f.id],chartId:null,visualStyle:'auto'
+ }));
+ return verifyAnswer({blocks,followUps:[],limitations:[]},context.facts,[],context,{materialityGate:true});
+}
+function citationProblems(parsed,facts){
+ const byId=new Map(facts.map(f=>[f.id,f]));
+ return (Array.isArray(parsed?.blocks)?parsed.blocks:[]).slice(0,35).map((b,index)=>{
+  const ids=Array.isArray(b?.evidenceIds)?b.evidenceIds:[],
+   missing=ids.filter(id=>!byId.has(id)).slice(0,4),
+   fields=['title','text','detail'].filter(field=>b?.[field]&&
+    !verifyClaim(b[field],ids,byId,field==='detail'?4200:1800));
+  return {index,title:String(b?.title||'').slice(0,70),missing,fields};
+ }).filter(x=>x.missing.length||x.fields.length).slice(0,12);
 }
 async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4.1',fetchImpl=fetch,mode='chat'}){
  const qaMode=mode==='qaqc',autonomous=mode==='autonomous'||qaMode;
@@ -318,7 +350,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
  // response is not an adequate report on a large, unfamiliar dataset.
  // These are independent open-ended investigations, not issue checklists.
  let stage=autonomous?'discovery-one':'report';
- let drafts=[],editorialRetries=0,reviewRetries=0;
+ let drafts=[],editorialRetries=0,reviewRetries=0,sourceOnly=false;
  let messages=autonomous?[
   {...seedMessages[0],content:seedMessages[0].content+
    (qaMode?' This is a first independent QA pass. Challenge the software with recomputed source checks and detailed records. Avoid spending advice.':' This is an exploratory draft for another analyst, NOT a public report. Explore source data, do calculations and make tentative evidence-linked observations. No topic is preselected. Submit candidate blocks when ready; final editorial synthesis happens later.')},
@@ -374,14 +406,22 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
    try{result=verifyAnswer(parsed,allFacts,charts,context,
     {materialityGate:autonomous});}
    catch(error){
-    if(!autonomous||editorialRetries>=2)throw error;
-    editorialRetries++;
-    messages.push({role:'assistant',content:message.content||''});
-    messages.push({role:'user',content:'The report did not pass Ledger source-citation verification. Some blocks lack required evidence or contain invented amounts or dates. Use the available record and calculation tools to repair the report. Keep only independently supportable claims, but do not collapse the whole investigation to a single easy fact.'});
-    continue;
+    if(!autonomous)throw error;
+    if(editorialRetries>=2&&error.safeCode==='invalid_ai_evidence'){
+     result=sourceOnlyReport(context);sourceOnly=true;
+    }else{
+     if(editorialRetries>=2)throw error;
+     editorialRetries++;
+     messages.push({role:'assistant',content:message.content||''});
+     messages.push({role:'user',content:JSON.stringify({
+      request:'Repair source citations using read-only Ledger records and calculation facts. Every exact dollar or ISO date in the title, summary, or detail must be supported by a cited source. Keep material findings and never invent supporting values.',
+      citationProblems:citationProblems(parsed,allFacts)})});
+     continue;
+    }
    }
-   if(autonomous&&editorialRetries<2&&
+   if(autonomous&&!sourceOnly&&editorialRetries<2&&
      (result.evidenceAudit.unsupportedBlocksWithheld>=2||
+      result.evidenceAudit.unsupportedDetailsWithheld>=2||
       (result.blocks.length<=1&&
        ((dataset?.manifest?.history||0)>40||(dataset?.manifest?.future||0)>20)))){
     editorialRetries++;
@@ -390,6 +430,8 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      request:qaMode?'Editorial QA review: investigate Ledger computation and source coverage rather than household spending. Recheck the independent calculation failures and user-saved schedule evidence. Build a stronger source-cited defect investigation where supported; do not invent software errors.':'Editorial quality review: reconsider the dataset as a whole. Is this genuinely a useful financial analysis, or did the synthesis miss important insights discovered by the two researchers? Recheck source citations and gather new evidence where helpful. Supply a substantially stronger, diverse report if the data supports it. Do not invent or require findings to hit a quota.',
      proposedBlocks:parsed.blocks.length,sourceVerifiedBlocks:result.blocks.length,
      discardedForInsufficientSourceEvidence:result.evidenceAudit.unsupportedBlocksWithheld,
+     unsupportedExpandedDetails:result.evidenceAudit.unsupportedDetailsWithheld,
+     citationProblems:citationProblems(parsed,allFacts),
      supportedExploratoryCandidates:drafts.map(x=>x.blocks.length),
      reminder:'Exact monetary and date claims require cited Ledger evidence, including hidden details.'})});
     continue;
@@ -397,7 +439,9 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
    result.investigations=investigations;
    let secondReview=null;
    if(autonomous){
-    secondReview=await reviewPresentation({apiKey,model,fetchImpl,blocks:result.blocks,facts:allFacts,context,qaMode});
+    secondReview=sourceOnly?
+     {rejected:new Set(),concerns:[],quality:'limited-source',reason:'Only verified Ledger source records were retained.'}:
+     await reviewPresentation({apiKey,model,fetchImpl,blocks:result.blocks,facts:allFacts,context,qaMode});
     const preAuditCount=result.blocks.length;
     result.blocks=result.blocks.filter((_,i)=>!secondReview.rejected.has(i));
     if(preAuditCount>=2&&result.blocks.length<=1&&reviewRetries<2){
@@ -433,13 +477,15 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      })});
      continue;
     }
-    if(!result.blocks.length){const e=Error('Independent review rejected all model claims');
-     e.safeCode='invalid_ai_evidence';throw e;}
+    if(!result.blocks.length){
+     result=sourceOnlyReport(context);sourceOnly=true;
+     secondReview={rejected:new Set(),concerns:[],quality:'limited-source',reason:'The model report was rejected by evidence review.'};
+    }
    }
    if(autonomous){
     result.followUps=[];result.mode=qaMode?'ledger-qaqc':'autonomous-adaptive';result.reportStatus='evidence-checked';
     if(qaMode)result.qaAudit=context.qaAudit;
-    result.analysisQuality=secondReview.quality==='substantive'?
+    result.analysisQuality=!sourceOnly&&secondReview.quality==='substantive'?
      {status:'substantive'}:
      {status:'limited',reason:secondReview.quality==='limited-source'?
       'The source evidence did not support a broader assessment.':
@@ -461,6 +507,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
        count:result.evidenceAudit.unsupportedBlocksWithheld,scope:'derived analysis only'}]:[]),
      ...(result.evidenceAudit.immaterialBlocksWithheld?[{action:'Suppressed standalone financially immaterial micro-transaction observations',
        count:result.evidenceAudit.immaterialBlocksWithheld,scope:'derived analysis only'}]:[])];
+    if(sourceOnly)result.limitations.push('The full AI-generated report failed its evidence review. Only directly verifiable source facts are shown.');
     result.limitations.push(...secondReview.concerns.slice(0,4)
      .map(x=>'Unresolved reviewer question (not a confirmed finding): '+x));
     result.disclosure=qaMode?'This QA/QC independently checks all available normalized transactions, source event legs and available daily balances, then runs bounded source-evidenced AI investigation. It is not a full source-code review or external bank statement reconciliation. Nothing is modified.':'The AI receives a broad sanitized private financial dataset and may read every remaining page of posted history, future events, projected balances, card obligations and source evidence. It never receives original bank or transaction IDs, credentials or raw files. The analysis cannot edit banking records or forecasts.';

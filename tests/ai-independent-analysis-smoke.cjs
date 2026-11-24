@@ -108,18 +108,22 @@ assert.equal(notMisleading.blocks[0].chart.type,'line',
 const badDetail=verifyAnswer({blocks:[
  {...material,detail:'This definitely saves $987654321.00 every month.'},material
 ],followUps:[],limitations:[]},[low],[],context);
-assert.equal(badDetail.blocks.length,1,
- 'expanded reasoning is subject to the same exact-dollar evidence validation');
+assert.equal(badDetail.blocks.length,2,
+ 'source-supported headlines survive when only expanded prose has unsupported figures');
+assert.equal(badDetail.blocks[0].detail,'','unverified expanded prose must be withheld');
+assert.equal(badDetail.evidenceAudit.unsupportedDetailsWithheld,1);
 const substantialDetail=('This is a conditional interpretation supported by the cited source. ').repeat(42);
 assert(substantialDetail.length>1800&&substantialDetail.length<4200);
 const supportedDepth=verifyAnswer({blocks:[{...material,detail:substantialDetail}],
  followUps:[],limitations:[]},[low],[],context);
 assert.equal(supportedDepth.blocks[0].detail,substantialDetail,
  'long, cited expandable analysis must not be silently discarded');
-assert.throws(()=>verifyAnswer({blocks:[{...material,
+const rejectedLong=verifyAnswer({blocks:[{...material,
  detail:substantialDetail+' Saving $987654321.00 is certain.'}],
- followUps:[],limitations:[]},[low],[],context),/supported/,
- 'long detail with invented amounts must still fail evidence validation');
+ followUps:[],limitations:[]},[low],[],context);
+assert.equal(rejectedLong.blocks.length,1);
+assert.equal(rejectedLong.blocks[0].detail,'',
+ 'long unsupported details must never appear even when headline is valid');
 (async()=>{
  assert.deepEqual(await researchPublic('private-address',{apiKey:'fictional'}),
   {error:'Unsupported public topic'},'external web research remains privacy-restricted');
@@ -283,5 +287,23 @@ assert.throws(()=>verifyAnswer({blocks:[{...material,
  assert.equal(quality.blocks.length,3);
  assert.equal(quality.analysisQuality.status,'substantive');
  assert.equal(quality.editorialRevisions,1);
- console.log('AI deep discovery: full-source pivots, separate independent explorations, synthesis, cited-numbers repair, broad finding retention, privacy, sparse retry and usefulness review passed');
+ // A model that repeatedly invents citations must not return an opaque
+ // invalid_ai_evidence error or claim to have produced a comprehensive report.
+ let invalidCalls=0;
+ const unproven={blocks:[{kind:'paragraph',title:'Imaginary $987654321.00 windfall',
+  text:'An unsupported amount of $987654321.00 is due.',
+  detail:'',visualStyle:'auto',evidenceIds:['nonexistent-proof'],chartId:null}],
+  followUps:[],limitations:[]};
+ const limited=await analyzeOneClick({context,apiKey:'fictional',
+  consent:'financial-analysis-v3',fetchImpl:async()=>{invalidCalls++;
+   const output=invalidCalls<=2?firstDraft:unproven;
+   return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify(output)}}]})};
+  }});
+ assert.equal(invalidCalls,5,'two independent passes and two citation repairs, no automatic paid fallback call');
+ assert.equal(limited.analysisQuality.status,'limited');
+ assert(limited.blocks.length>=1);
+ assert(limited.limitations.some(x=>x.includes('failed its evidence review')));
+ assert(!JSON.stringify(limited).includes('987654321'),
+  'unsupported invented figures are never included in the saved limited result');
+ console.log('AI deep discovery: independent research, citation repair, safe partial fallback, factual verification and report depth passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
