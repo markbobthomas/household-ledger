@@ -142,10 +142,11 @@ function budgetedRequest(packet){
    {safeCode:'invalid_request'});
  return request;
 }
-function confirmedBlock(packet){
+function confirmedBlock(packet,{incomplete=false}={}){
  const f=packet.evidence[0];
- return {kind:'hero',title:'Independent QA review complete',
-  text:'No additional source-supported AI concerns were identified in the selected records.',
+ return {kind:'hero',
+  title:incomplete?'AI evidence not fully verified':'AI sample review found no additional supported concerns',
+  text:incomplete?'The AI response was incomplete or its proposed concerns did not pass source validation. See the local audit results.':'No additional source-supported AI concerns were identified in the selected records.',
   detail:'This does not mean all records or Ledger software are error-free. The local checks and coverage limitations below still apply.',
   evidence:[f]};
 }
@@ -201,13 +202,16 @@ async function analyzeQualityCheck({context,consent,apiKey,fetchImpl=fetch}){
    if(blocks.length===6)break;
   }
  }
- if(!blocks.length)blocks.push(confirmedBlock(packet));
+ const validatedResponse=Array.isArray(parsed?.findings);
+ if(!blocks.length)blocks.push(confirmedBlock(packet,{
+  incomplete:!validatedResponse||parsed.findings.length>0}));
  return {asOf:context.asOf,mode:'ledger-qaqc',presentation:'quick-data-quality',
   blocks,followUps:[],limitations:[
    'All available normalized history and account-day source events were checked locally. The AI reviewed a selected sample, not every transaction.',
    'No external bank statement comparison or full source-code review was performed.',
    'AI-identified discrepancies are possible issues, not confirmed software defects.'
-  ],qaAudit:context.qaAudit,analysisQuality:parsed?
+  ],qaAudit:context.qaAudit,analysisQuality:validatedResponse&&(parsed.findings.length===0||
+   blocks.some(b=>b.evidence?.[0]?.kind!=='coverage'))?
    {status:'substantive'}:{status:'limited',cause:'source-proof',
     reason:'The one paid model response could not be fully validated; local checks remain available.'},
   tokenUsage:{model:MODEL,requests:1,inputTokens:Number.isFinite(input)?input:null,
