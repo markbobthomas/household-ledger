@@ -92,8 +92,8 @@ console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, 
  // order could silently misallocate the posted bank amount.
  const splitCsv=[header,
   '113-5555555-5555555,2026-08-01,Home sponge,10.00,20.00,2026-08-03',
-  '113-5555555-5555555,2026-08-01,Kids book,10.00,20.00,2026-10-10'].join('\\r\\n');
- const splitRows=await S.readFile('Orders.csv',Buffer.from(splitCsv.replaceAll('\\r\\n','\\r\\n')),window);
+  '113-5555555-5555555,2026-08-01,Kids book,10.00,20.00,2026-10-10'].join('\r\n');
+ const splitRows=await S.readFile('Orders.csv',Buffer.from(splitCsv),window);
  assert.equal(splitRows.length,2,'All shipment lines of a selected order must survive the cutoff');
  const quote='Order ID,Order Date,Product Name,Item Price,Quantity,Item Subtotal Tax\n'+
   'ABC,10/10/2026,"Batteries ""AA""\n10 pack",3.00,2,0.24';
