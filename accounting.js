@@ -124,7 +124,11 @@ function initialKind(t,account){
  // Preserve explicit internal-transfer evidence while distinguishing a
  // generic merchant credit from a card settlement. A bank-coded TRANSFER_IN
  // with no return evidence remains a transfer until matched/reviewed.
- if(transferText.test(name)||/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(primary)||
+ // An outgoing credit-card merchant charge is a purchase even when a bank
+ // assigns a generic TRANSFER_OUT personal-finance category. Card settlements
+ // reduce card debt (incoming credit); outgoing card transfers need explicit
+ // transfer-language evidence, not a provider label alone.
+ if(transferText.test(name)||(!isCard&&/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(primary))||
     isCard&&dir==='in'&&primary==='TRANSFER_IN')return 'internal_transfer';
  // Legacy user-authored transfers have explicit intent. A provisional Plaid
  // transfer type alone is NOT evidence that an unidentified credit is a transfer.
