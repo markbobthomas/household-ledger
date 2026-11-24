@@ -90,6 +90,12 @@ adjustments.predictions.futureRecurringRules.push(
  ...[0,1].map(i=>({id:'private-electric-'+i,kind:'event',type:'expense',
   accountId:bank,merchant:'Fictional Electric Utility',category:'Utilities',
   frequency:'monthly',anchorDate:date(12),amount:200})));
+// Two fictional independent four-week payroll streams: preserve exact
+// cadence rather than redacting the digit or inferring 3 paychecks/month.
+adjustments.predictions.futureRecurringRules.push(
+ ...[2042.25,2187.75].map((amount,i)=>({id:'private-payroll-'+i,
+  kind:'event',type:'income',accountId:bank,merchant:'Fictional Employer',
+  frequency:'every-4-weeks',amount,anchorDate:date(7+i*14)})));
 const report=build({prepared,adjustments,lastSync:'2026-11-23T11:00:00Z',
  syncDiagnostics:{lastAttempt:{at:'2026-11-23T12:00:00Z',outcome:'failed',
   requestId:'NEVER-EXPORT-REQUEST-ID'},
@@ -210,6 +216,30 @@ const modelPayload=JSON.stringify(aiDataset.initial)+
 for(const secret of [bank,'PRIVATE-TOKEN','PRIVATE-ID','raw-tx-','raw-private-rule',
  'DO-NOT-EXPORT','SECRET-IN-SOURCE','NEVER-EXPORT-REQUEST-ID'])
  assert(!modelPayload.includes(secret),'New AI source leaked private raw identifiers: '+secret);
+
+// Compare the independent outlook research against the SAME full sanitized
+// manual download. Do not ever use owner's real figures in the public tests.
+const {buildOutlookDesk}=require('../pilot/ai-outlook-desk.cjs');
+const research=buildOutlookDesk(aiContext);
+assert(research?.briefing,'Independent outlook research is available');
+assert(research.facts.length>30,'A real research desk, not an isolated QA flag');
+assert(research.briefing.comparisonMonths.length>=2,
+ 'The outlook compares fully covered historic months rather than partial November');
+assert(research.briefing.categories.some(x=>x.label==='Groceries'));
+assert(research.briefing.merchants.some(x=>x.label==='Fictional Store'));
+assert(research.briefing.savedIncome.recognizedSchedules===2,
+ 'Two independent saved payroll schedules are counted individually');
+assert.equal(research.briefing.savedIncome.unrecognizedCadence,0);
+assert.equal(research.briefing.savedIncome.normalizedMonthly,
+ Math.round((2042.25+2187.75)*13.044375/12*100)/100);
+assert(report.savedDecisions.recurringSchedules.filter(x=>x.type==='income')
+ .every(x=>x.frequency==='every-4-weeks'));
+assert(research.charts.some(x=>x.id==='outlook-near-term-checking'));
+assert(research.charts.some(x=>x.id==='outlook-purchase-categories'));
+const researchText=JSON.stringify(research);
+for(const secret of [bank,'PRIVATE-ID','PRIVATE-TOKEN','raw-tx-',
+ 'private-payroll-','DO-NOT-EXPORT','SECRET-IN-SOURCE'])
+ assert(!researchText.includes(secret),'Research desk leaked a raw identity '+secret);
 
 const raw=JSON.stringify(report);
 for(const forbidden of [bank,'PRIVATE-ID','PRIVATE-TOKEN','SECRET-IN-SOURCE',
