@@ -177,5 +177,86 @@ console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, 
  assert.equal(A.readFile('Your Orders.zip',modernZip.toString('base64')).length,2,
   'Existing extension handoff accepts modern ZIP data too');
 
+ // Real Amazon export bundles may include >500 auxiliary ZIP entries. An
+ // arbitrary central-directory file-count cap previously rejected them before
+ // any product data was examined. ZIP64 uses 64-bit directory metadata.
+ function largeAmazonZip({metadataFiles=725,zip64=false,entry64=false}={}){
+  const locals=[],central=[];
+  let localOffset=0;
+  for(let i=0;i<=metadataFiles;i++){
+   const target=i===metadataFiles,
+    path=Buffer.from(target?'Your Orders/Order History.csv':'Other Data/file-'+i+'.json'),
+    raw=target?Buffer.from(modernCsv):Buffer.from('{}'),
+    data=target?zlib.deflateRawSync(raw):raw,
+    method=target?8:0;
+   const head=Buffer.alloc(30);
+   head.writeUInt32LE(0x04034b50);
+   head.writeUInt16LE(method,8);
+   head.writeUInt16LE(data.length,18);
+   head.writeUInt32LE(raw.length,22);
+   head.writeUInt16LE(path.length,26);
+   locals.push(head,path,data);
+   const extension=entry64&&target?Buffer.alloc(28):Buffer.alloc(0);
+   if(extension.length){
+    extension.writeUInt16LE(0x0001,0);
+    extension.writeUInt16LE(24,2);
+    extension.writeBigUInt64LE(BigInt(raw.length),4);
+    extension.writeBigUInt64LE(BigInt(data.length),12);
+    extension.writeBigUInt64LE(BigInt(localOffset),20);
+   }
+   const desc=Buffer.alloc(46);
+   desc.writeUInt32LE(0x02014b50);
+   desc.writeUInt16LE(method,10);
+   desc.writeUInt32LE(extension.length?0xffffffff:data.length,20);
+   desc.writeUInt32LE(extension.length?0xffffffff:raw.length,24);
+   desc.writeUInt16LE(path.length,28);
+   desc.writeUInt16LE(extension.length,30);
+   desc.writeUInt32LE(extension.length?0xffffffff:localOffset,42);
+   central.push(desc,path,extension);
+   localOffset+=head.length+path.length+data.length;
+  }
+  const cd=Buffer.concat(central),count=metadataFiles+1,
+   end=Buffer.alloc(22),parts=[...locals,cd];
+  end.writeUInt32LE(0x06054b50);
+  end.writeUInt16LE(zip64?0xffff:count,8);
+  end.writeUInt16LE(zip64?0xffff:count,10);
+  end.writeUInt32LE(zip64?0xffffffff:cd.length,12);
+  end.writeUInt32LE(zip64?0xffffffff:localOffset,16);
+  if(zip64){
+   const record=Buffer.alloc(56),locator=Buffer.alloc(20);
+   record.writeUInt32LE(0x06064b50);
+   record.writeBigUInt64LE(44n,4);
+   record.writeBigUInt64LE(BigInt(count),24);
+   record.writeBigUInt64LE(BigInt(count),32);
+   record.writeBigUInt64LE(BigInt(cd.length),40);
+   record.writeBigUInt64LE(BigInt(localOffset),48);
+   locator.writeUInt32LE(0x07064b50);
+   locator.writeBigUInt64LE(BigInt(localOffset+cd.length),8);
+   locator.writeUInt32LE(1,16);
+   parts.push(record,locator);
+  }
+  parts.push(end);
+  return Buffer.concat(parts);
+ }
+ const complex=largeAmazonZip();
+ assert.equal((await S.readFile('Amazon Orders.zip',complex,modernWindow)).length,2,
+  'A bundle with 725 unrelated ZIP files must not hit the old 500-entry cap');
+ assert.equal(A.readFile('Amazon Orders.zip',complex.toString('base64')).length,2,
+  'Legacy ZIP parser must also support >500 auxiliary files');
+ const complex64=largeAmazonZip({zip64:true,entry64:true});
+ const zip64Rows=await S.readFile('Amazon Orders.zip',complex64,modernWindow);
+ assert.deepEqual(zip64Rows.map(x=>x.cents),[2500,2500],
+  'ZIP64 directory counts, sizes and entry offsets must import safely');
+ assert.equal(A.readFile('Amazon Orders.zip',complex64.toString('base64')).length,2);
+ const corrupt=Buffer.from(complex64);
+ // ZIP64 locator is mandatory when EOCD stores sentinel values.
+ corrupt.writeUInt32LE(0,corrupt.length-42);
+ await assert.rejects(()=>S.readFile('Amazon Orders.zip',corrupt,modernWindow),
+  /ZIP64 directory locator/,'Malformed ZIP64 metadata must be rejected');
+ const multipart=Buffer.from(complex);
+ multipart.writeUInt16LE(1,multipart.length-22+4);
+ await assert.rejects(()=>S.readFile('Amazon Orders.zip',multipart,modernWindow),
+  /Multi-part/,'Do not incorrectly parse a multi-disk ZIP');
+ console.log('PASS Amazon ZIP64 and 726-entry archive: validated directory, large ZIP, modern order CSV, rejected corrupt/multi-disk');
  console.log('PASS 79 MB binary Amazon import: 47 MB streaming fixture, compressed ZIP, date-window filtering and zero AI calls');
 })().catch(e=>{console.error(e);process.exitCode=1});
