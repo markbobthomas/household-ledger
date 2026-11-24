@@ -687,4 +687,24 @@ assert.ok(repetitive.statements.length>5,'Every forecast cycle is preserved for 
 assert.ok(repetitive.warningActions.some(a=>a.message===groupedWarnings[0]),
  'Grouped warning can still open the relevant statement');
 
+
+// Posted checking and issuer entries may be demonstrably paired even when the
+// historical importer has not recorded counterpart IDs. Use equal amount and
+// near dates across ALL connected cards, without changing those source rows.
+const unpairedRows=clearedRows.map(t=>({...t,pairedTransactionId:null}));
+const unpairedSource=JSON.stringify(unpairedRows);
+const unpaired=Payments.build(clearedSnapshot,unpairedRows,[],clearedRule,{days:100});
+assert.equal(unpaired.statements.find(s=>s.dueDate==='2026-11-03').alreadyPaid,true,
+ 'Unique unpaired checking/issuer settlement closes the old statement cycle');
+assert.equal(unpaired.statements.find(s=>s.dueDate==='2026-12-03').amount,130,
+ 'Settled old statement does not disable the subsequent estimated debt cap');
+assert.equal(unpaired.statements.find(s=>s.dueDate==='2026-12-03').estimatedPaymentLimited,true);
+assert.equal(JSON.stringify(unpairedRows),unpairedSource,'Historical transactions remain immutable');
+const competingIssuer=Payments.build({...clearedSnapshot,accounts:[
+ ...clearedSnapshot.accounts,{id:'another-card',name:'Another Card',type:'credit',current:200}
+]},[...unpairedRows,{...unpairedRows[3],id:'another-issuer',accountId:'another-card'}],
+ [],clearedRule,{days:100});
+assert.equal(competingIssuer.statements.find(s=>s.dueDate==='2026-11-03').alreadyPaid,false,
+ 'Two indistinguishable issuer credits cannot prove which card was paid');
+
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');

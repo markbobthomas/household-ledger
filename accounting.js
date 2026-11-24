@@ -277,12 +277,20 @@ function reconcile(state){
   // Explicitly described returns and uniquely matched card merchant returns
   // remain supported. With multiple same-merchant purchases, also require
   // high-confidence bank category evidence and no card-payment counterpart.
+  // An identical posted merchant charge shortly before the credit is
+  // independent refund evidence, even for a repeat-purchase merchant. Never
+  // choose between two same-dollar source purchases or infer an issuer credit
+  // from merchant identity alone.
+  const exact=candidates.filter(p=>days(p.date,t.date)<=35&&
+   Math.abs(Number(p.amount)-Number(t.amount))<.011);
+  const exactMatch=exact.length===1?exact[0]:null;
   const evidenced=candidates.length>1&&supportedMerchantRefund(t,candidates);
-  if(candidates.length===1||evidenced){
+  if(candidates.length===1||exactMatch||evidenced){
    t.accountingKind='refund';
-   t.classificationConfidence=evidenced?'Bank category and matching merchant purchases':
-    'Matched single merchant purchase';
-   const categories=[...new Set(candidates.map(p=>state?.categoryOverrides?.[p.id]||p.category)
+   t.classificationConfidence=exactMatch?'Unique same-amount merchant return':
+    evidenced?'Bank category and matching merchant purchases':'Matched single merchant purchase';
+   const sourcePurchases=exactMatch?[exactMatch]:candidates;
+   const categories=[...new Set(sourcePurchases.map(p=>state?.categoryOverrides?.[p.id]||p.category)
     .filter(c=>c&&!['Uncategorized','Transfer','Income','Savings'].includes(c)))];
    const pfc=t.personal_finance_category||t.source?.personalFinanceCategory||{};
    const providerCategory=root.HouseholdCategorization?.pfcCategory?.(pfc);
@@ -292,7 +300,7 @@ function reconcile(state){
    const manual=state?.categoryOverrides?.[t.id];
    const invalid=['Transfer','Income','Savings'].includes(manual||t.category);
    const reviewed=!!manual&&!['Transfer','Income','Savings','Uncategorized'].includes(manual);
-   if(invalid||candidates.length>1&&
+   if(invalid||!exactMatch&&candidates.length>1&&
       (categories.length!==1||categories[0]==='Other')&&!reviewed)
     t.reconciliationStatus='needs-review';
   }
@@ -325,7 +333,10 @@ function reconcile(state){
     const possibilities=purchases.filter(p=>p.accountId===t.accountId&&
      cleanedRefundMerchant(p.merchant)===target&&p.date<=t.date&&days(p.date,t.date)<=120);
     possibilities.sort((a,b)=>b.date.localeCompare(a.date));
-    if(possibilities.length===1)t.category=state?.categoryOverrides?.[possibilities[0].id]||possibilities[0].category||'Other';
+    const exact=possibilities.filter(p=>days(p.date,t.date)<=35&&
+     Math.abs(Number(p.amount)-Number(t.amount))<.011);
+    const matched=exact.length===1?exact[0]:possibilities.length===1?possibilities[0]:null;
+    if(matched)t.category=state?.categoryOverrides?.[matched.id]||matched.category||'Other';
     else if(possibilities.length>1){t.reconciliationStatus='needs-review';t.classificationConfidence='Multiple possible refund purchases';}
    }
   }else if(t.accountingKind==='unclassified_credit'){

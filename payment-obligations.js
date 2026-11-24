@@ -315,16 +315,35 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  // our estimate (which may not include unplanned charges or account credits).
  const actualSettlements=(from,card)=>{
   if(!from||!card)return [];
-  return records.filter(t=>{
-   if(!t||t.pending||t.type!=='transfer'||t.accountingKind!=='card_payment'||
-    t.cashDirection!=='out'||!t.pairedTransactionId||
-    !date(t.date)||t.date>asOf||!matchesAccount(t,from))return false;
-   const other=settled.get(String(t.pairedTransactionId));
-   return other&&!other.pending&&other.type==='transfer'&&
-    other.cashDirection==='in'&&matchesAccount(other,card)&&
-    Number(other.amount)>0&&Math.abs(Number(t.amount)-Number(other.amount))<.011;
-  }).map(t=>({id:String(t.id),date:t.date,amount:round(t.amount)}))
-   .sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
+  const postedCash=t=>t&&!t.pending&&t.type==='transfer'&&
+   t.accountingKind==='card_payment'&&t.cashDirection==='out'&&
+   Number(t.amount)>0&&date(t.date)&&t.date<=asOf;
+  const postedIssuer=t=>t&&!t.pending&&t.type==='transfer'&&
+   t.accountingKind==='card_payment'&&t.cashDirection==='in'&&
+   Number(t.amount)>0&&date(t.date)&&t.date<=asOf&&
+   accounts.some(a=>credit(a)&&matchesAccount(t,a));
+  const close=(a,b)=>Math.abs(Number(a.amount)-Number(b.amount))<.011&&
+   Math.abs(Date.parse(a.date)-Date.parse(b.date))<=5*86400000;
+  // Reconciled counterpart IDs are authoritative. Some Plaid imports retain
+  // both unmistakable settlement legs but no pair ID. Recover only a globally
+  // unique, equal-dollar cash/card pair; never infer from a payee or due date
+  // alone, or attach a checking debit to the wrong connected card.
+  const candidates=records.filter(t=>postedCash(t)&&matchesAccount(t,from));
+  const issuers=records.filter(postedIssuer);
+  return candidates.flatMap(t=>{
+   if(t.pairedTransactionId){
+    const other=settled.get(String(t.pairedTransactionId));
+    return other&&postedIssuer(other)&&matchesAccount(other,card)&&
+     Math.abs(Number(t.amount)-Number(other.amount))<.011?
+     [{id:String(t.id),date:t.date,amount:round(t.amount)}]:[];
+   }
+   const credits=issuers.filter(x=>!x.pairedTransactionId&&close(t,x));
+   if(credits.length!==1||!matchesAccount(credits[0],card))return [];
+   const debits=records.filter(x=>!x.pairedTransactionId&&postedCash(x)&&
+    accounts.some(a=>cash(a)&&matchesAccount(x,a))&&close(x,credits[0]));
+   return debits.length===1?
+    [{id:String(t.id),date:t.date,amount:round(t.amount),exactUnpaired:true}]:[];
+  }).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
  };
 
  // Card issuers can report their credit after checking already shows the
@@ -375,7 +394,15 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  }
  // Two indistinguishable posted debits cannot clear one card obligation.
  const oneSidedSettlements=new Map([...unpairedByCycle.entries()]
-  .filter(([,rows])=>rows.length===1)
+  .filter(([,rows])=>rows.length===1&&
+   // If issuer credits are present but ambiguous, this is NOT checking-only
+   // proof. Leave the source unresolved rather than clearing the wrong card.
+   !records.some(t=>t&&!t.pending&&!t.pairedTransactionId&&
+    t.type==='transfer'&&t.cashDirection==='in'&&
+    t.accountingKind==='card_payment'&&
+    accounts.some(a=>credit(a)&&matchesAccount(t,a))&&date(t.date)&&
+    Math.abs(Number(t.amount)-Number(rows[0].amount))<.011&&
+    Math.abs(Date.parse(t.date)-Date.parse(rows[0].date))<=5*86400000))
   .map(([key,rows])=>[key,{id:String(rows[0].id),date:rows[0].date,
    amount:round(rows[0].amount),checkingOnly:true,
    issuerMatched:Boolean(rows[0].issuerMatched)}]));

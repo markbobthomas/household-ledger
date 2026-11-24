@@ -175,6 +175,46 @@ function build({prepared,adjustments={},lastSync=null,syncDiagnostics={}}){
     date:row.date,merchant:row.merchant,category:row.category,
     suggestedCategory:dominant,reason:'Different from consistent same-merchant history; owner review required'});
  }
+ // Export-only review hints: a fuel brand is not proof a particular
+ // convenience-store purchase was fuel. Never override user categories.
+ const possibleFuelCategories=actual.filter(r=>!r.pending&&r.type==='expense'&&
+  r.category==='Groceries'&&
+  /^(?:chevron|shell|texaco|exxon|mobil|arco|cenex|bp|76)(?:\b|\s)/i.test(r.merchant))
+  .map(r=>({transactionId:r.id,accountId:r.accountId,date:r.date,
+   merchant:r.merchant,category:r.category,suggestedCategory:'Gas',
+   reason:'Fuel retailer may have charged for gas or convenience-store items; verify before changing a category'}));
+ // Compare groups of independent same-payee fixed monthly schedules against
+ // COMPLETE historical posting months, never replacing owner-entered amounts.
+ const recurringAmountReview=[];
+ const monthGroups=new Map();
+ for(const rule of rules.filter(r=>r.kind==='event'&&r.type==='expense'&&
+  r.frequency==='monthly'&&r.amount>0&&r.accountId&&r.merchant)){
+  const key=rule.accountId+'|'+rule.merchant.toLowerCase().trim();
+  if(!monthGroups.has(key))monthGroups.set(key,[]);
+  monthGroups.get(key).push(rule);
+ }
+ for(const group of monthGroups.values()){
+  if(group.length<2)continue;
+  const exemplar=group[0],monthAmounts=new Map();
+  for(const row of actual){
+   if(row.accountId!==exemplar.accountId||row.type!=='expense'||row.pending||
+    row.merchant.toLowerCase().trim()!==exemplar.merchant.toLowerCase().trim()||
+    row.date.slice(0,7)>=ctx.asOf.slice(0,7))continue;
+   const month=row.date.slice(0,7);
+   monthAmounts.set(month,money((monthAmounts.get(month)||0)+Number(row.amount||0)));
+  }
+  // At least three observed prior calendar months avoid first-month/noise bias.
+  const observed=[...monthAmounts.values()];
+  if(observed.length<3)continue;
+  const pastAverage=money(observed.reduce((s,v)=>s+v,0)/observed.length);
+  const expectedAmount=money(group.reduce((s,r)=>s+Number(r.amount),0));
+  if(pastAverage>0&&expectedAmount>pastAverage*1.4&&
+   expectedAmount-pastAverage>=50)
+   recurringAmountReview.push({accountId:exemplar.accountId,
+    merchant:exemplar.merchant,ruleCount:group.length,months:observed.length,
+    forecastMonthlyAmount:expectedAmount,historicalMonthlyAverage:pastAverage,
+    reason:'Saved monthly forecasts exceed multi-month posted history; distinct schedules may be intentional and require owner review'});
+ }
  const cardTypes=new Set(accounts.filter(a=>a.type==='credit').map(a=>a.id));
  const cardOutflowClassification=actual.filter(r=>cardTypes.has(r.accountId)&&
   r.cashDirection==='out'&&r.type==='transfer'&&
@@ -190,6 +230,7 @@ function build({prepared,adjustments={},lastSync=null,syncDiagnostics={}}){
   paymentReconciliations:(bundle.paymentReconciliations||[]).map(issue),
   paymentWarnings:(bundle.payments?.warnings||[]).map(safe),
   categoryConsistency,
+  possibleFuelCategories,recurringAmountReview,
   cardOutflowClassification
  };
  const coverage=ctx.scope;

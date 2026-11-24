@@ -102,4 +102,30 @@ assert.equal(conservative.get('cash-card-payment').pairedTransactionId,'issuer-p
 assert.equal(JSON.stringify(twoCards.transactions),twoCardsSource,
  'Read-only reconciliation never changes bank source or owner decisions');
 
+
+// Many identical-merchant purchases need not block a refund when only ONE
+// earlier charge has the same amount. Collisions stay in Review.
+const exactRefunds=M.migrate({});
+M.applyPlaidSync(exactRefunds,{itemId:'exact-credit',accounts:[
+ {account_id:'credit-refund',type:'credit'}],added:[
+ tx('order-a','credit-refund',60.78,'Fictional Marketplace','2026-10-01'),
+ tx('order-b','credit-refund',99.26,'Fictional Marketplace','2026-10-04'),
+ tx('return-b','credit-refund',-99.26,'Fictional Marketplace','2026-10-09'),
+ tx('order-c','credit-refund',33.08,'Fictional Marketplace','2026-10-10'),
+ tx('order-d','credit-refund',33.08,'Fictional Marketplace','2026-10-11'),
+ tx('ambiguous-return','credit-refund',-33.08,'Fictional Marketplace','2026-10-13'),
+ tx('unrelated-credit','credit-refund',-47.50,'Fictional Marketplace','2026-10-14')
+],modified:[],removed:[],nextCursor:'matched'});
+const exactOriginal=JSON.stringify(exactRefunds.transactions);
+const exactRows=new Map(M.records(exactRefunds).map(t=>[t.source.providerTransactionId,t]));
+assert.equal(exactRows.get('return-b').accountingKind,'refund',
+ 'Unique equal-amount credit is a supported refund even with multiple purchases');
+assert.equal(exactRows.get('return-b').spendingAmount,-99.26);
+assert.equal(exactRows.get('ambiguous-return').accountingKind,'unclassified_card_credit',
+ 'Two equal-dollar purchases do not establish which return was credited');
+assert.equal(exactRows.get('unrelated-credit').accountingKind,'unclassified_card_credit',
+ 'A credit without matching purchase amount or provider evidence remains for Review');
+assert.equal(JSON.stringify(exactRefunds.transactions),exactOriginal,
+ 'Refund reconciliation never rewrites bank data');
+
 console.log('PASS Phase 1 atomic duplicate/cross-account safeguards and human review flags');
