@@ -14,8 +14,8 @@ const monthBefore=ym=>{const d=new Date(ym+'-01T12:00:00Z');d.setUTCMonth(d.getU
 const monthNext=ym=>{const d=new Date(ym+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+1);return d.toISOString().slice(0,7)};
 const isoAdd=(date,n)=>new Date(Date.parse(date+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
 const safe=s=>String(s||'').slice(0,105);
-const M=Object.freeze({weekly:52.1775,'every-2-weeks':26.08875,biweekly:26.08875,
- 'every-3-weeks':17.3925,'every-4-weeks':13.044375,
+const M=Object.freeze({weekly:52,'every-2-weeks':26,biweekly:26,
+ 'every-3-weeks':52/3,'every-4-weeks':13,
  monthly:12,'twice-monthly':24,'semi-monthly':24,quarterly:4,annual:1,annually:1});
 const mean=(array,key)=>array.length?money(array.reduce((s,r)=>s+Number(r[key]||0),0)/array.length):0;
 function buildOutlookDesk(context){
