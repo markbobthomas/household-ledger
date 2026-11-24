@@ -556,4 +556,68 @@ assert.equal(utility.ledger.filter(x=>x.kind==='event'&&
  'A unique pending generic bill with different amount must not be double predicted');
 assert.equal(utility.pendingPaymentMatches.length,1);
 assert.deepEqual(utility.projection.diagnostics.balanceMismatches,[]);
+// When an overdue statement has rolled forward, a confirmed posted bank
+// withdrawal matches its immutable cycle ID, not the later preview date.
+const rolledAccounts=[
+ {id:'rolled-checking',name:'Checking',accountType:'checking',current:3100,available:3100},
+ {id:'rolled-card',name:'Fictional Visa',accountType:'credit',current:990}
+];
+const rolledRule={paymentRules:{'rolled-card':{
+ billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
+ closingDay:18,nextPaymentDate:'2026-11-10',nextDueDate:'2026-11-10',
+ fromAccountId:'rolled-checking',method:'fixed',fixedAmount:700,autopayEnabled:true
+}}};
+const rolledBank=[{id:'bank-posting',accountId:'rolled-checking',
+ date:'2026-11-10',amount:705,type:'expense',accountingKind:'purchase',
+ cashDirection:'out',merchant:'CHASE CREDIT CRD AUTOPAY',pending:false}];
+const rolled=Core.materialize({asOf:'2026-11-23',accounts:rolledAccounts,mode:'demo'},
+ rolledBank,rolledRule,T,Payments,40,{weekendPolicy:'friday'});
+const rolledStatement=rolled.payments.statements.find(s=>s.cardId==='rolled-card'&&
+ s.dueDate==='2026-11-10');
+assert.ok(rolledStatement);
+assert.equal(rolledStatement.alreadyPaid,true,
+ 'A posted bank debit linked after provisional-date rollover closes the exact card cycle');
+assert.equal(rolledStatement.actualPaymentDate,'2026-11-10');
+assert.equal(rolledStatement.actualPaymentAmount,705);
+assert.equal(rolled.ledger.some(e=>e.kind==='movement'&&e.toAccountId==='rolled-card'&&
+ e.id===rolledStatement.id),false,'No duplicate withdrawal after bank posting');
+const postingEvidence=rolled.paymentReconciliations.find(x=>x.status==='posted'&&
+ x.cardId==='rolled-card');
+assert.ok(postingEvidence,'Preserve the cycle-linked posting evidence for private audit');
+assert.equal(postingEvidence.date,'2026-11-10');
+assert.equal(postingEvidence.expectedDate,'2026-11-10');
+assert.equal(postingEvidence.amount,705);
+assert.equal(postingEvidence.forecastAmount,700);
+assert.equal(postingEvidence.difference,5);
+assert.deepEqual(rolled.projection.diagnostics.balanceMismatches,[]);
+
+// An estimated statement cannot pay more than modeled outstanding debt and
+// drive card debt negative. Confirmed issuer/owner amounts remain authoritative.
+const limitSnapshot={asOf:'2026-10-20',accounts:[
+ {id:'limit-cash',name:'Checking',type:'checking',current:3000},
+ {id:'limit-card',name:'Fictional Card',type:'credit',current:100}
+]};
+const limitPrefs={paymentRules:{'limit-card':{
+ billingStartDate:'2026-09-19',billingEndDate:'2026-10-18',
+ closingDay:18,nextPaymentDate:'2026-11-12',nextDueDate:'2026-11-12',
+ fromAccountId:'limit-cash',method:'statement',autopayEnabled:true
+}}};
+const limitPosted=[{id:'old-purchase',accountId:'limit-card',
+ date:'2026-10-08',type:'expense',accountingKind:'purchase',amount:240,
+ merchant:'Fictional Shop',pending:false}];
+const limited=Payments.build(limitSnapshot,limitPosted,[],limitPrefs,{days:60});
+assert.equal(limited.statements[0].statementBalance,240);
+assert.equal(limited.statements[0].requestedPaymentAmount,240);
+assert.equal(limited.statements[0].modeledPaymentLimit,100);
+assert.equal(limited.statements[0].estimatedPaymentLimited,true);
+assert.equal(limited.plans[0].amount,100);
+assert.ok(limited.warningActions.some(w=>w.kind==='card-payment-overbalance'));
+const confirmedLimit=Payments.build(limitSnapshot,limitPosted,[],{
+ paymentRules:{'limit-card':{...limitPrefs.paymentRules['limit-card'],
+ lastStatementBalance:240}}
+},{days:60});
+assert.equal(confirmedLimit.plans[0].amount,240,
+ 'Do not rewrite an owner-entered issued statement because modeled debt is lower');
+assert.ok(confirmedLimit.warnings.some(w=>w.includes('review a projected card payment')));
+
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
