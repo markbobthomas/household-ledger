@@ -424,7 +424,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     source:'Reconstructed from available posted card transactions'});
   }
   // Past cycles can inform review, but never inflate a payment with averages.
-  let plannedCardPayments=0;
+  let plannedCardPayments=0,unreconciledOverdue=false;
   // The statement is calculated from the *card's own* settled purchases and
   // refunds during each billing cycle, plus future explicitly predicted charges.
   // An account balance is not itself a statement balance (it may carry debt).
@@ -528,7 +528,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // those require issuer confirmation rather than an invented payment change.
    const estimatedOverpayment=fullAmount!==null&&
     requestedAmount>fullAmount+.011;
-   const limitEstimated=estimatedOverpayment&&method==='statement'&&!confirmedFirst;
+   const limitEstimated=estimatedOverpayment&&method==='statement'&&!confirmedFirst&&
+    due>asOf&&!unreconciledOverdue;
    const amount=limitEstimated?round(Math.max(0,fullAmount)):requestedAmount;
    if(estimatedOverpayment){
     const message=card.name+': '+(limitEstimated?'limited':'review')+
@@ -567,6 +568,11 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // One matching posted payment is enough to require reconciliation. Never
    // schedule the full amount again when part/all may already have been paid.
    const paid=postedForCycle.length>0;
+   // An earlier overdue statement may be reconciled later by the canonical
+   // bank-match pass. Until then its planned payment is still counted in this
+   // engine, so subtracting it from current card debt a second time would
+   // produce a falsely low payment cap for the following statement.
+   if(due<=asOf&&!paid)unreconciledOverdue=true;
    const postedPaymentTotal=round(postedForCycle.reduce((n,t)=>n+t.amount,0));
    if(paid&&Math.abs(postedPaymentTotal-amount)>.011){
     const message=card.name+': actual payment '+postedPaymentTotal.toFixed(2)+
