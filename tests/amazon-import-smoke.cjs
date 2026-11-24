@@ -103,6 +103,28 @@ assert.equal(near.matches.length,0,'Near amounts never create unverified categor
 assert.equal(near.suggestions.length,1);
 assert.match(near.suggestions[0].note,/^Possible Amazon: Coffee beans/);
 assert.equal(near.suggestions[0].confidence,'possible');
+// A price difference larger than the former 3% cap can still connect a
+// real product to a POSSIBLE Note without inventing a budget category.
+const taxDifference=A.match([
+ {orderId:'order-tax',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Outdoor camping lantern',cents:4000}
+],{
+ t:{id:'t',accountId:'credit',name:'AMAZON MARKETPLACE',date:'2026-10-13',amount:44.20}
+},{},categories);
+assert.equal(taxDifference.matches.length,0,'An amount mismatch must not generate a confident allocation');
+assert.equal(taxDifference.suggestions.length,1,
+ 'Date and price together allow a clear possible product when Amazon billing differs');
+assert.match(taxDifference.suggestions[0].note,/^Possible Amazon: Outdoor camping lantern/);
+const doubleChoice=A.match([
+ {orderId:'A',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Camping light',cents:4000},
+ {orderId:'B',date:'2026-10-10',shipmentDate:'2026-10-11',title:'Household detergent',cents:4100}
+],{
+ t:{id:'t',accountId:'credit',name:'AMAZON MARKETPLACE',date:'2026-10-13',amount:44.20}
+},{},categories);
+assert.equal(doubleChoice.matches.length,0);
+assert.equal(doubleChoice.suggestions.length,1);
+assert.match(doubleChoice.suggestions[0].note,/Possible Amazon \(verify\):/);
+assert.match(doubleChoice.suggestions[0].note,/ OR /,
+ 'Unresolved near-price ties must show alternatives, not falsely declare one product');
 const manualNotes=A.match(items,tx,{categoryOverrides:{a:'Groceries'},
  predictions:{transactionNotes:{[Pair.keyFor(tx.a)]:'My own note'}}},categories);
 assert(!manualNotes.matches.some(m=>m.transactionId==='a'),
