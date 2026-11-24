@@ -37,6 +37,8 @@ assert.ok(!analysis.matches.some(m=>m.transactionId==='c'||m.transactionId==='ca
 assert.deepEqual(Object.keys(tx),['a','b','c','unrelated','cash'],'matching cannot mutate bank facts');
 const manual=A.match(items,tx,{categoryOverrides:{a:'Groceries'}},categories);
 assert.ok(!manual.matches.some(m=>m.transactionId==='a'),'manual category not replaced');
+const unassigned=A.match(items,tx,{categoryOverrides:{a:'Uncategorized'}},categories);
+assert.ok(unassigned.matches.some(m=>m.transactionId==='a'),'unassigned Amazon charges can be classified');
 const reimport=A.match(items,tx,{amazonAllocations:{a:{orderId:a.orderId,lines:a.lines,amountCents:12000}}},categories);
 assert.ok(reimport.matches.some(m=>m.transactionId==='a'),'existing import remains linkable');
 const ambiguous=A.match(items,{...tx,a2:{...tx.a,id:'a2',accountId:'credit-two'}},{},categories);
