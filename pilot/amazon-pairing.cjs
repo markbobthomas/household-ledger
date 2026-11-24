@@ -72,7 +72,6 @@ function match(rows,transactions,adjustments,validCategories,allocate){
   if(!dates.length)return;
   candidates.push({id,items,ids,amount,source,date:dates.at(-1)});
  };
- const perItem=[];
  for(const [orderId,items] of orders){
   if(!items.length)continue;
   const total=items.reduce((n,i)=>n+i.cents,0);
@@ -87,7 +86,6 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    const date=item.shipmentDate||item.date;
    if(!shipGroups.has(date))shipGroups.set(date,[]);
    shipGroups.get(date).push(item);
-   perItem.push({orderId,item,date});
    add(orderId,[item],item.cents,'item');
   }
   for(const [date,ship] of shipGroups){
