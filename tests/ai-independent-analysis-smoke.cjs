@@ -110,6 +110,16 @@ const badDetail=verifyAnswer({blocks:[
 ],followUps:[],limitations:[]},[low],[],context);
 assert.equal(badDetail.blocks.length,1,
  'expanded reasoning is subject to the same exact-dollar evidence validation');
+const substantialDetail=('This is a conditional interpretation supported by the cited source. ').repeat(42);
+assert(substantialDetail.length>1800&&substantialDetail.length<4200);
+const supportedDepth=verifyAnswer({blocks:[{...material,detail:substantialDetail}],
+ followUps:[],limitations:[]},[low],[],context);
+assert.equal(supportedDepth.blocks[0].detail,substantialDetail,
+ 'long, cited expandable analysis must not be silently discarded');
+assert.throws(()=>verifyAnswer({blocks:[{...material,
+ detail:substantialDetail+' Saving $987654321.00 is certain.'}],
+ followUps:[],limitations:[]},[low],[],context),/supported/,
+ 'long detail with invented amounts must still fail evidence validation');
 (async()=>{
  assert.deepEqual(await researchPublic('private-address',{apiKey:'fictional'}),
   {error:'Unsupported public topic'},'external web research remains privacy-restricted');

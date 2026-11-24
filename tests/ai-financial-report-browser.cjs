@@ -170,24 +170,29 @@ module.exports=(async()=>{
     'a source-reviewed substantive report has no false quality warning');
    assert.equal(await page.locator('.glance-heading').innerText(),'At a glance');
    assert.equal(await page.locator('.metric-grid .metric').count(),1);
-   assert.equal(await page.locator('.insight-card').count(),7,
-    'all model-selected findings remain accessible');
+   assert.equal(await page.locator('.analysis-lead').count(),1,
+    'source-cited executive judgment is prominent');
+   assert.match(await page.locator('.analysis-lead h2').innerText(),/could fall to/);
+   assert.equal(await page.locator('.insight-card').count(),2,
+    'narrative findings remain expandable');
+   assert.equal(await page.locator('.insight-graphic').count(),4,
+    'model-selected graphics remain visible');
    assert.equal(await page.locator('.insight-card[open]').count(),0,
     'analysis starts as a compact at-a-glance view');
-   assert.match(await page.locator('.insight-card').first().locator('.insight-head').innerText(),/could fall to/);
+   assert.match(await page.locator('.insight-card').first().locator('.insight-head').innerText(),/Bills are concentrated/);
    assert((await page.locator('.insight-card').first().locator('.insight-preview').innerText()).length<160);
-   assert.equal(await page.locator('.graph svg').count(),0,
-    'charts are lazy until the relevant finding is expanded');
+   assert.equal(await page.locator('.graph svg').count(),3,
+    'source-calculated line/bar/donut charts are visible without clicks');
    await page.locator('.metric > summary.metric-summary').click();
    assert.match(await page.locator('.metric-detail').innerText(),/source-calculated/);
    await page.locator('.insight-card').first().locator('summary.insight-summary').click();
-   assert.match(await page.locator('.insight-card').first().locator('.insight-body').innerText(),/2026-12-19/,
-    'single expansion reveals source-backed details');
+   assert.match(await page.locator('.analysis-lead .insight-depth').innerText(),/How this was assessed/);
+   assert.match(await page.locator('.insight-card').first().locator('.insight-body').innerText(),/conditional/,
+    'single expansion reveals underlying rationale');
    assert.equal(await page.locator('.analysis-report img').count(),0,
     'expanded bank descriptions remain literal text, not HTML');
-   for(const i of [2,3,4,5])await page.locator('.insight-card').nth(i).locator('summary.insight-summary').click();
    assert.equal(await page.locator('.graph svg').count(),3,
-    'model-selected line, bar and donut graphs render when expanded');
+    'expanding evidence does not hide the graphics');
    assert.equal(await page.locator('.donut-legend-item').count(),3);
    await page.locator('.ranked-row').first().waitFor({state:'visible'});
    await page.locator('.ranked-row').first().waitFor({state:'visible'});
@@ -210,14 +215,13 @@ module.exports=(async()=>{
    assert.equal(await page.locator('#consent').isChecked(),false,'consent resets after every paid run');
    assert.equal(await page.locator('.analysis-report').count(),1,
     'a new cached report replaces the old; no transcript or stacked duplicate results');
-   assert.equal(await page.locator('.insight-card').count(),2);
+   assert.equal(await page.locator('.insight-card').count(),1);
+   assert.equal(await page.locator('.insight-graphic').count(),1);
    assert.match(await page.locator('.quality-note').innerText(),/Limited analysis/,
     'a shallow but verified report is visibly labelled incomplete');
-   assert.equal(await page.locator('.graph svg').count(),0,
-    'the changed report starts collapsed too');
+   assert.equal(await page.locator('.graph svg').count(),1,
+    'independent comparison is visible before expanding details');
    await page.locator('.insight-card').first().locator('summary.insight-summary').click();
-   await page.locator('.graph svg').first().waitFor({state:'visible'});
-   assert.equal(await page.locator('.graph svg').count(),1);
    assert.equal(await page.locator('.legend').count(),1);
    await page.locator('.limits').evaluate(el=>el.open=true);
    assert.equal(await page.locator('.analysis-detail summary')
