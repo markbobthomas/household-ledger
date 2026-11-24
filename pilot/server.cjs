@@ -500,9 +500,11 @@ const aiReports=aiCacheFactory?aiCacheFactory({
   });
   return context;
  },
- analyze:context=>require('./ai-chat.cjs').analyzeOneClick({
+ analyze:(context,{resumeState,onCheckpoint}={})=>
+ require('./ai-chat.cjs').analyzeOneClick({
   context,consent:'financial-analysis-v3',apiKey:env.OPENAI_API_KEY,
-  model:env.OPENAI_OUTLOOK_MODEL||env.OPENAI_REPORT_MODEL||'gpt-6.2-astra'
+  model:env.OPENAI_OUTLOOK_MODEL||env.OPENAI_REPORT_MODEL||'gpt-6.2-astra',
+  resumeState,onCheckpoint
  })
 }):{
  load:async()=>{},status:()=>({enabled:false,status:'unavailable',report:null}),
