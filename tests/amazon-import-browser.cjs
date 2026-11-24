@@ -22,7 +22,7 @@ module.exports=(async()=>{
   for(const [engine,name,width] of [[chromium,'desktop Chromium',1280],[webkit,'iPhone WebKit',390]]){
    const browser=await engine.launch({headless:true});
    const context=await browser.newContext({viewport:{width,height:800}});
-   const page=await context.newPage(),requests=[],errors=[];
+   const page=await context.newPage(),requests=[],noteRequests=[],errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    // Playwright cannot inspect a Blob streaming upload through postDataBuffer()
    // in all browsers. Verify exact transmitted File contents at the fetch
@@ -30,9 +30,13 @@ module.exports=(async()=>{
    await page.addInitScript(()=>{
     const original=window.fetch.bind(window);
     window.__amazonUploads=[];
+    window.__amazonNoteCalls=[];
     window.fetch=async(input,options={})=>{
      if(String(input).includes('/api/ledger/amazon-import')){
-      window.__amazonUploads.push({
+      if(typeof options.body==='string')
+       window.__amazonNoteCalls.push({
+        body:options.body,contentType:options.headers?.['Content-Type']});
+      else window.__amazonUploads.push({
        name:options.body?.name,bytes:await options.body?.text(),
        contentType:options.headers?.['Content-Type'],
        dryRun:options.headers?.['X-Amazon-Dry-Run']
@@ -43,6 +47,24 @@ module.exports=(async()=>{
    });
    await page.route('**/api/ledger/amazon-import',async route=>{
     const request=route.request(),headers=request.headers();
+    if(headers['content-type']==='application/json'){
+     const d=JSON.parse(request.postData()||'{}');
+     assert.deepEqual(Object.keys(d).sort(),['dryRun','mode']);
+     assert.equal(d.mode,'saved-notes');
+     noteRequests.push(d);
+     await route.fulfill({status:200,contentType:'application/json',
+      headers:{'x-ledger-revision':'fictional-revision'},
+      body:JSON.stringify({ready:d.dryRun?2:0,applied:d.dryRun?0:2,
+       bankCharges:2,confidentCategories:2,savedNoteCategories:2,
+       savedNoteStats:{itemNotes:3,unrecognized:1,eligibleNotes:2},
+       examples:[],suggestions:[],savedNoteExamples:[
+        {date:'2026-11-24',amountCents:2100,category:'Groceries',
+         note:'Possible Amazon: Coffee beans'},
+        {date:'2026-11-24',amountCents:2800,category:'Shopping',
+         note:'Amazon: USB charger'}
+       ]})});
+     return;
+    }
     assert.equal(headers['content-type'],'application/octet-stream');
     assert.equal(decodeURIComponent(headers['x-amazon-filename']),'Amazon-browser-sync.csv');
     const captured=request.postDataBuffer();
@@ -90,6 +112,21 @@ module.exports=(async()=>{
     assert.equal(upload.contentType,'application/octet-stream');
    }
    assert.deepEqual(uploads.map(u=>u.dryRun),['1','0']);
+   await page.locator('#notes-check').click();
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Review the categories'));
+   assert.match(await page.locator('#stats').innerText(),/From saved item Notes/);
+   assert.match(await page.locator('#details').innerText(),/Possible Amazon: Coffee beans/);
+   assert.equal(noteRequests.length,1);
+   assert.equal(noteRequests[0].dryRun,true,'Saved Notes preview is read-only');
+   await page.locator('#apply').click();
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Updated 2'));
+   assert.equal(noteRequests.length,2,'Saved Notes require explicit approval');
+   assert.equal(noteRequests[1].dryRun,false);
+   const after=await page.evaluate(()=>({
+    uploads:window.__amazonUploads.length,calls:window.__amazonNoteCalls}));
+   assert.equal(after.uploads,2,'No-upload Note category action never sends the ZIP');
+   assert.equal(after.calls.length,2);
+   assert(after.calls.every(c=>c.contentType==='application/json'));
    assert.deepEqual(errors,[],name+' has no JavaScript errors');
    await context.close();
   }
