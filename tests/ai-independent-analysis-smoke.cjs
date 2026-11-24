@@ -337,7 +337,7 @@ assert.equal(rejectedLong.blocks[0].detail,'',
   const body=JSON.parse(options.body);calls++;
   assert.equal(body.model,'gpt-6.2-astra');
   assert.equal(body.store,false);
-  assert.equal(body.reasoning.effort,'high');
+  assert.equal(body.reasoning.effort,calls===3?'medium':'high');
   assert.deepEqual(body.include,['reasoning.encrypted_content']);
   assert.equal(body.text.format.type,'json_schema');
   assert(!JSON.stringify(body).includes(account),'raw owner bank ID excluded');
@@ -359,16 +359,6 @@ assert.equal(rejectedLong.blocks[0].detail,'',
    return answer(proposed);
   }
   if(calls===3){
-   assert(body.input.some(x=>x.role==='system'&&
-    String(x.content).includes('independent second investigator')));
-   return answer(proposed);
-  }
-  if(calls===4){
-   assert(body.input.some(x=>x.role==='system'&&
-    String(x.content).includes('final independent editor')));
-   return answer(proposed);
-  }
-  if(calls===5){
    assert.equal(body.tools,undefined,
     'independent evidence reviewer does not receive tools');
    return answer({rejectedIndices:[],concerns:[],quality:'substantive',
@@ -378,10 +368,28 @@ assert.equal(rejectedLong.blocks[0].detail,'',
  };
  const report=await analyzeOneClick({context,apiKey:'synthetic',
   consent:'financial-analysis-v3',model:'gpt-6.2-astra',fetchImpl:fake});
- assert.equal(calls,5);
+ assert.equal(calls,3,'full research desk enables one deep GPT-6 pass plus second-stage review');
  assert(rawReasoningReplay,'GPT-6 reasoning is preserved on stateless tool calls');
  assert.equal(report.presentation,'independent-financial-outlook');
  assert.equal(report.blocks.length,3);
  assert.equal(report.analysisQuality.status,'substantive');
- console.log('GPT-6 financial outlook: private Responses function calls and report rendering schema passed');
+ // The optional slower critique cannot erase a locally cited completed outlook.
+ let reviewerCalls=0;
+ const reviewerTimedOut=await analyzeOneClick({context,apiKey:'synthetic',
+  consent:'financial-analysis-v3',model:'gpt-6.2-astra',
+  fetchImpl:async(_url,_opts)=>{
+   reviewerCalls++;
+   if(reviewerCalls===1)return {ok:true,json:async()=>({
+    status:'completed',output:[{type:'message',content:[{
+     type:'output_text',text:JSON.stringify(proposed)}]}]})};
+   const error=Error('Fictional slow secondary critique');
+   error.name='TimeoutError';throw error;
+  }});
+ assert.equal(reviewerCalls,2,'no paid retry after secondary review timeout');
+ assert.equal(reviewerTimedOut.blocks.length,3,'supported report survives critique timeout');
+ assert.equal(reviewerTimedOut.analysisQuality.status,'limited');
+ assert.match(reviewerTimedOut.analysisQuality.reason,/critique timed out/);
+ assert(!reviewerTimedOut.auditTrail.some(x=>x.action.startsWith('Independently re-reviewed')),
+  'never claim an incomplete critique was performed');
+ console.log('GPT-6 financial outlook: stateless source tools, one deep report, and review-timeout preservation passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
