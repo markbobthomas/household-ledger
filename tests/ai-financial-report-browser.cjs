@@ -77,7 +77,9 @@ module.exports=(async()=>{
  // Two very different source-supported report shapes: nothing forces a
  // forecast comparison, but an analyst can request it when warranted.
  const withoutComparison={...data,comparison:undefined};
- const withComparison={...data,analysisQuality:{status:'limited'},blocks:[{
+ const withComparison={...data,analysisQuality:{status:'limited',cause:'open-questions',
+  reason:'The source data needs one more specific check.',
+  questions:['Check the fictional card payment against the matching bank withdrawal.']},blocks:[{
   kind:'chart',title:'',text:'',chart:{
    id:'analysis-independent-comparison',type:'comparison',unit:'USD',
    title:'Independent balance sensitivity',subtitle:data.comparison.coverageNotice,
@@ -235,8 +237,13 @@ module.exports=(async()=>{
     'a new cached report replaces the old; no transcript or stacked duplicate results');
    assert.equal(await page.locator('.insight-card').count(),1);
    assert.equal(await page.locator('.insight-graphic').count(),1);
-   assert.match(await page.locator('.quality-note').innerText(),/Limited analysis/,
-    'a shallow but verified report is visibly labelled incomplete');
+   assert.match(await page.locator('.quality-note').innerText(),/specific questions that still need checking/,
+    'a genuinely unresolved reviewer question stays visible without a generic alarm');
+   assert.doesNotMatch(await page.locator('.quality-note').innerText(),/Limited analysis:/,
+    'do not show the vague old warning');
+   await page.locator('.quality-questions summary').click();
+   assert.match(await page.locator('.quality-questions li').first().innerText(),/fictional card payment/,
+    'show the actual unanswered question rather than hiding the reason');
    assert.equal(await page.locator('.graph svg').count(),1,
     'independent comparison is visible before expanding details');
    await page.locator('.insight-card').first().locator('summary.insight-summary').click();
