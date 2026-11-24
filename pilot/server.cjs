@@ -686,6 +686,22 @@ async function start(port=Number(env.PORT||8788)){
    try{ready=preparedFor(payload)}catch(_error){preparedCache=null}
    return respond(200,ready?{...payload,preparedForecast:ready}:payload);
   }
+  if(req.method==='GET'&&requestPath==='/api/ledger/reconciliation-audit'){
+   // Private, derived, one-day read-only evidence. An ordinary posted badge is
+   // not proof of a symmetrically matched checking/card source transfer.
+   const params=new URL(req.url,'http://localhost').searchParams;
+   const dates=params.getAll('date');
+   if(dates.length!==1||[...params.keys()].some(k=>k!=='date')||
+      !/^\d{4}-\d{2}-\d{2}$/.test(dates[0]))
+    return respond(400,{error:'Supply one ISO date'});
+   if(!state.items.length)return respond(409,{error:'No bank account connected'});
+   try{
+    const prepared=preparedFor(ledgerPayload());
+    return respond(200,require('./reconciliation-inspection.cjs').inspect(prepared,dates[0]));
+   }catch{
+    return respond(503,{error:'Canonical source reconciliation audit unavailable'});
+   }
+  }
   if(req.method==='GET'&&requestPath==='/api/status'){
    const refs=new Map(accountForecastLinks(state).map(x=>[x.id,x]));
    return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,
