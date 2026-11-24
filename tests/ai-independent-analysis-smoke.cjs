@@ -309,3 +309,79 @@ assert.equal(rejectedLong.blocks[0].detail,'',
   'unsupported invented figures are never included in the saved limited result');
  console.log('AI deep discovery: independent research, citation repair, safe partial fallback, factual verification and report depth passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
+
+// GPT-6 Responses API contract: private stateless sessions, encrypted reasoning
+// replay, source tools, structured report, and independent audit. Fictional only.
+(async()=>{
+ let calls=0,rawReasoningReplay=false;
+ const low=context.facts.find(x=>x.text.includes('lowest projected 90 day balance'));
+ assert(low,'fictional source low fact is available');
+ const f=createDataset(context).facts.find(x=>x.kind==='dataset-indices'&&x.text.includes('merchant'));
+ assert(f,'fictional merchant evidence');
+ const block=(kind,title,text,evidenceIds,detail='')=>({
+  kind,title,text,detail,visualStyle:'auto',evidenceIds,chartId:null});
+ const proposed={blocks:[
+  block('hero','Projected cash is conditional',
+   'A dated low deserves attention but not panic.',[low.id],
+   'Ledger reaches $4500.00 on '+date(30)+
+    '; ordinary purchases are not automatically forecast.'),
+  block('paragraph','Purchases need source context',
+   'Inspect merchant purchasing patterns without labeling them waste.',[f.id],
+   'Merchant grouping includes necessary purchases and may contain mixed retailers.'),
+  block('paragraph','Do not double-count card payments',
+   'Credit-card settlement is not an additional purchase.',[f.id],
+   'Compare source card purchases and settlement separately when assessing cash flow.')
+ ],followUps:[],limitations:[]};
+ const fake=async(url,options)=>{
+  assert.equal(url,'https://api.openai.com/v1/responses');
+  const body=JSON.parse(options.body);calls++;
+  assert.equal(body.model,'gpt-6.2-astra');
+  assert.equal(body.store,false);
+  assert.equal(body.reasoning.effort,'high');
+  assert.deepEqual(body.include,['reasoning.encrypted_content']);
+  assert.equal(body.text.format.type,'json_schema');
+  assert(!JSON.stringify(body).includes(account),'raw owner bank ID excluded');
+  const send=items=>({ok:true,json:async()=>({status:'completed',output:items})});
+  const answer=value=>send([{type:'message',content:[{
+   type:'output_text',text:JSON.stringify(value)}]}]);
+  if(calls===1){
+   assert(body.tools.some(t=>t.name==='read_financial_dataset'));
+   return send([{type:'reasoning',id:'reason-1',summary:[],
+     encrypted_content:'private-opaque-reasoning'},
+    {type:'function_call',call_id:'read-1',name:'read_financial_dataset',
+     arguments:JSON.stringify({section:'history',offset:1500,limit:200})}]);
+  }
+  if(calls===2){
+   assert(body.input.some(x=>x.type==='function_call_output'&&x.call_id==='read-1'));
+   assert(body.input.some(x=>x.type==='reasoning'&&
+    x.encrypted_content==='private-opaque-reasoning'));
+   rawReasoningReplay=true;
+   return answer(proposed);
+  }
+  if(calls===3){
+   assert(body.input.some(x=>x.role==='system'&&
+    String(x.content).includes('independent second investigator')));
+   return answer(proposed);
+  }
+  if(calls===4){
+   assert(body.input.some(x=>x.role==='system'&&
+    String(x.content).includes('final independent editor')));
+   return answer(proposed);
+  }
+  if(calls===5){
+   assert.equal(body.tools,undefined,
+    'independent evidence reviewer does not receive tools');
+   return answer({rejectedIndices:[],concerns:[],quality:'substantive',
+    reason:'Multiple distinct qualified findings with valid source references.'});
+  }
+  throw Error('Unexpected GPT-6 mock API call '+calls);
+ };
+ const report=await analyzeOneClick({context,apiKey:'synthetic',
+  consent:'financial-analysis-v3',model:'gpt-6.2-astra',fetchImpl:fake});
+ assert.equal(calls,5);
+ assert(rawReasoningReplay,'GPT-6 reasoning is preserved on stateless tool calls');
+ assert.equal(report.presentation,'independent-financial-outlook');
+ assert.equal(report.blocks.length,3);
+ assert.equal(report.analysisQuality.status,'substantive');
+ console.log('GPT-6 financial outlook: private Responses function calls and report rendering schema passed');
+})().catch(e=>{console.error(e);process.exitCode=1});
