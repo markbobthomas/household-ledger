@@ -43,9 +43,9 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
  'use strict';
  const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','\'':'&#39;'}[c]));
  const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
- let payload=null,revision='';
+ let payload=null,revision='',ready=0;
  function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
- function setBusy(b){$('check').disabled=b;$('apply').disabled=b||!payload}
+ function setBusy(b){$('check').disabled=b;$('apply').disabled=b||!payload||!ready}
  async function readFile(file){
   return await new Promise((resolve,reject)=>{
    const r=new FileReader();
@@ -79,7 +79,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
    '<p>No safe matches found.</p>';
   $('preview').hidden=false;
  }
- $('file').addEventListener('change',()=>{payload=null;revision='';$('apply').disabled=true;$('preview').hidden=true;message('')});
+ $('file').addEventListener('change',()=>{payload=null;revision='';ready=0;$('apply').disabled=true;$('preview').hidden=true;message('')});
  $('check').addEventListener('click',async()=>{
   const file=$('file').files?.[0];
   if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
@@ -88,7 +88,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
   try{
    payload={fileName:file.name,base64:await readFile(file)};
    const data=await request(true);
-   show(data);message(data.ready?'Matches checked. Review the totals, then apply categories.':'No new safe matches found.');
+   show(data);ready=data.ready;message(data.ready?'Matches checked. Review the totals, then apply categories.':'No new safe matches found.');
    $('apply').disabled=!data.ready;
   }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}
@@ -99,7 +99,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
   try{
    const data=await request(false);show(data);
    message('Saved '+data.applied+' bank transaction categorization'+(data.applied===1?'':'s')+'. Return to Ledger to see updated Budget and Review.');
-   payload=null;$('apply').disabled=true;
+   payload=null;ready=0;$('apply').disabled=true;
   }catch(e){message(e.message,true)}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}
  });
