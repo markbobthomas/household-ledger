@@ -561,7 +561,8 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
      await saveCheckpoint(round+1);
      continue;
     }
-    if(result.blocks.length&&secondReview.quality==='reconsider'&&reviewRetries<3){
+    if(result.blocks.length&&secondReview.quality==='reconsider'&&
+       reviewRetries<(qaMode?2:3)){
      // A factually supportable report can still be too shallow to be useful.
      // Let the model select further inquiries, without enforcing categories
      // or an arbitrary minimum number of findings.
