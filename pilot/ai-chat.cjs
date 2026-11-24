@@ -234,7 +234,7 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
    !Array.isArray(parsed.followUps)||!Array.isArray(parsed.limitations))throw Error('Invalid chat response');
  const byId=new Map(facts.map(f=>[f.id,f]));
  const plotIds=new Map(charts.map(c=>[c.id,c]));
- const blocks=[];let microWithheld=0;
+ const blocks=[];let microWithheld=0,unsupportedDetailsWithheld=0;
  for(const b of parsed.blocks){
   if(!b||!['paragraph','heading','metric','chart','hero','callout'].includes(b.kind)||
     typeof b.title!=='string'||b.title.length>120||typeof b.text!=='string'||
@@ -257,18 +257,23 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
      ).join('; ')).slice(0,15000)};
    const chartEvidence=new Map(byId);
    chartEvidence.set(proof.id,proof);
-   const ids=[...b.evidenceIds,proof.id];
+   // Chart source proofs remain authoritative, not invalid model IDs.
+   const validChartIds=b.evidenceIds.filter(id=>byId.has(id));
+   const ids=[...validChartIds,proof.id];
    if((b.title&&!verifyClaim(b.title,ids,chartEvidence))||
-      (b.text&&!verifyClaim(b.text,ids,chartEvidence))||
-      (detail&&!verifyClaim(detail,ids,chartEvidence,4200)))continue;
-   blocks.push({kind:'chart',title:b.title||chart.title,text:b.text,detail,
+      (b.text&&!verifyClaim(b.text,ids,chartEvidence)))continue;
+   const verifiedDetail=detail&&verifyClaim(detail,ids,chartEvidence,4200)?detail:'';
+   if(detail&&!verifiedDetail)unsupportedDetailsWithheld++;
+   blocks.push({kind:'chart',title:b.title||chart.title,text:b.text,detail:verifiedDetail,
     chart:presentationChart(chart,b.visualStyle),
-    evidence:[...b.evidenceIds.map(id=>byId.get(id)),proof]});
+    evidence:[...validChartIds.map(id=>byId.get(id)),proof]});
   }else{
-   if(detail&&!verifyClaim(detail,b.evidenceIds,byId,4200))continue;
    if(!verifyClaim(b.text||b.title,b.evidenceIds,byId)||
       b.title&&!verifyClaim(b.title,b.evidenceIds,byId))continue;
-   blocks.push({kind:b.kind,title:b.title,text:b.text,detail,
+   // Withhold ONLY an unsupported explanation; keep valid sourced findings.
+   const verifiedDetail=detail&&verifyClaim(detail,b.evidenceIds,byId,4200)?detail:'';
+   if(detail&&!verifiedDetail)unsupportedDetailsWithheld++;
+   blocks.push({kind:b.kind,title:b.title,text:b.text,detail:verifiedDetail,
     evidence:b.evidenceIds.map(id=>byId.get(id))});
   }
  }
@@ -276,7 +281,8 @@ function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
  return {asOf:context.asOf,blocks,
   evidenceAudit:{blocksRequested:parsed.blocks.length,blocksVerified:blocks.length,
    immaterialBlocksWithheld:microWithheld,
-   unsupportedBlocksWithheld:parsed.blocks.length-blocks.length-microWithheld},
+   unsupportedBlocksWithheld:parsed.blocks.length-blocks.length-microWithheld,
+   unsupportedDetailsWithheld},
   followUps:parsed.followUps.filter(x=>typeof x==='string'&&x.length>5&&x.length<=140).slice(0,4),
   // Free-form model limitations have no citations. Do not elevate those into
   // verified autonomous findings; use source-known constraints instead.
