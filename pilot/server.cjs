@@ -984,9 +984,13 @@ async function start(port=Number(env.PORT||8788)){
      const rows=isBinary?
       await stream.readFile(body.fileName,body.fileBytes,window):
       amazon.readFile(body.fileName,body.base64);
-     const items=rows.filter(item=>
+     const relevant= isBinary?null:new Set(rows.filter(item=>
       item.date>=window.minDate&&item.date<=window.maxDate||
-      item.shipmentDate>=window.minDate&&item.shipmentDate<=window.maxDate);
+      item.shipmentDate>=window.minDate&&item.shipmentDate<=window.maxDate)
+       .map(item=>item.orderId));
+     // The streaming reader already includes complete eligible orders.
+     // Legacy small JSON handoffs also retain all shipment lines per order.
+     const items=isBinary?rows:rows.filter(item=>relevant.has(item.orderId));
      result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
       savedCategoryChoices(state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories));
     }catch(error){return respond(400,{error:String(error.message||'Invalid Amazon export').slice(0,150)})}
