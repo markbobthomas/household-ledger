@@ -49,20 +49,31 @@ module.exports=(async()=>{
     const request=route.request(),headers=request.headers();
     if(headers['content-type']==='application/json'){
      const d=JSON.parse(request.postData()||'{}');
-     assert.deepEqual(Object.keys(d).sort(),['dryRun','mode']);
+     assert.deepEqual(Object.keys(d).sort(),['dryRun','mode','replaceOther']);
      assert.equal(d.mode,'saved-notes');
      noteRequests.push(d);
+     const ready=d.replaceOther?1:0;
      await route.fulfill({status:200,contentType:'application/json',
       headers:{'x-ledger-revision':'fictional-revision'},
-      body:JSON.stringify({ready:d.dryRun?2:0,applied:d.dryRun?0:2,
-       bankCharges:2,confidentCategories:2,savedNoteCategories:2,
-       savedNoteStats:{itemNotes:3,unrecognized:1,eligibleNotes:2},
-       examples:[],suggestions:[],savedNoteExamples:[
-        {date:'2026-11-24',amountCents:2100,category:'Groceries',
-         note:'Possible Amazon: Coffee beans'},
-        {date:'2026-11-24',amountCents:2800,category:'Shopping',
-         note:'Amazon: USB charger'}
-       ]})});
+      body:JSON.stringify({ready:d.dryRun?ready:0,
+       applied:d.dryRun?0:ready,
+       bankCharges:3,confidentCategories:ready,savedNoteCategories:ready,
+       replaceOtherEnabled:d.replaceOther,
+       savedNoteStats:{itemNotes:3,recognizable:2,unrecognized:1,
+        replaceableOther:1,protectedSpecific:1,eligibleNotes:ready},
+       examples:[],suggestions:[],
+       otherCategoryReview:d.replaceOther?[]:[{
+        date:'2026-11-24',amountCents:2100,
+        suggestedCategory:'Groceries',existingCategory:'Other',
+        reason:'protected-other',note:'Possible Amazon: Coffee beans'
+       }],
+       savedNoteSkipped:[{date:'2026-11-24',amountCents:2800,
+        reason:'protected-specific',existingCategory:'Shopping',
+        suggestedCategory:'Shopping',note:'Amazon: USB charger'}],
+       savedNoteExamples:d.replaceOther?[{
+        date:'2026-11-24',amountCents:2100,category:'Groceries',
+        note:'Possible Amazon: Coffee beans'
+       }]:[]})});
      return;
     }
     assert.equal(headers['content-type'],'application/octet-stream');
@@ -113,19 +124,33 @@ module.exports=(async()=>{
    }
    assert.deepEqual(uploads.map(u=>u.dryRun),['1','0']);
    await page.locator('#notes-check').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Review the categories'));
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('No category changes proposed'));
    assert.match(await page.locator('#stats').innerText(),/From saved item Notes/);
+   assert.match(await page.locator('#diagnosis').innerText(),/existing Other category choice/);
    assert.match(await page.locator('#details').innerText(),/Possible Amazon: Coffee beans/);
    assert.equal(noteRequests.length,1);
    assert.equal(noteRequests[0].dryRun,true,'Saved Notes preview is read-only');
+   assert.equal(noteRequests[0].replaceOther,false,'Protected Other category is default');
+   assert.equal(await page.locator('#apply').isDisabled(),true,
+    'Recognized Note with protected Other cannot be overwritten silently');
+   await page.locator('#include-other').check();
+   assert.equal(await page.locator('#apply').isDisabled(),true,
+    'Changing Other replacement scope invalidates the preview');
+   await page.locator('#notes-check').click();
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Review the categories'));
+   assert.equal(noteRequests.length,2);
+   assert.equal(noteRequests[1].replaceOther,true);
+   assert.equal(noteRequests[1].dryRun,true);
+   assert.match(await page.locator('#details').innerText(),/Groceries/);
    await page.locator('#apply').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Updated 2'));
-   assert.equal(noteRequests.length,2,'Saved Notes require explicit approval');
-   assert.equal(noteRequests[1].dryRun,false);
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Updated 1'));
+   assert.equal(noteRequests.length,3,'Saved Notes require a fresh approved preview');
+   assert.equal(noteRequests[2].dryRun,false);
+   assert.equal(noteRequests[2].replaceOther,true);
    const after=await page.evaluate(()=>({
     uploads:window.__amazonUploads.length,calls:window.__amazonNoteCalls}));
    assert.equal(after.uploads,2,'No-upload Note category action never sends the ZIP');
-   assert.equal(after.calls.length,2);
+   assert.equal(after.calls.length,3);
    assert(after.calls.every(c=>c.contentType==='application/json'));
    assert.deepEqual(errors,[],name+' has no JavaScript errors');
    await context.close();
