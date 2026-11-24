@@ -112,6 +112,20 @@ const repeated=A.match([
  {orderId:'order-2',date:'2026-10-12',shipmentDate:'2026-10-12',title:'Coffee beans',cents:2000}
 ],{charge:{id:'charge',accountId:'bank',name:'AMAZON',date:'2026-10-13',amount:20}}, {},categories);
 assert.equal(repeated.matches.length,0,'Two equal-value purchases are ambiguous');
+assert.equal(repeated.suggestions.length,1,
+ 'Ambiguous equal-cost purchases still provide item names for manual review');
+assert.match(repeated.suggestions[0].note,/Possible Amazon \(verify\):/);
+assert.match(repeated.suggestions[0].note,/ OR /,
+ 'Alternatives are labeled OR, not asserted to be items within one charge');
+const broad=A.match([{orderId:'113-date',date:'2026-10-10',shipmentDate:'2026-10-12',
+ title:'Kids school supplies',cents:7900}],{
+ other:{id:'other',accountId:'credit-one',merchant:'Fictional Grouping',
+ name:'AMAZON MARKETPLACE',date:'2026-10-14',amount:120}
+},{},categories);
+assert.equal(broad.matches.length,0);
+assert.equal(broad.suggestions.length,1,
+ 'A date-close order with a different charge amount supplies a verified-as-possible Note');
+assert.match(broad.suggestions[0].note,/Possible Amazon: Kids school supplies/);
 
 const Apply=require('../pilot/amazon-apply.cjs');
 const oldChoices={categoryOverrides:{a:'Groceries'},
