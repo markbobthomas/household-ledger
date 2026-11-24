@@ -14,10 +14,14 @@ const amazonCharge=t=>t&&t.pending!==true&&Number(t.amount)>0&&
  Number.isSafeInteger(Math.round(Number(t.amount)*100));
 function targetWindow(transactions,adjustments={}){
  const overrides=adjustments.categoryOverrides||{},
-  existing=adjustments.amazonAllocations||{};
+  notes=adjustments.predictions?.transactionNotes||{};
+ // A charge with a manual category may still need its Amazon product Note.
+ // Include every Amazon charge missing its bank-note overlay, even if a
+ // prior category import or manual category is already present.
  const dates=Object.values(transactions||{}).filter(t=>amazonCharge(t)&&
-  (overrides[t.id]===undefined||overrides[t.id]==='Uncategorized')&&
-  !existing[t.id]&&isoDate(t.date)).map(t=>isoDate(t.date)).sort();
+  (!String(notes['bank:'+JSON.stringify([String(t.accountId||''),String(t.id)])]||'').trim()||
+   overrides[t.id]===undefined||overrides[t.id]==='Uncategorized')&&
+  isoDate(t.date)).map(t=>isoDate(t.date)).sort();
  if(!dates.length)return null;
  const shift=(d,n)=>{
   const date=new Date(d+'T12:00:00Z');date.setUTCDate(date.getUTCDate()+n);
