@@ -965,8 +965,10 @@ async function start(port=Number(env.PORT||8788)){
     const savedNotesOnly=body?.mode==='saved-notes';
     const isBinary=Buffer.isBuffer(body?.fileBytes);
     if(savedNotesOnly){
-     if(Object.keys(body).sort().join(',')!=='dryRun,mode'||
-        typeof body.dryRun!=='boolean')
+     if(!['dryRun,mode','dryRun,mode,replaceOther'].includes(
+        Object.keys(body).sort().join(','))||
+        typeof body.dryRun!=='boolean'||
+        (body.replaceOther!==undefined&&typeof body.replaceOther!=='boolean'))
       return respond(400,{error:'Invalid Amazon Note categorization request'});
     }else if(!body||typeof body!=='object'||Array.isArray(body)||
        Object.keys(body).sort().join(',')!==
@@ -1010,7 +1012,10 @@ async function start(port=Number(env.PORT||8788)){
     // Snapshot before saving; a failed write must never lose personal Notes.
     const before=structuredClone(state.ledgerAdjustments||{}),
      plan=require('./amazon-apply.cjs').prepare(result,before,{
-      transactions:state.transactions,categories:validCategories
+      transactions:state.transactions,categories:validCategories,
+      // Replacing a previously saved Other category is a separate, explicit
+      // choice for the no-upload Note review; never on ordinary ZIP imports.
+      replaceOther:savedNotesOnly&&body.replaceOther===true
      }),
      {report,next,nextPredictions,hasNotes,categoryChanged}=plan;
     if(body.dryRun||!plan.ready)return respond(200,report);
