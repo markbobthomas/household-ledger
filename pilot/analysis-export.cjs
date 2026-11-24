@@ -14,8 +14,23 @@ const safe=x=>cleanDescription(String(x??'')).slice(0,140);
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
 const permitted=(v,allowed)=>allowed.includes(String(v))?String(v):null;
 
-function build({prepared,adjustments={},lastSync=null}){
+function build({prepared,adjustments={},lastSync=null,syncDiagnostics={}}){
  const ctx=financialContext(prepared,{lastSync,adjustments});
+ const sync=object(syncDiagnostics),lastAttempt=object(sync.lastAttempt);
+ const safeTimestamp=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(x)?x:null;
+ const bankSync={
+  // The server refreshes derived forecasts hourly, but Plaid history only
+  // refreshes on an authenticated manual Sync action; a stale timestamp
+  // by itself is not proof of a provider error.
+  automaticTransactionSync:false,
+  lastAttemptAt:safeTimestamp(lastAttempt.at),
+  lastAttemptOutcome:permitted(lastAttempt.outcome,['started','success','failed']),
+  attemptStatusScope:'current-server-process-only',
+  itemIssues:(Array.isArray(sync.issues)?sync.issues:[]).slice(0,30).map(issue=>({
+   code:/^[A-Z_]{3,60}$/.test(String(issue?.code||''))?String(issue.code):'UNSPECIFIED',
+   observedAt:safeTimestamp(issue?.observedAt)
+  }))
+ };
  const ds=createDataset(ctx);
  const section=name=>{
   const n=ds.manifest[name],result=[];
@@ -181,6 +196,7 @@ function build({prepared,adjustments={},lastSync=null}){
  return {
   format:'ledger-manual-analysis-export',version:1,
   exportedAt:new Date().toISOString(),asOf:ctx.asOf,lastSuccessfulBankSync:lastSync,
+  bankSync,
   currency:'USD',
   purpose:'Owner-initiated analysis in an external chat. No model or external API was called to create this file.',
   sensitivity:'CONFIDENTIAL: Contains private balances, spending, income, merchant names and financial decisions in plain JSON. Share only deliberately; do not post publicly.',
