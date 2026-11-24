@@ -41,8 +41,15 @@ function registerAccounts(state,provided){
  return state.accounts;
 }
 function accountsFor(state){
+ // Accept both normalized private account IDs and raw Plaid account_id
+ // records. Without this, legacy read-only audits can silently treat cards
+ // and checking accounts as unknown and mislabel a card payment as a
+ // depository transfer. Never modify the source account array.
  const byId=new Map((Array.isArray(state?.accounts)?state.accounts:[])
-  .filter(a=>a?.id).map(a=>[String(a.id),{...a,type:accountType(a)}]));
+  .filter(a=>a?.id||a?.account_id).map(a=>{
+   const id=String(a.id||a.account_id);
+   return [id,{...a,id,type:accountType(a)}];
+  }));
  for(const t of state?.transactions||[]){
   const id=key(t);
   if(!byId.has(id))byId.set(id,{id,name:safe(t.account||id),type:'unknown',
