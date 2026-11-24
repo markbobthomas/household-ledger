@@ -530,9 +530,8 @@ const qaReports=aiCacheFactory?aiCacheFactory({
   return require('./ai-qaqc.cjs').buildContext(prepared,{
    lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
  },
- analyze:context=>require('./ai-chat.cjs').analyzeQualityCheck({
-  context,consent:'ledger-qaqc-v1',apiKey:env.OPENAI_API_KEY,
-  model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+ analyze:context=>require('./ai-quick-qaqc.cjs').analyzeQualityCheck({
+  context,consent:'ledger-qaqc-v1',apiKey:env.OPENAI_API_KEY
  })
 }):{load:async()=>{},status:()=>({enabled:false,status:'unavailable',report:null}),
  schedule:()=>false,clear:async()=>{}};
