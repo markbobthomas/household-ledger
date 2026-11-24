@@ -511,20 +511,19 @@ button{font:inherit;cursor:pointer}
   // edits. Keep the original full report and every expansion below unchanged.
   if(!isQa){
    const points=[],seen=new Set();
-   for(const block of blocks){
-    if(!['hero','paragraph','callout','chart'].includes(block.kind))continue;
-    const point=String(block.title||block.chart?.title||block.text||'').trim();
-    if(!point||seen.has(point.toLowerCase()))continue;
-    seen.add(point.toLowerCase());points.push(point);
-    if(points.length===4)break;
-   }
-   // Sparse older reports may contain metrics but no narrative findings.
-   if(!points.length)for(const block of blocks){
-    if(block.kind!=='metric')continue;
-    const point=String(block.title||'').trim()+
-     (block.text?': '+String(block.text).trim():'');
-    if(!point.trim()||seen.has(point.toLowerCase()))continue;
-    seen.add(point.toLowerCase());points.push(point);
+   // Prefer the main narrative and warnings; use chart/metric headings
+   // only to fill a short summary, never to create new interpretations.
+   for(const kinds of [['hero','paragraph','callout'],['chart'],['metric']]){
+    for(const block of blocks){
+     if(!kinds.includes(block.kind))continue;
+     const point=block.kind==='metric'?
+      String(block.title||'').trim()+
+       (block.text?': '+String(block.text).trim():''):
+      String(block.title||block.chart?.title||block.text||'').trim();
+     if(!point||seen.has(point.toLowerCase()))continue;
+     seen.add(point.toLowerCase());points.push(point);
+     if(points.length===4)break;
+    }
     if(points.length===4)break;
    }
    if(points.length){
