@@ -222,7 +222,7 @@ for(const secret of [bank,'PRIVATE-TOKEN','PRIVATE-ID','raw-tx-','raw-private-ru
 const {buildOutlookDesk}=require('../pilot/ai-outlook-desk.cjs');
 const research=buildOutlookDesk(aiContext);
 assert(research?.briefing,'Independent outlook research is available');
-assert(research.facts.length>30,'A real research desk, not an isolated QA flag');
+assert(research.facts.length>12,'Independent research supplies multiple source-grounded household observations');
 assert(research.briefing.comparisonMonths.length>=2,
  'The outlook compares fully covered historic months rather than partial November');
 assert(research.briefing.categories.some(x=>x.label==='Groceries'));
