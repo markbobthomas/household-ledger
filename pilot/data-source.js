@@ -109,7 +109,7 @@ function prepare(payload,asOf=today()){
   transactions:rows,items:[],
   accounts:banks.map(a=>({id:a.id,name:a.name,type:a.type,subtype:a.subtype,
    institution:'Connected via Plaid',itemId:a.itemId||'connected-bank-item'})),
-  ...Object.fromEntries(['categoryOverrides','predictions','reviews','learning','customCategories']
+  ...Object.fromEntries(['categoryOverrides','predictions','reviews','learning','customCategories','amazonAllocations']
    .filter(k=>adjustments[k]!==undefined).map(k=>[k,adjustments[k]]))
  });
  const snapshot={asOf,mode:'plaid',connected:true,source:'Plaid bank-reported balances',
