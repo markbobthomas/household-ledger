@@ -518,6 +518,7 @@ const aiReports=aiCacheFactory?aiCacheFactory({
 // a bank refresh produced no changed transactions.
 const qaSnapshotRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify({
  financial:aiSnapshotRevision(),lastSync:state.lastSync,
+ qaqcEngine:'one-pass-terra-v1',
  syncIssues:state.items.map(i=>i.syncIssue?.code||null)
 })).digest('hex');
 const qaReports=aiCacheFactory?aiCacheFactory({
@@ -530,9 +531,8 @@ const qaReports=aiCacheFactory?aiCacheFactory({
   return require('./ai-qaqc.cjs').buildContext(prepared,{
    lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
  },
- analyze:context=>require('./ai-chat.cjs').analyzeQualityCheck({
-  context,consent:'ledger-qaqc-v1',apiKey:env.OPENAI_API_KEY,
-  model:env.OPENAI_REPORT_MODEL||'gpt-4.1'
+ analyze:context=>require('./ai-quick-qaqc.cjs').analyzeQualityCheck({
+  context,consent:'ledger-qaqc-v1',apiKey:env.OPENAI_API_KEY
  })
 }):{load:async()=>{},status:()=>({enabled:false,status:'unavailable',report:null}),
  schedule:()=>false,clear:async()=>{}};

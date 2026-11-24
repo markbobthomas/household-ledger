@@ -173,7 +173,7 @@ button{font:inherit;cursor:pointer}
 <section class="qaqc-panel" aria-label="Ledger quality assurance">
 <h2>AI QA/QC · Check Ledger for errors</h2>
 <p>Separate from financial advice. Independently audit recorded and expected transactions, forecast math, reconciliations and coverage. No changes are made.</p>
-<label><input id="qaqc-consent" type="checkbox"><span>I authorize one read-only AI QA/QC run using the same sanitized financial records and calculations described below. This is not recurring authorization.</span></label>
+<label><input id="qaqc-consent" type="checkbox"><span>I authorize one read-only AI QA/QC run using selected sanitized transaction examples, schedule comparisons and local integrity-check results. The AI does not receive every transaction. This is not recurring authorization.</span></label>
 <div class="control"><button id="run-qaqc" type="button" disabled>Run AI QA/QC</button>
 <p id="qaqc-status" role="status" aria-live="polite">Checking for a previous QA/QC result…</p></div>
 <div id="qaqc-analysis" role="region" aria-label="Ledger QA/QC results"></div>
@@ -532,6 +532,14 @@ button{font:inherit;cursor:pointer}
     for(const point of points)list.append(el('li','',point));
     short.append(list);msg.append(short);
    }
+  }
+  if(isQa&&data.tokenUsage){
+   const t=data.tokenUsage,usage=el('p','muted');
+   const cost=typeof t.costUsd==='number'?'$'+t.costUsd.toFixed(4):'cost not reported';
+   usage.textContent='Quick QAQC · '+(t.requests||1)+' AI request · '+
+    cost+' estimated API token cost · '+(t.selectedEvidence||0)+
+    ' source excerpts reviewed by AI. Local checks cover the full available record set.';
+   msg.append(usage);
   }
   msg.append(el('h2','glance-heading',isQa?'AI investigation':'At a glance'));
   // Financial outlook is readable long-form by default. QA retains compact UI.
