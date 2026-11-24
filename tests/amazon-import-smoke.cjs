@@ -126,5 +126,56 @@ console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, 
  const large=await S.readFile('Retail.OrderHistory.csv',before,window);
  assert.equal(large.length,1,'The 47 MB file yields only the one in-window order');
  assert.equal(large[0].orderId,parsed[0].orderId);
+ // Amazon changed its 2026 export name and renamed several columns.
+ // "Total Amount" belongs to a single item, not the whole order: even
+ // identical line totals must sum to the actual posted bank charge.
+ const modernCsv=[
+  'Order ID,Order Date,Product Name,Original Quantity,Total Amount,Unit Price,Unit Price Tax,Order Status,Ship Date,Currency',
+  '113-9999999-0000001,2026-10-10T20:00:00Z,Kids jacket,2,25.00,10.00,2.50,Shipped,2026-10-11T11:00:00Z,USD',
+  '113-9999999-0000001,2026-10-10T20:00:00Z,Coffee beans,1,25.00,20.00,5.00,Shipped,2026-10-11T11:00:00Z,USD',
+  '113-9999999-0000001,2026-10-10T20:00:00Z,Cancelled item,1,99.00,99.00,0.00,Cancelled,2026-10-11T11:00:00Z,USD'
+ ].join('\r\n');
+ const modernTx={target:{id:'target',name:'AMAZON MKTPLACE',
+  amount:50,date:'2026-10-15',pending:false,accountId:'test-credit'}};
+ const modernWindow=S.targetWindow(modernTx,{});
+ const modern=A.readFile('Order History.csv',Buffer.from(modernCsv).toString('base64'));
+ assert.equal(modern.length,2,'Legacy small-CSV handoff recognizes modern columns and excludes cancelled items');
+ assert.deepEqual(modern.map(x=>x.cents),[2500,2500],
+  'Total Amount is a per-item total and includes tax/shipping/discounts already');
+ assert(modern.every(x=>x.charged===null),'Modern item totals must not masquerade as order-level charges');
+ const modernBinary=await S.readFile('Order History.csv',Buffer.from(modernCsv),modernWindow);
+ assert.equal(modernBinary.length,2,'Binary importer recognizes new 2026 Order History CSV');
+ assert.deepEqual(modernBinary.map(x=>x.cents),[2500,2500]);
+ const modernMatched=A.match(modernBinary,modernTx,{},categories);
+ assert.equal(modernMatched.matches.length,1);
+ assert.equal(modernMatched.matches[0].lines.reduce((n,x)=>n+x.cents,0),5000);
+ assert.deepEqual(modernMatched.matches[0].lines.map(x=>x.category),
+  ['Kids & Family','Groceries']);
+ // Amazon ZIP layout since 2026: a spaced filename inside a folder.
+ const modernFilename=Buffer.from('Your Orders/Order History.csv'),
+  modernContent=Buffer.from(modernCsv),
+  modernDeflate=zlib.deflateRawSync(modernContent),
+  modernLocal=Buffer.alloc(30),modernCentral=Buffer.alloc(46),
+  modernEnd=Buffer.alloc(22);
+ modernLocal.writeUInt32LE(0x04034b50);
+ modernLocal.writeUInt16LE(8,8);
+ modernLocal.writeUInt16LE(modernFilename.length,26);
+ modernCentral.writeUInt32LE(0x02014b50);
+ modernCentral.writeUInt16LE(8,10);
+ modernCentral.writeUInt32LE(modernDeflate.length,20);
+ modernCentral.writeUInt32LE(modernContent.length,24);
+ modernCentral.writeUInt16LE(modernFilename.length,28);
+ modernEnd.writeUInt32LE(0x06054b50);
+ modernEnd.writeUInt16LE(1,8);
+ modernEnd.writeUInt16LE(1,10);
+ modernEnd.writeUInt32LE(modernCentral.length+modernFilename.length,12);
+ modernEnd.writeUInt32LE(modernLocal.length+modernFilename.length+modernDeflate.length,16);
+ const modernZip=Buffer.concat([modernLocal,modernFilename,modernDeflate,
+  modernCentral,modernFilename,modernEnd]);
+ assert.equal((await S.readFile('Your Orders.zip',modernZip,modernWindow)).length,2,
+  '79 MB streaming ZIP recognizes new Amazon spaced order-history filename');
+ assert.equal(A.readFile('Your Orders.zip',modernZip.toString('base64')).length,2,
+  'Existing extension handoff accepts modern ZIP data too');
+
  console.log('PASS 79 MB binary Amazon import: 47 MB streaming fixture, compressed ZIP, date-window filtering and zero AI calls');
 })().catch(e=>{console.error(e);process.exitCode=1});
