@@ -113,6 +113,33 @@ const repeated=A.match([
 ],{charge:{id:'charge',accountId:'bank',name:'AMAZON',date:'2026-10-13',amount:20}}, {},categories);
 assert.equal(repeated.matches.length,0,'Two equal-value purchases are ambiguous');
 
+const Apply=require('../pilot/amazon-apply.cjs');
+const oldChoices={categoryOverrides:{a:'Groceries'},
+ predictions:{transactionNotes:{[Pair.keyFor(tx.b)]:'My own handwritten note'}}};
+const matchWithManual=A.match(items,tx,oldChoices,categories);
+const planned=Apply.prepare(matchWithManual,oldChoices);
+assert.equal(planned.next.predictions.transactionNotes[Pair.keyFor(tx.b)],
+ 'My own handwritten note','Never overwrite a handwritten Note');
+assert.equal(planned.next.categoryOverrides.a,'Groceries','Preserve manual category when adding an item Note');
+assert.match(planned.next.predictions.transactionNotes[Pair.keyFor(tx.a)],
+ /^Amazon: Laundry detergent/, 'Write the product title to the exact pre-existing bank Note key');
+assert.equal(oldChoices.predictions.transactionNotes[Pair.keyFor(tx.a)],undefined,
+ 'Planning does not mutate prior saved Notes');
+assert.equal(oldChoices.categoryOverrides.a,'Groceries',
+ 'Planning does not mutate prior categories');
+assert.equal(planned.next.amazonAllocations.a,undefined,
+ 'Manual category is not overwritten with automatic item allocation');
+const nearPlan=Apply.prepare(near,oldChoices);
+assert.equal(nearPlan.report.confidentCategories,0,
+ 'A near-amount suggestion never assigns an automatic category');
+assert.equal(nearPlan.next.categoryOverrides.near,undefined);
+assert.equal(nearPlan.next.amazonAllocations.near,undefined);
+assert.equal(nearPlan.next.predictions.transactionNotes[
+ 'bank:'+JSON.stringify(['credit-one','near'])],
+ 'Possible Amazon: Coffee beans');
+const idempotent=Apply.prepare(near,nearPlan.next);
+assert.equal(idempotent.ready,0,'Repeated import does not rewrite an identical Amazon Note');
+
 console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, manual priority, ambiguity PASS');
 
 
