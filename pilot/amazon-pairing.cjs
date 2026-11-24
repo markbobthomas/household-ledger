@@ -64,7 +64,7 @@ function match(rows,transactions,adjustments,validCategories,allocate){
  }
  const candidates=[],signatures=new Set();
  const add=(id,items,amount,source)=>{
-  if(!Number.isSafeInteger(amount)||amount<=0||!nearby(amount)||candidates.length>=MAX_GROUPS)return;
+  if(!Number.isSafeInteger(amount)||amount<=0||candidates.length>=MAX_GROUPS)return;
   const ids=items.map(i=>i._id).sort();
   const sig=ids.join('|')+'|'+amount;
   if(signatures.has(sig))return;signatures.add(sig);
@@ -149,63 +149,86 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    needsReview:categories.includes('Uncategorized'),notesOnly:manual,
    alreadyImported:Boolean(existing[tx.id]),confidence:'exact'});
  }
- // Suggestions provide purchase context, not proof of a bank allocation.
- // They never set categories or alter a posted bank transaction. An
- // ambiguous bank charge gets a list of alternatives labeled OR (verify),
- // rather than a definitive but potentially wrong item name.
+ // Date and price independently rank possible Amazon products. Amazon can
+ // split one order into separate charges, settle it later, and apply tax or
+ // credits so that a product-line total is NOT identical to the bank debit.
+ // An unverified suggestion is a helpful Note, not a categorical assertion.
+ // Index by shipment day rather than scanning every imported row for every
+ // bank charge (large ZIPs can contain tens of thousands of item lines).
+ const byDay=new Map();
+ for(const c of candidates){
+  if(!byDay.has(c.date))byDay.set(c.date,[]);
+  byDay.get(c.date).push(c);
+ }
+ const shift=(iso,n)=>{
+  const date=new Date(iso+'T12:00:00Z');
+  date.setUTCDate(date.getUTCDate()+n);
+  return date.toISOString().slice(0,10);
+ };
+ const rank=(t,c)=>{
+  const gap=dayGap(t.date,c.date),
+   diff=Math.abs(c.amount-cents(t))/Math.max(c.amount,cents(t));
+  return diff+Math.abs(gap-2)*.035+
+   (c.source==='shipment-part'?.015:0);
+ };
  for(const t of txs){
   if(selection.has(t.id)||String(notes[keyFor(t)]||'').trim())continue;
-  const exact=(byAmount.get(cents(t))||[]).filter(c=>validDate(t,c)&&
-   c.ids.every(id=>!usedItems.has(id)));
-  const close=candidates.filter(c=>
-   c.ids.every(id=>!usedItems.has(id))&&
-   dayGap(t.date,c.date)>=-1&&dayGap(t.date,c.date)<=10&&
-   c.amount!==cents(t)&&
-   Math.abs(c.amount-cents(t))<=Math.min(500,Math.max(75,Math.round(cents(t)*.03))));
-  const score=c=>Math.abs(c.amount-cents(t))/Math.max(1,cents(t))+
-   Math.abs(dayGap(t.date,c.date)-2)*.012;
-  exact.sort((a,b)=>proximity(t,a)-proximity(t,b));
-  close.sort((a,b)=>score(a)-score(b));
-  let picked=null,choices=[];
-  if(exact.length){
-   choices=exact.slice(0,3);
-  }else if(close.length===1){
-   picked=close[0];
-  }else if(close.length>1){
-   if(score(close[1])-score(close[0])>=.06)picked=close[0];
-   else choices=close.slice(0,3);
-  }else{
-   // Strongest date-only fallback: one nearby Amazon order, or a shortlist
-   // of two plausible orders. An order can include several product lines.
-   const around=[];
-   for(const [orderId,items] of orders){
-    const dates=items.map(i=>i.shipmentDate||i.date).filter(Boolean).sort();
-    if(!dates.length)continue;
-    const date=dates.at(-1),gap=dayGap(t.date,date);
-    if(gap<0||gap>7)continue;
-    const sum=items.reduce((n,i)=>n+i.cents,0);
-    if(sum<cents(t)*.45||sum>cents(t)*2.2)continue;
-    if(items.some(i=>usedItems.has(i._id)))continue;
-    around.push({id:orderId,items,date,amount:sum,
-     ids:items.map(i=>i._id),source:'date-only'});
-   }
-   around.sort((a,b)=>score(a)-score(b));
-   if(around.length===1)picked=around[0];
-   else if(around.length>1&&score(around[0])<=.7){
-    if(score(around[1])-score(around[0])>=.3)picked=around[0];
-    else choices=around.slice(0,2);
+  const alternatives=[];
+  for(let days=-1;days<=14;days++){
+   // Bank charge is expected to follow order/shipment date; tolerate one
+   // day before for posting/date-zone differences.
+   const date=shift(t.date,-days);
+   for(const c of byDay.get(date)||[]){
+    if(c.ids.some(id=>usedItems.has(id)))continue;
+    const ratio=Math.abs(c.amount-cents(t))/Math.max(c.amount,cents(t));
+    // A little price divergence is common. A large discrepancy can only
+    // be suggested when the dates are close, and is ALWAYS unverified.
+    const limit=days<=4?.45:days<=10?.30:.12;
+    if(ratio>limit)continue;
+    alternatives.push({c,score:rank(t,c)});
    }
   }
-  if(picked)suggestions.push({transactionId:t.id,accountId:t.accountId,
-   date:t.date,amountCents:cents(t),orderId:picked.id,
-   note:itemNote(picked.items,'Possible Amazon: '),
-   confidence:'possible',source:picked.source});
-  else if(choices.length){
-   const note=choiceNote(choices);
-   if(note.length>26)suggestions.push({transactionId:t.id,accountId:t.accountId,
-    date:t.date,amountCents:cents(t),orderId:choices[0].id,
-    note,confidence:'possible',source:'alternatives'});
+  alternatives.sort((a,b)=>a.score-b.score||a.c.id.localeCompare(b.c.id));
+  // Same item set can appear as a shipment and an order candidate; they
+  // must not create a false tie or a duplicate in the displayed Note.
+  const unique=[],signatures=new Set();
+  for(const suggestion of alternatives){
+   const key=suggestion.c.ids.join('|');
+   if(signatures.has(key))continue;
+   signatures.add(key);unique.push(suggestion);
+   if(unique.length>=4)break;
   }
+  if(unique.length){
+   const [best,second]=unique;
+   // A uniquely strong price+date fit receives a singular Possible Note.
+   // Otherwise list actual alternatives with explicit OR, not two bought
+   // items attributed to the same charge as fact.
+   const alone=!second||second.score-best.score>=.17;
+   const options=alone?[best.c]:unique.slice(0,3).map(x=>x.c);
+   const note=alone?itemNote(options[0].items,'Possible Amazon: '):
+    choiceNote(options);
+   if(note)suggestions.push({transactionId:t.id,accountId:t.accountId,
+    date:t.date,amountCents:cents(t),orderId:best.c.id,note,
+    confidence:'possible',source:alone?best.c.source:'alternatives'});
+   continue;
+  }
+  // Amounts can diverge radically with gift cards, partial refunds or
+  // settlement splits. Only use a date-only hint if a SINGLE order exists
+  // around the charge; otherwise the source does not establish an item.
+  const around=[];
+  for(const [orderId,items] of orders){
+   const dates=items.map(i=>i.shipmentDate||i.date).filter(Boolean).sort();
+   if(!dates.length)continue;
+   const date=dates.at(-1),gap=dayGap(t.date,date);
+   if(gap<0||gap>5||items.some(i=>usedItems.has(i._id)))continue;
+   around.push({id:orderId,items,date});
+   if(around.length>1)break;
+  }
+  if(around.length===1)suggestions.push({transactionId:t.id,
+   accountId:t.accountId,date:t.date,amountCents:cents(t),
+   orderId:around[0].id,
+   note:itemNote(around[0].items,'Possible Amazon (date only): '),
+   confidence:'possible',source:'date-only'});
  }
  const uniqueSuggestions=suggestions;
  const matchedBank=new Set(matches.map(m=>m.transactionId));
