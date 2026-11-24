@@ -620,4 +620,22 @@ assert.equal(confirmedLimit.plans[0].amount,240,
  'Do not rewrite an owner-entered issued statement because modeled debt is lower');
 assert.ok(confirmedLimit.warnings.some(w=>w.includes('review a projected card payment')));
 
+// A payment still awaiting matching to bank posting must not be subtracted
+// from the latest source card balance a second time when estimating later caps.
+const stalePrefs={paymentRules:{'limit-card':{...limitPrefs.paymentRules['limit-card'],
+ billingStartDate:'2026-08-19',billingEndDate:'2026-09-18',
+ nextPaymentDate:'2026-10-12',nextDueDate:'2026-10-12'
+}}};
+const stale=Payments.build({...limitSnapshot,asOf:'2026-11-23'},
+ [{...limitPosted,date:'2026-09-08'}],
+ [{id:'future-usage',date:'2026-11-30',accountId:'limit-card',
+ type:'expense',amount:250,merchant:'Fictional Scheduled Service'}],
+ stalePrefs,{days:50});
+const later=stale.statements.find(x=>x.dueDate==='2026-12-12');
+assert.ok(later);
+assert.equal(later.amount,250,'Preserve estimated payment when earlier overdue cash debit remains unreconciled');
+assert.equal(later.estimatedPaymentLimited,undefined,
+ 'Never derive a false balance cap by re-subtracting unresolved overdue payments');
+assert.ok(stale.plans.some(x=>x.originalDueDate==='2026-10-12'),
+ 'Outstanding prior payment remains explicitly reserved for review');
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
