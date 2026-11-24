@@ -52,6 +52,10 @@ button{font:inherit;cursor:pointer}
 #export-status{font-size:.84rem!important;margin:10px 0 0!important}
 .analysis-report{background:#fff;border:1px solid #e1e8e2;border-radius:16px;padding:clamp(17px,3vw,31px);min-width:0}
 .analysis-report .who{font-size:.81rem;font-weight:660;color:#5d7268;margin:0 0 20px}
+.key-points{margin:0 0 20px;padding:0 0 15px;border-bottom:1px solid #e3ebe4}
+.key-points h2{font-size:1rem;letter-spacing:-.01em;margin:0 0 8px;color:#284b3c}
+.key-points ul{margin:0;padding-left:21px;display:grid;gap:7px}
+.key-points li{font-size:.92rem;line-height:1.45;color:#334e3f;overflow-wrap:anywhere}
 .quality-note{font-size:.87rem!important;color:#78542d!important;max-width:800px;border-bottom:1px solid #e9eee9;padding:0 0 15px;margin:-7px 0 14px!important;line-height:1.5!important}
 .quality-questions{margin:0 0 16px;font-size:.88rem;color:#52685d}
 .quality-questions summary{font-weight:640;color:#3c594b}
@@ -501,8 +505,35 @@ button{font:inherit;cursor:pointer}
    for(const note of qa.limitations||[])info(inside,note);
    limits.append(h,inside);audit.append(limits);msg.append(audit);
   }
-  msg.append(el('h2','glance-heading',isQa?'AI investigation':'At a glance'));
   const blocks=(data.blocks||[]).filter(b=>b&&typeof b==='object');
+  // Add a quick, point-form reading guide made ONLY from the existing report.
+  // No model call, new financial calculations, changed findings, or saved-data
+  // edits. Keep the original full report and every expansion below unchanged.
+  if(!isQa){
+   const points=[],seen=new Set();
+   // Prefer the main narrative and warnings; use chart/metric headings
+   // only to fill a short summary, never to create new interpretations.
+   for(const kinds of [['hero','paragraph','callout'],['chart'],['metric']]){
+    for(const block of blocks){
+     if(!kinds.includes(block.kind))continue;
+     const point=block.kind==='metric'?
+      String(block.title||'').trim()+
+       (block.text?': '+String(block.text).trim():''):
+      String(block.title||block.chart?.title||block.text||'').trim();
+     if(!point||seen.has(point.toLowerCase()))continue;
+     seen.add(point.toLowerCase());points.push(point);
+     if(points.length===4)break;
+    }
+    if(points.length===4)break;
+   }
+   if(points.length){
+    const short=el('section','key-points'),list=el('ul');
+    short.append(el('h2','','Key points'));
+    for(const point of points)list.append(el('li','',point));
+    short.append(list);msg.append(short);
+   }
+  }
+  msg.append(el('h2','glance-heading',isQa?'AI investigation':'At a glance'));
   // Financial outlook is readable long-form by default. QA retains compact UI.
   if(!isQa&&data.presentation==='independent-financial-outlook'){
    msg.classList.add('outlook-report');

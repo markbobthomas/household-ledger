@@ -171,7 +171,16 @@ module.exports=(async()=>{
     'bank-sourced model text must be literal and never execute HTML');
    assert.equal(await page.locator('.quality-note').count(),0,
     'a source-reviewed substantive report has no false quality warning');
+   const bullets=await page.locator('#analysis .key-points li').allInnerTexts();
+   assert.deepEqual(bullets,[
+    data.blocks[0].title,data.blocks[1].title,data.blocks[7].title,data.blocks[3].title
+   ],'summary repeats existing sourced findings without new financial claims');
+   assert.equal(await page.locator('#analysis .key-points h2').innerText(),'Key points');
    assert.equal(await page.locator('.glance-heading').innerText(),'At a glance');
+   assert.equal(await page.locator('#analysis .key-points').evaluate(n=>
+    !!(n.compareDocumentPosition(n.parentElement.querySelector('.glance-heading'))&Node.DOCUMENT_POSITION_FOLLOWING)),true,
+    'summary is above the original unchanged analysis');
+   assert.equal(requests.length,0,'quick summary needs no extra paid AI request');
    assert.equal(await page.locator('.metric-grid .metric').count(),1);
    assert.equal(await page.locator('.analysis-lead').count(),1,
     'source-cited executive judgment is prominent');
@@ -237,6 +246,9 @@ module.exports=(async()=>{
     'a new cached report replaces the old; no transcript or stacked duplicate results');
    assert.equal(await page.locator('.insight-card').count(),1);
    assert.equal(await page.locator('.insight-graphic').count(),1);
+   assert.deepEqual(await page.locator('#analysis .key-points li').allInnerTexts(),[
+    'Coverage caveat','Independent balance sensitivity'
+   ],'summary works with sparse saved reports without inventing findings');
    assert.match(await page.locator('.quality-note').innerText(),/specific questions that still need checking/,
     'a genuinely unresolved reviewer question stays visible without a generic alarm');
    assert.doesNotMatch(await page.locator('.quality-note').innerText(),/Limited analysis:/,
@@ -273,6 +285,8 @@ module.exports=(async()=>{
     'expanded QA findings do not execute untrusted HTML');
    assert.equal(await page.locator('#analysis .analysis-report').count(),1,
     'ordinary analysis remains separate from QA/QC');
+   assert.equal(await page.locator('#qaqc-analysis .key-points').count(),0,
+    'the separate QA/QC report is unchanged');
    assert.equal(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+2),true,
     'analysis fits narrow mobile width');
    assert.deepEqual(errors,[],name+' AI analysis should not throw');
