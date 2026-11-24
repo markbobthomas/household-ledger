@@ -71,6 +71,7 @@ module.exports=(async()=>{
     document.getElementById('check').click();
    },csv);
    await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Matches checked'));
+   await page.locator('#preview details summary').click();
    assert.match(await page.locator('#details').innerText(),/Amazon: Laundry detergent/);
    assert.match(await page.locator('#details').innerText(),/Possible Amazon: Coffee beans/);
    assert.match(await page.locator('#stats').innerText(),/Possible item Notes/);
