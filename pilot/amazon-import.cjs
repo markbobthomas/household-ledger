@@ -53,8 +53,8 @@ function extractCSV(text){
   const qty=Number(col(row,'quantity','quantity ordered')||1);
   if(!Number.isFinite(qty)||qty<1||qty>1000)continue;
   const itemTotal=usdCents(col(row,'item total','item total amount','item price total','item charged','item total charged'));
-  const subtotal=usdCents(col(row,'item subtotal','item subtotal amount','item subtotal price','item price','purchase price'));
-  const unit=usdCents(col(row,'unit price','price per unit'));
+  const subtotal=usdCents(col(row,'item subtotal','item subtotal amount','item subtotal price'));
+  const unit=usdCents(col(row,'unit price','price per unit','item price','purchase price'));
   const tax=usdCents(col(row,'item subtotal tax','item tax','tax charged'));
   let cents=itemTotal!==null?itemTotal:subtotal!==null?subtotal+(tax||0):unit!==null?Math.round(unit*qty)+(tax||0):null;
   if(!Number.isSafeInteger(cents)||cents<=0)continue;
