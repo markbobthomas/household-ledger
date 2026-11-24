@@ -12,7 +12,8 @@ const READ_TOOL={type:'function',function:{
  name:'read_financial_dataset',
  description:'Read the actual sanitized Ledger financial dataset, not a preselected summary. Pick any section and page through all records. Every returned row has a source evidence ID. The manifest reports the exact total record count and offsets; no bank data may be changed.',
  parameters:{type:'object',additionalProperties:false,required:['section','offset','limit'],properties:{
- section:{type:'string',enum:['history','future','balances','cards','indices','evidence']},
+ section:{type:'string',enum:['history','future','balances','cards','indices','evidence',
+  'accounts','savedDecisions','reconciliation','bankSync']},
  offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:200}
  }}}};
 function createDataset(context){
@@ -20,7 +21,11 @@ function createDataset(context){
   !Array.isArray(context.facts)||!(context.privateIds instanceof Map))
   throw Error('Missing canonical financial data');
  const alias=id=>context.privateIds.get(String(id))||'unknown-account';
- const sections={history:[],future:[],balances:[],cards:[],indices:[],evidence:[]};
+ const sections={history:[],future:[],balances:[],cards:[],indices:[],evidence:[],
+  accounts:[],savedDecisions:[],reconciliation:[],bankSync:[]};
+ const full=context.reportEvidence?.format==='ledger-manual-analysis-export'?
+  context.reportEvidence:null;
+ const transactionExtras=new Map((full?.actualTransactions||[]).map(row=>[row.id,row]));
  const facts=[];
  // Every model-visible row gets a stable, opaque evidence ID. Actual IDs and
  // account references never leave the existing private backend.
@@ -42,10 +47,422 @@ function createDataset(context){
     {accountingKind:row.accountingKind}:{}),
    ...( ['matched','unmatched','ambiguous','needs-review','confirmed'].includes(row.reconciliationStatus)?
     {reconciliationStatus:row.reconciliationStatus}:{})};
+  const fullRow=transactionExtras.get('dataset-history-'+(sections.history.length+1));
+  if(fullRow)for(const key of ['bankDescription','cashDirection','categoryMethod'])
+   if(typeof fullRow[key]==='string')fields[key]=safe(fullRow[key]);
   add('history',fields,
-   accountId+' '+row.date+' '+type+' $'+amount.toFixed(2)+' '+merchant+
+   accountId+' '+row.date+' '+type+' 
+ }
+ for(const row of [...(context.source.projection.events||[])]
+  .filter(x=>x&&date(x.date)&&finite(x.amount)).sort((a,b)=>a.date.localeCompare(b.date))){
+  const accountId=alias(row.accountId),amount=money(row.amount),
+   merchant=safe(row.merchant),kind=safe(row.kind||'event'),
+   transfer=!!row.transferGroupId,recurring=!!(row.recurringRuleId||row.seriesKey||row.cadence);
+  add('future',{accountId,date:row.date,amount,merchant,kind,transfer,recurring},
+   accountId+' '+row.date+' projected '+kind+' $'+amount.toFixed(2)+' '+merchant+
+   (recurring?'; scheduled recurrence':'')+(transfer?'; linked transfer leg':''));
+ }
+ for(const account of context.source.projection.accounts||[]){
+  const accountId=alias(account.id);
+  for(const row of account.series||[]){
+   if(!row||!date(row.date)||!finite(row.balance))continue;
+   const balance=money(row.balance),income=finite(row.income)?money(row.income):0,
+    outflow=finite(row.outflow)?money(row.outflow):0;
+   add('balances',{accountId,date:row.date,balance,income,outflow},
+    accountId+' '+row.date+' projected balance $'+balance.toFixed(2)+
+    '; scheduled inflows $'+income.toFixed(2)+'; outflows $'+outflow.toFixed(2));
+  }
+ }
+ for(const row of context.source.payments?.statements||[]){
+  const card=alias(row.cardId),funding=alias(row.fromAccountId),
+   dueDate=date(row.dueDate)?row.dueDate:null,
+   periodStart=date(row.periodStart)?row.periodStart:null,
+   periodEnd=date(row.periodEnd)?row.periodEnd:null,
+   withdrawalDate=date(row.withdrawalDate)?row.withdrawalDate:null,
+   amount=finite(row.amount)?money(row.amount):null,
+   statementBalance=finite(row.statementBalance)?money(row.statementBalance):null;
+  add('cards',{card,funding,dueDate,periodStart,periodEnd,withdrawalDate,amount,
+   statementBalance,autopay:!!row.autopayEnabled,alreadyPaid:!!row.alreadyPaid,
+   estimated:!!row.estimated,pendingReserved:!!row.pendingReserved,
+   actualPaymentDate:date(row.actualPaymentDate)?row.actualPaymentDate:null,
+   actualPaymentAmount:finite(row.actualPaymentAmount)?money(row.actualPaymentAmount):null,
+   ...(row.estimatedPaymentLimited?{estimatedPaymentLimited:true,
+    requestedPaymentAmount:finite(row.requestedPaymentAmount)?money(row.requestedPaymentAmount):null,
+    modeledPaymentLimit:finite(row.modeledPaymentLimit)?money(row.modeledPaymentLimit):null}:{}),
+   ...(row.statementReconciliation&&typeof row.statementReconciliation==='object'?{
+    statementReconciliation:{
+     status:safe(row.statementReconciliation.status),
+     source:safe(row.statementReconciliation.source),
+     difference:finite(row.statementReconciliation.difference)?money(row.statementReconciliation.difference):null
+    }}:{})},
+  card+' statement period '+(periodStart||'unknown')+' to '+(periodEnd||'unknown')+
+   ', due '+(dueDate||'unknown')+'; withdrawal '+(withdrawalDate||'unknown')+
+   ', amount '+(amount===null?'unknown':'$'+amount.toFixed(2))+
+   ', statement '+(statementBalance===null?'unknown':'$'+statementBalance.toFixed(2))+
+   ', funding '+funding+'; autopay '+!!row.autopayEnabled+
+   ', paid '+!!row.alreadyPaid+', estimated '+!!row.estimated);
+ }
+ // Build a neutral navigation index over ALL accessible records. The AI
+ // chooses what is interesting; these are standard data pivots, not diagnoses
+ // or suggested findings. Counts and totals stay tied to source evidence.
+ const grouped=new Map();
+ const group=(family,period,accountId,type,label,value)=>{
+  const key=JSON.stringify([family,period,accountId,type,label]);
+  const row=grouped.get(key)||{family,period,accountId,type,label,count:0,total:0};
+  row.count++;row.total+=Math.abs(value);grouped.set(key,row);
+ };
+ for(const row of sections.history){
+  const month=row.date.slice(0,7),kind=row.type;
+  group('monthly-flow',month,row.accountId,kind,'All records',row.amount);
+  group('merchant',null,null,kind,row.merchant,row.amount);
+  group('category',null,null,kind,row.category,row.amount);
+  group('merchant-month',month,null,kind,row.merchant,row.amount);
+  group('category-month',month,null,kind,row.category,row.amount);
+ }
+ for(const row of sections.future){
+  group('scheduled-month',row.date.slice(0,7),row.accountId,row.kind,
+   'Canonical projected event legs',row.amount);
+ }
+ for(const row of sections.cards){
+  if(finite(row.amount)&&row.dueDate)
+   group('card-obligations-month',row.dueDate.slice(0,7),row.funding,
+    row.estimated?'estimated':'recorded','Card statements',row.amount);
+ }
+ // Order within each dimension by absolute magnitude and interleave families
+ // so no particular analysis topic dominates the initial evidence.
+ const byFamily=new Map();
+ for(const row of grouped.values()){
+  row.total=money(row.total);
+  if(!byFamily.has(row.family))byFamily.set(row.family,[]);
+  byFamily.get(row.family).push(row);
+ }
+ for(const family of byFamily.keys())
+  byFamily.get(family).sort((a,b)=>b.total-a.total||
+   String(b.period||'').localeCompare(String(a.period||'')));
+ const families=[...byFamily.keys()],positions=new Map(families.map(k=>[k,0]));
+ let remaining=true;
+ while(remaining){
+  remaining=false;
+  for(const family of families){
+   const offset=positions.get(family),row=byFamily.get(family)[offset];
+   if(!row)continue;
+   remaining=true;positions.set(family,offset+1);
+   const text='Source index '+row.family+'; period '+(row.period||'all available')+
+    '; '+row.accountId+'; transaction kind '+row.type+'; '+
+    row.label+'; '+row.count+' normalized records; gross absolute amount $'+
+    row.total.toFixed(2)+'. Not net household spending or adjusted for transfers.';
+   add('indices',row,text);
+  }
+ }
+ for(const f of context.facts){
+  if(f?.id&&typeof f.text==='string')
+   sections.evidence.push({id:f.id,kind:safe(f.kind),text:f.text.slice(0,340)});
+ }
+ // Share exactly the approved manual-export source fields, including saved
+ // decisions, reconciliation review and bank sync. All supplementary fields
+ // were scrubbed and aliased by analysis-export.cjs, NOT arbitrary state.
+ if(full){
+  const describe=(group,item)=>{
+   const parts=[];
+   const walk=(value,path,depth)=>{
+    if(parts.length>=80||depth>3||value===undefined||value===null)return;
+    if(Array.isArray(value)){for(const [i,v] of value.slice(0,16).entries())
+     walk(v,path+'['+i+']',depth+1);return}
+    if(typeof value==='object'){for(const [k,v] of Object.entries(value).slice(0,35))
+     walk(v,path?path+'.'+k:k,depth+1);return}
+    const field=path.split('.').at(-1);
+    const formatted=typeof value==='number'&&Number.isFinite(value)&&
+     /amount|balance|difference|target|threshold|average|outflow|gross|expense|refund/i.test(field)?
+      '
+ function page(section,offset=0,limit=100){
+  if(!Object.hasOwn(sections,section)||!Number.isInteger(offset)||offset<0||
+   !Number.isInteger(limit)||limit<1||limit>200)
+   return {error:'Invalid dataset page request'};
+  const rows=sections[section].slice(offset,offset+limit);
+  return {section,offset,returned:rows.length,total:sections[section].length,
+   hasMore:offset+rows.length<sections[section].length,
+   nextOffset:offset+rows.length,rows};
+ }
+ function initial(maxChars=160000){
+  // Give the model a genuine broad cross-section of *records* rather than
+  // preselecting findings. Remaining records are all available through pages.
+  const orders=['indices','savedDecisions','reconciliation','accounts',
+   'history','future','balances','cards','bankSync','evidence'];
+  const cursors=Object.fromEntries(orders.map(k=>[k,0]));
+  const records=Object.fromEntries(orders.map(k=>[k,[]]));
+  let remaining=Math.max(3000,maxChars);
+  let more=true;
+  while(more&&remaining>1200){
+   more=false;
+   for(const section of orders){
+    const index=cursors[section],row=sections[section][index];
+    if(!row)continue;
+    const size=JSON.stringify(row).length+20;
+    if(size>remaining)continue;
+    records[section].push(row);cursors[section]++;remaining-=size;
+    more=true;
+   }
+  }
+  return {source:'Private Ledger sanitized financial data',
+   asOf:context.asOf,accounts:context.accounts,primary:context.primary,
+   coverage:context.scope,manifest:{counts,columns:{
+    history:['accountId','date','amount','merchant','description','category','type','pending'],
+    future:['accountId','date','amount','merchant','kind','transfer','recurring'],
+    balances:['accountId','date','balance','income','outflow'],
+    cards:['card','funding','dueDate','periodStart','periodEnd','withdrawalDate','amount',
+     'statementBalance','autopay','alreadyPaid','estimated','pendingReserved'],
+    indices:['family','period','accountId','type','label','count','total'],
+    evidence:['kind','text'],
+    accounts:['id','type','opening','subtype','currency'],
+    savedDecisions:['group','id','accountId','merchant','amount','frequency','category'],
+    reconciliation:['group','date','accountId','merchant','amount','status','reason'],
+    bankSync:['group','lastAttemptOutcome','lastSuccessfulBankSync']
+   },initialIncluded:cursors,
+   note:'All sources, including complete manual-export decisions and reconciliation evidence, can be paged. Historic rows are newest first; indices contain gross absolute totals, not net household spending. Request independent calculations before concluding. All account and transaction references use local aliases; raw provider IDs and credentials are excluded.'},
+   records};
+ }
+ return {manifest:counts,page,initial:initial(),facts};
+}
+module.exports={READ_TOOL,createDataset};
++amount.toFixed(2)+' '+merchant+
    (description?'; original bank description '+description:'')+
-   '; category '+category+(row.pending?'; pending':''));
+   (fields.bankDescription?'; bank narrative '+fields.bankDescription:'')+
+   '; category '+category+(row.pending?'; pending':'')+
+   (fields.accountingKind?'; accounting kind '+fields.accountingKind:'')+
+   (fields.reconciliationStatus?'; reconciliation '+fields.reconciliationStatus:''));
+ }
+ for(const row of [...(context.source.projection.events||[])]
+  .filter(x=>x&&date(x.date)&&finite(x.amount)).sort((a,b)=>a.date.localeCompare(b.date))){
+  const accountId=alias(row.accountId),amount=money(row.amount),
+   merchant=safe(row.merchant),kind=safe(row.kind||'event'),
+   transfer=!!row.transferGroupId,recurring=!!(row.recurringRuleId||row.seriesKey||row.cadence);
+  add('future',{accountId,date:row.date,amount,merchant,kind,transfer,recurring},
+   accountId+' '+row.date+' projected '+kind+' $'+amount.toFixed(2)+' '+merchant+
+   (recurring?'; scheduled recurrence':'')+(transfer?'; linked transfer leg':''));
+ }
+ for(const account of context.source.projection.accounts||[]){
+  const accountId=alias(account.id);
+  for(const row of account.series||[]){
+   if(!row||!date(row.date)||!finite(row.balance))continue;
+   const balance=money(row.balance),income=finite(row.income)?money(row.income):0,
+    outflow=finite(row.outflow)?money(row.outflow):0;
+   add('balances',{accountId,date:row.date,balance,income,outflow},
+    accountId+' '+row.date+' projected balance $'+balance.toFixed(2)+
+    '; scheduled inflows $'+income.toFixed(2)+'; outflows $'+outflow.toFixed(2));
+  }
+ }
+ for(const row of context.source.payments?.statements||[]){
+  const card=alias(row.cardId),funding=alias(row.fromAccountId),
+   dueDate=date(row.dueDate)?row.dueDate:null,
+   periodStart=date(row.periodStart)?row.periodStart:null,
+   periodEnd=date(row.periodEnd)?row.periodEnd:null,
+   withdrawalDate=date(row.withdrawalDate)?row.withdrawalDate:null,
+   amount=finite(row.amount)?money(row.amount):null,
+   statementBalance=finite(row.statementBalance)?money(row.statementBalance):null;
+  add('cards',{card,funding,dueDate,periodStart,periodEnd,withdrawalDate,amount,
+   statementBalance,autopay:!!row.autopayEnabled,alreadyPaid:!!row.alreadyPaid,
+   estimated:!!row.estimated,pendingReserved:!!row.pendingReserved,
+   actualPaymentDate:date(row.actualPaymentDate)?row.actualPaymentDate:null,
+   actualPaymentAmount:finite(row.actualPaymentAmount)?money(row.actualPaymentAmount):null,
+   ...(row.estimatedPaymentLimited?{estimatedPaymentLimited:true,
+    requestedPaymentAmount:finite(row.requestedPaymentAmount)?money(row.requestedPaymentAmount):null,
+    modeledPaymentLimit:finite(row.modeledPaymentLimit)?money(row.modeledPaymentLimit):null}:{}),
+   ...(row.statementReconciliation&&typeof row.statementReconciliation==='object'?{
+    statementReconciliation:{
+     status:safe(row.statementReconciliation.status),
+     source:safe(row.statementReconciliation.source),
+     difference:finite(row.statementReconciliation.difference)?money(row.statementReconciliation.difference):null
+    }}:{})},
+  card+' statement period '+(periodStart||'unknown')+' to '+(periodEnd||'unknown')+
+   ', due '+(dueDate||'unknown')+'; withdrawal '+(withdrawalDate||'unknown')+
+   ', amount '+(amount===null?'unknown':'$'+amount.toFixed(2))+
+   ', statement '+(statementBalance===null?'unknown':'$'+statementBalance.toFixed(2))+
+   ', funding '+funding+'; autopay '+!!row.autopayEnabled+
+   ', paid '+!!row.alreadyPaid+', estimated '+!!row.estimated);
+ }
+ // Build a neutral navigation index over ALL accessible records. The AI
+ // chooses what is interesting; these are standard data pivots, not diagnoses
+ // or suggested findings. Counts and totals stay tied to source evidence.
+ const grouped=new Map();
+ const group=(family,period,accountId,type,label,value)=>{
+  const key=JSON.stringify([family,period,accountId,type,label]);
+  const row=grouped.get(key)||{family,period,accountId,type,label,count:0,total:0};
+  row.count++;row.total+=Math.abs(value);grouped.set(key,row);
+ };
+ for(const row of sections.history){
+  const month=row.date.slice(0,7),kind=row.type;
+  group('monthly-flow',month,row.accountId,kind,'All records',row.amount);
+  group('merchant',null,null,kind,row.merchant,row.amount);
+  group('category',null,null,kind,row.category,row.amount);
+  group('merchant-month',month,null,kind,row.merchant,row.amount);
+  group('category-month',month,null,kind,row.category,row.amount);
+ }
+ for(const row of sections.future){
+  group('scheduled-month',row.date.slice(0,7),row.accountId,row.kind,
+   'Canonical projected event legs',row.amount);
+ }
+ for(const row of sections.cards){
+  if(finite(row.amount)&&row.dueDate)
+   group('card-obligations-month',row.dueDate.slice(0,7),row.funding,
+    row.estimated?'estimated':'recorded','Card statements',row.amount);
+ }
+ // Order within each dimension by absolute magnitude and interleave families
+ // so no particular analysis topic dominates the initial evidence.
+ const byFamily=new Map();
+ for(const row of grouped.values()){
+  row.total=money(row.total);
+  if(!byFamily.has(row.family))byFamily.set(row.family,[]);
+  byFamily.get(row.family).push(row);
+ }
+ for(const family of byFamily.keys())
+  byFamily.get(family).sort((a,b)=>b.total-a.total||
+   String(b.period||'').localeCompare(String(a.period||'')));
+ const families=[...byFamily.keys()],positions=new Map(families.map(k=>[k,0]));
+ let remaining=true;
+ while(remaining){
+  remaining=false;
+  for(const family of families){
+   const offset=positions.get(family),row=byFamily.get(family)[offset];
+   if(!row)continue;
+   remaining=true;positions.set(family,offset+1);
+   const text='Source index '+row.family+'; period '+(row.period||'all available')+
+    '; '+row.accountId+'; transaction kind '+row.type+'; '+
+    row.label+'; '+row.count+' normalized records; gross absolute amount $'+
+    row.total.toFixed(2)+'. Not net household spending or adjusted for transfers.';
+   add('indices',row,text);
+  }
+ }
+ for(const f of context.facts){
+  if(f?.id&&typeof f.text==='string')
+   sections.evidence.push({id:f.id,kind:safe(f.kind),text:f.text.slice(0,340)});
+ }
+ const counts=Object.fromEntries(Object.entries(sections).map(([k,v])=>[k,v.length]));
+ function page(section,offset=0,limit=100){
+  if(!Object.hasOwn(sections,section)||!Number.isInteger(offset)||offset<0||
+   !Number.isInteger(limit)||limit<1||limit>200)
+   return {error:'Invalid dataset page request'};
+  const rows=sections[section].slice(offset,offset+limit);
+  return {section,offset,returned:rows.length,total:sections[section].length,
+   hasMore:offset+rows.length<sections[section].length,
+   nextOffset:offset+rows.length,rows};
+ }
+ function initial(maxChars=160000){
+  // Give the model a genuine broad cross-section of *records* rather than
+  // preselecting findings. Remaining records are all available through pages.
+  const orders=['indices','history','future','balances','cards','evidence'];
+  const cursors=Object.fromEntries(orders.map(k=>[k,0]));
+  const records=Object.fromEntries(orders.map(k=>[k,[]]));
+  let remaining=Math.max(3000,maxChars);
+  let more=true;
+  while(more&&remaining>1200){
+   more=false;
+   for(const section of orders){
+    const index=cursors[section],row=sections[section][index];
+    if(!row)continue;
+    const size=JSON.stringify(row).length+20;
+    if(size>remaining)continue;
+    records[section].push(row);cursors[section]++;remaining-=size;
+    more=true;
+   }
+  }
+  return {source:'Private Ledger sanitized financial data',
+   asOf:context.asOf,accounts:context.accounts,primary:context.primary,
+   coverage:context.scope,manifest:{counts,columns:{
+    history:['accountId','date','amount','merchant','description','category','type','pending'],
+    future:['accountId','date','amount','merchant','kind','transfer','recurring'],
+    balances:['accountId','date','balance','income','outflow'],
+    cards:['card','funding','dueDate','periodStart','periodEnd','withdrawalDate','amount',
+     'statementBalance','autopay','alreadyPaid','estimated','pendingReserved'],
+    indices:['family','period','accountId','type','label','count','total'],
+    evidence:['kind','text']
+   },initialIncluded:cursors,
+   note:'Initial records are the beginning of each independently ordered section. Page all remaining records with read_financial_dataset. Historical rows newest first; future events and balances earliest first. The index is an unbiased set of simple pivots over every eligible record, with gross absolute totals that must not be treated as net spending. These are normalized provider records, not raw bank credentials or original IDs.'},
+   records};
+ }
+ return {manifest:counts,page,initial:initial(),facts};
+}
+module.exports={READ_TOOL,createDataset};
++money(value).toFixed(2):
+      typeof value==='string'&&!date(value)?safe(value):String(value);
+    parts.push(path+' '+formatted);
+   };
+   walk(item,'',0);
+   return group+': '+parts.join('; ');
+  };
+  const extra=(section,group,record)=>{
+   const value=record&&typeof record==='object'&&!Array.isArray(record)?
+    record:{value:record};
+   add(section,{group,...value},describe(group,value));
+  };
+  for(const row of full.accounts||[])extra('accounts','accounts',row);
+  for(const [group,items] of Object.entries(full.savedDecisions||{})){
+   if(Array.isArray(items))for(const item of items)
+    extra('savedDecisions',group,item);
+   else if(items!==null&&items!==undefined)
+    extra('savedDecisions',group,items);
+  }
+  for(const [group,items] of Object.entries(full.reconciliationAndReview||{})){
+   if(Array.isArray(items))for(const item of items)
+    extra('reconciliation',group,item);
+   else if(items!==null&&items!==undefined)
+    extra('reconciliation',group,items);
+  }
+  extra('bankSync','bankSync',full.bankSync||{});
+  extra('bankSync','exportMetadata',{lastSuccessfulBankSync:full.lastSuccessfulBankSync,
+   asOf:full.asOf,coverage:full.coverage,counts:full.counts});
+ }
+ const counts=Object.fromEntries(Object.entries(sections).map(([k,v])=>[k,v.length]));
+ function page(section,offset=0,limit=100){
+  if(!Object.hasOwn(sections,section)||!Number.isInteger(offset)||offset<0||
+   !Number.isInteger(limit)||limit<1||limit>200)
+   return {error:'Invalid dataset page request'};
+  const rows=sections[section].slice(offset,offset+limit);
+  return {section,offset,returned:rows.length,total:sections[section].length,
+   hasMore:offset+rows.length<sections[section].length,
+   nextOffset:offset+rows.length,rows};
+ }
+ function initial(maxChars=160000){
+  // Give the model a genuine broad cross-section of *records* rather than
+  // preselecting findings. Remaining records are all available through pages.
+  const orders=['indices','history','future','balances','cards','evidence'];
+  const cursors=Object.fromEntries(orders.map(k=>[k,0]));
+  const records=Object.fromEntries(orders.map(k=>[k,[]]));
+  let remaining=Math.max(3000,maxChars);
+  let more=true;
+  while(more&&remaining>1200){
+   more=false;
+   for(const section of orders){
+    const index=cursors[section],row=sections[section][index];
+    if(!row)continue;
+    const size=JSON.stringify(row).length+20;
+    if(size>remaining)continue;
+    records[section].push(row);cursors[section]++;remaining-=size;
+    more=true;
+   }
+  }
+  return {source:'Private Ledger sanitized financial data',
+   asOf:context.asOf,accounts:context.accounts,primary:context.primary,
+   coverage:context.scope,manifest:{counts,columns:{
+    history:['accountId','date','amount','merchant','description','category','type','pending'],
+    future:['accountId','date','amount','merchant','kind','transfer','recurring'],
+    balances:['accountId','date','balance','income','outflow'],
+    cards:['card','funding','dueDate','periodStart','periodEnd','withdrawalDate','amount',
+     'statementBalance','autopay','alreadyPaid','estimated','pendingReserved'],
+    indices:['family','period','accountId','type','label','count','total'],
+    evidence:['kind','text']
+   },initialIncluded:cursors,
+   note:'Initial records are the beginning of each independently ordered section. Page all remaining records with read_financial_dataset. Historical rows newest first; future events and balances earliest first. The index is an unbiased set of simple pivots over every eligible record, with gross absolute totals that must not be treated as net spending. These are normalized provider records, not raw bank credentials or original IDs.'},
+   records};
+ }
+ return {manifest:counts,page,initial:initial(),facts};
+}
+module.exports={READ_TOOL,createDataset};
++amount.toFixed(2)+' '+merchant+
+   (description?'; original bank description '+description:'')+
+   (fields.bankDescription?'; bank narrative '+fields.bankDescription:'')+
+   '; category '+category+(row.pending?'; pending':'')+
+   (fields.accountingKind?'; accounting kind '+fields.accountingKind:'')+
+   (fields.reconciliationStatus?'; reconciliation '+fields.reconciliationStatus:''));
  }
  for(const row of [...(context.source.projection.events||[])]
   .filter(x=>x&&date(x.date)&&finite(x.amount)).sort((a,b)=>a.date.localeCompare(b.date))){
