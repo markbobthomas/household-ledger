@@ -48,7 +48,7 @@ function evidencePacket(context){
   safe(context.scope?.lastSync||'not established')+
   '. This is all-record LOCAL coverage, not all-record AI coverage.');
  for(const issue of (context.qaAudit.issues||[]).slice(0,12))
-  add('local-check',safe(issue.severity)+' '+safe(issue.title)+': '+safe(issue.detail).slice(0,260));
+  add('local-check',safe(issue.severity)+' '+safe(issue.title)+': '+String(issue.detail).slice(0,260));
  // Compute EVERY merchant/account group's history statistics locally.
  // Show categories and temporal variety, but never present a sample as exhaustive.
  const groups=new Map();
@@ -64,7 +64,7 @@ function evidencePacket(context){
  const candidates=[...groups.values()].sort((a,b)=>
   (b.cats.size-a.cats.size)*30+(b.months.size-a.months.size)*2+
   (b.rows.length-a.rows.length));
- for(const g of candidates.slice(0,42)){
+ for(const g of candidates.slice(0,24)){
   const rows=g.rows.sort(sort);
   add('posted-group',g.account+' '+g.merchant+': '+rows.length+' recorded transactions over '+
     g.months.size+' months; category labels '+[...g.cats].slice(0,6).join(', ')+
@@ -101,12 +101,12 @@ function evidencePacket(context){
    (first.recurringRuleId||first.seriesKey?'; recurring/series entry':''));
  }
  for(const s of (payments.statements||[]).slice(0,12))
-  add('card-statement',alias(s.cardId)+' due '+safe(s.dueDate)+
-   '; expected withdrawal '+safe(s.withdrawalDate)+
+  add('card-statement',alias(s.cardId)+' due '+String(s.dueDate||'unknown')+
+   '; expected withdrawal '+String(s.withdrawalDate||'unknown')+
    '; amount '+dollars(s.amount)+'; funding '+alias(s.fromAccountId)+
    '; paid '+Boolean(s.alreadyPaid)+'; estimated '+Boolean(s.estimated));
  for(const f of (context.facts||[]).filter(f=>f.kind==='qaqc-saved-decision').slice(0,24))
-  add('saved-decision',safe(f.text).slice(0,390));
+  add('saved-decision',String(f.text).slice(0,390));
  // Prioritize varied record groups over endless local flags. Bound request bytes
  // before an API call and disclose exactly how many excerpts made the cut.
  const evidence=items.slice(0,215);
@@ -187,8 +187,9 @@ async function analyzeQualityCheck({context,consent,apiKey,fetchImpl=fetch}){
  if(Array.isArray(parsed?.findings)){
   for(const f of parsed.findings.slice(0,12)){
    const ids=Array.isArray(f?.evidenceIds)?unique(f.evidenceIds).slice(0,6):[];
+   const selectedIds=new Set(packet.evidence.map(e=>e.id));
    const evidence=ids.map(id=>packet.byId.get(id));
-   if(!ids.length||evidence.some(e=>!e)||!['high','medium','low'].includes(f.severity)||
+   if(!ids.length||ids.some(id=>!selectedIds.has(id))||evidence.some(e=>!e)||!['high','medium','low'].includes(f.severity)||
       !verifyClaim(f.title,ids,packet.byId,110)||
       !verifyClaim(f.observation,ids,packet.byId,700)||
       !verifyClaim(f.action,ids,packet.byId,350))continue;
