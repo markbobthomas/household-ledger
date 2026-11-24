@@ -293,10 +293,14 @@ function reconcile(state){
   // Reconcile only earlier purchases on the SAME card and merchant.
   // A positive credit exceeding an original purchase (or its uncredited
   // remainder) is not proof of that merchant's refund.
-  const candidates=original&&creditCents>0?purchases.filter(p=>
+  const merchantPurchases=original&&creditCents>0?purchases.filter(p=>
    p.accountId===t.accountId&&cleanedRefundMerchant(p.merchant)===original&&
-   p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending&&
-   Math.round(Number(p.amount)*100)-(creditedCents.get(String(p.id))||0)>=creditCents):[];
+   p.date<=t.date&&days(p.date,t.date)<=120&&!p.pending):[];
+  const candidates=merchantPurchases.filter(p=>
+   Math.round(Number(p.amount)*100)-(creditedCents.get(String(p.id))||0)>=creditCents);
+  // Exhausting other purchases does NOT turn a repeated merchant into a
+  // single original purchase: partial credits still need independent proof.
+  const singlePurchase=merchantPurchases.length===1&&candidates.length===1;
   // Explicitly described returns and uniquely matched card merchant returns
   // remain supported. With multiple same-merchant purchases, also require
   // high-confidence bank category evidence and no card-payment counterpart.
@@ -307,14 +311,14 @@ function reconcile(state){
   const exact=candidates.filter(p=>days(p.date,t.date)<=35&&
    Math.abs(Number(p.amount)-Number(t.amount))<.011);
   const exactMatch=exact.length===1?exact[0]:null;
-  const evidenced=candidates.length>1&&supportedMerchantRefund(t,candidates);
-  if(candidates.length===1||exactMatch||evidenced){
+  const evidenced=merchantPurchases.length>1&&supportedMerchantRefund(t,candidates);
+  if(singlePurchase||exactMatch||evidenced){
    t.accountingKind='refund';
    t.classificationConfidence=exactMatch?'Unique same-amount merchant return':
     evidenced?'Bank category and matching merchant purchases':'Matched single merchant purchase';
    // Attribute a credit allowance only when ONE source purchase is known.
    // Multiple-purchase bank-supported returns do not invent allocation.
-   const uniqueSource=exactMatch||candidates.length===1?exactMatch||candidates[0]:null;
+   const uniqueSource=exactMatch||singlePurchase?exactMatch||candidates[0]:null;
    if(uniqueSource)creditedCents.set(String(uniqueSource.id),
     (creditedCents.get(String(uniqueSource.id))||0)+creditCents);
    const sourcePurchases=exactMatch?[exactMatch]:candidates;
@@ -328,7 +332,7 @@ function reconcile(state){
    const manual=state?.categoryOverrides?.[t.id];
    const invalid=['Transfer','Income','Savings'].includes(manual||t.category);
    const reviewed=!!manual&&!['Transfer','Income','Savings','Uncategorized'].includes(manual);
-   if(invalid||!exactMatch&&candidates.length>1&&
+   if(invalid||!exactMatch&&merchantPurchases.length>1&&
       (categories.length!==1||categories[0]==='Other')&&!reviewed)
     t.reconciliationStatus='needs-review';
   }
