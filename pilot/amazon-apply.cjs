@@ -51,11 +51,17 @@ function prepare(result,before={},context={}){
    ...before,
    predictions:{...(before.predictions||{}),transactionNotes:nextNotes},
    categoryOverrides:overrides,amazonAllocations:allocations
-  },context.categories||[]):{proposals:[],stats:{}};
+  },context.categories||[],{
+   replaceOther:context.replaceOther===true
+  }):{proposals:[],stats:{},review:[],skipped:[]};
  for(const candidate of noteAnalysis.proposals){
   const id=candidate.transactionId;
-  if(allocations[id]||(overrides[id]!==undefined&&overrides[id]!=='Uncategorized'))
-   continue;
+  // 'Other' may have been chosen manually. Only a separately opted-in
+  // saved-Notes action is allowed to replace that explicit choice.
+  const replaceOther=context.replaceOther===true&&candidate.replaceOther===true&&
+   overrides[id]==='Other';
+  if(allocations[id]||(overrides[id]!==undefined&&overrides[id]!=='Uncategorized'&&
+   !replaceOther))continue;
   overrides[id]=candidate.category;
   revisedCategories.add(id);
   noteCategories.add(id);
@@ -80,6 +86,9 @@ function prepare(result,before={},context={}){
    confidentCategories:[...revisedCategories].filter(id=>overrides[id]!=='Uncategorized').length,
    savedNoteCategories:noteCategories.size,
    savedNoteStats:noteAnalysis.stats,
+   otherCategoryReview:noteAnalysis.review||[],
+   savedNoteSkipped:noteAnalysis.skipped||[],
+   replaceOtherEnabled:context.replaceOther===true,
    likelyCategories:likelyCategories.size,
    exactCategories:[...revisedCategories].filter(id=>!likelyCategories.has(id)&&
     !noteCategories.has(id)&&

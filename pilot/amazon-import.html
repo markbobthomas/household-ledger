@@ -21,7 +21,9 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 <section class="panel">
 <h2>Categorize saved Amazon Notes</h2>
 <p>Already imported products? Review their saved item names and assign recognizable categories <strong>without uploading your ZIP again</strong>. Existing handwritten Notes and categories you chose remain unchanged.</p>
-<button type="button" id="notes-check" class="primary">Check saved item Notes</button>
+<div class="actions"><button type="button" id="notes-check" class="primary">Check saved item Notes</button></div>
+<label style="font-weight:400;margin:12px 0"><input id="include-other" type="checkbox">
+Also propose replacing existing <strong>Other</strong> category choices when an Amazon product is recognizable. These choices will only change after you review the preview and press Apply.</label>
 </section>
 <section class="panel">
 <h2>Upload Amazon order history</h2>
@@ -34,6 +36,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 </section>
 <section class="panel" id="preview" hidden>
 <h2>Preview</h2><div id="stats"></div>
+<p id="diagnosis" class="muted" role="status"></p>
 <p class="muted">Exact, unique purchase matches receive item Notes and confident categories. Very close date-and-amount suggestions may also get a broad category when every plausible product clearly belongs in the same category. Their Notes still begin <strong>“Possible Amazon:”</strong>, because the purchase itself is not proven. Ambiguous items spanning different categories and date-only guesses never set a category. You can also categorize the saved product Notes directly using the new button above, without uploading an archive. Existing personal Notes and manual categories are preserved. No bank transactions or balances are edited.</p>
 <details><summary>Show product Notes and category suggestions</summary><div id="details"></div></details>
 </section>
@@ -66,7 +69,8 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
      'X-Amazon-Filename':encodeURIComponent(payload.fileName),
      'X-Amazon-Dry-Run':dryRun?'1':'0'}:{}),
     ...(revision?{'X-Ledger-Revision':revision}:{})},
-   body:savedNotes?JSON.stringify({mode:'saved-notes',dryRun}):payload.file,
+   body:savedNotes?JSON.stringify({mode:'saved-notes',dryRun,
+    replaceOther:Boolean(payload.replaceOther)}):payload.file,
    cache:'no-store'});
   const type=response.headers.get('content-type')||'';
   if(!type.includes('application/json'))throw Error('Private Ledger server is unavailable. Reload and retry.');
@@ -88,6 +92,10 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
    ['From strong likely items (verify)',data.likelyCategories??0],
    ['Changes ready to save',data.ready],
    ['Saved item Notes found',data.savedNoteStats?.itemNotes??0],
+   ['Amazon charges without saved Notes',data.savedNoteStats?.missingNotes??0],
+   ['Recognizable product categories',data.savedNoteStats?.recognizable??0],
+   ['Recognizable, but saved as Other',data.savedNoteStats?.replaceableOther??0],
+   ['Protected existing specific categories',data.savedNoteStats?.protectedSpecific??0],
    ['Saved Notes with unknown products',data.savedNoteStats?.unrecognized??0],
    ['Mixed or conflicting products',data.savedNoteStats?.mixed??0],
    ['Date-only Notes (needs review)',data.savedNoteStats?.dateOnly??0],
@@ -96,7 +104,19 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
    ['Unrecognized item categories',data.needsReview??0],
    ['Ambiguous bank charges',data.ambiguousOrders]
   ];
-  $('stats').innerHTML=stats.map(([label,value])=>'<div class="row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>').join('');
+  $('stats').innerHTML=stats.map(([label,value])=>
+   '<div class="row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>').join('');
+  const n=data.savedNoteStats||{};
+  let diagnosis='';
+  if(n.itemNotes===0)diagnosis='No importer-written Amazon product Notes were found in saved Ledger preferences. If your previous ZIP preview found Notes, Apply that preview first.';
+  else if(!data.confidentCategories&&n.replaceableOther&&!data.replaceOtherEnabled)
+   diagnosis=n.replaceableOther+' recognizable product Note(s) have an existing Other category choice. To propose replacing them, select the option above, then Check saved item Notes again.';
+  else if(!data.confidentCategories&&n.protectedSpecific)
+   diagnosis='Recognizable products already have specific saved categories. Ledger preserves these choices. Remaining items may need manual review.';
+  else if(!data.confidentCategories)
+   diagnosis='No categories can safely be assigned from the available product text. The counts below distinguish unknown, incomplete, mixed and date-only descriptions.';
+  else diagnosis='Review each suggested category. No bank amount or saved Note will change.';
+  $('diagnosis').textContent=diagnosis;
   const confirmed=(data.examples||[]).map(x=>
    '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+'</strong> · '+esc(x.orderId)+
    '<span>'+esc(x.note||'')+'</span><span>'+esc((x.categories||[]).join(', '))+
@@ -110,19 +130,43 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
    '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+
    ' · '+esc(x.category)+'</strong><span>'+esc(x.note)+'</span>'+
    '<span>Category from saved product Note; existing Note unchanged</span></div>');
-  $('details').innerHTML=[...fromNotes,...confirmed,...possible].join('')||
-   '<p>No recognized product Notes ready for automatic categories.</p>';
+  const reasons={
+   'protected-other':'Recognizable item; stored category is Other (requires opt-in)',
+   'protected-specific':'Existing specific category preserved',
+   'date-only':'Purchase identity only matched by date',
+   'incomplete':'Product title shortened; additional items may be hidden',
+   'mixed':'Plausible items belong to different categories',
+   'unrecognized':'Product category not recognized',
+   'existing-item-allocation':'Existing item-level allocation preserved'
+  };
+  const skipped=[...(data.otherCategoryReview||[]),...(data.savedNoteSkipped||[])].map(x=>
+   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+
+   '</strong><span>'+esc(x.note||'')+'</span><span>'+
+   esc(reasons[x.reason]||x.reason)+
+   (x.suggestedCategory?' · Suggested '+esc(x.suggestedCategory):'')+
+   (x.existingCategory?' · Existing '+esc(x.existingCategory):'')+
+   '</span></div>');
+  $('details').innerHTML=[...fromNotes,...confirmed,...possible,...skipped].join('')||
+   '<p>No saved Amazon product descriptions available for category review.</p>';
   $('preview').hidden=false;
  }
  $('file').addEventListener('change',()=>{payload=null;revision='';ready=0;$('apply').disabled=true;$('preview').hidden=true;message('')});
+ $('include-other').addEventListener('change',()=>{
+  // The requested replacement scope must never change between a preview
+  // and Apply. Force a fresh server-side preview and revision.
+  payload=null;revision='';ready=0;
+  $('apply').disabled=true;$('preview').hidden=true;
+  message('Check saved item Notes again to review these category choices.');
+ });
  $('notes-check').addEventListener('click',async()=>{
-  payload={mode:'saved-notes'};revision='';ready=0;
+  payload={mode:'saved-notes',replaceOther:$('include-other').checked};
+  revision='';ready=0;
   setBusy(true);message('Checking saved Amazon product Notes…');
   try{
    const data=await request(true);
    show(data);ready=data.ready;
    message(ready?'Review the categories from existing Notes, then select Apply.':
-    'No safe categories to assign. The preview explains which Notes need review.');
+    'No category changes proposed. Review the explanation and skipped-reason counts.');
    $('apply').disabled=!ready;
   }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}

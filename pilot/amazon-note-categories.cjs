@@ -38,38 +38,83 @@ function categoryForNote(value,categories){
  if(new Set(outcomes).size!==1)return {status:'mixed'};
  return {status:'ready',category:outcomes[0],confidence:kind};
 }
-function analyze(transactions,adjustments={},categories=[]){
+// Import status must be reported separately from the user's explicit category
+// choice. Ledger stores all explicit choices as categoryOverrides, including
+// "Other"; it cannot infer why the user chose them or safely overwrite them.
+function analyze(transactions,adjustments={},categories=[],options={}){
  const notes=adjustments.predictions?.transactionNotes||{},
   overrides=adjustments.categoryOverrides||{},
-  allocations=adjustments.amazonAllocations||{};
- const stats={amazonCharges:0,itemNotes:0,alreadyCategorized:0,
-  eligibleNotes:0,unrecognized:0,mixed:0,dateOnly:0,
-  incomplete:0,notImported:0,alreadyAllocated:0},
-  proposals=[];
+  allocations=adjustments.amazonAllocations||{},
+  replaceOther=options.replaceOther===true;
+ const stats={amazonCharges:0,itemNotes:0,missingNotes:0,
+  unrecognized:0,mixed:0,dateOnly:0,incomplete:0,notImported:0,
+  alreadyCategorized:0,alreadyAllocated:0,
+  existingOther:0,existingSpecific:0,
+  recognizable:0,eligibleNotes:0,replaceableOther:0,
+  protectedSpecific:0};
+ const proposals=[],review=[],skipped=[];
  for(const t of Object.values(transactions||{})){
   if(!amazon(t))continue;
   stats.amazonCharges++;
   const note=notes[keyFor(t)];
-  if(typeof note!=='string'||!note.trim())continue;
+  if(typeof note!=='string'||!note.trim()){
+   stats.missingNotes++;
+   continue;
+  }
   const outcome=categoryForNote(note,categories);
-  if(outcome.status==='not-imported'){stats.notImported++;continue}
+  if(outcome.status==='not-imported'){
+   stats.notImported++;
+   continue;
+  }
   stats.itemNotes++;
-  if(overrides[t.id]!==undefined&&overrides[t.id]!=='Uncategorized'){
-   stats.alreadyCategorized++;continue;
+  const existing=overrides[t.id],hasExisting=
+   typeof existing==='string'&&existing.trim()&&existing!=='Uncategorized';
+  if(hasExisting){
+   stats.alreadyCategorized++;
+   if(existing==='Other')stats.existingOther++;
+   else stats.existingSpecific++;
   }
-  if(allocations[t.id]){stats.alreadyAllocated++;continue}
-  if(outcome.status==='date-only'){stats.dateOnly++;continue}
-  if(outcome.status==='incomplete'){stats.incomplete++;continue}
-  if(outcome.status==='mixed'||outcome.status==='ambiguous'){
-   stats.mixed++;continue;
+  const example={transactionId:t.id,date:t.date,
+   amountCents:Math.round(Number(t.amount)*100),note:note.slice(0,160),
+   existingCategory:hasExisting?existing:null,
+   suggestedCategory:outcome.status==='ready'?outcome.category:null,
+   reason:''};
+  if(allocations[t.id]){
+   stats.alreadyAllocated++;
+   example.reason='existing-item-allocation';
+  }else if(outcome.status==='date-only'){
+   stats.dateOnly++;example.reason='date-only';
+  }else if(outcome.status==='incomplete'){
+   stats.incomplete++;example.reason='incomplete';
+  }else if(outcome.status==='mixed'||outcome.status==='ambiguous'){
+   stats.mixed++;example.reason='mixed';
+  }else if(outcome.status!=='ready'){
+   stats.unrecognized++;example.reason='unrecognized';
+  }else{
+   stats.recognizable++;
+   if(hasExisting&&existing!=='Other'){
+    stats.protectedSpecific++;example.reason='protected-specific';
+   }else if(existing==='Other'){
+    stats.replaceableOther++;
+    if(!replaceOther)example.reason='protected-other';
+   }
+   if(!example.reason){
+    stats.eligibleNotes++;
+    proposals.push({transactionId:t.id,accountId:t.accountId,
+     date:t.date,amountCents:example.amountCents,
+     category:outcome.category,confidence:outcome.confidence,
+     note:example.note,replaceOther:existing==='Other'});
+    continue;
+   }
   }
-  if(outcome.status!=='ready'){stats.unrecognized++;continue}
-  stats.eligibleNotes++;
-  proposals.push({transactionId:t.id,accountId:t.accountId,
-   date:t.date,amountCents:Math.round(Number(t.amount)*100),
-   category:outcome.category,confidence:outcome.confidence,
-   note:note.slice(0,160)});
+  if(example.reason==='protected-other'){
+   // These are actual recognized item names, but the stored category
+   // was an explicit "Other" override. Only a separate opt-in may change it.
+   review.push(example);
+  }else if(skipped.length<35){
+   skipped.push(example);
+  }
  }
- return {proposals,stats};
+ return {proposals,stats,review:review.slice(0,35),skipped};
 }
 module.exports={categoryForNote,analyze};
