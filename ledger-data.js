@@ -215,6 +215,7 @@ function removeCategory(state,name){
 function migrate(input){
  const old=input&&typeof input==='object'?input:{};
  const categoryOverrides=old.categoryOverrides&&typeof old.categoryOverrides==='object'&&!Array.isArray(old.categoryOverrides)?copy(old.categoryOverrides):{};
+ const amazonAllocations=old.amazonAllocations&&typeof old.amazonAllocations==='object'&&!Array.isArray(old.amazonAllocations)?copy(old.amazonAllocations):{};
  const reviews=old.reviews&&typeof old.reviews==='object'&&!Array.isArray(old.reviews)?copy(old.reviews):{categoryConfirmed:{},predictionConfirmed:{}};
  reviews.categoryConfirmed=reviews.categoryConfirmed&&typeof reviews.categoryConfirmed==='object'?reviews.categoryConfirmed:{};
  reviews.predictionConfirmed=reviews.predictionConfirmed&&typeof reviews.predictionConfirmed==='object'?reviews.predictionConfirmed:{};
@@ -258,7 +259,7 @@ function migrate(input){
   }
   return record;
  });
- return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,predictions,reviews,learning,sync,customCategories:[]};
+ return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,amazonAllocations,predictions,reviews,learning,sync,customCategories:[]};
 }
 // Category learning never edits authoritative ledger rows. A learned rule can
 // automatically resolve an unclassified/low-confidence transaction only when
@@ -389,7 +390,20 @@ function records(state){
  const learned=state.learning?.categoryRules||{};
  const index=Object.keys(learned).length?categorySafetyIndex(state):null;
  const repeats=confirmedRepeatCategoryIndex(state);
- return Accounting.reconcile(state).transactions.map(t=>({...t,...resolution(state,t,index,repeats),originalCategory:t.category||'Other'}));
+ return Accounting.reconcile(state).transactions.map(t=>{
+  const imported=state.amazonAllocations?.[t.id],
+   lines=Array.isArray(imported?.lines)?imported.lines:null,
+   amount=Math.round(Number(t.amount)*100);
+  // Itemized categories allocate ONE posted bank purchase, not extra charges.
+  // Reject stale or malformed entries without altering bank-derived totals.
+  const valid=lines&&lines.length&&t.type==='expense'&&!t.pending&&
+   Number.isSafeInteger(amount)&&amount>0&&
+   lines.every(l=>typeof l.title==='string'&&typeof l.category==='string'&&
+    Number.isSafeInteger(l.cents)&&l.cents>0)&&
+   lines.reduce((n,l)=>n+l.cents,0)===amount&&imported.amountCents===amount;
+  return {...t,...resolution(state,t,index,repeats),originalCategory:t.category||'Other',
+   ...(valid?{amazonAllocation:imported}:{})};
+ });
 }
 // The same category registry and manual overrides serve Bank History and Review.
 // A category that only came from low-confidence provider/merchant evidence stays
@@ -776,6 +790,7 @@ function remapTransactionMetadata(adjustments,accountId,previous,id){
  };
  if(!previous||previous===id)return adjustments;
  move(adjustments.categoryOverrides,previous,id);
+ move(adjustments.amazonAllocations,previous,id);
  move(adjustments.reviews?.categoryConfirmed,previous,id);
  move(adjustments.reviews?.transactionKinds,previous,id);
  const p=adjustments.predictions;

@@ -908,7 +908,14 @@ function detailHtml(bundle,s){
      selectCategories.map(c=>'<option value="'+escapeHTML(c)+'"'+
       (c===assigned?' selected':'')+'>'+escapeHTML(categoryLabel(c))+'</option>').join('')+
     '</select><small data-actual-category-status role="status"></small></label>';
-  const linkedPlans=window.HouseholdPlannerTransactions.historicalScheduleMatches(
+  const amazonInfo=Array.isArray(resolved?.amazonAllocation?.lines)?
+    '<div class="panel mini-panel" data-amazon-item-allocation><strong>Amazon item categories</strong>'+
+     resolved.amazonAllocation.lines.map(line=>
+      '<div class="future-skip-line"><span>'+escapeHTML(line.title)+
+      ' · '+escapeHTML(categoryLabel(line.category))+'</span><strong>'+
+      cash(line.cents/100)+'</strong></div>').join('')+
+     '<small>These items share one bank charge. Selecting a new category replaces this item split.</small></div>':'';
+   const linkedPlans=window.HouseholdPlannerTransactions.historicalScheduleMatches(
    row,activeAccounts(s),state().predictions?.futureRecurringRules||[]);
   const linkedActions=linkedPlans.length?
    '<div class="transaction-related-plans"><strong>Related recurring plan'+(linkedPlans.length===1?'':'s')+'</strong>'+
@@ -923,7 +930,7 @@ function detailHtml(bundle,s){
    '<p class="transaction-detail-help">Bank amount and date are read-only. You can correct how an incoming credit is interpreted without changing the bank record. Future predictions are saved separately.</p>';
   return detailShell(row.merchant||'Bank transaction',
    'Bank history · '+cash(row.amount)+' · '+escapeHTML(dayLabel(row.date)),
-   summary+creditTypeEditor+categoryEditor+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
+   summary+creditTypeEditor+categoryEditor+amazonInfo+transactionNoteForm(bankNoteKey(transactionDetail.account,row.id))+
     linkedActions+(linkedPlans.length?'':recurringDraft?repeatingReviewForm(s):
      '<p class="transaction-detail-help">This bank transaction is read-only and cannot create a repeating plan.</p>'),
    'ACTUAL · BANK-RECORDED');
@@ -2107,20 +2114,34 @@ function historyInsights(rows,view,options={}){
    pendingCount=purchases.filter(r=>pendingBudgetCents(r,options.cardSettlementIds)!==0).length;
   const groups=new Map();
   for(const r of purchases){
-   const category=String(r.category||'Other'),
-    posted=categorySpendingCents(r,options.cardSettlementIds),
-    provisional=pendingBudgetCents(r,options.cardSettlementIds);
-   const g=groups.get(category)||{name:category,cents:0,count:0,pendingCents:0,pendingCount:0,
-    expectedCents:0,expectedCount:0,items:[]};
-   g.cents+=posted;g.pendingCents+=provisional;
-   if(posted)g.count++;
-   if(provisional)g.pendingCount++;
-   if(posted||provisional)g.items.push({date:r.date,merchant:historyMerchantName(r),
-    cents:posted+provisional,source:provisional?'pending':'spent',id:r.id,
-    accountId:window.HouseholdPlannerHistory.accountOf(r,activeAccounts(snapshot()))});
-   groups.set(category,g);
+   const posted=categorySpendingCents(r,options.cardSettlementIds),
+    provisional=pendingBudgetCents(r,options.cardSettlementIds),
+    lines=r.amazonAllocation?.lines,
+    valid=posted>0&&Array.isArray(lines)&&lines.length&&
+     lines.every(line=>Number.isSafeInteger(line.cents)&&line.cents>0&&
+      typeof line.category==='string')&&
+     lines.reduce((sum,line)=>sum+line.cents,0)===posted,
+    portions=new Map();
+   if(valid)for(const line of lines){
+    const part=portions.get(line.category)||{cents:0,titles:[]};
+    part.cents+=line.cents;part.titles.push(line.title);
+    portions.set(line.category,part);
+   }
+   else portions.set(String(r.category||'Other'),{cents:posted,titles:[]});
+   for(const [category,part] of portions){
+    const g=groups.get(category)||{name:category,cents:0,count:0,pendingCents:0,pendingCount:0,
+     expectedCents:0,expectedCount:0,items:[]};
+    g.cents+=part.cents;g.pendingCents+=provisional;
+    if(part.cents)g.count++;
+    if(provisional)g.pendingCount++;
+    if(part.cents||provisional)g.items.push({date:r.date,
+     merchant:historyMerchantName(r)+(part.titles.length?' · '+part.titles.join('; ').slice(0,135):''),
+     cents:part.cents+provisional,source:provisional?'pending':'spent',id:r.id,
+     accountId:window.HouseholdPlannerHistory.accountOf(r,activeAccounts(snapshot()))});
+    groups.set(category,g);
+   }
   }
-  for(const r of predictions){
+    for(const r of predictions){
    const g=groups.get(r.name)||{name:r.name,cents:0,count:0,expectedCents:0,expectedCount:0,items:[]};
    g.expectedCents+=r.cents;g.expectedCount++;
    g.items.push({date:r.date,merchant:r.merchant||'Expected expense',
@@ -2451,10 +2472,19 @@ function financialRecapPage(bundle,s){
  for(const row of current){
   const cents=categorySpendingCents(row,settlements);
   if(!cents)continue;
-  const category=model.canonicalCategory(state(),row.category)||'Other';
-  spendCategories.set(category,(spendCategories.get(category)||0)+cents);
+  const lines=row.amazonAllocation?.lines,
+   valid=cents>0&&Array.isArray(lines)&&lines.length&&
+    lines.reduce((n,l)=>n+Number(l.cents||0),0)===cents;
+  if(valid)for(const line of lines){
+   const category=model.canonicalCategory(state(),line.category)||'Uncategorized';
+   spendCategories.set(category,(spendCategories.get(category)||0)+line.cents);
+  }
+  else{
+   const category=model.canonicalCategory(state(),row.category)||'Other';
+   spendCategories.set(category,(spendCategories.get(category)||0)+cents);
+  }
  }
- const topSpending=[...spendCategories].filter(([,cents])=>cents>0)
+  const topSpending=[...spendCategories].filter(([,cents])=>cents>0)
   .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,5),
   lastDay=shiftDay(asOf,30),
   scopedBills=forecastBills.filter(r=>historyAccount==='all'||String(r.accountId||r.fromAccountId)===historyAccount),
@@ -3459,7 +3489,12 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
     escapeHTML(warningThreshold(state().predictions))+'" required></label>'+
     '<button class="btn primary" type="submit">Save</button></form></section>'+
-  autopayPanel(s,bundle)+connectionPanel(s,bundle)+
+  (live()?'<section class="panel" aria-label="Amazon order import">'+
+    '<div class="section-title"><h2>Amazon purchases</h2></div>'+
+    '<p>Categorize Amazon charges from your downloaded order history. '+
+    'Matches never create duplicate bank spending.</p>'+
+    '<a class="btn primary" href="/amazon-import">Import Amazon orders</a></section>':'')+
+   autopayPanel(s,bundle)+connectionPanel(s,bundle)+
   '<details class="panel ledger-advanced-settings"><summary>Advanced settings and diagnostics</summary>'+
   (state().predictions?.recurringForecastMode!=='approved-only'&&
    Object.keys(state().predictions?.futureRecurrenceExclusions||{}).length?

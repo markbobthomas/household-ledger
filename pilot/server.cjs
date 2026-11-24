@@ -389,7 +389,7 @@ async function sync(){
    }
    for(const t of page.removed){
     if(!next[t.transaction_id]||ids.has(next[t.transaction_id].accountId)||!next[t.transaction_id].accountId){
-     delete next[t.transaction_id];delete overrides[t.transaction_id];
+     delete next[t.transaction_id];delete overrides[t.transaction_id];delete adjustments.amazonAllocations?.[t.transaction_id];
     }
    }
   }
@@ -397,7 +397,7 @@ async function sync(){
  const legacyId=state.accounts.length===1?state.accounts[0].id:null;
  for(const t of Object.values(next))if(!t.accountId&&legacyId)t.accountId=legacyId;
  const selectedIds=new Set(stages.flatMap(s=>s.accounts.map(a=>a.id)));
- for(const [id,t] of Object.entries(next))if(t.accountId&&!selectedIds.has(t.accountId)){delete next[id];delete overrides[id]}
+ for(const [id,t] of Object.entries(next))if(t.accountId&&!selectedIds.has(t.accountId)){delete next[id];delete overrides[id];delete adjustments.amazonAllocations?.[id]}
  const committed={...state,transactions:next,accounts:stages.flatMap(s=>s.accounts),
   transactionReplacements:replacements,ledgerAdjustments:adjustments,
   items:state.items.map(i=>{
@@ -549,7 +549,7 @@ async function start(port=Number(env.PORT||8788)){
   const respond=(status,data)=>{const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
     if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
     if(req.method==='POST'&&status>=200&&status<300&&
-       (requestPath.startsWith('/api/ledger/')&&requestPath!=='/api/ledger/forecasts'||
+       (requestPath.startsWith('/api/ledger/')&&!['/api/ledger/forecasts','/api/ledger/amazon-import'].includes(requestPath)||
         ['/api/sync','/api/exchange','/api/disconnect'].includes(requestPath))){
      invalidatePrepared();
      schedulePrepared();
@@ -651,6 +651,14 @@ async function start(port=Number(env.PORT||8788)){
     'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"});
    return res.end(page);
   }
+  if(req.method==='GET'&&requestPath==='/amazon-import'){
+   let page;try{page=await fs.readFile(path.join(__dirname,'amazon-import.html'),'utf8')}
+   catch{return respond(503,{error:'Amazon import screen unavailable'})}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
+    'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
+    'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
+   return res.end(page);
+  }
   if(req.method==='GET'&&requestPath==='/bank-connect'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://cdn.plaid.com; style-src 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data:; form-action 'self'"});return res.end(await html())}
   const staticPath=requestPath.slice(1);
   const allowed=/^(?:index[.]html|modern[.]css|planner[.]css|(?:planner|demo-data|forecast|forecast-ledger|accounting|categorization|ledger-data|account-forecast|payment-obligations|planner-intelligence|planner-backtest|planner-transactions|planner-history|planner-recurrence|planner-core|planner-summary|planner-coverage|bank-feed|cashflow|recurring|reviews)[.]js|sandbox[/]sandbox-ui[.]js|pilot[/]data-source[.]js|manifest[.]webmanifest|ledger-icon[.]png)$/;
@@ -742,7 +750,7 @@ async function start(port=Number(env.PORT||8788)){
  // Unknown browser navigation should be a 404, not a misleading bank-action error.
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1')return respond(403,{error:'Action header required'});
-  let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>524288)return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
+  let body={};try{let n=0,chunks=[];for await(const chunk of req){n+=chunk.length;if(n>(requestPath==='/api/ledger/amazon-import'?9*1024*1024:524288))return respond(413,{error:'Adjustments too large'});chunks.push(chunk)}body=JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{return respond(400,{error:'Invalid JSON'})}
   if(requestPath==='/api/ai/settings'){
    // Backward-compatible opt-out: old clients cannot re-enable automatic calls.
    if(!body||typeof body!=='object'||Array.isArray(body)||
@@ -924,10 +932,55 @@ async function start(port=Number(env.PORT||8788)){
    if(accountRemovalBusy&&[
     '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
      '/api/ledger/category-rule','/api/ledger/categories/delete','/api/ledger/categories/rename',
-    '/api/ledger/credit-kind','/api/exchange',
+    '/api/ledger/credit-kind','/api/ledger/amazon-import','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
+   if(requestPath==='/api/ledger/amazon-import'){
+    if(!state.items.length)return respond(409,{error:'Connect a bank account before importing Amazon orders'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+       Object.keys(body).sort().join(',')!=='base64,dryRun,fileName'||
+       typeof body.fileName!=='string'||typeof body.base64!=='string'||
+       typeof body.dryRun!=='boolean')
+     return respond(400,{error:'Select a valid Amazon order CSV or ZIP'});
+    const amazon=require('./amazon-import.cjs');
+    let result;
+    try{
+     const items=amazon.readFile(body.fileName,body.base64);
+     result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
+      savedCategoryChoices(state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories));
+    }catch(error){return respond(400,{error:String(error.message||'Invalid Amazon export').slice(0,150)})}
+    const before=state.ledgerAdjustments||{},
+     allocations={...(before.amazonAllocations||{})},overrides={...(before.categoryOverrides||{})},
+     changed=result.matches.filter(match=>{
+      const prior=allocations[match.transactionId];
+      return !prior||prior.orderId!==match.orderId||
+       JSON.stringify(prior.lines)!==JSON.stringify(match.lines);
+     });
+    const report={importedItems:result.importedItems,orderGroups:result.orderGroups,
+     matches:result.matches.length,ready:changed.length,
+     needsReview:changed.filter(m=>m.needsReview).length,
+     alreadyImported:result.matches.length-changed.length,
+     ambiguousOrders:result.ambiguousOrders,unmatchedOrders:result.unmatchedOrders,
+     examples:changed.slice(0,35).map(m=>({date:m.date,amountCents:m.amountCents,
+      orderId:m.orderId,categories:m.categories,needsReview:m.needsReview})),
+     applied:0};
+    if(body.dryRun||!changed.length)return respond(200,report);
+    for(const proposal of changed){
+     const id=proposal.transactionId,selected=proposal.categories.find(c=>c!=='Uncategorized')||'Uncategorized';
+     // No bank amount, transaction, or forecast is created or rewritten.
+     // A mixed Amazon purchase is itemized for reporting. The base category
+     // remains a display fallback for screens without an item-level breakdown.
+     overrides[id]=proposal.needsReview?'Uncategorized':selected;
+     allocations[id]={orderId:proposal.orderId,amountCents:proposal.amountCents,
+      lines:proposal.lines};
+    }
+    state.ledgerAdjustments={...before,categoryOverrides:overrides,amazonAllocations:allocations};
+    try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
+    report.applied=changed.length;
+    invalidatePrepared();schedulePrepared();
+    return respond(200,report);
+   }
    if(requestPath==='/api/ledger/categories/rename'){
     if(!state.items.length)return respond(409,{error:'No bank account connected'});
     if(!body||typeof body!=='object'||Array.isArray(body)||
@@ -953,7 +1006,9 @@ async function start(port=Number(env.PORT||8788)){
     try{
      await saveForecast(decision.predictions);
      state.ledgerAdjustments={...before,predictions:decision.predictions,
-      categoryOverrides:decision.categoryOverrides,learning:decision.learning};
+      categoryOverrides:decision.categoryOverrides,learning:decision.learning,
+       amazonAllocations:Object.fromEntries(Object.entries(before.amazonAllocations||{}).map(([id,a])=>
+        [id,{...a,lines:(a.lines||[]).map(l=>({...l,category:l.category===renamed.from?renamed.to:l.category}))}]))};
      await save();
     }catch(error){
      state.ledgerAdjustments=before;
@@ -986,7 +1041,9 @@ async function start(port=Number(env.PORT||8788)){
     try{
      await saveForecast(decision.predictions);
      state.ledgerAdjustments={...before,predictions:decision.predictions,
-      categoryOverrides:decision.categoryOverrides,learning:decision.learning};
+      categoryOverrides:decision.categoryOverrides,learning:decision.learning,
+       amazonAllocations:Object.fromEntries(Object.entries(before.amazonAllocations||{}).map(([id,a])=>
+        [id,{...a,lines:(a.lines||[]).map(l=>({...l,category:l.category===removed?'Uncategorized':l.category}))}]))};
      await save();
     }catch(error){
      state.ledgerAdjustments=before;
@@ -1056,7 +1113,9 @@ async function start(port=Number(env.PORT||8788)){
       nextLearning=decision.learning;
      }
     }
-    state.ledgerAdjustments={...before,categoryOverrides:overrides,
+    const amazonAllocations={...(before.amazonAllocations||{})};
+    delete amazonAllocations[id]; // A later manual choice replaces the imported split.
+    state.ledgerAdjustments={...before,categoryOverrides:overrides,amazonAllocations,
      ...(nextLearning?{learning:nextLearning}:{})};
     try{await save()}catch(error){
      state.ledgerAdjustments=before;
@@ -1109,7 +1168,13 @@ async function start(port=Number(env.PORT||8788)){
      if(Object.entries(body.categoryOverrides).some(([id,category])=>!ids.has(id)||!allowedCats.has(category)))return respond(400,{error:'Invalid category override'});
     }
     // Never permit source records, Plaid tokens, or provider balances in adjustment writes.
-    state.ledgerAdjustments=Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]]));
+    const preservedAmazon={...(state.ledgerAdjustments?.amazonAllocations||{})};
+    if(body.categoryOverrides)for(const id of Object.keys(preservedAmazon)){
+     if(body.categoryOverrides[id]!==state.ledgerAdjustments?.categoryOverrides?.[id])
+      delete preservedAmazon[id]; // Bulk manual category changes take priority.
+    }
+    state.ledgerAdjustments={...Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]])),
+     amazonAllocations:preservedAmazon};
     await save();
     // Keep compatibility with the older adjustments route, while the new
     // app only writes future-ledger settings through /forecasts.
@@ -1270,10 +1335,12 @@ async function start(port=Number(env.PORT||8788)){
      }
      const overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
      for(const txId of removedIds)delete overrides[txId];
+     const amazonAllocations={...(state.ledgerAdjustments?.amazonAllocations||{})};
+     for(const txId of removedIds)delete amazonAllocations[txId];
      const next={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
       items:state.items.flatMap(i=>i.id!==item.id?[i]:
        revoke?[]:[{...i,accountIds:i.accountIds.filter(a=>a!==id)}]),
-      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides},
+      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides,amazonAllocations},
       ...(revoke?{pendingRevocations:[...pendingRevocations(),
        {id:item.id,token:item.token}]}:{})};
      // Commit FIRST. Failed disk persistence never triggers Plaid revocation.
