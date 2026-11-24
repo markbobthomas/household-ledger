@@ -161,6 +161,22 @@ assert.equal(M.accountingView(directionState).summary.spending,46.65,
 assert.equal(JSON.stringify(directionState.transactions),directionOriginal,
  'Reclassification cannot rewrite original bank transactions');
 
+const genericTransferState=M.migrate({accounts:[
+ {id:'fictional-card',name:'Fictional Card',type:'credit'}],transactions:[
+ {id:'fictional-membership',accountId:'fictional-card',date:'2026-10-05',
+  merchant:'Fictional Membership',type:'transfer',amount:18.75,
+  category:'Subscriptions',source:{provider:'plaid',plaidAmount:18.75,
+   personalFinanceCategory:{primary:'TRANSFER_OUT',detailed:'TRANSFER_OUT_ACCOUNT_TRANSFER'}}}
+]});
+const originalGeneric=JSON.stringify(genericTransferState.transactions);
+const externalCardCharge=M.records(genericTransferState)[0];
+assert.equal(externalCardCharge.type,'expense',
+ 'Generic provider transfer-out category cannot hide outgoing credit-card merchant spending');
+assert.equal(externalCardCharge.accountingKind,'purchase');
+assert.equal(externalCardCharge.pairedTransactionId,null);
+assert.equal(JSON.stringify(genericTransferState.transactions),originalGeneric,
+ 'Provider-coded card transfer repair must be read-only');
+
 async function browserCase(browser,opts,mobile){
  const page=await browser.newPage(opts),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{const Base=Date;class Fixed extends Base{

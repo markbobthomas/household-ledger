@@ -424,7 +424,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     source:'Reconstructed from available posted card transactions'});
   }
   // Past cycles can inform review, but never inflate a payment with averages.
-  let plannedCardPayments=0;
+  let plannedCardPayments=0,unreconciledOverdue=false;
   // The statement is calculated from the *card's own* settled purchases and
   // refunds during each billing cycle, plus future explicitly predicted charges.
   // An account balance is not itself a statement balance (it may carry debt).
@@ -517,9 +517,20 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const currentDebt=Number(card.current);
    const fullAmount=Number.isFinite(currentDebt)&&card.current!==null&&card.current!==undefined?
     round(Math.max(0,currentDebt+futureToDue-plannedCardPayments)):null;
-   const amount=round(method==='statement'?statementAmount:
+   const requestedAmount=round(method==='statement'?statementAmount:
     method==='full'?(fullAmount??0):
     method==='minimum'?Number(rule.minimumAmount):Number(rule.fixedAmount));
+   // The observed card balance already includes posted bank activity; dated
+   // future card purchases add to it, while earlier modeled payments reduce it.
+   // An unverified *estimated statement* must not create a negative card debt
+   // simply because a prior period contains more transactions than remain owed.
+   // Never silently cap an owner-entered issued, fixed or minimum obligation:
+   // those require issuer confirmation rather than an invented payment change.
+   const estimatedOverpayment=fullAmount!==null&&
+    requestedAmount>fullAmount+.011;
+   const limitEstimated=estimatedOverpayment&&method==='statement'&&!confirmedFirst&&
+    due>asOf&&!unreconciledOverdue;
+   const amount=limitEstimated?round(Math.max(0,fullAmount)):requestedAmount;
    if(method==='full'&&fullAmount===null){
     warnings.push(card.name+': full balance needs a current bank-reported card balance');continue;
    }
@@ -546,6 +557,23 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // One matching posted payment is enough to require reconciliation. Never
    // schedule the full amount again when part/all may already have been paid.
    const paid=postedForCycle.length>0;
+   if(!paid&&estimatedOverpayment){
+    const message=card.name+': '+(limitEstimated?'limited':'review')+
+     ' a projected card payment '+requestedAmount.toFixed(2)+
+     ' against modeled available card debt '+fullAmount.toFixed(2)+
+     ' for '+actualDue+'. Confirm issuer balance and missing card activity.';
+    warnings.push(message);
+    warningActions.push({message,kind:'card-payment-overbalance',
+     cardId:id,periodEnd:cycleClose,difference:round(requestedAmount-fullAmount),
+     signature:[cycleClose,requestedAmount.toFixed(2),fullAmount.toFixed(2),
+      confirmedFirst?'issued':'estimated',method].join('|')});
+   }
+
+   // An earlier overdue statement may be reconciled later by the canonical
+   // bank-match pass. Until then its planned payment is still counted in this
+   // engine, so subtracting it from current card debt a second time would
+   // produce a falsely low payment cap for the following statement.
+   if(due<=asOf&&!paid)unreconciledOverdue=true;
    const postedPaymentTotal=round(postedForCycle.reduce((n,t)=>n+t.amount,0));
    if(paid&&Math.abs(postedPaymentTotal-amount)>.011){
     const message=card.name+': actual payment '+postedPaymentTotal.toFixed(2)+
@@ -583,7 +611,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     bankId:String(candidates[0].id),status:'pending',reservedInAvailable:true
    });
    const recentPostedPayment=postedPayments[0]||null;
-   const statement={cardId:id,cardName:card.name,fromAccountId:from?.id||null,
+   const statement={id:'autopay|'+id+'|'+due,
+    cardId:id,cardName:card.name,fromAccountId:from?.id||null,
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
     dueDate:actualDue,withdrawalDate:expectedWithdrawal(due),closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
@@ -591,6 +620,8 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
     method,confidence,confirmed:confirmedFirst,estimated:!confirmedFirst,
     historicalAverage:null,fullBalanceEstimate:fullAmount,
+    ...(estimatedOverpayment?{requestedPaymentAmount:requestedAmount,
+     modeledPaymentLimit:fullAmount,estimatedPaymentLimited:limitEstimated}:{}),
     autopayEnabled:autopay,alreadyPaid:paid,...(pendingReserved?{pendingReserved:true}:{}),actualPayments:postedForCycle,
     actualPaymentAmount:postedPaymentTotal,actualPaymentDate:postedForCycle[0]?.date||null,
     lastPostedPayment:recentPostedPayment,observedCount:cycleRows.length,scheduledCount:predictedRows.length,

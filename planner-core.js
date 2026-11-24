@@ -726,8 +726,16 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   const actualAmount=money(pair.bank.amount),planned=pair.item.e;
   const record={id,bankId,accountId:pair.item.account,
    ...(pair.item.cardId?{cardId:pair.item.cardId}:{}),
+   // Public exports may include only these separately whitelisted facts;
+   // original bank and forecast identifiers remain private to the backend.
+   date:pair.bank.date,
+   expectedDate:planned.originalDueDate||planned._seriesDate||
+    planned.anchorDate||planned.baseDate||planned.date,
+   merchant:String(planned.merchant||'Scheduled payment'),
+   amount:actualAmount,
    status:pending?'pending':'posted',reservedInAvailable:Boolean(held),
-   actualAmount,forecastAmount:money(planned.amount)};
+   actualAmount,forecastAmount:money(planned.amount),
+   difference:money(actualAmount-Number(planned.amount))};
   paymentReconciliations.push(record);
   const list=pair.item.kind==='event'?finalEvents:finalPlans,
    index=list.findIndex(x=>String(x.id)===id);
@@ -738,9 +746,12 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   // A pending ACH isn't a posted card payment. Keep that distinction in
   // the statement summary even if its cash has been reserved by the bank.
   if(pair.item.cardId){
-   const statement=(payment.statements||[]).find(s=>String(s.cardId)===String(pair.item.cardId)&&
-    String(s.fromAccountId)===String(pair.item.account)&&
-    Math.abs(diff(pair.bank.date,s.withdrawalDate||s.dueDate))<=7);
+   const statement=(payment.statements||[]).find(s=>
+    // Match the exact planned cycle, not its delayed provisional posting
+    // date. A stale plan can be rolled forward by weeks after it was due.
+    String(s.id)===id&&
+    String(s.cardId)===String(pair.item.cardId)&&
+    String(s.fromAccountId)===String(pair.item.account));
    if(statement){
     if(pending){statement.pendingReserved=Boolean(held);
      statement.pendingPaymentAmount=actualAmount;}
@@ -749,6 +760,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
      statement.actualPaymentAmount=actualAmount;
      statement.actualPayments=[...(statement.actualPayments||[]),
       {id:bankId,date:pair.bank.date,amount:actualAmount,checkingOnly:true}];
+     statement.lastPostedPayment={id:bankId,date:pair.bank.date,amount:actualAmount};
     }
    }
    const detail=(payment.paymentDetails||[]).find(d=>String(d.id)===id);
