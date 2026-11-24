@@ -74,7 +74,7 @@ assert(sourceFact);
   assert(!JSON.stringify(payload).includes(bank),'Provider never receives raw bank identifiers');
   if(calls<=3){
    assert(payload.messages[0].content.includes('quality-assurance auditor'));
-   assert.equal(payload.tools.length,5,'QA does not use external public research');
+   assert.equal(payload.tools.length,5,'QA does not use external public research or full-export financial advice tools');
    const first=JSON.parse(payload.messages[1].content);
    assert.equal(first.independentQualityChecks.checks.daysRecomputed,2);
   }

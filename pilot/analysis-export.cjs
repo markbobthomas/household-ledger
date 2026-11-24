@@ -15,8 +15,10 @@ const safe=x=>cleanDescription(String(x??'')).slice(0,140);
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
 const permitted=(v,allowed)=>allowed.includes(String(v))?String(v):null;
 
-function build({prepared,adjustments={},lastSync=null,syncDiagnostics={}}){
- const ctx=financialContext(prepared,{lastSync,adjustments});
+function build({prepared,adjustments={},lastSync=null,syncDiagnostics={},context=null}){
+ // One canonical sanitized export for both an owner download and a consented
+ // AI investigation; reuse the already verified financial snapshot when supplied.
+ const ctx=context||financialContext(prepared,{lastSync,adjustments});
  const sync=object(syncDiagnostics),lastAttempt=object(sync.lastAttempt);
  const safeTimestamp=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(x)?x:null;
  const bankSync={
