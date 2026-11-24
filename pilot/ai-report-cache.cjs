@@ -39,7 +39,8 @@ function create({read,write,revision,snapshot,analyze,available=()=>true,defer=s
   const fresh=!!(current&&saved.report&&saved.revision===current);
   const canResume=!!(current&&saved.checkpoint?.revision===current);
   return {enabled:false,status:running?'running':queued?'queued':
-   phase==='failed'?'failed':saved.report?(fresh?'ready':'outdated'):'not_ready',
+   phase==='failed'?'failed':canResume?'paused':
+   saved.report?(fresh?'ready':'outdated'):'not_ready',
    // A durable encrypted checkpoint never triggers a paid call by itself.
    resumeAvailable:canResume,
    analysisStage:running?(activeStage||'preparing'):
