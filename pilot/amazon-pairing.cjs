@@ -172,7 +172,9 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    (c.source==='shipment-part'?.015:0);
  };
  for(const t of txs){
-  if(selection.has(t.id)||String(notes[keyFor(t)]||'').trim())continue;
+  // Existing imported Possible Notes may be upgraded to a category on reimport.
+  // Never overwrite their text; that protection is enforced when applying.
+  if(selection.has(t.id))continue;
   const alternatives=[];
   for(let days=-1;days<=14;days++){
    // Bank charge is expected to follow order/shipment date; tolerate one
@@ -207,9 +209,35 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    const options=alone?[best.c]:unique.slice(0,3).map(x=>x.c);
    const note=alone?itemNote(options[0].items,'Possible Amazon: '):
     choiceNote(options);
+   // Even without cent-for-cent reconciliation, a uniquely close product
+   // can reliably indicate a broad spending category. Keep the purchase
+   // identity in the Note marked Possible. Do not allocate item-level cents,
+   // label ambiguous choices or assign a category from a date-only hint.
+   let suggestedCategory=null;
+   // Category confidence can exceed product-identity confidence: two
+   // possible items may both be clearly groceries, even though the exact
+   // item cannot be established. Require ALL plausible close alternatives
+   // to agree; if four or more survive, we have only a truncated candidate
+   // list and therefore cannot claim category unanimity.
+   const categoryChoices=alone?[best.c]:(unique.length<4?unique.map(x=>x.c):[]);
+   if(categoryChoices.length&&!existing[t.id]&&categoryChoices.every(c=>{
+     const gap=dayGap(t.date,c.date);
+     const difference=Math.abs(c.amount-cents(t))/
+      Math.max(c.amount,cents(t));
+     return gap>=0&&gap<=7&&difference<=.13;
+   })){
+    const choiceCats=categoryChoices.map(c=>{
+     const lines=allocate(c.items,cents(t),validCategories);
+     const cats=[...new Set((lines||[]).map(l=>l.category))];
+     return cats.length===1&&cats[0]!=='Uncategorized'?cats[0]:null;
+    });
+    if(choiceCats[0]&&choiceCats.every(c=>c===choiceCats[0]))
+     suggestedCategory=choiceCats[0];
+   }
    if(note)suggestions.push({transactionId:t.id,accountId:t.accountId,
     date:t.date,amountCents:cents(t),orderId:best.c.id,note,
-    confidence:'possible',source:alone?best.c.source:'alternatives'});
+    confidence:'possible',source:alone?best.c.source:'alternatives',
+    suggestedCategory,_candidateIds:options.flatMap(c=>c.ids)});
    continue;
   }
   // Amounts can diverge radically with gift cards, partial refunds or
@@ -229,6 +257,21 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    orderId:around[0].id,
    note:itemNote(around[0].items,'Possible Amazon (date only): '),
    confidence:'possible',source:'date-only'});
+ }
+ // If two posted charges claim the same physical product, a match may be
+ // useful as a Note, but assigning either category would be unjustified.
+ // Include ALL suggestions here, not only the ones eligible for categories.
+ const potentialOwners=new Map();
+ for(const suggestion of suggestions){
+  for(const id of suggestion._candidateIds||[]){
+   if(!potentialOwners.has(id))potentialOwners.set(id,new Set());
+   potentialOwners.get(id).add(suggestion.transactionId);
+  }
+ }
+ for(const suggestion of suggestions){
+  if((suggestion._candidateIds||[]).some(id=>potentialOwners.get(id).size>1))
+   suggestion.suggestedCategory=null;
+  delete suggestion._candidateIds;
  }
  const uniqueSuggestions=suggestions;
  const matchedBank=new Set(matches.map(m=>m.transactionId));

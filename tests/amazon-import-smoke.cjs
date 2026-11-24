@@ -166,15 +166,76 @@ assert.equal(oldChoices.categoryOverrides.a,'Groceries',
 assert.equal(planned.next.amazonAllocations.a,undefined,
  'Manual category is not overwritten with automatic item allocation');
 const nearPlan=Apply.prepare(near,oldChoices);
-assert.equal(nearPlan.report.confidentCategories,0,
- 'A near-amount suggestion never assigns an automatic category');
-assert.equal(nearPlan.next.categoryOverrides.near,undefined);
-assert.equal(nearPlan.next.amazonAllocations.near,undefined);
+assert.equal(nearPlan.report.confidentCategories,1,
+ 'A uniquely strong Amazon item link may supply its known product category');
+assert.equal(nearPlan.report.likelyCategories,1,
+ 'Probable item categories are separately counted');
+assert.equal(nearPlan.next.categoryOverrides.near,'Groceries');
+assert.equal(nearPlan.next.amazonAllocations.near,undefined,
+ 'An unverified link must never invent an item allocation');
 assert.equal(nearPlan.next.predictions.transactionNotes[
  'bank:'+JSON.stringify(['credit-one','near'])],
  'Possible Amazon: Coffee beans');
 const idempotent=Apply.prepare(near,nearPlan.next);
 assert.equal(idempotent.ready,0,'Repeated import does not rewrite an identical Amazon Note');
+
+const existingPossibleNote={
+ predictions:{transactionNotes:{
+  [Pair.keyFor({accountId:'credit-one',id:'near'})]:'Possible Amazon: Coffee beans'
+ }}
+};
+const noteUpgrade=A.match([{orderId:'113-near',date:'2026-10-10',shipmentDate:'2026-10-11',
+ title:'Coffee beans',cents:1999}],{
+ near:{id:'near',accountId:'credit-one',name:'Amazon',date:'2026-10-13',amount:20}
+},existingPossibleNote,categories);
+assert.equal(noteUpgrade.suggestions[0].suggestedCategory,'Groceries',
+ 'Existing Possible item Notes must remain eligible for later category enrichment');
+const upgraded=Apply.prepare(noteUpgrade,existingPossibleNote);
+assert.equal(upgraded.next.categoryOverrides.near,'Groceries');
+assert.equal(upgraded.next.predictions.transactionNotes[Pair.keyFor({
+ accountId:'credit-one',id:'near'})],'Possible Amazon: Coffee beans',
+ 'Enrich category without changing an existing Note');
+const manualNear=Apply.prepare(noteUpgrade,{
+ categoryOverrides:{near:'Shopping'},...existingPossibleNote
+});
+assert.equal(manualNear.next.categoryOverrides.near,'Shopping',
+ 'Never override a user-chosen category with a probable classification');
+assert.equal(manualNear.report.confidentCategories,0);
+const conflicted=A.match([{orderId:'single-shipment',date:'2026-10-10',
+ shipmentDate:'2026-10-11',title:'Coffee beans',cents:2000}],{
+ first:{id:'first',accountId:'credit-one',name:'AMZN',date:'2026-10-13',amount:20.5},
+ second:{id:'second',accountId:'credit-one',name:'AMZN',date:'2026-10-14',amount:21}
+},{},categories);
+assert.equal(conflicted.suggestions.length,2);
+assert.ok(conflicted.suggestions.every(x=>!x.suggestedCategory),
+ 'Two posted charges cannot both take an automatic category from one purchased item');
+assert.equal(Apply.prepare(conflicted,{}).report.confidentCategories,0);
+assert.equal(Apply.prepare(doubleChoice,{}).report.confidentCategories,0,
+ 'Competing product candidates stay unclassified');
+
+const sameCategoryAlternatives=A.match([
+ {orderId:'home-1',date:'2026-10-10',shipmentDate:'2026-10-11',
+  title:'Laundry detergent',cents:2000},
+ {orderId:'home-2',date:'2026-10-10',shipmentDate:'2026-10-11',
+  title:'Kitchen sponge',cents:2000}
+],{
+ home:{id:'home',accountId:'credit-one',name:'AMAZON',
+  date:'2026-10-13',amount:20.5}
+},{},categories);
+assert.equal(sameCategoryAlternatives.matches.length,0,
+ 'Uncertain product identity remains unconfirmed');
+assert.match(sameCategoryAlternatives.suggestions[0].note,/ OR /);
+assert.equal(sameCategoryAlternatives.suggestions[0].suggestedCategory,
+ 'Home & Maintenance',
+ 'Two plausible items of the same category can yield that category safely');
+assert.equal(Apply.prepare(sameCategoryAlternatives,{}).next.categoryOverrides.home,
+ 'Home & Maintenance');
+assert.equal(Apply.prepare(sameCategoryAlternatives,{}).next.amazonAllocations.home,
+ undefined,'Common category does not invent a product/amount allocation');
+
+assert.equal(Apply.prepare(broad,{}).report.confidentCategories,0,
+ 'Date-only or large-discrepancy hints must not change categories');
+
 
 console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, manual priority, ambiguity PASS');
 
