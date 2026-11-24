@@ -252,8 +252,8 @@ const RESPONSE_FORMAT={type:'json_schema',json_schema:{name:'ledger_financial_ou
  }}}};
 const parseAmounts=s=>[...String(s||'').matchAll(/\$([0-9][\d,]*(?:\.\d{1,2})?)/g)]
  .map(m=>Number(m[1].replace(/,/g,''))).filter(Number.isFinite);
-function verifyClaim(text,ids,byId){
- if(typeof text!=='string'||!text.trim()||text.length>1800)return false;
+function verifyClaim(text,ids,byId,maxLength=1800){
+ if(typeof text!=='string'||!text.trim()||text.length>maxLength)return false;
  if(!Array.isArray(ids)||!ids.length||ids.length>20||
   ids.some(id=>typeof id!=='string'||!byId.has(id)))return false;
  // Reject unsupported exact-dollar claims; the source evidence, not the model,
