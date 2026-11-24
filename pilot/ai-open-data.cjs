@@ -36,7 +36,12 @@ function createDataset(context){
    original=safe(row.name||row.description||row.originalName||row.source?.bankName||''),
    description=original&&original.toLowerCase()!==merchant.toLowerCase()?original:null,
    category=safe(row.category||'Unassigned'),type=safe(row.type||'unclassified');
-  const fields={accountId,date:row.date,amount,merchant,description,category,type,pending:!!row.pending};
+  const fields={accountId,date:row.date,amount,merchant,description,category,type,pending:!!row.pending,
+   ...( ['purchase','card_payment','internal_transfer','refund','loan_payment',
+    'unclassified_card_credit','unclassified_credit'].includes(row.accountingKind)?
+    {accountingKind:row.accountingKind}:{}),
+   ...( ['matched','unmatched','ambiguous','needs-review','confirmed'].includes(row.reconciliationStatus)?
+    {reconciliationStatus:row.reconciliationStatus}:{})};
   add('history',fields,
    accountId+' '+row.date+' '+type+' $'+amount.toFixed(2)+' '+merchant+
    (description?'; original bank description '+description:'')+
@@ -72,7 +77,18 @@ function createDataset(context){
    statementBalance=finite(row.statementBalance)?money(row.statementBalance):null;
   add('cards',{card,funding,dueDate,periodStart,periodEnd,withdrawalDate,amount,
    statementBalance,autopay:!!row.autopayEnabled,alreadyPaid:!!row.alreadyPaid,
-   estimated:!!row.estimated,pendingReserved:!!row.pendingReserved},
+   estimated:!!row.estimated,pendingReserved:!!row.pendingReserved,
+   actualPaymentDate:date(row.actualPaymentDate)?row.actualPaymentDate:null,
+   actualPaymentAmount:finite(row.actualPaymentAmount)?money(row.actualPaymentAmount):null,
+   ...(row.estimatedPaymentLimited?{estimatedPaymentLimited:true,
+    requestedPaymentAmount:finite(row.requestedPaymentAmount)?money(row.requestedPaymentAmount):null,
+    modeledPaymentLimit:finite(row.modeledPaymentLimit)?money(row.modeledPaymentLimit):null}:{}),
+   ...(row.statementReconciliation&&typeof row.statementReconciliation==='object'?{
+    statementReconciliation:{
+     status:safe(row.statementReconciliation.status),
+     source:safe(row.statementReconciliation.source),
+     difference:finite(row.statementReconciliation.difference)?money(row.statementReconciliation.difference):null
+    }}:{})},
   card+' statement period '+(periodStart||'unknown')+' to '+(periodEnd||'unknown')+
    ', due '+(dueDate||'unknown')+'; withdrawal '+(withdrawalDate||'unknown')+
    ', amount '+(amount===null?'unknown':'$'+amount.toFixed(2))+
