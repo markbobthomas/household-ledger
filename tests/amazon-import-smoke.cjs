@@ -105,9 +105,8 @@ assert.match(near.suggestions[0].note,/^Possible Amazon: Coffee beans/);
 assert.equal(near.suggestions[0].confidence,'possible');
 const manualNotes=A.match(items,tx,{categoryOverrides:{a:'Groceries'},
  predictions:{transactionNotes:{[Pair.keyFor(tx.a)]:'My own note'}}},categories);
-assert(manualNotes.matches.find(m=>m.transactionId==='a').notesOnly);
-assert.equal(manualNotes.matches.find(m=>m.transactionId==='a').note.startsWith('Amazon:'),true,
- 'Matcher proposes exact item titles but server preserves user-entered Note');
+assert(!manualNotes.matches.some(m=>m.transactionId==='a'),
+ 'An already categorized transaction with a personal Note needs no import changes');
 const repeated=A.match([
  {orderId:'order-1',date:'2026-10-12',shipmentDate:'2026-10-12',title:'Kids jacket',cents:2000},
  {orderId:'order-2',date:'2026-10-12',shipmentDate:'2026-10-12',title:'Coffee beans',cents:2000}
