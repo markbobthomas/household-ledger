@@ -63,3 +63,68 @@ end.writeUInt32LE(local.length+name.length+zipped.length,16);
 const zip=Buffer.concat([local,name,zipped,central,name,end]);
 assert.equal(A.readFile('my-amazon-export.zip',zip.toString('base64')).length,5);
 console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, manual priority, ambiguity PASS');
+
+
+// Large private importer: 79 MiB binary transport, streaming ZIP/CSV, and
+// bank-derived date cutoff. Uses fictional amounts, no external AI/API calls.
+(async()=>{
+ const S=require('../pilot/amazon-stream.cjs'),zlib=require('node:zlib');
+ assert.equal(S.MAX_FILE,79*1024*1024);
+ const window=S.targetWindow(tx,{categoryOverrides:{b:'Groceries'}});
+ assert(window&&window.outstandingAmazonCharges===1,
+  'Manually categorized charges do not enlarge required order-history range');
+ assert.equal(window.minDate,'2026-09-24');
+ assert.equal(window.maxDate,'2026-10-17');
+ assert.equal(S.targetWindow(tx,{categoryOverrides:{a:'Shopping',b:'Groceries'}}),null,
+  'No unresolved Amazon charges means there is no history to process');
+ const old='113-0000000-0000001,2018-01-01,Old clothing,20.00,20.00,2018-01-02';
+ const recent='113-1111111-1111111,2026-10-10,"Laundry detergent, 100 oz",25.00,120.00,2026-10-11';
+ const header='Order ID,Order Date,Product Name,Item Total,Total Charged,Shipment Date';
+ const txt=[header,old,recent].join('\r\n');
+ const parsed=await S.readFile('Retail.OrderHistory.csv',Buffer.from(txt),window);
+ assert.equal(parsed.length,1,'Old irrelevant orders excluded before categorization');
+ assert.equal(parsed[0].title,'Laundry detergent, 100 oz');
+ assert.equal(parsed[0].charged,12000);
+ const match=A.match(parsed,tx,{categoryOverrides:{}},categories);
+ assert(match.matches.some(m=>m.transactionId==='a'));
+ // A shipment placed long before the bank window must retain every item
+ // once any one shipment proves the order is relevant. Dropping half an
+ // order could silently misallocate the posted bank amount.
+ const splitCsv=[header,
+  '113-5555555-5555555,2026-08-01,Home sponge,10.00,20.00,2026-08-03',
+  '113-5555555-5555555,2026-08-01,Kids book,10.00,20.00,2026-10-10'].join('\r\n');
+ const splitRows=await S.readFile('Orders.csv',Buffer.from(splitCsv),window);
+ assert.equal(splitRows.length,2,'All shipment lines of a selected order must survive the cutoff');
+ const quote='Order ID,Order Date,Product Name,Item Price,Quantity,Item Subtotal Tax\n'+
+  'ABC,10/10/2026,"Batteries ""AA""\n10 pack",3.00,2,0.24';
+ const multiline=await S.readFile('Orders.csv',Buffer.from(quote),window);
+ assert.equal(multiline[0].cents,624);
+ assert.equal(multiline[0].title,'Batteries "AA"\n10 pack');
+ const filename=Buffer.from('Amazon/Orders/Retail.OrderHistory.1.csv'),
+  content=Buffer.from(txt),compressed=zlib.deflateRawSync(content),
+  loc=Buffer.alloc(30),dir=Buffer.alloc(46),eocd=Buffer.alloc(22);
+ loc.writeUInt32LE(0x04034b50,0);loc.writeUInt16LE(8,8);loc.writeUInt16LE(filename.length,26);
+ dir.writeUInt32LE(0x02014b50,0);dir.writeUInt16LE(8,10);
+ dir.writeUInt32LE(compressed.length,20);dir.writeUInt32LE(content.length,24);
+ dir.writeUInt16LE(filename.length,28);
+ eocd.writeUInt32LE(0x06054b50,0);eocd.writeUInt16LE(1,8);eocd.writeUInt16LE(1,10);
+ eocd.writeUInt32LE(dir.length+filename.length,12);
+ eocd.writeUInt32LE(loc.length+filename.length+compressed.length,16);
+ const zipCompressed=Buffer.concat([loc,filename,compressed,dir,filename,eocd]);
+ const fromZip=await S.readFile('Amazon Orders.zip',zipCompressed,window);
+ assert.equal(fromZip.length,1,'Compressed ZIP decoded with same date filter');
+ assert.equal(fromZip[0].charged,12000);
+ await assert.rejects(()=>S.readFile('Orders.zip',Buffer.from('invalid'),window),/ZIP/);
+ await assert.rejects(()=>S.readFile('Orders.csv',Buffer.alloc(S.MAX_FILE+1),window),/79 MB/);
+ // Realistic 47 MB text export: the old rows must be scanned, but must not
+ // be retained, categorized or billed as model tokens.
+ const filler='113-0000000-0000001,2018-01-01,Old household item '+('x'.repeat(180))+
+  ',3.00,3.00,2018-01-01\r\n';
+ const before=Buffer.from(header+'\r\n'+filler.repeat(Math.ceil(47*1024*1024/Buffer.byteLength(filler)))+
+  recent+'\r\n');
+ assert(before.length>47*1024*1024,'Large fixture exceeds users 47 MB file size');
+ const large=await S.readFile('Retail.OrderHistory.csv',before,window);
+ assert.equal(large.length,1,'The 47 MB file yields only the one in-window order');
+ assert.equal(large[0].orderId,parsed[0].orderId);
+ console.log('PASS 79 MB binary Amazon import: 47 MB streaming fixture, compressed ZIP, date-window filtering and zero AI calls');
+})().catch(e=>{console.error(e);process.exitCode=1});

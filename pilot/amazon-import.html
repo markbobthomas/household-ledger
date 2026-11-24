@@ -23,7 +23,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 <p>In Amazon, request your personal information for <strong>Orders</strong>, download the resulting ZIP, then upload it here. A CSV containing item-level order history also works. Select the file named <code>Retail.OrderHistory</code> if uploading a single CSV.</p>
 <label for="file">Amazon CSV or ZIP file
 <input id="file" type="file" accept=".csv,.zip,text/csv,application/zip"></label>
-<p class="muted">Private: your file is processed only by Ledger's authenticated server. No Amazon password is needed, and nothing is sent to an AI provider. Maximum file size: 6 MB.</p>
+<p class="muted">Private: your file is processed only by Ledger's authenticated server. No Amazon password is needed, and nothing is sent to an AI provider. Maximum file size: 79 MB. Ledger uses only orders near Amazon charges that still need categorization.</p>
 <div class="actions"><button type="button" id="check" class="primary">Check matches</button><button type="button" id="apply" disabled>Apply categories</button></div>
 <p id="message" role="status" aria-live="polite"></p>
 </section>
@@ -49,18 +49,16 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
  let payload=null,revision='',ready=0;
  function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
  function setBusy(b){$('check').disabled=b;$('apply').disabled=b||!payload||!ready}
- async function readFile(file){
-  return await new Promise((resolve,reject)=>{
-   const r=new FileReader();
-   r.onerror=()=>reject(Error('Could not read the selected file'));
-   r.onload=()=>resolve(String(r.result||'').split(',')[1]||'');
-   r.readAsDataURL(file);
-  });
- }
  async function request(dryRun){
+  // Send original Blob bytes, not a 105 MB base64 JSON body for a 79 MB file.
+  // Preview and Apply are separate authenticated requests with revision checks;
+  // neither stores the file, including when the preview is cancelled.
   const response=await fetch('/api/ledger/amazon-import',{method:'POST',credentials:'same-origin',
-   headers:{'Content-Type':'application/json','X-Pilot-Action':'1',...(revision?{'X-Ledger-Revision':revision}:{})},
-   body:JSON.stringify({...payload,dryRun}),cache:'no-store'});
+   headers:{'Content-Type':'application/octet-stream','X-Pilot-Action':'1',
+    'X-Amazon-Filename':encodeURIComponent(payload.fileName),
+    'X-Amazon-Dry-Run':dryRun?'1':'0',
+    ...(revision?{'X-Ledger-Revision':revision}:{})},
+   body:payload.file,cache:'no-store'});
   const type=response.headers.get('content-type')||'';
   if(!type.includes('application/json'))throw Error('Private Ledger server is unavailable. Reload and retry.');
   const data=await response.json();
@@ -70,7 +68,7 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
  }
  function show(data){
   const stats=[
-   ['Product items read',data.importedItems],['Charge matches',data.matches],
+   ['Relevant product items',data.importedItems],['Charge matches',data.matches],
    ['Ready to categorize',data.ready],['Need item review',data.needsReview],
    ['Ambiguous order groups',data.ambiguousOrders],['Not matched',data.unmatchedOrders],
    ['Previously imported',data.alreadyImported]
@@ -86,12 +84,12 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
  $('check').addEventListener('click',async()=>{
   const file=$('file').files?.[0];
   if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
-  if(file.size>6*1024*1024){message('This file exceeds the 6 MB limit.',true);return}
+  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
   setBusy(true);message('Checking item descriptions against your existing charges…');
   try{
-   payload={fileName:file.name,base64:await readFile(file)};
+   payload={fileName:file.name,file};
    const data=await request(true);
-   show(data);ready=data.ready;message(data.ready?'Matches checked. Review the totals, then apply categories.':'No new safe matches found.');
+   show(data);ready=data.ready;message(data.ready?'Matches checked. Review the totals, then apply categories.':data.noUncategorizedAmazonCharges?'There are no outstanding Amazon charges requiring categorization.':'No new safe matches found.');
    $('apply').disabled=!data.ready;
   }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}
