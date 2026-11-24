@@ -9,7 +9,7 @@ const {cleanDescription}=require('./ai-private-adapter.cjs');
 
 const isDate=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x);
 const num=x=>typeof x==='number'&&Number.isFinite(x);
-const money=x=>Math.money(x*100)/100;
+const money=x=>Math.round(x*100)/100;
 const safe=x=>cleanDescription(String(x??'')).slice(0,140);
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
 const permitted=(v,allowed)=>allowed.includes(String(v))?String(v):null;
