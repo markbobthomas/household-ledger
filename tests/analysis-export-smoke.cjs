@@ -76,10 +76,10 @@ const adjustments={
 };
 // Private ambiguous transfer is NOT household expense. Separately classify an
 // owner-labeled housing-related outgoing transfer as a conditional proxy.
-history[82].type='transfer';history[82].category='Other';
+history[82].type='transfer';history[82].category='Other';history[82].merchant='Fictional Merchant A';
 history[82].cashDirection='out';history[82].accountingKind='internal_transfer';
 history[82].amount=120;
-history[83].type='transfer';history[83].category='Mortgage';
+history[83].type='transfer';history[83].category='Mortgage';history[83].merchant='Fictional Merchant B';
 history[83].cashDirection='out';history[83].accountingKind='internal_transfer';
 history[83].amount=1000;
 // Export-only QA should surface, not rewrite, suspicious manual merchant
