@@ -145,6 +145,12 @@ button{font:inherit;cursor:pointer}
 .outlook-report .outlook-section h2{font-size:1.28rem;line-height:1.33;margin:3px 0 10px;color:#243f34}
 .outlook-report .outlook-section p{font-size:.97rem;line-height:1.72;margin:7px 0 12px;white-space:pre-line;overflow-wrap:anywhere;color:#33483b}
 .outlook-report .outlook-chart{padding:15px 0 19px}
+.outlook-table-wrap{overflow-x:auto;margin:12px 0 17px}
+.outlook-table{width:100%;border-collapse:collapse;text-align:left;font-size:.88rem}
+.outlook-table th{padding:9px 12px 9px 0;border-bottom:2px solid #d9e4dc;color:#284b3a;font-weight:650}
+.outlook-table td{padding:9px 12px 9px 0;border-bottom:1px solid #e4ebe5;color:#364e41}
+.outlook-table td:not(:first-child){font-variant-numeric:tabular-nums}
+@media(max-width:650px){.outlook-table{font-size:.79rem}.outlook-table th,.outlook-table td{padding-right:11px}}
 .outlook-report .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0 22px}
 .outlook-report .metric{background:#fafbfa}
 .outlook-report .metric>strong{font-size:clamp(1.18rem,2.8vw,1.55rem);font-variant-numeric:tabular-nums}
@@ -205,6 +211,45 @@ button{font:inherit;cursor:pointer}
   const cut=s.slice(0,max-1).replace(/\s+\S*$/,'').trim();
   return {lead:(cut||s.slice(0,max-1))+'…',full:s};
  };
+ // Parse simple Markdown pipe tables supplied in a source-verified report.
+ // Every cell uses textContent; generated HTML is never interpreted.
+ function reportRich(parent,value){
+  const lines=String(value||'').split('\n');
+  const isPipe=line=>line.trim().startsWith('|')&&line.trim().endsWith('|');
+  const cells=line=>line.trim().slice(1,-1).split('|').map(v=>v.trim());
+  const separator=line=>isPipe(line)&&cells(line).every(v=>/^[:\-\s]+$/.test(v));
+  let i=0,buffer=[];
+  const flush=()=>{const text=buffer.join('\n').trim();if(text)info(parent,text);buffer=[]};
+  while(i<lines.length){
+   if(i+2<lines.length&&isPipe(lines[i])&&separator(lines[i+1])){
+    const headings=cells(lines[i]);
+    if(headings.length>=2&&headings.length<=6){
+     const records=[];let next=i+2;
+     while(next<lines.length&&isPipe(lines[next])&&records.length<25){
+      const row=cells(lines[next]);
+      if(row.length!==headings.length||row.some(x=>x.length>250))break;
+      records.push(row);next++;
+     }
+     if(records.length){
+      flush();
+      const wrap=el('div','outlook-table-wrap'),table=el('table','outlook-table'),
+       thead=el('thead'),tr=el('tr'),tbody=el('tbody');
+      for(const h of headings)tr.append(el('th','',h.slice(0,90)));
+      thead.append(tr);table.append(thead);
+      for(const record of records){
+       const line=el('tr');
+       for(const cell of record)line.append(el('td','',cell));
+       tbody.append(line);
+      }
+      table.append(tbody);wrap.append(table);parent.append(wrap);
+      i=next;continue;
+     }
+    }
+   }
+   buffer.push(lines[i]);i++;
+  }
+  flush();
+ }
  function detailsFor(parent,block,extra=''){
   const text=String(block.detail||'').trim();
   const oldLong=clipText(block.text||'').full;
@@ -446,7 +491,7 @@ button{font:inherit;cursor:pointer}
     const section=el('section','outlook-summary');
     section.append(el('h2','',hero.title||'Independent household outlook'));
     if(hero.text)info(section,hero.text);
-    if(hero.detail)info(section,hero.detail);
+    if(hero.detail)reportRich(section,hero.detail);
     addEvidence(section,hero.evidence);msg.append(section);
    }
    const metrics=blocks.filter(b=>b.kind==='metric');
@@ -456,7 +501,7 @@ button{font:inherit;cursor:pointer}
      const card=el('section','metric');
      card.append(el('div','label',block.title||'Financial metric'),
       el('strong','',block.text||''));
-     if(block.detail)info(card,block.detail);
+     if(block.detail)reportRich(card,block.detail);
      addEvidence(card,block.evidence);grid.append(card);
     }
     msg.append(grid);
@@ -472,11 +517,11 @@ button{font:inherit;cursor:pointer}
      section.append(el('h2','',block.title||block.chart.title||'Source-based comparison'));
      if(block.text)info(section,block.text);
      drawGraph(section,block.chart);
-     if(block.detail)info(section,block.detail);
+     if(block.detail)reportRich(section,block.detail);
     }else{
      section.append(el('h2','',block.title||'Financial finding'));
      if(block.text)info(section,block.text);
-     if(block.detail)info(section,block.detail);
+     if(block.detail)reportRich(section,block.detail);
     }
     addEvidence(section,block.evidence);msg.append(section);
    }
