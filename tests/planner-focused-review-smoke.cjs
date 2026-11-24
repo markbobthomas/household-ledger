@@ -38,6 +38,26 @@ assert.deepEqual(payroll.map(x=>x.frequency),['every-4-weeks','every-4-weeks']);
 assert.equal(new Set(payroll.map(x=>x.key)).size,2);
 assert.ok(!list.some(x=>x.merchant==='Savings Transfer'),
  'Paired bank transfers are not recurring bill suggestions');
+const cardSourceRows=[
+ row('card-post-a','2026-09-13','Visa Autopay',500,'transfer',{
+  cashDirection:'out',accountingKind:'card_payment'}),
+ row('card-post-b','2026-10-13','Visa Autopay',500,'transfer',{
+  cashDirection:'out',accountingKind:'card_payment'}),
+ row('card-narrative-a','2026-09-14','Credit card payment',165),
+ row('card-narrative-b','2026-10-14','Credit card payment',165),
+ row('utility-a','2026-09-15','Example Utility Autopay',72),
+ row('utility-b','2026-10-15','Example Utility Autopay',72)
+];
+const withCardSource=[...transactions,...cardSourceRows];
+for(const suggestions of [H.recommendedRepeating(withCardSource,accounts,asOf),
+ H.candidates(withCardSource,accounts,asOf,{
+  paymentRules:{card:{fromAccountId:'main',autopayEnabled:true}}},[])]) {
+ assert(!suggestions.some(v=>/visa autopay|credit card payment/i.test(v.merchant)),
+  'Neither historical scanner may propose an already modeled card payment');
+ assert(suggestions.some(v=>v.merchant==='Example Utility Autopay'),
+  'Unrelated real utility autopay is still eligible');
+}
+assert.equal(JSON.stringify(transactions),copy,'Read-only scanners cannot modify bank rows');
 assert.equal(JSON.stringify(transactions),copy,'Recommendation discovery never edits bank records');
 const bank=M.migrate({accounts,transactions:[row('g','2026-10-09','Safeway',55,'expense',{category:'Groceries'})]});
 M.setCategory(bank,'g','Shopping');

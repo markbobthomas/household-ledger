@@ -3,6 +3,18 @@
 'use strict';
 const validDate=s=>{const text=String(s||''),parsed=new Date(text+'T12:00:00Z');
  return /^\d{4}-\d{2}-\d{2}$/.test(text)&&Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===text;};
+// One classification gate for BOTH forecast discovery and Review's historical
+// repeating suggestions. A card-payment source row is never a new purchase
+// schedule, even if its counterpart is still missing. "Autopay" alone is not
+// payment evidence: utility/insurance autopays remain ordinary bill candidates.
+const cardPaymentSource=t=>{
+ if(t?.accountingKind==='card_payment')return true;
+ const pfc=t?.personal_finance_category||t?.source?.personalFinanceCategory||{};
+ if(/(?:^|_)(?:CREDIT_CARD_PAYMENT|CARD_PAYMENT)(?:_|$)/.test(
+  String(pfc.detailed||'').toUpperCase()))return true;
+ const description=String(t?.merchant||'')+' '+String(t?.description||'');
+ return /\b(?:credit\s+card\s+(?:auto\s*)?(?:payment|pay|pmt|pymt)|(?:card|cardmember)\s+(?:payment|autopay|pmt|pymt)|payment\s+(?:to\s+)?(?:credit\s+card|visa|mastercard|amex|discover)|(?:visa|mastercard|amex|discover)\s+(?:auto\s*)?(?:payment|pay|pmt|pymt))\b/i.test(description);
+};
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 const CategoryLibrary=root.HouseholdLedgerData||
  (typeof require==='function'?require('./ledger-data.js'):null);
@@ -1311,7 +1323,7 @@ const api={transactionTitle,ensure,keyEvent,keyMovement,normalFields,transferFie
  // separate. Preserve unknown/ambiguous account references unchanged.
  merchantKey,accountRef,daysBetween,shift,monthAt,forecastBusinessDate,
  federalReserveHoliday,bankBusinessDay,nextBankBusinessDate,
- recurrenceEvidence,recurrenceCadence};
+ recurrenceEvidence,recurrenceCadence,cardPaymentSource};
 root.HouseholdPlannerTransactions=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

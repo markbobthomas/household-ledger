@@ -117,8 +117,9 @@ function candidates(records,accounts,asOf,preferences={},forecastEvents=[],optio
  const groups=shared.recurrenceEvidence(records,accounts,asOf,{
   includeAmount:true,
   eligible:t=>canPlan(t)&&!t.pending&&Number(t.amount)>0&&t.date<=asOf&&
-   !t.pairedTransactionId&&
-   !['unclassified_credit','unclassified_card_credit','confirmed_transfer'].includes(t.accountingKind),
+   !t.pairedTransactionId&&!shared.cardPaymentSource(t)&&
+   !['unclassified_credit','unclassified_card_credit','confirmed_transfer',
+    'internal_transfer'].includes(t.accountingKind),
   typeOf:(t,account)=>{
    const kind=t.type==='transfer'?
     (t.cashDirection==='out'?'expense':t.cashDirection==='in'?'income':null):t.type;
@@ -196,8 +197,9 @@ function recommendedRepeating(records,accounts,asOf){
  const output=[];
  const groups=shared.recurrenceEvidence(records,accounts,asOf,{
   eligible:t=>canPlan(t)&&!t.pending&&Number(t.amount)>0&&t.date<=asOf&&
-   !t.pairedTransactionId&&
-   !['unclassified_credit','unclassified_card_credit','confirmed_transfer'].includes(t.accountingKind),
+   !t.pairedTransactionId&&!shared.cardPaymentSource(t)&&
+   !['unclassified_credit','unclassified_card_credit','confirmed_transfer',
+    'internal_transfer'].includes(t.accountingKind),
   typeOf:(t,bank)=>{
    const kind=t.type==='transfer'?(t.cashDirection==='out'?'expense':
     t.cashDirection==='in'?'income':null):t.type;

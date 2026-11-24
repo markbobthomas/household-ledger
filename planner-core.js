@@ -54,17 +54,8 @@ const billName=/\b(?:mortgage|mtg|home loan|rent|lease payment|loan payment|auto
 const variableName=/\b(?:safeway|costco|walmart|amazon|grocery|supermarket|target|restaurant|coffee|starbucks|fuel|gas station|shell|chevron|uber|lyft)\b/i;
 const internalName=/\b(?:transfer to|transfer from|savings transfer|account transfer|xfer|credit card payment|payment to visa|payment to mastercard)\b/i;
 const metadata=t=>t.personal_finance_category||t.source?.personalFinanceCategory||{};
-// Posted card settlements, including unpaired ACH payment legs, belong in
-// source reconciliation and established card payment plans. They must never
-// become an independent recurring expense suggestion or second withdrawal.
-// A normal utility/insurance bill that says merely "autopay" remains eligible.
-const cardSettlementHistory=t=>{
- if(t.accountingKind==='card_payment')return true;
- const category=String(metadata(t).detailed||'').toUpperCase();
- if(/(?:^|_)(?:CREDIT_CARD_PAYMENT|CARD_PAYMENT)(?:_|$)/.test(category))return true;
- const description=String(t.merchant||'')+' '+String(t.description||'');
- return /\b(?:credit\s+card\s+(?:auto\s*)?(?:payment|pay|pmt|pymt)|(?:card|cardmember)\s+(?:payment|autopay|pmt|pymt)|payment\s+(?:to\s+)?(?:credit\s+card|visa|mastercard|amex|discover)|(?:visa|mastercard|amex|discover)\s+(?:auto\s*)?(?:payment|pay|pmt|pymt))\b/i.test(description);
-};
+// Shared card-payment filter is used by the forecast and History/Review.
+const cardSettlementHistory=t=>shared.cardPaymentSource(t);
 const trusted=t=>billName.test(String(t.merchant||''))||
  /(?:MORTGAGE|SUBSCRIPTION|RECURRING|RENT_PAYMENT|RENT_AND_UTILITIES_RENT|AUTO_LOAN|LOAN_PAYMENT)/.test(String(metadata(t).detailed||'').toUpperCase());
 const cadence=(a,b)=>shared.recurrenceCadence([a,b],'forecast');
