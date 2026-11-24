@@ -488,8 +488,17 @@ const aiReports=aiCacheFactory?aiCacheFactory({
  available:()=>!!state.items.length,
  snapshot:()=>{
   const prepared=preparedFor(ledgerPayload());
-  return require('./ai-financial-report.cjs').financialContext(prepared,{
+  const context=require('./ai-financial-report.cjs').financialContext(prepared,{
    lastSync:state.lastSync,adjustments:state.ledgerAdjustments});
+  // The SAME complete sanitized financial evidence as manual Export Data.
+  // Created only during an explicitly consented AI Analysis request.
+  context.reportEvidence=require('./analysis-export.cjs').build({
+   prepared,context,adjustments:state.ledgerAdjustments,lastSync:state.lastSync,
+   syncDiagnostics:{lastAttempt:lastSyncAttempt,
+    issues:state.items.filter(i=>i.syncIssue).map(i=>({
+     code:i.syncIssue.code,observedAt:i.syncIssue.observedAt}))}
+  });
+  return context;
  },
  analyze:context=>require('./ai-chat.cjs').analyzeOneClick({
   context,consent:'financial-analysis-v3',apiKey:env.OPENAI_API_KEY,
@@ -558,7 +567,10 @@ async function start(port=Number(env.PORT||8788)){
   // this public source identifier, never credentials, banking records or disk paths.
   if(requestPath==='/healthz'&&req.method==='GET')return respond(200,{
    ok:true,mode:'multi-account-private',
-   commit:deployedCommit
+   commit:deployedCommit,
+   // Harmless model identifier, never a provider key or private financial data.
+   analysisModel:env.OPENAI_REPORT_MODEL||'gpt-4.1',
+   analysisModelSource:env.OPENAI_REPORT_MODEL?'environment-override':'default'
   });
   const origin=req.headers.origin,host=req.headers.host;
   // Reject cross-origin writes including sign in/out. Other mutations also
@@ -722,7 +734,8 @@ async function start(port=Number(env.PORT||8788)){
   if(req.method==='GET'&&requestPath==='/api/ai/qaqc')return respond(200,qaReports.status());
   if(req.method==='GET'&&requestPath==='/api/ai/report'){
    // Read-only status never queues an external API request.
-   return respond(200,aiReports.status());
+   return respond(200,{...aiReports.status(),
+    analysisModel:env.OPENAI_REPORT_MODEL||'gpt-4.1'});
   }
  // Unknown browser navigation should be a 404, not a misleading bank-action error.
   if(req.method==='GET'||req.method==='HEAD')return respond(404,{error:'Not found'});
