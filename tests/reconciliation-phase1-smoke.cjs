@@ -61,4 +61,45 @@ assert.equal(M.accountingView(retail).summary.spending,96.5,
  'Purchases minus evidenced refund without double-counting card payment');
 assert.equal(JSON.stringify(retail.transactions),originalRetail,'Read-only provider state');
 
+// Equal amount and a nearby date are not proof of a transfer BETWEEN cards.
+// The issuer-side receipt can still match a verified checking debit; an
+// unrelated card merchant credit can instead refund a same-card purchase.
+const twoCards=M.migrate({accounts:[
+ {id:'cash-qa',name:'Fictional Checking',type:'checking'},
+ {id:'card-a',name:'Fictional Card A',type:'credit'},
+ {id:'card-b',name:'Fictional Card B',type:'credit'}
+],transactions:[
+ {id:'video',accountId:'card-a',date:'2026-10-24',type:'expense',
+  merchant:'Fictional Video Membership',amount:27.42,
+  source:{provider:'plaid',plaidAmount:27.42}},
+ {id:'cloud-buy',accountId:'card-b',date:'2026-10-20',type:'expense',
+  merchant:'Fictional Cloud Storage',amount:27.42,
+  source:{provider:'plaid',plaidAmount:27.42}},
+ {id:'cloud-return',accountId:'card-b',date:'2026-10-25',type:'transfer',
+  merchant:'Fictional Cloud Storage',amount:27.42,
+  source:{provider:'plaid',plaidAmount:-27.42,
+   personalFinanceCategory:{primary:'TRANSFER_IN',detailed:'TRANSFER_IN_ACCOUNT_TRANSFER'}}},
+ {id:'cash-card-payment',accountId:'cash-qa',date:'2026-10-26',type:'transfer',
+  merchant:'Fictional Visa Credit Card Payment',amount:118.50,
+  source:{provider:'plaid',plaidAmount:118.50}},
+ {id:'issuer-payment',accountId:'card-b',date:'2026-10-25',type:'transfer',
+  merchant:'AUTOMATIC PAYMENT - THANK',amount:118.50,
+  source:{provider:'plaid',plaidAmount:-118.50}}
+]});
+const twoCardsSource=JSON.stringify(twoCards.transactions);
+const conservative=new Map(M.records(twoCards).map(t=>[t.id,t]));
+assert.equal(conservative.get('video').type,'expense');
+assert.equal(conservative.get('video').pairedTransactionId,null,
+ 'An unrelated credit on another card cannot erase a genuine card purchase');
+assert.equal(conservative.get('cloud-return').accountingKind,'refund',
+ 'A source TRANSFER_IN label cannot hide an evidenced same-card merchant refund');
+assert.equal(conservative.get('cloud-return').pairedTransactionId,null);
+assert.equal(conservative.get('cloud-return').spendingAmount,-27.42);
+assert.equal(conservative.get('issuer-payment').accountingKind,'card_payment',
+ 'Exact issuer-side automatic-payment receipt is a repayment, not a refund');
+assert.equal(conservative.get('issuer-payment').pairedTransactionId,'cash-card-payment');
+assert.equal(conservative.get('cash-card-payment').pairedTransactionId,'issuer-payment');
+assert.equal(JSON.stringify(twoCards.transactions),twoCardsSource,
+ 'Read-only reconciliation never changes bank source or owner decisions');
+
 console.log('PASS Phase 1 atomic duplicate/cross-account safeguards and human review flags');
