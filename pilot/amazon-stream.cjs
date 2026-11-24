@@ -4,7 +4,7 @@
 const zlib=require('node:zlib');
 const {Readable}=require('node:stream');
 const {StringDecoder}=require('node:string_decoder');
-const {isoDate,usdCents}=require('./amazon-import.cjs');
+const {isoDate,usdCents,ORDER_CSV}=require('./amazon-import.cjs');
 const MAX_FILE=79*1024*1024,MAX_EXPANDED=384*1024*1024,
  MAX_ROWS=90000,MAX_SCANNED_ROWS=2000000;
 const nameHeader=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -52,26 +52,29 @@ function parser(window={}){
     };
     const date=isoDate(col('order date','order placed date','purchase date')),
      shipmentDate=isoDate(col('shipment date','ship date','shipped date'));
-    const id=col('order id','amazon order id');
+    const id=col('order id','amazon order id'),
+     cancelled=/\bcancell?ed\b/i.test(col('order status','item status'));
     if(window._targetOrders){
      // Second pass: include EVERY line of a relevant order, not just the
      // in-window shipment. Partial orders could allocate incorrect amounts.
-    }else if(id&&(eligible(date)||eligible(shipmentDate))){
+    }else if(id&&!cancelled&&(eligible(date)||eligible(shipmentDate))){
      if(window._discoverOrders.size>=MAX_ROWS)
       throw Error('Too many relevant Amazon orders');
      window._discoverOrders.add(id);
     }
-    if(window._targetOrders?.has(id)){
-     const title=col('product name','product title','item description','item name','title');
-     const qty=Number(col('quantity','quantity ordered')||1);
+    if(window._targetOrders?.has(id)&&!cancelled){
+     const title=col('product name','product title','item title','item description','item name','title');
+     const qty=Number(col('original quantity','quantity','quantity ordered')||1);
      if(id&&title&&date&&Number.isFinite(qty)&&qty>=1&&qty<=1000){
-      const total=usdCents(col('item total','item total amount','item price total','item charged','item total charged')),
-       subtotal=usdCents(col('item subtotal','item subtotal amount','item subtotal price')),
+      // Amazon's Total Amount (2026) / Total Owed (older) is an
+      // individual product-line amount. Never treat it as an order total.
+      const total=usdCents(col('total amount','total owed','item total','item total amount','item price total','item charged','item total charged')),
+       subtotal=usdCents(col('shipment item subtotal','item subtotal','item subtotal amount','item subtotal price')),
        unit=usdCents(col('unit price','price per unit','item price','purchase price')),
-       tax=usdCents(col('item subtotal tax','item tax','tax charged')),
+       tax=usdCents(col('shipment item subtotal tax','item subtotal tax','item tax','tax charged')),
        cents=total!==null?total:subtotal!==null?subtotal+(tax||0):
         unit!==null?Math.round(unit*qty)+(tax||0):null,
-       charged=usdCents(col('total charged','order total charged','order total','total owed','grand total')),
+       charged=usdCents(col('total charged','order total charged','order total','grand total')),
        currency=col('currency','currency code');
       if(Number.isSafeInteger(cents)&&cents>0&&
          (!currency||currency.toUpperCase()==='USD'||currency==='$')){
@@ -160,7 +163,7 @@ async function readFile(fileName,buffer,window={}){
    if(ptr+46+n+e+c>buffer.length)throw Error('Invalid ZIP filename');
    const name=buffer.subarray(ptr+46,ptr+46+n).toString('utf8');
    ptr+=46+n+e+c;
-   if(!/(?:^|\/)(?:Retail\.OrderHistory(?:\.\d+)?|OrderHistory|Amazon[-_ ]Orders?|Orders)(?:\.\d+)?\.csv$/i.test(name))continue;
+   if(!ORDER_CSV.test(name))continue;
    if(files.length>=30||uncompressed>MAX_EXPANDED)
     throw Error('Amazon ZIP contains too much order history');
    if(local+30>buffer.length||buffer.readUInt32LE(local)!==0x04034b50)

@@ -2,6 +2,9 @@
 // Private Amazon order-history importer. Never creates, deletes or edits a bank transaction.
 const zlib=require('node:zlib');
 const MAX_FILE=6*1024*1024,MAX_TEXT=24*1024*1024,MAX_ROWS=90000;
+// Shared with the 79 MB streaming importer. Amazon's 2026 ZIP uses
+// "Order History.csv" (with a space); earlier exports use Retail.OrderHistory.
+const ORDER_CSV=/(?:^|\/)(?:Retail\.OrderHistory(?:\.\d+)?|Order[ ._-]*History(?:\.\d+)?|Amazon[-_ ]Orders?|Orders)(?:\.\d+)?\.csv$/i;
 const usdCents=value=>{
  if(value===null||value===undefined||String(value).trim()==='')return null;
  const s=String(value).trim().replace(/[$,\s]/g,'');
@@ -49,16 +52,19 @@ function extractCSV(text){
    title=col(row,'product name','product title','item title','item description','item name','title'),
    date=isoDate(col(row,'order date','order placed date','purchase date')),
    shipmentDate=isoDate(col(row,'shipment date','ship date','shipped date'));
-  if(!orderId||!title||!date)continue;
-  const qty=Number(col(row,'quantity','quantity ordered')||1);
+  if(!orderId||!title||!date||/\bcancell?ed\b/i.test(col(row,'order status','item status')))continue;
+  const qty=Number(col(row,'original quantity','quantity','quantity ordered')||1);
   if(!Number.isFinite(qty)||qty<1||qty>1000)continue;
-  const itemTotal=usdCents(col(row,'item total','item total amount','item price total','item charged','item total charged'));
-  const subtotal=usdCents(col(row,'item subtotal','item subtotal amount','item subtotal price'));
+  // Total Amount (2026) and Total Owed (earlier) are PER-ITEM totals.
+  // They already include tax, shipping and discounts. They must not be
+  // mistaken for a repeated order-level "Total Charged".
+  const itemTotal=usdCents(col(row,'total amount','total owed','item total','item total amount','item price total','item charged','item total charged'));
+  const subtotal=usdCents(col(row,'shipment item subtotal','item subtotal','item subtotal amount','item subtotal price'));
   const unit=usdCents(col(row,'unit price','price per unit','item price','purchase price'));
-  const tax=usdCents(col(row,'item subtotal tax','item tax','tax charged'));
+  const tax=usdCents(col(row,'shipment item subtotal tax','item subtotal tax','item tax','tax charged'));
   let cents=itemTotal!==null?itemTotal:subtotal!==null?subtotal+(tax||0):unit!==null?Math.round(unit*qty)+(tax||0):null;
   if(!Number.isSafeInteger(cents)||cents<=0)continue;
-  const charged=usdCents(col(row,'total charged','order total charged','order total','total owed','grand total'));
+  const charged=usdCents(col(row,'total charged','order total charged','order total','grand total'));
   const currency=col(row,'currency','currency code');
   if(currency&&currency.toUpperCase()!=='USD'&&currency!=='$')continue;
   out.push({orderId:orderId.slice(0,90),title:title.slice(0,240),date,shipmentDate,
@@ -93,7 +99,7 @@ function zipTexts(buf){
   if(ptr+46+n+e+c>buf.length)throw Error('Invalid ZIP filename');
   const name=buf.subarray(ptr+46,ptr+46+n).toString('utf8');
   ptr+=46+n+e+c;
-  if(!/(?:^|\/)(?:Retail\.OrderHistory(?:\.\d+)?|OrderHistory|Amazon[-_ ]Orders?|Orders)(?:\.\d+)?\.csv$/i.test(name))continue;
+  if(!ORDER_CSV.test(name))continue;
   if(files.length>=30||uncompressed>MAX_TEXT||total+uncompressed>MAX_TEXT)
    throw Error('Amazon ZIP contains too much order history');
   if(local+30>buf.length||buf.readUInt32LE(local)!==0x04034b50)throw Error('Invalid ZIP entry');
@@ -217,4 +223,4 @@ function match(rows,transactions,adjustments,validCategories){
  return {matches,importedItems:rows.length,orderGroups:groups.length,
   ambiguousOrders:ambiguous.size,unmatchedOrders:Math.max(0,groups.length-matches.length-ambiguous.size)};
 }
-module.exports={readFile,match,extractCSV,csvRows,usdCents,isoDate,classify};
+module.exports={readFile,match,extractCSV,csvRows,usdCents,isoDate,classify,ORDER_CSV};
