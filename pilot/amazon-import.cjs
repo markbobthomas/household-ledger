@@ -129,6 +129,26 @@ function classify(title,categories){
  for(const [pattern,choices] of rules)if(pattern.test(name)){
   const c=pick(choices);if(c)return c;
  }
+ // More concrete product nouns from long retail titles. These rules are
+ // intentionally purpose-based rather than brand-based: Amazon sells almost
+ // anything, and an unknown title must never become a confident category.
+ const additional=[
+  [/(\\b(?:infant|newborn|baby monitor|baby bottle|nursing|breast pump|pacifier|swaddle|school supplies|children's toy|kids' toy|dolls?|action figures?|toy cars?)\\b)/i,
+   ['Kids & Family']],
+  [/(\\b(?:cookies?|crackers?|meal replacement|protein powder|energy bars?|soup|sauce|condiments?|peanut butter|jam|granola bars?|breakfast food|coffee beans|k-cups?|ground coffee|sparkling water|soda|electrolyte drink)\\b)/i,
+   ['Groceries']],
+  [/(\\b(?:body wash|deodorant|moisturizer|face wash|antifungal|acne|eczema|allergy medicine|skin cream|hand sanitizer|mouthwash|razor blades|contact lens|eye drops|cold medicine|pain relief|pill organizer)\\b)/i,
+   ['Health','Healthcare']],
+  [/(\\b(?:car detailing|vehicle fluids?|motor oil|windshield|car wash|automotive parts?|air filter for car|motorcycle|garage door remote)\\b)/i,
+   ['Transportation']],
+  [/(\\b(?:blender|coffee maker|humidifier|dehumidifier|air purifier|lamps?|light bulbs?|pillows?|blankets?|mattress|curtains?|storage bins?|shelving|wall shelves?|power drill|screwdriver|caulk|dishwasher|dish rack|broom|mop|shower head|toilet brush|trash can|garden hose|kitchen utensils?)\\b)/i,
+   ['Home & Maintenance','Household','Shopping']],
+  [/(\\b(?:usb|hdmi|ethernet|bluetooth|wireless mouse|ipad|iphone|smartphone|android phone|tablet|printer|ink cartridge|webcam|flash drive|memory card|sd card|screen protector|protective case|power bank|adapter|headset|earbuds?|earphones?|camera|backpack|handbag|wallet|sunglasses|sneakers|sandals|boots|t-shirts?|sweatshirts?|sweaters?|water bottles?|tumbler|lunch bag|label maker|scissors|school binder)\\b)/i,
+   ['Shopping']]
+ ];
+ for(const [pattern,choices] of additional)if(pattern.test(name)){
+  const category=pick(choices);if(category)return category;
+ }
  return 'Uncategorized'; // Never invent a category for an unfamiliar product.
 }
 function groupsOf(rows){
