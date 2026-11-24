@@ -30,6 +30,12 @@ function itemNote(items,prefix='Amazon: '){
  }
  return note.slice(0,160);
 }
+// If two purchases are both plausible, the Note must say OR rather than
+// falsely claiming they were both paid for by one bank charge.
+function choiceNote(choices){
+ const titles=[...new Set(choices.map(c=>c.items.map(i=>compact(i.title)).filter(Boolean).join(' + ')).filter(Boolean))].slice(0,3);
+ return ('Possible Amazon (verify): '+titles.join(' OR ')).slice(0,160);
+}
 function match(rows,transactions,adjustments,validCategories,allocate){
  const notes=adjustments?.predictions?.transactionNotes||{},
   overrides=adjustments?.categoryOverrides||{},
@@ -145,56 +151,65 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    needsReview:categories.includes('Uncategorized'),notesOnly:manual,
    alreadyImported:Boolean(existing[tx.id]),confidence:'exact'});
  }
- // Suggestions are useful context, not proof. Never write a category for
- // these and mark the note itself as unverified for manual review.
+ // Suggestions provide purchase context, not proof of a bank allocation.
+ // They never set categories or alter a posted bank transaction. An
+ // ambiguous bank charge gets a list of alternatives labeled OR (verify),
+ // rather than a definitive but potentially wrong item name.
  for(const t of txs){
-  if(selection.has(t.id)||ambiguous.has(t.id)||typeof notes[keyFor(t)]==='string'&&notes[keyFor(t)].trim())continue;
-  const possible=candidates.filter(c=>
+  if(selection.has(t.id)||String(notes[keyFor(t)]||'').trim())continue;
+  const exact=(byAmount.get(cents(t))||[]).filter(c=>validDate(t,c)&&
+   c.ids.every(id=>!usedItems.has(id)));
+  const close=candidates.filter(c=>
    c.ids.every(id=>!usedItems.has(id))&&
    dayGap(t.date,c.date)>=-1&&dayGap(t.date,c.date)<=10&&
    c.amount!==cents(t)&&
    Math.abs(c.amount-cents(t))<=Math.min(500,Math.max(75,Math.round(cents(t)*.03))));
-  possible.sort((a,b)=>{
-   const score=c=>Math.abs(c.amount-cents(t))/Math.max(1,cents(t))+
-    Math.abs(dayGap(t.date,c.date)-2)*.012;
-   return score(a)-score(b);
-  });
-  let picked=null;
-  if(possible.length===1)picked=possible[0];
-  else if(possible.length>1){
-   const score=c=>Math.abs(c.amount-cents(t))/Math.max(1,cents(t))+
-    Math.abs(dayGap(t.date,c.date)-2)*.012;
-   if(score(possible[1])-score(possible[0])>=.06)picked=possible[0];
-  }
-  // Date-only fallback: a lone purchased item near the charge. It is still
-  // "Possible" and must never drive an automatic category override.
-  if(!picked&&!possible.length){
-   const adjacent=perItem.filter(x=>!usedItems.has(x.item._id)&&
-    dayGap(t.date,x.date)>=0&&dayGap(t.date,x.date)<=5);
-   if(adjacent.length===1)picked={id:adjacent[0].orderId,
-    items:[adjacent[0].item],ids:[adjacent[0].item._id],
-    source:'date-only'};
+  const score=c=>Math.abs(c.amount-cents(t))/Math.max(1,cents(t))+
+   Math.abs(dayGap(t.date,c.date)-2)*.012;
+  exact.sort((a,b)=>proximity(t,a)-proximity(t,b));
+  close.sort((a,b)=>score(a)-score(b));
+  let picked=null,choices=[];
+  if(exact.length){
+   choices=exact.slice(0,3);
+  }else if(close.length===1){
+   picked=close[0];
+  }else if(close.length>1){
+   if(score(close[1])-score(close[0])>=.06)picked=close[0];
+   else choices=close.slice(0,3);
+  }else{
+   // Strongest date-only fallback: one nearby Amazon order, or a shortlist
+   // of two plausible orders. An order can include several product lines.
+   const around=[];
+   for(const [orderId,items] of orders){
+    const dates=items.map(i=>i.shipmentDate||i.date).filter(Boolean).sort();
+    if(!dates.length)continue;
+    const date=dates.at(-1),gap=dayGap(t.date,date);
+    if(gap<0||gap>7)continue;
+    const sum=items.reduce((n,i)=>n+i.cents,0);
+    if(sum<cents(t)*.45||sum>cents(t)*2.2)continue;
+    if(items.some(i=>usedItems.has(i._id)))continue;
+    around.push({id:orderId,items,date,amount:sum,
+     ids:items.map(i=>i._id),source:'date-only'});
+   }
+   around.sort((a,b)=>score(a)-score(b));
+   if(around.length===1)picked=around[0];
+   else if(around.length>1&&score(around[0])<=.7){
+    if(score(around[1])-score(around[0])>=.3)picked=around[0];
+    else choices=around.slice(0,2);
+   }
   }
   if(picked)suggestions.push({transactionId:t.id,accountId:t.accountId,
    date:t.date,amountCents:cents(t),orderId:picked.id,
    note:itemNote(picked.items,'Possible Amazon: '),
    confidence:'possible',source:picked.source});
- }
- // Avoid assigning the same exported product to two different speculative
- // notes. Suggestions are never verified charge allocations.
- const seenSuggested=new Map(),contested=new Set();
- for(const entry of suggestions){
-  const candidate=candidates.find(c=>c.id===entry.orderId&&
-   itemNote(c.items,'Possible Amazon: ')===entry.note);
-  if(!candidate)continue;
-  for(const item of candidate.ids){
-   const prior=seenSuggested.get(item);
-   if(prior&&prior!==entry.transactionId){
-    contested.add(prior);contested.add(entry.transactionId);
-   }else seenSuggested.set(item,entry.transactionId);
+  else if(choices.length){
+   const note=choiceNote(choices);
+   if(note.length>26)suggestions.push({transactionId:t.id,accountId:t.accountId,
+    date:t.date,amountCents:cents(t),orderId:choices[0].id,
+    note,confidence:'possible',source:'alternatives'});
   }
  }
- const uniqueSuggestions=suggestions.filter(x=>!contested.has(x.transactionId));
+ const uniqueSuggestions=suggestions;
  const matchedBank=new Set(matches.map(m=>m.transactionId));
  const suggestedBank=new Set(uniqueSuggestions.map(m=>m.transactionId));
  return {matches,suggestions:uniqueSuggestions,importedItems:rows.length,orderGroups:orders.size,
