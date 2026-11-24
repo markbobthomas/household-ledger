@@ -4,7 +4,8 @@
 // fuzzy/date-only links are explicitly marked possible and NEVER categorized.
 const DAY=86400000,MAX_SUBSET_ITEMS=10,MAX_GROUPS=250000;
 const amazon=t=>t&&t.pending!==true&&Number(t.amount)>0&&
- /(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.merchant||t.name||''))&&
+ (/(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.merchant||''))||
+ /(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.name||'')))&&
  /^\d{4}-\d{2}-\d{2}$/.test(String(t.date||''))&&
  Number.isSafeInteger(Math.round(Number(t.amount)*100));
 const cents=t=>Math.round(Number(t.amount)*100);
