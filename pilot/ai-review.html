@@ -53,6 +53,9 @@ button{font:inherit;cursor:pointer}
 .analysis-report{background:#fff;border:1px solid #e1e8e2;border-radius:16px;padding:clamp(17px,3vw,31px);min-width:0}
 .analysis-report .who{font-size:.81rem;font-weight:660;color:#5d7268;margin:0 0 20px}
 .quality-note{font-size:.87rem!important;color:#78542d!important;max-width:800px;border-bottom:1px solid #e9eee9;padding:0 0 15px;margin:-7px 0 14px!important;line-height:1.5!important}
+.quality-questions{margin:0 0 16px;font-size:.88rem;color:#52685d}
+.quality-questions summary{font-weight:640;color:#3c594b}
+.quality-questions li{margin:6px 0;line-height:1.5}
 .analysis-report .finding>p,.analysis-report .hero>.keyline,
 .analysis-report .callout>p,.analysis-report .chart-insight>p{
  font-size:.93rem;line-height:1.45;color:#566c61;margin:0 0 4px}
@@ -453,8 +456,25 @@ button{font:inherit;cursor:pointer}
   if(data.mode!==(isQa?'ledger-qaqc':'autonomous-adaptive'))throw Error('Unexpected analysis response');
   msg.append(who);
   if(data.analysisQuality?.status==='limited'){
-   msg.append(el('p','quality-note',
-    isQa?'Limited QA/QC: the reviewer could not verify that all significant calculation and reconciliation gaps were investigated. Some checks remain incomplete.':'Limited analysis: the independent reviewer could not confirm that this run explored enough of the material financial questions. The evidence-checked findings below may be incomplete.'));
+   const quality=data.analysisQuality;
+   const explanation=isQa?
+    'Some software checks are still unfinished. See the findings below.':
+    quality.cause==='source-proof'?
+     'The AI made claims that the records did not support. Those claims were left out. This is a source-checked snapshot, not the full financial analysis.':
+    quality.cause==='missing-records'?
+     'Some questions could not be answered with the available financial records. The findings below are supported by the records we have.':
+    quality.cause==='open-questions'?
+     'The review found specific questions that still need checking. The supported findings remain below.':
+     'Some parts of this saved report could not be fully checked. The verified findings remain below.';
+   msg.append(el('p','quality-note',explanation));
+   if(!isQa&&Array.isArray(quality.questions)&&quality.questions.length){
+    const details=el('details','quality-questions'),
+     summary=el('summary','','Questions still to check'),list=el('ul');
+    for(const question of quality.questions.slice(0,5)){
+     if(typeof question==='string'&&question.trim())list.append(el('li','',question));
+    }
+    if(list.childElementCount){details.append(summary,list);msg.append(details)}
+   }
   }
   if(isQa&&data.qaAudit){
    const qa=data.qaAudit,checks=qa.checks||{},audit=el('section','quality-audit');
