@@ -147,6 +147,10 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
  const plans=[],billEvents=[],obligations=[],warnings=[],warningActions=[],statements=[],historyStatements=[],suppressedExpectedIds=[],
   cardEstimates=[],paymentDetails=[],pendingPaymentMatches=[];
+ // Keep near-term payment anomalies visible without repeating the same
+ // long-range scenario for every future billing cycle. Cycle-level evidence
+ // remains preserved on each statement for a detailed audit.
+ const overbalanceWarnings=new Map();
  for(const card of accounts.filter(credit))
   if(!ready(cards[card.id],card,accounts)){
    const candidate=cards[card.id]?{
@@ -562,11 +566,16 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      ' a projected card payment '+requestedAmount.toFixed(2)+
      ' against modeled available card debt '+fullAmount.toFixed(2)+
      ' for '+actualDue+'. Confirm issuer balance and missing card activity.';
-    warnings.push(message);
-    warningActions.push({message,kind:'card-payment-overbalance',
-     cardId:id,periodEnd:cycleClose,difference:round(requestedAmount-fullAmount),
-     signature:[cycleClose,requestedAmount.toFixed(2),fullAmount.toFixed(2),
-      confirmedFirst?'issued':'estimated',method].join('|')});
+    const group=overbalanceWarnings.get(id)||{count:0,cardName:card.name,firstHiddenCycle:null};
+    group.count++;
+    if(group.count<=2){
+     warnings.push(message);
+     warningActions.push({message,kind:'card-payment-overbalance',
+      cardId:id,periodEnd:cycleClose,difference:round(requestedAmount-fullAmount),
+      signature:[cycleClose,requestedAmount.toFixed(2),fullAmount.toFixed(2),
+       confirmedFirst?'issued':'estimated',method].join('|')});
+    }else if(!group.firstHiddenCycle)group.firstHiddenCycle=cycleClose;
+    overbalanceWarnings.set(id,group);
    }
 
    // An earlier overdue statement may be reconciled later by the canonical
@@ -649,6 +658,16 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      merchant:card.name+' autopay',kind:'card_payment',confidence,cardId:id});
    }
   }
+ }
+ for(const [cardId,group] of overbalanceWarnings){
+  if(group.count<=2)continue;
+  const additional=group.count-2;
+  const message=group.cardName+': '+additional+
+   ' additional future card-payment cycles exceed modeled debt. See the individual statements before confirming payment amounts.';
+  warnings.push(message);
+  warningActions.push({message,kind:'card-payment-overbalance',
+   cardId,periodEnd:group.firstHiddenCycle,
+   signature:'grouped|'+group.firstHiddenCycle+'|'+additional});
  }
  for(const b of bills){
   if(b.enabled===false)continue;

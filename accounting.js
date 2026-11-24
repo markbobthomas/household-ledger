@@ -90,7 +90,11 @@ function cardSettlementEvidence(name,pfc,account,dir){
    /\b(?:credit card payment|card payment|payment to (?:card|credit)|autopay (?:card|credit)|card autopay|credit card autopay|cardmember payment|cc payment|cc pymt)\b/i.test(name);
  const issuerNamed=cardIssuer.test(name)&&
    /\b(?:payment|autopay|pymt|pmt|epay)\b/i.test(name);
- return bankIdentified||explicit||(isCard&&issuerNamed);
+ // Some card issuers post their settlement as "AUTOMATIC PAYMENT - THANK".
+ // This exact issuer-side receipt is stronger than a generic "PAYMENT" word
+ // in a merchant charge, and requires a credit entering a card account.
+ const issuerReceipt=isCard&&/^\s*automatic payment\s*[-–]?\s*thank(?:\s*you)?\b/i.test(name);
+ return bankIdentified||explicit||(isCard&&issuerNamed)||issuerReceipt;
 }
 function initialKind(t,account){
  const name=String(t.merchant||'')+' '+String(t.description||'');
@@ -128,8 +132,11 @@ function initialKind(t,account){
  // assigns a generic TRANSFER_OUT personal-finance category. Card settlements
  // reduce card debt (incoming credit); outgoing card transfers need explicit
  // transfer-language evidence, not a provider label alone.
- if(transferText.test(name)||(!isCard&&/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(primary))||
-    isCard&&dir==='in'&&primary==='TRANSFER_IN')return 'internal_transfer';
+ if(transferText.test(name)||(!isCard&&/^(?:TRANSFER_IN|TRANSFER_OUT)$/.test(primary)))
+  return 'internal_transfer';
+ // A generic TRANSFER_IN bank label on a card merchant credit is not
+ // proof that it came from another household account. Let a verified
+ // funding-account counterpart pair it, or test a same-card merchant refund.
  // Legacy user-authored transfers have explicit intent. A provisional Plaid
  // transfer type alone is NOT evidence that an unidentified credit is a transfer.
  if(t.type==='transfer'&&!isCard&&t.source?.provider!=='plaid')return 'internal_transfer';
@@ -212,6 +219,10 @@ function reconcile(state){
   if(a.accountingKind==='refund'||b.accountingKind==='refund')continue;
   const aCard=a.accountType==='credit',bCard=b.accountType==='credit',
    cashCardPair=aCard!==bCard;
+  // A credit-card purchase and a merchant credit on another credit card
+  // cannot prove a balance transfer, even with identical amounts/dates.
+  // Card-to-card balance transfers require separate explicit owner review.
+  if(aCard&&bCard)continue;
   // No credit-card repayment can have the credit account as its
   // outgoing leg. Do not mispair a merchant charge with a coincidentally
   // equal incoming checking transfer.

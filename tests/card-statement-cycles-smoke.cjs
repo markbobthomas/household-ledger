@@ -636,4 +636,55 @@ assert.ok(later);
 assert.equal(later.amount,250,'Preserve estimated payment when earlier overdue cash debit remains unreconciled');
 assert.equal(later.estimatedPaymentLimited,undefined,
  'Never derive a false balance cap by re-subtracting unresolved overdue payments');
+// A genuinely settled old issuer payment must not keep the overdue flag
+// active and disable later estimated caps. All amounts here are fictional.
+const clearedSnapshot={asOf:'2026-11-23',accounts:[
+ {id:'cleared-cash',name:'Fictional Checking',type:'checking',current:4000},
+ {id:'cleared-card',name:'Fictional Card',type:'credit',current:130}
+]};
+const clearedRule={paymentRules:{'cleared-card':{
+ billingStartDate:'2026-09-07',billingEndDate:'2026-10-06',
+ closingDay:6,nextPaymentDate:'2026-11-03',nextDueDate:'2026-11-03',
+ fromAccountId:'cleared-cash',method:'statement',autopayEnabled:true
+}}};
+const clearedRows=[
+ {id:'cleared-buy-sept',accountId:'cleared-card',date:'2026-09-18',
+  amount:100,type:'expense',accountingKind:'purchase',merchant:'Fictional Purchase'},
+ {id:'cleared-buy-oct',accountId:'cleared-card',date:'2026-10-20',
+  amount:210,type:'expense',accountingKind:'purchase',merchant:'Fictional Purchase'},
+ {id:'cleared-bank-out',accountId:'cleared-cash',date:'2026-11-04',
+  amount:100,type:'transfer',accountingKind:'card_payment',
+  cashDirection:'out',pairedTransactionId:'cleared-bank-in',merchant:'Fictional Card Payment'},
+ {id:'cleared-bank-in',accountId:'cleared-card',date:'2026-11-03',
+  amount:100,type:'transfer',accountingKind:'card_payment',
+  cashDirection:'in',pairedTransactionId:'cleared-bank-out',
+  merchant:'AUTOMATIC PAYMENT - THANK'}
+];
+const cleared=Payments.build(clearedSnapshot,clearedRows,[],clearedRule,{days:100});
+const oldCycle=cleared.statements.find(x=>x.dueDate==='2026-11-03');
+const newCycle=cleared.statements.find(x=>x.dueDate==='2026-12-03');
+assert.equal(oldCycle.alreadyPaid,true,'Matched old checking/card settlement closes its original cycle');
+assert.equal(newCycle.amount,130,'Following estimated payment cannot exceed modeled available debt');
+assert.equal(newCycle.estimatedPaymentLimited,true,
+ 'Resolved old cycle must not disable the future estimated payment guard');
+assert.equal(cleared.plans.find(x=>x.id===newCycle.id).amount,130);
+
+// Suppress repetitive distant warnings but keep all individual statement
+// evidence and the first two actionable cases visible.
+const repetitive=Payments.build({asOf:'2026-10-20',accounts:[
+ {id:'rep-cash',name:'Fictional Checking',type:'checking',current:4000},
+ {id:'rep-card',name:'Fictional Card',type:'credit',current:50}
+]},[],[],{paymentRules:{'rep-card':{
+ billingStartDate:'2026-09-07',billingEndDate:'2026-10-06',
+ closingDay:6,nextPaymentDate:'2026-11-03',nextDueDate:'2026-11-03',
+ fromAccountId:'rep-cash',method:'fixed',fixedAmount:500,autopayEnabled:true
+}}},{days:210});
+const excessWarnings=repetitive.warnings.filter(x=>x.includes('projected card payment'));
+const groupedWarnings=repetitive.warnings.filter(x=>x.includes('additional future card-payment cycles'));
+assert.equal(excessWarnings.length,2,'Only the first two per-card warnings need full repeated text');
+assert.equal(groupedWarnings.length,1,'Remaining related warnings get one concise summary');
+assert.ok(repetitive.statements.length>5,'Every forecast cycle is preserved for investigation');
+assert.ok(repetitive.warningActions.some(a=>a.message===groupedWarnings[0]),
+ 'Grouped warning can still open the relevant statement');
+
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
