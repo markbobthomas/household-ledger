@@ -131,16 +131,51 @@ function build({prepared,adjustments={},lastSync=null}){
   date:fieldDate(row?.date),dueDate:fieldDate(row?.dueDate),
   expectedDate:fieldDate(row?.expectedDate),
   accountId:aid(row?.accountId||row?.fromAccountId),
-  merchant:safe(row?.merchant),amount:value(row?.amount),
+  merchant:safe(row?.merchant),amount:value(row?.amount??row?.actualAmount),
+  cardId:aid(row?.cardId),forecastAmount:value(row?.forecastAmount),
+  difference:value(row?.difference),
   status:safe(row?.status),reason:safe(row?.reason),kind:safe(row?.kind)
  });
+ // An observed one-off category difference is not permission to overwrite
+ // an owner's deliberate category. Expose the exact export-local transaction
+ // for Review; exclude mixed-use retailers whose categories are naturally varied.
+ const mixedUse=/^(?:amazon|walmart|costco|target|safeway|fred meyer|lowe'?s|the home depot)$/i;
+ const categoryGroups=new Map();
+ for(const row of actual.filter(r=>r.type==='expense'&&!r.pending&&r.category&&
+  !['Other','Uncategorized'].includes(r.category)&&!mixedUse.test(r.merchant))){
+  const key=row.merchant.toLowerCase().trim();
+  if(!categoryGroups.has(key))categoryGroups.set(key,[]);
+  categoryGroups.get(key).push(row);
+ }
+ const categoryConsistency=[];
+ for(const rows of categoryGroups.values()){
+  if(rows.length<3)continue;
+  const totals=new Map();
+  for(const row of rows)totals.set(row.category,(totals.get(row.category)||0)+1);
+  const ordered=[...totals].sort((a,b)=>b[1]-a[1]);
+  const [dominant,count]=ordered[0];
+  if(count<3||count/rows.length<.7)continue;
+  for(const row of rows)if(row.category!==dominant)
+   categoryConsistency.push({transactionId:row.id,accountId:row.accountId,
+    date:row.date,merchant:row.merchant,category:row.category,
+    suggestedCategory:dominant,reason:'Different from consistent same-merchant history; owner review required'});
+ }
+ const cardTypes=new Set(accounts.filter(a=>a.type==='credit').map(a=>a.id));
+ const cardOutflowClassification=actual.filter(r=>cardTypes.has(r.accountId)&&
+  r.cashDirection==='out'&&r.type==='transfer'&&
+  ['Subscriptions','Insurance','Groceries','Dining','Gas','Healthcare'].includes(r.category))
+  .map(r=>({transactionId:r.id,accountId:r.accountId,date:r.date,
+   merchant:r.merchant,category:r.category,reason:
+    'Outgoing card merchant charge is marked transfer; verify external purchase versus card correction'}));
  const bundle=prepared.bundle;
  const reviews={
   overduePayments:(bundle.overduePayments||[]).map(issue),
   duplicateChecks:(bundle.duplicateChecks||[]).map(issue),
   postedMatchReview:(bundle.postedMatchReview||[]).map(issue),
   paymentReconciliations:(bundle.paymentReconciliations||[]).map(issue),
-  paymentWarnings:(bundle.payments?.warnings||[]).map(safe)
+  paymentWarnings:(bundle.payments?.warnings||[]).map(safe),
+  categoryConsistency,
+  cardOutflowClassification
  };
  const coverage=ctx.scope;
  return {
