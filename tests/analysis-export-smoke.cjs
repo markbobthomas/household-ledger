@@ -74,7 +74,16 @@ const adjustments={
  learning:{categoryRules:{rule:{merchant:'Fictional Grocer',category:'Groceries',
   mode:'auto',accountId:bank,privateId:'DO-NOT-EXPORT'}}}
 };
-const report=build({prepared,adjustments,lastSync:'2026-11-23T11:00:00Z'});
+const report=build({prepared,adjustments,lastSync:'2026-11-23T11:00:00Z',
+ syncDiagnostics:{lastAttempt:{at:'2026-11-23T12:00:00Z',outcome:'failed',
+  requestId:'NEVER-EXPORT-REQUEST-ID'},
+  issues:[{code:'INVALID_FIELD',observedAt:'2026-11-23T12:00:01Z',
+   message:'SECRET-PROVIDER-MESSAGE',requestId:'NEVER-EXPORT-REQUEST-ID'}]}});
+assert.equal(report.bankSync.automaticTransactionSync,false);
+assert.equal(report.bankSync.lastAttemptOutcome,'failed');
+assert.equal(report.bankSync.lastAttemptAt,'2026-11-23T12:00:00Z');
+assert.equal(report.bankSync.itemIssues[0].code,'INVALID_FIELD');
+assert.equal(report.bankSync.itemIssues[0].observedAt,'2026-11-23T12:00:01Z');
 assert.equal(report.format,'ledger-manual-analysis-export');
 assert.equal(report.counts.history,630,'all history, not the last 500 or 140');
 assert.equal(report.actualTransactions.length,630);
@@ -114,7 +123,8 @@ assert.equal(report.reconciliationAndReview.categoryConsistency[0].category,'Gro
 const raw=JSON.stringify(report);
 for(const forbidden of [bank,'PRIVATE-ID','PRIVATE-TOKEN','SECRET-IN-SOURCE',
  'raw-private-rule','raw-future','raw-tx-','raw-added','DO-NOT-EXPORT',
- 'providerTransactionId','access_token','itemId','account_id','passphrase' ])
+ 'providerTransactionId','access_token','itemId','account_id','passphrase',
+ 'SECRET-PROVIDER-MESSAGE','NEVER-EXPORT-REQUEST-ID' ])
  assert(!raw.includes(forbidden),'Private provider field leaked: '+forbidden);
 const again=JSON.parse(raw);
 assert.equal(again.actualTransactions.length,history.length,'download is standalone parseable JSON');
