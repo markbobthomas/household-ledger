@@ -214,15 +214,25 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    // identity in the Note marked Possible. Do not allocate item-level cents,
    // label ambiguous choices or assign a category from a date-only hint.
    let suggestedCategory=null;
-   const gap=dayGap(t.date,best.c.date);
-   const priceDifference=Math.abs(best.c.amount-cents(t))/
-    Math.max(best.c.amount,cents(t));
-   if(alone&&!ambiguous.has(t.id)&&gap>=0&&gap<=7&&priceDifference<=.13&&
-      !existing[t.id]){
-    const lines=allocate(best.c.items,cents(t),validCategories);
-    const cats=[...new Set((lines||[]).map(l=>l.category))];
-    if(cats.length===1&&cats[0]!=='Uncategorized')
-     suggestedCategory=cats[0];
+   // Category confidence can exceed product-identity confidence: two
+   // possible items may both be clearly groceries, even though the exact
+   // item cannot be established. Require ALL plausible close alternatives
+   // to agree; if four or more survive, we have only a truncated candidate
+   // list and therefore cannot claim category unanimity.
+   const categoryChoices=alone?[best.c]:(unique.length<4?unique.map(x=>x.c):[]);
+   if(categoryChoices.length&&!existing[t.id]&&categoryChoices.every(c=>{
+     const gap=dayGap(t.date,c.date);
+     const difference=Math.abs(c.amount-cents(t))/
+      Math.max(c.amount,cents(t));
+     return gap>=0&&gap<=7&&difference<=.13;
+   })){
+    const choiceCats=categoryChoices.map(c=>{
+     const lines=allocate(c.items,cents(t),validCategories);
+     const cats=[...new Set((lines||[]).map(l=>l.category))];
+     return cats.length===1&&cats[0]!=='Uncategorized'?cats[0]:null;
+    });
+    if(choiceCats[0]&&choiceCats.every(c=>c===choiceCats[0]))
+     suggestedCategory=choiceCats[0];
    }
    if(note)suggestions.push({transactionId:t.id,accountId:t.accountId,
     date:t.date,amountCents:cents(t),orderId:best.c.id,note,
