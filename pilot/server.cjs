@@ -962,8 +962,13 @@ async function start(port=Number(env.PORT||8788)){
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
    if(requestPath==='/api/ledger/amazon-import'){
     if(!state.items.length)return respond(409,{error:'Connect a bank account before importing Amazon orders'});
+    const savedNotesOnly=body?.mode==='saved-notes';
     const isBinary=Buffer.isBuffer(body?.fileBytes);
-    if(!body||typeof body!=='object'||Array.isArray(body)||
+    if(savedNotesOnly){
+     if(Object.keys(body).sort().join(',')!=='dryRun,mode'||
+        typeof body.dryRun!=='boolean')
+      return respond(400,{error:'Invalid Amazon Note categorization request'});
+    }else if(!body||typeof body!=='object'||Array.isArray(body)||
        Object.keys(body).sort().join(',')!==
         (isBinary?'dryRun,fileBytes,fileName':'base64,dryRun,fileName')||
        typeof body.fileName!=='string'||body.fileName.length>240||
@@ -971,36 +976,42 @@ async function start(port=Number(env.PORT||8788)){
        (isBinary?body.fileBytes.length===0:typeof body.base64!=='string'))
      return respond(400,{error:'Select a valid Amazon order CSV or ZIP'});
     const amazon=require('./amazon-import.cjs'),stream=require('./amazon-stream.cjs');
-    const window=stream.targetWindow(state.transactions,state.ledgerAdjustments||{});
-    if(!window)return respond(200,{
-     importedItems:0,orderGroups:0,matches:0,ready:0,needsReview:0,
-     alreadyImported:0,ambiguousOrders:0,unmatchedOrders:0,
-     bankCharges:0,verifiedBankCharges:0,possibleBankCharges:0,
-     unmatchedBankCharges:0,notesReady:0,confidentCategories:0,
-     noUncategorizedAmazonCharges:true,examples:[],suggestions:[],applied:0
-    });
-    let result;
-    try{
-     // Filtering by required posted-bank dates happens locally before grouping;
-     // neither the source file nor any imported product title goes to OpenAI.
-     const rows=isBinary?
-      await stream.readFile(body.fileName,body.fileBytes,window):
-      amazon.readFile(body.fileName,body.base64);
-     const relevant= isBinary?null:new Set(rows.filter(item=>
-      item.date>=window.minDate&&item.date<=window.maxDate||
-      item.shipmentDate>=window.minDate&&item.shipmentDate<=window.maxDate)
-       .map(item=>item.orderId));
-     // The streaming reader already includes complete eligible orders.
-     // Legacy small JSON handoffs also retain all shipment lines per order.
-     const items=isBinary?rows:rows.filter(item=>relevant.has(item.orderId));
-     result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
-      savedCategoryChoices(state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories));
-    }catch(error){return respond(400,{error:String(error.message||'Invalid Amazon export').slice(0,150)})}
-    // Snapshot the original preferences before saveForecast writes the new
-    // encrypted Note overlay. A later category-store failure must restore
-    // the ORIGINAL notes, not the partially updated in-memory object.
+    const validCategories=savedCategoryChoices(
+     state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories);
+    let result={matches:[],suggestions:[],importedItems:0,orderGroups:0,
+     ambiguousOrders:0,unmatchedOrders:0,bankCharges:0,
+     verifiedBankCharges:0,possibleBankCharges:0,unmatchedBankCharges:0};
+    if(!savedNotesOnly){
+     const window=stream.targetWindow(state.transactions,state.ledgerAdjustments||{});
+     if(!window)return respond(200,{
+      importedItems:0,orderGroups:0,matches:0,ready:0,needsReview:0,
+      alreadyImported:0,ambiguousOrders:0,unmatchedOrders:0,
+      bankCharges:0,verifiedBankCharges:0,possibleBankCharges:0,
+      unmatchedBankCharges:0,notesReady:0,confidentCategories:0,
+      noUncategorizedAmazonCharges:true,examples:[],suggestions:[],applied:0
+     });
+     try{
+      // Filtering by required posted-bank dates happens locally before
+      // grouping. No order history or private Note goes to OpenAI.
+      const rows=isBinary?
+       await stream.readFile(body.fileName,body.fileBytes,window):
+       amazon.readFile(body.fileName,body.base64);
+      const relevant=isBinary?null:new Set(rows.filter(item=>
+       item.date>=window.minDate&&item.date<=window.maxDate||
+       item.shipmentDate>=window.minDate&&item.shipmentDate<=window.maxDate)
+        .map(item=>item.orderId));
+      const items=isBinary?rows:rows.filter(item=>relevant.has(item.orderId));
+      result=amazon.match(items,state.transactions,state.ledgerAdjustments||{},
+       validCategories);
+     }catch(error){return respond(400,{
+      error:String(error.message||'Invalid Amazon export').slice(0,150)
+     })}
+    }
+    // Snapshot before saving; a failed write must never lose personal Notes.
     const before=structuredClone(state.ledgerAdjustments||{}),
-     plan=require('./amazon-apply.cjs').prepare(result,before),
+     plan=require('./amazon-apply.cjs').prepare(result,before,{
+      transactions:state.transactions,categories:validCategories
+     }),
      {report,next,nextPredictions,hasNotes,categoryChanged}=plan;
     if(body.dryRun||!plan.ready)return respond(200,report);
     try{

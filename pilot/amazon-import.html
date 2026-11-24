@@ -19,6 +19,11 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 <body><main><a href="/">← Ledger</a><h1>Amazon purchase import</h1>
 <p>Match Amazon purchases to your existing bank charges, <strong>add the actual product names to transaction Notes</strong>, and assign categories when confident. Existing personal notes and bank balances are never changed.</p>
 <section class="panel">
+<h2>Categorize saved Amazon Notes</h2>
+<p>Already imported products? Review their saved item names and assign recognizable categories <strong>without uploading your ZIP again</strong>. Existing handwritten Notes and categories you chose remain unchanged.</p>
+<button type="button" id="notes-check" class="primary">Check saved item Notes</button>
+</section>
+<section class="panel">
 <h2>Upload Amazon order history</h2>
 <p>In Amazon, request your personal information for <strong>Orders</strong>, download the resulting ZIP, then upload it here. A CSV containing item-level order history also works. Select the file named <code>Retail.OrderHistory</code> if uploading a single CSV.</p>
 <label for="file">Amazon CSV or ZIP file
@@ -29,8 +34,8 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 </section>
 <section class="panel" id="preview" hidden>
 <h2>Preview</h2><div id="stats"></div>
-<p class="muted">Exact, unique purchase matches receive item Notes and confident categories. Very close date-and-amount suggestions may also get a broad category when every plausible product clearly belongs in the same category. Their Notes still begin <strong>“Possible Amazon:”</strong>, because the purchase itself is not proven. Ambiguous items spanning different categories and date-only guesses never set a category. If you already imported item Notes, you can recheck the same archive to add eligible categories without changing those Notes. Existing personal Notes and manual categories are preserved. No bank transactions or balances are edited.</p>
-<details><summary>Show matched purchases</summary><div id="details"></div></details>
+<p class="muted">Exact, unique purchase matches receive item Notes and confident categories. Very close date-and-amount suggestions may also get a broad category when every plausible product clearly belongs in the same category. Their Notes still begin <strong>“Possible Amazon:”</strong>, because the purchase itself is not proven. Ambiguous items spanning different categories and date-only guesses never set a category. You can also categorize the saved product Notes directly using the new button above, without uploading an archive. Existing personal Notes and manual categories are preserved. No bank transactions or balances are edited.</p>
+<details><summary>Show product Notes and category suggestions</summary><div id="details"></div></details>
 </section>
 <section class="panel"><h2>Sync Amazon orders from your browser</h2>
 <p>On a desktop computer, you can use the <a href="https://github.com/markbobthomas/household-ledger/tree/main/browser/amazon-ledger" target="_blank" rel="noopener noreferrer">Ledger Amazon browser extension (Chrome / Edge)</a> to read orders while signed in to Amazon and open this same preview automatically—without waiting for an Amazon data export.</p>
@@ -48,17 +53,21 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
  const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
  let payload=null,revision='',ready=0;
  function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
- function setBusy(b){$('check').disabled=b;$('apply').disabled=b||!payload||!ready}
+ function setBusy(b){$('check').disabled=b;$('notes-check').disabled=b;$('apply').disabled=b||!payload||!ready}
  async function request(dryRun){
   // Send original Blob bytes, not a 105 MB base64 JSON body for a 79 MB file.
   // Preview and Apply are separate authenticated requests with revision checks;
   // neither stores the file, including when the preview is cancelled.
+  const savedNotes=payload.mode==='saved-notes';
   const response=await fetch('/api/ledger/amazon-import',{method:'POST',credentials:'same-origin',
-   headers:{'Content-Type':'application/octet-stream','X-Pilot-Action':'1',
-    'X-Amazon-Filename':encodeURIComponent(payload.fileName),
-    'X-Amazon-Dry-Run':dryRun?'1':'0',
+   headers:{'Content-Type':savedNotes?'application/json':'application/octet-stream',
+    'X-Pilot-Action':'1',
+    ...(!savedNotes?{
+     'X-Amazon-Filename':encodeURIComponent(payload.fileName),
+     'X-Amazon-Dry-Run':dryRun?'1':'0'}:{}),
     ...(revision?{'X-Ledger-Revision':revision}:{})},
-   body:payload.file,cache:'no-store'});
+   body:savedNotes?JSON.stringify({mode:'saved-notes',dryRun}):payload.file,
+   cache:'no-store'});
   const type=response.headers.get('content-type')||'';
   if(!type.includes('application/json'))throw Error('Private Ledger server is unavailable. Reload and retry.');
   const data=await response.json();
@@ -74,10 +83,17 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
    ['Still unmatched',data.unmatchedBankCharges??0],
    ['Notes to add',data.notesReady??0],
    ['Categories to assign',data.confidentCategories??0],
+   ['From saved item Notes',data.savedNoteCategories??0],
    ['From exact matches',data.exactCategories??0],
    ['From strong likely items (verify)',data.likelyCategories??0],
    ['Changes ready to save',data.ready],
-   ['Unrecognized item categories',data.needsReview],
+   ['Saved item Notes found',data.savedNoteStats?.itemNotes??0],
+   ['Saved Notes with unknown products',data.savedNoteStats?.unrecognized??0],
+   ['Mixed or conflicting products',data.savedNoteStats?.mixed??0],
+   ['Date-only Notes (needs review)',data.savedNoteStats?.dateOnly??0],
+   ['Incomplete product Notes',data.savedNoteStats?.incomplete??0],
+   ['Already categorized',data.savedNoteStats?.alreadyCategorized??0],
+   ['Unrecognized item categories',data.needsReview??0],
    ['Ambiguous bank charges',data.ambiguousOrders]
   ];
   $('stats').innerHTML=stats.map(([label,value])=>'<div class="row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>').join('');
@@ -90,17 +106,34 @@ summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
    '<span>'+esc(x.note||'')+'</span><span>'+
    (x.suggestedCategory?'Likely category: '+esc(x.suggestedCategory)+' · Verify the item':
     'Category unchanged · Verify the possible products')+'</span></div>');
-  $('details').innerHTML=[...confirmed,...possible].join('')||'<p>No item matches found.</p>';
+  const fromNotes=(data.savedNoteExamples||[]).map(x=>
+   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+
+   ' · '+esc(x.category)+'</strong><span>'+esc(x.note)+'</span>'+
+   '<span>Category from saved product Note; existing Note unchanged</span></div>');
+  $('details').innerHTML=[...fromNotes,...confirmed,...possible].join('')||
+   '<p>No recognized product Notes ready for automatic categories.</p>';
   $('preview').hidden=false;
  }
  $('file').addEventListener('change',()=>{payload=null;revision='';ready=0;$('apply').disabled=true;$('preview').hidden=true;message('')});
+ $('notes-check').addEventListener('click',async()=>{
+  payload={mode:'saved-notes'};revision='';ready=0;
+  setBusy(true);message('Checking saved Amazon product Notes…');
+  try{
+   const data=await request(true);
+   show(data);ready=data.ready;
+   message(ready?'Review the categories from existing Notes, then select Apply.':
+    'No safe categories to assign. The preview explains which Notes need review.');
+   $('apply').disabled=!ready;
+  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
+  finally{setBusy(false);if(!payload)$('apply').disabled=true}
+ });
  $('check').addEventListener('click',async()=>{
   const file=$('file').files?.[0];
   if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
   if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
   setBusy(true);message('Checking item descriptions against your existing charges…');
   try{
-   payload={fileName:file.name,file};
+   payload={mode:'zip',fileName:file.name,file};
    const data=await request(true);
    show(data);ready=data.ready;message(data.ready?'Matches checked. Review the totals, then apply categories.':data.noUncategorizedAmazonCharges?'There are no outstanding Amazon charges requiring Notes or categories.':'No new safe matches found.');
    $('apply').disabled=!data.ready;

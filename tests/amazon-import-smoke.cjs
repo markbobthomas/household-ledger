@@ -237,6 +237,82 @@ assert.equal(Apply.prepare(broad,{}).report.confidentCategories,0,
  'Date-only or large-discrepancy hints must not change categories');
 
 
+
+const NoteCats=require('../pilot/amazon-note-categories.cjs');
+const fromNotes={
+ coffee:{id:'coffee',name:'Amazon Marketplace',accountId:'card-a',
+  date:'2026-10-15',amount:18.5,pending:false},
+ child:{id:'child',name:'AMZN',accountId:'card-a',
+  date:'2026-10-15',amount:35,pending:false},
+ common:{id:'common',name:'AMZN',accountId:'card-a',
+  date:'2026-10-16',amount:22,pending:false},
+ mixed:{id:'mixed',name:'AMZN',accountId:'card-a',
+  date:'2026-10-16',amount:22,pending:false},
+ dateOnly:{id:'dateOnly',name:'AMZN',accountId:'card-a',
+  date:'2026-10-16',amount:22,pending:false},
+ manual:{id:'manual',name:'AMZN',accountId:'card-a',
+  date:'2026-10-16',amount:22,pending:false},
+ personal:{id:'personal',name:'AMZN',accountId:'card-a',
+  date:'2026-10-16',amount:22,pending:false},
+ unknown:{id:'unknown',name:'AMZN',accountId:'card-a',
+  date:'2026-10-16',amount:22,pending:false},
+ allocated:{id:'allocated',name:'AMZN',accountId:'card-a',
+  date:'2026-10-16',amount:22,pending:false}
+};
+const importedNotes={
+ [Pair.keyFor(fromNotes.coffee)]:'Possible Amazon: Coffee beans',
+ [Pair.keyFor(fromNotes.child)]:'Amazon: Kids jacket',
+ [Pair.keyFor(fromNotes.common)]:
+  'Possible Amazon (verify): Laundry detergent OR Kitchen sponge',
+ [Pair.keyFor(fromNotes.mixed)]:
+  'Possible Amazon (verify): Coffee beans OR Kids jacket',
+ [Pair.keyFor(fromNotes.dateOnly)]:
+  'Possible Amazon (date only): Laundry detergent',
+ [Pair.keyFor(fromNotes.manual)]:'Amazon: Coffee beans',
+ [Pair.keyFor(fromNotes.personal)]:'I bought a gift for a friend',
+ [Pair.keyFor(fromNotes.unknown)]:'Possible Amazon: JX-7730 Trillium model',
+ [Pair.keyFor(fromNotes.allocated)]:'Amazon: Kitchen sponge'
+};
+const priorSaved={predictions:{transactionNotes:importedNotes},
+ categoryOverrides:{manual:'Shopping'},
+ amazonAllocations:{allocated:{orderId:'prior',amountCents:2200,lines:[
+  {title:'Kitchen sponge',category:'Home & Maintenance',cents:2200}
+ ]}}};
+const savedResult=NoteCats.analyze(fromNotes,priorSaved,categories);
+assert.equal(savedResult.stats.itemNotes,8);
+assert.equal(savedResult.proposals.length,3,
+ 'Already-written Amazon Notes must be classifiable without a ZIP or exact bank cents');
+assert.equal(savedResult.stats.mixed,1);
+assert.equal(savedResult.stats.dateOnly,1);
+assert.equal(savedResult.stats.unrecognized,1);
+assert.equal(savedResult.stats.alreadyCategorized,1);
+assert.equal(savedResult.stats.alreadyAllocated,1);
+const emptyImport={matches:[],suggestions:[],bankCharges:0};
+const savedPlan=Apply.prepare(emptyImport,priorSaved,{
+ transactions:fromNotes,categories
+});
+assert.equal(savedPlan.ready,3,'Three real product Notes provide category-only changes');
+assert.equal(savedPlan.report.savedNoteCategories,3);
+assert.equal(savedPlan.report.notesReady,0,'Do not rewrite any imported or handwritten Notes');
+assert.equal(savedPlan.next.categoryOverrides.coffee,'Groceries');
+assert.equal(savedPlan.next.categoryOverrides.child,'Kids & Family');
+assert.equal(savedPlan.next.categoryOverrides.common,'Home & Maintenance');
+assert.equal(savedPlan.next.categoryOverrides.manual,'Shopping');
+assert.equal(savedPlan.next.categoryOverrides.mixed,undefined);
+assert.equal(savedPlan.next.categoryOverrides.dateOnly,undefined);
+assert.equal(savedPlan.next.amazonAllocations.coffee,undefined);
+assert.deepEqual(savedPlan.next.predictions.transactionNotes,importedNotes);
+assert.deepEqual(priorSaved.categoryOverrides,{manual:'Shopping'},
+ 'A dry run never alters the saved category state');
+const savedAgain=Apply.prepare(emptyImport,savedPlan.next,{
+ transactions:fromNotes,categories
+});
+assert.equal(savedAgain.ready,0,'Rechecking saved Notes does not duplicate category assignments');
+assert.equal(savedAgain.report.savedNoteCategories,0);
+assert.equal(NoteCats.categoryForNote('Possible Amazon (verify): Coffee beans OR Kids jacket',categories).status,'mixed');
+assert.equal(NoteCats.categoryForNote('Possible Amazon (date only): Coffee beans',categories).status,'date-only');
+assert.equal(NoteCats.categoryForNote('My personal note: Coffee beans',categories).status,'not-imported');
+
 console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, manual priority, ambiguity PASS');
 
 
