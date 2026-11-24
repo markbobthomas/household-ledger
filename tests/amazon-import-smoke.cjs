@@ -309,6 +309,51 @@ const savedAgain=Apply.prepare(emptyImport,savedPlan.next,{
 });
 assert.equal(savedAgain.ready,0,'Rechecking saved Notes does not duplicate category assignments');
 assert.equal(savedAgain.report.savedNoteCategories,0);
+
+const otherState={predictions:{transactionNotes:{
+ [Pair.keyFor(fromNotes.coffee)]:'Possible Amazon: Coffee beans',
+ [Pair.keyFor(fromNotes.child)]:'Amazon: Kids jacket'
+}},categoryOverrides:{coffee:'Other',child:'Shopping'}};
+const otherRead=NoteCats.analyze(fromNotes,otherState,categories);
+assert.equal(otherRead.stats.replaceableOther,1,
+ 'Recognizable item previously assigned Other must be explained, not hidden');
+assert.equal(otherRead.stats.protectedSpecific,1,
+ 'An existing specific manual category remains protected');
+assert.equal(otherRead.stats.recognizable,2);
+assert.equal(otherRead.proposals.length,0,
+ 'Without explicit opt-in, neither existing category can be overwritten');
+assert.equal(otherRead.review[0].suggestedCategory,'Groceries');
+assert.equal(otherRead.review[0].existingCategory,'Other');
+const otherOptIn=NoteCats.analyze(fromNotes,otherState,categories,{
+ replaceOther:true
+});
+assert.equal(otherOptIn.proposals.length,1,
+ 'Explicit opt-in may replace only Other, not a specific manual category');
+const beforeOpt=Apply.prepare(emptyImport,otherState,{
+ transactions:fromNotes,categories
+});
+assert.equal(beforeOpt.report.confidentCategories,0);
+assert.equal(beforeOpt.next.categoryOverrides.coffee,'Other');
+const afterOpt=Apply.prepare(emptyImport,otherState,{
+ transactions:fromNotes,categories,replaceOther:true
+});
+assert.equal(afterOpt.report.confidentCategories,1);
+assert.equal(afterOpt.next.categoryOverrides.coffee,'Groceries');
+assert.equal(afterOpt.next.categoryOverrides.child,'Shopping');
+assert.deepEqual(afterOpt.next.predictions.transactionNotes,
+ otherState.predictions.transactionNotes);
+assert.deepEqual(otherState.categoryOverrides,{coffee:'Other',child:'Shopping'},
+ 'A preview never mutates the original category choices');
+assert.equal(Apply.prepare(emptyImport,afterOpt.next,{
+ transactions:fromNotes,categories,replaceOther:true
+}).ready,0,'Repeated Other-category replacement is idempotent');
+
+const noSaved=NoteCats.analyze(fromNotes,{predictions:{transactionNotes:{}}},categories);
+assert.equal(noSaved.stats.itemNotes,0);
+assert.equal(noSaved.stats.missingNotes,Object.keys(fromNotes).length,
+ 'Absent saved item Notes must not be reported as unrecognized products');
+assert.equal(noSaved.proposals.length,0);
+
 assert.equal(NoteCats.categoryForNote('Possible Amazon (verify): Coffee beans OR Kids jacket',categories).status,'mixed');
 assert.equal(NoteCats.categoryForNote('Possible Amazon (date only): Coffee beans',categories).status,'date-only');
 assert.equal(NoteCats.categoryForNote('My personal note: Coffee beans',categories).status,'not-imported');
