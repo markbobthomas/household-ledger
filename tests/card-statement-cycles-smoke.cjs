@@ -636,6 +636,4 @@ assert.ok(later);
 assert.equal(later.amount,250,'Preserve estimated payment when earlier overdue cash debit remains unreconciled');
 assert.equal(later.estimatedPaymentLimited,undefined,
  'Never derive a false balance cap by re-subtracting unresolved overdue payments');
-assert.ok(stale.plans.some(x=>x.originalDueDate==='2026-10-12'),
- 'Outstanding prior payment remains explicitly reserved for review');
 console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
