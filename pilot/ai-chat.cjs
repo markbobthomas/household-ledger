@@ -8,6 +8,7 @@ const {COMPUTE_TOOL,RESEARCH_TOOL,computeFinancialView,researchPublic}=require('
 const {createComparison}=require('./ai-independent-forecast.cjs');
 const {READ_TOOL,createDataset}=require('./ai-open-data.cjs');
 const {AUDIT_TOOL,auditFinancialEvidence}=require('./ai-evidence-audit.cjs');
+const {buildOutlookDesk}=require('./ai-outlook-desk.cjs');
 const MODEL_NAME=/^[a-zA-Z0-9_.-]{1,80}$/;
 const ISO=/^\d{4}-\d{2}-\d{2}$/;
 const amount=n=>Math.round(n*100)/100;
@@ -160,13 +161,42 @@ function providerError(status){
   status>=500?'provider_unavailable':'provider_rejected';
  return e;
 }
+// Carry through encrypted reasoning and function-call inputs with store:false.
+function responsesInput(messages){
+ const input=[];
+ for(const m of messages){
+  if(m.role==='tool')
+   input.push({type:'function_call_output',call_id:m.tool_call_id,output:m.content||''});
+  else if(m.role==='assistant'&&Array.isArray(m.tool_calls)){
+   if(Array.isArray(m.responseOutput)&&m.responseOutput.length)
+    input.push(...m.responseOutput);
+   else for(const c of m.tool_calls)
+    input.push({type:'function_call',call_id:c.id,name:c.function?.name,
+     arguments:c.function?.arguments||'{}'});
+  }else input.push({role:m.role,content:m.content||''});
+ }
+ return input;
+}
 async function complete({apiKey,model,messages,fetchImpl,toolChoice='auto',tools=TOOLS,responseFormat=FORMAT}){
+ const isReasoning=/^gpt-6(?:\\.|-)/.test(model);
  let response;
- try{response=await fetchImpl('https://api.openai.com/v1/chat/completions',{
-  method:'POST',signal:AbortSignal.timeout(90000),
+ try{response=await fetchImpl(isReasoning?'https://api.openai.com/v1/responses':
+  'https://api.openai.com/v1/chat/completions',{
+  method:'POST',signal:AbortSignal.timeout(isReasoning?180000:90000),
   headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
-  body:JSON.stringify({model,store:false,response_format:responseFormat,
-   ...(tools.length?{tools,tool_choice:toolChoice}:{}),messages})
+  body:JSON.stringify(isReasoning?{
+   model,store:false,reasoning:{effort:'high'},
+   include:['reasoning.encrypted_content'],
+   text:{format:{type:'json_schema',name:responseFormat.json_schema.name,
+    strict:true,schema:responseFormat.json_schema.schema}},
+   ...(tools.length?{tools:tools.map(t=>({type:'function',name:t.function.name,
+    description:t.function.description||'Read-only source tool',
+    parameters:t.function.parameters,strict:false})),tool_choice:toolChoice}:{}),
+   input:responsesInput(messages)
+  }:{
+   model,store:false,response_format:responseFormat,
+   ...(tools.length?{tools,tool_choice:toolChoice}:{}),messages
+  })
  })}catch(error){
   const e=Error('AI request failed');e.safeCode=error?.name==='AbortError'||
    error?.name==='TimeoutError'?'analysis_timeout':'provider_connection_failed';throw e;
@@ -174,6 +204,19 @@ async function complete({apiKey,model,messages,fetchImpl,toolChoice='auto',tools
  if(!response.ok)throw providerError(Number(response.status));
  let data;try{data=await response.json()}catch{
   const e=Error('AI response invalid');e.safeCode='invalid_provider_response';throw e;
+ }
+ if(isReasoning){
+  if(!Array.isArray(data?.output)||data.status==='failed'||data.status==='incomplete'){
+   const e=Error('Reasoning response incomplete');e.safeCode='invalid_provider_response';throw e;
+  }
+  const calls=data.output.filter(x=>x.type==='function_call').map(x=>({
+   id:x.call_id,type:'function',function:{name:x.name,arguments:x.arguments||'{}'}}));
+  const content=data.output.filter(x=>x.type==='message').flatMap(x=>
+   (x.content||[]).filter(p=>p.type==='output_text').map(p=>p.text)).join('');
+  if(!calls.length&&!content){
+   const e=Error('Reasoning model returned no report');e.safeCode='invalid_provider_response';throw e;
+  }
+  return {content:content||null,tool_calls:calls,responseOutput:data.output};
  }
  const result=data?.choices?.[0]?.message;
  if(!result||typeof result!=='object'){const e=Error('AI result missing');e.safeCode='invalid_provider_response';throw e}
