@@ -310,14 +310,12 @@ assert.equal(rejectedLong.blocks[0].detail,'',
  console.log('AI deep discovery: independent research, citation repair, safe partial fallback, factual verification and report depth passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
 
-// GPT-6 Responses API contract: private stateless sessions, encrypted reasoning
-// replay, source tools, structured report, and independent audit. Fictional only.
+// GPT-6 Responses API: full separate investigations, independent synthesis,
+// strict high-reasoning review, and encrypted resume after a provider timeout.
 (async()=>{
- let calls=0,rawReasoningReplay=false;
  const low=context.facts.find(x=>x.text.includes('lowest projected 90 day balance'));
- assert(low,'fictional source low fact is available');
  const f=createDataset(context).facts.find(x=>x.kind==='dataset-indices'&&x.text.includes('merchant'));
- assert(f,'fictional merchant evidence');
+ assert(low&&f);
  const block=(kind,title,text,evidenceIds,detail='')=>({
   kind,title,text,detail,visualStyle:'auto',evidenceIds,chartId:null});
  const proposed={blocks:[
@@ -332,64 +330,110 @@ assert.equal(rejectedLong.blocks[0].detail,'',
    'Credit-card settlement is not an additional purchase.',[f.id],
    'Compare source card purchases and settlement separately when assessing cash flow.')
  ],followUps:[],limitations:[]};
+ const verdict={rejectedIndices:[],concerns:[],quality:'substantive',
+  reason:'Independent investigations and detailed report were evidence supported.'};
+ const send=value=>({ok:true,json:async()=>({status:'completed',output:[
+  {type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]})});
+ let calls=0,reasoningReplay=false;
  const fake=async(url,options)=>{
   assert.equal(url,'https://api.openai.com/v1/responses');
   const body=JSON.parse(options.body);calls++;
   assert.equal(body.model,'gpt-6.2-astra');
   assert.equal(body.store,false);
-  assert.equal(body.reasoning.effort,calls===3?'medium':'high');
+  assert.equal(body.reasoning.effort,'high','all analytical passes retain high reasoning');
   assert.deepEqual(body.include,['reasoning.encrypted_content']);
   assert.equal(body.text.format.type,'json_schema');
   assert(!JSON.stringify(body).includes(account),'raw owner bank ID excluded');
-  const send=items=>({ok:true,json:async()=>({status:'completed',output:items})});
-  const answer=value=>send([{type:'message',content:[{
-   type:'output_text',text:JSON.stringify(value)}]}]);
   if(calls===1){
    assert(body.tools.some(t=>t.name==='read_financial_dataset'));
-   return send([{type:'reasoning',id:'reason-1',summary:[],
+   return {ok:true,json:async()=>({status:'completed',output:[
+    {type:'reasoning',id:'reason-1',summary:[],
      encrypted_content:'private-opaque-reasoning'},
     {type:'function_call',call_id:'read-1',name:'read_financial_dataset',
-     arguments:JSON.stringify({section:'history',offset:1500,limit:200})}]);
+     arguments:JSON.stringify({section:'history',offset:1500,limit:200})}]})};
   }
   if(calls===2){
    assert(body.input.some(x=>x.type==='function_call_output'&&x.call_id==='read-1'));
    assert(body.input.some(x=>x.type==='reasoning'&&
     x.encrypted_content==='private-opaque-reasoning'));
-   rawReasoningReplay=true;
-   return answer(proposed);
+   reasoningReplay=true;return send(proposed);
   }
   if(calls===3){
-   assert.equal(body.tools,undefined,
-    'independent evidence reviewer does not receive tools');
-   return answer({rejectedIndices:[],concerns:[],quality:'substantive',
-    reason:'Multiple distinct qualified findings with valid source references.'});
+   assert(String(body.input[0].content).includes('independent second investigator'));
+   return send(proposed);
+  }
+  if(calls===4){
+   assert(String(body.input[0].content).includes('final independent editor'));
+   assert(JSON.parse(body.input.at(-1).content).candidates.length===2);
+   return send(proposed);
+  }
+  if(calls===5){
+   assert.equal(body.tools,undefined,'independent evidence reviewer does not receive tools');
+   return send(verdict);
   }
   throw Error('Unexpected GPT-6 mock API call '+calls);
  };
  const report=await analyzeOneClick({context,apiKey:'synthetic',
   consent:'financial-analysis-v3',model:'gpt-6.2-astra',fetchImpl:fake});
- assert.equal(calls,3,'full research desk enables one deep GPT-6 pass plus second-stage review');
- assert(rawReasoningReplay,'GPT-6 reasoning is preserved on stateless tool calls');
+ assert.equal(calls,5,'two full investigators, synthesis and independent review were all retained');
+ assert(reasoningReplay,'encrypted reasoning is preserved on stateless source-tool calls');
  assert.equal(report.presentation,'independent-financial-outlook');
  assert.equal(report.blocks.length,3);
+ assert.equal(report.independentExplorations,2);
  assert.equal(report.analysisQuality.status,'substantive');
- // The optional slower critique cannot erase a locally cited completed outlook.
- let reviewerCalls=0;
- const reviewerTimedOut=await analyzeOneClick({context,apiKey:'synthetic',
+
+ // The fourth step times out. The encrypted checkpoint must preserve the
+ // source-verified editorial candidate and both independently researched drafts.
+ let resumedFrom=null,firstCalls=0;
+ const timeout=async()=>{
+  firstCalls++;
+  if(firstCalls<=3)return send(proposed);
+  const e=Error('Fictional provider deadline');e.name='TimeoutError';throw e;
+ };
+ await assert.rejects(()=>analyzeOneClick({context,apiKey:'synthetic',
+  consent:'financial-analysis-v3',model:'gpt-6.2-astra',fetchImpl:timeout,
+  onCheckpoint:async saved=>{resumedFrom=structuredClone(saved)}}),
+  e=>e.safeCode==='analysis_timeout');
+ assert.equal(firstCalls,4,'no automatic paid retry on timed-out review');
+ assert.equal(resumedFrom.progress,'review');
+ assert.equal(resumedFrom.drafts.length,2,'both independent research passes persisted');
+ assert.equal(resumedFrom.nextRound,2,'resumable report reuses the same editorial stage');
+ assert(resumedFrom.pendingReview?.includes('Projected cash is conditional'));
+ let resumeCalls=0;
+ const resumed=await analyzeOneClick({context,apiKey:'synthetic',
   consent:'financial-analysis-v3',model:'gpt-6.2-astra',
-  fetchImpl:async(_url,_opts)=>{
-   reviewerCalls++;
-   if(reviewerCalls===1)return {ok:true,json:async()=>({
-    status:'completed',output:[{type:'message',content:[{
-     type:'output_text',text:JSON.stringify(proposed)}]}]})};
-   const error=Error('Fictional slow secondary critique');
-   error.name='TimeoutError';throw error;
+  resumeState:resumedFrom,
+  fetchImpl:async(url,options)=>{
+   resumeCalls++;
+   assert.equal(url,'https://api.openai.com/v1/responses');
+   const body=JSON.parse(options.body);
+   assert.equal(body.tools,undefined);
+   assert.equal(body.reasoning.effort,'high');
+   return send(verdict);
   }});
- assert.equal(reviewerCalls,2,'no paid retry after secondary review timeout');
- assert.equal(reviewerTimedOut.blocks.length,3,'supported report survives critique timeout');
- assert.equal(reviewerTimedOut.analysisQuality.status,'limited');
- assert.match(reviewerTimedOut.analysisQuality.reason,/critique timed out/);
- assert(!reviewerTimedOut.auditTrail.some(x=>x.action.startsWith('Independently re-reviewed')),
-  'never claim an incomplete critique was performed');
- console.log('GPT-6 financial outlook: stateless source tools, one deep report, and review-timeout preservation passed');
+ assert.equal(resumeCalls,1,'continue at review, not from first exploratory analysis');
+ assert.equal(resumed.independentExplorations,2);
+ assert.equal(resumed.blocks.length,3);
+ assert.equal(resumed.analysisQuality.status,'substantive');
+ assert(resumed.auditTrail.some(x=>x.action.startsWith('Independently re-reviewed')));
+
+ // A timeout during the second exploratory pass should not repeat the first.
+ let earlyCheckpoint=null,earlyCalls=0;
+ await assert.rejects(()=>analyzeOneClick({context,apiKey:'synthetic',
+  consent:'financial-analysis-v3',model:'gpt-6.2-astra',
+  onCheckpoint:async state=>{earlyCheckpoint=structuredClone(state)},
+  fetchImpl:async()=>{
+   earlyCalls++;if(earlyCalls===1)return send(proposed);
+   const e=Error('Fictional timeout in second investigation');e.name='TimeoutError';throw e;
+  }}),e=>e.safeCode==='analysis_timeout');
+ assert.equal(earlyCheckpoint.stage,'discovery-two');
+ assert.equal(earlyCheckpoint.drafts.length,1);
+ let continued=0;
+ const done=await analyzeOneClick({context,apiKey:'synthetic',
+  consent:'financial-analysis-v3',model:'gpt-6.2-astra',resumeState:earlyCheckpoint,
+  fetchImpl:async()=>{continued++;return send(continued===3?verdict:proposed)}});
+ assert.equal(continued,3,'only outstanding discovery, synthesis and review are repeated');
+ assert.equal(done.independentExplorations,2);
+ assert.equal(done.analysisQuality.status,'substantive');
+ console.log('GPT-6 deep financial outlook: two investigations, synthesis, deep review, and checkpoint recovery passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
