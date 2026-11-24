@@ -28,7 +28,8 @@ function buildOutlookDesk(context){
  const byMonth=new Map();
  const group=(map,label,amount)=>{if(!label)return;map.set(safe(label),cents(amount)+ (map.get(safe(label))||0))};
  const init=month=>({month,purchases:0,refunds:0,purchaseCount:0,refundCount:0,
-  payroll:0,otherIncome:0,transferOut:0,transferCount:0,cardPurchases:0,
+  payroll:0,otherIncome:0,transferOut:0,obligationTransfers:0,
+  otherTransferOut:0,transferCount:0,cardPurchases:0,
   fees:0,categories:new Map(),merchants:new Map(),retailOther:new Map(),
   high100:0,high100Count:0,subMerchants:new Map(),transfers:new Map()});
  for(const tx of rows){
@@ -57,6 +58,12 @@ function buildOutlookDesk(context){
   }else if(type==='transfer'&&tx.cashDirection==='out'&&
    !['card_payment'].includes(kind)){
    v.transferOut+=amount;v.transferCount++;
+   // Only owner-categorized mortgage/utility-like transfers are part of a
+   // conservative household outflow proxy. Other transfer destinations may
+   // be savings, family movements or unsettled reimbursements.
+   if(['mortgage','utility','utilities'].includes(category.toLowerCase()))
+    v.obligationTransfers+=amount;
+   else v.otherTransferOut+=amount;
    group(v.transfers,category,Number(tx.amount));
   }
   byMonth.set(key,v);
@@ -72,6 +79,8 @@ function buildOutlookDesk(context){
   netPurchaseAverage:mean(windows,'purchases')/100-mean(windows,'refunds')/100,
   creditPurchasesAverage:mean(windows,'cardPurchases')/100,
   transferOutAverage:mean(windows,'transferOut')/100,
+  obligationTransferAverage:mean(windows,'obligationTransfers')/100,
+  otherTransferAverage:mean(windows,'otherTransferOut')/100,
   payrollObservedAverage:mean(windows,'payroll')/100,
   otherIncomeAverage:mean(windows,'otherIncome')/100,
   largePurchaseCount:windows.reduce((s,x)=>s+x.high100Count,0),
@@ -119,7 +128,9 @@ function buildOutlookDesk(context){
   ' per month, purchases net identified refunds '+dollar(averaged.netPurchaseAverage)+
   ' per month; credit-card purchases '+dollar(averaged.creditPurchasesAverage)+
   ' per month; outgoing transfers (excluding card repayments) '+dollar(averaged.transferOutAverage)+
-  ' per month. The transfer amount may include mortgage-like payments but is not independently verified external expenditure. Posted card repayments are excluded to avoid counting purchases twice.': 'No fully covered calendar month available; do not infer historical monthly spending.',{});
+  ' per month, of which owner-categorized mortgage/utility transfer candidates '+dollar(averaged.obligationTransferAverage)+
+  ' per month and other transfers '+dollar(averaged.otherTransferAverage)+
+  ' per month. Owner labels do not independently prove final mortgage payment/expense. Posted card repayments are excluded to avoid counting purchases twice.': 'No fully covered calendar month available; do not infer historical monthly spending.',{});
  for(const m of complete){
   add('Recorded purchases and cash inflows '+m.month,
    'Full calendar month '+m.month+': purchase charges '+dollar(m.purchases/100)+
@@ -127,7 +138,9 @@ function buildOutlookDesk(context){
    ', net purchase charges '+dollar((m.purchases-m.refunds)/100)+
    ', observed direct payroll-like deposits '+dollar(m.payroll/100)+
    ', other classified income '+dollar(m.otherIncome/100)+
-   ', distinct outgoing non-card-payment transfers '+dollar(m.transferOut/100)+
+   ', outgoing non-card transfers '+dollar(m.transferOut/100)+
+   ', of which owner-categorized mortgage/utility '+dollar(m.obligationTransfers/100)+
+   ', other ambiguous transfers '+dollar(m.otherTransferOut/100)+
    ', credit-card new purchases '+dollar(m.cardPurchases/100)+
    ', purchase count '+m.purchaseCount+'. Payroll-like deposit names are heuristics; saved recurring income rules separately establish cadence.');
  }
@@ -141,13 +154,13 @@ function buildOutlookDesk(context){
   recognized.slice(0,8).map(x=>x.id+' '+dollar(x.amount)+' '+x.frequency+
    (validDate(x.anchorDate)?' anchored '+x.anchorDate:'')).join('; '));
  if(windows.length&&normalizedPayroll!==null){
-  const combined=money(averaged.netPurchaseAverage+averaged.transferOutAverage),
+  const combined=money(averaged.netPurchaseAverage+averaged.obligationTransferAverage),
    difference=money(normalizedPayroll-combined);
   add('Conditional normalized cash-flow sustainability comparison',
    'Normalized saved recurring income '+dollar(normalizedPayroll)+
-   ' per month versus observed net purchase charges plus outgoing non-card-payment transfers '+
+   ' per month versus observed net purchase charges plus owner-categorized housing/utility withdrawal candidates '+
    dollar(combined)+' per month; difference '+(difference<0?'-':'+')+dollar(difference)+
-   '. WARNING: outgoing transfers could include savings or other non-expense transfers and other income/expenses may be missing. This is a scenario proxy, not an audited deficit or daily cash forecast.');
+   '. WARNING: transfer recipient/purpose not independently verified; other transfers and possibly missing household income/expenses excluded. This is a scenario proxy, not an audited deficit or daily cash forecast.');
   add('Illustrative spending-adjustment sensitivity',
    'At that same observed proxy and normalized income, spending reductions of $250.00, $500.00 and $750.00 per month would change that calculated margin by those amounts, to '+
    (difference+250<0?'-':'+')+dollar(difference+250)+', '+
@@ -258,6 +271,8 @@ function buildOutlookDesk(context){
    classifiedPayrollDeposits:money(m.payroll/100),
    otherClassifiedIncome:money(m.otherIncome/100),
    externalOrInternalTransferOut:money(m.transferOut/100),
+   ownerCategorizedHousingUtilityTransfers:money(m.obligationTransfers/100),
+   unclassifiedOrOtherTransfers:money(m.otherTransferOut/100),
    creditCardNewPurchases:money(m.cardPurchases/100),
    purchaseCount:m.purchaseCount})),
   monthlyAverage:averaged,
