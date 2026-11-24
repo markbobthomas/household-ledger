@@ -309,8 +309,11 @@ button{font:inherit;cursor:pointer}
    svg.append(svgEl('line',{x1:L,x2:w-R,y1:py,y2:py,stroke:'#e1e7e2','stroke-width':1}));
    svg.append(svgEl('text',{x:L-7,y:py+4,'font-size':11,fill:'#6f8176','text-anchor':'end'},(chart.unit==='count'?new Intl.NumberFormat('en-US').format(value):brief(value))));
   }
+  const primaryLegend=chart.legendPrimary||'Ledger scheduled forecast',
+   secondaryLegend=chart.legendSecondary||'Independent history-only';
   const show=p=>{selected.textContent=chart.type==='comparison'?
-    p.label+' · Ledger '+money(p.value)+' · History-only '+money(p.alternateValue):
+    p.label+' · '+primaryLegend+' '+money(p.value)+' · '+
+     secondaryLegend+' '+money(p.alternateValue):
     String(p.label)+' · '+formatValue(p.value)};
   // Make the entire plot touch-selectable. Small SVG point markers alone
   // are difficult to hit reliably on iPhone.
@@ -376,8 +379,8 @@ button{font:inherit;cursor:pointer}
   if(chart.title)fig.append(el('strong','',chart.title));
   if(chart.type==='comparison'){
    const legend=el('div','legend');const a=el('span','ledger'),b=el('span','history');
-   a.append(el('i'),el('span','','Ledger scheduled forecast'));
-   b.append(el('i'),el('span','','Independent history-only'));
+   a.append(el('i'),el('span','',primaryLegend));
+   b.append(el('i'),el('span','',secondaryLegend));
    legend.append(a,b);fig.append(legend);
   }
   fig.append(svg,selected);
