@@ -74,6 +74,22 @@ const adjustments={
  learning:{categoryRules:{rule:{merchant:'Fictional Grocer',category:'Groceries',
   mode:'auto',accountId:bank,privateId:'DO-NOT-EXPORT'}}}
 };
+// Export-only QA should surface, not rewrite, suspicious manual merchant
+// categories and two distinct fixed utilities above recent actual totals.
+history[20].merchant='Chevron';
+history[20].category='Groceries';
+for(let i=0;i<6;i++){
+ history[100+i].merchant='Fictional Electric Utility';
+ history[100+i].category='Utilities';
+ history[100+i].type='expense';
+ history[100+i].pending=false;
+ history[100+i].date=['2026-08-12','2026-08-12','2026-09-12','2026-09-12','2026-10-12','2026-10-12'][i];
+ history[100+i].amount=100;
+}
+adjustments.predictions.futureRecurringRules.push(
+ ...[0,1].map(i=>({id:'private-electric-'+i,kind:'event',type:'expense',
+  accountId:bank,merchant:'Fictional Electric Utility',category:'Utilities',
+  frequency:'monthly',anchorDate:date(12),amount:200})));
 const report=build({prepared,adjustments,lastSync:'2026-11-23T11:00:00Z',
  syncDiagnostics:{lastAttempt:{at:'2026-11-23T12:00:00Z',outcome:'failed',
   requestId:'NEVER-EXPORT-REQUEST-ID'},
@@ -117,6 +133,12 @@ assert.equal(report.cardStatements[0].actualPaymentAmount,1280);
 assert.equal(report.cardStatements[0].actualPaymentDate,date(-4));
 assert.equal(report.cardStatements[0].estimatedPaymentLimited,true);
 assert.equal(report.cardStatements[0].statementReconciliation.difference,12);
+assert.equal(report.reconciliationAndReview.possibleFuelCategories.length,1,
+ 'Fuel retailer grocery categories are suggested for review, never overridden');
+assert.equal(report.reconciliationAndReview.possibleFuelCategories[0].suggestedCategory,'Gas');
+assert.equal(report.reconciliationAndReview.recurringAmountReview.length,1,
+ 'A pair of fixed utility schedules materially above three posted months must be reviewable');
+assert.equal(report.reconciliationAndReview.recurringAmountReview[0].ruleCount,2);
 assert.equal(report.reconciliationAndReview.categoryConsistency.length,1);
 assert.equal(report.reconciliationAndReview.categoryConsistency[0].suggestedCategory,'Subscriptions');
 assert.equal(report.reconciliationAndReview.categoryConsistency[0].category,'Groceries');
