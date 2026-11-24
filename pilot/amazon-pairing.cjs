@@ -13,24 +13,21 @@ const dayGap=(posted,ship)=>
 const keyFor=t=>'bank:'+JSON.stringify([String(t.accountId||''),String(t.id)]);
 const compact=s=>String(s||'').replace(/\s+/g,' ').trim();
 function itemNote(items,prefix='Amazon: '){
- const titles=items.map(i=>compact(i.title)).filter(Boolean);
+ const titles=[...new Set(items.map(i=>compact(i.title)).filter(Boolean))];
  if(!titles.length)return '';
- const seen=[...new Set(titles)];
- let out=prefix;
- for(let i=0;i<seen.length;i++){
-  const suffix=seen.length-i-1?'; +'+(seen.length-i-1)+' more':'';
-  const available=160-out.length-suffix.length-(i>0?2:0);
-  if(available<=0)break;
-  const value=seen[i].slice(0,available);
-  if(i>0)out+='; ';
-  out+=value;
-  if(value.length<seen[i].length||i<seen.length-1){
-   const remain=seen.length-i-1;
-   if(remain)out+='; +'+remain+' more';
-   break;
+ let note=prefix;
+ for(let i=0;i<titles.length;i++){
+  const separator=i?'; ':'',remaining=titles.length-i-1;
+  const reserve=remaining?'; +'+remaining+' more':'';
+  if(note.length+separator.length+titles[i].length+reserve.length<=160){
+   note+=separator+titles[i];continue;
   }
+  const space=160-note.length-separator.length-reserve.length;
+  if(space>4)note+=separator+titles[i].slice(0,space-1).trimEnd()+'…'+reserve;
+  else if(remaining)note=note.slice(0,160-reserve.length)+reserve;
+  return note.slice(0,160);
  }
- return out.slice(0,160);
+ return note.slice(0,160);
 }
 function match(rows,transactions,adjustments,validCategories,allocate){
  const txs=Object.values(transactions||{}).filter(amazon);
@@ -178,9 +175,24 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    note:itemNote(picked.items,'Possible Amazon: '),
    confidence:'possible',source:picked.source});
  }
+ // Avoid assigning the same exported product to two different speculative
+ // notes. Suggestions are never verified charge allocations.
+ const seenSuggested=new Map(),contested=new Set();
+ for(const entry of suggestions){
+  const candidate=candidates.find(c=>c.id===entry.orderId&&
+   itemNote(c.items,'Possible Amazon: ')===entry.note);
+  if(!candidate)continue;
+  for(const item of candidate.ids){
+   const prior=seenSuggested.get(item);
+   if(prior&&prior!==entry.transactionId){
+    contested.add(prior);contested.add(entry.transactionId);
+   }else seenSuggested.set(item,entry.transactionId);
+  }
+ }
+ const uniqueSuggestions=suggestions.filter(x=>!contested.has(x.transactionId));
  const matchedBank=new Set(matches.map(m=>m.transactionId));
- const suggestedBank=new Set(suggestions.map(m=>m.transactionId));
- return {matches,suggestions,importedItems:rows.length,orderGroups:orders.size,
+ const suggestedBank=new Set(uniqueSuggestions.map(m=>m.transactionId));
+ return {matches,suggestions:uniqueSuggestions,importedItems:rows.length,orderGroups:orders.size,
   ambiguousOrders:ambiguous.size,unmatchedOrders:orders.size-
    new Set(matches.map(m=>m.orderId.split(' · ')[0])).size,
   bankCharges:txs.length,verifiedBankCharges:matchedBank.size,
