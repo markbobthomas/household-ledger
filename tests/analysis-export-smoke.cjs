@@ -17,6 +17,10 @@ const history=Array.from({length:630},(_,i)=>({
   providerTransactionId:'PRIVATE-ID',access_token:'PRIVATE-TOKEN'
  }
 }));
+for(const [j,i] of [12,13,14,15].entries()){
+ history[i].merchant='Fictional Periodical';
+ history[i].category=j===3?'Groceries':'Subscriptions';
+}
 const future=[
  {id:'raw-future',date:date(15),accountId:bank,merchant:'Fictional Housing',
   kind:'expense',amount:1280,recurringRuleId:'raw-private-rule'}
@@ -33,10 +37,16 @@ const prepared={bundle:{
  ledger:[],rows:history,
  payments:{statements:[{cardId:bank,fromAccountId:bank,periodStart:date(-30),
    periodEnd:date(-1),dueDate:date(10),amount:620,statementBalance:620,
-   autopayEnabled:true,estimated:false}],warnings:[]},
+   autopayEnabled:true,estimated:false,alreadyPaid:true,
+   actualPaymentDate:date(-4),actualPaymentAmount:1280,
+   statementReconciliation:{status:'difference',source:'user-entered',difference:12},
+   estimatedPaymentLimited:true,requestedPaymentAmount:640,modeledPaymentLimit:620
+   }],warnings:[]},
  overduePayments:[],duplicateChecks:[],postedMatchReview:[],
- paymentReconciliations:[{date:date(-4),merchant:'Housing',amount:1280,status:'posted',
-  accountId:bank,providerTransactionId:'private-ledger-evidence'}]
+ paymentReconciliations:[{date:date(-4),expectedDate:date(-5),
+  merchant:'Housing',amount:1280,forecastAmount:1290,difference:-10,
+  status:'posted',cardId:bank,accountId:bank,
+  bankId:'raw-private-bank-id',providerTransactionId:'private-ledger-evidence'}]
 }};
 const adjustments={
  categoryOverrides:{[history[1].id]:'Home & Maintenance'},
@@ -90,6 +100,17 @@ assert.equal(report.savedDecisions.transactionNotes[0].transactionId,
  'Notes and category overrides must refer to the same export-local transaction despite sorting');
 assert.equal(report.savedDecisions.alertThreshold,6000);
 assert.equal(report.reconciliationAndReview.paymentReconciliations[0].amount,1280);
+assert.equal(report.reconciliationAndReview.paymentReconciliations[0].forecastAmount,1290);
+assert.equal(report.reconciliationAndReview.paymentReconciliations[0].difference,-10);
+assert.equal(report.reconciliationAndReview.paymentReconciliations[0].expectedDate,date(-5));
+assert.equal(report.reconciliationAndReview.paymentReconciliations[0].cardId,'account-1');
+assert.equal(report.cardStatements[0].actualPaymentAmount,1280);
+assert.equal(report.cardStatements[0].actualPaymentDate,date(-4));
+assert.equal(report.cardStatements[0].estimatedPaymentLimited,true);
+assert.equal(report.cardStatements[0].statementReconciliation.difference,12);
+assert.equal(report.reconciliationAndReview.categoryConsistency.length,1);
+assert.equal(report.reconciliationAndReview.categoryConsistency[0].suggestedCategory,'Subscriptions');
+assert.equal(report.reconciliationAndReview.categoryConsistency[0].category,'Groceries');
 const raw=JSON.stringify(report);
 for(const forbidden of [bank,'PRIVATE-ID','PRIVATE-TOKEN','SECRET-IN-SOURCE',
  'raw-private-rule','raw-future','raw-tx-','raw-added','DO-NOT-EXPORT',
