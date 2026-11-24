@@ -289,6 +289,39 @@ assert.equal(rejectedLong.blocks[0].detail,'',
  assert.equal(quality.blocks.length,3);
  assert.equal(quality.analysisQuality.status,'substantive');
  assert.equal(quality.editorialRevisions,1);
+ // A skeptical reviewer must send its actual unanswered questions back to
+ // the analyst. If real gaps remain after deeper follow-up, identify them
+ // precisely instead of returning the generic "Limited analysis" warning.
+ let repeatedCalls=0,followUps=0;
+ const stillOpen=await analyzeOneClick({context,apiKey:'fictional',
+  consent:'financial-analysis-v3',fetchImpl:async(_url,opts)=>{
+   repeatedCalls++;
+   const body=JSON.parse(opts.body);
+   const answer=value=>({ok:true,json:async()=>({choices:[{
+    message:{content:JSON.stringify(value)}}]})});
+   if(repeatedCalls===1){
+    assert.match(body.messages[0].content,/Use short, direct sentences and familiar words/,
+     'plain writing changes must keep the full-depth investigator prompt');
+   }
+   if(repeatedCalls<=3)return answer(tooShallow);
+   if(repeatedCalls%2===0)return answer({rejectedIndices:[],
+    concerns:['Compare the fictional recurring card payment with the bank withdrawal before drawing a cash conclusion.'],
+    quality:'reconsider',reason:'The specific card payment cross-check is still missing.'});
+   const request=JSON.parse(body.messages.at(-1).content);
+   assert(request.reviewerQuestions.some(q=>q.includes('recurring card payment')),
+    'the review questions themselves, not just a vague reviewer summary, guide the next source investigation');
+   assert.match(request.action,/read-only source research/);
+   followUps++;
+   return answer(tooShallow);
+  }});
+ assert.equal(repeatedCalls,10,
+  'retain both independent passes, full synthesis, four evidence reviews and three repairs');
+ assert.equal(followUps,3,'give unresolved leads three full editorial retries');
+ assert.equal(stillOpen.independentExplorations,2);
+ assert.equal(stillOpen.analysisQuality.status,'limited');
+ assert.equal(stillOpen.analysisQuality.cause,'open-questions');
+ assert(stillOpen.analysisQuality.questions.some(q=>q.includes('recurring card payment')));
+ assert(!stillOpen.analysisQuality.reason.includes('could not confirm that this run explored enough'));
  // A model that repeatedly invents citations must not return an opaque
  // invalid_ai_evidence error or claim to have produced a comprehensive report.
  let invalidCalls=0;
@@ -303,6 +336,10 @@ assert.equal(rejectedLong.blocks[0].detail,'',
   }});
  assert.equal(invalidCalls,5,'two independent passes and two citation repairs, no automatic paid fallback call');
  assert.equal(limited.analysisQuality.status,'limited');
+ assert.equal(limited.analysisQuality.cause,'source-proof',
+  'source-only fallback must not be mislabeled as a depth-review failure');
+ assert(!limited.auditTrail.some(a=>a.action.startsWith('Independently re-reviewed')),
+  'source-only fallback does not claim a paid independent reviewer checked AI claims');
  assert(limited.blocks.length>=1);
  assert(limited.limitations.some(x=>x.includes('failed its evidence review')));
  assert(!JSON.stringify(limited).includes('987654321'),
