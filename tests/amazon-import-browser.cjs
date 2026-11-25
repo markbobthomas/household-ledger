@@ -203,7 +203,7 @@ module.exports=(async()=>{
    assert.equal(await page.locator('#ai-apply').isDisabled(),true);
    await page.locator('#ai-check').click();
    await page.waitForFunction(()=>
-    document.getElementById('ai-message').textContent.includes('AI suggested 1 category'));
+    document.getElementById('ai-message').textContent.includes('AI suggested 2 categories'));
    await page.locator('#ai-preview details summary').click();
    assert.match(await page.locator('#ai-preview').innerText(),/Pet grooming brush/);
    assert.match(await page.locator('#ai-preview').innerText(),/Child car seat travel bag/);
