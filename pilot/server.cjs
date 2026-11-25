@@ -44,6 +44,15 @@ let state=freshState(),forecastWrites=Promise.resolve(),householdEditQueue=Promi
 // preview replaces the old one; applying after any settings edit is rejected.
 let amazonAiPreview=null;
 const settingsRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify(state.ledgerAdjustments||{})).digest('hex');
+ // Scoped sharing token is stored only as an HMAC on the encrypted private disk.
+ const categoryShareHash=token=>crypto.createHmac('sha256',key).update('category-share-v1:'+token).digest('hex');
+ function validCategoryShare(req){
+  const token=String(req.headers['x-ledger-share']||''),share=state.categoryShare;
+  if(!state.items.length||!/^[a-f0-9]{64}$/.test(token)||!share||
+     !/^[a-f0-9]{64}$/.test(String(share.hash||''))||
+     !Number.isSafeInteger(share.expiresAt)||share.expiresAt<=Date.now())return false;
+  return crypto.timingSafeEqual(Buffer.from(share.hash,'hex'),Buffer.from(categoryShareHash(token),'hex'));
+ }
 const staleMessage='Ledger was updated on another device. This edit was not saved. Reload the page to review the latest changes.';
 function normalizeState(){
  if(!Array.isArray(state.items))state.items=[];
@@ -627,6 +636,52 @@ async function start(port=Number(env.PORT||8788)){
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff','Set-Cookie':[auth.clearCookie(),auth.signedOutCookie()]});
    return res.end(JSON.stringify({signedOut:true}));
+  }
+  if(req.method==='GET'&&requestPath==='/categorize'){
+   let page;try{page=await fs.readFile(path.join(__dirname,'category-share.html'),'utf8')}
+   catch{return respond(503,{error:'Categorization screen unavailable'})}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
+    'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
+    'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"});
+   return res.end(page);
+  }
+  if(requestPath==='/api/share/categorize'){
+   // A bearer link can NEVER access a normal household API or owner session.
+   if(!validCategoryShare(req))return respond(401,{error:'This private link expired or has been replaced. Ask for a new link.'});
+   if(req.method==='GET'){
+    try{return respond(200,{...require('./category-share.cjs').snapshot(state),revision:settingsRevision()})}
+    catch{return respond(503,{error:'Category list temporarily unavailable'})}
+   }
+   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1'||
+     !/^application\/json(?:;|$)/i.test(String(req.headers['content-type']||'')))
+    return respond(403,{error:'Category action rejected'});
+   if(Number(req.headers['content-length'])>8192)return respond(413,{error:'Category action too large'});
+   let choice;try{
+    const chunks=[];let total=0;
+    for await(const chunk of req){total+=chunk.length;if(total>8192)return respond(413,{error:'Category action too large'});chunks.push(chunk)}
+    choice=JSON.parse(Buffer.concat(chunks).toString());
+   }catch{return respond(400,{error:'Invalid category choice'})}
+   // Serialize with bank sync, account removal, and other category writes.
+   const prior=householdEditQueue;let release;
+   householdEditQueue=new Promise(resolve=>{release=resolve});await prior;
+   try{
+    if(!validCategoryShare(req))return respond(401,{error:'Shared access has ended'});
+    if(accountRemovalBusy)return respond(409,{error:'Account changes are in progress. Refresh and retry.'});
+    if(!req.headers['x-ledger-revision']||req.headers['x-ledger-revision']!==settingsRevision())
+     return respond(409,{error:staleMessage,code:'STALE_LEDGER'});
+    const share=require('./category-share.cjs'),view=share.snapshot(state);
+    if(!share.selectionIsValid(view,choice))
+     return respond(409,{error:'This item or category changed. Refresh to see the latest list.'});
+    const before=state.ledgerAdjustments||{},next=share.change(state,choice);
+    if(choice.kind==='transaction'){
+     state.ledgerAdjustments=next;
+     try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
+     invalidatePrepared();schedulePrepared();
+    }else await saveForecast(next.predictions,req.headers['x-ledger-revision']);
+    return respond(200,{saved:true,remaining:Math.max(0,view.items.length-1)});
+   }catch(error){return respond(error.httpStatus||503,{
+    error:error.httpStatus===409?staleMessage:'Could not save this category. No bank transactions were changed.'})}
+   finally{release()}
   }
   const expected=Buffer.from('pilot:'+env.PILOT_PASSWORD).toString('base64');
   const supplied=String(req.headers.authorization||'').replace(/^Basic /,'');
