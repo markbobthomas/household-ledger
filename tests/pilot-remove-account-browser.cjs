@@ -83,11 +83,13 @@ module.exports=(async()=>{
     // Only a deliberate Demo choice should be local to this browser. It must
     // survive reload without deleting or overwriting saved household state.
     await page.locator('#planner-menu > summary').click();
+    await page.locator('#planner-menu .planner-menu-advanced > summary').click();
     await page.locator('#ledger-mode-switch').selectOption('demo');
     await page.reload({waitUntil:'load'});
     assert.equal(await page.locator('#source-type').textContent(),'DEMO DATA',
      'Explicit Demo selection is respected on this device after reload');
     await page.locator('#planner-menu > summary').click();
+    await page.locator('#planner-menu .planner-menu-advanced > summary').click();
     await page.locator('#ledger-mode-switch').selectOption('real');
     await page.waitForFunction(()=>document.querySelector('#source-type')?.textContent==='REAL BANK',
      null,{timeout:30000});
