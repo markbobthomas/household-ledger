@@ -117,6 +117,18 @@ function showDiagnostics(details){
     'No recovery result')+'</p>':'')+
   '<p class="muted">These are observations from this private Ledger server, not the Plaid Dashboard. Match the environment and time when checking Plaid logs. A previous error displayed below may be older than the latest refresh.</p>';
 }
+/* One passive observation per account, not proof every pending bank
+ * charge has posted. No new provider call, local storage, or telemetry. */
+function sourceFreshness(account){
+ if(account.needsReconnect)return 'Bank sign-in is required before a new refresh can succeed.';
+ if(account.syncIssue)return 'Bank refresh reported an error; retained records may be outdated.';
+ const timestamp=Date.parse(String(account.balanceObservedAt||''));
+ if(!Number.isFinite(timestamp))return 'No verified balance observation time is available.';
+ const age=Date.now()-timestamp;
+ if(age< -5*60000)return 'Bank observation time is later than this device clock. Check clock and sync.';
+ if(age>48*3600000)return 'Balance observation is over 48 hours old; refresh banks before relying on projections.';
+ return 'Balance observed within 48 hours; this does not confirm all transactions are posted.';
+}
 async function refresh(){
  try{const d=await api('status'),accounts=d.accounts||d.account?[...(d.accounts||[d.account])]:[],transactions=d.transactions||[];
   showDiagnostics(d.diagnostics);
@@ -155,7 +167,8 @@ async function refresh(){
    '<p><strong>'+money(a.current)+'</strong> '+(a.type==='credit'?'card debt':'current balance')+
    ' · '+money(a.available)+' available</p>'+
    '<p class="muted">Last observed '+esc(a.balanceObservedAt||'unknown')+' · '+esc(a.type)+
-   ' · Bank connection '+(connections.indexOf(String(a.itemId||a.id))+1)+'</p>'+
+   ' · Bank connection '+(connections.indexOf(String(a.itemId||a.id))+1)+'</p>'+ 
+   '<p class="muted" data-source-freshness>'+esc(sourceFreshness(a))+'</p>'+
    (a.needsReconnect?'<p class="account-alert">Bank sign-in required. Reconnect this existing connection to resume updates.</p>':'')+
    (a.syncIssue&&!a.needsReconnect?'<p class="account-alert">Last update failed ('+esc(a.syncIssue.code||'Sync error')+'). The saved bank records have been retained. Retry refresh; renewing access is optional and might not resolve a malformed request.</p>':'')+
    '<button type="button" data-reconnect-account="'+esc(a.id)+'">Reconnect without losing saved data</button>'+
