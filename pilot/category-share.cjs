@@ -23,6 +23,13 @@ function snapshot(state){
  const candidates=model.categoryReviewQueue(ledger);
  const source=new Map(rows.map(t=>[String(t.id),t]));
  const notes=adjustments.predictions?.transactionNotes||{};
+ // A deliberately chosen Other is a final decision, including legacy manual
+ // overrides predating categoryProvenance. Automated Other remains reviewable.
+ const ownerChosenOther=new Set(Object.entries(adjustments.categoryOverrides||{})
+  .filter(([id,category])=>category==='Other'&&
+   (!adjustments.categoryProvenance?.[id]?.source||
+    adjustments.categoryProvenance[id].source==='manual'))
+  .map(([id])=>String(id)));
  // Never display a whole-charge action for an itemized Amazon charge with
  // unknown lines: overwriting its allocation would misclassify known items.
  const itemizedNeedsReview=new Set();
@@ -32,7 +39,8 @@ function snapshot(state){
    itemizedNeedsReview.add(String(id));
  }
  const transactions=candidates.transactions.filter(t=>!t.creditKind&&
-  source.has(t.id)&&!itemizedNeedsReview.has(String(t.id)))
+  source.has(t.id)&&!itemizedNeedsReview.has(String(t.id))&&
+  !ownerChosenOther.has(String(t.id)))
   .map(t=>{
    const original=source.get(t.id);
    const note=notes[keyFor(original)];
@@ -48,6 +56,8 @@ function snapshot(state){
  const amazon=require('./amazon-evidence.cjs').review(
   state.transactions,adjustments,model.categories(ledger));
  for(const item of amazon.items){
+  // Amazon's secondary review path must not reopen an owner-approved Other.
+  if(ownerChosenOther.has(String(item.id)))continue;
   // A mixed order is a set of separately priced category decisions.
   // Keep the original posted bank amount as one transaction.
   if(Number.isSafeInteger(item.lineIndex)){
