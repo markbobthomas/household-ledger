@@ -23,7 +23,16 @@ function snapshot(state){
  const candidates=model.categoryReviewQueue(ledger);
  const source=new Map(rows.map(t=>[String(t.id),t]));
  const notes=adjustments.predictions?.transactionNotes||{};
- const transactions=candidates.transactions.filter(t=>!t.creditKind&&source.has(t.id))
+ // Never display a whole-charge action for an itemized Amazon charge with
+ // unknown lines: overwriting its allocation would misclassify known items.
+ const itemizedNeedsReview=new Set();
+ for(const [id,allocation] of Object.entries(adjustments.amazonAllocations||{})){
+  const lines=allocation?.lines;
+  if(Array.isArray(lines)&&lines.length&&Number.isSafeInteger(allocation?.amountCents))
+   itemizedNeedsReview.add(String(id));
+ }
+ const transactions=candidates.transactions.filter(t=>!t.creditKind&&
+  source.has(t.id)&&!itemizedNeedsReview.has(String(t.id)))
   .map(t=>{
    const original=source.get(t.id);
    const note=notes[keyFor(original)];
@@ -32,6 +41,32 @@ function snapshot(state){
     suggested:t.suggested||null,
     note:typeof note==='string'?note.slice(0,160):''};
   });
+ // Include identifiable Amazon products still parked in a broad "Other"
+ // category. These are review choices, never automatic overrides; specific
+ // manual categories and item allocations remain protected by the model.
+ const known=new Set(transactions.map(t=>t.id));
+ const amazon=require('./amazon-evidence.cjs').review(
+  state.transactions,adjustments,model.categories(ledger));
+ for(const item of amazon.items){
+  // A mixed order is a set of separately priced category decisions.
+  // Keep the original posted bank amount as one transaction.
+  if(Number.isSafeInteger(item.lineIndex)){
+   const id='amazon-item:'+JSON.stringify([item.id,item.lineIndex]);
+   transactions.push({kind:'amazon-item',id,
+    merchant:item.note.startsWith('Amazon: ')?item.note.slice(8):item.merchant,
+    amount:item.amountCents/100,date:item.date,
+    reason:'Review one Amazon product',category:item.currentCategory,
+    suggested:item.suggestedCategory,note:item.note});
+   continue;
+  }
+  if(known.has(item.id)||item.currentCategory!=='Other'||
+     !item.suggestedCategory)continue;
+  known.add(item.id);
+  transactions.push({kind:'transaction',id:item.id,merchant:item.merchant,
+   amount:item.amountCents/100,date:item.date,
+   reason:'Review Amazon product category',category:'Other',
+   suggested:item.suggestedCategory,note:item.note});
+ }
  const plans=candidates.plans.map(p=>({
   kind:p.kind,id:p.id,merchant:p.merchant.slice(0,140),
   amount:p.amount,date:p.date,reason:p.reason,category:p.category,
@@ -48,18 +83,33 @@ function selectionIsValid(view,selection){
  if(!selection||typeof selection!=='object'||Array.isArray(selection)||
     Object.keys(selection).sort().join(',')!=='category,id,kind')return false;
  return typeof selection.id==='string'&&selection.id.length>0&&
-  typeof selection.kind==='string'&&['transaction','schedule','oneoff','bill'].includes(selection.kind)&&
+  typeof selection.kind==='string'&&['transaction','amazon-item','schedule','oneoff','bill'].includes(selection.kind)&&
   typeof selection.category==='string'&&
   view.categories.includes(selection.category)&&
   view.items.some(i=>i.id===selection.id&&i.kind===selection.kind);
 }
-function change(state,choice){
+function change(state,choice,allowedCategories){
  const before=state.ledgerAdjustments||{};
+ if(choice.kind==='amazon-item'){
+  // selectionIsValid was checked against a fresh server-side queue.
+  let pair;
+  try{pair=JSON.parse(choice.id.slice('amazon-item:'.length))}catch{}
+  if(!Array.isArray(pair)||pair.length!==2||
+     typeof pair[0]!=='string'||!Number.isSafeInteger(pair[1]))
+   throw Error('Invalid Amazon item review');
+  const result=require('./amazon-review-choice.cjs').change(
+   state.transactions,before,{transactionId:pair[0],lineIndex:pair[1],
+    category:choice.category,verified:true},
+   Array.isArray(allowedCategories)?allowedCategories:snapshot(state).categories);
+  return result.next;
+ }
  if(choice.kind==='transaction'){
   const overrides={...(before.categoryOverrides||{}),[choice.id]:choice.category};
   const amazonAllocations={...(before.amazonAllocations||{})};
   delete amazonAllocations[choice.id];
-  return {...before,categoryOverrides:overrides,amazonAllocations};
+  const categoryProvenance={...(before.categoryProvenance||{}),
+   [choice.id]:{source:'manual',category:choice.category}};
+  return {...before,categoryOverrides:overrides,amazonAllocations,categoryProvenance};
  }
  const key={schedule:'futureRecurringRules',oneoff:'futureTransactionAdds',bill:'paymentBills'}[choice.kind];
  if(!key)throw Error('Invalid category task');

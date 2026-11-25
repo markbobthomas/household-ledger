@@ -123,6 +123,48 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
    'Revocation cuts off the shared access');
   assert.equal((await req('/api/share/budget','GET',undefined,newer)).status,401,
    'Revocation cuts off the read-only Budget view too');
+  // A mixed-item Amazon charge may be categorized by the shared link only
+  // one product at a time. A whole-charge edit would destroy known allocations.
+  const shareLogic=require('../pilot/category-share.cjs');
+  const mixedTx={id:'fictional-amazon-mixed',accountId:'fake-checking',itemId:'fake-item',
+   date:'2026-11-11',name:'AMZN MKTPLACE',merchant:'Amazon',
+   amount:40,pending:false,category:'Other'};
+  const sourceState=open(file);
+  sourceState.transactions[mixedTx.id]=mixedTx;
+  sourceState.ledgerAdjustments.amazonAllocations={
+   [mixedTx.id]:{orderId:'fake-mixed-order',amountCents:4000,lines:[
+    {title:'Coffee beans',category:'Groceries',cents:2000},
+    {title:'Unidentified household object',category:'Uncategorized',cents:2000}
+   ]}
+  };
+  sourceState.ledgerAdjustments.amazonEvidence={
+   [mixedTx.id]:{version:1,source:'amazon-import',accountId:'fake-checking',
+    amountCents:4000,orderId:'fake-mixed-order',match:'exact',
+    choices:[{date:'2026-11-11',orderId:'fake-mixed-order',items:[
+     {title:'Coffee beans',cents:2000},
+     {title:'Unidentified household object',cents:2000}]}]}
+  };
+  sourceState.ledgerAdjustments.categoryOverrides={
+   ...(sourceState.ledgerAdjustments.categoryOverrides||{}),
+   [mixedTx.id]:'Uncategorized'
+  };
+  const mixedView=shareLogic.snapshot(sourceState);
+  assert.ok(!mixedView.items.some(x=>x.kind==='transaction'&&x.id===mixedTx.id),
+   'Spouse review must not show unsafe whole-transaction choice for mixed allocation');
+  const amazonTask=mixedView.items.find(x=>x.kind==='amazon-item');
+  assert.ok(amazonTask,'Only unknown Amazon product has its own review entry');
+  assert.equal(amazonTask.amount,20);
+  const selected={kind:amazonTask.kind,id:amazonTask.id,category:'Shopping'};
+  assert(shareLogic.selectionIsValid(mixedView,selected));
+  const corrected=shareLogic.change(sourceState,selected);
+  assert.deepEqual(corrected.amazonAllocations[mixedTx.id].lines.map(x=>x.category),
+   ['Groceries','Shopping'],
+   'Spouse item review preserves the Groceries sibling classification');
+  assert.equal(corrected.amazonAllocations[mixedTx.id].lines.reduce((n,x)=>n+x.cents,0),
+   4000,'Spouse decision preserves original charged cents');
+  assert.equal(sourceState.transactions[mixedTx.id].amount,40,'Never change bank charge');
+  assert.ok(!shareLogic.snapshot({...sourceState,ledgerAdjustments:corrected}).items.some(x=>
+   x.kind==='amazon-item'),'Review task disappears after successful item save');
   console.log('PASS private spouse categorization: scope, save, forecast, consent and revocation');
  }finally{child.kill('SIGTERM');fs.rmSync(folder,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});

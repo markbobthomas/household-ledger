@@ -4,6 +4,7 @@
 // Notes, date-only guesses, truncated lists, or conflicting product categories.
 const {classify}=require('./amazon-import.cjs');
 const {keyFor}=require('./amazon-pairing.cjs');
+const Evidence=require('./amazon-evidence.cjs');
 const amazon=t=>t&&t.pending!==true&&Number(t.amount)>0&&
  (/(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.merchant||''))||
   /(?:^|\W)(?:amazon|amzn|amz)(?:\W|$)/i.test(String(t.name||'')));
@@ -45,6 +46,7 @@ function analyze(transactions,adjustments={},categories=[],options={}){
  const notes=adjustments.predictions?.transactionNotes||{},
   overrides=adjustments.categoryOverrides||{},
   allocations=adjustments.amazonAllocations||{},
+  evidence=adjustments.amazonEvidence||{},
   replaceOther=options.replaceOther===true;
  const stats={amazonCharges:0,itemNotes:0,missingNotes:0,
   unrecognized:0,mixed:0,dateOnly:0,incomplete:0,notImported:0,
@@ -61,7 +63,12 @@ function analyze(transactions,adjustments={},categories=[],options={}){
    stats.missingNotes++;
    continue;
   }
-  const outcome=categoryForNote(note,categories);
+  const structured=Evidence.valid(evidence[t.id],t),
+   evidenceCategory=structured?Evidence.category(evidence[t.id],categories):null,
+   outcome=structured?evidenceCategory?
+    {status:'ready',category:evidenceCategory,confidence:evidence[t.id].match}:
+    {status:evidence[t.id].uncertainty==='date-only'?'date-only':'mixed'}:
+    categoryForNote(note,categories);
   if(outcome.status==='not-imported'){
    stats.notImported++;
    continue;

@@ -15,7 +15,8 @@ const amazonCharge=t=>t&&t.pending!==true&&Number(t.amount)>0&&
  Number.isSafeInteger(Math.round(Number(t.amount)*100));
 function targetWindow(transactions,adjustments={}){
  const overrides=adjustments.categoryOverrides||{},
-  notes=adjustments.predictions?.transactionNotes||{};
+  notes=adjustments.predictions?.transactionNotes||{},
+  evidence=adjustments.amazonEvidence||{};
  // A charge with a manual category may still need its Amazon product Note.
  // Include every Amazon charge missing its bank-note overlay, even if a
  // prior category import or manual category is already present.

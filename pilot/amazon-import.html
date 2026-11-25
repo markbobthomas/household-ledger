@@ -1,576 +1,227 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>Amazon order import · Ledger</title>
+<meta name="robots" content="noindex,nofollow"><title>Amazon purchases · Ledger</title>
 <style>
-:root{color-scheme:light;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#202c2b;background:#f7f9f6}
-*{box-sizing:border-box}body{margin:0}main{max-width:760px;margin:24px auto;padding:0 18px 48px}
-a{color:#126e62}h1{font-size:1.65rem;letter-spacing:-.04em}h2{font-size:1.1rem;margin-top:0}
-.panel{background:#fff;border:1px solid #dce6e0;border-radius:12px;padding:22px;margin:16px 0}
-p,li{line-height:1.55}small,.muted{color:#586d66}label{display:block;font-weight:600;margin:20px 0 12px}
-input[type=file]{display:block;width:100%;padding:14px;border:1px dashed #97b3a5;border-radius:8px;margin-top:8px}
-button{font:inherit;cursor:pointer;padding:11px 18px;border:1px solid #a5b6ae;border-radius:8px;background:#fff}
-button.primary{color:white;background:#175f50;border-color:#175f50}button:disabled{opacity:.45;cursor:default}
-.actions{display:flex;flex-wrap:wrap;gap:10px}.row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e8ece9;padding:12px 0}
-.row strong{text-align:right}ul{padding-left:23px}.warn{color:#805000}.ok{color:#126144}
-#message{min-height:24px;font-weight:600}#message.error{color:#ab2935}#preview[hidden]{display:none}
-.item{border-top:1px solid #e8ece9;padding:12px 0}.item span{display:block;font-size:.9rem;color:#546660}
-summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
-.ai-suggestion{padding:13px 0;border-top:1px solid #e8ece9}.ai-suggestion label{margin:10px 0;font-weight:500}.ai-suggestion select{display:block;width:100%;padding:10px;margin-top:5px;font:inherit;border:1px solid #a5b6ae;border-radius:8px;background:white}.ai-suggestion input{margin-right:7px}.ai-warning{color:#805000;font-size:.9rem}.ai-meta{font-size:.9rem;color:#586d66}
+:root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#202827;background:#f7f9f7;color-scheme:light}
+*{box-sizing:border-box}body{margin:0}main{max-width:720px;margin:22px auto;padding:0 16px 40px}
+a{color:#18594c}h1{font-size:1.65rem;letter-spacing:-.04em;margin:14px 0 6px}h2{font-size:1.06rem;margin:0 0 8px}
+p{line-height:1.48;margin:8px 0 12px}.muted,small{color:#536960;font-size:.9rem}
+.panel{background:#fff;border:1px solid #dde5df;border-radius:13px;padding:20px;margin:15px 0}
+button,.button{font:inherit;cursor:pointer;border:1px solid #becbc2;padding:11px 15px;background:white;border-radius:9px}
+button.primary,.button.primary{background:#175e51;color:white;border-color:#175e51}
+button.quick{padding:9px 13px;font-size:.95rem}
+button:disabled{opacity:.55;cursor:default}.button{text-decoration:none;display:inline-block;text-align:center}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #82b5a0;outline-offset:2px}
+input[type=file]{width:100%;padding:14px;border:1px dashed #98b4a5;border-radius:9px;background:#f7faf7}
+input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:7px}
+.checkline{display:block;font-weight:400;margin:14px 0;line-height:1.48}
+.actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}#message,#review-message{min-height:24px;font-weight:600}
+.error{color:#a12f38}.ok{color:#175e51}summary{cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
+.stat{background:#f3f7f3;padding:12px;border-radius:10px;text-align:center}
+.stat strong{display:block;font-size:1.6rem}.stat small{display:block}
+.item{background:#f9fbf9;border:1px solid #e3e9e4;border-radius:11px;padding:15px;margin:14px 0}
+.item strong,.item span{display:block}.item-meta{font-size:.9rem;color:#536960;margin-top:6px}
+.proposal{font-size:1.1rem;padding:13px 15px;width:100%;text-align:left}
+.select-category{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.select-category select{min-width:160px;max-width:100%;flex:1;font:inherit;padding:11px;border:1px solid #adbfb4;border-radius:8px}
+#review-card[hidden],#results[hidden],#finish[hidden],#review[hidden]{display:none}
+#review-count{color:#536960;font-size:.9rem}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px}
+hr{border:0;border-top:1px solid #e6ebe6;margin:16px 0}
 </style></head>
-<body><main><a href="/">← Ledger</a><h1>Amazon purchase import</h1>
-<p>Import Amazon purchases to your existing bank charges and <strong>save product names in transaction Notes</strong>. Ledger assigns a category only when supported by the product description. Existing personal Notes and bank balances are preserved.</p>
+<body><main>
+<a href="/">← Ledger</a>
+<h1>Amazon purchases</h1>
+<p class="muted">Match Amazon products to the bank charges already in Ledger. Product names are saved to transaction Notes, and clear categories are assigned automatically. No new expenses are created.</p>
 <section class="panel">
-<h2>Categorize saved Amazon Notes</h2>
-<p>Already imported products? Review their saved item names and assign recognizable categories <strong>without uploading your ZIP again</strong>. Existing handwritten Notes and categories you chose remain unchanged.</p>
-<div class="actions"><button type="button" id="notes-check" class="primary">Check saved item Notes</button></div>
-<label style="font-weight:400;margin:12px 0"><input id="include-other" type="checkbox">
-Also propose replacing existing <strong>Other</strong> category choices when an Amazon product is recognizable. These choices will only change after you review the preview and press Apply.</label>
+ <h2>Import Amazon order history</h2>
+ <p class="muted">Upload the Amazon Orders ZIP or item-level CSV (up to 79 MB). Older saved Notes still work without another upload.</p>
+ <input id="file" type="file" aria-label="Amazon order CSV or ZIP" accept=".zip,.csv,text/csv,application/zip">
+ <label class="checkline"><input type="checkbox" id="ai-consent"> Use AI to suggest categories for unfamiliar products after import <small>(optional; product titles and category names only; at most $0.05 per request)</small></label>
+ <div class="actions"><button class="primary" id="import" type="button">Import and save</button></div>
+ <p id="message" role="status" aria-live="polite"></p>
+ <section id="results" hidden aria-label="Import results">
+  <div id="stats" class="stats"></div>
+  <p class="muted" id="import-summary"></p>
+ </section>
 </section>
-<section class="panel">
-<h2>AI categorize unfamiliar Amazon products</h2>
-<p>For saved Amazon product Notes that the local rules cannot recognize, ask
-OpenAI to suggest categories using the product descriptions and the names of
-your existing Ledger budget categories. <strong>No amounts, dates, bank details,
-account numbers or transaction identifiers are sent.</strong> This is optional.
-One classification request is capped below <strong>$0.05</strong> and is separate
-from Ledger's Financial Analysis. Each suggestion starts unselected: approve it,
-change its category, or leave it skipped. A <strong>Possible Amazon</strong> Note
-requires you to confirm its product-to-charge match before approving. Nothing
-changes until you explicitly apply your selected items. Incomplete or date-only
-matches remain for manual review.</p>
-<div class="actions">
-<button type="button" id="ai-check" class="primary">AI suggest categories (OpenAI)</button>
-<button type="button" id="ai-apply" disabled>Apply selected categories</button>
-</div>
-<p id="ai-message" role="status" aria-live="polite"></p>
-<div id="ai-preview" hidden></div>
+<section class="panel" id="review" hidden>
+ <div class="toolbar"><h2>Review remaining purchases</h2><span id="review-count"></span></div>
+ <p class="muted">Select one category per charge. A possible product match is never treated as confirmed unless you verify it.</p>
+ <div id="review-card"></div>
+ <div id="finish" hidden>
+  <p id="finished-message" class="ok">You're finished with this review session.</p>
+  <a class="button primary" href="/">Back to Ledger</a>
+ </div>
+ <p id="review-message" role="status" aria-live="polite"></p>
+ <hr>
+ <div class="actions"><button id="ai-check" type="button">Suggest with AI</button><span class="muted" id="ai-status">Optional; runs only when you choose it.</span></div>
 </section>
-<section class="panel">
-<h2>Upload Amazon order history</h2>
-<p>In Amazon, request your personal information for <strong>Orders</strong>, download the resulting ZIP, then upload it here. A CSV containing item-level order history also works. Select the file named <code>Retail.OrderHistory</code> if uploading a single CSV.</p>
-<label for="file">Amazon CSV or ZIP file
-<input id="file" type="file" accept=".csv,.zip,text/csv,application/zip"></label>
-<p class="muted">Private: your file is processed only by Ledger's authenticated server. No Amazon password is needed. ZIP import and local categorization never send data to an AI provider; only the separate, explicitly selected OpenAI suggestion feature sends product names and category names. Maximum file size: 79 MB. Ledger checks posted Amazon charges missing an item Note or a category.</p>
-<div class="actions">
-<button type="button" id="import" class="primary">Import &amp; Save product Notes</button>
-<button type="button" id="check">Preview only (does not save)</button>
-<button type="button" id="apply" disabled>Save previewed changes</button>
-</div>
-<p class="muted">The Import button saves eligible Notes and categories in one pass.
-The Preview button only checks the file; it does not save any Notes or categories.
-Saving an import does not add expenses or alter bank transaction amounts.</p>
-<p id="message" role="status" aria-live="polite"></p>
-</section>
-<section class="panel" id="preview" hidden>
-<h2>Preview</h2><div id="stats"></div>
-<p id="diagnosis" class="muted" role="status"></p>
-<p class="muted">Exact, unique purchase matches receive item Notes and confident categories. Very close date-and-amount suggestions may also get a broad category when every plausible product clearly belongs in the same category. Their Notes still begin <strong>“Possible Amazon:”</strong>, because the purchase itself is not proven. Ambiguous items spanning different categories and date-only guesses never set a category. You can also categorize the saved product Notes directly using the new button above, without uploading an archive. Existing personal Notes and manual categories are preserved. No bank transactions or balances are edited.</p>
-<details><summary>Show product Notes and category suggestions</summary><div id="details"></div></details>
-</section>
-<section class="panel"><h2>Sync Amazon orders from your browser</h2>
-<p>On a desktop computer, you can use the <a href="https://github.com/markbobthomas/household-ledger/tree/main/browser/amazon-ledger" target="_blank" rel="noopener noreferrer">Ledger Amazon browser extension (Chrome / Edge)</a> to read orders while signed in to Amazon and open this same preview automatically—without waiting for an Amazon data export.</p>
-<p class="muted">This initial browser sync is deliberately conservative: it handles clearly priced single-item orders from up to five order-history pages. Multi-item orders and uncertain totals still need an Amazon CSV/ZIP export. Nothing is saved until you press Apply categories. Desktop browser required; iPhone/iPad browser extensions are not supported.</p></section>
-<section class="panel"><h2>How matching works</h2>
-<ul><li>Matches whole orders, individual items and combinations of items shipped on the same day. Near-amount or date-only suggestions are clearly marked as unverified in Notes.</li>
-<li>Splits one charge across budget categories when multiple different items were purchased.</li>
-<li>Only closely priced products with one clear common spending category can receive a likely category. Mixed-category alternatives, overlapping claims, or date-only hints stay unclassified for review.</li>
-<li>Existing personal Notes are never overwritten. Reimporting does not add expenses or duplicate allocations.</li></ul></section>
+<details class="panel" id="advanced">
+ <summary><strong>Details and other import options</strong></summary>
+ <p class="muted">Confirmed matches use amounts and dates and can split one posted charge among product categories. Possible and date-only matches remain clearly labeled. Existing handwritten Notes, manual category choices and all bank amounts remain untouched.</p>
+ <label class="checkline"><input type="checkbox" id="include-other"> Include existing Other categories in the AI review. These are never changed without your approval.</label>
+ <p class="muted">The experimental <a href="https://github.com/markbobthomas/household-ledger/tree/main/browser/amazon-ledger" target="_blank" rel="noopener noreferrer">desktop Chrome/Edge Amazon extension</a> can prepare a small single-item export; it is optional and not yet verified against a live Amazon session.</p>
+ <p id="diagnostics" class="muted"></p>
+</details>
 </main>
 <script>
 (function(){
- 'use strict';
- const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;','\'':'&#39;'}[c]));
- const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
- let payload=null,revision='',ready=0,aiToken=null;
- function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
- function selectedAiChoices(){
-  return [...$('ai-preview').querySelectorAll('.ai-suggestion')].flatMap(row=>{
-   if(!row.querySelector('.ai-select')?.checked)return [];
-   const verified=!!row.querySelector('.ai-verify')?.checked;
-   if(row.dataset.possible==='1'&&!verified)return [];
-   return [{index:Number(row.dataset.index),category:row.querySelector('.ai-category').value,verified}];
-  });
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(c||0)/100);
+let revision='',queue=[],categories=[],skipped=new Set(),suggestions=new Map(),index=0,busy=false;
+let noteCount=0,assignedCount=0,unmatchedCount=0,hasImported=false,reviewTotal=0;
+function setMessage(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
+function reviewMessage(text,error=false){$('review-message').textContent=text;$('review-message').className=error?'error':''}
+function updateResults(){
+ $('results').hidden=!hasImported;
+ if(!hasImported)return;
+ const values=[['Notes added',noteCount],['Categories assigned',assignedCount],
+  ['Need review',reviewTotal],['Unmatched',unmatchedCount]];
+ $('stats').innerHTML=values.map(x=>'<div class="stat"><strong>'+esc(x[1])+
+  '</strong><small>'+esc(x[0])+'</small></div>').join('');
+}
+async function api(url,options){
+ const response=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});
+ const type=response.headers.get('content-type')||'';
+ if(!type.includes('application/json'))throw Error('Ledger is unavailable. Sign in and reload.');
+ const data=await response.json();
+ if(!response.ok)throw Error(data.error||'Request unsuccessful');
+ revision=response.headers.get('x-ledger-revision')||revision;
+ return data;
+}
+function setBusy(value){
+ busy=value;
+ ['import','ai-check'].forEach(id=>$(id).disabled=value);
+}
+async function loadReview(){
+ const result=await api('/api/ledger/amazon-review');
+ categories=result.categories||[];
+ queue=result.items||[];
+ reviewTotal=result.stats?.review||queue.length;
+ unmatchedCount=result.stats?.unmatched??unmatchedCount;
+ $('review').hidden=!(result.stats?.amazonCharges);
+ if(!hasImported&&result.stats?.amazonCharges){
+  $('diagnostics').textContent=(result.stats.confirmed||0)+' confirmed matches · '+
+   (result.stats.possible||0)+' possible matches · '+
+   (result.stats.notes||0)+' Amazon Notes saved';
  }
- function updateAiChoices(){
-  const count=selectedAiChoices().length;
-  $('ai-apply').disabled=!aiToken||!count;
-  const status=$('ai-choice-status');
-  if(status)status.textContent=count+' item'+(count===1?'':'s')+
-   ' approved for saving. Unchecked or unverified items will be skipped.';
+ skipped=new Set();index=0;
+ updateResults();render();
+}
+function itemKey(item){return item.id+'|'+(item.lineIndex??'whole')}
+function current(){
+ const available=queue.filter(item=>!skipped.has(itemKey(item)));
+ if(index>=available.length)index=0;
+ return available[index]||null;
+}
+function render(){
+ const item=current();
+ $('review-count').textContent=queue.length+' remaining';
+ $('finish').hidden=!!item;
+ $('review-card').hidden=!item;
+ if(!item){
+  $('finished-message').textContent=queue.length?
+   'Review complete for now. Skipped items remain available next time.':
+   'All Amazon category decisions are up to date.';
+  return;
  }
- function setBusy(b){
-  $('import').disabled=b;$('check').disabled=b;$('notes-check').disabled=b;
-  $('apply').disabled=b||!payload||!ready;
-  $('ai-check').disabled=b;$('ai-apply').disabled=b||!aiToken||!selectedAiChoices().length;
- }
- async function request(dryRun){
-  // Send original Blob bytes, not a 105 MB base64 JSON body for a 79 MB file.
-  // Preview and Apply are separate authenticated requests with revision checks;
-  // neither stores the file, including when the preview is cancelled.
-  const savedNotes=payload.mode==='saved-notes';
-  const response=await fetch('/api/ledger/amazon-import',{method:'POST',credentials:'same-origin',
-   headers:{'Content-Type':savedNotes?'application/json':'application/octet-stream',
-    'X-Pilot-Action':'1',
-    ...(!savedNotes?{
-     'X-Amazon-Filename':encodeURIComponent(payload.fileName),
-     'X-Amazon-Dry-Run':dryRun?'1':'0'}:{}),
-    ...(revision?{'X-Ledger-Revision':revision}:{})},
-   body:savedNotes?JSON.stringify({mode:'saved-notes',dryRun,
-    replaceOther:Boolean(payload.replaceOther)}):payload.file,
-   cache:'no-store'});
-  const type=response.headers.get('content-type')||'';
-  if(!type.includes('application/json'))throw Error('Private Ledger server is unavailable. Reload and retry.');
-  const data=await response.json();
-  if(!response.ok)throw Error(data.error||'Amazon import failed');
-  revision=response.headers.get('x-ledger-revision')||revision;
-  return data;
- }
- function show(data){
-  const stats=[
-   ['Amazon bank charges',data.bankCharges??0],
-   ['Confirmed item matches',data.verifiedBankCharges??data.matches],
-   ['Possible item Notes (verify)',data.possibleBankCharges??0],
-   ['Still unmatched',data.unmatchedBankCharges??0],
-   ['Notes to add',data.notesReady??0],
-   ['Categories to assign',data.confidentCategories??0],
-   ['From saved item Notes',data.savedNoteCategories??0],
-   ['From exact matches',data.exactCategories??0],
-   ['From strong likely items (verify)',data.likelyCategories??0],
-   ['Changes ready to save',data.ready],
-   ['Saved item Notes found',data.savedNoteStats?.itemNotes??0],
-   ['Amazon charges without saved Notes',data.savedNoteStats?.missingNotes??0],
-   ['Recognizable product categories',data.savedNoteStats?.recognizable??0],
-   ['Recognizable, but saved as Other',data.savedNoteStats?.replaceableOther??0],
-   ['Protected existing specific categories',data.savedNoteStats?.protectedSpecific??0],
-   ['Saved Notes with unknown products',data.savedNoteStats?.unrecognized??0],
-   ['Mixed or conflicting products',data.savedNoteStats?.mixed??0],
-   ['Date-only Notes (needs review)',data.savedNoteStats?.dateOnly??0],
-   ['Incomplete product Notes',data.savedNoteStats?.incomplete??0],
-   ['Already categorized',data.savedNoteStats?.alreadyCategorized??0],
-   ['Unrecognized item categories',data.needsReview??0],
-   ['Ambiguous bank charges',data.ambiguousOrders]
-  ];
-  $('stats').innerHTML=stats.map(([label,value])=>
-   '<div class="row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>').join('');
-  const n=data.savedNoteStats||{};
-  let diagnosis='';
-  if(n.itemNotes===0)diagnosis='No importer-written Amazon product Notes were found in saved Ledger preferences. If your previous ZIP preview found Notes, Apply that preview first.';
-  else if(!data.confidentCategories&&n.replaceableOther&&!data.replaceOtherEnabled)
-   diagnosis=n.replaceableOther+' recognizable product Note(s) have an existing Other category choice. To propose replacing them, select the option above, then Check saved item Notes again.';
-  else if(!data.confidentCategories&&n.protectedSpecific)
-   diagnosis='Recognizable products already have specific saved categories. Ledger preserves these choices. Remaining items may need manual review.';
-  else if(!data.confidentCategories)
-   diagnosis='No categories can safely be assigned from the available product text. The counts below distinguish unknown, incomplete, mixed and date-only descriptions.';
-  else diagnosis='Review each suggested category. No bank amount or saved Note will change.';
-  $('diagnosis').textContent=diagnosis;
-  const confirmed=(data.examples||[]).map(x=>
-   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+'</strong> · '+esc(x.orderId)+
-   '<span>'+esc(x.note||'')+'</span><span>'+esc((x.categories||[]).join(', '))+
-   (x.notesOnly?' · Note only (manual category kept)':x.needsReview?' · Category needs review':'')+'</span></div>');
-  const possible=(data.suggestions||[]).map(x=>
-   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+' · Possible match</strong>'+
-   '<span>'+esc(x.note||'')+'</span><span>'+
-   (x.suggestedCategory?'Likely category: '+esc(x.suggestedCategory)+' · Verify the item':
-    'Category unchanged · Verify the possible products')+'</span></div>');
-  const fromNotes=(data.savedNoteExamples||[]).map(x=>
-   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+
-   ' · '+esc(x.category)+'</strong><span>'+esc(x.note)+'</span>'+
-   '<span>Category from saved product Note; existing Note unchanged</span></div>');
-  const reasons={
-   'protected-other':'Recognizable item; stored category is Other (requires opt-in)',
-   'protected-specific':'Existing specific category preserved',
-   'date-only':'Purchase identity only matched by date',
-   'incomplete':'Product title shortened; additional items may be hidden',
-   'mixed':'Plausible items belong to different categories',
-   'unrecognized':'Product category not recognized',
-   'existing-item-allocation':'Existing item-level allocation preserved'
-  };
-  const skipped=[...(data.otherCategoryReview||[]),...(data.savedNoteSkipped||[])].map(x=>
-   '<div class="item"><strong>'+esc(x.date)+' · '+esc(money(x.amountCents))+
-   '</strong><span>'+esc(x.note||'')+'</span><span>'+
-   esc(reasons[x.reason]||x.reason)+
-   (x.suggestedCategory?' · Suggested '+esc(x.suggestedCategory):'')+
-   (x.existingCategory?' · Existing '+esc(x.existingCategory):'')+
-   '</span></div>');
-  $('details').innerHTML=[...fromNotes,...confirmed,...possible,...skipped].join('')||
-   '<p>No saved Amazon product descriptions available for category review.</p>';
-  $('preview').hidden=false;
- }
- $('file').addEventListener('change',()=>{payload=null;revision='';ready=0;$('apply').disabled=true;$('preview').hidden=true;message('')});
- async function aiRequest(action,token,selections){
-  const response=await fetch('/api/ledger/amazon-ai',{
-   method:'POST',credentials:'same-origin',cache:'no-store',
+ const match=item.match==='exact'?'Confirmed Amazon match':
+  item.match==='possible'?'Possible Amazon match — verify product':
+  item.match==='legacy'?'Saved Amazon item Note':'Amazon item not identified';
+ const proposed=suggestions.get(itemKey(item))?.category||item.suggestedCategory;
+ const categoryOptions=categories.map(c=>'<option value="'+esc(c)+'"'+
+  (proposed===c?' selected':'')+'>'+esc(c)+'</option>').join('');
+ const proposal=proposed&&categories.includes(proposed)?
+  '<button type="button" id="accept" class="proposal primary">Use '+esc(proposed)+'</button>':'';
+ const popular=['Groceries','Dining','Shopping','Kids & Family','Healthcare',
+  'Home & Maintenance'].filter(c=>categories.includes(c)&&c!==proposed);
+ const quick=popular.length?'<p class="muted">Or choose a category:</p>'+
+  '<div class="actions" id="quick-categories">'+popular.map((c,i)=>
+   '<button type="button" class="quick" data-choice="'+i+'">'+esc(c)+'</button>').join('')+
+  '</div>':'';
+ $('review-card').innerHTML='<div class="item"><strong>'+esc(item.note||item.merchant)+
+  '</strong><span class="item-meta">'+esc(item.merchant)+' · '+esc(item.date)+' · '+
+  esc(money(item.amountCents))+'</span><span class="item-meta">'+esc(match)+
+  (item.protectedOther?' · Previously Other':'')+'</span></div>'+
+  (item.requiresVerification?'<label class="checkline"><input type="checkbox" id="verified"> I checked this product against the charge</label>':'')+
+  proposal+quick+
+  '<div class="select-category"><select id="category" aria-label="Choose category">'+
+  '<option value="">Choose another category</option>'+categoryOptions+
+  '</select><button type="button" id="save-category">Save category</button></div>'+
+  '<button type="button" id="skip">Skip for now</button>';
+ const verify=()=>!item.requiresVerification||!!$('verified')?.checked;
+ const choose=async selected=>{
+  if(!selected)return reviewMessage('Choose a category.',true);
+  if(!verify())return reviewMessage('Verify the possible Amazon match before using this product.',true);
+  setBusy(true);reviewMessage('Saving category…');
+  try{
+   await api('/api/ledger/amazon-review-choice',{method:'POST',
+    headers:{'Content-Type':'application/json','X-Pilot-Action':'1',
+     ...(revision?{'X-Ledger-Revision':revision}:{})},
+    body:JSON.stringify({transactionId:item.id,category:selected,
+     lineIndex:item.lineIndex??null,verified:verify()})});
+   queue=queue.filter(row=>itemKey(row)!==itemKey(item));index=0;
+   reviewTotal=queue.length;assignedCount++;suggestions.delete(itemKey(item));
+   updateResults();reviewMessage('Saved '+selected+'.');render();
+  }catch(error){reviewMessage(error.message,true)}
+  finally{setBusy(false)}
+ };
+ $('save-category').onclick=()=>choose($('category').value);
+ $('review-card').querySelectorAll('.quick').forEach(btn=>{
+  btn.onclick=()=>choose(popular[Number(btn.dataset.choice)]);
+ });
+ if($('accept'))$('accept').onclick=()=>choose(proposed);
+ $('skip').onclick=()=>{skipped.add(itemKey(item));index=0;reviewMessage('Skipped for now; no category was changed.');render()};
+}
+async function askAI(force=false){
+ if(busy&&!force)return;
+ setBusy(true);reviewMessage('Checking unfamiliar products…');
+ try{
+  const data=await api('/api/ledger/amazon-ai',{method:'POST',
    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
-   body:JSON.stringify(action==='preview'?
-    {action,consent:true,replaceOther:$('include-other').checked}:
-    {action,token,selections})
-  });
-  if(!(response.headers.get('content-type')||'').includes('application/json'))
-   throw Error('Ledger AI categorization is unavailable');
-  const data=await response.json();
-  if(!response.ok)throw Error(data.error||'AI categorization failed');
-  return data;
- }
- $('ai-check').addEventListener('click',async()=>{
-  aiToken=null;$('ai-apply').disabled=true;$('ai-preview').hidden=true;
-  setBusy(true);
-  $('ai-message').textContent='Reviewing saved product descriptions with OpenAI…';
-  try{
-   const data=await aiRequest('preview');
-   aiToken=data.previewToken||null;
-   const e=data.eligibleStats||{};
-   const stats=[
-    ['Saved Amazon Notes',e.importerNotes??0],
-    ['Eligible unfamiliar products',e.eligible??0],
-    ['AI categories suggested',data.proposed??0],
-    ['Not confidently classified',data.notConfident??0],
-    ['Already categorized (protected)',e.alreadyAssigned??0],
-    ['Existing item allocations (protected)',e.allocated??0],
-    ['Incomplete or date-only (review manually)',e.unsafeNote??0],
-    ['AI classification cost',data.costUsd==null?'Not reported':
-     '$'+Number(data.costUsd).toFixed(4)],
-    ['Per-run cost limit','$'+Number(data.costCeilingUsd||0.05).toFixed(2)]
-   ];
-   const available=Array.isArray(data.allowedCategories)?data.allowedCategories:[];
-   const proposals=(data.examples||[]).map((x,i)=>{
-    const index=Number.isSafeInteger(x.index)?x.index:i;
-    const isPossible=x.possibleMatch===true||
-     String(x.note||'').startsWith('Possible Amazon: ')||
-     String(x.note||'').startsWith('Possible Amazon (verify): ');
-    const options=available.map(category=>
-     '<option value="'+esc(category)+'"'+(category===x.category?' selected':'')+'>'+
-     esc(category)+'</option>').join('');
-    return '<section class="ai-suggestion" data-index="'+index+'" data-possible="'+
-     (isPossible?'1':'0')+'"><strong>'+esc(x.note)+'</strong>'+
-     '<p class="ai-meta">AI suggested '+esc(x.category)+
-     (x.previous?' · Previously '+esc(x.previous):'')+
-     (x.date?' · Bank charge '+esc(x.date)+' · '+esc(money(x.amountCents||0)):'')+
-     '</p><label><input type="checkbox" class="ai-select">Approve this item</label>'+
-     '<label>Category<select class="ai-category">'+options+'</select></label>'+
-     (isPossible?'<p class="ai-warning">Possible product match — the item is not confirmed against the bank charge.</p>'+
-      '<label><input type="checkbox" class="ai-verify">I verified this item matches the bank charge</label>':'')+
-     '</section>';
-   }).join('');
-   $('ai-preview').innerHTML=stats.map(([k,v])=>
-    '<div class="row"><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong></div>').join('')+
-    '<details><summary>Review proposed product categories</summary>'+
-    (proposals||'<p>No safe category suggestions were found.</p>')+'</details>'+
-    (proposals?'<p id="ai-choice-status" class="muted">0 items approved for saving. Select each item you want to apply.</p>':'');
-   $('ai-preview').hidden=false;
-   $('ai-message').textContent=aiToken?
-    'AI suggested '+data.proposed+' categor'+(data.proposed===1?'y':'ies')+
-    '. Approve, correct or skip each item, then Apply selected categories. Nothing has been changed yet.':
-    'No eligible category changes. Existing category choices remain protected.';
-  }catch(error){$('ai-message').textContent=error.message;aiToken=null}
-  finally{setBusy(false)}
- });
- $('ai-apply').addEventListener('click',async()=>{
-  if(!aiToken)return;
-  const token=aiToken;aiToken=null;setBusy(true);
-  $('ai-message').textContent='Saving reviewed AI category suggestions…';
-  const selections=selectedAiChoices();
-  if(!selections.length)return;
-  try{
-   const result=await aiRequest('apply',token,selections);
-   $('ai-message').textContent='Saved '+result.applied+
-    ' selected AI category assignment'+(result.applied===1?'':'s')+
-    '. Unselected items, product Notes and bank amounts were not changed.';
-   $('ai-preview').hidden=true;
-  }catch(error){$('ai-message').textContent=error.message}
-  finally{setBusy(false)}
- });
- $('ai-preview').addEventListener('change',updateAiChoices);
- $('include-other').addEventListener('change',()=>{
-  payload=null;revision='';ready=0;aiToken=null;
-  $('apply').disabled=true;$('preview').hidden=true;
-  $('ai-apply').disabled=true;$('ai-preview').hidden=true;
-  message('Check saved item Notes again to review these category choices.');
- });
- $('notes-check').addEventListener('click',async()=>{
-  payload={mode:'saved-notes',replaceOther:$('include-other').checked};
-  revision='';ready=0;
-  setBusy(true);message('Checking saved Amazon product Notes…');
-  try{
-   const data=await request(true);
-   show(data);ready=data.ready;
-   message(ready?'Review the categories from existing Notes, then select Apply.':
-    'No category changes proposed. Review the explanation and skipped-reason counts.');
-   $('apply').disabled=!ready;
-  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
- $('import').addEventListener('click',async()=>{
-  const file=$('file').files?.[0];
-  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
-  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
-  payload={mode:'zip',fileName:file.name,file};revision='';ready=0;
-  setBusy(true);message('Importing and saving Amazon product Notes…');
-  try{
-   // Unlike Preview, the user's Import click directly commits changes.
-   // The ZIP is processed/uploaded only once, not a second time to Apply.
-   const applied=await request(false);
-   const expected=applied.savedNoteStats?.itemNotes??0;
-   const added=applied.notesReady??0;
-   const categories=applied.confidentCategories??0;
-   // Prove that a separate authenticated request sees persisted Notes,
-   // rather than trusting a dry-run proposal or the write response alone.
-   payload={mode:'saved-notes',replaceOther:false};revision='';
-   let verification;
-   try{verification=await request(true)}
-   catch(error){
-    show(applied);ready=0;payload=null;
-    message('The import was submitted, but a fresh saved-Notes check failed: '+
-     error.message+'. Open Check saved item Notes to verify before retrying.',true);
-    return;
-   }
-   const found=verification.savedNoteStats?.itemNotes??0;
-   show(verification);
-   ready=verification.ready??0;
-   if(found<expected||found<added){
-    message('Import verification did not find all the product Notes expected from the saved import. No duplicate expenses were created. Review the preview before retrying.',true);
-   }else{
-    message('Import saved and verified: '+added+' new product Note'+(added===1?'':'s')+
-     ', '+categories+' category assignment'+(categories===1?'':'s')+
-     '. '+found+' importer product Note'+(found===1?' is':'s are')+
-     ' now stored in Ledger.');
-   }
-  }catch(e){message(e.message,true);payload=null;ready=0;$('preview').hidden=true}
-  finally{setBusy(false)}
- });
- $('check').addEventListener('click',async()=>{
-  const file=$('file').files?.[0];
-  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
-  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
-  setBusy(true);message('Checking item descriptions against your existing charges…');
-  try{
-   payload={mode:'zip',fileName:file.name,file};
-   const data=await request(true);
-   show(data);ready=data.ready;
-   message(data.ready?
-    'Preview only: NO changes have been saved. '+(data.notesReady??0)+
-     ' product Notes can be added. Choose Save previewed changes or Import & Save product Notes.':
-    'Preview only: no changes were saved. Check the counts and skipped reasons.');
-   $('apply').disabled=!data.ready;
-  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
- $('apply').addEventListener('click',async()=>{
-  if(!payload)return;
-  setBusy(true);message('Saving category assignments…');
-  try{
-   const data=await request(false);show(data);
-   message('Saved '+(data.notesReady??0)+' new product Notes and '+
-    (data.confidentCategories??0)+' category assignments. To confirm saved Notes, choose Check saved item Notes.');
-   payload=null;ready=0;$('apply').disabled=true;
-  }catch(e){message(e.message,true)}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
-})();
-</script></body></html>+Number(data.costUsd).toFixed(4)],
-    ['Per-run cost limit','
-  // The requested replacement scope must never change between a preview
-  // and Apply. Force a fresh server-side preview and revision.
-  payload=null;revision='';ready=0;
-  $('apply').disabled=true;$('preview').hidden=true;
-  message('Check saved item Notes again to review these category choices.');
- });
- $('notes-check').addEventListener('click',async()=>{
-  payload={mode:'saved-notes',replaceOther:$('include-other').checked};
-  revision='';ready=0;
-  setBusy(true);message('Checking saved Amazon product Notes…');
-  try{
-   const data=await request(true);
-   show(data);ready=data.ready;
-   message(ready?'Review the categories from existing Notes, then select Apply.':
-    'No category changes proposed. Review the explanation and skipped-reason counts.');
-   $('apply').disabled=!ready;
-  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
- $('import').addEventListener('click',async()=>{
-  const file=$('file').files?.[0];
-  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
-  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
-  payload={mode:'zip',fileName:file.name,file};revision='';ready=0;
-  setBusy(true);message('Importing and saving Amazon product Notes…');
-  try{
-   // Unlike Preview, the user's Import click directly commits changes.
-   // The ZIP is processed/uploaded only once, not a second time to Apply.
-   const applied=await request(false);
-   const expected=applied.savedNoteStats?.itemNotes??0;
-   const added=applied.notesReady??0;
-   const categories=applied.confidentCategories??0;
-   // Prove that a separate authenticated request sees persisted Notes,
-   // rather than trusting a dry-run proposal or the write response alone.
-   payload={mode:'saved-notes',replaceOther:false};revision='';
-   let verification;
-   try{verification=await request(true)}
-   catch(error){
-    show(applied);ready=0;payload=null;
-    message('The import was submitted, but a fresh saved-Notes check failed: '+
-     error.message+'. Open Check saved item Notes to verify before retrying.',true);
-    return;
-   }
-   const found=verification.savedNoteStats?.itemNotes??0;
-   show(verification);
-   ready=verification.ready??0;
-   if(found<expected||found<added){
-    message('Import verification did not find all the product Notes expected from the saved import. No duplicate expenses were created. Review the preview before retrying.',true);
-   }else{
-    message('Import saved and verified: '+added+' new product Note'+(added===1?'':'s')+
-     ', '+categories+' category assignment'+(categories===1?'':'s')+
-     '. '+found+' importer product Note'+(found===1?' is':'s are')+
-     ' now stored in Ledger.');
-   }
-  }catch(e){message(e.message,true);payload=null;ready=0;$('preview').hidden=true}
-  finally{setBusy(false)}
- });
- $('check').addEventListener('click',async()=>{
-  const file=$('file').files?.[0];
-  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
-  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
-  setBusy(true);message('Checking item descriptions against your existing charges…');
-  try{
-   payload={mode:'zip',fileName:file.name,file};
-   const data=await request(true);
-   show(data);ready=data.ready;
-   message(data.ready?
-    'Preview only: NO changes have been saved. '+(data.notesReady??0)+
-     ' product Notes can be added. Choose Save previewed changes or Import & Save product Notes.':
-    'Preview only: no changes were saved. Check the counts and skipped reasons.');
-   $('apply').disabled=!data.ready;
-  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
- $('apply').addEventListener('click',async()=>{
-  if(!payload)return;
-  setBusy(true);message('Saving category assignments…');
-  try{
-   const data=await request(false);show(data);
-   message('Saved '+(data.notesReady??0)+' new product Notes and '+
-    (data.confidentCategories??0)+' category assignments. To confirm saved Notes, choose Check saved item Notes.');
-   payload=null;ready=0;$('apply').disabled=true;
-  }catch(e){message(e.message,true)}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
-})();
-</script></body></html>+Number(data.costCeilingUsd||0.05).toFixed(2)]
-   ];
-   const proposals=(data.examples||[]).map(x=>
-    '<div class="item"><strong>'+esc(x.category)+'</strong>'+
-    '<span>'+esc(x.note)+'</span><span>'+
-    (x.previous?'Previously: '+esc(x.previous)+' · ':'')+
-    'Proposed by AI; review before applying</span></div>').join('');
-   $('ai-preview').innerHTML=stats.map(([k,v])=>
-    '<div class="row"><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong></div>').join('')+
-    '<details><summary>Review proposed product categories</summary>'+
-    (proposals||'<p>No safe category suggestions were found.</p>')+'</details>';
-   $('ai-preview').hidden=false;
-   $('ai-message').textContent=aiToken?
-    'AI suggested '+data.proposed+' categor'+(data.proposed===1?'y':'ies')+
-    '. Review them and select Apply; nothing has been changed yet.':
-    'No eligible category changes. Existing category choices remain protected.';
-  }catch(error){$('ai-message').textContent=error.message;aiToken=null}
-  finally{setBusy(false)}
- });
- $('ai-apply').addEventListener('click',async()=>{
-  if(!aiToken)return;
-  const token=aiToken;aiToken=null;setBusy(true);
-  $('ai-message').textContent='Saving reviewed AI category suggestions…';
-  try{
-   const result=await aiRequest('apply',token);
-   $('ai-message').textContent='Saved '+result.applied+
-    ' AI category assignment'+(result.applied===1?'':'s')+
-    '. Existing product Notes and bank amounts were not changed.';
-   $('ai-preview').hidden=true;
-  }catch(error){$('ai-message').textContent=error.message}
-  finally{setBusy(false)}
- });
- $('include-other').addEventListener('change',()=>{
-  // The requested replacement scope must never change between a preview
-  // and Apply. Force a fresh server-side preview and revision.
-  payload=null;revision='';ready=0;
-  $('apply').disabled=true;$('preview').hidden=true;
-  message('Check saved item Notes again to review these category choices.');
- });
- $('notes-check').addEventListener('click',async()=>{
-  payload={mode:'saved-notes',replaceOther:$('include-other').checked};
-  revision='';ready=0;
-  setBusy(true);message('Checking saved Amazon product Notes…');
-  try{
-   const data=await request(true);
-   show(data);ready=data.ready;
-   message(ready?'Review the categories from existing Notes, then select Apply.':
-    'No category changes proposed. Review the explanation and skipped-reason counts.');
-   $('apply').disabled=!ready;
-  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
- $('import').addEventListener('click',async()=>{
-  const file=$('file').files?.[0];
-  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
-  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
-  payload={mode:'zip',fileName:file.name,file};revision='';ready=0;
-  setBusy(true);message('Importing and saving Amazon product Notes…');
-  try{
-   // Unlike Preview, the user's Import click directly commits changes.
-   // The ZIP is processed/uploaded only once, not a second time to Apply.
-   const applied=await request(false);
-   const expected=applied.savedNoteStats?.itemNotes??0;
-   const added=applied.notesReady??0;
-   const categories=applied.confidentCategories??0;
-   // Prove that a separate authenticated request sees persisted Notes,
-   // rather than trusting a dry-run proposal or the write response alone.
-   payload={mode:'saved-notes',replaceOther:false};revision='';
-   let verification;
-   try{verification=await request(true)}
-   catch(error){
-    show(applied);ready=0;payload=null;
-    message('The import was submitted, but a fresh saved-Notes check failed: '+
-     error.message+'. Open Check saved item Notes to verify before retrying.',true);
-    return;
-   }
-   const found=verification.savedNoteStats?.itemNotes??0;
-   show(verification);
-   ready=verification.ready??0;
-   if(found<expected||found<added){
-    message('Import verification did not find all the product Notes expected from the saved import. No duplicate expenses were created. Review the preview before retrying.',true);
-   }else{
-    message('Import saved and verified: '+added+' new product Note'+(added===1?'':'s')+
-     ', '+categories+' category assignment'+(categories===1?'':'s')+
-     '. '+found+' importer product Note'+(found===1?' is':'s are')+
-     ' now stored in Ledger.');
-   }
-  }catch(e){message(e.message,true);payload=null;ready=0;$('preview').hidden=true}
-  finally{setBusy(false)}
- });
- $('check').addEventListener('click',async()=>{
-  const file=$('file').files?.[0];
-  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
-  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
-  setBusy(true);message('Checking item descriptions against your existing charges…');
-  try{
-   payload={mode:'zip',fileName:file.name,file};
-   const data=await request(true);
-   show(data);ready=data.ready;
-   message(data.ready?
-    'Preview only: NO changes have been saved. '+(data.notesReady??0)+
-     ' product Notes can be added. Choose Save previewed changes or Import & Save product Notes.':
-    'Preview only: no changes were saved. Check the counts and skipped reasons.');
-   $('apply').disabled=!data.ready;
-  }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
- $('apply').addEventListener('click',async()=>{
-  if(!payload)return;
-  setBusy(true);message('Saving category assignments…');
-  try{
-   const data=await request(false);show(data);
-   message('Saved '+(data.notesReady??0)+' new product Notes and '+
-    (data.confidentCategories??0)+' category assignments. To confirm saved Notes, choose Check saved item Notes.');
-   payload=null;ready=0;$('apply').disabled=true;
-  }catch(e){message(e.message,true)}
-  finally{setBusy(false);if(!payload)$('apply').disabled=true}
- });
+   body:JSON.stringify({action:'preview',consent:true,replaceOther:$('include-other').checked})});
+  const count=data.proposed||0;
+  suggestions=new Map((data.examples||[]).filter(x=>x.transactionId&&categories.includes(x.category))
+    .map(x=>[itemKey({id:x.transactionId,lineIndex:x.lineIndex}),
+     {category:x.category,possibleMatch:x.possibleMatch}]));
+  $('ai-status').textContent=count+' proposed · '+(data.costUsd==null?
+   'Cost not reported':('$'+Number(data.costUsd).toFixed(4)))+
+   ' spent on this request (maximum $0.05).';
+  reviewMessage(count?'Review the suggested categories below. Nothing was automatically approved.':
+   'No confident new categories. Existing choices are unchanged.');
+  render();
+ }catch(error){reviewMessage(error.message,true)}
+ finally{setBusy(false)}
+}
+$('ai-check').onclick=askAI;
+$('import').onclick=async()=>{
+ const file=$('file').files?.[0];
+ if(!file)return setMessage('Choose an Amazon CSV or ZIP first.',true);
+ if(file.size>79*1024*1024)return setMessage('This file exceeds 79 MB.',true);
+ setBusy(true);setMessage('Importing and saving product Notes…');
+ try{
+  const result=await api('/api/ledger/amazon-import',{method:'POST',
+   headers:{'Content-Type':'application/octet-stream','X-Pilot-Action':'1',
+    'X-Amazon-Filename':encodeURIComponent(file.name),'X-Amazon-Dry-Run':'0',
+    ...(revision?{'X-Ledger-Revision':revision}:{})},body:file});
+  const expected=result.savedNoteStats?.itemNotes||0;
+  // A separate authenticated read verifies that importer Notes persisted.
+  const saved=await api('/api/ledger/amazon-import',{method:'POST',
+   headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
+   body:JSON.stringify({mode:'saved-notes',dryRun:true,replaceOther:false})});
+  if((saved.savedNoteStats?.itemNotes||0)<expected)
+   throw Error('Import submitted, but saved Notes could not be independently verified. Review before retrying.');
+  hasImported=true;noteCount=result.notesReady||0;assignedCount=result.confidentCategories||0;
+  $('import-summary').textContent='Product information saved privately. Existing personal Notes and bank charges were not changed.';
+  $('diagnostics').textContent+=(result.evidenceSaved||0)+' complete item records retained for future categorization.';
+  await loadReview();
+  setMessage('Import saved and verified.');
+  if($('ai-consent').checked)await askAI(true);
+ }catch(error){setMessage(error.message,true)}
+ finally{setBusy(false)}
+};
+loadReview().catch(e=>{reviewMessage(e.message,true);$('review').hidden=false});
 })();
 </script></body></html>

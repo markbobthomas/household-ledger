@@ -1,243 +1,146 @@
 'use strict';
-// Synthetic end-to-end test of browser-extracted CSV entering the real import UI.
-// No Amazon session, real bank accounts or private Ledger credentials are needed.
-const assert=require('node:assert/strict'),path=require('node:path'),{spawn}=require('node:child_process');
-const {chromium,webkit}=require('./browser-harness.cjs');
+// Synthetic desktop/iPhone acceptance test for the single Amazon owner workflow.
+// No household, bank, Amazon, or OpenAI credentials are used.
+const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
+const {spawn}=require('node:child_process'),{chromium,webkit}=require('./browser-harness.cjs');
 module.exports=(async()=>{
  const port=19103,url='http://127.0.0.1:'+port+'/pilot/amazon-import.html';
  const server=spawn('python3',['-m','http.server',String(port),'--bind','127.0.0.1'],{
   cwd:path.resolve(__dirname,'..'),stdio:'ignore'
  });
- const csv='Order ID,Order Date,Product Name,Item Total,Total Charged\r\n'+
+ const csv='Order ID,Order Date,Product Name,Item Total,Total Charged\n'+
   '"113-1234567-7654321","2026-11-22","Laundry detergent, 50 oz","29.50","29.50"';
+ const html=fs.readFileSync(path.resolve(__dirname,'../pilot/amazon-import.html'),'utf8');
+ assert.equal((html.match(/<\/html>/g)||[]).length,1,'No trailing duplicate HTML or scripts');
+ assert(!html.includes('Check saved item Notes'),'Retired review action removed from primary page');
+ assert(!html.includes('Save previewed changes'),'Retired second-upload path removed from page');
  async function ready(){
-  for(let i=0;i<80;i++){
-   try{if((await fetch(url)).ok)return}catch(_){}
+  for(let i=0;i<100;i++){
+   try{if((await fetch(url)).ok)return}catch{}
    await new Promise(r=>setTimeout(r,100));
   }
-  throw Error('Amazon import fixture server could not start');
+  throw Error('Amazon browser fixture server did not start');
  }
  try{
   await ready();
   for(const [engine,name,width] of [[chromium,'desktop Chromium',1280],[webkit,'iPhone WebKit',390]]){
    const browser=await engine.launch({headless:true});
-   const context=await browser.newContext({viewport:{width,height:800}});
-   const page=await context.newPage(),requests=[],noteRequests=[],aiRequests=[],errors=[];
+   const ctx=await browser.newContext({viewport:{width,height:800}});
+   const page=await ctx.newPage(),errors=[],uploads=[],notes=[],aiRequests=[],writes=[];
    page.on('pageerror',e=>errors.push(e.message));
-   // Playwright cannot inspect a Blob streaming upload through postDataBuffer()
-   // in all browsers. Verify exact transmitted File contents at the fetch
-   // boundary inside each tested Chromium/WebKit page instead.
+   // Streaming File bodies are not exposed reliably by Playwright's
+   // postDataBuffer() in WebKit. Verify the original File before dispatch.
    await page.addInitScript(()=>{
     const original=window.fetch.bind(window);
-    window.__amazonUploads=[];
-    window.__amazonNoteCalls=[];
-    window.fetch=async(input,options={})=>{
-     if(String(input).includes('/api/ledger/amazon-import')){
-      if(typeof options.body==='string')
-       window.__amazonNoteCalls.push({
-        body:options.body,contentType:options.headers?.['Content-Type']});
-      else window.__amazonUploads.push({
-       name:options.body?.name,bytes:await options.body?.text(),
-       contentType:options.headers?.['Content-Type'],
-       dryRun:options.headers?.['X-Amazon-Dry-Run']
-      });
+    window.__amazonFileUploads=[];
+    window.fetch=async (url,options)=>{
+     if(String(url).includes('/api/ledger/amazon-import')&&
+        options?.body instanceof Blob){
+      window.__amazonFileUploads.push({
+       name:options.body.name,text:await options.body.text()});
      }
-     return original(input,options);
+     return original(url,options);
     };
    });
-   await page.route('**/api/ledger/amazon-ai',async route=>{
-    const d=route.request().postDataJSON();
-    aiRequests.push(d);
-    if(d.action==='preview'){
-     assert.equal(d.consent,true,'AI product-name disclosure requires user consent');
-     await route.fulfill({status:200,contentType:'application/json',
-      body:JSON.stringify({
-       reviewed:3,proposed:2,notConfident:1,
-       eligibleStats:{importerNotes:69,eligible:3,alreadyAssigned:54,
-        allocated:9,unsafeNote:4},
-       model:'gpt-6-luna',costUsd:0.0013,costCeilingUsd:0.05,
-       previewToken:'a'.repeat(48),
-       allowedCategories:['Shopping','Pets','Kids & Family','Childcare','Healthcare','Insurance'],
-       examples:[{index:0,note:'Possible Amazon: Pet grooming brush',
-        category:'Shopping',previous:'Other',possibleMatch:true,
-        date:'2026-11-24',amountCents:2400},
-        {index:1,note:'Amazon: Child car seat travel bag',
-         category:'Childcare',previous:'Other',possibleMatch:false,
-         date:'2026-11-23',amountCents:1800}]
-      })});
-    }else{
-     assert.equal(d.action,'apply');
-     assert.equal(d.token,'a'.repeat(48));
-     assert.deepEqual(d.selections,[{index:1,category:'Kids & Family',verified:false}],
-      'Only the explicitly selected corrected category can be applied');
-     await route.fulfill({status:200,contentType:'application/json',
-      body:JSON.stringify({applied:1})});
-    }
-   });
-   await page.route('**/api/ledger/amazon-import',async route=>{
-    const request=route.request(),headers=request.headers();
-    if(headers['content-type']==='application/json'){
-     const d=JSON.parse(request.postData()||'{}');
-     assert.deepEqual(Object.keys(d).sort(),['dryRun','mode','replaceOther']);
-     assert.equal(d.mode,'saved-notes');
-     noteRequests.push(d);
-     const ready=d.replaceOther?1:0;
-     await route.fulfill({status:200,contentType:'application/json',
-      headers:{'x-ledger-revision':'fictional-revision'},
-      body:JSON.stringify({ready:d.dryRun?ready:0,
-       applied:d.dryRun?0:ready,
-       bankCharges:3,confidentCategories:ready,savedNoteCategories:ready,
-       replaceOtherEnabled:d.replaceOther,
-       savedNoteStats:{itemNotes:3,recognizable:2,unrecognized:1,
-        replaceableOther:1,protectedSpecific:1,eligibleNotes:ready},
-       examples:[],suggestions:[],
-       otherCategoryReview:d.replaceOther?[]:[{
-        date:'2026-11-24',amountCents:2100,
-        suggestedCategory:'Groceries',existingCategory:'Other',
-        reason:'protected-other',note:'Possible Amazon: Coffee beans'
-       }],
-       savedNoteSkipped:[{date:'2026-11-24',amountCents:2800,
-        reason:'protected-specific',existingCategory:'Shopping',
-        suggestedCategory:'Shopping',note:'Amazon: USB charger'}],
-       savedNoteExamples:d.replaceOther?[{
-        date:'2026-11-24',amountCents:2100,category:'Groceries',
-        note:'Possible Amazon: Coffee beans'
-       }]:[]})});
-     return;
-    }
-    assert.equal(headers['content-type'],'application/octet-stream');
-    assert.equal(decodeURIComponent(headers['x-amazon-filename']),'Amazon-browser-sync.csv');
-    const captured=request.postDataBuffer();
-    if(captured!==null)assert.equal(captured.toString('utf8'),csv);
-    const d={fileName:'Amazon-browser-sync.csv',dryRun:headers['x-amazon-dry-run']==='1'};
-    requests.push(d);
-    if(requests.length===2)assert.equal(headers['x-ledger-revision'],'fictional-revision');
+   let remaining=[
+    {id:'fictional-exact',date:'2026-11-24',amountCents:2950,
+     merchant:'AMAZON',note:'Amazon: Laundry detergent, 50 oz',
+     match:'exact',currentCategory:'Uncategorized',
+     suggestedCategory:'Home & Maintenance',requiresVerification:false},
+    {id:'fictional-possible',date:'2026-11-23',amountCents:1900,
+     merchant:'AMZN',note:'Possible Amazon: Pet grooming brush',
+     match:'possible',currentCategory:'Uncategorized',
+     suggestedCategory:null,requiresVerification:true}
+   ];
+   await page.route('**/api/ledger/amazon-review',async route=>{
     await route.fulfill({status:200,contentType:'application/json',
      headers:{'x-ledger-revision':'fictional-revision'},
-     body:JSON.stringify({importedItems:1,matches:1,ready:d.dryRun?1:0,applied:d.dryRun?0:1,
-      bankCharges:2,verifiedBankCharges:1,possibleBankCharges:1,unmatchedBankCharges:0,
-      notesReady:1,confidentCategories:1,needsReview:0,ambiguousOrders:0,unmatchedOrders:0,alreadyImported:0,
-      examples:[{date:'2026-11-24',amountCents:2950,orderId:'113-1234567-7654321',
-       note:'Amazon: Laundry detergent, 50 oz',categories:['Home & Maintenance'],needsReview:false}],
-      suggestions:[{date:'2026-11-23',amountCents:1400,confidence:'possible',note:'Possible Amazon: Coffee beans'}]})});
+     body:JSON.stringify({items:remaining,categories:['Home & Maintenance','Pets','Shopping','Other'],
+      stats:{amazonCharges:2,confirmed:1,possible:1,unmatched:0,notes:2,review:remaining.length}})});
    });
-   await page.goto(url);
-   assert.equal(await page.locator('#apply').isDisabled(),true,'No category write before preview');
-   // Same DOM File/DataTransfer handoff as the MV3 Ledger-tab injection.
-   await page.evaluate(csvText=>{
-    const transfer=new DataTransfer();
-    transfer.items.add(new File([csvText],'Amazon-browser-sync.csv',{type:'text/csv'}));
-    const file=document.getElementById('file');
-    file.files=transfer.files;
-    file.dispatchEvent(new Event('change',{bubbles:true}));
-    document.getElementById('check').click();
-   },csv);
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Preview only: NO changes have been saved'));
-   await page.locator('#preview details summary').click();
-   assert.match(await page.locator('#details').innerText(),/Amazon: Laundry detergent/);
-   assert.match(await page.locator('#details').innerText(),/Possible Amazon: Coffee beans/);
-   assert.match(await page.locator('#stats').innerText(),/Possible item Notes/);
-   assert.equal(requests.length,1,name+' previews exactly once');
-   assert.equal(requests[0].dryRun,true,name+' does not save automatically');
-   assert.equal(await page.locator('#apply').isDisabled(),false,name+' can approve reviewed match');
-   await page.locator('#apply').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Saved 1 new product Notes'));
-   assert.equal(requests.length,2,name+' explicitly applies exactly once');
-   assert.equal(requests[1].dryRun,false);
-   const uploads=await page.evaluate(()=>window.__amazonUploads);
-   assert.equal(uploads.length,2,name+' sends the exact file twice only after user approval');
-   for(const upload of uploads){
-    assert.equal(upload.name,'Amazon-browser-sync.csv');
-    assert.equal(upload.bytes,csv,name+' sends original CSV bytes, not base64');
-    assert.equal(upload.contentType,'application/octet-stream');
-   }
-   assert.deepEqual(uploads.map(u=>u.dryRun),['1','0']);
-   await page.locator('#notes-check').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('No category changes proposed'));
-   assert.match(await page.locator('#stats').innerText(),/From saved item Notes/);
-   assert.match(await page.locator('#diagnosis').innerText(),/existing Other category choice/);
-   assert.match(await page.locator('#details').innerText(),/Possible Amazon: Coffee beans/);
-   assert.equal(noteRequests.length,1);
-   assert.equal(noteRequests[0].dryRun,true,'Saved Notes preview is read-only');
-   assert.equal(noteRequests[0].replaceOther,false,'Protected Other category is default');
-   assert.equal(await page.locator('#apply').isDisabled(),true,
-    'Recognized Note with protected Other cannot be overwritten silently');
-   await page.locator('#include-other').check();
-   assert.equal(await page.locator('#apply').isDisabled(),true,
-    'Changing Other replacement scope invalidates the preview');
-   await page.locator('#notes-check').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Review the categories'));
-   assert.equal(noteRequests.length,2);
-   assert.equal(noteRequests[1].replaceOther,true);
-   assert.equal(noteRequests[1].dryRun,true);
-   assert.match(await page.locator('#details').innerText(),/Groceries/);
-   await page.locator('#apply').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Saved 0 new product Notes'));
-   assert.equal(noteRequests.length,3,'Saved Notes require a fresh approved preview');
-   assert.equal(noteRequests[2].dryRun,false);
-   assert.equal(noteRequests[2].replaceOther,true);
-   const after=await page.evaluate(()=>({
-    uploads:window.__amazonUploads.length,calls:window.__amazonNoteCalls}));
-   assert.equal(after.uploads,2,'No-upload Note category action never sends the ZIP');
-   assert.equal(after.calls.length,3);
-   assert(after.calls.every(c=>c.contentType==='application/json'));
-
-   // Regression for the real failure: previewed item Notes were never saved.
-   // The primary Import action commits in ONE binary upload and follows with
-   // a lightweight saved-Notes read that must confirm persisted state.
-   assert.equal(await page.locator('#import').isEnabled(),true);
-   await page.locator('#import').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Import saved and verified'));
-   const finalUploads=await page.evaluate(()=>window.__amazonUploads);
-   assert.equal(finalUploads.length,3,
-    name+' one-click import adds exactly one ZIP/CSV upload, not two');
-   assert.equal(finalUploads[2].name,'Amazon-browser-sync.csv');
-   assert.equal(finalUploads[2].bytes,csv);
-   assert.equal(finalUploads[2].dryRun,'0','Primary Import must actually save Notes');
-   assert.equal(noteRequests.length,4,
-    'Import must perform an independent small saved-Notes verification');
-   assert.equal(noteRequests[3].mode,'saved-notes');
-   assert.equal(noteRequests[3].dryRun,true);
-   assert.equal(noteRequests[3].replaceOther,false);
-   assert.match(await page.locator('#message').innerText(),/3 importer product Notes are now stored/);
-   assert.equal(await page.locator('#ai-apply').isDisabled(),true);
-   await page.locator('#ai-check').click();
-   await page.waitForFunction(()=>
-    document.getElementById('ai-message').textContent.includes('AI suggested 2 categories'));
-   await page.locator('#ai-preview details summary').click();
-   assert.match(await page.locator('#ai-preview').innerText(),/Pet grooming brush/);
-   assert.match(await page.locator('#ai-preview').innerText(),/Child car seat travel bag/);
-   assert.match(await page.locator('#ai-preview').innerText(),/Per-run cost limit/);
-   assert.equal(aiRequests.length,1,name+' previews AI suggestions once');
-   assert.equal(aiRequests[0].action,'preview');
-   assert.equal(aiRequests[0].replaceOther,true);
-   assert.equal(await page.locator('#ai-apply').isDisabled(),true,
-    'All AI proposals start unselected');
-   await page.locator('.ai-suggestion').nth(0).locator('.ai-select').check();
-   assert.equal(await page.locator('#ai-apply').isDisabled(),true,
-    'Possible Amazon product needs separate match verification');
-   assert.match(await page.locator('.ai-suggestion').nth(0).innerText(),
-    /Possible product match/);
-   await page.locator('.ai-suggestion').nth(0).locator('.ai-verify').check();
-   assert.equal(await page.locator('#ai-apply').isDisabled(),false,
-    'Verified possible item can be approved');
-   await page.locator('.ai-suggestion').nth(0).locator('.ai-select').uncheck();
-   assert.equal(await page.locator('#ai-apply').isDisabled(),true,
-    'Skipping a proposed item removes it from Apply');
-   await page.locator('.ai-suggestion').nth(1).locator('.ai-select').check();
-   await page.locator('.ai-suggestion').nth(1).locator('.ai-category')
-    .selectOption('Kids & Family');
-   assert.equal(await page.locator('#ai-apply').isDisabled(),false);
-   assert.match(await page.locator('#ai-choice-status').innerText(),/1 item approved/);
-   await page.locator('#ai-apply').click();
-   await page.waitForFunction(()=>
-    document.getElementById('ai-message').textContent.includes('Saved 1 selected AI category assignment'));
-   assert.equal(aiRequests.length,2,name+' AI suggestions require a second Apply click');
-   assert.equal(aiRequests[1].action,'apply');
-   assert.equal(await page.locator('#ai-apply').isDisabled(),true);
-   assert.deepEqual(errors,[],name+' has no JavaScript errors');
-   await context.close();
+   await page.route('**/api/ledger/amazon-review-choice',async route=>{
+    const d=route.request().postDataJSON();writes.push(d);
+    assert.equal(route.request().headers()['x-ledger-revision'],'fictional-revision');
+    assert(!('amount' in d),'Manual category write contains no bank amounts');
+    assert(!('note' in d),'Manual category write does not overwrite product Notes');
+    remaining=remaining.filter(t=>t.id!==d.transactionId);
+    await route.fulfill({status:200,contentType:'application/json',
+     headers:{'x-ledger-revision':'fictional-revision'},body:JSON.stringify({saved:true})});
+   });
+   await page.route('**/api/ledger/amazon-import',async route=>{
+    const req=route.request();
+    const binary=req.headers()['content-type']==='application/octet-stream';
+    if(binary){
+     uploads.push({filename:decodeURIComponent(req.headers()['x-amazon-filename']),
+      dryRun:req.headers()['x-amazon-dry-run']});
+     await route.fulfill({status:200,contentType:'application/json',
+      headers:{'x-ledger-revision':'fictional-revision'},
+      body:JSON.stringify({ready:1,applied:1,notesReady:1,
+       evidenceSaved:1,confidentCategories:1,savedNoteStats:{itemNotes:2}})});
+    }else{
+     const d=req.postDataJSON();notes.push(d);
+     assert.deepEqual(d,{mode:'saved-notes',dryRun:true,replaceOther:false});
+     await route.fulfill({status:200,contentType:'application/json',
+      headers:{'x-ledger-revision':'fictional-revision'},
+      body:JSON.stringify({ready:0,savedNoteStats:{itemNotes:2}})});
+    }
+   });
+   await page.route('**/api/ledger/amazon-ai',async route=>{
+    const d=route.request().postDataJSON();aiRequests.push(d);
+    assert.deepEqual(d,{action:'preview',consent:true,replaceOther:false});
+    await route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify({proposed:1,costUsd:.0007,costCeilingUsd:.05,
+      examples:[{transactionId:'fictional-possible',note:'Possible Amazon: Pet grooming brush',
+       category:'Pets',possibleMatch:true}]})});
+   });
+   try{
+    await page.goto(url);
+    await page.locator('#review-card #accept').waitFor();
+    assert.match(await page.locator('#review-count').innerText(),/2 remaining/);
+    assert.equal(await page.locator('#results').isHidden(),true,'No diagnostics before import');
+    assert.equal(await page.locator('#quick-categories .quick').count()>0,true,
+      'Common spending categories are available as one-tap choices');
+    await page.locator('#accept').click();
+    await page.waitForFunction(()=>document.getElementById('review-count').textContent.includes('1 remaining'));
+    assert.deepEqual(writes[0],{transactionId:'fictional-exact',category:'Home & Maintenance',
+     lineIndex:null,verified:true});
+    await page.locator('#ai-check').click();
+    await page.waitForFunction(()=>document.getElementById('ai-status').textContent.includes('1 proposed'));
+    assert.match(await page.locator('#ai-status').innerText(),/\$0\.0007/);
+    await page.locator('#accept').click();
+    await page.waitForFunction(()=>document.getElementById('review-message').textContent.includes('Verify the possible'));
+    assert.equal(writes.length,1,'Possible product cannot be accepted without verification');
+    await page.locator('#verified').check();
+    await page.locator('#accept').click();
+    await page.waitForFunction(()=>!document.getElementById('finish').hidden);
+    assert.deepEqual(writes[1],{transactionId:'fictional-possible',category:'Pets',
+     lineIndex:null,verified:true});
+    assert.match(await page.locator('#finished-message').innerText(),/up to date/);
+    await page.locator('#file').setInputFiles({name:'Amazon-orders.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
+    await page.locator('#ai-consent').check();
+    await page.locator('#import').click();
+    await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Import saved and verified'));
+    await page.waitForFunction(()=>document.getElementById('ai-status').textContent.includes('1 proposed'));
+    assert.equal(uploads.length,1,'One import action sends file exactly once');
+    const captured=await page.evaluate(()=>window.__amazonFileUploads);
+    assert.deepEqual(captured,[{name:'Amazon-orders.csv',text:csv}],
+     'The exact original CSV bytes are sent once without base64 encoding');
+    assert.equal(uploads[0].filename,'Amazon-orders.csv');
+    assert.equal(uploads[0].dryRun,'0');
+    assert.deepEqual(notes,[{mode:'saved-notes',dryRun:true,replaceOther:false}]);
+    assert.equal(aiRequests.length,2,'AI is opt-in at import and when directly requested');
+    assert.equal(await page.locator('#results').isHidden(),false);
+    assert.match(await page.locator('#stats').innerText(),/Notes added/);
+    assert.match(await page.locator('#stats').innerText(),/Categories assigned/);
+    assert.match(await page.locator('#stats').innerText(),/Need review/);
+    assert.match(await page.locator('#stats').innerText(),/Unmatched/);
+    assert.match(await page.locator('#import-summary').innerText(),/Product information saved privately/);
+    const dimensions=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,
+     width:document.documentElement.clientWidth}));
+    assert(dimensions.scrollWidth<=dimensions.width+2,name+' mobile layout must fit');
+    assert.deepEqual(errors,[],name+' has no runtime script errors');
+   }finally{await ctx.close();await browser.close()}
   }
- }finally{server.kill('SIGTERM')}
- console.log('Amazon browser handoff + explicit approval PASS (Chromium, iPhone WebKit)');
+  console.log('Amazon streamlined import, consented AI, one-tap review and mobile layout PASS');
+ }finally{server.kill()}
 })();

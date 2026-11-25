@@ -2,14 +2,32 @@
 // Pure import proposal: only existing private category overrides and
 // account-qualified transaction Note preferences can change. No bank edits.
 const {keyFor}=require('./amazon-pairing.cjs');
+const Evidence=require('./amazon-evidence.cjs');
 function prepare(result,before={},context={}){
  const priorNotes=before.predictions?.transactionNotes||{},
   nextNotes={...priorNotes},
   allocations={...(before.amazonAllocations||{})},
   overrides={...(before.categoryOverrides||{})},
   addedNotes=new Set(),revisedCategories=new Set(),likelyCategories=new Set(),
-  noteCategories=new Set();
+  noteCategories=new Set(),evidenceChanged=new Set(),
+  amazonEvidence={...(before.amazonEvidence||{})},
+  provenance={...(before.categoryProvenance||{})};
  const entries=[...(result.matches||[]),...(result.suggestions||[])];
+ // Preserve original full products and candidate alternatives, independently
+ // of the existing 160-character Note overlay. Do not replace a verified
+ // product pairing with a weaker possible pairing during re-import.
+ for(const entry of entries){
+  const tx=context.transactions?.[entry.transactionId];
+  if(!tx||String(tx.accountId)!==String(entry.accountId)||
+     Math.round(Number(tx.amount)*100)!==entry.amountCents)continue;
+  const newer=Evidence.fromMatch(entry),old=amazonEvidence[entry.transactionId];
+  if(!newer||old?.match==='exact'&&newer.match!=='exact')continue;
+  const stable=x=>JSON.stringify(x&&{...x,updatedAt:null});
+  if(stable(newer)!==stable(old)){
+   amazonEvidence[entry.transactionId]=newer;
+   evidenceChanged.add(entry.transactionId);
+  }
+ }
  for(const proposal of entries){
   const key=keyFor({accountId:proposal.accountId,id:proposal.transactionId});
   if(typeof priorNotes[key]==='string'&&priorNotes[key].trim())continue;
@@ -18,13 +36,15 @@ function prepare(result,before={},context={}){
   addedNotes.add(proposal.transactionId);
  }
  for(const proposal of result.matches||[]){
-  if(proposal.notesOnly)continue;
+  if(proposal.notesOnly||['manual','manual-item','amazon-ai-reviewed-item','amazon-ai-reviewed'].includes(
+     provenance[proposal.transactionId]?.source))continue;
   const id=proposal.transactionId,prior=allocations[id];
   const changed=!prior||prior.orderId!==proposal.orderId||
    JSON.stringify(prior.lines)!==JSON.stringify(proposal.lines);
   if(!changed)continue;
   const chosen=proposal.categories.find(c=>c!=='Uncategorized')||'Uncategorized';
   overrides[id]=proposal.needsReview?'Uncategorized':chosen;
+  provenance[id]={source:'amazon-rule',category:overrides[id]};
   allocations[id]={orderId:proposal.orderId,amountCents:proposal.amountCents,
    lines:proposal.lines};
   revisedCategories.add(id);
@@ -39,6 +59,7 @@ function prepare(result,before={},context={}){
   if(overrides[id]!==undefined&&overrides[id]!=='Uncategorized')continue;
   if(overrides[id]===proposal.suggestedCategory)continue;
   overrides[id]=proposal.suggestedCategory;
+  provenance[id]={source:'amazon-rule',category:overrides[id]};
   revisedCategories.add(id);
   likelyCategories.add(id);
  }
@@ -50,7 +71,8 @@ function prepare(result,before={},context={}){
   require('./amazon-note-categories.cjs').analyze(context.transactions,{
    ...before,
    predictions:{...(before.predictions||{}),transactionNotes:nextNotes},
-   categoryOverrides:overrides,amazonAllocations:allocations
+   categoryOverrides:overrides,amazonAllocations:allocations,
+   amazonEvidence,categoryProvenance:provenance
   },context.categories||[],{
    replaceOther:context.replaceOther===true
   }):{proposals:[],stats:{},review:[],skipped:[]};
@@ -63,6 +85,7 @@ function prepare(result,before={},context={}){
   if(allocations[id]||(overrides[id]!==undefined&&overrides[id]!=='Uncategorized'&&
    !replaceOther))continue;
   overrides[id]=candidate.category;
+  provenance[id]={source:'amazon-rule',category:overrides[id]};
   revisedCategories.add(id);
   noteCategories.add(id);
  }
@@ -71,10 +94,12 @@ function prepare(result,before={},context={}){
   nextPredictions=hasNotes?{...(before.predictions||{}),transactionNotes:nextNotes}:
    before.predictions||{},
   next={...before,categoryOverrides:overrides,amazonAllocations:allocations,
+  amazonEvidence,categoryProvenance:provenance,
    predictions:nextPredictions},
   report={
    importedItems:result.importedItems||0,orderGroups:result.orderGroups||0,
-   matches:(result.matches||[]).length,ready:changedIds.size,
+   matches:(result.matches||[]).length,ready:new Set([...changedIds,...evidenceChanged]).size,
+   evidenceSaved:evidenceChanged.size,
    needsReview:(result.matches||[]).filter(m=>m.needsReview).length,
    alreadyImported:(result.matches||[]).filter(m=>m.alreadyImported).length,
    ambiguousOrders:result.ambiguousOrders,unmatchedOrders:result.unmatchedOrders,
@@ -109,6 +134,6 @@ function prepare(result,before={},context={}){
    applied:0
   };
  return {next,nextPredictions,hasNotes,categoryChanged:revisedCategories.size>0,
-  ready:changedIds.size,report};
+  ready:new Set([...changedIds,...evidenceChanged]).size,report};
 }
 module.exports={prepare};

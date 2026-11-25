@@ -791,6 +791,8 @@ function remapTransactionMetadata(adjustments,accountId,previous,id){
  if(!previous||previous===id)return adjustments;
  move(adjustments.categoryOverrides,previous,id);
  move(adjustments.amazonAllocations,previous,id);
+ move(adjustments.amazonEvidence,previous,id);
+ move(adjustments.categoryProvenance,previous,id);
  move(adjustments.reviews?.categoryConfirmed,previous,id);
  move(adjustments.reviews?.transactionKinds,previous,id);
  const p=adjustments.predictions;

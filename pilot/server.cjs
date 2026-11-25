@@ -404,6 +404,8 @@ async function sync(){
    for(const t of page.removed){
     if(!next[t.transaction_id]||ids.has(next[t.transaction_id].accountId)||!next[t.transaction_id].accountId){
      delete next[t.transaction_id];delete overrides[t.transaction_id];delete adjustments.amazonAllocations?.[t.transaction_id];
+      delete adjustments.amazonEvidence?.[t.transaction_id];
+      delete adjustments.categoryProvenance?.[t.transaction_id];
     }
    }
   }
@@ -411,7 +413,8 @@ async function sync(){
  const legacyId=state.accounts.length===1?state.accounts[0].id:null;
  for(const t of Object.values(next))if(!t.accountId&&legacyId)t.accountId=legacyId;
  const selectedIds=new Set(stages.flatMap(s=>s.accounts.map(a=>a.id)));
- for(const [id,t] of Object.entries(next))if(t.accountId&&!selectedIds.has(t.accountId)){delete next[id];delete overrides[id];delete adjustments.amazonAllocations?.[id]}
+ for(const [id,t] of Object.entries(next))if(t.accountId&&!selectedIds.has(t.accountId)){delete next[id];delete overrides[id];delete adjustments.amazonAllocations?.[id];
+  delete adjustments.amazonEvidence?.[id];delete adjustments.categoryProvenance?.[id]}
  const committed={...state,transactions:next,accounts:stages.flatMap(s=>s.accounts),
   transactionReplacements:replacements,ledgerAdjustments:adjustments,
   items:state.items.map(i=>{
@@ -439,7 +442,9 @@ function ledgerPayload(){
   syncIssues:state.items.filter(i=>i.syncIssue).map(i=>({
    accountIds:i.accountIds.map(String),...i.syncIssue
   })),
-  adjustments:state.ledgerAdjustments||{}};
+  adjustments:(()=>{const {amazonEvidence:_privateItems,
+  categoryProvenance:_privateOrigins,...publicSettings}=state.ledgerAdjustments||{};
+  return publicSettings})()};
 }
 // RAM only. Bank and forecast persistence remain separately encrypted on disk.
 // Forecast-only writes invalidate here only when cash-flow inputs change.
@@ -672,8 +677,8 @@ async function start(port=Number(env.PORT||8788)){
     const share=require('./category-share.cjs'),view=share.snapshot(state);
     if(!share.selectionIsValid(view,choice))
      return respond(409,{error:'This item or category changed. Refresh to see the latest list.'});
-    const before=state.ledgerAdjustments||{},next=share.change(state,choice);
-    if(choice.kind==='transaction'){
+    const before=state.ledgerAdjustments||{},next=share.change(state,choice,view.categories);
+    if(choice.kind==='transaction'||choice.kind==='amazon-item'){
      state.ledgerAdjustments=next;
      try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
      invalidatePrepared();schedulePrepared();
@@ -775,6 +780,14 @@ async function start(port=Number(env.PORT||8788)){
    res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.png')?'image/png':name.endsWith('.webmanifest')?'application/manifest+json':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com",
    ...(upgradeCookie?{'Set-Cookie':upgradeCookie}:{})});
    return res.end(body);
+  }
+  if(req.method==='GET'&&requestPath==='/api/ledger/amazon-review'){
+   if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+   const before=state.ledgerAdjustments||{};
+   const categories=savedCategoryChoices(before.predictions,before.customCategories,
+    before.categoryOverrides);
+   return respond(200,require('./amazon-evidence.cjs').review(
+    state.transactions,before,categories));
   }
   if(req.method==='GET'&&requestPath==='/api/ledger/category-share'){
    const active=!!(state.items.length&&state.categoryShare?.expiresAt>Date.now());
@@ -1038,7 +1051,8 @@ async function start(port=Number(env.PORT||8788)){
    if(accountRemovalBusy&&[
     '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
      '/api/ledger/category-rule','/api/ledger/categories/delete','/api/ledger/categories/rename',
-    '/api/ledger/credit-kind','/api/ledger/amazon-import','/api/exchange',
+    '/api/ledger/credit-kind','/api/ledger/amazon-import',
+    '/api/ledger/amazon-review-choice','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
@@ -1098,16 +1112,19 @@ async function start(port=Number(env.PORT||8788)){
       costCeilingUsd:ai.COST_CEILING_USD,model:response.model,
       previewToken:amazonAiPreview?.token||null,
       // Authenticated user's Notes are already in their encrypted Ledger;
-      // never include transaction IDs in the preview or model prompt.
-      // Category options are names only. Never send IDs to the browser,
-      // nor any bank metadata to the AI provider.
+      // transaction IDs are provided ONLY to this authenticated browser,
+      // never to the external model prompt.
+      // Category options are names only; bank metadata never goes to AI.
       allowedCategories:ai.categoriesForAi(cats),
       examples:response.proposals.map((p,index)=>({
-       index,note:p.note,category:p.category,previous:p.previous,
+       index,transactionId:p.transactionId,lineIndex:p.lineIndex,
+       note:p.note,category:p.category,previous:p.previous,
        possibleMatch:p.note.startsWith('Possible Amazon: ')||
         p.note.startsWith('Possible Amazon (verify): '),
        date:state.transactions[p.transactionId]?.date||'',
-       amountCents:Math.round(Number(state.transactions[p.transactionId]?.amount||0)*100)
+       amountCents:Number.isSafeInteger(p.lineIndex)?
+        state.ledgerAdjustments?.amazonAllocations?.[p.transactionId]?.lines?.[p.lineIndex]?.cents||0:
+        Math.round(Number(state.transactions[p.transactionId]?.amount||0)*100)
       }))
      });
     }
@@ -1150,22 +1167,46 @@ async function start(port=Number(env.PORT||8788)){
       const tx=state.transactions?.[p.transactionId],
        old=overrides[p.transactionId];
       if(!tx||String(tx.accountId)!==String(p.accountId)||
-         notes[p.noteKey]!==p.note||allocations[p.transactionId]||
+         notes[p.noteKey]!==p.note||
+         (allocations[p.transactionId]&&!Number.isSafeInteger(p.lineIndex))||
+         (Number.isSafeInteger(p.lineIndex)&&(
+          !allocations[p.transactionId]?.lines?.[p.lineIndex]||
+          !['Other','Uncategorized'].includes(allocations[p.transactionId].lines[p.lineIndex].category)||
+          allocations[p.transactionId].lines[p.lineIndex].title!==p.product||
+          before.categoryProvenance?.[p.transactionId]?.lines?.[p.lineIndex]?.source==='manual'))||
          (old!==undefined&&old!=='Uncategorized'&&
           !(old==='Other'&&pending.replaceOther)))
        return respond(409,{error:'Amazon transaction or category changed. Review again.'});
       approved.push({...p,category:s.category});
      }
      amazonAiPreview=null; // Single use even when selected categories are unchanged.
+     const origins={...(before.categoryProvenance||{})},
+      nextAllocations={...allocations};
      const applied=[];
      for(const p of approved){
-      if(overrides[p.transactionId]===p.category)continue;
-      overrides[p.transactionId]=p.category;
+      if(Number.isSafeInteger(p.lineIndex)){
+       const previous=nextAllocations[p.transactionId],oldLine=previous.lines[p.lineIndex];
+       if(oldLine.category===p.category)continue;
+       const lines=previous.lines.map((line,i)=>i===p.lineIndex?
+        {...line,category:p.category}:line);
+       nextAllocations[p.transactionId]={...previous,lines};
+       overrides[p.transactionId]=lines.some(line=>line.category==='Uncategorized')?
+        'Uncategorized':lines[0].category;
+       origins[p.transactionId]={source:'amazon-ai-reviewed-item',
+        category:overrides[p.transactionId],lines:{
+         ...(origins[p.transactionId]?.lines||{}),
+         [p.lineIndex]:{source:'amazon-ai-reviewed',category:p.category}}};
+      }else{
+       if(overrides[p.transactionId]===p.category)continue;
+       overrides[p.transactionId]=p.category;
+       origins[p.transactionId]={source:'amazon-ai-reviewed',category:p.category};
+      }
       applied.push(p);
      }
      if(!applied.length)return respond(200,{applied:0});
      try{
-      state.ledgerAdjustments={...before,categoryOverrides:overrides};
+      state.ledgerAdjustments={...before,categoryOverrides:overrides,
+       amazonAllocations:nextAllocations,categoryProvenance:origins};
       await save();
      }catch(error){
       state.ledgerAdjustments=before;
@@ -1346,6 +1387,23 @@ async function start(port=Number(env.PORT||8788)){
     try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
     return respond(200,{saved:true,scope:'credit-kind'});
    }
+   if(requestPath==='/api/ledger/amazon-review-choice'){
+    if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+    const before=state.ledgerAdjustments||{};
+    const categories=savedCategoryChoices(before.predictions,before.customCategories,
+     before.categoryOverrides);
+    let result;
+    try{result=require('./amazon-review-choice.cjs').change(
+     state.transactions,before,body,categories)}
+    catch(error){return respond(error.httpStatus||400,{
+     error:String(error.message||'Invalid Amazon category').slice(0,180)})}
+    state.ledgerAdjustments=result.next;
+    try{await save()}catch(error){
+     state.ledgerAdjustments=before;
+     return respond(503,{error:'Could not save Amazon category'});
+    }
+    return respond(200,{saved:true,scope:result.scope});
+   }
    if(requestPath==='/api/ledger/category'){
     // Scoped, read-only-source classification adjustment. Never upload entire
     // bank history or a stale prediction snapshot to change one row's category.
@@ -1385,7 +1443,11 @@ async function start(port=Number(env.PORT||8788)){
     }
     const amazonAllocations={...(before.amazonAllocations||{})};
     delete amazonAllocations[id]; // A later manual choice replaces the imported split.
+    const categoryProvenance={...(before.categoryProvenance||{})};
+    if(body.category===null)delete categoryProvenance[id];
+    else categoryProvenance[id]={source:'manual',category:selected};
     state.ledgerAdjustments={...before,categoryOverrides:overrides,amazonAllocations,
+     categoryProvenance,
      ...(nextLearning?{learning:nextLearning}:{})};
     try{await save()}catch(error){
      state.ledgerAdjustments=before;
@@ -1438,13 +1500,21 @@ async function start(port=Number(env.PORT||8788)){
      if(Object.entries(body.categoryOverrides).some(([id,category])=>!ids.has(id)||!allowedCats.has(category)))return respond(400,{error:'Invalid category override'});
     }
     // Never permit source records, Plaid tokens, or provider balances in adjustment writes.
-    const preservedAmazon={...(state.ledgerAdjustments?.amazonAllocations||{})};
-    if(body.categoryOverrides)for(const id of Object.keys(preservedAmazon)){
-     if(body.categoryOverrides[id]!==state.ledgerAdjustments?.categoryOverrides?.[id])
-      delete preservedAmazon[id]; // Bulk manual category changes take priority.
+    const previousPrivate=state.ledgerAdjustments||{},
+     preservedEvidence={...(previousPrivate.amazonEvidence||{})},
+     preservedOrigins={...(previousPrivate.categoryProvenance||{})},
+     preservedAmazon={...(previousPrivate.amazonAllocations||{})};
+    if(body.categoryOverrides)for(const id of new Set([
+      ...Object.keys(previousPrivate.categoryOverrides||{}),
+      ...Object.keys(body.categoryOverrides)])){
+     if(body.categoryOverrides[id]===previousPrivate.categoryOverrides?.[id])continue;
+     delete preservedAmazon[id]; // Bulk manual choices supersede item splits.
+     if(body.categoryOverrides[id]===undefined)delete preservedOrigins[id];
+     else preservedOrigins[id]={source:'manual',category:body.categoryOverrides[id]};
     }
     state.ledgerAdjustments={...Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]])),
-     amazonAllocations:preservedAmazon};
+     amazonAllocations:preservedAmazon,
+     amazonEvidence:preservedEvidence,categoryProvenance:preservedOrigins};
     await save();
     // Keep compatibility with the older adjustments route, while the new
     // app only writes future-ledger settings through /forecasts.
@@ -1605,12 +1675,16 @@ async function start(port=Number(env.PORT||8788)){
      }
      const overrides={...(state.ledgerAdjustments?.categoryOverrides||{})};
      for(const txId of removedIds)delete overrides[txId];
-     const amazonAllocations={...(state.ledgerAdjustments?.amazonAllocations||{})};
-     for(const txId of removedIds)delete amazonAllocations[txId];
+     const amazonAllocations={...(state.ledgerAdjustments?.amazonAllocations||{})},
+      amazonEvidence={...(state.ledgerAdjustments?.amazonEvidence||{})},
+      categoryProvenance={...(state.ledgerAdjustments?.categoryProvenance||{})};
+     for(const txId of removedIds){delete amazonAllocations[txId];
+      delete amazonEvidence[txId];delete categoryProvenance[txId]}
      const next={...state,accounts:state.accounts.filter(a=>String(a.id)!==id),
       items:state.items.flatMap(i=>i.id!==item.id?[i]:
        revoke?[]:[{...i,accountIds:i.accountIds.filter(a=>a!==id)}]),
-      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides,amazonAllocations},
+      transactions,ledgerAdjustments:{...state.ledgerAdjustments,categoryOverrides:overrides,
+       amazonAllocations,amazonEvidence,categoryProvenance},
       ...(revoke?{pendingRevocations:[...pendingRevocations(),
        {id:item.id,token:item.token}]}:{})};
      // Commit FIRST. Failed disk persistence never triggers Plaid revocation.
