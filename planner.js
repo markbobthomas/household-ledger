@@ -1998,7 +1998,7 @@ function schedulesPage(bundle,s){
      '<span class="bills-upcoming-card-sum" data-bills-upcoming-card-sum>Card purchases '+
       cash(cardChargeCents/100)+'</span>'+
      '<span class="bills-upcoming-total">'+upcomingBills.length+'</span></div></div>'+
-    '<p class="audit-footnote">All expected activity: expenses, deposits, refunds and transfers. Checking outflows include card repayments; card purchases count as spending when charged, not again when repaid.</p>'+
+    explanationDetails('What is included','<p class="audit-footnote">All expected activity: expenses, deposits, refunds and transfers. Checking outflows include card repayments; card purchases count as spending when charged, not again when repaid.</p>')+
     (transactionNotice?'<p class="future-notice" role="status">'+escapeHTML(transactionNotice)+'</p>':'')+
     (showNewTransaction?newTransactionForm(s):'')+
     (groupedBills||'<p class="bills-upcoming-empty">No expected transactions in this period.</p>')+
@@ -2026,7 +2026,7 @@ function schedulesPage(bundle,s){
    '</div>'+
    '<button class="btn ledger-add-repeating" type="button" data-schedule-new aria-label="Add repeating payment" title="Add repeating payment">+ Add payment</button></div>'+
   (scheduleNotice?'<p class="future-notice" role="status">'+escapeHTML(scheduleNotice)+'</p>':'')+
-  '<p class="audit-footnote">Saved expenses, deposits, refunds and transfers. Card autopay is managed in <button type="button" class="btn" data-view="settings">card payment settings</button>; it is not a duplicate recurring rule.</p>'+
+  explanationDetails('About recurring bills','<p class="audit-footnote">Saved expenses, deposits, refunds and transfers. Card autopay is managed in <button type="button" class="btn" data-view="settings">card payment settings</button>; it is not a duplicate recurring rule.</p>')+
   create+'<div class="schedule-grid">'+
    '<div class="schedule-list-summary">'+
     '<p class="ledger-list-count schedule-list-count" data-schedule-visible-count '+
@@ -2122,6 +2122,11 @@ function historyMerchantName(row){
  return source||'Unknown merchant';
 }
 function historyMerchantKey(row){return historyMerchantName(row).toLocaleLowerCase('en-US')}
+// Secondary explanation stays available without crowding the primary task.
+function explanationDetails(label,markup){
+ return '<details class="ledger-method-disclosure"><summary>'+escapeHTML(label)+
+  '</summary><div class="ledger-method-body">'+markup+'</div></details>';
+}
 
 // Read-only reporting. Actual bank records, future predictions, and recurring
 // matching are untouched. Exclude pending, paired transfers and card payments.
@@ -2159,7 +2164,7 @@ function historyInsights(rows,view,options={}){
    largest=Math.max(1,...values.map(g=>Math.max(0,g.cents))),
    showTotal=sum=>(sum<0?'−':'')+cash(Math.abs(sum)/100);
   return '<section class="history-insight-panel" data-history-merchant-insights aria-label="Merchant spending">'+
-   '<p class="audit-footnote">Posted purchases less merchant refunds only. Excludes pending activity, transfers (including categorized outward payments), and card repayments.</p>'+
+   explanationDetails('What is counted','<p class="audit-footnote">Posted purchases less merchant refunds only. Excludes pending activity, transfers (including categorized outward payments), and card repayments.</p>')+
    '<div class="history-merchant-overview">'+
     '<div><small>Net merchant spending</small><strong data-history-merchant-total>'+
      showTotal(visibleCents)+'</strong></div>'+
@@ -2399,8 +2404,10 @@ function historyInsights(rows,view,options={}){
 
    (historyBudgetMessage?'<p class="history-budget-feedback" role="status">'+escapeHTML(historyBudgetMessage)+'</p>':'')+
    budgetSummary+
-   '<p class="audit-footnote" data-budget-composition>Posted '+cash(postedCents/100)+' · Provisional pending '+cash(pendingCents/100)+' · Expected '+cash(expectedCents/100)+'</p>'+
-   (pendingCount?'<p class="audit-footnote">Pending amounts and categories may change. Things to check lists category reviews after posting.</p>':'')+
+   explanationDetails('How this total is calculated',
+    '<p class="audit-footnote" data-budget-composition>Posted '+cash(postedCents/100)+
+    ' · Provisional pending '+cash(pendingCents/100)+' · Expected '+cash(expectedCents/100)+'</p>'+
+    (pendingCount?'<p class="audit-footnote">Pending amounts and categories may change. Things to check lists category reviews after posting.</p>':''))+
    (values.length?'<div class="history-category-table"><div class="history-category-columns">'+
      '<span>Category</span><span>Spent + expected</span><span>Budget / month</span></div>'+
     '<div class="history-category-legend">'+values.map(g=>
@@ -2429,7 +2436,7 @@ function historyInsights(rows,view,options={}){
  }
  const largest=Math.max(1,...groups.map(g=>g.count));
  return '<section class="history-insight-panel" data-history-size-insights aria-label="Purchase sizes">'+
-  '<small class="audit-footnote">Posted purchases only · excludes refunds, transfers and card repayments</small>'+header+'<div class="history-size-list">'+groups.map((g,i)=>
+  explanationDetails('What is counted','<p class="audit-footnote">Posted purchases only · excludes refunds, transfers and card repayments.</p>')+header+'<div class="history-size-list">'+groups.map((g,i)=>
    '<button type="button" class="history-size-row" data-history-size-band="'+i+'">'+
    '<span class="history-size-name">'+escapeHTML(g.name)+'</span>'+
    '<span class="history-size-track"><span style="width:'+Math.round(g.count/largest*100)+'%"></span></span>'+
@@ -3368,9 +3375,9 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
     '<span class="status-tag warn">'+overdue.length+'</span></div>'+
-   '<p class="lead">The bank has not confirmed these payments. '+
+   explanationDetails('How these alerts work','<p class="lead">The bank has not confirmed these payments. '+
     'Each unpaid payment remains reserved once in the forecast until it posts, is moved, or is skipped. '+
-    'Ignoring an alert hides it from Review but keeps the withdrawal in your projected balance.</p>'+
+    'Ignoring an alert hides it from Review but keeps the withdrawal in your projected balance.</p>')+
    reviewOverdue(overdue).map(item=>{
     const expanded=overdueEditKey===item.key,
      cashAccounts=activeAccounts(s).filter(a=>accountType(a)!=='credit'),
@@ -3995,14 +4002,17 @@ function render({navigationOnly=false}={}){
   '. Your bank balances have not been changed.</div>';
  else if(latestError)note='<div class="notice danger">'+escapeHTML(latestError)+'</div>';
  else if(caution.length)note='<div class="notice danger forecast-review-notice">'+
-  '<strong>Forecast requires review.</strong><div class="forecast-review-items">'+
+  '<details class="ledger-warning-disclosure" data-forecast-warning-details>'+
+  '<summary><strong>Forecast warning · '+caution.length+
+   ' item'+(caution.length===1?'':'s')+' need review</strong><span>Details</span></summary>'+
+  '<div class="forecast-review-items">'+
   caution.map(item=>'<button type="button" class="forecast-review-link" '+
    'data-forecast-review="'+escapeHTML(item.action)+'"'+
    (item.cardId?' data-forecast-card-id="'+escapeHTML(item.cardId)+'"':'')+
    (item.periodEnd?' data-forecast-period="'+escapeHTML(item.periodEnd)+'"':'')+
    '><span>'+escapeHTML(item.text)+'</span>'+
    '<span class="forecast-review-chevron" aria-hidden="true">›</span></button>').join('')+
-  '</div></div>';
+  '</div></details></div>';
  else note='<div class="notice"><div><strong>'+(live()?'Read-only bank feed':'Fictional planning preview')+'.</strong> '+
   (live()?'Balances are bank-reported; future movements are estimates.':'These balances and transactions are samples, not your actual household.')+
   '</div><span class="secondary">'+escapeHTML(s.asOf||dateToday())+'</span></div>';
