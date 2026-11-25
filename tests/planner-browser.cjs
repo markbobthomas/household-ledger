@@ -1988,7 +1988,10 @@ module.exports=(async()=>{
    if(await quickRow.count()){
     const id=await quickRow.getAttribute('data-category-id');
     const beforeBadge=await page.locator('[data-review-tab-count]').innerText();
+    await quickRow.locator('[data-review-select-row]').check();
     await quickRow.locator('[data-review-skip]').click();
+    assert.equal(await page.locator('[data-review-bulk-count]').innerText(),'0 selected',
+     'Deferring a selected row must not silently include it in a later bulk category change');
     assert.equal(await page.locator('[data-category-review-form][data-category-id="'+id+'"]').count(),0,
      'Skip only defers that row in this session');
     assert.equal(await page.locator('[data-review-tab-count]').innerText(),beforeBadge,

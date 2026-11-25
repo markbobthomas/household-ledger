@@ -4889,7 +4889,9 @@ document.addEventListener('click',async e=>{
  if(skipCategory){
   const row=skipCategory.closest('[data-category-review-form]');
   if(!row||row.dataset.saving==='true')return;
-  reviewSkipped.add(reviewCategoryKey(row.dataset.categoryKind,row.dataset.categoryId));
+  const key=reviewCategoryKey(row.dataset.categoryKind,row.dataset.categoryId);
+  reviewSkipped.add(key);
+  reviewCategorySelected.delete(key); // A skipped row must never be included in a later batch.
   reviewLastSave=null;
   renderReviewFilters();
   return;

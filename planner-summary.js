@@ -870,7 +870,9 @@ function render(input){
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
    series.at(-1).date,chosen.id,series):new Map(),
   projectedEvents:derived?.events||[],
-  overdueCount:(bundle?.overduePayments||[]).filter(row=>String(row.accountId||'')===String(chosen.id)).length,
+  overdueCount:(bundle?.overduePayments||[]).filter(row=>
+   String(row.accountId||'')===String(chosen.id)||
+   String(row.fromAccountId||'')===String(chosen.id)).length,
   missingMortgageCount:(bundle?.missingMortgages||[]).length,
   legacyCount:(bundle?.recurrenceMigration?.legacySeries||[]).length,
   recentEarnedIncome:(bundle?.rows||[]).some(t=>t.type==='income'&&!t.pending&&
