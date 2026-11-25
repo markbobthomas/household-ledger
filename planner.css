@@ -7054,7 +7054,7 @@ a:hover{color:#166e61}
 .planner-menu-content{
  width: min(288px,calc(100vw - 24px));
  max-width:min(288px,calc(100vw - 24px));
- gap:3px;padding:9px;overscroll-behavior:contain;
+ gap:3px;padding:9px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
 }
 .planner-menu-content > :is(button,a){
  display:flex;align-items:center;min-height:44px;
