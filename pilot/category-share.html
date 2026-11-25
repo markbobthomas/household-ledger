@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fafaf8">
+<title>Ledger · Categorize</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#20241f;background:#fafaf8}
+*{box-sizing:border-box}body{margin:0}main{max-width:540px;margin:0 auto;padding:env(safe-area-inset-top) 18px calc(28px + env(safe-area-inset-bottom))}
+header{padding:24px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-size:15px;letter-spacing:.02em;font-weight:750;color:#60685e}
+.count{font-size:14px;font-weight:700;color:#435444;padding:7px 10px;background:#edf1e9;border-radius:20px}
+h1{font-size:clamp(25px,7vw,34px);line-height:1.15;letter-spacing:-.04em;margin:12px 0 9px}
+p{line-height:1.5}.muted{color:#656b63;font-size:15px}.context{margin:0 0 22px}
+.card{background:#fff;border:1px solid #e4e8e0;border-radius:20px;padding:21px 19px;margin:16px 0;box-shadow:0 3px 20px #26352708}
+.tiny{font-size:13px;color:#68736a;font-weight:650;letter-spacing:.02em}.merchant{font-size:24px;font-weight:750;line-height:1.18;letter-spacing:-.03em;margin:9px 0 6px;overflow-wrap:anywhere}
+.amount{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:14px}
+.note{margin:16px 0 5px;padding:13px;background:#f5f6f2;border-radius:12px;overflow-wrap:anywhere;line-height:1.45;font-size:15px}
+.note small{display:block;color:#647166;font-size:12px;margin-bottom:4px;font-weight:650}
+.warning{color:#815a1b;font-size:13px;margin:8px 0 0}
+.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
+button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.chip{min-height:57px;text-align:left;padding:10px 15px;border:1px solid #d6ddd4;border-radius:13px;background:#fff;color:#253128;font-size:16px;font-weight:650;overflow-wrap:anywhere}
+.chip:active{background:#dfeadf}.chip.suggested{border:2px solid #54795b}
+.chip:disabled,button:disabled{opacity:.5;cursor:default}
+.subhead{font-weight:700;font-size:16px;margin:22px 0 0}
+summary{cursor:pointer;padding:13px 0;color:#37553a;font-weight:650;min-height:48px}
+hr{border:0;border-top:1px solid #e6ebe4;margin:24px 0}
+.secondary{background:transparent;color:#48674c;border:0;padding:15px 10px;font-size:16px;font-weight:650}
+.primary{background:#294d34;color:white;border:1px solid #294d34;border-radius:13px;min-height:54px;padding:12px 16px;font-weight:700}
+.primary:disabled{opacity:.45}.wide{width:100%}.buttons{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.status{min-height:25px;margin-top:10px;color:#6b3d25;font-size:14px}
+.hide{display:none!important}input.shareurl{font:inherit;width:100%;padding:13px;border:1px solid #cad2c8;border-radius:10px;background:white;color:#323c31;margin:8px 0 12px}
+.footer{text-align:center;font-size:13px;color:#737e71;margin-top:22px}
+.notice{padding:12px 14px;background:#faf1dd;color:#6c4c21;border-radius:10px}
+@media(max-width:350px){.choices{grid-template-columns:1fr}}
+</style></head><body><main>
+<header><div class="brand">LEDGER</div><div id="count" class="count" hidden></div></header>
+<section id="owner" class="hide">
+<h1>Share categorization</h1>
+<p class="muted context">Send one link. Your wife can categorize purchases on her phone without signing in or using the rest of Ledger.</p>
+<div class="card">
+<p id="owner-status" class="muted">Checking your sharing link…</p>
+<button id="create" class="primary wide" type="button">Create private link</button>
+<div id="sharebox" class="hide">
+<label for="shareurl" class="tiny">Private link</label><input id="shareurl" class="shareurl" type="text" readonly>
+<div class="buttons"><button id="send" class="primary" type="button">Share link</button><button id="copy" class="secondary" type="button">Copy link</button></div>
+</div>
+<p id="owner-feedback" class="status" role="status" aria-live="polite"></p>
+<hr><button id="revoke" class="secondary" type="button" hidden>Turn off shared access</button>
+</div>
+<p class="muted">The link works for 30 days. Anyone who has it can see transaction names, dates, amounts, and saved item notes, and change spending categories. It does not show balances or let them manage accounts. Creating another link immediately disables the previous one.</p>
+<a href="/" class="secondary">Return to Ledger</a>
+</section>
+<section id="review" class="hide">
+<h1>Categorize purchases</h1><p class="muted context">Tap the category that fits best. It saves automatically.</p>
+<div id="card" class="card">
+<div id="meta" class="tiny"></div><div id="merchant" class="merchant"></div>
+<div id="amount" class="amount"></div><div id="note" class="note hide"></div>
+<p id="possible" class="warning hide">Possible Amazon item match. Check the item before using it to decide.</p>
+<div id="reason" class="muted"></div>
+<p class="subhead">What kind of purchase was this?</p>
+<div id="quick" class="choices"></div>
+<details id="more"><summary>More categories</summary><div id="extra" class="choices"></div></details>
+</div>
+<div class="buttons"><button id="skip" class="secondary" type="button">Skip for now</button><button id="reload" class="secondary" type="button">Refresh</button></div>
+<p id="feedback" class="status" role="status" aria-live="polite"></p>
+</section>
+<section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p><button id="again" class="primary" type="button" hidden>Review skipped items</button></section>
+<section id="error" class="hide"><h1>Link unavailable</h1><p id="errormsg" class="muted">Ask for a new private link.</p></section>
+<p class="footer">Only category decisions are available here. Bank accounts and balances stay in Ledger.</p>
+</main><script>
+'use strict';
+const $=id=>document.getElementById(id);
+const manage=location.pathname==='/categorize/manage',token=location.hash.slice(1);
+let view={items:[],categories:[]},revision='',skipped=new Set(),index=0,busy=false,link='';
+const text=(id,s)=>$(id).textContent=String(s??'');
+const show=which=>['owner','review','empty','error'].forEach(id=>$(id).classList.toggle('hide',id!==which));
+function money(v){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Math.abs(Number(v)||0))}
+async function api(path,body,shared=false){
+ const headers=shared?{'X-Ledger-Share':token}: {};
+ if(body!==undefined){headers['X-Pilot-Action']='1';headers['Content-Type']='application/json';if(revision)headers['X-Ledger-Revision']=revision}
+ const response=await fetch(path,{method:body===undefined?'GET':'POST',headers,credentials:'same-origin',
+  cache:'no-store',body:body===undefined?undefined:JSON.stringify(body)});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(data.error||'Could not connect to Ledger');
+ const next=response.headers.get('X-Ledger-Revision');
+ if(next)revision=next;
+ return data;
+}
+async function ownerStatus(){
+ try{const d=await api('/api/ledger/category-share');
+  text('owner-status',d.active?'A link is active until '+new Date(d.expiresAt).toLocaleDateString()+'. Create another link to share again.':'No active sharing link.');
+  $('revoke').hidden=!d.active;
+ }catch(e){text('owner-status',e.message)}
+}
+$('create').onclick=async()=>{
+ $('create').disabled=true;text('owner-feedback','');
+ try{
+  const d=await api('/api/ledger/category-share',{action:'create'});
+  link=location.origin+'/categorize#'+d.token;
+  $('shareurl').value=link;$('sharebox').classList.remove('hide');
+  text('owner-feedback','Private link ready. Share it in a message.');
+  await ownerStatus();
+ }catch(e){text('owner-feedback',e.message)}
+ finally{$('create').disabled=false}
+};
+$('revoke').onclick=async()=>{
+ $('revoke').disabled=true;text('owner-feedback','');
+ try{await api('/api/ledger/category-share',{action:'revoke'});
+  link='';$('shareurl').value='';$('sharebox').classList.add('hide');
+  text('owner-feedback','Shared access turned off.');await ownerStatus();
+ }catch(e){text('owner-feedback',e.message)}
+ finally{$('revoke').disabled=false}
+};
+$('send').onclick=async()=>{if(!link)return;
+ if(navigator.share){try{await navigator.share({title:'Categorize our purchases',url:link});return}catch(e){if(e.name==='AbortError')return}}
+ await copyLink();
+};
+async function copyLink(){
+ if(!link)return;
+ try{await navigator.clipboard.writeText(link);text('owner-feedback','Link copied. Paste it into a message.')}
+ catch{$('shareurl').focus();$('shareurl').select();text('owner-feedback','Select and copy the link above.')}
+}
+$('copy').onclick=copyLink;
+function chip(name,item){
+ const b=document.createElement('button');b.type='button';b.className='chip';
+ if(name===item.suggested||name===item.category&&!['Other','Uncategorized'].includes(name))b.classList.add('suggested');
+ b.textContent=name;
+ b.onclick=()=>save(item,name);
+ return b;
+}
+function render(){
+ text('count',view.items.length+' left');$('count').hidden=false;
+ let remaining=view.items.map((x,i)=>({x,i})).filter(p=>!skipped.has(p.x.kind+':'+p.x.id));
+ if(!view.items.length){show('empty');text('emptytitle','All caught up');text('emptymsg','There are no spending categories waiting for review.');$('again').hidden=true;return}
+ if(!remaining.length){show('empty');text('emptytitle','That’s everything for now');text('emptymsg',view.items.length+' item(s) skipped. You can review them whenever you want.');$('again').hidden=false;return}
+ const next=remaining.find(p=>p.i>=index)||remaining[0];index=next.i;
+ const item=next.x;show('review');
+ text('meta',(item.kind==='transaction'?'TRANSACTION':'UPCOMING PAYMENT')+' · '+(item.date||'Date not set'));
+ text('merchant',item.merchant);text('amount',money(item.amount));
+ text('reason',item.category&&item.category!=='Other'&&item.category!=='Uncategorized'?'Current suggestion: '+item.category:'');
+ $('note').classList.toggle('hide',!item.note);
+ $('note').replaceChildren();
+ if(item.note){const small=document.createElement('small');small.textContent='SAVED ITEM NOTE';$('note').append(small,document.createTextNode(item.note))}
+ $('possible').classList.toggle('hide',!/^(?:Possible Amazon)/i.test(item.note||''));
+ const suggested=new Set([item.suggested,item.category].filter(x=>x&&view.categories.includes(x)&&!['Other','Uncategorized'].includes(x)));
+ const preferred=['Groceries','Dining','Shopping','Kids & Family','Healthcare','Home & Maintenance'];
+ const quick=[...suggested,...preferred].filter((x,i,a)=>view.categories.includes(x)&&a.indexOf(x)===i).slice(0,6);
+ $('quick').replaceChildren(...quick.map(n=>chip(n,item)));
+ $('extra').replaceChildren(...view.categories.filter(n=>!quick.includes(n)).map(n=>chip(n,item)));
+ $('more').open=false;
+ text('feedback','');
+}
+async function load(){
+ const data=await api('/api/share/categorize',undefined,true);
+ view=data;revision=data.revision||revision;
+ if(index>=view.items.length)index=0;
+ render();
+}
+async function save(item,category){
+ if(busy)return;busy=true;text('feedback','Saving…');
+ document.querySelectorAll('.chip,#skip,#reload').forEach(b=>b.disabled=true);
+ try{await api('/api/share/categorize',{kind:item.kind,id:item.id,category},true);
+  skipped.delete(item.kind+':'+item.id);await load();
+ }catch(e){text('feedback',e.message+'. Nothing was changed.');if(/changed|refresh/i.test(e.message))try{await load()}catch{}}
+ finally{busy=false;document.querySelectorAll('.chip,#skip,#reload').forEach(b=>b.disabled=false)}
+}
+$('skip').onclick=()=>{if(busy)return;const x=view.items[index];if(x)skipped.add(x.kind+':'+x.id);index=(index+1)%view.items.length;render()};
+$('reload').onclick=async()=>{if(busy)return;try{await load()}catch(e){text('feedback',e.message)}};
+$('again').onclick=()=>{skipped.clear();index=0;render()};
+if(manage){show('owner');ownerStatus()}
+else if(!/^[a-f0-9]{64}$/.test(token)){show('error');text('errormsg','This link is incomplete. Ask for a new categorization link.')}
+else load().catch(e=>{show('error');text('errormsg',e.message)});
+</script></body></html>
