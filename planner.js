@@ -87,7 +87,7 @@ function recordDeviceTiming(kind,start){
  if(!Object.hasOwn(deviceTimings,kind)||!Number.isFinite(start)||
    typeof window.performance?.now!=='function')return;
  const finish=()=>{
-  const sample=Math.max(0,Math.round((performance.now()-start)*10)/10),
+  const sample=Math.max(0,Math.round((window.performance.now()-start)*10)/10),
    values=deviceTimings[kind];
   values.push(sample);
   if(values.length>80)values.shift();
@@ -3802,7 +3802,7 @@ function activatePreparedView(view,from,fromHistoryView){
 // Spending's four presentation tabs change no bank data. Render only that
 // current pane; keep all other main destinations ready for an instant tap.
 function renderHistorySubview(previousView){
- const timingStart=performance.now();
+ const timingStart=window.performance?.now?.()??Date.now();
  const root=$('planner-main'),context=preparedContext;
  if(!preparedReady||!context||!root){render();return}
  const prior=root.firstElementChild;
@@ -3845,7 +3845,7 @@ function renderReviewFilters(){
 // and account filters are shared by all Spending/Activity panes, whereas
 // Activity search/sort and Budget display preferences are local.
 function renderHistoryFilters(scope='shared'){
- const timingStart=performance.now();
+ const timingStart=window.performance?.now?.()??Date.now();
  if(!preparedContext||!preparedReady){render({navigationOnly:true});return}
  if(scope==='shared'){
   preparedViews.delete('history');preparedViews.delete('activity');
@@ -4685,7 +4685,7 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;renderScheduleFilters();return;}
  const view=e.target.closest('[data-view]');
  if(view){
-  const timingStart=performance.now();
+  const timingStart=window.performance?.now?.()??Date.now();
   if(!preparedReady)return;
   const previousTab=activeTab,previousHistoryView=historyView;
   // The Summary can offer twelve future months; those optional unchecked
