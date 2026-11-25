@@ -748,7 +748,8 @@ module.exports=(async()=>{
    assert.match(await page.locator('[data-device-perf]').innerText(),/Prepared page switches/);
    assert.match(await page.locator('[data-device-perf]').innerText(),/median/);
    // These fictional nickname edits change labels, not account IDs or cash flow.
-   const beforeAliasForecasts=await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds);
+   // A prior real forecast edit may have invalidated the cache; allow that
+   // necessary regeneration before measuring display-only changes.
    const saveAlias=async(id,name)=>{
     const form=page.locator('[data-account-nickname="'+id+'"]');
     await form.locator('input[name="nickname"]').fill(name);
@@ -761,9 +762,10 @@ module.exports=(async()=>{
     },{id,name},{timeout:20000});
    };
    await saveAlias('demo-checking','Daily Checking');
+   const warmAliasForecasts=await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds);
    await saveAlias('demo-visa','Household Credit');
    assert.equal(await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds),
-    beforeAliasForecasts,device+': account label changes must not rerun canonical forecasts');
+    warmAliasForecasts,device+': another nickname-only edit must reuse the valid cached forecast');
    const geometry=await page.locator('[data-account-nickname="demo-checking"]').evaluate(row=>({
     overflow:document.documentElement.scrollWidth-innerWidth,
     fieldHeight:row.querySelector('input').getBoundingClientRect().height,
