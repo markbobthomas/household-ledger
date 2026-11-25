@@ -287,3 +287,6 @@ body.ledger-app .planner-menu-content{
 @media(min-width:781px){
  body.ledger-app .planner-nav-primary .tab-link{font-size:15px!important}
 }
+
+/* Recurring bills remain one continuous ledger list, not a stack of cards. */
+body.ledger-app .schedule-card{border:0!important;box-shadow:none!important;border-radius:0!important}
