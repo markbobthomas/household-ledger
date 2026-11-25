@@ -748,8 +748,12 @@ module.exports=(async()=>{
    assert.match(await page.locator('[data-device-perf]').innerText(),/Prepared page switches/);
    assert.match(await page.locator('[data-device-perf]').innerText(),/median/);
    // These fictional nickname edits change labels, not account IDs or cash flow.
-   // A prior real forecast edit may have invalidated the cache; allow that
-   // necessary regeneration before measuring display-only changes.
+   // The preceding what-if saved a financial edit; one stale-cache refresh
+   // can be necessary. Label changes must never affect bank facts or
+   // repeatedly rebuild the canonical projection.
+   const beforeAliasBuilds=await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds);
+   const beforeAliasBankFacts=await page.evaluate(()=>
+    window.HouseholdBankFeed.getSnapshot('2026-10-19').accounts.map(a=>[a.id,a.current,a.available]));
    const saveAlias=async(id,name)=>{
     const form=page.locator('[data-account-nickname="'+id+'"]');
     await form.locator('input[name="nickname"]').fill(name);
@@ -762,10 +766,13 @@ module.exports=(async()=>{
     },{id,name},{timeout:20000});
    };
    await saveAlias('demo-checking','Daily Checking');
-   const warmAliasForecasts=await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds);
    await saveAlias('demo-visa','Household Credit');
-   assert.equal(await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds),
-    warmAliasForecasts,device+': another nickname-only edit must reuse the valid cached forecast');
+   const afterAliasBuilds=await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds);
+   assert.ok(afterAliasBuilds-beforeAliasBuilds<=1,
+    device+': account names should not repeatedly recalculate forecasts after a prior financial edit');
+   assert.deepEqual(await page.evaluate(()=>
+    window.HouseholdBankFeed.getSnapshot('2026-10-19').accounts.map(a=>[a.id,a.current,a.available])),
+    beforeAliasBankFacts,device+': nickname saves cannot alter source balances or IDs');
    const geometry=await page.locator('[data-account-nickname="demo-checking"]').evaluate(row=>({
     overflow:document.documentElement.scrollWidth-innerWidth,
     fieldHeight:row.querySelector('input').getBoundingClientRect().height,
