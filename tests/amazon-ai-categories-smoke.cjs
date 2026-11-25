@@ -51,8 +51,8 @@ assert.equal(Ai.refineCategory('Gate check car seat travel bag','Childcare',
  ['Kids & Family','Childcare']),'Kids & Family');
 assert.equal(Ai.refineCategory('Cotton muslin burp cloth set','Childcare',
  ['Kids & Family','Childcare']),'Kids & Family');
-assert.equal(Ai.refineCategory('Toy accident protection plan warranty','Insurance',
- ['Insurance','Kids & Family']),'Kids & Family');
+assert.equal(Ai.refineCategory('Toy accident protection plan warranty','Kids & Family',
+ ['Insurance','Kids & Family']),'Insurance');
 assert.equal(Ai.refineCategory('Orthodontic toothpaste 10%','Shopping',
  ['Shopping','Healthcare']),'Healthcare');
 assert.equal(Ai.refineCategory('Children chewable probiotic','Shopping',
@@ -61,11 +61,36 @@ assert.equal(Ai.refineCategory('Monthly homeowner insurance premium','Insurance'
  ['Insurance','Kids & Family']),'Insurance');
 assert.equal(Ai.refineCategory('Toy accident protection plan','Insurance',
  ['Insurance']),'Insurance','Do not invent categories missing from budget');
+
+// Shared decisions across AI post-validation and deterministic bank/item paths.
+const chosen=['Insurance','Healthcare','Kids & Family','Groceries','Dining','Subscriptions'];
+assert.equal(Ai.refineCategory('Extended accident protection plan','Kids & Family',chosen),'Insurance');
+assert.equal(Ai.refineCategory('Medical insurance premium','Insurance',chosen),'Healthcare');
+assert.equal(Ai.refineCategory('Annual software subscription','Shopping',chosen),'Subscriptions');
+assert.equal(Ai.refineCategory('Coffee beans subscription delivery','Subscriptions',chosen),'Groceries');
+assert.equal(Ai.refineCategory('Grocery store prepared meal','Dining',chosen),'Groceries');
+assert.equal(Ai.refineCategory('Coffee shop latte','Groceries',chosen),'Dining');
+assert.equal(Ai.refineCategory('Generic monthly membership subscription','Subscriptions',chosen),null);
+const bank=require('../categorization.js');
+assert.equal(bank.pfcCategory({primary:'INSURANCE',detailed:'INSURANCE_HEALTH'}),'Healthcare');
+assert.equal(bank.pfcCategory({primary:'INSURANCE',detailed:'INSURANCE_HOME'}),'Insurance');
+assert.equal(bank.pfcCategory({primary:'SUBSCRIPTIONS',detailed:'SUBSCRIPTIONS_OTHER'}),null);
+assert.equal(bank.pfcCategory({primary:'SUBSCRIPTIONS',detailed:'SUBSCRIPTIONS_DIGITAL_STREAMING'}),'Subscriptions');
+assert.equal(bank.classify({merchant:'Starbucks',type:'expense',
+ personal_finance_category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'HIGH'}}).category,'Dining');
+assert.equal(bank.classify({merchant:'Safeway prepared meal',type:'expense',
+ personal_finance_category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT',confidence_level:'HIGH'}}).category,'Groceries');
+assert.equal(bank.classify({merchant:'Health insurance premium',type:'expense'}).category,'Healthcare');
+assert.equal(bank.merchantCategory({merchant:'Costco'}),null,'Unknown basket cannot invent dominant category');
+
 const {request,preflightMaximumUsd}=Ai.buildRequest(available.candidates,allowed);
 assert.equal(request.model,'gpt-6-luna');
 const guidance=JSON.stringify(request.input);
 assert(guidance.includes('Childcare = paid daycare'),'AI gets category meanings');
-assert(guidance.includes('Insurance = household policy'),'Retail protections distinguished');
+assert(guidance.includes('Insurance = premiums'),'Retail protections now included');
+assert(guidance.includes('Subscriptions = DIGITAL services ONLY'));
+assert(guidance.includes('Groceries = edible food and drinks ONLY'));
+assert(guidance.includes('Health-insurance premiums belong Healthcare/Health'));
 assert(guidance.includes('Possible can be categorized for user REVIEW'),'Possible match stays unverified');
 assert(request.max_output_tokens<=4096);
 assert(preflightMaximumUsd<Ai.COST_CEILING_USD);
