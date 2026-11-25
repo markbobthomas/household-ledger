@@ -19,7 +19,7 @@ function busy(state){
 }
 async function send(type,args={}){
  const res=await chrome.runtime.sendMessage({type,...args});
- if(!res?.ok)throw Error(res?.error||'Amazon sync could not complete.');
+ if(!res?.ok||res.busy)throw Error(res?.busy?'Another Amazon sync is already running.':res?.error||'Amazon sync could not complete.');
  return res;
 }
 async function refresh(){
