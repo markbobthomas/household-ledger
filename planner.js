@@ -703,8 +703,8 @@ function editorFor(row,s,records,opts={}){
    '<label><input type="radio" name="scope" value="one" checked> Only this payment</label>'+
    '</fieldset>':
   '<fieldset class="future-scope"><legend>Apply changes to</legend>'+
-  '<label><input type="radio" name="scope" value="one" checked> This payment only</label>'+
-  '<label><input type="radio" name="scope" value="all"> This and future payments</label>'+
+  '<label><input type="radio" name="scope" value="one" checked> This occurrence</label>'+
+  '<label><input type="radio" name="scope" value="all"> All future occurrences</label>'+
   '</fieldset>'+
   '<div class="future-repeat-fields" hidden>'+
    '<div class="future-fields"><label>Repeat frequency'+frequencyChoices(cadence)+'</label>'+
@@ -834,9 +834,55 @@ function universalCreateForm(s,preset={}){
   '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div>'+
   '<p role="alert" class="calendar-quick-error" data-calendar-error></p></form>';
 }
+
+/* Home what-if uses the same contextual transaction-detail panel as actual
+ * and future rows. This preview is ephemeral; only the existing canonical
+ * add/save path can modify the forecast, never Plaid source transactions. */
+function whatIfForm(s,preset={}){
+ const account=activeAccounts(s).find(a=>String(a.id)===String(preset.accountId));
+ return '<form data-whatif-form class="calendar-quick-form universal-form">'+
+  '<p class="transaction-detail-help">Try one additional payment. Nothing changes until you save.</p>'+
+  '<div class="calendar-quick-fields">'+
+  '<label>Money<select name="type"><option value="expense">Out (expense)</option><option value="income">In (deposit)</option></select></label>'+
+  '<label>Amount ($)<input name="amount" type="number" inputmode="decimal" min=".01" max="999999999" step=".01" required placeholder="0.00"></label>'+
+  '<label>Date<input name="date" type="date" required min="'+escapeHTML(shiftDay(s.asOf,1))+
+   '" max="'+escapeHTML(shiftDay(s.asOf,horizon))+'" value="'+escapeHTML(preset.date||shiftDay(s.asOf,1))+'"></label>'+
+  '<label>Description<input name="merchant" maxlength="160" required placeholder="What is this for?"></label>'+
+  '</div><p class="transaction-detail-help">Account: <strong>'+
+   escapeHTML(account?.name||preset.accountName||'Selected checking')+'</strong> · One time only</p>'+
+  '<input type="hidden" name="accountId" value="'+escapeHTML(preset.accountId||'')+'">'+
+  '<section class="ledger-whatif-result" data-whatif-preview aria-live="polite" aria-atomic="true">Enter an amount to compare balances.</section>'+
+  '<div class="calendar-quick-actions"><button type="submit" class="btn primary" disabled>Save to forecast</button>'+
+  '<button type="button" class="btn" data-close-transaction-detail>Cancel</button></div>'+
+  '<p role="alert" class="calendar-quick-error" data-whatif-error></p>'+
+  '<p class="transaction-detail-help">This simulates a checking/savings cash movement, not a credit-card charge. Existing payments and bank facts stay unchanged.</p></form>';
+}
+function updateWhatIfPreview(form){
+ const host=form?.querySelector('[data-whatif-preview]'),save=form?.querySelector('[type=submit]');
+ if(!host||!save)return null;
+ const result=window.HouseholdPlannerSummary?.previewWhatIf?.(Object.fromEntries(new FormData(form)));
+ save.disabled=!result?.valid||!result.saveReady;
+ if(!result?.valid){
+  host.textContent=result?.message||'A daily balance projection is unavailable.';
+  return result;
+ }
+ host.innerHTML='<div class="ledger-whatif-heading"><strong>Preview · '+
+  escapeHTML(result.accountName)+'</strong><span>'+
+  escapeHTML(dayLabel(result.effectiveDate))+
+  (result.effectiveDate!==result.requestedDate?' · bank business day':'')+'</span></div>'+
+  '<div class="ledger-whatif-comparison"><div><small>End-of-day balance</small>'+
+  '<span>'+cash(result.beforeDay)+' → <strong>'+cash(result.afterDay)+'</strong></span></div>'+
+  '<div><small>Lowest balance in '+escapeHTML(result.month)+'</small>'+
+  '<span>'+cash(result.beforeLow)+' → <strong>'+cash(result.afterLow)+'</strong></span></div></div>'+
+  '<p>'+escapeHTML(result.message)+'</p>';
+ return result;
+}
 function detailHtml(bundle,s){
  if(!transactionDetail)return '';
- if(transactionDetail.kind==='new-payment')return detailShell('Add a payment',
+ if(transactionDetail.kind==='what-if')return detailShell('Try a payment',
+   'See the balance change before adding it',whatIfForm(s,transactionDetail.preset||{}),
+   'UNSAVED · WHAT-IF');
+  if(transactionDetail.kind==='new-payment')return detailShell('Add a payment',
    'Add a one-time or repeating payment',universalCreateForm(s,transactionDetail.preset||{}),'PLAN ONLY');
  if(transactionDetail.kind==='overdue'){
   const host=[...document.querySelectorAll('[data-overdue-item]')]
@@ -1024,6 +1070,7 @@ function drawTransactionDetail(bundle,s){
  if(prior&&typeof prior.remove==='function')prior.remove();
  root.insertAdjacentHTML('beforeend',detailHtml(bundle,s));
  syncTransactionViewport();
+ updateWhatIfPreview(root.querySelector('[data-whatif-form]'));
  const form=root.querySelector('.transaction-overlay form[data-history-recurring-form]');
  if(form&&recurringDraft?.examples){
   form.dataset.linkedExampleIds=JSON.stringify(recurringDraft.examples);
