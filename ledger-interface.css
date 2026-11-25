@@ -546,3 +546,42 @@ body.ledger-app :is(.ledger-warning-summary,.ledger-context-disclosure > summary
  body.ledger-app #planner-notice .ledger-warning-summary{gap:8px}
  body.ledger-app #planner-notice .ledger-warning-expand{font-size:11px}
 }
+
+
+/* Private account aliases: a recognizable name without exposing bank IDs in main views. */
+body.ledger-app .ledger-account-names{display:block}
+body.ledger-app .ledger-account-names>.lead{margin:4px 0 16px;max-width:700px}
+body.ledger-app .ledger-account-name-row{
+ display:grid;grid-template-columns:minmax(160px,1.3fr) minmax(180px,1fr) auto auto;
+ align-items:center;gap:12px;border-top:1px solid #dbe3eb;padding:12px 0;
+}
+body.ledger-app .ledger-account-name-identity{display:flex;flex-direction:column;min-width:0;gap:3px}
+body.ledger-app .ledger-account-name-identity strong{
+ display:block;color:#172635;font-size:14px;overflow-wrap:anywhere
+}
+body.ledger-app .ledger-account-name-identity small{
+ color:#667482;font-size:12px;overflow-wrap:anywhere
+}
+body.ledger-app .ledger-account-name-row label{display:block;min-width:0;margin:0}
+body.ledger-app .ledger-account-name-row input{
+ width:100%;min-width:0;height:44px;min-height:44px;
+ border:1px solid #98aaba;border-radius:5px;background:#fff;color:#172635;
+ padding:10px 12px;font-size:14px
+}
+body.ledger-app .ledger-account-name-row .btn{
+ min-height:44px;margin:0;padding:10px 14px;white-space:nowrap
+}
+body.ledger-app .ledger-account-name-message{margin:10px 0 0;font-weight:650;color:#275b42}
+body.ledger-app .ledger-account-name-error{grid-column:1/-1;margin:0;color:#b42332}
+@media(max-width:760px){
+ body.ledger-app .ledger-account-name-row{
+  grid-template-columns:minmax(0,1fr) auto auto;gap:10px
+ }
+ body.ledger-app .ledger-account-name-identity{grid-column:1/-1}
+ body.ledger-app .ledger-account-name-row label{grid-column:1}
+}
+@media(max-width:370px){
+ body.ledger-app .ledger-account-name-row{grid-template-columns:minmax(0,1fr) auto}
+ body.ledger-app .ledger-account-name-row label{grid-column:1/-1}
+ body.ledger-app .ledger-account-name-row button{grid-row:auto}
+}
