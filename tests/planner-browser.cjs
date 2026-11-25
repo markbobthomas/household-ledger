@@ -1890,58 +1890,36 @@ module.exports=(async()=>{
     .evaluate(el=>getComputedStyle(el).fontSize);
    assert.equal(reviewTitleSize,mobile?'18px':'20px',
     'Review page title matches Settings heading hierarchy');
-   assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(items=>
-    items.map(x=>x.dataset.reviewTab)),['categories','payments','earlier','suggestions'],
-    'Review preserves four distinct sections as tabs');
+   assert.equal(await page.locator('[data-review-tab]').count(),0,
+    'Review has one risk-ranked queue, not a four-tab navigation');
+   const reviewSections=['payments','earlier','suggestions','categories'];
+   assert.deepEqual(await page.locator('[data-review-pane]').evaluateAll(items=>
+    items.map(x=>x.dataset.reviewPane)),reviewSections,
+    'Forecast-impacting tasks precede ordinary categorization');
+   assert.equal(await page.locator('[data-review-focus]').inputValue(),'all');
+   for(const section of reviewSections)
+    assert.equal(await page.locator('[data-review-pane="'+section+'"]').isVisible(),true,
+     'All task groups are visible in the default queue');
    for(const width of (mobile?[320,390]:[768,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
-    const grid=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
-     .evaluateAll(items=>items.map(el=>el.getBoundingClientRect().toJSON()));
-    const reviewTabSize=await page.locator('.reviews-page .ledger-section-tabs .history-subtab')
-     .first().evaluate(el=>getComputedStyle(el).fontSize);
-    assert.equal(reviewTabSize,width<=650?'12px':'13px',
-     'Review tab headings use the same secondary navigation type scale');
-    assert.ok(grid.length===4&&Math.abs(grid[0].width-grid[1].width)<=2&&
-     (width>650?grid.every(x=>Math.abs(x.top-grid[0].top)<=2):
-      grid[2].top>grid[0].bottom+1)&&
-     await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),
-     'Review tabs use Spending responsive grid at '+width+'px');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+3),true,
+     'Review queue fits without horizontal overflow at '+width+'px');
    }
    await page.setViewportSize({width:mobile?390:1280,height:mobile?844:900});
-   const reviewSections=['categories','payments','earlier','suggestions'];
-   const verifyPendingTabColors=async activeSection=>{
-    const states=await page.locator('.reviews-page [data-review-tab]').evaluateAll(tabs=>
-     tabs.map(tab=>({
-      id:tab.dataset.reviewTab,
-      count:Number(tab.querySelector('.review-tab-count')?.textContent||0),
-      pending:tab.classList.contains('review-tab-pending'),
-      active:tab.classList.contains('active'),
-      color:getComputedStyle(tab).color,
-      countColor:tab.querySelector('.review-tab-count')?
-       getComputedStyle(tab.querySelector('.review-tab-count')).color:null
-     })));
-    assert.deepEqual(states.map(x=>x.id),reviewSections);
-    for(const item of states){
-     assert.equal(item.pending,item.count>0,
-      'Only Review sections with unresolved work are red: '+JSON.stringify(item));
-     assert.equal(item.active,item.id===activeSection);
-     assert.equal(item.color==='rgb(180, 35, 53)',item.count>0,
-      'Selected and unselected Review labels have the right attention color: '+
-       JSON.stringify(item));
-     if(item.count>0)assert.equal(item.countColor,item.color,
-      'Pending section count and label use the same red text');
-    }
-   };
-   await verifyPendingTabColors(
-    await page.locator('[data-review-tab].active').getAttribute('data-review-tab'));
-   for(const section of reviewSections){
-    await page.locator('[data-review-tab="'+section+'"]').click();
-    await verifyPendingTabColors(section);
-    assert.equal(await page.locator('[data-review-pane="'+section+'"]').isVisible(),true);
-    for(const other of reviewSections.filter(x=>x!==section))
-     assert.equal(await page.locator('[data-review-pane="'+other+'"]').isVisible(),false);
-   }
-   await page.locator('[data-review-tab="categories"]').click();
+   const beforeFocus=await page.evaluate(()=>({
+    generation:window.HouseholdPreparedViewGeneration(),
+    builds:window.HouseholdPlannerWorkStats().forecastBuilds
+   }));
+   await page.locator('[data-review-focus]').selectOption('payments');
+   assert.equal(await page.locator('[data-review-pane="payments"]').isVisible(),true);
+   for(const section of reviewSections.filter(x=>x!=='payments'))
+    assert.equal(await page.locator('[data-review-pane="'+section+'"]').isVisible(),false);
+   assert.deepEqual(await page.evaluate(()=>({
+    generation:window.HouseholdPreparedViewGeneration(),
+    builds:window.HouseholdPlannerWorkStats().forecastBuilds
+   })),beforeFocus,'Review filters reuse prepared forecast and DOM');
+   await page.locator('[data-review-focus]').selectOption('all');
+   await page.locator('[data-review-focus]').selectOption('categories');
    assert.equal(await page.locator('.reviews-page .review-priority,.review-intro p,'+
     '.category-review-panel > .lead').count(),0,
     'Review relies on section labels and actionable status rather than repeated instructional prose');
@@ -2002,6 +1980,29 @@ module.exports=(async()=>{
     assert.ok(await page.locator('[data-category-review-form] .ledger-transaction-identity small')
      .evaluateAll(notes=>notes.every(note=>!/Missing category|Unassigned category/i.test(note.textContent))),
      'Review category context must not repeat in every transaction subtitle');
+   }
+   // One-tap category review reuses the existing saved overlay, and undo
+   // restores the previous classification without changing bank transactions.
+   const quickRow=page.locator('[data-category-review-form][data-category-kind="transaction"]')
+    .filter({has:page.locator('[data-review-quick-category]')}).first();
+   if(await quickRow.count()){
+    const id=await quickRow.getAttribute('data-category-id');
+    const beforeBadge=await page.locator('[data-review-tab-count]').innerText();
+    await quickRow.locator('[data-review-skip]').click();
+    assert.equal(await page.locator('[data-category-review-form][data-category-id="'+id+'"]').count(),0,
+     'Skip only defers that row in this session');
+    assert.equal(await page.locator('[data-review-tab-count]').innerText(),beforeBadge,
+     'Skip does not falsely resolve or recategorize a transaction');
+    await page.locator('[data-review-show-skipped]').click();
+    const returned=page.locator('[data-category-review-form][data-category-id="'+id+'"]');
+    assert.equal(await returned.count(),1,'Skipped task is recoverable immediately');
+    await returned.locator('[data-review-quick-category]').first().click();
+    await page.locator('[data-review-undo]').waitFor({state:'visible',timeout:30000});
+    assert.equal(await returned.count(),0,'A quick category choice saves without an additional Apply');
+    await page.locator('[data-review-undo]').click();
+    await page.locator('[data-category-review-form][data-category-id="'+id+'"]')
+     .waitFor({state:'attached',timeout:30000});
+    assert.equal(await page.locator('[data-review-undo]').count(),0);
    }
    // Category checks are independent from the existing one-click editor.
    const reviewSelectionRows=page.locator('.reviews-page [data-review-select-row]'),
@@ -2217,7 +2218,7 @@ module.exports=(async()=>{
     '[data-review-pane="suggestions"] .recommended-repeating [data-review-recommendation]').first();
    if(await suggestion.count()){
     const section=await suggestion.evaluate(node=>node.closest('[data-review-pane]').dataset.reviewPane);
-    await page.locator('[data-review-tab="'+section+'"]').click();
+    await page.locator('[data-review-focus]').selectOption(section);
     await suggestion.click();
     assert.equal(await page.locator('.transaction-detail [data-history-recurring-form]').count(),1,
      'Review suggestions open the same shared editor');

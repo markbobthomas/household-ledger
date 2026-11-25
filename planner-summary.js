@@ -452,6 +452,47 @@ function displayedMonthLow(){
  const matching=points.filter(p=>p.date.startsWith(calendarMonth)&&Number.isFinite(p.balance));
  return matching.length?matching.reduce((a,b)=>b.balance<a.balance?b:a):null;
 }
+// Explain the existing canonical projection, not a separate balance calculation.
+function forecastClarityMarkup(){
+ const c=calendarContext;
+ if(!c)return '';
+ if(isHistoricalMonth())return '<section class="summary-forecast-clarity" data-summary-trust>'+
+  '<strong>Past month</strong><p>These balances are reconstructed from posted transactions, not independent bank statements for each day.</p></section>';
+ if(c.card)return '<section class="summary-forecast-clarity" data-summary-trust>'+
+  '<strong>Card debt is an estimate</strong><p>Card purchases change card debt; only linked card payments change checking. Future charges and issuer statements may differ.</p></section>';
+ const low=displayedMonthLow(),cutoff=low?.date||'',
+  start=cutoff?addDay(cutoff,-14):'',
+  withdrawals=(c.projectedEvents||[]).filter(e=>
+   e.kind==='expense'&&cutoff&&e.date>=start&&e.date<=cutoff&&
+   Number.isFinite(Number(e.amount))).sort((a,b)=>
+    Math.abs(Number(b.amount))-Math.abs(Number(a.amount))).slice(0,3),
+  why=withdrawals.length?withdrawals.map(e=>
+   esc(e.merchant||'Scheduled payment')+' ('+money(Math.abs(Number(e.amount)))+')').join(' · '):
+   'No single withdrawal explains the low',
+  old=c.legacyCount||0,unpaid=c.overdueCount||0,missing=c.missingMortgageCount||0,
+  noPay=c.recentEarnedIncome&&!c.plannedIncome,
+  risks=[...(missing?['Possible missing mortgage']:[]),
+   ...(unpaid?[unpaid+' expected payment'+(unpaid===1?'':'s')+' not confirmed by the bank']:[]),
+   ...(old?[old+' older automatic estimate'+(old===1?'':'s')+' not yet confirmed']:[]),
+   ...(noPay?['Recent income found, but no future deposit predicted']:[])],
+  warning=low&&low.balance<0?'Projected balance falls below zero':
+   low&&low.balance<alertThreshold(c.prefs)?'Projected balance falls below your warning amount':'',
+  balanceDate=/^\d{4}-\d{2}-\d{2}/.test(String(c.balanceObserved||''))?
+   String(c.balanceObserved).slice(0,10):'',
+  status=warning||risks.length?'Needs attention':'Assumptions to know';
+ return '<section class="summary-forecast-clarity" data-summary-trust aria-label="Forecast explanation">'+
+  '<div class="summary-forecast-head"><strong>What this forecast means</strong>'+
+   '<span class="summary-forecast-status">'+esc(status)+'</span></div>'+
+  (low?'<p><strong>Lowest in '+esc(monthName(calendarMonth))+': '+money(low.balance)+
+   ' on '+esc(dateLabel(low.date))+'.</strong> Largest scheduled withdrawals in the preceding 15 days: '+why+'.</p>':
+   '<p>No full-month low is available for this selection.</p>')+
+  (balanceDate?'<p>Opening bank balance observed '+esc(balanceDate)+'.</p>':'')+
+  (warning?'<p class="summary-forecast-warning">'+esc(warning)+'.</p>':'')+
+  (risks.length?'<p class="summary-forecast-warning">'+risks.map(esc).join(' · ')+'.</p>':'')+
+  '<p class="summary-forecast-caveat">Includes dated planned cash movements. Excludes everyday unplanned spending; missing predictions may change the low.</p>'+
+  (risks.length?'<button type="button" class="btn" data-view="reviews">Check forecast questions</button>':'')+
+  '</section>';
+}
 function monthlyLowMarkup(card=false){
  const point=displayedMonthLow(),past=isHistoricalMonth(),
   title=past?'Reconstructed lowest in month':
@@ -480,6 +521,8 @@ function updateDisplayedMonthLow(){
     if(wrap.firstElementChild)second.replaceWith(wrap.firstElementChild);}
   }
  }
+ const trust=document.querySelector('[data-summary-trust]');
+ if(trust)trust.outerHTML=forecastClarityMarkup();
  const el=document.querySelector('[data-summary-month-low]');
  if(!el)return;
  const point=displayedMonthLow(),value=el.querySelector('[data-summary-month-low-value]'),
@@ -825,7 +868,16 @@ function render(input){
   cushion:alertThreshold(prefs),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,
-   series.at(-1).date,chosen.id,series):new Map()};
+   series.at(-1).date,chosen.id,series):new Map(),
+  projectedEvents:derived?.events||[],
+  overdueCount:(bundle?.overduePayments||[]).filter(row=>String(row.accountId||'')===String(chosen.id)).length,
+  missingMortgageCount:(bundle?.missingMortgages||[]).length,
+  legacyCount:(bundle?.recurrenceMigration?.legacySeries||[]).length,
+  recentEarnedIncome:(bundle?.rows||[]).some(t=>t.type==='income'&&!t.pending&&
+   String(t.accountId||'')===String(chosen.id)&&t.date>=addDay(snapshot.asOf,-100)),
+  plannedIncome:(derived?.events||[]).some(t=>t.kind==='income'&&t.date>snapshot.asOf&&
+   t.date<=addDay(snapshot.asOf,60)),
+  balanceObserved:chosen.balanceAsOf||chosen.observedAt||chosen.asOf||''};
  }
  if(series.length<2){
   const status=derived?.balanceStatus||(!bundle?.projection?'calculation':'unavailable');
@@ -891,7 +943,7 @@ function render(input){
   '<div class="summary-numbers">'+rawBalanceMarkup(chosen,isReal||snapshot?.connected||snapshot?.mode==='plaid',allAccounts)+
    (credit?(isHistoricalMonth()?monthlyLowMarkup(true):cardFutureMetric):
     monthlyLowMarkup(false))+'</div>'+
-    calendarGrid()+'</section>';
+    calendarGrid()+forecastClarityMarkup()+'</section>';
  const trendChart='<section class="summary-stage summary-legacy">'+
 
   '<div class="summary-trend-ranges" role="group" aria-label="Balance trend time range">'+

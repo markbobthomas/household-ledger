@@ -41,6 +41,10 @@ module.exports=(async()=>{
     'Merchants, Purchase Sizes and Spending Summary must also be prepared at startup');
    assert.equal(await page.locator('.summary-page').count(),1,
     'Preparation never replaces the visible Home calendar');
+   assert.equal(await page.locator('[data-summary-trust]').count(),1,
+    'Home explains forecast assumptions using the existing projection');
+   assert.match(await page.locator('[data-summary-trust]').innerText(),/Excludes everyday unplanned spending/);
+
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
     'Background preparation never changes the selected calendar month');
    // One Home calendar and one Upcoming list; no separate Trend
@@ -467,7 +471,7 @@ module.exports=(async()=>{
     }
    }
    await page.locator('.top-actions [data-view="reviews"]').click();
-   await page.locator('[data-review-tab="payments"]').click();
+   await page.locator('[data-review-focus]').selectOption('payments');
    assert.equal(await page.locator('[data-review-pane="payments"]').isVisible(),true);
    assert.equal(await page.evaluate(()=>window.HouseholdPreparedViewGeneration()),priorGeneration,
     'Review panes reuse the existing page');
