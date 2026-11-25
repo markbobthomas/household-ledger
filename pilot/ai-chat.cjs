@@ -54,6 +54,7 @@ const ANALYST_PROMPT=[
  'This is the SAME sanitized full financial evidence used by the owner manual Export Data: complete recorded history, future balances, saved schedules/one-offs, card rules, budgets, category choices, transaction notes, bank sync, reconciliation and source-review diagnostics. Initial rows are only a cross-section; retrieve more pages when needed. audit_financial_evidence independently computes posted expenses net identified refunds and compares schedules, card settlements, category review and source reconciliation. These are optional methods, NOT a mandatory findings checklist. Never confuse gross index totals with actual net expense or treat a review hint as a confirmed defect.',
  'You may put compact Markdown pipe tables in the expanded section detail when a side-by-side comparison materially clarifies the analysis (e.g., complete months, merchant totals, recurring obligations, sensitivity scenarios, and prioritized actions). A standard pipe table has a header row, a separator row, and data rows. Include verified citations for all numeric/date table claims in the surrounding block evidence IDs. This is optional: choose prose, metrics, tables, or charts according to the actual financial discoveries.',
  'Quality bar: produce a genuinely useful independent financial review, not isolated alerts. First form a clearly supported overall financial judgment; then investigate the strongest evidence wherever it leads. Possible research directions include comparable completed-month purchase and income trends, near-term cash-flow timing, card obligations and payment reconciliation, category/source uncertainty, recurring charges and concrete opportunities to save. These are examples, never a mandatory checklist or finding quota. Distinguish an incoming transfer from earnings and a mortgage-like transfer to an unconnected account from a verified mortgage expense. Distinguish biweekly annualized income from ordinary two-paycheck months, and full months from partial ones. Investigate any disconnect between actual historical card use and the deliberately scheduled-only forecast without adding variable purchases to Ledger predictions. Include well-chosen comparative charts and calculations when they materially clarify a finding. Do not manufacture exact deficits, savings or averages: obtain computed evidence with read-only tools and cite it, or qualify what cannot be established. Lead with WHY the most important discovery matters; provide specific, evidence-linked next actions or an explicit unresolved question in each substantive expansion.',
+ 'When source-supported changes are available, add up to three independently verifiable callout blocks with titles beginning "Action: ". State one specific next step, why it matters and its source evidence IDs; explain alternatives in detail. If no action is supported, omit these callouts rather than invent one. This is an optional reading guide IN ADDITION TO the full comprehensive analysis. Do not omit or shorten any other material research, evidence, figures, visuals or caveats.',
  'Write for an intelligent person who is not trained in finance. Use short, direct sentences and familiar words. Say cash available instead of liquidity, money coming in or going out instead of inflows and outflows, and payment due instead of obligation when accurate. Explain essential finance terms in everyday language. Use clear, specific headings. Explain what happened, why it matters, how certain it is, and what the reader can do. Keep ALL the original research, amounts, dates, comparisons, charts, tables, reasoning, caveats and recommendations. Plain language must NEVER mean a shorter or shallower analysis, fewer research passes, vague advice, or less source evidence. The expanded sections should still give a thorough explanation in easy-to-follow prose, without dense jargon or a patronizing tone.'
 ].join(' ');
 const QA_PROMPT=[
@@ -280,6 +281,25 @@ function presentationChart(chart,style){
  if(style==='line'&&timeSeries)return {...chart,type:'line'};
  if(style==='bar')return {...chart,type:'bar'};
  return chart;
+}
+/* Action highlights can only reuse facts from validated financial report blocks.
+ * They are not a second model result and cannot turn QA/QC into advice. */
+function verifiedActions(blocks){
+ const actions=[],seen=new Set();
+ for(let i=0;i<(blocks||[]).length;i++){
+  const block=blocks[i],title=String(block?.title||'').trim(),
+   description=String(block?.text||'').trim(),
+   evidence=Array.isArray(block?.evidence)?block.evidence.filter(item=>
+    item&&typeof item.id==='string'&&typeof item.text==='string'&&item.text.trim()):[];
+  if(block?.kind!=='callout'||!/^Action:\s+\S/i.test(title)||
+    !description||!evidence.length)continue;
+  const key=title.toLocaleLowerCase('en-US');
+  if(seen.has(key))continue;seen.add(key);
+  actions.push({blockIndex:i,title:title.replace(/^Action:\s*/i,''),
+   nextStep:description,evidence:evidence.slice(0,12)});
+  if(actions.length===3)break;
+ }
+ return actions;
 }
 function verifyAnswer(parsed,facts,charts,context,{materialityGate=false}={}){
  if(!parsed||!Array.isArray(parsed.blocks)||parsed.blocks.length>40||
@@ -589,6 +609,7 @@ async function chatTurn({context,consent,question,history=[],apiKey,model='gpt-4
     result.followUps=[];result.mode=qaMode?'ledger-qaqc':'autonomous-adaptive';result.reportStatus='evidence-checked';
     if(!qaMode){
      result.presentation='independent-financial-outlook';
+      result.actions=verifiedActions(result.blocks);
      result.researchCoverage=research?{completeMonths:research.briefing.comparisonMonths,
       independentlyCalculatedFacts:research.facts.length,
       availableResearchCharts:research.charts.length}:null;
@@ -727,4 +748,4 @@ async function analyzeOneClick(options){
  return chatTurn({...options,mode:'autonomous',history:[],
   question:'What do you make of this financial data? What stands out and why?'});
 }
-module.exports={chatTurn,analyzeOneClick,analyzeQualityCheck,makeChart,verifyAnswer,cleanConversation,selectContextFacts};
+module.exports={chatTurn,analyzeOneClick,analyzeQualityCheck,makeChart,verifyAnswer,verifiedActions,cleanConversation,selectContextFacts};
