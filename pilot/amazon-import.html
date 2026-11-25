@@ -63,16 +63,16 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  </section>
 </section>
 <details class="panel" id="browser-sync-setup">
- <summary><strong>Set up Amazon browser sync on desktop (optional)</strong></summary>
- <p class="muted">One-time setup for Chrome or Edge on a computer. This is an experimental manual import, not automatic background syncing. The ZIP import above supports more orders.</p>
+ <summary><strong>Set up automatic Amazon sync on desktop (optional)</strong></summary>
+ <p class="muted">One-time setup for desktop Chrome or Edge. After you turn it on, the extension automatically checks Amazon about every six hours while your browser is running, then saves matched Notes and confident categories. The ZIP import above still covers more orders.</p>
  <ol>
   <li><a href="https://github.com/markbobthomas/household-ledger/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">Download Ledger's extension files (ZIP)</a> and unzip them.</li>
   <li>In desktop Chrome, open <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>), enable <strong>Developer mode</strong>, select <strong>Load unpacked</strong>, then select the unzipped <code>household-ledger-main/browser/amazon-ledger</code> folder.</li>
   <li>Open the extension. Paste your private Ledger website address and click <strong>Connect Ledger</strong>; approve access to that Ledger site only. <button id="copy-ledger-address" type="button" class="quick">Copy this Ledger address</button> <span id="copy-ledger-feedback" role="status" class="muted"></span></li>
-  <li>Sign in to Ledger and Amazon in the same browser. Open Amazon <strong>Your Orders</strong>, choose the order period, and click <strong>Sync Amazon orders</strong> in the extension.</li>
-  <li>Ledger opens this import page with a CSV ready. Review the products and click <strong>Import and save</strong>. No bank purchases are created.</li>
+  <li>Sign in to Ledger and Amazon in the same desktop browser. Open the extension and select <strong>Enable automatic sync</strong>. Approve Amazon page access. The first check runs immediately.</li>
+  <li>The extension checks again about every six hours whenever the browser is open. It saves verified matches automatically; uncertain categories remain for review in Ledger. You can pause syncing in the extension at any time.</li>
  </ol>
- <p class="muted">Only clearly priced single-item orders from up to five pages are included. Mixed orders and uncertain amounts are skipped. There is no iPad or iPhone extension support.</p>
+ <p class="muted">Automatic checks use the Amazon and Ledger sign-ins in your browser; no password is copied or stored by the extension. If a session expires, reopen the website and sign in. Currently only clearly priced single-item orders from up to five pages are included; mixed orders and uncertain amounts still need the ZIP import. Not supported on iPad or iPhone.</p>
  <p class="muted"><a href="https://github.com/markbobthomas/household-ledger/blob/main/browser/amazon-ledger/README.md" target="_blank" rel="noopener noreferrer">Complete installation and troubleshooting guide</a></p>
 </details>
 <section class="panel" id="review" hidden>
@@ -91,7 +91,7 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  <summary><strong>Details and other import options</strong></summary>
  <p class="muted">Confirmed matches use amounts and dates and can split one posted charge among product categories. Possible and date-only matches remain clearly labeled. Existing handwritten Notes, manual category choices and all bank amounts remain untouched.</p>
  <label class="checkline"><input type="checkbox" id="include-other"> Include existing Other categories in the AI review. These are never changed without your approval.</label>
- <p class="muted">Optional desktop Chrome/Edge Amazon sync setup is above. Compatibility with a signed-in live Amazon session is not yet verified.</p>
+ <p class="muted">Optional automatic Amazon sync setup is above. Compatibility with a signed-in live Amazon session is not yet verified.</p>
  <section aria-label="Private Amazon matching quality" id="amazon-quality">
   <h3>Saved Amazon matching quality</h3>
   <p class="muted">Counts use your current saved posted Amazon charges, not the number of products uploaded. No data is sent to AI to calculate these figures.</p>
