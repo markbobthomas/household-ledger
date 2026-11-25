@@ -51,8 +51,8 @@ assert.equal(Ai.refineCategory('Gate check car seat travel bag','Childcare',
  ['Kids & Family','Childcare']),'Kids & Family');
 assert.equal(Ai.refineCategory('Cotton muslin burp cloth set','Childcare',
  ['Kids & Family','Childcare']),'Kids & Family');
-assert.equal(Ai.refineCategory('Toy accident protection plan warranty','Insurance',
- ['Insurance','Kids & Family']),'Kids & Family');
+assert.equal(Ai.refineCategory('Toy accident protection plan warranty','Kids & Family',
+ ['Insurance','Kids & Family']),'Insurance');
 assert.equal(Ai.refineCategory('Orthodontic toothpaste 10%','Shopping',
  ['Shopping','Healthcare']),'Healthcare');
 assert.equal(Ai.refineCategory('Children chewable probiotic','Shopping',
@@ -61,11 +61,36 @@ assert.equal(Ai.refineCategory('Monthly homeowner insurance premium','Insurance'
  ['Insurance','Kids & Family']),'Insurance');
 assert.equal(Ai.refineCategory('Toy accident protection plan','Insurance',
  ['Insurance']),'Insurance','Do not invent categories missing from budget');
+
+// Shared decisions across AI post-validation and deterministic bank/item paths.
+const chosen=['Insurance','Healthcare','Kids & Family','Groceries','Dining','Subscriptions'];
+assert.equal(Ai.refineCategory('Extended accident protection plan','Kids & Family',chosen),'Insurance');
+assert.equal(Ai.refineCategory('Medical insurance premium','Insurance',chosen),'Healthcare');
+assert.equal(Ai.refineCategory('Annual software subscription','Shopping',chosen),'Subscriptions');
+assert.equal(Ai.refineCategory('Coffee beans subscription delivery','Subscriptions',chosen),'Groceries');
+assert.equal(Ai.refineCategory('Grocery store prepared meal','Dining',chosen),'Groceries');
+assert.equal(Ai.refineCategory('Coffee shop latte','Groceries',chosen),'Dining');
+assert.equal(Ai.refineCategory('Generic monthly membership subscription','Subscriptions',chosen),null);
+const bank=require('../categorization.js');
+assert.equal(bank.pfcCategory({primary:'INSURANCE',detailed:'INSURANCE_HEALTH'}),'Healthcare');
+assert.equal(bank.pfcCategory({primary:'INSURANCE',detailed:'INSURANCE_HOME'}),'Insurance');
+assert.equal(bank.pfcCategory({primary:'SUBSCRIPTIONS',detailed:'SUBSCRIPTIONS_OTHER'}),null);
+assert.equal(bank.pfcCategory({primary:'SUBSCRIPTIONS',detailed:'SUBSCRIPTIONS_DIGITAL_STREAMING'}),'Subscriptions');
+assert.equal(bank.classify({merchant:'Starbucks',type:'expense',
+ personal_finance_category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_GROCERIES',confidence_level:'HIGH'}}).category,'Dining');
+assert.equal(bank.classify({merchant:'Safeway prepared meal',type:'expense',
+ personal_finance_category:{primary:'FOOD_AND_DRINK',detailed:'FOOD_AND_DRINK_RESTAURANT',confidence_level:'HIGH'}}).category,'Groceries');
+assert.equal(bank.classify({merchant:'Health insurance premium',type:'expense'}).category,'Healthcare');
+assert.equal(bank.merchantCategory({merchant:'Costco'}),null,'Unknown basket cannot invent dominant category');
+
 const {request,preflightMaximumUsd}=Ai.buildRequest(available.candidates,allowed);
 assert.equal(request.model,'gpt-6-luna');
 const guidance=JSON.stringify(request.input);
 assert(guidance.includes('Childcare = paid daycare'),'AI gets category meanings');
-assert(guidance.includes('Insurance = household policy'),'Retail protections distinguished');
+assert(guidance.includes('Insurance = premiums'),'Retail protections now included');
+assert(guidance.includes('Subscriptions = DIGITAL services ONLY'));
+assert(guidance.includes('Groceries = edible food and drinks ONLY'));
+assert(guidance.includes('Health-insurance premiums belong Healthcare/Health'));
 assert(guidance.includes('Possible can be categorized for user REVIEW'),'Possible match stays unverified');
 assert(request.max_output_tokens<=4096);
 assert(preflightMaximumUsd<Ai.COST_CEILING_USD);
@@ -114,6 +139,18 @@ const fakeFetch=async(url,opts)=>{
   })});
  assert.equal(low.proposals.length,0,
   'Low confidence and invented labels must not become categories');
+ const membership=await Ai.classify({
+  candidates:[{...available.candidates[0],product:'Generic annual club membership subscription'}],
+  categories:[...categories,'Subscriptions'],apiKey:'fictional-key',
+  fetchImpl:async()=>({ok:true,json:async()=>({
+   status:'completed',usage:{input_tokens:120,output_tokens:40},
+   output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({
+    choices:[{i:0,category:'Subscriptions',confidence:'high'}]
+   })}]}]
+  })})
+ });
+ assert.equal(membership.proposals.length,0,'Digital-only safeguard must abstain instead of emitting null category');
+
  assert.equal((await Ai.classify({candidates:[],categories,
   apiKey:'fictional-key',fetchImpl:()=>{throw Error('must not call')}})).proposals.length,0);
  console.log('Amazon AI categories: consent input, high-confidence validation, cost limits and manual priority PASS');

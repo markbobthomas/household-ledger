@@ -14,6 +14,19 @@ assert.equal(items.length,5);
 assert.equal(items[0].title,'Laundry detergent, 100 oz');
 assert.equal(items[0].cents,2500);
 const categories=['Shopping','Groceries','Health','Kids & Family','Transportation','Other','Uncategorized','Home & Maintenance'];
+
+const refinedCategories=['Groceries','Insurance','Healthcare','Subscriptions','Dining','Boys','Kids & Family','Shopping','Other'];
+assert.equal(A.classify('Accidental damage protection plan for kids toy',refinedCategories),'Insurance');
+assert.equal(A.classify('Extended warranty for toy',refinedCategories),'Insurance');
+assert.equal(A.classify('Health insurance premium payment',refinedCategories),'Healthcare');
+assert.equal(A.classify('Insurance deductible payment',refinedCategories),'Insurance');
+assert.equal(A.classify('Annual Kindle Unlimited subscription',refinedCategories),'Subscriptions');
+assert.equal(A.classify('Physical coffee beans subscription delivery',refinedCategories),'Groceries');
+assert.equal(A.classify('Infant formula pack',refinedCategories),'Groceries');
+assert.equal(A.classify('Grocery store prepared meal kit',refinedCategories),'Groceries');
+assert.notEqual(A.classify('Generic annual club membership subscription',refinedCategories),'Subscriptions');
+assert.notEqual(A.classify('Dish soap 12 fl oz',refinedCategories),'Groceries');
+
 const tx={
  a:{id:'a',name:'AMAZON MKTPLACE',date:'2026-10-15',amount:120,pending:false,accountId:'credit-one'},
  b:{id:'b',name:'AMZN MKTPLACE',date:'2026-10-14',amount:10,pending:false,accountId:'credit-one'},
