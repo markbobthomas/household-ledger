@@ -16,7 +16,8 @@ function eligible(transactions,adjustments={},categories=[],replaceOther=false){
   overrides=adjustments.categoryOverrides||{},
   allocations=adjustments.amazonAllocations||{},
   evidence=adjustments.amazonEvidence||{};
- const candidates=[],stats={amazonCharges:0,importerNotes:0,alreadyAssigned:0,
+ const candidates=[];let titleBudget=0;
+ const stats={amazonCharges:0,importerNotes:0,alreadyAssigned:0,
   allocated:0,unsafeNote:0,alreadyRecognized:0,eligible:0,limited:0};
  for(const tx of Object.values(transactions||{})){
   if(!merchant(tx))continue;
@@ -46,6 +47,9 @@ function eligible(transactions,adjustments={},categories=[],replaceOther=false){
    note.startsWith('Possible Amazon: ')?note.slice(17):
    note.startsWith('Possible Amazon (verify): ')?note.slice(26):'';
   if(!title||title.length>650){stats.unsafeNote++;continue}
+  const bytes=Buffer.byteLength(title,'utf8')+160;
+  if(titleBudget+bytes>14500){stats.limited++;continue}
+  titleBudget+=bytes;
   candidates.push({transactionId:id,accountId:tx.accountId,
    noteKey:keyFor(tx),note,product:title,previous:old||null});
  }
