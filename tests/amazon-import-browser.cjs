@@ -110,6 +110,8 @@ module.exports=(async()=>{
     assert.match(await page.locator('#browser-sync-setup').innerText(),/Import and save/);
     assert.equal(await page.locator('#copy-ledger-address').count(),1);
     await page.locator('#copy-ledger-address').click();
+    await page.waitForFunction(()=>/Address copied|Copy the address/.test(
+      document.getElementById('copy-ledger-feedback').textContent));
     assert.match(await page.locator('#copy-ledger-feedback').innerText(),/Address copied|Copy the address/);
 
     assert.equal(await page.locator('#quick-categories .quick').count()>0,true,
