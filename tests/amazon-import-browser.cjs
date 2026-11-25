@@ -22,7 +22,7 @@ module.exports=(async()=>{
   for(const [engine,name,width] of [[chromium,'desktop Chromium',1280],[webkit,'iPhone WebKit',390]]){
    const browser=await engine.launch({headless:true});
    const context=await browser.newContext({viewport:{width,height:800}});
-   const page=await context.newPage(),requests=[],noteRequests=[],errors=[];
+   const page=await context.newPage(),requests=[],noteRequests=[],aiRequests=[],errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    // Playwright cannot inspect a Blob streaming upload through postDataBuffer()
    // in all browsers. Verify exact transmitted File contents at the fetch
@@ -44,6 +44,28 @@ module.exports=(async()=>{
      }
      return original(input,options);
     };
+   });
+   await page.route('**/api/ledger/amazon-ai',async route=>{
+    const d=route.request().postDataJSON();
+    aiRequests.push(d);
+    if(d.action==='preview'){
+     assert.equal(d.consent,true,'AI product-name disclosure requires user consent');
+     await route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify({
+       reviewed:2,proposed:1,notConfident:1,
+       eligibleStats:{importerNotes:69,eligible:2,alreadyAssigned:54,
+        allocated:9,unsafeNote:4},
+       model:'gpt-6-luna',costUsd:0.0013,costCeilingUsd:0.05,
+       previewToken:'a'.repeat(48),
+       examples:[{note:'Possible Amazon: Pet grooming brush',
+        category:'Shopping',previous:null}]
+      })});
+    }else{
+     assert.equal(d.action,'apply');
+     assert.equal(d.token,'a'.repeat(48));
+     await route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify({applied:1})});
+    }
    });
    await page.route('**/api/ledger/amazon-import',async route=>{
     const request=route.request(),headers=request.headers();
@@ -171,6 +193,23 @@ module.exports=(async()=>{
    assert.equal(noteRequests[3].dryRun,true);
    assert.equal(noteRequests[3].replaceOther,false);
    assert.match(await page.locator('#message').innerText(),/3 importer product Notes are now stored/);
+   assert.equal(await page.locator('#ai-apply').isDisabled(),true);
+   await page.locator('#ai-check').click();
+   await page.waitForFunction(()=>
+    document.getElementById('ai-message').textContent.includes('AI suggested 1 category'));
+   await page.locator('#ai-preview details summary').click();
+   assert.match(await page.locator('#ai-preview').innerText(),/Pet grooming brush/);
+   assert.match(await page.locator('#ai-preview').innerText(),/Per-run cost limit/);
+   assert.equal(aiRequests.length,1,name+' previews AI suggestions once');
+   assert.equal(aiRequests[0].action,'preview');
+   assert.equal(aiRequests[0].replaceOther,true);
+   assert.equal(await page.locator('#ai-apply').isDisabled(),false);
+   await page.locator('#ai-apply').click();
+   await page.waitForFunction(()=>
+    document.getElementById('ai-message').textContent.includes('Saved 1 AI category assignment'));
+   assert.equal(aiRequests.length,2,name+' AI suggestions require a second Apply click');
+   assert.equal(aiRequests[1].action,'apply');
+   assert.equal(await page.locator('#ai-apply').isDisabled(),true);
    assert.deepEqual(errors,[],name+' has no JavaScript errors');
    await context.close();
   }

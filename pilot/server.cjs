@@ -5,8 +5,10 @@ const env=process.env;
 const {inspect:accountForecastLinks}=require('./account-forecast-links.cjs');
 // Load optional UI modules only inside their relevant edit endpoints.
 // A deliberately partial static deployment must still start and serve /healthz.
-const savedCategoryChoices=(predictions,customCategories=[])=>
- require('../ledger-data.js').categories({predictions,customCategories});
+const savedCategoryChoices=(predictions,customCategories=[],categoryOverrides={})=>
+ require('../ledger-data.js').categories({
+  predictions,customCategories,categoryOverrides
+ });
 if(!env.PILOT_PASSWORD||env.PILOT_PASSWORD.length<20||!env.PILOT_ENCRYPTION_KEY||!env.PLAID_CLIENT_ID||!env.PLAID_SECRET)
  throw Error('Missing pilot password (20+ characters), encryption key, or Plaid credentials');
 const key=crypto.createHash('sha256').update(env.PILOT_ENCRYPTION_KEY).digest();
@@ -38,6 +40,9 @@ const safe=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 const stamp=()=>new Date().toISOString();
 const freshState=()=>({items:[],transactions:{},accounts:[],lastSync:null,error:null,ledgerAdjustments:{}});
 let state=freshState(),forecastWrites=Promise.resolve(),householdEditQueue=Promise.resolve(),accountRemovalBusy=false;
+// Ephemeral, private single-use preview; never persisted or logged. A new
+// preview replaces the old one; applying after any settings edit is rejected.
+let amazonAiPreview=null;
 const settingsRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify(state.ledgerAdjustments||{})).digest('hex');
 const staleMessage='Ledger was updated on another device. This edit was not saved. Reload the page to review the latest changes.';
 function normalizeState(){
@@ -549,7 +554,8 @@ async function start(port=Number(env.PORT||8788)){
   const respond=(status,data)=>{const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
     if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
     if(req.method==='POST'&&status>=200&&status<300&&
-       (requestPath.startsWith('/api/ledger/')&&!['/api/ledger/forecasts','/api/ledger/amazon-import'].includes(requestPath)||
+       (requestPath.startsWith('/api/ledger/')&&!['/api/ledger/forecasts','/api/ledger/amazon-import',
+        '/api/ledger/amazon-ai'].includes(requestPath)||
         ['/api/sync','/api/exchange','/api/disconnect'].includes(requestPath))){
      invalidatePrepared();
      schedulePrepared();
@@ -960,6 +966,96 @@ async function start(port=Number(env.PORT||8788)){
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
+   if(requestPath==='/api/ledger/amazon-ai'){
+    if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+    if(!body||typeof body!=='object'||Array.isArray(body))
+     return respond(400,{error:'Invalid Amazon AI category request'});
+    if(body.action==='preview'){
+     if(Object.keys(body).sort().join(',')!=='action,consent,replaceOther'||
+        body.consent!==true||typeof body.replaceOther!=='boolean')
+      return respond(400,{error:'Explicit product-name AI consent required'});
+     if(!env.OPENAI_API_KEY)
+      return respond(503,{error:'AI categorization is not configured'});
+     const ai=require('./amazon-ai-categories.cjs'),
+      before=state.ledgerAdjustments||{},
+      cats=savedCategoryChoices(before.predictions,before.customCategories,
+       before.categoryOverrides),
+      {candidates,stats}=ai.eligible(state.transactions,before,cats,body.replaceOther),
+      previousRevision=settingsRevision();
+     // No product names, bank fields or identifying metadata are sent to
+     // the provider beyond the consented product descriptions and category
+     // choices. At most one hard-bounded model request per explicit preview.
+     let response;
+     try{
+      response=await ai.classify({candidates,categories:cats,
+       apiKey:env.OPENAI_API_KEY});
+     }catch(error){
+      return respond(503,{error:String(error.message||'AI categorization failed').slice(0,170)});
+     }
+     if(previousRevision!==settingsRevision())
+      return respond(409,{error:'Ledger changed during AI review. Check again; nothing was applied.'});
+     const token=crypto.randomBytes(24).toString('hex');
+     amazonAiPreview=response.proposals.length?{
+      token,revision:previousRevision,expires:Date.now()+15*60*1000,
+      replaceOther:body.replaceOther,proposals:response.proposals
+     }:null;
+     return respond(200,{
+      reviewed:response.reviewed,proposed:response.proposals.length,
+      notConfident:response.abstained,eligibleStats:stats,
+      costUsd:response.costUsd,preflightMaximumUsd:response.preflightMaximumUsd,
+      costCeilingUsd:ai.COST_CEILING_USD,model:response.model,
+      previewToken:amazonAiPreview?.token||null,
+      // Authenticated user's Notes are already in their encrypted Ledger;
+      // never include transaction IDs in the preview or model prompt.
+      examples:response.proposals.slice(0,45).map(p=>({
+       note:p.note,category:p.category,previous:p.previous
+      }))
+     });
+    }
+    if(body.action==='apply'){
+     if(Object.keys(body).sort().join(',')!=='action,token'||
+        typeof body.token!=='string'||body.token.length!==48)
+      return respond(400,{error:'Preview categories before applying'});
+     const pending=amazonAiPreview;
+     // One-time, unguessable token and unchanged preferences required.
+     if(!pending||!crypto.timingSafeEqual(
+        Buffer.from(pending.token),Buffer.from(body.token))||
+        Date.now()>pending.expires||settingsRevision()!==pending.revision)
+      return respond(409,{error:'AI preview expired or Ledger changed. Check again.'});
+     amazonAiPreview=null;
+     const before=structuredClone(state.ledgerAdjustments||{}),
+      overrides={...(before.categoryOverrides||{})},
+      notes=before.predictions?.transactionNotes||{},
+      allocations=before.amazonAllocations||{},
+      valid=savedCategoryChoices(before.predictions,before.customCategories,
+       before.categoryOverrides),
+      allowed=new Set(valid),
+      applied=[];
+     for(const p of pending.proposals){
+      const tx=state.transactions?.[p.transactionId],old=overrides[p.transactionId];
+      if(!tx||String(tx.accountId)!==String(p.accountId)||
+         notes[p.noteKey]!==p.note||allocations[p.transactionId]||
+         !allowed.has(p.category)||
+         (old!==undefined&&old!=='Uncategorized'&&
+          !(old==='Other'&&pending.replaceOther))||
+         old===p.category)continue;
+      overrides[p.transactionId]=p.category;
+      applied.push(p);
+     }
+     if(!applied.length)return respond(200,{applied:0});
+     try{
+      state.ledgerAdjustments={...before,categoryOverrides:overrides};
+      await save();
+     }catch(error){
+      state.ledgerAdjustments=before;
+      return respond(503,{error:'Could not save AI categories; Ledger is unchanged'});
+     }
+     invalidatePrepared();schedulePrepared();
+     return respond(200,{applied:applied.length,
+      examples:applied.slice(0,45).map(p=>({note:p.note,category:p.category}))});
+    }
+    return respond(400,{error:'Unknown AI category action'});
+   }
    if(requestPath==='/api/ledger/amazon-import'){
     if(!state.items.length)return respond(409,{error:'Connect a bank account before importing Amazon orders'});
     const savedNotesOnly=body?.mode==='saved-notes';
@@ -979,7 +1075,8 @@ async function start(port=Number(env.PORT||8788)){
      return respond(400,{error:'Select a valid Amazon order CSV or ZIP'});
     const amazon=require('./amazon-import.cjs'),stream=require('./amazon-stream.cjs');
     const validCategories=savedCategoryChoices(
-     state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories);
+     state.ledgerAdjustments?.predictions,state.ledgerAdjustments?.customCategories,
+     state.ledgerAdjustments?.categoryOverrides);
     let result={matches:[],suggestions:[],importedItems:0,orderGroups:0,
      ambiguousOrders:0,unmatchedOrders:0,bankCharges:0,
      verifiedBankCharges:0,possibleBankCharges:0,unmatchedBankCharges:0};
