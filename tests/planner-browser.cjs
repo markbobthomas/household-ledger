@@ -1570,7 +1570,7 @@ module.exports=(async()=>{
      'The old budget category no longer counts that same purchase');
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
-    await page.locator('#planner-menu summary').click();
+    await page.locator('#planner-menu > summary').click();
     await page.locator('#planner-menu [data-view="settings"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     const settingsTitleSize=await page.locator('.settings-page .page-heading h2')

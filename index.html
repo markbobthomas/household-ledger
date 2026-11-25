@@ -11,7 +11,7 @@
 <link rel="icon" type="image/png" sizes="180x180" href="/ledger-icon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/ledger-icon.png">
 <title>Ledger · Balance Planner</title>
-<link rel="stylesheet" href="planner.css?v=release2-whatif-20261124">
+<link rel="stylesheet" href="planner.css?v=ui-cleanup-20261125">
 </head>
 <body>
 <main class="shell"><div class="content">
@@ -22,20 +22,23 @@
     <div class="top-actions">
     <button type="button" class="attention-link" data-view="reviews" aria-label="Open things to check"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg><span class="attention-label">Things to check</span><span class="attention-short" aria-hidden="true">Check</span><span class="review-tab-count" data-review-tab-count hidden></span></button>
     <div id="planner-save-feedback" class="planner-save-feedback" role="status" aria-live="polite" hidden></div>
-      <details class="planner-menu" id="planner-menu"><summary aria-label="Open other planning tools">☰ <span>More</span></summary>
-        <div class="planner-menu-content" role="group" aria-label="Other planning tools">
+      <details class="planner-menu" id="planner-menu"><summary aria-label="More Ledger options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>More</span></summary>
+        <div class="planner-menu-content" role="group" aria-label="More Ledger options">
           <button type="button" data-view="settings">Settings</button>
           <a href="/ai-review" class="btn" id="ai-review-link">AI analysis</a>
           <a href="/categorize/manage" class="btn" id="category-share-link">Share categorization</a>
-          <div class="planner-menu-bank">
-            <label for="ledger-mode-switch">Data source</label>
-            <select id="ledger-mode-switch" class="mode-box" aria-label="Bank data source"><option value="demo">Demo</option><option value="real">Real / Plaid</option></select>
-            <span class="status-tag" id="source-type" aria-live="polite">DEMO DATA</span>
-            <button class="btn" type="button" id="refresh-bank" hidden>Refresh bank</button>
-            <a class="btn" id="bank-connect" href="/bank-connect" hidden>Bank connections</a>
-          </div>
-          <button class="btn primary" type="button" id="audit-launch" data-run-backtest hidden>Check accuracy</button>
-          <small id="deployment-version">Focused Review v1 · Server not verified</small>
+          <a class="btn" id="bank-connect" href="/bank-connect" hidden>Bank connections</a>
+          <button class="btn" type="button" id="refresh-bank" hidden>Refresh bank</button>
+          <details class="planner-menu-advanced">
+            <summary>Advanced tools</summary>
+            <div class="planner-menu-bank">
+              <label for="ledger-mode-switch">Data source</label>
+              <select id="ledger-mode-switch" class="mode-box" aria-label="Bank data source"><option value="demo">Demo</option><option value="real">Real / Plaid</option></select>
+              <span class="status-tag" id="source-type" aria-live="polite">DEMO DATA</span>
+            </div>
+            <button class="btn primary" type="button" id="audit-launch" data-run-backtest hidden>Check accuracy</button>
+            <small id="deployment-version">Server not verified</small>
+          </details>
         </div>
       </details>
     </div>
