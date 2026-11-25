@@ -204,8 +204,8 @@ $('import').onclick=async()=>{
   if((saved.savedNoteStats?.itemNotes||0)<expected)
    throw Error('Import submitted, but saved Notes could not be independently verified. Review before retrying.');
   hasImported=true;noteCount=result.notesReady||0;assignedCount=result.confidentCategories||0;
-  $('import-summary').textContent=(result.evidenceSaved||0)+
-   ' full product-evidence records saved privately; existing personal Notes and bank charges unchanged.';
+  $('import-summary').textContent='Product information saved privately. Existing personal Notes and bank charges were not changed.';
+  $('diagnostics').textContent+=(result.evidenceSaved||0)+' complete item records retained for future categorization.';
   await loadReview();
   setMessage('Import saved and verified.');
   if($('ai-consent').checked)await askAI(true);
