@@ -564,7 +564,7 @@ async function start(port=Number(env.PORT||8788)){
     if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
     if(req.method==='POST'&&status>=200&&status<300&&
        (requestPath.startsWith('/api/ledger/')&&!['/api/ledger/forecasts','/api/ledger/amazon-import',
-        '/api/ledger/amazon-ai'].includes(requestPath)||
+        '/api/ledger/amazon-ai','/api/ledger/category-share'].includes(requestPath)||
         ['/api/sync','/api/exchange','/api/disconnect'].includes(requestPath))){
      invalidatePrepared();
      schedulePrepared();
@@ -704,6 +704,14 @@ async function start(port=Number(env.PORT||8788)){
    try{upgradeCookie=[auth.cookie(await auth.issue()),auth.clearSignedOut(),auth.upgradedCookie()]}
    catch{ /* A transient session-disk failure must not take down the bank UI. */ }
   }
+  if(req.method==='GET'&&requestPath==='/categorize/manage'){
+   let page;try{page=await fs.readFile(path.join(__dirname,'category-share.html'),'utf8')}
+   catch{return respond(503,{error:'Categorization sharing unavailable'})}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
+    'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
+    'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"});
+   return res.end(page);
+  }
   if(req.method==='GET'&&requestPath==='/ai-review'){
    let page;try{page=await fs.readFile(path.join(__dirname,'ai-review.html'),'utf8')}
    catch{return respond(503,{error:'AI review unavailable'})}
@@ -758,6 +766,10 @@ async function start(port=Number(env.PORT||8788)){
    res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.png')?'image/png':name.endsWith('.webmanifest')?'application/manifest+json':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://cdn.plaid.com; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; frame-src https://*.plaid.com; connect-src 'self' https://*.plaid.com; img-src 'self' data: https://*.plaid.com",
    ...(upgradeCookie?{'Set-Cookie':upgradeCookie}:{})});
    return res.end(body);
+  }
+  if(req.method==='GET'&&requestPath==='/api/ledger/category-share'){
+   const active=!!(state.items.length&&state.categoryShare?.expiresAt>Date.now());
+   return respond(200,{active,expiresAt:active?state.categoryShare.expiresAt:null});
   }
   if(req.method==='GET'&&requestPath==='/api/ledger'){
    const payload=ledgerPayload();
@@ -1021,6 +1033,22 @@ async function start(port=Number(env.PORT||8788)){
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
+   if(requestPath==='/api/ledger/category-share'){
+    // Owner-only issuance; reissuing a link immediately revokes the old one.
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+       Object.keys(body).length!==1||!['create','revoke'].includes(body.action))
+     return respond(400,{error:'Invalid sharing action'});
+    if(!state.items.length)return respond(409,{error:'Connect a bank before sharing categories'});
+    if(body.action==='create'){
+     const token=crypto.randomBytes(32).toString('hex'),previous=state.categoryShare;
+     state.categoryShare={hash:categoryShareHash(token),expiresAt:Date.now()+30*24*60*60*1000};
+     try{await save()}catch(error){state.categoryShare=previous;throw error}
+     return respond(200,{token,expiresAt:state.categoryShare.expiresAt});
+    }
+    const previous=state.categoryShare;delete state.categoryShare;
+    try{await save()}catch(error){state.categoryShare=previous;throw error}
+    return respond(200,{revoked:true});
+   }
    if(requestPath==='/api/ledger/amazon-ai'){
     if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
     if(!body||typeof body!=='object'||Array.isArray(body))
