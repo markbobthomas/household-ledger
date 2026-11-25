@@ -42,7 +42,8 @@ function eligible(transactions,adjustments={},categories=[],replaceOther=false){
    let added=0;
    for(let lineIndex=0;lineIndex<lineItems.length;lineIndex++){
     const line=lineItems[lineIndex];
-    if(!['Uncategorized','Other'].includes(line.category))continue;
+    if(!['Uncategorized','Other'].includes(line.category)||
+       adjustments.categoryProvenance?.[id]?.lines?.[lineIndex]?.source==='manual')continue;
     const product=String(line.title||'');
     if(!product||product.length>240){stats.unsafeNote++;continue}
     const cost=Buffer.byteLength(product,'utf8')+160;
