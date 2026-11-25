@@ -496,3 +496,53 @@ body.ledger-app .schedule-page .bills-upcoming-filters
   grid-column:3!important;grid-row:2!important;
  }
 }
+
+/* Progressive disclosure: keep finance signals visible, secondary explanations on demand.
+   Native details/summary works with keyboard, VoiceOver and touch, and does not
+   change the report cache or any financial state. */
+body.ledger-app #planner-notice .forecast-review-notice{
+ display:block!important;padding:0!important;background:#fff8ed!important;
+ color:#513e25!important;border:1px solid #e8d5b6!important;border-left:3px solid #bf7a25!important;
+ border-radius:6px!important;box-shadow:none!important;
+}
+body.ledger-app #planner-notice .ledger-warning-disclosure{width:100%;min-width:0}
+body.ledger-app #planner-notice .ledger-warning-summary{
+ display:flex;align-items:center;gap:10px;min-height:44px;
+ padding:10px 14px;cursor:pointer;list-style:none;flex-wrap:wrap;
+}
+body.ledger-app #planner-notice .ledger-warning-summary::-webkit-details-marker{display:none}
+body.ledger-app #planner-notice .ledger-warning-summary strong{color:#4e3920;font-size:13px}
+body.ledger-app #planner-notice .ledger-warning-count{font-size:12px;color:#71552f}
+body.ledger-app #planner-notice .ledger-warning-expand{margin-left:auto;font-weight:700;font-size:12px;color:#5e513d}
+body.ledger-app #planner-notice .ledger-warning-expand::after{content:'⌄';padding-left:7px;display:inline-block}
+body.ledger-app #planner-notice details[open] .ledger-warning-expand::after{content:'⌃'}
+body.ledger-app #planner-notice .forecast-review-items{
+ border-top:1px solid #eadcc5;padding:6px 10px 10px;gap:4px;
+}
+body.ledger-app #planner-notice .forecast-review-link{min-height:44px;color:#493b2b!important}
+body.ledger-app .ledger-context-disclosure{margin:7px 0 10px;min-width:0;font-size:12px;color:#4d6070}
+body.ledger-app .ledger-context-disclosure > summary{
+ display:flex;align-items:center;gap:7px;width:fit-content;max-width:100%;
+ min-height:40px;padding:7px 2px;cursor:pointer;list-style:none;
+ font-size:12px;font-weight:700;color:#415b72;
+}
+body.ledger-app .ledger-context-disclosure > summary::-webkit-details-marker{display:none}
+body.ledger-app .ledger-context-disclosure > summary::after{content:'⌄';font-size:17px}
+body.ledger-app .ledger-context-disclosure[open] > summary::after{content:'⌃'}
+body.ledger-app .ledger-context-disclosure .audit-footnote{margin:5px 0 8px}
+body.ledger-app .summary-forecast-clarity{padding:0!important;overflow:hidden}
+body.ledger-app .summary-forecast-clarity > summary{
+ display:flex;align-items:center;gap:10px;min-height:44px;
+ list-style:none;cursor:pointer;padding:11px 14px;flex-wrap:wrap;
+}
+body.ledger-app .summary-forecast-clarity > summary::-webkit-details-marker{display:none}
+body.ledger-app .summary-forecast-clarity > summary::after{content:'⌄';font-size:19px;margin-left:2px}
+body.ledger-app .summary-forecast-clarity[open] > summary::after{content:'⌃'}
+body.ledger-app .summary-forecast-clarity .summary-forecast-content{padding:0 14px 12px}
+body.ledger-app :is(.ledger-warning-summary,.ledger-context-disclosure > summary,.summary-forecast-clarity > summary):focus-visible{
+ outline:2px solid #175dad;outline-offset:-2px;border-radius:5px;
+}
+@media(max-width:480px){
+ body.ledger-app #planner-notice .ledger-warning-summary{gap:8px}
+ body.ledger-app #planner-notice .ledger-warning-expand{font-size:11px}
+}

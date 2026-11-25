@@ -43,7 +43,12 @@ module.exports=(async()=>{
     'Preparation never replaces the visible Home calendar');
    assert.equal(await page.locator('[data-summary-trust]').count(),1,
     'Home explains forecast assumptions using the existing projection');
-   assert.match(await page.locator('[data-summary-trust]').innerText(),/Excludes everyday unplanned spending/);
+   assert.equal(await page.locator('[data-summary-trust]').evaluate(el=>el.open),false,
+    'Forecast explanation stays collapsed on Home');
+   assert.match(await page.locator('[data-summary-trust]').textContent(),/Excludes everyday unplanned spending/);
+   await page.locator('[data-summary-trust] > summary').click();
+   assert.equal(await page.locator('[data-summary-trust]').evaluate(el=>el.open),true,
+    'Forecast explanation opens without changing balances');
 
    assert.equal(await page.locator('.calendar-month-title').innerText(),initialMonth,
     'Background preparation never changes the selected calendar month');
@@ -61,6 +66,8 @@ module.exports=(async()=>{
    assert.equal(await page.locator('[data-upcoming-filter]').count(),0);
    assert.equal(await page.locator('[data-upcoming-scope]').count(),0);
    assert.equal(await page.locator('.bills-upcoming').isVisible(),true);
+   assert.equal(await page.locator('.bills-upcoming .ledger-context-disclosure').evaluate(el=>el.open),false,
+    'Bills explanation starts collapsed; transactions remain visible');
    assert.equal(await page.locator('.bills-upcoming-row').count()>0,true,
     'Upcoming lists canonical expected rows once');
    assert.equal(await page.locator('.transactions-page').count(),0);
@@ -152,6 +159,12 @@ module.exports=(async()=>{
    };
    await jump('history','history-page');
    const budget=await page.locator('.history-spending-overview strong').innerText();
+   const budgetDetails=page.locator('[data-budget-explanation]');
+   assert.equal(await budgetDetails.evaluate(el=>el.open),false,
+    'Budget calculation detail starts collapsed');
+   await budgetDetails.locator('summary').click();
+   assert.equal(await budgetDetails.evaluate(el=>el.open),true,
+    'Budget calculation detail can be expanded without a financial edit');
    const reviewBadge=await page.locator('[data-review-tab-count]').textContent();
    await jump('schedules','schedule-page');
    await jump('activity','history-page');
@@ -330,16 +343,22 @@ module.exports=(async()=>{
     const root=document.querySelector('#planner-notice');
     root.insertAdjacentHTML('beforeend',
      '<div class="notice danger forecast-review-notice">'+
-     '<strong>Forecast requires review.</strong>'+
+     '<details class="ledger-warning-disclosure" data-forecast-warning>'+
+     '<summary class="ledger-warning-summary"><strong>Forecast needs review</strong><span>1 item</span><span>Details</span></summary>'+
      '<div class="forecast-review-items">'+
      '<button type="button" class="forecast-review-link" '+
      'data-forecast-review="card-statement" data-forecast-card-id="demo-visa" '+
      'data-forecast-period="2026-09-30">'+
      '<span>Fictional card payment differs from forecast</span>'+
      '<span class="forecast-review-chevron" aria-hidden="true">›</span></button>'+
-     '</div></div>');
+     '</div></details></div>');
    });
    const noticeLink=page.locator('[data-forecast-review="card-statement"]');
+   assert.equal(await page.locator('[data-forecast-warning]').evaluate(el=>el.open),false,
+    'Forecast warning details are hidden by default');
+   await page.locator('[data-forecast-warning] > summary').click();
+   assert.equal(await page.locator('[data-forecast-warning]').evaluate(el=>el.open),true,
+    'The warning detail can be expanded for actionable navigation');
    assert.equal(await noticeLink.count(),1,'Card warning exposes a clickable review destination');
    await noticeLink.click();
    assert.equal(await page.locator('.planner-nav-primary [data-view="schedules"][aria-current="page"]').count(),1,
