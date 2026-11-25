@@ -56,6 +56,26 @@ const {spawn}=require('node:child_process');
   assert.deepEqual(afterOriginalDuplicate.data.accounts,beforeOriginalDuplicate.data.accounts);
   assert.deepEqual(afterOriginalDuplicate.data.transactions,beforeOriginalDuplicate.data.transactions);
   assert.deepEqual(afterOriginalDuplicate.data.adjustments,beforeOriginalDuplicate.data.adjustments);
+  // A fictional account alias is encrypted forecast metadata, not a bank-source
+  // rename or new Plaid account. Other devices see it through private status.
+  const sourceName=status.data.accounts[0].name;
+  assert.equal((await request('/api/ledger/forecasts',{predictions:{
+   accountNicknames:{'acct-1':'Fictional Cash'}
+  }})).code,200,'Private account nickname is saved');
+  const namedStatus=await request('/api/status');
+  assert.equal(namedStatus.data.accounts[0].displayName,'Fictional Cash');
+  assert.equal(namedStatus.data.accounts[0].name,sourceName,
+   'Original bank metadata stays read-only');
+  assert.equal((await request('/api/ledger')).data.adjustments.predictions.accountNicknames['acct-1'],
+   'Fictional Cash','Another device receives the saved nickname');
+  assert.equal((await request('/api/ledger/forecasts',{predictions:{
+   accountNicknames:{'acct-1':' '}
+  }})).code,400,'Blank nickname is rejected');
+  assert.equal((await request('/api/ledger/forecasts',{predictions:
+   beforeOriginalDuplicate.data.adjustments.predictions||{}})).code,200,
+   'Original preferences can be restored without touching bank balances');
+  assert.equal((await request('/api/status')).data.accounts[0].displayName,sourceName,
+   'Removing nickname restores the original label');
   const pendingOverride=await request('/api/ledger/adjustments',{categoryOverrides:{'pending-1':'Groceries'}});
   assert.equal(pendingOverride.code,200);
   const noteKey=id=>'bank:'+JSON.stringify(['acct-1',id]);
