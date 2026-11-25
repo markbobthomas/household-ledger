@@ -9,11 +9,14 @@ button.primary{background:#175f50;color:white}button:disabled{opacity:.5}
 small{color:#63746e;line-height:1.45;display:block;margin-top:13px}
 </style></head><body>
 <h1>Amazon → Ledger</h1>
-<p>Open <strong>Your Orders</strong> at amazon.com while signed in, then sync recent order pages into Ledger for review.</p>
+<p><strong>1.</strong> Sign in to your private Ledger in this browser, paste its website address below, then Connect Ledger once.</p>
 <label for="ledger">Your private Ledger address</label>
 <input id="ledger" type="url" placeholder="https://your-ledger.onrender.com" autocomplete="off" spellcheck="false">
-<div class="actions"><button id="save" type="button">Connect Ledger</button>
-<button id="sync" class="primary" type="button">Sync Amazon orders</button></div>
+<div class="actions"><button id="save" type="button">Connect Ledger</button></div>
+<p><strong>2.</strong> Open Amazon <strong>Your Orders</strong> in this browser while signed in. Choose an order period.</p>
+<div class="actions"><button id="sync" class="primary" type="button">Sync Amazon orders</button></div>
+<p><strong>3.</strong> Review the CSV opened in Ledger, then click <strong>Import and save</strong> there.</p>
 <p id="message" role="status" aria-live="polite"></p>
-<small>Reads up to five Amazon order pages only when you click Sync. Orders with uncertain item prices are skipped. No password, Amazon cookies, or purchase history is kept by this extension. Ledger opens a preview; you decide whether to apply it.</small>
+<small>Experimental, desktop Chrome/Edge only. Reads up to five pages of clearly priced single-item orders. Multi-item and uncertain orders are skipped. No passwords, cookies or order history are stored. The ZIP/CSV importer remains available.</small>
+<p><a href="https://github.com/markbobthomas/household-ledger/blob/main/browser/amazon-ledger/README.md" target="_blank" rel="noopener noreferrer">Setup and troubleshooting guide</a></p>
 <script src="popup.js"></script></body></html>

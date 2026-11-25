@@ -20,7 +20,10 @@ module.exports=(async()=>{
     items:server.pending?[{kind:'transaction',id:'fixture-1',
      merchant:'Fictional purchase',date:'2026-11-17',amount:42.25,
      category:'Other',reason:'Missing category',
-     note:'Amazon: Fictional lunch bag',suggested:null}]:[]});
+     note:'Household reminder',notes:[
+      {label:'Saved note',text:'Household reminder'},
+      {label:'Amazon product details',text:'Possible Amazon: Fictional lunch bag'}
+     ],suggested:null}]:[]});
   if(url.pathname==='/api/share/categorize'&&req.method==='POST'){
    const chunks=[];req.on('data',x=>chunks.push(x));return req.on('end',()=>{
     const choice=JSON.parse(Buffer.concat(chunks).toString());
@@ -54,7 +57,10 @@ module.exports=(async()=>{
    await page.goto(url);
    await page.getByRole('heading',{name:'Categorize purchases'}).waitFor();
    assert.equal(await page.getByText('Fictional purchase').count(),1);
-   assert.equal(await page.getByText('Amazon: Fictional lunch bag').count(),1);
+   assert.equal(await page.getByText('Household reminder').count(),1);
+   assert.equal(await page.getByText('Possible Amazon: Fictional lunch bag').count(),1);
+   assert.equal(await page.getByText('Amazon product details').count(),1);
+   assert.equal(await page.getByText('Possible Amazon item match. Check the item before using it to decide.').count(),1);
    await page.getByRole('button',{name:'Groceries',exact:true}).click();
    await page.getByRole('heading',{name:'All caught up'}).waitFor();
    await page.getByRole('button',{name:'See our budget'}).click();

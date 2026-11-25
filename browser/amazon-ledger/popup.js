@@ -38,4 +38,9 @@ el('sync').addEventListener('click',async()=>{
   status('Opened the Ledger preview. Check matches before saving.');
  }catch(e){status(e.message)}finally{busy(false)}
 });
-chrome.storage.local.get('ledgerOrigin').then(({ledgerOrigin})=>{if(ledgerOrigin)el('ledger').value=ledgerOrigin;});
+chrome.storage.local.get('ledgerOrigin').then(({ledgerOrigin})=>{
+ if(ledgerOrigin){
+  el('ledger').value=ledgerOrigin;
+  status('Ledger site saved. Open Amazon Your Orders and click Sync.');
+ }else status('Connect your private Ledger site first.');
+});

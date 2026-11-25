@@ -23,6 +23,27 @@ function snapshot(state){
  const candidates=model.categoryReviewQueue(ledger);
  const source=new Map(rows.map(t=>[String(t.id),t]));
  const notes=adjustments.predictions?.transactionNotes||{};
+ const evidence=require('./amazon-evidence.cjs');
+ // Only annotations for the decision currently shared. Owner notes and
+ // separately imported Amazon product evidence can both be useful.
+ const annotations=(...entries)=>{
+  const found=[],seen=new Set();
+  for(const [label,value] of entries){
+   if(typeof value!=='string'||!value.trim())continue;
+   const text=value.trim().slice(0,160);
+   if(seen.has(text))continue;
+   seen.add(text);found.push({label,text});
+  }
+  return found;
+ };
+ const chargeNotes=id=>{
+  const raw=state.transactions?.[id],saved=raw?notes[keyFor(raw)]:null,
+   imported=raw&&adjustments.amazonEvidence?.[id],
+   product=imported&&evidence.valid(imported,raw)?evidence.note(imported):'';
+  return annotations(['Saved note',saved],['Transaction note',raw?.note],
+   ['Amazon product details',product]);
+ };
+ const withNotes=(item,entries)=>({...item,notes:entries,note:entries[0]?.text||''});
  // A deliberately chosen Other is a final decision, including legacy manual
  // overrides predating categoryProvenance. Automated Other remains reviewable.
  const ownerChosenOther=new Set(Object.entries(adjustments.categoryOverrides||{})
@@ -43,11 +64,9 @@ function snapshot(state){
   !ownerChosenOther.has(String(t.id)))
   .map(t=>{
    const original=source.get(t.id);
-   const note=notes[keyFor(original)];
-   return {kind:'transaction',id:t.id,merchant:t.merchant.slice(0,140),
+   return withNotes({kind:'transaction',id:t.id,merchant:t.merchant.slice(0,140),
     amount:t.amount,date:t.date,reason:t.reason,category:t.category,
-    suggested:t.suggested||null,
-    note:typeof note==='string'?note.slice(0,160):''};
+    suggested:t.suggested||null},chargeNotes(original.id));
   });
  // Include identifiable Amazon products still parked in a broad "Other"
  // category. These are review choices, never automatic overrides; specific
@@ -62,26 +81,36 @@ function snapshot(state){
   // Keep the original posted bank amount as one transaction.
   if(Number.isSafeInteger(item.lineIndex)){
    const id='amazon-item:'+JSON.stringify([item.id,item.lineIndex]);
-   transactions.push({kind:'amazon-item',id,
+   transactions.push(withNotes({kind:'amazon-item',id,
     merchant:item.note.startsWith('Amazon: ')?item.note.slice(8):item.merchant,
     amount:item.amountCents/100,date:item.date,
     reason:'Review one Amazon product',category:item.currentCategory,
-    suggested:item.suggestedCategory,note:item.note});
+    suggested:item.suggestedCategory},
+    annotations(...chargeNotes(item.id).map(n=>[n.label,n.text]),
+     ['Amazon item',item.note])));
    continue;
   }
   if(known.has(item.id)||item.currentCategory!=='Other'||
      !item.suggestedCategory)continue;
   known.add(item.id);
-  transactions.push({kind:'transaction',id:item.id,merchant:item.merchant,
+  transactions.push(withNotes({kind:'transaction',id:item.id,merchant:item.merchant,
    amount:item.amountCents/100,date:item.date,
    reason:'Review Amazon product category',category:'Other',
-   suggested:item.suggestedCategory,note:item.note});
+   suggested:item.suggestedCategory},
+   annotations(...chargeNotes(item.id).map(n=>[n.label,n.text]),
+    ['Amazon item',item.note])));
  }
- const plans=candidates.plans.map(p=>({
-  kind:p.kind,id:p.id,merchant:p.merchant.slice(0,140),
-  amount:p.amount,date:p.date,reason:p.reason,category:p.category,
-  suggested:null,note:''
- }));
+ const planLists={schedule:'futureRecurringRules',oneoff:'futureTransactionAdds',
+  bill:'paymentBills'};
+ const plans=candidates.plans.map(p=>{
+  const row=(adjustments.predictions?.[planLists[p.kind]]||[])
+   .find(x=>String(x?.id)===p.id);
+  return withNotes({kind:p.kind,id:p.id,merchant:p.merchant.slice(0,140),
+   amount:p.amount,date:p.date,reason:p.reason,category:p.category,
+   suggested:null},
+   annotations(['Saved note',notes['forecast:'+p.id]],
+    ['Payment note',row?.note],['Payment note',row?.memo]));
+ });
  const names=model.categories(ledger).filter(c=>!excluded.has(c));
  const categories=[...names].sort((a,b)=>{
   const ai=first.indexOf(a),bi=first.indexOf(b);

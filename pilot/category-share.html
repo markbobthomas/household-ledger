@@ -16,6 +16,7 @@ p{line-height:1.5}.muted{color:#656b63;font-size:15px}.context{margin:0 0 22px}
 .amount{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:14px}
 .note{margin:16px 0 5px;padding:13px;background:#f5f6f2;border-radius:12px;overflow-wrap:anywhere;line-height:1.45;font-size:15px}
 .note small{display:block;color:#647166;font-size:12px;margin-bottom:4px;font-weight:650}
+.note-entry+.note-entry{margin-top:12px;padding-top:12px;border-top:1px solid #dce3e9}
 .warning{color:#815a1b;font-size:13px;margin:8px 0 0}
 .choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
 button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -185,10 +186,20 @@ function render(){
  text('meta',(item.kind==='amazon-item'?'AMAZON ITEM':item.kind==='transaction'?'TRANSACTION':'UPCOMING PAYMENT')+' · '+(item.date||'Date not set'));
  text('merchant',item.merchant);text('amount',money(item.amount));
  text('reason',item.category&&item.category!=='Other'&&item.category!=='Uncategorized'?'Current suggestion: '+item.category:'');
- $('note').classList.toggle('hide',!item.note);
+ const itemNotes=Array.isArray(item.notes)?item.notes:
+  item.note?[{label:'Saved note',text:item.note}]:[];
+ $('note').classList.toggle('hide',!itemNotes.length);
  $('note').replaceChildren();
- if(item.note){const small=document.createElement('small');small.textContent='SAVED ITEM NOTE';$('note').append(small,document.createTextNode(item.note))}
- $('possible').classList.toggle('hide',!/^(?:Possible Amazon)/i.test(item.note||''));
+ for(const entry of itemNotes){
+  if(typeof entry.text!=='string'||!entry.text.trim())continue;
+  const wrapper=document.createElement('div'),small=document.createElement('small');
+  wrapper.className='note-entry';
+  small.textContent=entry.label||'Note';
+  wrapper.append(small,document.createTextNode(entry.text));
+  $('note').append(wrapper);
+ }
+ $('possible').classList.toggle('hide',!itemNotes.some(n=>
+  /^(?:Possible Amazon)/i.test(n.text||'')));
  const suggested=new Set([item.suggested,item.category].filter(x=>x&&view.categories.includes(x)&&!['Other','Uncategorized'].includes(x)));
  const preferred=['Groceries','Dining','Shopping','Kids & Family','Healthcare','Home & Maintenance'];
  const quick=[...suggested,...preferred].filter((x,i,a)=>view.categories.includes(x)&&a.indexOf(x)===i).slice(0,6);
