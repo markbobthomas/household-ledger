@@ -2642,7 +2642,7 @@ module.exports=(async()=>{
      await page.locator('[data-review-pane="earlier"] .review-row-open.ledger-transaction-row').count()){
      const where=await page.locator('[data-review-pane="suggestions"] .review-row-open.ledger-transaction-row').count()?
       'suggestions':'earlier';
-     await page.locator('[data-review-tab="'+where+'"]').click();
+     await page.locator('[data-review-focus]').selectOption(where);
      assertFontsMatch('Review recurring '+width,await transactionFonts(
       '[data-review-pane="'+where+'"] .review-row-open.ledger-transaction-row',
       '.review-candidate-main strong','.review-candidate-amount'),baseline);
