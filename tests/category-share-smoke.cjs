@@ -165,6 +165,36 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal(sourceState.transactions[mixedTx.id].amount,40,'Never change bank charge');
   assert.ok(!shareLogic.snapshot({...sourceState,ledgerAdjustments:corrected}).items.some(x=>
    x.kind==='amazon-item'),'Review task disappears after successful item save');
+  // An owner's explicit Other is final on the shared link, even if older
+  // category decisions have no provenance record. Machine-assigned Other
+  // must remain reviewable when an identifiable Amazon product is available.
+  const manualOther='fictional-amazon-manual-other',
+   legacyOther='fictional-amazon-legacy-other',
+   automatedOther='fictional-amazon-automated-other';
+  for(const id of [manualOther,legacyOther,automatedOther]){
+   sourceState.transactions[id]={id,accountId:'fake-checking',itemId:'fake-item',
+    date:'2026-11-12',name:'Amazon',merchant:'Amazon',
+    amount:16.75,pending:false,category:'Other'};
+   sourceState.ledgerAdjustments.amazonEvidence[id]={
+    version:1,source:'amazon-import',accountId:'fake-checking',
+    amountCents:1675,orderId:'fictional-'+id,match:'exact',
+    choices:[{date:'2026-11-12',orderId:'fictional-'+id,
+     items:[{title:'Coffee beans',cents:1675}]}]};
+  }
+  sourceState.ledgerAdjustments.categoryOverrides={
+   ...(sourceState.ledgerAdjustments.categoryOverrides||{}),
+   [manualOther]:'Other',[legacyOther]:'Other',[automatedOther]:'Other'};
+  sourceState.ledgerAdjustments.categoryProvenance={
+   ...(sourceState.ledgerAdjustments.categoryProvenance||{}),
+   [manualOther]:{source:'manual',category:'Other'},
+   [automatedOther]:{source:'amazon-rule',category:'Other'}};
+  const sharedOther=shareLogic.snapshot(sourceState);
+  assert.equal(sharedOther.items.some(x=>x.id===manualOther),false,
+   'Explicit manual Other is excluded from spouse sharing');
+  assert.equal(sharedOther.items.some(x=>x.id===legacyOther),false,
+   'Legacy manual Other without provenance is excluded from spouse sharing');
+  assert.equal(sharedOther.items.some(x=>x.id===automatedOther),true,
+   'Automated Other with an Amazon product suggestion remains shareable');
   console.log('PASS private spouse categorization: scope, save, forecast, consent and revocation');
  }finally{child.kill('SIGTERM');fs.rmSync(folder,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
