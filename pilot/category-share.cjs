@@ -59,7 +59,9 @@ function change(state,choice){
   const overrides={...(before.categoryOverrides||{}),[choice.id]:choice.category};
   const amazonAllocations={...(before.amazonAllocations||{})};
   delete amazonAllocations[choice.id];
-  return {...before,categoryOverrides:overrides,amazonAllocations};
+  const categoryProvenance={...(before.categoryProvenance||{}),
+   [choice.id]:{source:'manual',category:choice.category}};
+  return {...before,categoryOverrides:overrides,amazonAllocations,categoryProvenance};
  }
  const key={schedule:'futureRecurringRules',oneoff:'futureTransactionAdds',bill:'paymentBills'}[choice.kind];
  if(!key)throw Error('Invalid category task');
