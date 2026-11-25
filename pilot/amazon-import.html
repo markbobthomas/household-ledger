@@ -109,8 +109,9 @@ async function loadReview(){
  skipped=new Set();index=0;
  updateResults();render();
 }
+function itemKey(item){return item.id+'|'+(item.lineIndex??'whole')}
 function current(){
- const available=queue.filter(item=>!skipped.has(item.id));
+ const available=queue.filter(item=>!skipped.has(itemKey(item)));
  if(index>=available.length)index=0;
  return available[index]||null;
 }
@@ -128,7 +129,7 @@ function render(){
  const match=item.match==='exact'?'Confirmed Amazon match':
   item.match==='possible'?'Possible Amazon match — verify product':
   item.match==='legacy'?'Saved Amazon item Note':'Amazon item not identified';
- const proposed=suggestions.get(item.id)?.category||item.suggestedCategory;
+ const proposed=suggestions.get(itemKey(item))?.category||item.suggestedCategory;
  const categoryOptions=categories.map(c=>'<option value="'+esc(c)+'"'+
   (proposed===c?' selected':'')+'>'+esc(c)+'</option>').join('');
  const proposal=proposed&&categories.includes(proposed)?
@@ -149,19 +150,20 @@ function render(){
   if(!verify())return reviewMessage('Verify the possible Amazon match before using this product.',true);
   setBusy(true);reviewMessage('Saving category…');
   try{
-   await api('/api/ledger/category',{method:'POST',
+   await api('/api/ledger/amazon-review-choice',{method:'POST',
     headers:{'Content-Type':'application/json','X-Pilot-Action':'1',
      ...(revision?{'X-Ledger-Revision':revision}:{})},
-    body:JSON.stringify({transactionId:item.id,category:selected})});
-   queue=queue.filter(row=>row.id!==item.id);index=0;
-   reviewTotal=queue.length;assignedCount++;suggestions.delete(item.id);
+    body:JSON.stringify({transactionId:item.id,category:selected,
+     lineIndex:item.lineIndex??null,verified:verify()})});
+   queue=queue.filter(row=>itemKey(row)!==itemKey(item));index=0;
+   reviewTotal=queue.length;assignedCount++;suggestions.delete(itemKey(item));
    updateResults();reviewMessage('Saved '+selected+'.');render();
   }catch(error){reviewMessage(error.message,true)}
   finally{setBusy(false)}
  };
  $('save-category').onclick=()=>choose($('category').value);
  if($('accept'))$('accept').onclick=()=>choose(proposed);
- $('skip').onclick=()=>{skipped.add(item.id);index=0;reviewMessage('Skipped for now; no category was changed.');render()};
+ $('skip').onclick=()=>{skipped.add(itemKey(item));index=0;reviewMessage('Skipped for now; no category was changed.');render()};
 }
 async function askAI(force=false){
  if(busy&&!force)return;
@@ -172,7 +174,8 @@ async function askAI(force=false){
    body:JSON.stringify({action:'preview',consent:true,replaceOther:$('include-other').checked})});
   const count=data.proposed||0;
   suggestions=new Map((data.examples||[]).filter(x=>x.transactionId&&categories.includes(x.category))
-    .map(x=>[x.transactionId,{category:x.category,possibleMatch:x.possibleMatch}]));
+    .map(x=>[itemKey({id:x.transactionId,lineIndex:x.lineIndex}),
+     {category:x.category,possibleMatch:x.possibleMatch}]));
   $('ai-status').textContent=count+' proposed · '+(data.costUsd==null?
    'Cost not reported':('$'+Number(data.costUsd).toFixed(4)))+
    ' spent on this request (maximum $0.05).';
