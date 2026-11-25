@@ -538,6 +538,40 @@ const qaReports=aiCacheFactory?aiCacheFactory({
  schedule:()=>false,clear:async()=>{}};
 async function start(port=Number(env.PORT||8788)){
  await load();
+ // TEMPORARY read-only live-data audit for repeated zero Amazon categories.
+ // Output counts only; never print product titles, Notes, accounts, amounts,
+ // transaction IDs, keys, examples, passwords, or financial decisions.
+ // Remove after reading the one-shot private Render diagnostic.
+ if(env.RENDER_GIT_COMMIT){
+  try{
+   const {analyze}=require('./amazon-note-categories.cjs'),
+    {keyFor}=require('./amazon-pairing.cjs'),
+    cats=savedCategoryChoices(state.ledgerAdjustments?.predictions,
+     state.ledgerAdjustments?.customCategories),
+    notes=state.ledgerAdjustments?.predictions?.transactionNotes||{},
+    txs=Object.values(state.transactions||{}),
+    tagged=note=>/^(Amazon: |Possible Amazon(?:: | \\(verify\\): | \\(date only\\): ))/.test(String(note||'')),
+    byKey=new Set(txs.map(keyFor)),
+    annotated=txs.filter(t=>tagged(notes[keyFor(t)])),
+    noOther=analyze(state.transactions,state.ledgerAdjustments||{},cats),
+    withOther=analyze(state.transactions,state.ledgerAdjustments||{},cats,{replaceOther:true});
+   console.log('LEDGER_AMAZON_PRIVATE_COUNTS_V1 '+JSON.stringify({
+    bankRows:txs.length,
+    savedNotes:Object.keys(notes).length,
+    importerTaggedNotes:Object.values(notes).filter(tagged).length,
+    bankKeyedNotes:Object.keys(notes).filter(k=>byKey.has(k)).length,
+    importerTaggedMatchingBankKeys:annotated.length,
+    importerTaggedWithNoMatchingBankKey:Object.entries(notes).filter(([k,n])=>
+     tagged(n)&&!byKey.has(k)).length,
+    amazon:noOther.stats,
+    categoryProposalsDefault:noOther.proposals.length,
+    categoryProposalsIfOtherApproved:withOther.proposals.length,
+    categoryCount:cats.length
+   }));
+  }catch(error){
+   console.log('LEDGER_AMAZON_PRIVATE_COUNTS_V1_ERROR '+String(error?.name||'Error'));
+  }
+ }
  await auth.load();
  // A damaged derived-report cache must never prevent access to bank records.
  // Fail closed on standing external-sharing consent; leave the bank disk alone.
