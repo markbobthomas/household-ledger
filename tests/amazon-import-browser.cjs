@@ -56,7 +56,12 @@ module.exports=(async()=>{
     await route.fulfill({status:200,contentType:'application/json',
      headers:{'x-ledger-revision':'fictional-revision'},
      body:JSON.stringify({items:remaining,categories:['Home & Maintenance','Pets','Shopping','Other'],
-      stats:{amazonCharges:2,confirmed:1,possible:1,unmatched:0,notes:2,review:remaining.length}})});
+      stats:{amazonCharges:2,confirmed:1,possible:1,unmatched:0,notes:2,
+        exactEvidence:1,possibleEvidence:1,legacyItemNotes:0,
+        unidentifiedCharges:0,specificCategoryCharges:1,
+        splitCharges:1,splitItemLines:2,unclassifiedItemLines:1,
+        manuallyReviewedCharges:1,aiReviewedCharges:0,staleEvidence:0,
+        review:remaining.length}})});
    });
    await page.route('**/api/ledger/amazon-review-choice',async route=>{
     const d=route.request().postDataJSON();writes.push(d);
@@ -135,6 +140,15 @@ module.exports=(async()=>{
     assert.match(await page.locator('#stats').innerText(),/Need review/);
     assert.match(await page.locator('#stats').innerText(),/Unmatched/);
     assert.match(await page.locator('#import-summary').innerText(),/Product information saved privately/);
+    await page.locator('#advanced summary').click();
+    const quality=await page.locator('#quality-summary').innerText();
+    assert.match(quality,/1 exact product-evidence matches/);
+    assert.match(quality,/1 unverified possible matches/);
+    assert.match(quality,/1 of 2 charges have saved specific categories/);
+    assert.match(quality,/including 1 unresolved product categories/);
+    assert.equal(await page.locator('#quality-summary').evaluate(el=>
+     el.textContent.includes('fictional-exact')),false,
+     'Aggregate diagnostics never expose a bank transaction ID');
     const dimensions=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,
      width:document.documentElement.clientWidth}));
     assert(dimensions.scrollWidth<=dimensions.width+2,name+' mobile layout must fit');
