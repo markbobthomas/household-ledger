@@ -61,6 +61,12 @@ hr{border:0;border-top:1px solid #e6ebe6;margin:16px 0}
  <p class="muted">Confirmed matches use amounts and dates and can split one posted charge among product categories. Possible and date-only matches remain clearly labeled. Existing handwritten Notes, manual category choices and all bank amounts remain untouched.</p>
  <label class="checkline"><input type="checkbox" id="include-other"> Include existing Other categories in the AI review. These are never changed without your approval.</label>
  <p class="muted">The experimental <a href="https://github.com/markbobthomas/household-ledger/tree/main/browser/amazon-ledger" target="_blank" rel="noopener noreferrer">desktop Chrome/Edge Amazon extension</a> can prepare a small single-item export; it is optional and not yet verified against a live Amazon session.</p>
+ <section aria-label="Private Amazon matching quality" id="amazon-quality">
+  <h3>Saved Amazon matching quality</h3>
+  <p class="muted">Counts use your current saved posted Amazon charges, not the number of products uploaded. No data is sent to AI to calculate these figures.</p>
+  <div id="quality-summary" role="status" aria-live="polite">Checking saved matches…</div>
+  <p class="muted">Manual and AI-reviewed counts describe saved choices, not proof a category was correct. Unidentified or uncertain charges may need another Amazon export or your review. Existing specific categories are protected.</p>
+ </section>
  <p id="diagnostics" class="muted"></p>
 </details>
 </main>
@@ -102,6 +108,21 @@ async function loadReview(){
  reviewTotal=result.stats?.review||queue.length;
  unmatchedCount=result.stats?.unmatched??unmatchedCount;
  $('review').hidden=!(result.stats?.amazonCharges);
+ const quality=result.stats||{},n=k=>Number.isSafeInteger(quality[k])?quality[k]:0;
+ $('quality-summary').textContent=n('amazonCharges')?
+  n('exactEvidence')+' exact product-evidence matches · '+
+  n('possibleEvidence')+' unverified possible matches · '+
+  n('legacyItemNotes')+' legacy product Notes without current structured evidence · '+
+  n('unidentifiedCharges')+' charges without identified products. '+
+  n('specificCategoryCharges')+' of '+n('amazonCharges')+
+  ' charges have saved specific categories; '+n('splitCharges')+
+  ' item-split charges contain '+n('splitItemLines')+' product lines, including '+
+  n('unclassifiedItemLines')+' unresolved product categories. '+
+  n('manuallyReviewedCharges')+' charges have recorded manual choices, '+
+  n('aiReviewedCharges')+' have approved AI choices, and '+
+  n('staleEvidence')+' stored matches no longer agree with their bank charge.':
+  'No posted Amazon charges are currently available for comparison.';
+
  if(!hasImported&&result.stats?.amazonCharges){
   $('diagnostics').textContent=(result.stats.confirmed||0)+' confirmed matches · '+
    (result.stats.possible||0)+' possible matches · '+
