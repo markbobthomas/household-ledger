@@ -5,7 +5,7 @@ const Imp=require('../pilot/amazon-import.cjs');
 const {keyFor}=require('../pilot/amazon-pairing.cjs');
 const html=require('node:fs').readFileSync(
  require('node:path').join(__dirname,'../pilot/amazon-import.html'),'utf8');
-const inlineScript=html.match(/<script>([\\s\\S]*?)<\\/script>/);
+const inlineScript=html.match(/<script>([\s\S]*?)<\/script>/);
 assert(inlineScript,'Amazon page must contain its UI script');
 new (require('node:vm').Script)(inlineScript[1],{filename:'amazon-import.html'});
 const categories=['Uncategorized','Other','Shopping','Groceries',
