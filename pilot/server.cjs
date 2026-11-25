@@ -1010,7 +1010,7 @@ async function start(port=Number(env.PORT||8788)){
       // Category options are names only. Never send IDs to the browser,
       // nor any bank metadata to the AI provider.
       allowedCategories:ai.categoriesForAi(cats),
-      examples:response.proposals.slice(0,45).map((p,index)=>({
+      examples:response.proposals.map((p,index)=>({
        index,note:p.note,category:p.category,previous:p.previous,
        possibleMatch:p.note.startsWith('Possible Amazon: ')||
         p.note.startsWith('Possible Amazon (verify): '),
@@ -1023,7 +1023,7 @@ async function start(port=Number(env.PORT||8788)){
      if(Object.keys(body).sort().join(',')!=='action,selections,token'||
         typeof body.token!=='string'||body.token.length!==48||
         !Array.isArray(body.selections)||!body.selections.length||
-        body.selections.length>45)
+        body.selections.length>90)
       return respond(400,{error:'Select and review the categories to save'});
      const pending=amazonAiPreview;
      if(!pending||!crypto.timingSafeEqual(
