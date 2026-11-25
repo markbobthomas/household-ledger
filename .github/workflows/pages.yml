@@ -22,5 +22,9 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
+      # Uploads may take a moment to become visible to the Pages deployment API.
+      # Retrying the entire job can upload duplicate artifacts with the same name.
+      - name: Allow Pages artifact discovery to settle
+        run: sleep 12
       - id: deployment
         uses: actions/deploy-pages@v4
