@@ -301,7 +301,7 @@ body.ledger-app{
 }
 /* Activity: checkbox | transaction detail | category | Note.
    Reserve an actual column for the label and keep 12px between fields. */
-@media(min-width:651px){
+@media(min-width:950px){
  body.ledger-app .history-page .history-actual-row.ledger-list-row{
   grid-template-columns:28px minmax(0,1fr) minmax(140px,160px) 88px!important;
   column-gap:12px!important;
@@ -468,4 +468,31 @@ body.ledger-app .schedule-page .ledger-toolbar.bills-upcoming-filters
 body.ledger-app .schedule-page .bills-upcoming-filters
  :is(select[data-bills-month],select[name="transactionFilter"]){
  box-sizing:border-box!important;height:44px!important;min-height:44px!important;
+}
+
+/* Tablet and compact desktop: transaction gets the full first row, while
+   Category and Note sit neatly together on a second line. Never shrink the
+   merchant column to make room for editable controls. */
+@media(min-width:651px) and (max-width:949px){
+ body.ledger-app .history-page .history-actual-row.ledger-list-row{
+  grid-template-columns:28px minmax(0,1fr) 88px!important;
+  column-gap:12px!important;row-gap:10px!important;
+  padding:10px 8px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.history-select-wrap{
+  grid-column:1!important;grid-row:1!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.history-row-open{
+  grid-column:2/-1!important;grid-row:1!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap{
+  grid-column:2!important;grid-row:2!important;
+  padding:0!important;justify-content:flex-end!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap .ledger-row-category{
+  width:min(255px,100%)!important;max-width:255px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.transaction-note-trigger{
+  grid-column:3!important;grid-row:2!important;
+ }
 }
