@@ -1117,11 +1117,14 @@ async function start(port=Number(env.PORT||8788)){
       // Category options are names only; bank metadata never goes to AI.
       allowedCategories:ai.categoriesForAi(cats),
       examples:response.proposals.map((p,index)=>({
-       index,transactionId:p.transactionId,note:p.note,category:p.category,previous:p.previous,
+       index,transactionId:p.transactionId,lineIndex:p.lineIndex,
+       note:p.note,category:p.category,previous:p.previous,
        possibleMatch:p.note.startsWith('Possible Amazon: ')||
         p.note.startsWith('Possible Amazon (verify): '),
        date:state.transactions[p.transactionId]?.date||'',
-       amountCents:Math.round(Number(state.transactions[p.transactionId]?.amount||0)*100)
+       amountCents:Number.isSafeInteger(p.lineIndex)?
+        state.ledgerAdjustments?.amazonAllocations?.[p.transactionId]?.lines?.[p.lineIndex]?.cents||0:
+        Math.round(Number(state.transactions[p.transactionId]?.amount||0)*100)
       }))
      });
     }
@@ -1164,25 +1167,46 @@ async function start(port=Number(env.PORT||8788)){
       const tx=state.transactions?.[p.transactionId],
        old=overrides[p.transactionId];
       if(!tx||String(tx.accountId)!==String(p.accountId)||
-         notes[p.noteKey]!==p.note||allocations[p.transactionId]||
+         notes[p.noteKey]!==p.note||
+         (allocations[p.transactionId]&&!Number.isSafeInteger(p.lineIndex))||
+         (Number.isSafeInteger(p.lineIndex)&&(
+          !allocations[p.transactionId]?.lines?.[p.lineIndex]||
+          !['Other','Uncategorized'].includes(allocations[p.transactionId].lines[p.lineIndex].category)||
+          allocations[p.transactionId].lines[p.lineIndex].title!==p.product||
+          before.categoryProvenance?.[p.transactionId]?.lines?.[p.lineIndex]?.source==='manual'))||
          (old!==undefined&&old!=='Uncategorized'&&
           !(old==='Other'&&pending.replaceOther)))
        return respond(409,{error:'Amazon transaction or category changed. Review again.'});
       approved.push({...p,category:s.category});
      }
      amazonAiPreview=null; // Single use even when selected categories are unchanged.
-     const origins={...(before.categoryProvenance||{})};
+     const origins={...(before.categoryProvenance||{})},
+      nextAllocations={...allocations};
      const applied=[];
      for(const p of approved){
-      if(overrides[p.transactionId]===p.category)continue;
-      overrides[p.transactionId]=p.category;
-      origins[p.transactionId]={source:'amazon-ai-reviewed',category:p.category};
+      if(Number.isSafeInteger(p.lineIndex)){
+       const previous=nextAllocations[p.transactionId],oldLine=previous.lines[p.lineIndex];
+       if(oldLine.category===p.category)continue;
+       const lines=previous.lines.map((line,i)=>i===p.lineIndex?
+        {...line,category:p.category}:line);
+       nextAllocations[p.transactionId]={...previous,lines};
+       overrides[p.transactionId]=lines.some(line=>line.category==='Uncategorized')?
+        'Uncategorized':lines[0].category;
+       origins[p.transactionId]={source:'amazon-ai-reviewed-item',
+        category:overrides[p.transactionId],lines:{
+         ...(origins[p.transactionId]?.lines||{}),
+         [p.lineIndex]:{source:'amazon-ai-reviewed',category:p.category}}};
+      }else{
+       if(overrides[p.transactionId]===p.category)continue;
+       overrides[p.transactionId]=p.category;
+       origins[p.transactionId]={source:'amazon-ai-reviewed',category:p.category};
+      }
       applied.push(p);
      }
      if(!applied.length)return respond(200,{applied:0});
      try{
       state.ledgerAdjustments={...before,categoryOverrides:overrides,
-       categoryProvenance:origins};
+       amazonAllocations:nextAllocations,categoryProvenance:origins};
       await save();
      }catch(error){
       state.ledgerAdjustments=before;
