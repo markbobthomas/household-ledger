@@ -303,7 +303,7 @@ module.exports=(async()=>{
      evidence:[{id:'fictional-proof-1',text:'Fictional source-backed monthly charge'}]}]};
    await page.reload();
    await page.locator('#analysis .outlook-actions').waitFor({state:'visible'});
-   assert.equal(await page.locator('#analysis .outlook-action-list li').count(),1);
+   assert.equal(await page.locator('#analysis .outlook-action-list > li').count(),1);
    assert.match(await page.locator('.outlook-action-list').innerText(),/Review a fictional recurring cost/);
    await page.locator('.outlook-action-list .action-evidence-link').click();
    assert.equal(await page.locator('#ledger-action-evidence-0').getAttribute('open'),'',
