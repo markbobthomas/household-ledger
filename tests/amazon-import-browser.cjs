@@ -107,7 +107,8 @@ module.exports=(async()=>{
       'Optional desktop setup remains available without opening it');
     await page.locator('#browser-sync-setup summary').click();
     assert.match(await page.locator('#browser-sync-setup').innerText(),/Load unpacked/);
-    assert.match(await page.locator('#browser-sync-setup').innerText(),/Import and save/);
+    assert.match(await page.locator('#browser-sync-setup').innerText(),/Enable automatic sync/);
+    assert.match(await page.locator('#browser-sync-setup').innerText(),/six hours/);
     assert.equal(await page.locator('#copy-ledger-address').count(),1);
     await page.locator('#copy-ledger-address').click();
     await page.waitForFunction(()=>/Address copied|Copy the address/.test(
