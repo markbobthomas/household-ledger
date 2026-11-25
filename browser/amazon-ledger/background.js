@@ -35,8 +35,8 @@ async function run(tabId,origin){
  }
  const value=await chrome.scripting.executeScript({target:{tabId:dest.id},
   func:(csv,counts)=>{
-   const input=document.getElementById('file'),check=document.getElementById('check');
-   if(!input||!check)return false;
+   const input=document.getElementById('file'),importButton=document.getElementById('import');
+   if(!input||!importButton)return false;
    const transfer=new DataTransfer();
    transfer.items.add(new File([csv],'Amazon-browser-sync.csv',{type:'text/csv'}));
    input.files=transfer.files;
@@ -46,10 +46,10 @@ async function run(tabId,origin){
    note.textContent='Browser sync: '+counts.items+' single-item purchases read from '+counts.pages+
     ' order pages; '+counts.skipped+' uncertain orders skipped.'+
     (counts.stoppedForLogin?' Amazon requested another sign-in; sync stopped early.':'')+
-    ' Confirm the bank-charge matches below before applying.';
+    ' Review the item descriptions and select Import and save to apply.';
    note.style.fontWeight='600';
    input.closest('section')?.insertBefore(note,input.closest('label')||input);
-   check.click();return true;
+   importButton.focus();return true;
   },args:[scan.csv,{items:scan.items,pages:scan.pages,skipped:scan.skipped,stoppedForLogin:scan.stoppedForLogin}]});
  if(value?.[0]?.result!==true)throw Error('Ledger import page is unavailable. Sign in and retry.');
  await chrome.tabs.update(dest.id,{active:true});
