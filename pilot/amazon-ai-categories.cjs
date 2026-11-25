@@ -57,9 +57,9 @@ function refineCategory(product,category,allowed){
  const have=name=>allowed.find(c=>c.toLowerCase()===name.toLowerCase());
  const kids=have('Kids & Family')||have('Kids')||have('Children');
  const health=have('Healthcare')||have('Health');
- if(kids&&(/\\b(?:car[ -]?seat (?:travel |gate[ -]?check )?bag|gate[ -]?check car[ -]?seat|burp cloths?|muslin burp|baby bottles?|diaper bags?|pacifiers?|swaddle blankets?)\\b/i.test(title)||
-  /\\btoy\\b.*\\b(?:protection plan|warranty|accident protection)\\b|\\b(?:protection plan|warranty|accident protection)\\b.*\\btoy\\b/i.test(title)))return kids;
- if(health&&/\\b(?:toothpaste|probiotic|vitamins?|dental floss|mouthwash)\\b/i.test(title))return health;
+ if(kids&&(/\b(?:car[ -]?seat (?:travel |gate[ -]?check )?bag|gate[ -]?check car[ -]?seat|burp cloths?|muslin burp|baby bottles?|diaper bags?|pacifiers?|swaddle blankets?)\b/i.test(title)||
+  /\btoy\b.*\b(?:protection plan|warranty|accident protection)\b|\b(?:protection plan|warranty|accident protection)\b.*\btoy\b/i.test(title)))return kids;
+ if(health&&/\b(?:toothpaste|probiotic|vitamins?|dental floss|mouthwash)\b/i.test(title))return health;
  return category;
 }
 function buildRequest(candidates,categories){
