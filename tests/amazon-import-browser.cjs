@@ -28,6 +28,20 @@ module.exports=(async()=>{
    const ctx=await browser.newContext({viewport:{width,height:800}});
    const page=await ctx.newPage(),errors=[],uploads=[],notes=[],aiRequests=[],writes=[];
    page.on('pageerror',e=>errors.push(e.message));
+   // Streaming File bodies are not exposed reliably by Playwright's
+   // postDataBuffer() in WebKit. Verify the original File before dispatch.
+   await page.addInitScript(()=>{
+    const original=window.fetch.bind(window);
+    window.__amazonFileUploads=[];
+    window.fetch=async (url,options)=>{
+     if(String(url).includes('/api/ledger/amazon-import')&&
+        options?.body instanceof Blob){
+      window.__amazonFileUploads.push({
+       name:options.body.name,text:await options.body.text()});
+     }
+     return original(url,options);
+    };
+   });
    let remaining=[
     {id:'fictional-exact',date:'2026-11-24',amountCents:2950,
      merchant:'AMAZON',note:'Amazon: Laundry detergent, 50 oz',
@@ -57,8 +71,7 @@ module.exports=(async()=>{
     const req=route.request();
     const binary=req.headers()['content-type']==='application/octet-stream';
     if(binary){
-     uploads.push({body:req.postDataBuffer()?.toString('utf8'),
-      filename:decodeURIComponent(req.headers()['x-amazon-filename']),
+     uploads.push({filename:decodeURIComponent(req.headers()['x-amazon-filename']),
       dryRun:req.headers()['x-amazon-dry-run']});
      await route.fulfill({status:200,contentType:'application/json',
       headers:{'x-ledger-revision':'fictional-revision'},
@@ -109,7 +122,9 @@ module.exports=(async()=>{
     await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Import saved and verified'));
     await page.waitForFunction(()=>document.getElementById('ai-status').textContent.includes('1 proposed'));
     assert.equal(uploads.length,1,'One import action sends file exactly once');
-    assert.equal(uploads[0].body,csv);
+    const captured=await page.evaluate(()=>window.__amazonFileUploads);
+    assert.deepEqual(captured,[{name:'Amazon-orders.csv',text:csv}],
+     'The exact original CSV bytes are sent once without base64 encoding');
     assert.equal(uploads[0].filename,'Amazon-orders.csv');
     assert.equal(uploads[0].dryRun,'0');
     assert.deepEqual(notes,[{mode:'saved-notes',dryRun:true,replaceOther:false}]);
