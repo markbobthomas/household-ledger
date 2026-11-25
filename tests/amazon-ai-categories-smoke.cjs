@@ -47,8 +47,26 @@ assert.equal(withOther.candidates.length,3,
 assert(withOther.candidates.some(c=>c.transactionId==='f'));
 const allowed=Ai.categoriesForAi(categories);
 assert(!allowed.includes('Other')&&!allowed.includes('Uncategorized'));
+assert.equal(Ai.refineCategory('Gate check car seat travel bag','Childcare',
+ ['Kids & Family','Childcare']),'Kids & Family');
+assert.equal(Ai.refineCategory('Cotton muslin burp cloth set','Childcare',
+ ['Kids & Family','Childcare']),'Kids & Family');
+assert.equal(Ai.refineCategory('Toy accident protection plan warranty','Insurance',
+ ['Insurance','Kids & Family']),'Kids & Family');
+assert.equal(Ai.refineCategory('Orthodontic toothpaste 10%','Shopping',
+ ['Shopping','Healthcare']),'Healthcare');
+assert.equal(Ai.refineCategory('Children chewable probiotic','Shopping',
+ ['Shopping','Healthcare']),'Healthcare');
+assert.equal(Ai.refineCategory('Monthly homeowner insurance premium','Insurance',
+ ['Insurance','Kids & Family']),'Insurance');
+assert.equal(Ai.refineCategory('Toy accident protection plan','Insurance',
+ ['Insurance']),'Insurance','Do not invent categories missing from budget');
 const {request,preflightMaximumUsd}=Ai.buildRequest(available.candidates,allowed);
 assert.equal(request.model,'gpt-6-luna');
+const guidance=JSON.stringify(request.input);
+assert(guidance.includes('Childcare = paid daycare'),'AI gets category meanings');
+assert(guidance.includes('Insurance = household policy'),'Retail protections distinguished');
+assert(guidance.includes('Possible can be categorized for user REVIEW'),'Possible match stays unverified');
 assert(request.max_output_tokens<=4096);
 assert(preflightMaximumUsd<Ai.COST_CEILING_USD);
 let calls=0;
