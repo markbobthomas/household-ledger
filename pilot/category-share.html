@@ -154,7 +154,7 @@ function render(){
  if(!remaining.length){show('empty');text('emptytitle','That’s everything for now');text('emptymsg',view.items.length+' item(s) skipped. You can review them whenever you want.');$('again').hidden=false;return}
  const next=remaining.find(p=>p.i>=index)||remaining[0];index=next.i;
  const item=next.x;show('review');
- text('meta',(item.kind==='transaction'?'TRANSACTION':'UPCOMING PAYMENT')+' · '+(item.date||'Date not set'));
+ text('meta',(item.kind==='amazon-item'?'AMAZON ITEM':item.kind==='transaction'?'TRANSACTION':'UPCOMING PAYMENT')+' · '+(item.date||'Date not set'));
  text('merchant',item.merchant);text('amount',money(item.amount));
  text('reason',item.category&&item.category!=='Other'&&item.category!=='Uncategorized'?'Current suggestion: '+item.category:'');
  $('note').classList.toggle('hide',!item.note);
