@@ -64,6 +64,28 @@ function review(transactions={},adjustments={},categories=[]){
   if(saved)hasNotes++;
   if(good){if(e.match==='exact')confirmed++;else possible++}else unmatched++;
   const existing=overrides[tx.id]||null,origin=provenance[tx.id];
+  const allocation=adjustments.amazonAllocations?.[tx.id];
+  const splitLines=Array.isArray(allocation?.lines)?allocation.lines:null;
+  const safeSplit=splitLines&&splitLines.length&&allocation.amountCents===amount(tx)&&
+   splitLines.every(line=>line&&typeof line.title==='string'&&
+    Number.isSafeInteger(line.cents)&&line.cents>0)&&
+   splitLines.reduce((n,line)=>n+line.cents,0)===amount(tx);
+  if(safeSplit&&splitLines.some(line=>['Uncategorized','Other'].includes(line.category))){
+   // Review ONLY unknown product lines; never collapse a mixed Amazon purchase
+   // into one transaction-level category and silently discard its split.
+   if(origin?.source==='manual')continue;
+   for(let lineIndex=0;lineIndex<splitLines.length;lineIndex++){
+    const line=splitLines[lineIndex];
+    if(!['Uncategorized','Other'].includes(line.category)||items.length>=500)continue;
+    const proposed=classify(line.title,categories);
+    items.push({id:String(tx.id),lineIndex,date:String(tx.date),
+     amountCents:line.cents,merchant:String(tx.merchant||tx.name||'Amazon').slice(0,100),
+     note:'Amazon: '+line.title.slice(0,150),match:'exact',
+     currentCategory:line.category,suggestedCategory:proposed==='Uncategorized'?null:proposed,
+     requiresVerification:false,protectedOther:false});
+   }
+   continue;
+  }
   // An explicitly chosen specific category is never offered for replacement.
   if(existing&&existing!=='Other'&&existing!=='Uncategorized')continue;
   if(existing==='Other'&&origin?.source==='manual')continue;
