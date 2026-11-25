@@ -70,7 +70,7 @@ function review(transactions={},adjustments={},categories=[]){
    splitLines.every(line=>line&&typeof line.title==='string'&&
     Number.isSafeInteger(line.cents)&&line.cents>0)&&
    splitLines.reduce((n,line)=>n+line.cents,0)===amount(tx);
-  if(safeSplit&&splitLines.some(line=>['Uncategorized','Other'].includes(line.category))){
+  if(safeSplit){
    // Review ONLY unknown product lines; never collapse a mixed Amazon purchase
    // into one transaction-level category and silently discard its split.
    if(origin?.source==='manual')continue;
