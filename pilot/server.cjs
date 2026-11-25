@@ -677,7 +677,7 @@ async function start(port=Number(env.PORT||8788)){
     const share=require('./category-share.cjs'),view=share.snapshot(state);
     if(!share.selectionIsValid(view,choice))
      return respond(409,{error:'This item or category changed. Refresh to see the latest list.'});
-    const before=state.ledgerAdjustments||{},next=share.change(state,choice);
+    const before=state.ledgerAdjustments||{},next=share.change(state,choice,view.categories);
     if(choice.kind==='transaction'||choice.kind==='amazon-item'){
      state.ledgerAdjustments=next;
      try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
