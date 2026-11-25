@@ -647,6 +647,66 @@ module.exports=(async()=>{
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    assert.equal(await page.locator('[data-history-category-item="'+categoryName+'"]').count(),1,
     'Returning to Spending keeps the saved category');
+
+   // Release 2 — Home scenarios reuse the common editor and cannot modify the
+   // canonical projection before an explicit save, on either target browser.
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   const findFuture=()=>page.evaluate(()=>{
+    const asOf=window.HouseholdPlannerSummary?.whatIfContext?.()?.asOf;
+    return [...document.querySelectorAll('[data-calendar-day]')]
+     .map(el=>el.dataset.calendarDay).find(day=>day>asOf&&
+      [1,2,3,4,5].includes(new Date(day+'T12:00:00Z').getUTCDay()))||null;
+   });
+   let trialDay=await findFuture();
+   if(!trialDay){await page.locator('[data-calendar-nav="1"]').click();trialDay=await findFuture()}
+   assert.ok(trialDay,device+': future business date is available');
+   await page.locator('[data-calendar-day="'+trialDay+'"]').click();
+   assert.equal(await page.locator('[data-calendar-whatif]').isEnabled(),true);
+   const beforeScenario=await page.evaluate(()=>({
+    forecast:window.HouseholdPlannerWorkStats().forecastBuilds,
+    generation:window.HouseholdPreparedViewGeneration()
+   }));
+   await page.locator('[data-calendar-whatif]').click();
+   const form=page.locator('[data-whatif-form]'),name='Fictional Release Two Sample Expense';
+   assert.equal(await page.locator('.transaction-detail [data-whatif-form]').count(),1,
+    'Home scenarios use the shared transaction detail dialog');
+   await form.locator('[name=amount]').fill('37.25');
+   await form.locator('[name=merchant]').fill(name);
+   const preview=await page.evaluate(()=>
+    window.HouseholdPlannerSummary.previewWhatIf(Object.fromEntries(
+     new FormData(document.querySelector('[data-whatif-form]')))));
+   assert.equal(preview.valid,true);
+   assert.equal(preview.afterDay,Math.round((preview.beforeDay-37.25)*100)/100,
+    'Exactly one cash withdrawal changes that projected day');
+   assert.ok(preview.afterLow<=preview.beforeLow,'Expense cannot raise the monthly low');
+   assert.match(await form.locator('[data-whatif-preview]').innerText(),/Lowest balance in/);
+   const afterScenario=await page.evaluate(()=>({
+    forecast:window.HouseholdPlannerWorkStats().forecastBuilds,
+    generation:window.HouseholdPreparedViewGeneration()
+   }));
+   assert.deepEqual(afterScenario,beforeScenario,'Preview has no canonical recalculation');
+   const fit=await form.evaluate(el=>({
+    left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right,
+    viewport:innerWidth,scrollWidth:document.documentElement.scrollWidth
+   }));
+   assert.ok(fit.left>=-1&&fit.right<=fit.viewport+1&&fit.scrollWidth<=fit.viewport+3,
+    device+': what-if stays inside the phone width '+JSON.stringify(fit));
+   await form.locator('[data-close-transaction-detail]').click();
+   assert.equal(await page.locator('[data-whatif-form]').count(),0);
+   const check=async()=>page.evaluate(({date,merchant})=>{
+    const c=window.HouseholdPlannerSummary.whatIfContext();
+    return window.HouseholdPlannerSummary.previewWhatIf({
+     date,merchant,amount:'37.25',type:'expense',accountId:c.accountId});
+   },{date:trialDay,merchant:name});
+   assert.equal((await check()).valid,true,'Cancel did not save any payment');
+   await page.locator('[data-calendar-whatif]').click();
+   await page.locator('[data-whatif-form] [name=amount]').fill('37.25');
+   await page.locator('[data-whatif-form] [name=merchant]').fill(name);
+   await page.locator('[data-whatif-form] button[type=submit]').click();
+   await page.locator('[data-whatif-form]').waitFor({state:'detached',timeout:25000});
+   const duplicate=await check();
+   assert.equal(duplicate.valid,false,'Cannot count the same saved payment again');
+   assert.match(duplicate.message,/already in the forecast/);
    await context.close();
    assert.deepEqual(errors,[],device+' console errors');
   }
