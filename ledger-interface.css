@@ -226,3 +226,24 @@ body.ledger-app :is(.transaction-overlay,.transaction-detail) .btn.primary{
 @media(prefers-reduced-motion:reduce){
  body.ledger-app *{scroll-behavior:auto}
 }
+
+/* Carry the new risk palette through legacy Spending/Budget widgets. */
+body.ledger-app .history-page{
+ --budget-over-pink:#b42332;--budget-over-pink-text:#b42332;
+}
+body.ledger-app .history-page :is(.history-list-surface,.schedule-grid){
+ border-color:#cbd5df!important;border-radius:7px!important;
+}
+body.ledger-app .history-page .history-budget-fill{background:#175dad!important}
+body.ledger-app .history-page .history-budget-track.over .history-budget-fill{
+ background:#b42332!important;
+}
+body.ledger-app .summary-page .summary-numbers [data-bank-available-value]:not(.summary-bank-negative){
+ color:#172635!important;
+}
+body.ledger-app .summary-page .summary-numbers [data-bank-available-value].summary-bank-negative{
+ color:#b42332!important;
+}
+body.ledger-app .summary-page :is(.summary-forecast-head strong,.summary-forecast-caveat){
+ color:#263f55;
+}
