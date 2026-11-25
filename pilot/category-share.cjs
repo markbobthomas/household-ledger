@@ -32,6 +32,21 @@ function snapshot(state){
     suggested:t.suggested||null,
     note:typeof note==='string'?note.slice(0,160):''};
   });
+ // Include identifiable Amazon products still parked in a broad "Other"
+ // category. These are review choices, never automatic overrides; specific
+ // manual categories and item allocations remain protected by the model.
+ const known=new Set(transactions.map(t=>t.id));
+ const amazon=require('./amazon-evidence.cjs').review(
+  state.transactions,adjustments,model.categories(ledger));
+ for(const item of amazon.items){
+  if(known.has(item.id)||item.currentCategory!=='Other'||
+     !item.suggestedCategory)continue;
+  known.add(item.id);
+  transactions.push({kind:'transaction',id:item.id,merchant:item.merchant,
+   amount:item.amountCents/100,date:item.date,
+   reason:'Review Amazon product category',category:'Other',
+   suggested:item.suggestedCategory,note:item.note});
+ }
  const plans=candidates.plans.map(p=>({
   kind:p.kind,id:p.id,merchant:p.merchant.slice(0,140),
   amount:p.amount,date:p.date,reason:p.reason,category:p.category,
