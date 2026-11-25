@@ -2618,8 +2618,11 @@ module.exports=(async()=>{
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const posted=await design(page.locator('.history-entry .history-actual-row').first(),
     '.history-entry','.history-actual-description strong','.history-actual-amount');
-   assert.ok(posted.height>=60&&Math.abs(posted.height-ref.height)<=30,
-    'Activity matches Upcoming Bills vertical rhythm: '+JSON.stringify({ref,posted}));
+   // At phone/tablet widths Category and Note intentionally take a separate
+   // 44px-tall line instead of squeezing the merchant into an unreadable strip.
+   const postedRowAllowance=page.viewportSize().width<950?50:30;
+   assert.ok(posted.height>=60&&Math.abs(posted.height-ref.height)<=postedRowAllowance,
+    'Activity preserves list rhythm with room for the two-line editor: '+JSON.stringify({ref,posted}));
    assert.ok(Math.abs(ref.merchant-posted.merchant)<=1&&
     Math.abs(ref.amount-posted.amount)<=1,
     'Activity text matches Upcoming Bills: '+JSON.stringify({ref,posted}));
