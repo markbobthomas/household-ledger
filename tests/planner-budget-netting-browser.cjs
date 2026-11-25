@@ -225,10 +225,12 @@ module.exports=(async()=>{
     name+': Budget category expansion does not switch to posted-only Activity');
    await unassigned.locator('[data-history-drill-category]').click();
    assert.equal(await details.isHidden(),true,name+': category details can be collapsed');
-   assert.match(await page.locator('[data-history-category-insights]').evaluate(el=>
-    el.innerText+' '+[...el.querySelectorAll('[aria-label],[title]')].map(node=>
-     (node.getAttribute('aria-label')||'')+' '+(node.getAttribute('title')||'')).join(' ')),
-    /\bpending\b/i,name+': Provisional pending spending is explained including review availability');
+   const budgetDisclosure=page.locator('[data-budget-explanation]');
+   assert.equal(await budgetDisclosure.evaluate(el=>el.open),false,
+    name+': budget calculation explanation is closed by default');
+   await budgetDisclosure.locator('summary').click();
+   assert.match(await budgetDisclosure.innerText(),/\bpending\b/i,
+    name+': provisional pending spending and review availability are explained on demand');
    await page.locator('.planner-nav-primary [data-view="history"]').click();
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    await page.locator('[data-history-view="summary"]').click();
