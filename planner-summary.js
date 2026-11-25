@@ -459,10 +459,12 @@ function displayedMonthLow(){
 function forecastClarityMarkup(){
  const c=calendarContext;
  if(!c)return '';
- if(isHistoricalMonth())return '<section class="summary-forecast-clarity" data-summary-trust>'+
-  '<strong>Past month</strong><p>These balances are reconstructed from posted transactions, not independent bank statements for each day.</p></section>';
- if(c.card)return '<section class="summary-forecast-clarity" data-summary-trust>'+
-  '<strong>Card debt is an estimate</strong><p>Card purchases change card debt; only linked card payments change checking. Future charges and issuer statements may differ.</p></section>';
+ if(isHistoricalMonth())return '<details class="summary-forecast-clarity" data-summary-trust>'+
+  '<summary>Past month · reconstructed balance details</summary>'+
+  '<div class="ledger-explainer-body"><p>These balances are reconstructed from posted transactions, not independent bank statements for each day.</p></div></details>';
+ if(c.card)return '<details class="summary-forecast-clarity" data-summary-trust>'+
+  '<summary>Card debt is an estimate · Details</summary>'+
+  '<div class="ledger-explainer-body"><p>Card purchases change card debt; only linked card payments change checking. Future charges and issuer statements may differ.</p></div></details>';
  const low=displayedMonthLow(),cutoff=low?.date||'',
   start=cutoff?addDay(cutoff,-14):'',
   withdrawals=(c.projectedEvents||[]).filter(e=>
@@ -482,10 +484,13 @@ function forecastClarityMarkup(){
    low&&low.balance<alertThreshold(c.prefs)?'Projected balance falls below your warning amount':'',
   balanceDate=/^\d{4}-\d{2}-\d{2}/.test(String(c.balanceObserved||''))?
    String(c.balanceObserved).slice(0,10):'',
-  status=warning||risks.length?'Needs attention':'Assumptions to know';
- return '<section class="summary-forecast-clarity" data-summary-trust aria-label="Forecast explanation">'+
-  '<div class="summary-forecast-head"><strong>What this forecast means</strong>'+
-   '<span class="summary-forecast-status">'+esc(status)+'</span></div>'+
+  summary=warning?warning:risks.length?
+   'Forecast warning · '+risks.length+' question'+(risks.length===1?'':'s')+' to check':
+   'Forecast assumptions';
+ return '<details class="summary-forecast-clarity" data-summary-trust aria-label="Forecast explanation">'+
+  '<summary class="summary-forecast-head"><strong>'+esc(summary)+'</strong>'+
+   '<span class="summary-forecast-status">Details</span></summary>'+
+  '<div class="ledger-explainer-body">'+
   (low?'<p><strong>Lowest in '+esc(monthName(calendarMonth))+': '+money(low.balance)+
    ' on '+esc(dateLabel(low.date))+'.</strong> Largest scheduled withdrawals in the preceding 15 days: '+why+'.</p>':
    '<p>No full-month low is available for this selection.</p>')+
@@ -494,7 +499,7 @@ function forecastClarityMarkup(){
   (risks.length?'<p class="summary-forecast-warning">'+risks.map(esc).join(' · ')+'.</p>':'')+
   '<p class="summary-forecast-caveat">Includes dated planned cash movements. Excludes everyday unplanned spending; missing predictions may change the low.</p>'+
   (risks.length?'<button type="button" class="btn" data-view="reviews">Check forecast questions</button>':'')+
-  '</section>';
+  '</div></details>';
 }
 function monthlyLowMarkup(card=false){
  const point=displayedMonthLow(),past=isHistoricalMonth(),
