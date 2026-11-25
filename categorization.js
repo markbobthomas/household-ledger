@@ -63,9 +63,11 @@ function pfcCategory(pfc){
  if(primary==='MEDICAL'||primary==='HEALTH_AND_FITNESS')return 'Health';
  if(primary==='ENTERTAINMENT'||primary==='RECREATION')return 'Entertainment';
  if(primary==='PERSONAL_CARE')return 'Shopping';
- if(primary==='INSURANCE')return 'Insurance';
+ if(primary==='INSURANCE')return /(?:HEALTH|MEDICAL)/.test(detailed)?'Healthcare':'Insurance';
  if(primary==='CHILDCARE'||primary==='EDUCATION')return 'Kids & Family';
- if(primary==='SUBSCRIPTIONS')return 'Subscriptions';
+ // Recurrence or a generic membership is not evidence of a digital service.
+ if(primary==='SUBSCRIPTIONS')
+  return /(?:DIGITAL|STREAMING|SOFTWARE|ONLINE|VIDEO|MUSIC|CLOUD)/.test(detailed)?'Subscriptions':null;
  if(primary==='BANK_FEES')return 'Other';
  // Transfer/loan/payroll categories belong to accounting classification, not consumption.
  return null;
@@ -87,7 +89,7 @@ function merchantCategory(t){
   ['Insurance',/\b(insurance premium|state farm|geico|progressive insurance|allstate)\b/],
   ['Entertainment',/\b(cinema|movie theater|concert tickets|steam games|gaming|amusement park)\b/],
   ['Kids & Family',/\b(daycare|childcare|preschool|school lunch|kids camp)\b/],
-  ['Subscriptions',/\b(netflix|spotify|youtube premium|hulu|disney plus|apple music|membership subscription)\b/],
+  ['Subscriptions',/\b(netflix|spotify|youtube premium|hulu|disney plus|apple music|kindle unlimited|software subscription|digital subscription|cloud storage subscription)\b/],
   ['Shopping',/\b(home depot|best buy|hardware store|clothing shop|electronics store|ikea|office depot)\b/]
  ];
  for(const [cat,re] of rules)if(safeWord(name,re))return cat;
@@ -98,6 +100,18 @@ function classify(t){
  if(obligation.isMortgage)return {category:'Housing',method:'mortgage-payment',confidence:.93,confidenceLevel:'RULE'};
  if(fuelEvidence(t)&&['expense','refund'].includes(String(t?.type||'expense')))
   return {category:'Gas',method:'fuel-description',confidence:.99,confidenceLevel:'RULE'};
+ // Explicit service purpose overrides a coarse provider industry label.
+ // These patterns do not infer dominant contents from mixed-use retailers.
+ const service=nameOf(t);
+ if(['expense','refund'].includes(String(t?.type||'expense'))){
+  if(/\b(?:health|medical)\s+insurance\b/i.test(service))
+   return {category:'Healthcare',method:'explicit-service-purpose',confidence:.93,confidenceLevel:'RULE'};
+  if(/\b(?:coffee shop|cafe|caf[eé]|starbucks|restaurant|pizzeria|doordash|grubhub|ubereats)\b/i.test(service))
+   return {category:'Dining',method:'explicit-food-service',confidence:.93,confidenceLevel:'RULE'};
+  if(/\b(?:safeway|whole foods|trader joe'?s|albertsons|winco)\b/i.test(service)&&
+     /\b(?:prepared meals?|hot bar|deli meals?|ready.to.eat)\b/i.test(service))
+   return {category:'Groceries',method:'grocery-prepared-meal',confidence:.93,confidenceLevel:'RULE'};
+ }
  const src=t?.source||{};
  const pfc=t?.personal_finance_category||t?.personalFinanceCategory||
   src.personalFinanceCategory||src.personal_finance_category;
