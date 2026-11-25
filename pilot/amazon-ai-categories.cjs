@@ -146,6 +146,9 @@ async function classify({candidates,categories,apiKey,fetchImpl=fetch}){
   const picked=allowedNames.get(item.category.trim().toLowerCase());
   if(!picked)continue;
   const c=candidates[i],category=refineCategory(c.product,picked,allowed);
+  // A purpose guard may abstain even when the model supplied high confidence.
+  // Never emit null or an unavailable category as a proposal.
+  if(typeof category!=='string'||!allowedNames.has(category.toLowerCase()))continue;
   proposals.push({transactionId:c.transactionId,accountId:c.accountId,
    noteKey:c.noteKey,note:c.note,category,previous:c.previous});
  }
