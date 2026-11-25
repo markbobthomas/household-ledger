@@ -22,7 +22,7 @@ function targetWindow(transactions,adjustments={}){
  // prior category import or manual category is already present.
  const dates=Object.values(transactions||{}).filter(t=>amazonCharge(t)&&
   (!String(notes['bank:'+JSON.stringify([String(t.accountId||''),String(t.id)])]||'').trim()||
-   overrides[t.id]===undefined||overrides[t.id]==='Uncategorized'||!evidence[t.id])&&
+   overrides[t.id]===undefined||overrides[t.id]==='Uncategorized')&&
   isoDate(t.date)).map(t=>isoDate(t.date)).sort();
  if(!dates.length)return null;
  const shift=(d,n)=>{
