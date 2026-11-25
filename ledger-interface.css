@@ -7,7 +7,7 @@
  --ledger-action:#175dad;--ledger-action-hover:#0f478a;
  --ledger-control-border:#8d9cab;--ledger-surface:#fff;
 }
-body.ledger-app,body.ledger-app .content{background:#f3f5f7!important;color:var(--ink);font-size:13px}
+body.ledger-app,body.ledger-app .content{background:#f3f5f7!important;color:var(--ink);font-size:15px}
 body.ledger-app .content{max-width:1440px;padding:17px 24px 48px}
 body.ledger-app .topbar{
  align-items:center;margin:0 0 12px;min-height:50px;
@@ -282,4 +282,8 @@ body.ledger-app .planner-menu-content{
 }
 @media(max-width:780px){
  body.ledger-app .main-navigation{padding:3px 4px!important;margin-bottom:10px!important}
+}
+
+@media(min-width:781px){
+ body.ledger-app .planner-nav-primary .tab-link{font-size:15px!important}
 }
