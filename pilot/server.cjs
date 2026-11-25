@@ -1051,7 +1051,8 @@ async function start(port=Number(env.PORT||8788)){
    if(accountRemovalBusy&&[
     '/api/ledger/forecasts','/api/ledger/adjustments','/api/ledger/category',
      '/api/ledger/category-rule','/api/ledger/categories/delete','/api/ledger/categories/rename',
-    '/api/ledger/credit-kind','/api/ledger/amazon-import','/api/exchange',
+    '/api/ledger/credit-kind','/api/ledger/amazon-import',
+    '/api/ledger/amazon-review-choice','/api/exchange',
     '/api/sync','/api/disconnect','/api/accounts/remove'
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
@@ -1361,6 +1362,23 @@ async function start(port=Number(env.PORT||8788)){
     state.ledgerAdjustments={...before,reviews};
     try{await save()}catch(error){state.ledgerAdjustments=before;throw error}
     return respond(200,{saved:true,scope:'credit-kind'});
+   }
+   if(requestPath==='/api/ledger/amazon-review-choice'){
+    if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+    const before=state.ledgerAdjustments||{};
+    const categories=savedCategoryChoices(before.predictions,before.customCategories,
+     before.categoryOverrides);
+    let result;
+    try{result=require('./amazon-review-choice.cjs').change(
+     state.transactions,before,body,categories)}
+    catch(error){return respond(error.httpStatus||400,{
+     error:String(error.message||'Invalid Amazon category').slice(0,180)})}
+    state.ledgerAdjustments=result.next;
+    try{await save()}catch(error){
+     state.ledgerAdjustments=before;
+     return respond(503,{error:'Could not save Amazon category'});
+    }
+    return respond(200,{saved:true,scope:result.scope});
    }
    if(requestPath==='/api/ledger/category'){
     // Scoped, read-only-source classification adjustment. Never upload entire
