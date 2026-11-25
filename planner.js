@@ -5322,6 +5322,7 @@ async function saveAccountNickname(id,value){
   const result=await savePlanning();
   if(live()&&(!result||result.saved!==true))throw Error('The private server did not confirm the save.');
   accountNicknameNotice=nickname?'Name saved.':'Bank name restored.';
+  accountNicknameBusy=false;
   // Rebuild cached labels, but the canonical forecast and bank history remain cached.
   render();
  }catch(error){
