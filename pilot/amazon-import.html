@@ -163,8 +163,8 @@ function render(){
  if($('accept'))$('accept').onclick=()=>choose(proposed);
  $('skip').onclick=()=>{skipped.add(item.id);index=0;reviewMessage('Skipped for now; no category was changed.');render()};
 }
-async function askAI(){
- if(busy)return;
+async function askAI(force=false){
+ if(busy&&!force)return;
  setBusy(true);reviewMessage('Checking unfamiliar products…');
  try{
   const data=await api('/api/ledger/amazon-ai',{method:'POST',
@@ -205,7 +205,7 @@ $('import').onclick=async()=>{
    ' full product-evidence records saved privately; existing personal Notes and bank charges unchanged.';
   await loadReview();
   setMessage('Import saved and verified.');
-  if($('ai-consent').checked)await askAI();
+  if($('ai-consent').checked)await askAI(true);
  }catch(error){setMessage(error.message,true)}
  finally{setBusy(false)}
 };
