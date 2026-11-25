@@ -13,7 +13,8 @@ const categories=['Uncategorized','Other','Shopping','Groceries',
 // The added word-boundary patterns must match product nouns in normal titles.
 assert.equal(Imp.classify('Newborn pacifier for stroller',categories),'Kids & Family');
 assert.equal(Imp.classify('Fresh cookies box',categories),'Groceries');
-assert.equal(Imp.classify('Electric humidifier',categories),'Maintenance');
+assert.equal(Imp.classify('Electric humidifier',categories),'Home & Maintenance');
+assert.equal(Imp.classify('Electric humidifier',categories.filter(x=>x!=='Home & Maintenance')),'Maintenance');
 assert.equal(Imp.classify('USB webcam',categories),'Shopping');
 assert.equal(Imp.classify('Unknown ZX-9831 trademarked thing',categories),'Uncategorized');
 const make=(id,note)=>({
