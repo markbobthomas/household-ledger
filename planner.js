@@ -99,7 +99,9 @@ function forecastSaveFeedback(message,allowUndo=false){
 let historyAccount='all',historySearch='',historySort='newest',historyCategoryFilter='',historyLimit=90,recurringDraft=null,reviewNotice='',overdueEditKey='';
 let historyView=activeTab==='activity'?'list':'categories',historySelectedMonths=null,historyMonthPickerOpen=false,historyMonthFutureExtent=0,historySizeFilter=-1,historyPurchaseDrill=false;
 let historyMerchantFilter='',historyMerchantSearch='';
-let categoryReviewLimit=40,reviewSort='newest',reviewPane='';
+let categoryReviewLimit=40,reviewSort='newest',reviewPane='all';
+const reviewSkipped=new Set(); // UI-only, unresolved items still count
+let reviewLastSave=null;
 const reviewCategorySelected=new Set();
 let reviewBulkSaving=false;
 const reviewCategoryKey=(kind,id)=>JSON.stringify([String(kind),String(id)]);
@@ -3130,9 +3132,9 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
  const {recommendations,legacyItems,decisionsNeeded,pending,ignored,overdue,ignoredOverdue,categoryIssues,categoryCount}=queue;
  const paneCounts={categories:categoryCount,payments:overdue.length,
   earlier:decisionsNeeded,suggestions:pending.length};
- if(!reviewPane)reviewPane=Object.keys(paneCounts).find(key=>paneCounts[key]>0)||'categories';
+ if(!['all','categories','payments','earlier','suggestions'].includes(reviewPane))reviewPane='all';
  const pane=id=>'<div class="review-tab-pane" data-review-pane="'+id+
-  '"'+(reviewPane===id?'':' hidden')+'>';
+  '"'+(reviewPane==='all'||reviewPane===id?'':' hidden')+'>';
  lastRecommendedRepeating=recommendations;
  const
   expanded=(r,legacyKey='')=>!!r&&recurringDraft?.reviewRowKey===r.key&&
@@ -3193,7 +3195,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   categoryRows=[
    ...categoryIssues.plans.map(item=>({...item,isPlan:true})),
    ...categoryIssues.transactions.map(item=>({...item,isPlan:false}))
-  ],shownCategories=sortedReviewRows(categoryRows,item=>item.date,
+  ],availableCategoryRows=categoryRows.filter(item=>!reviewSkipped.has(reviewCategoryKey(item.kind,item.id))),
+  shownCategories=sortedReviewRows(availableCategoryRows,item=>item.date,
    item=>item.merchant,item=>item.amount).slice(0,categoryReviewLimit),
   selectableCategories=shownCategories.filter(item=>!item.creditKind),
   categoryRow=item=>{
@@ -3227,7 +3230,15 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
        '<option value="transfer">Transfer</option></select>':
      '<label class="minimal-control-label"><span class="visually-hidden">Category</span><select name="category" aria-label="Category for '+
       escapeHTML(item.merchant)+' — saves when selected">'+categoryOptions()+'</select>')+
-    '<small data-category-review-status role="status" hidden>Saving…</small></label></div>';
+    '<small data-category-review-status role="status" hidden>Saving…</small></label>'+
+    (item.creditKind?'':('<div class="review-one-tap-choices" aria-label="Choose category in one tap">'+
+     [...new Set([item.suggested,'Groceries','Dining','Shopping','Healthcare']
+      .map(c=>model.canonicalCategory(state(),c)).filter(c=>c&&c!=='Uncategorized'&&categoryChoices.includes(c)))]
+      .slice(0,3).map(c=>'<button type="button" class="review-category-chip" data-review-quick-category="'+
+       escapeHTML(c)+'" aria-label="Save '+escapeHTML(c)+' category">'+
+       escapeHTML(c)+'</button>').join('')+
+     '<button type="button" class="review-skip" data-review-skip>Skip for now</button></div>'))+
+    '</div>';
   };
  // A refreshed bank sync or resolved item must not leave a stale bulk choice.
  const activeKeys=new Set(categoryRows.filter(item=>!item.creditKind).map(item=>reviewCategoryKey(item.kind,item.id)));
@@ -3260,36 +3271,21 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
       ['merchant','Merchant A–Z']].map(([value,label])=>
       '<option value="'+value+'"'+(reviewSort===value?' selected':'')+'>'+label+'</option>').join('')+
     '</select></label></div>'+
-  '<nav class="history-subtabs spending-tabs ledger-section-tabs" aria-label="Review views">'+
-   [['categories','Categories'],['payments','Missing payments'],['earlier','Old forecasts'],['suggestions','Suggestions']]
-    .map(([id,name])=>'<button type="button" class="history-subtab'+
-     (reviewPane===id?' active':'')+(paneCounts[id]>0?' review-tab-pending':'')+
-     '" data-review-tab="'+id+'" aria-pressed="'+
-     (reviewPane===id)+'">'+name+
-     (paneCounts[id]?'<small class="review-tab-count">'+paneCounts[id]+'</small>':'')+
-     '</button>').join('')+'</nav>'+
-  '<p class="review-action-guide">Review the evidence, choose an action, and resolved items leave this list.</p>'+
-  (reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
-  pane('categories')+
-  '<section class="panel category-review-panel" data-category-review>'+
-   '<div class="section-title"><h2>Items to confirm</h2>'+
-    '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
-   (categoryCount?
-    '<div class="review-bulk-toolbar" data-review-bulk-toolbar>'+
-     '<button type="button" class="btn" data-review-select-all>'+
-      (selectableCategories.length&&selectableCategories.every(item=>reviewCategorySelected.has(
-       reviewCategoryKey(item.kind,item.id)))?'Deselect shown':'Select all shown')+'</button>'+
-     '<span data-review-bulk-count role="status" aria-live="polite">'+reviewCategorySelected.size+' selected</span>'+
-     '<select data-review-bulk-category aria-label="Category for selected items"'+
-      (reviewCategorySelected.size?'':' disabled')+'>'+categoryOptions()+'</select>'+
-     '<button type="button" class="btn primary" data-review-bulk-apply disabled>Apply to selected</button>'+
-     '<button type="button" class="btn" data-review-bulk-clear'+
-      (reviewCategorySelected.size?'':' disabled')+'>Clear</button>'+
-    '</div>'+
-    shownCategories.map(categoryRow).join('')+
-    (categoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
-     'Show more ('+(categoryRows.length-shownCategories.length)+' remaining)</button>':''):
-    '')+'</section></div>'+
+  '<div class="review-queue-controls">'+
+   '<strong>'+queue.outstanding+' unresolved task'+(queue.outstanding===1?'':'s')+'</strong>'+
+   '<label>Show <select data-review-focus aria-label="Filter review tasks">'+
+    [['all','All tasks',queue.outstanding],['payments','Payments to verify',paneCounts.payments],
+     ['earlier','Older forecasts',paneCounts.earlier],['suggestions','Repeating suggestions',paneCounts.suggestions],
+     ['categories','Categories',paneCounts.categories]].map(([key,label,count])=>
+      '<option value="'+key+'"'+(reviewPane===key?' selected':'')+'>'+label+' ('+count+')</option>').join('')+
+   '</select></label></div>'+
+  '<p class="review-action-guide">Forecast questions appear first. Choose a category to save; skipping is temporary.</p>'+
+  ((bundle?.missingMortgages||[]).length?
+   '<section class="panel review-risk-banner"><strong>Possible missing mortgage</strong>'+
+   '<p>Ledger found mortgage evidence that needs checking before relying on the projected low.</p>'+
+   '<button type="button" class="btn" data-view="schedules">Check recurring bills</button></section>':'')+
+  (reviewLastSave?'<p class="future-notice" role="status">Category saved. <button type="button" class="btn" data-review-undo>Undo last choice</button></p>':
+   reviewNotice?'<p class="future-notice" role="status">'+escapeHTML(reviewNotice)+'</p>':'')+
   pane('payments')+
   (overdue.length||ignoredOverdue.length?'<section class="panel overdue-payments" data-overdue-review>'+
    '<div class="section-title"><h2>Payments to verify</h2>'+
@@ -3371,7 +3367,30 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
     (ignored.some(r=>expanded(r))?' open':'')+'><summary>Dismissed suggestions ('+
      ignored.length+')</summary><div class="ignored-repeating-items">'+
       reviewRecommendations(ignored).map(normalCard).join('')+'</div></details>':'')+
-  '</div></div>';
+  '</div>'+
+  pane('categories')+
+  '<section class="panel category-review-panel" data-category-review>'+
+   '<div class="section-title"><h2>Items to confirm</h2>'+
+    '<span class="status-tag '+(categoryCount?'warn':'good')+'">'+categoryCount+'</span></div>'+
+   (reviewSkipped.size?'<p class="review-skip-notice">'+reviewSkipped.size+
+    ' skipped for now; still unresolved. <button type="button" class="btn" data-review-show-skipped>Show skipped</button></p>':'')+
+   (categoryCount?
+    '<div class="review-bulk-toolbar" data-review-bulk-toolbar>'+
+     '<button type="button" class="btn" data-review-select-all>'+
+      (selectableCategories.length&&selectableCategories.every(item=>reviewCategorySelected.has(
+       reviewCategoryKey(item.kind,item.id)))?'Deselect shown':'Select all shown')+'</button>'+
+     '<span data-review-bulk-count role="status" aria-live="polite">'+reviewCategorySelected.size+' selected</span>'+
+     '<select data-review-bulk-category aria-label="Category for selected items"'+
+      (reviewCategorySelected.size?'':' disabled')+'>'+categoryOptions()+'</select>'+
+     '<button type="button" class="btn primary" data-review-bulk-apply disabled>Apply to selected</button>'+
+     '<button type="button" class="btn" data-review-bulk-clear'+
+      (reviewCategorySelected.size?'':' disabled')+'>Clear</button>'+
+    '</div>'+
+    shownCategories.map(categoryRow).join('')+
+    (availableCategoryRows.length>shownCategories.length?'<button type="button" class="btn" data-more-category-review>'+
+     'Show more ('+(availableCategoryRows.length-shownCategories.length)+' remaining)</button>':''):
+    '')+'</section></div>'+
+  '</div>';
 }
 
 function incomeStatus(bundle,s,chosen,derived){
@@ -3768,7 +3787,7 @@ function switchExistingPane(buttonAttr,paneAttr,newValue){
   button.setAttribute('aria-pressed',String(current));
  }
  for(const pane of root?.querySelectorAll('['+paneAttr+']')||[])
-  pane.hidden=pane.getAttribute(paneAttr)!==newValue;
+  pane.hidden=newValue!=='all'&&pane.getAttribute(paneAttr)!==newValue;
 }
 function render({navigationOnly=false}={}){
  // Any full render, even an uncached navigation, gets a fresh coherent set.
@@ -4530,7 +4549,10 @@ document.addEventListener('click',async e=>{
     target==='reviews-suggestions'?'suggestions':'payments';
    const tab=document.querySelector('[data-review-tab="'+pane+'"]');
    if(tab&&reviewPane!==pane)tab.click();
-   else if(!tab){reviewPane=pane;render({navigationOnly:true})}
+   else if(!tab){reviewPane=pane;
+    const picker=document.querySelector('[data-review-focus]');
+    if(picker){picker.value=pane;switchExistingPane('data-review-tab','data-review-pane',pane)}
+    else render({navigationOnly:true});}
   }
   return;
  }
@@ -4850,6 +4872,60 @@ document.addEventListener('click',async e=>{
   reviewCategorySelected.clear();
   for(const box of document.querySelectorAll('.reviews-page [data-review-select-row]'))box.checked=false;
   updateReviewBulkControls();return;
+ }
+ const quickCategory=e.target.closest?.('[data-review-quick-category]');
+ if(quickCategory){
+  if(reviewBulkSaving)return;
+  const row=quickCategory.closest('[data-category-review-form]'),
+   select=row?.querySelector('select[name="category"]');
+  if(!select||select.disabled||row.dataset.saving==='true')return;
+  const choice=model.canonicalCategory(state(),quickCategory.dataset.reviewQuickCategory);
+  if(!choice||choice==='Uncategorized')return;
+  select.value=choice;
+  select.dispatchEvent(new Event('change',{bubbles:true}));
+  return;
+ }
+ const skipCategory=e.target.closest?.('[data-review-skip]');
+ if(skipCategory){
+  const row=skipCategory.closest('[data-category-review-form]');
+  if(!row||row.dataset.saving==='true')return;
+  const key=reviewCategoryKey(row.dataset.categoryKind,row.dataset.categoryId);
+  reviewSkipped.add(key);
+  reviewCategorySelected.delete(key); // A skipped row must never be included in a later batch.
+  reviewLastSave=null;
+  renderReviewFilters();
+  return;
+ }
+ if(e.target.closest?.('[data-review-show-skipped]')){
+  reviewSkipped.clear();renderReviewFilters();return;
+ }
+ if(e.target.closest?.('[data-review-undo]')){
+  const previous=reviewLastSave;
+  if(!previous)return;
+  reviewLastSave=null;
+  try{
+   if(previous.kind==='transaction'){
+    await saveTransactionCategory(previous.id,
+     previous.hadOverride?previous.oldOverride:previous.oldCategory,
+     previous.hadOverride,false);
+   }else{
+    await commitForecastChange(()=>{
+     const predictions=state().predictions||{};
+     const group=previous.kind==='schedule'?predictions.futureRecurringRules:
+      previous.kind==='oneoff'?predictions.futureTransactionAdds:predictions.paymentBills;
+     const entry=(group||[]).find(item=>String(item.id)===previous.id);
+     if(!entry)throw Error('This bill changed. Open Bills to correct the category.');
+     entry.category=previous.oldCategory;
+     entry.categoryReviewed=previous.oldReviewed;
+    });
+   }
+   reviewNotice='Last category decision undone.';
+   render();
+  }catch(error){
+   reviewNotice='Undo could not be saved: '+String(error.message||error);
+   render();
+  }
+  return;
  }
  const applyReviewCategory=e.target.closest?.('[data-review-bulk-apply]');
  if(applyReviewCategory){
@@ -5364,6 +5440,15 @@ document.addEventListener('change',async e=>{
  if(!chosen||chosen==='Uncategorized'){select.value='';return}
  const issues=model.categoryReviewQueue(state()),
   active=[...issues.transactions,...issues.plans].some(row=>row.kind===kind&&row.id===id);
+ const overrides=state().categoryOverrides||{},hadOverride=Object.prototype.hasOwnProperty.call(overrides,id),
+  source=(state().transactions||[]).find(row=>String(row.id)===id),
+  group=kind==='schedule'?state().predictions?.futureRecurringRules:
+   kind==='oneoff'?state().predictions?.futureTransactionAdds:state().predictions?.paymentBills,
+  plan=(group||[]).find(row=>String(row.id)===id),
+  undoChoice={kind,id,hadOverride,oldOverride:overrides[id],
+   oldCategory:kind==='transaction'?
+    (model.canonicalCategory(state(),source?.category||'Other')||'Other'):
+    String(plan?.category||'Uncategorized'),oldReviewed:Boolean(plan?.categoryReviewed)};
  if(!active){
   select.value='';
   setNotice('This item changed. Refresh and try again.');
@@ -5377,8 +5462,10 @@ document.addEventListener('change',async e=>{
  const prior=item.querySelector('[data-category-review-error]');
  if(prior)prior.remove();
  try{
-  if(kind==='transaction')await saveTransactionCategory(id,chosen,true);
+  if(kind==='transaction')await saveTransactionCategory(id,chosen,true,false);
   else await saveReviewPlanCategory(kind,id,chosen);
+  reviewSkipped.delete(reviewCategoryKey(kind,id));
+  reviewLastSave=undoChoice;
   reviewNotice='Category saved.';render();
  }catch(error){
   // Reset to the placeholder for easy retry, including reselecting the same
@@ -5980,6 +6067,20 @@ document.addEventListener('change',async e=>{
    else{quick.insertAdjacentHTML('afterend','<span class="schedule-quick-error" role="alert">'+
     escapeHTML(scheduleNotice)+'</span>');}
   }
+  return;
+ }
+ if(e.target.matches?.('[data-review-focus]')){
+  const next=e.target.value;
+  if(!['all','payments','earlier','suggestions','categories'].includes(next))return;
+  const dirty=reviewFormDirty()||
+   [...document.querySelectorAll('.reviews-page [data-overdue-date]')].some(form=>
+    [...form.querySelectorAll('input,select,textarea')].some(field=>
+     field.type!=='hidden'&&field.value!==field.defaultValue));
+  if(dirty&&!window.confirm('Discard unsaved review changes to filter tasks?')){
+   e.target.value=reviewPane;return;
+  }
+  recurringDraft=null;overdueEditKey='';reviewPane=next;
+  switchExistingPane('data-review-tab','data-review-pane',next);
   return;
  }
  if(e.target.matches?.('[data-review-sort]')){
