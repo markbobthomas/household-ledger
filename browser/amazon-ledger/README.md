@@ -1,96 +1,111 @@
-# Amazon browser sync — desktop setup
+# Automatic Amazon → Ledger sync (desktop Chrome / Edge)
 
-**Status:** Experimental. The extension is implemented and checked with
-fictional Amazon pages, but it has **not been verified against a live,
-signed-in Amazon order page**. It runs only when you click Sync.
+**Status:** Implemented as an opt-in desktop extension. Fictional tests cover
+scheduling, automatic order extraction, the authenticated Ledger importer,
+session failures and pause/resume. **Signed-in live Amazon acceptance remains
+unverified**; Amazon may change its order pages.
 
-The existing Amazon ZIP/CSV importer works without the extension and is the
-more complete option for historical and multi-item orders.
-
-## What you need
-
-A desktop computer with **Google Chrome or Microsoft Edge**, your private
-Ledger website, and an Amazon.com account. You will sign in to both sites
-in the browser; you do **not** enter passwords into the extension.
-
-**iPhone and iPad browsers cannot install this extension.**
+Once installed and enabled, the extension checks approximately **every six
+hours while Chrome or Edge is running**. It matches readable Amazon orders to
+existing posted bank purchases, saves product names in Ledger Notes, applies
+only supported high-confidence category matches, and leaves uncertain purchases
+for Review. **It does not create transactions or edit source bank records.**
 
 ## Install once
 
-1. [Download the Ledger repository ZIP](https://github.com/markbobthomas/household-ledger/archive/refs/heads/main.zip)
-   and unzip it somewhere you will keep. Inside it, find
-   `household-ledger-main/browser/amazon-ledger`. This exact folder contains
-   `manifest.json`.
-2. Open desktop Chrome. Enter `chrome://extensions` in the address bar.
-   In Edge, enter `edge://extensions`. Turn on **Developer mode**.
-3. Click **Load unpacked** and select the exact
-   `household-ledger-main/browser/amazon-ledger` folder. **Do not** select
-   the outer `household-ledger-main` folder.
-4. Open your private Ledger website in that browser and sign in. Navigate
-   to **Amazon purchases**, expand **Set up Amazon browser sync on desktop**,
-   and click **Copy this Ledger address**.
-5. In the browser's Extensions (puzzle-piece) menu, pin **Ledger Amazon
-   Orders Sync**. Open it, paste your private Ledger address, select
-   **Connect Ledger**, and approve access to that specific Ledger website.
-   The extension remembers only the Ledger website address.
+1. On a **computer** (not iPad/iPhone), download the
+   [Ledger repository ZIP](https://github.com/markbobthomas/household-ledger/archive/refs/heads/main.zip)
+   and unzip it.
+2. In desktop Chrome open `chrome://extensions` (Edge:
+   `edge://extensions`). Turn on **Developer mode** and choose
+   **Load unpacked**. Select the exact
+   `household-ledger-main/browser/amazon-ledger` folder containing
+   `manifest.json`, not the outer repository folder. Pin **Ledger Amazon
+   Orders Sync** from the browser's Extensions menu.
+3. Open your **private Ledger website** and Amazon.com in the **same browser
+   profile**, and sign in to both.
+4. In Ledger → **Amazon purchases**, expand
+   **Set up automatic Amazon sync on desktop** and choose
+   **Copy this Ledger address**.
+5. Open the pinned extension, paste the address and click **Connect Ledger**.
+   Approve access only to that private Ledger site. Click
+   **Enable automatic sync**, then approve access to Amazon order pages.
 
-## Sync when you choose to
+The first check runs when you enable it. Later checks happen through the
+browser's scheduled alarms. The extension opens temporary inactive tabs to
+read your signed-in Amazon order pages and save through your signed-in Ledger
+website. The tabs close afterward.
 
-1. Sign in at Amazon.com in the same Chrome/Edge profile. Open **Returns &
-   Orders → Your Orders** and select the order period to read.
-2. Click the Ledger Amazon Orders Sync extension icon and select
-   **Sync Amazon orders**.
-3. The extension reads the current page and up to four following order
-   pages. It opens the authenticated Ledger **Amazon purchases** page with
-   a CSV attached. **Review the products** and click **Import and save**
-   to apply the matching and categorization. The import never creates new
-   bank transactions.
-4. Check the resulting transaction Notes and category review suggestions.
-   Repeat only when you want to import another set of orders.
+**No repeated download, upload or Import and save click is required for the
+automatic path.** The extension displays the last check, last successful
+check and any sign-in errors. Choose **Sync now** for an extra check or
+**Turn off automatic sync** to stop future checks.
 
-### Important coverage limits
+## What it does—and doesn't—sync
 
-The extension currently captures only orders with **a single identified
-product**, a readable purchase date and a clearly labeled total. It skips
-multi-item orders, uncertain prices, returns and refunds; it can stop if
-Amazon asks for another sign-in. It does **not** guarantee that every Amazon
-charge will have an item match.
+- The order reader covers up to five Amazon order-history pages, currently
+  accepting only **clearly priced single-product orders** with recognizable
+  dates and totals. It skips uncertain, cancelled, mixed-item and refund
+  records rather than guessing.
+- The existing private Ledger importer matches by dates and amounts, adds
+  product Notes, avoids duplicate expenses and respects saved manual category
+  choices. Some uncertain matches may generate a clearly labeled possible
+  product Note; they must not be treated as confirmed.
+- Automatic importing does **not** automatically call paid AI categorization.
+  Ledger's built-in matching/category rules are applied when safe. You can
+  separately opt in to AI suggestions from Ledger.
+- ZIP/CSV import still handles multi-item purchases and longer order history.
+  The browser extension is **not** a replacement for that full export yet.
+- If the desktop browser is closed, alarms cannot run. Checks resume when
+  Chrome/Edge is running and the scheduled alarm fires. A session expiration,
+  Amazon security challenge or site-layout change may block checks.
+- Amazon browser sync and bank/Plaid refresh are separate: the matching uses
+  whatever bank transactions Ledger already has.
 
-Use the Amazon ZIP/CSV import for mixed orders and fuller coverage.
-Changes to Amazon's website may require updating the scraper. A real
-signed-in desktop test is still needed before live compatibility can be
-confirmed.
+## Security and privacy
+
+The owner authorized credential storage if required, but this implementation
+**does not need or store passwords**. It reuses existing signed-in Amazon and
+Ledger browser sessions. No password, session token, Amazon cookies or item
+titles are written into extension storage. It keeps only the private Ledger
+origin, on/off preference, timestamps, error/status text and aggregate
+counts. Product data travels only between Amazon pages and the existing
+authenticated Ledger import endpoint. No separate data-collection server is
+created.
+
+Automatic sync is **off by default**. Site access is requested only when you
+connect and enable it; no Amazon permissions are required for the existing
+manual Ledger ZIP importer.
 
 ## Troubleshooting
 
 | Problem | Action |
-|---|---|
-| Chrome cannot load the extension | Select the folder **containing manifest.json**, not the outer repository folder. |
-| Ledger address rejected | Use only the HTTPS base URL of your private Ledger site. No password, path, query or link fragment. |
-| Permission denied | Click **Connect Ledger** again and approve that specific Ledger site. |
-| Amazon page not recognized | Open Amazon.com **Your Orders**, then click Sync. |
-| Ledger login requested during sync | Sign in to your private Ledger in the same browser profile, then retry. |
-| No safe orders found | Try a period containing simple single-item orders. Otherwise use ZIP/CSV. |
-| Some purchases missing | The extension intentionally skips ambiguous/multi-item orders and reads no more than five pages. |
-| CSV opened in Ledger | This is the review step. Select **Import and save** after checking the products. |
+| --- | --- |
+| Can't install extension | Use Chrome/Edge on a computer. Select the exact folder containing `manifest.json`; enable Developer mode. |
+| Ledger connection rejected | Copy only the private site's HTTPS origin (no path, query or password). |
+| Amazon permission denied | Click **Enable automatic sync** again and approve Amazon access. |
+| Last check says sign in to Amazon | Open Amazon.com Your Orders, sign in or finish any verification, then click **Sync now**. |
+| Last check says sign in to Ledger | Open your private Ledger site in the same browser profile and sign in; click **Sync now**. |
+| No readable orders | Check a signed-in order page or use the Amazon ZIP/CSV importer for multi-item orders. |
+| No matching Ledger purchase | Wait for the bank charge to post or use the fuller ZIP/CSV import; automatic checks retry later. |
+| Nothing happens with browser closed | Keep desktop Chrome/Edge running for periodic checks. |
+| Want to stop | Open the extension and click **Turn off automatic sync**. |
+| Want to review each imported CSV | Use **Manual import (optional)**, open Amazon Your Orders, and click **Open manual import preview**. |
 
-## Privacy and safeguards
+## Technical scope and verification
 
-- The extension stores only the private Ledger site address, not Amazon
-  purchase history, passwords, cookies, bank records or account details.
-- It uses the existing signed-in website sessions. It does not monitor
-  browsing activity or sync in the background.
-- Extracted product descriptions go directly into the authenticated Ledger
-  import page. No developer backend or AI model receives them from the
-  extension. AI classification remains a separate optional choice in Ledger.
-- It requests access to your private Ledger site when you connect. It is an
-  **unpacked extension**, not a Chrome Web Store listing.
-- Ledger's importer protects manual categories and saved Notes, matches
-  against existing bank charges, and does not create duplicate expenses.
+The extension uses Manifest V3 `chrome.alarms` (six-hour interval),
+separately approved Amazon and Ledger origins, temporary same-origin tabs,
+an in-origin authenticated upload with Ledger's revision guard and importer,
+and no direct writes to bank history. A single-flight guard avoids concurrent
+automatic/manual syncs, and temporary tabs are closed on failure. A failed
+check is recorded and not reported as success. Server-side manual overrides
+and duplicate prevention remain authoritative.
 
-## Developer verification
+Run `node tests/amazon-browser-sync-smoke.cjs` for synthetic extraction
+and extension integration tests. The private banking/forecast and
+desktop/iPhone browser regression suites must also pass before release.
 
-Run `node tests/amazon-browser-sync-smoke.cjs` with fictional fixtures.
-Extension source is in `manifest.json`, `popup.html`, `popup.js`,
-`background.js` and `scraper.js`. Live signed-in Amazon acceptance has
-not yet occurred.
+This is an unpacked extension, not a Chrome Web Store listing, and it cannot
+run on iOS/iPadOS Chrome or Safari. Live Amazon-page compatibility is still
+a separate owner-side acceptance step.
