@@ -116,13 +116,25 @@ function readFile(fileName,base64){
 function classify(title,categories){
  const name=String(title).toLowerCase();
  const pick=options=>options.map(o=>categories.find(c=>c.toLowerCase()===o.toLowerCase())).find(Boolean);
+ // Owner-defined priority for the four reviewed budget categories. Product
+ // evidence is required; a marketplace name or a generic membership is not enough.
+ const answeredRules=[
+  [/\b(?:health|medical)\s+insurance\s+(?:premium|policy|payment|plan)\b/i,['Healthcare','Health']],
+  [/\b(?:insurance\s+deductible|insurance.related\s+out.of.pocket|out.of.pocket\s+insurance)\b/i,['Insurance']],
+  [/\b(?:extended\s+warrant(?:y|ies)|protection\s+plan|accident\s+protection|product\s+warrant(?:y|ies)|purchase\s+protection\s+plan)\b/i,['Insurance']],
+  [/\b(?:kindle\s+unlimited|netflix|spotify\s+premium|streaming\s+(?:service|subscription)|digital\s+subscription|software\s+subscription|cloud\s+storage\s+subscription|adobe\s+creative\s+cloud|apple\s+music|youtube\s+premium)\b/i,['Subscriptions']],
+  [/\b(?:baby\s+formula|infant\s+formula|meal\s+kits?|grocery\s+delivery|prepared\s+grocery\s+meal|grocery\s+store\s+prepared\s+meal)\b/i,['Groceries']]
+ ];
+ for(const [pattern,choices] of answeredRules)if(pattern.test(name)){
+  const category=pick(choices);if(category)return category;
+ }
  const rules=[
   [/(\bdiapers?\b|\bwipes?\b.*\bbaby\b|\bbaby\b.*\bwipes?\b|\btoddler\b|\bstroller\b|\bcrib\b|\bchildren'?s\b|\bkids?\b.*\b(toy|clothes|pajama|shoe|book|jacket|shirt|dress|pants|clothing)\b|\bpreschool\b|\blego\b|\bformula\b)/i,['Boys','Kids & Family','Kids','Children']],
   [/(\bcoffee\b|\bcereal\b|\bsnack\b|\bfood\b|\bprotein bar\b|\bpasta\b|\brice\b|\btea bags?\b|\bspices?\b|\bgranola\b|\bchocolate\b|\bcandy\b|\bbeverage\b|\bdrink mix\b|\boatmeal\b|\bpantry\b|\bolive oil\b|\bnuts?\b)/i,['Groceries','Food']],
   [/(\bvitamin\b|\bsupplements?\b|\bmedicine\b|\bibuprofen\b|\bfirst aid\b|\bbandages?\b|\bthermometer\b|\bskin care\b|\btoothpaste\b|\btoothbrush\b|\bdental floss\b|\bshampoo\b|\blotion\b|\bsunscreen\b|\bprescription\b)/i,['Health','Medical']],
   [/(\bauto\b|\bautomotive\b|\bcar battery\b|\bengine\b|\boil filter\b|\bwiper blade\b|\btires?\b|\bbrake pads?\b|\bvehicle\b|\bcar seat cover\b)/i,['Transportation','Auto']],
   [/(\bxbox\b|\bplaystation\b|\bnintendo\b|\bvideo game\b|\bboard game\b|\bpuzzle game\b|\bmovie\b|\bblu-?ray\b|\bgaming\b)/i,['Entertainment']],
-  [/(\bprime membership\b|\bkindle unlimited\b|\bsubscription\b)/i,['Subscriptions']],
+  [/(\bkindle unlimited\b|\b(?:digital|streaming|software) subscription\b)/i,['Subscriptions']],
   [/(\bdetergent\b|\bcleaner\b|\blaundry\b|\bpaper towels?\b|\btoilet paper\b|\btrash bags?\b|\bdish soap\b|\bhand soap\b|\bsponges?\b|\bvacuum\b|\btools?\b|\bhardware\b|\bhome\b|\bpaint\b|\bfaucet\b|\bfilter\b|\bkitchen\b|\bfurniture\b|\bbedding\b)/i,['Maintenance','Home & Maintenance','Household','Shopping']],
   [/(\bclothes?\b|\bshirt\b|\bpants\b|\bjeans\b|\bsocks?\b|\bshoes?\b|\bdress\b|\bjackets?\b|\bshorts\b|\bhoodie\b|\bcharger\b|\bcables?\b|\bkeyboard\b|\bcomputer\b|\bheadphones?\b|\bphone case\b|\blaptop\b|\bbatteries?\b|\bbook\b|\bnotebook\b|\bpens?\b|\boffice\b|\blamp\b|\baccessor(?:y|ies)\b)/i,['Shopping']]
  ];
