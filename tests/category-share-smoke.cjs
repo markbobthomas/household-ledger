@@ -195,6 +195,39 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
    'Legacy manual Other without provenance is excluded from spouse sharing');
   assert.equal(sharedOther.items.some(x=>x.id===automatedOther),true,
    'Automated Other with an Amazon product suggestion remains shareable');
+  // A shared task displays the saved owner Note AND independently saved
+  // Amazon evidence, without changing an existing decision.
+  const annotated='fictional-annotated-amazon';
+  sourceState.transactions[annotated]={id:annotated,accountId:'fake-checking',
+   itemId:'fake-item',date:'2026-11-15',name:'AMZN PURCHASE',merchant:'Amazon',
+   amount:12.40,pending:false,category:null};
+  sourceState.ledgerAdjustments.predictions.transactionNotes[
+   'bank:'+JSON.stringify(['fake-checking',annotated])]='Household note: birthday supplies';
+  sourceState.ledgerAdjustments.amazonEvidence[annotated]={
+   version:1,source:'amazon-import',accountId:'fake-checking',amountCents:1240,
+   orderId:'fictional-annotated-order',match:'exact',
+   choices:[{orderId:'fictional-annotated-order',date:'2026-11-13',
+    items:[{title:'Fictional birthday wrapping paper',cents:1240}]}]
+  };
+  const annotatedTask=shareLogic.snapshot(sourceState).items.find(x=>x.id===annotated&&x.kind==='transaction');
+  assert.ok(annotatedTask,'Uncategorized annotated charge remains in shared queue');
+  assert.deepEqual(annotatedTask.notes.map(n=>n.label),['Saved note','Amazon product details']);
+  assert.equal(annotatedTask.notes[0].text,'Household note: birthday supplies');
+  assert.match(annotatedTask.notes[1].text,/Fictional birthday wrapping paper/);
+  sourceState.ledgerAdjustments.predictions.futureRecurringRules.push({
+   id:'fictional-planned-note',merchant:'Fictional scheduled purchase',
+   accountId:'fake-checking',type:'expense',frequency:'monthly',
+   anchorDate:'2026-11-15',amount:8,category:'Uncategorized',
+   note:'Scheduled payment reminder'});
+  sourceState.ledgerAdjustments.predictions.transactionNotes['forecast:fictional-planned-note']=
+   'Saved plan note';
+  const plannedTask=shareLogic.snapshot(sourceState).items.find(x=>x.id==='fictional-planned-note');
+  assert.deepEqual(plannedTask.notes.map(n=>n.text),['Saved plan note','Scheduled payment reminder']);
+  sourceState.ledgerAdjustments.predictions.transactionNotes[
+   'bank:'+JSON.stringify(['fake-checking',mixedTx.id])]='Gift for a relative';
+  const splitNoteTask=shareLogic.snapshot(sourceState).items.find(x=>x.kind==='amazon-item');
+  assert.ok(splitNoteTask.notes.some(n=>n.text==='Gift for a relative'));
+  assert.ok(splitNoteTask.notes.some(n=>n.text.includes('Unidentified household object')));
   console.log('PASS private spouse categorization: scope, save, forecast, consent and revocation');
  }finally{child.kill('SIGTERM');fs.rmSync(folder,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
