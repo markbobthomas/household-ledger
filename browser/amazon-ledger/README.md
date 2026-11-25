@@ -14,9 +14,9 @@ already-deployed Ledger Amazon CSV importer and **never writes bank transactions
    **Connect Ledger**. Approve access only to that Ledger website.
 5. Sign in to \`amazon.com\`, open **Your Orders** (choose a desired order
    period), open the extension and click **Sync Amazon orders**.
-6. Ledger opens its existing **Check matches** preview automatically. Review
-   the totals and click **Apply categories** if correct. Nothing is saved
-   before that final action.
+6. Ledger opens the Amazon import page with the extracted CSV already selected.
+   Review the source details and click **Import and save**. No bank amounts
+   or category choices change until that explicit action.
 
 The extension reads the page you opened and up to four additional order-history
 pages, with a short delay. It may skip pages that need extra authentication.
