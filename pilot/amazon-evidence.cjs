@@ -52,6 +52,55 @@ function note(record){
  return ('Possible Amazon (verify): '+record.choices.map(c=>
    c.items.map(i=>i.title).join(' + ')).join(' OR ')).slice(0,160);
 }
+
+/* Aggregate diagnostics only. Count actual posted Amazon charges once, not
+ * repeated item lines as extra spending. Keep merchant names, titles, amounts,
+ * IDs, and owner choices inside the existing authenticated review only. */
+function quality(transactions={},adjustments={}){
+ const out={exactEvidence:0,possibleEvidence:0,legacyItemNotes:0,
+  staleEvidence:0,unidentifiedCharges:0,specificCategoryCharges:0,
+  splitCharges:0,splitItemLines:0,unclassifiedItemLines:0,
+  manuallyReviewedCharges:0,aiReviewedCharges:0};
+ const evidence=adjustments.amazonEvidence||{},
+  allocations=adjustments.amazonAllocations||{},
+  notes=adjustments.predictions?.transactionNotes||{},
+  categories=adjustments.categoryOverrides||{},
+  provenance=adjustments.categoryProvenance||{};
+ const specific=value=>typeof value==='string'&&value.trim()&&
+  !['Uncategorized','Other','Unassigned'].includes(value.trim());
+ for(const tx of Object.values(transactions||{})){
+  if(!isAmazon(tx))continue;
+  const e=evidence[tx.id],validEvidence=valid(e,tx),
+   note=String(notes[keyFor(tx)]||''),
+   imported=/^(?:Amazon: |Possible Amazon(?:: | \())/.test(note),
+   allocation=allocations[tx.id],lines=allocation?.lines,
+   safeSplit=Array.isArray(lines)&&lines.length>0&&
+    allocation.amountCents===amount(tx)&&
+    lines.every(line=>line&&typeof line.title==='string'&&
+     Number.isSafeInteger(line.cents)&&line.cents>0)&&
+    lines.reduce((sum,line)=>sum+line.cents,0)===amount(tx);
+  if(e&&!validEvidence)out.staleEvidence++;
+  if(validEvidence){
+   if(e.match==='exact')out.exactEvidence++;
+   else out.possibleEvidence++;
+  }else if(imported)out.legacyItemNotes++;
+  else out.unidentifiedCharges++;
+  if(safeSplit){
+   out.splitCharges++;
+   out.splitItemLines+=lines.length;
+   out.unclassifiedItemLines+=lines.filter(line=>!specific(line.category)).length;
+  }
+  const categorized=safeSplit?lines.every(line=>specific(line.category)):
+   specific(categories[tx.id]);
+  if(categorized)out.specificCategoryCharges++;
+  const origin=provenance[tx.id];
+  const sources=[origin?.source,...Object.values(origin?.lines||{}).map(x=>x?.source)];
+  if(sources.some(x=>x==='manual'||x==='manual-item'))out.manuallyReviewedCharges++;
+  if(sources.some(x=>x==='amazon-ai-reviewed'||x==='amazon-ai-reviewed-item'))
+   out.aiReviewedCharges++;
+ }
+ return out;
+}
 function review(transactions={},adjustments={},categories=[]){
  const evidence=adjustments.amazonEvidence||{},overrides=adjustments.categoryOverrides||{},
   provenance=adjustments.categoryProvenance||{},
@@ -116,6 +165,7 @@ function review(transactions={},adjustments={},categories=[]){
  }
  items.sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
  return {items,categories:categories.filter(c=>!['Uncategorized','Income','Transfer','Savings'].includes(c)),
-  stats:{amazonCharges:total,confirmed,possible,unmatched,notes:hasNotes,review:items.length}};
+  stats:{amazonCharges:total,confirmed,possible,unmatched,notes:hasNotes,review:items.length,
+   ...quality(transactions,adjustments)}};
 }
-module.exports={isAmazon,amount,lines,fromMatch,valid,category,note,review};
+module.exports={isAmazon,amount,lines,fromMatch,valid,category,note,review,quality};
