@@ -707,6 +707,27 @@ module.exports=(async()=>{
    const duplicate=await check();
    assert.equal(duplicate.valid,false,'Cannot count the same saved payment again');
    assert.match(duplicate.message,/already in the forecast/);
+   // Release 3: actual interaction timing is gathered in the local browser
+   // after paint, without storing or transmitting a financial data payload.
+   await page.waitForFunction(()=>window.HouseholdLedgerDeviceTiming?.().navigation.samples>=2,
+    null,{timeout:8000});
+   const timing=await page.evaluate(()=>window.HouseholdLedgerDeviceTiming());
+   assert.ok(timing.navigation.samples>=2&&
+    Number.isFinite(timing.navigation.medianMs)&&timing.navigation.medianMs>=0,
+    'Prepared navigation reports local, nonnegative paint timing');
+   assert.ok(timing.activityFilter.samples+timing.spendingFilter.samples>0,
+    'Report filtering contributes timing samples without rebuilding forecasts');
+   assert.deepEqual(Object.keys(timing).sort(),
+    ['activityFilter','navigation','spendingFilter']);
+   assert.equal(JSON.stringify(timing).includes('Costco Warehouse'),false,
+    'No merchant or financial record appears in performance measurements');
+   await page.locator('#planner-menu>summary').click();
+   await page.locator('#planner-menu [data-view="settings"]').click();
+   await page.locator('.settings-page').waitFor({state:'visible'});
+   await page.locator('.ledger-advanced-settings').evaluate(el=>el.open=true);
+   await page.locator('[data-device-perf-refresh]').click();
+   assert.match(await page.locator('[data-device-perf]').innerText(),/Prepared page switches/);
+   assert.match(await page.locator('[data-device-perf]').innerText(),/median/);
    await context.close();
    assert.deepEqual(errors,[],device+' console errors');
   }

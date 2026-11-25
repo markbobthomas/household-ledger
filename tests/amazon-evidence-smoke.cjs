@@ -84,6 +84,13 @@ assert.deepEqual(mixState.amazonAllocations.mixed.lines.map(x=>x.category),
  ['Groceries','Uncategorized']);
 const mixReview=Evidence.review({mixed},mixState,cats);
 assert.equal(mixReview.items.length,1);
+const initialQuality=Evidence.quality({mixed},mixState);
+assert.equal(initialQuality.exactEvidence,1,'Evidence quality distinguishes verified structured matches');
+assert.equal(initialQuality.splitCharges,1);
+assert.equal(initialQuality.splitItemLines,2,'Item lines are counted without double-counting bank charges');
+assert.equal(initialQuality.unclassifiedItemLines,1);
+assert.equal(initialQuality.specificCategoryCharges,0,'Mixed unknown basket is not fully categorized');
+assert.equal(initialQuality.manuallyReviewedCharges,0);
 assert.equal(mixReview.items[0].lineIndex,1,
  'Only unknown item in a mixed Amazon charge needs review');
 assert.equal(AI.eligible({mixed},mixState,cats,false).candidates[0].lineIndex,1,
@@ -96,6 +103,18 @@ assert.equal(improved.amazonAllocations.mixed.lines.reduce((n,x)=>n+x.cents,0),4
  'Manual correction must preserve per-item cents and bank-charge sum');
 assert.equal(improved.categoryProvenance.mixed.lines[1].source,'manual');
 assert.equal(Evidence.review({mixed},improved,cats).items.length,0);
+const approvedQuality=Evidence.quality({mixed},improved);
+assert.equal(approvedQuality.specificCategoryCharges,1,'All split lines now have specific categories');
+assert.equal(approvedQuality.manuallyReviewedCharges,1,'Approved per-item manual choice is tracked');
+assert.equal(approvedQuality.unclassifiedItemLines,0);
+assert.equal(Evidence.review({mixed},improved,cats).stats.specificCategoryCharges,1,
+ 'Private review exposes aggregate quality in its existing response');
+const mismatchedEvidence=Evidence.quality({mixed:{...mixed,amount:41}},improved);
+assert.equal(mismatchedEvidence.staleEvidence,1,'Bank amount changes invalidate old item evidence');
+assert.equal(mismatchedEvidence.specificCategoryCharges,0,'Stale split is never counted as fully categorized');
+assert.equal(JSON.stringify(approvedQuality).includes('mixed-order'),false,
+ 'Aggregate quality does not expose order IDs or product names');
+
 assert.throws(()=>ReviewChoice.change({mixed},mixState,
  {...decision,lineIndex:null},cats),/no longer needs|no longer/);
 assert.throws(()=>ReviewChoice.change({mixed},mixState,

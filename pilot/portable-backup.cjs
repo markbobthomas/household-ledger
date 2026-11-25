@@ -6,10 +6,10 @@ const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('n
 const {promisify}=require('node:util'),scrypt=promisify(crypto.scrypt);
 const FORMAT='household-ledger-portable-v1',AAD=Buffer.from(FORMAT,'utf8');
 const MAX_SOURCE=40*1024*1024,MAX_BUNDLE=80*1024*1024;
-// The optional derived analysis contains standing consent and private report
-// output. It must travel with the other encrypted files during recovery.
+// Optional encrypted AI Analysis and separate QA/QC caches must both survive
+// an isolated whole-household recovery. Older four-part archives remain readable.
 const PARTS=[['bank',''],['forecasts','.forecasts'],['sessions','.sessions'],
- ['analysis','.analysis']];
+ ['analysis','.analysis'],['qaqc','.qaqc']];
 function object(v){return !!v&&typeof v==='object'&&!Array.isArray(v)}
 function requiredSecret(secret){
  if(typeof secret!=='string'||!secret)throw Error('Source encryption key is required');
@@ -53,6 +53,13 @@ function validate(parts){
     typeof parts.analysis.autoEnabled!=='boolean'||
     (parts.analysis.report!==null&&!object(parts.analysis.report))))
   throw Error('Invalid automatic AI analysis cache');
+ // QA/QC is a separate optional encrypted report, not an authority for any
+ // bank transaction. Missing QA is valid for older portable archives.
+ if(parts.qaqc!==undefined&&parts.qaqc!==null&&
+   (!object(parts.qaqc)||parts.qaqc.version!==1||
+    typeof parts.qaqc.autoEnabled!=='boolean'||
+    (parts.qaqc.report!==null&&!object(parts.qaqc.report))))
+  throw Error('Invalid encrypted QA/QC report cache');
  for(const name of Object.keys(parts))if(!PARTS.some(([kind])=>kind===name))
   throw Error('Unexpected private file in recovery archive');
 }
@@ -130,6 +137,7 @@ async function restore({bundle,passphrase,destination,secret}){
   throw error;
  }
  return {verified:true,hasBank:true,hasForecasts:parts.forecasts!==null,
-  hasSessions:parts.sessions!==null,hasAnalysis:parts.analysis!=null};
+  hasSessions:parts.sessions!=null,hasAnalysis:parts.analysis!=null,
+  hasQaqc:parts.qaqc!=null};
 }
 module.exports={capture,open,restore};

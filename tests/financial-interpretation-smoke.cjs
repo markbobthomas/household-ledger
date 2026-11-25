@@ -188,4 +188,21 @@ assert.equal(Shared.recurrenceCadence(['2026-08-01','2026-09-01','2026-10-01'],'
 assert.equal(Shared.recurrenceCadence(['2026-08-02','2026-09-03','2026-10-02'],'coverage'),'monthly');
 assert.equal(Shared.recurrenceCadence(['2026-09-04','2026-09-18'],'forecast'),'biweekly');
 assert.equal(JSON.stringify(wageRows),source,'Recurrence evidence does not rewrite historical rows');
+// Release 3: only independently verified, sourced financial callouts may
+// populate the top action guide; QA/QC remains a separate analysis pipeline.
+const Chat=require('../pilot/ai-chat.cjs');
+const cited={id:'fact-1',text:'Fictional historical cost observation'};
+const actions=Chat.verifiedActions([
+ {kind:'hero',title:'Overview',text:'Overview',evidence:[cited]},
+ {kind:'callout',title:'Action: Review a recurring fictional cost',
+  text:'Check whether this fictional cost is still needed.',evidence:[cited]},
+ {kind:'callout',title:'Action: Unsupported suggestion',
+  text:'Something without evidence',evidence:[]},
+ {kind:'paragraph',title:'Action: Not actually an action callout',
+  text:'An explanatory report paragraph',evidence:[cited]}
+]);
+assert.equal(actions.length,1,'Only evidence-backed action callouts become shortcuts');
+assert.equal(actions[0].blockIndex,1);
+assert.equal(actions[0].evidence[0].id,'fact-1');
+assert.equal(actions[0].title,'Review a recurring fictional cost');
 console.log('PASS phase-2 shared classification, signed reporting, card settlement, stream identity, policy-specific cadence and immutable facts');

@@ -17,7 +17,9 @@ const Backup=require('./portable-backup.cjs');
   const parts=await Backup.open(bundle,passphrase);
   console.log('PASS portable recovery archive: authenticated bank snapshot'+
    (parts.forecasts!==null?', forecast preferences':'')+
-   (parts.sessions!==null?', saved sessions':''));
+   (parts.sessions!=null?', saved sessions':'')+
+   (parts.analysis!=null?', saved financial analysis':'')+
+   (parts.qaqc!=null?', saved separate QA/QC':''));
   return;
  }
  const output=await Backup.restore({bundle,passphrase,destination,

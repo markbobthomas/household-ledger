@@ -144,6 +144,14 @@ button{font:inherit;cursor:pointer}
 .qaqc-issues summary{font-weight:650;font-size:.9rem;color:#294a3d}
 .qaqc-issues p{font-size:.86rem!important;line-height:1.5!important;color:#526459!important;margin:7px 0!important}
 .qaqc-panel .analysis-report{margin-top:13px}
+.outlook-actions{margin:10px 0 20px;padding:12px 0;border-top:1px solid #dee9e0;border-bottom:1px solid #dee9e0}
+.outlook-actions h2{font-size:1.1rem;letter-spacing:-.01em;margin:2px 0 5px}
+.outlook-actions>p{font-size:.84rem;line-height:1.48;color:#597060}
+.outlook-action-list{margin:10px 0 0;padding-left:22px}
+.outlook-action-list li{margin:10px 0 15px;padding-left:2px}
+.outlook-action-list li strong{font-size:.96rem;color:#2b4937}
+.outlook-action-list li p{font-size:.9rem;line-height:1.5;margin:4px 0}
+.action-evidence-link{display:inline-block;font-size:.85rem;margin:2px 0 4px}
 .outlook-report .who{margin-bottom:10px}
 .outlook-report .outlook-summary{border-bottom:1px solid #e1e8e2;padding:4px 0 15px;margin-bottom:16px}
 .outlook-report .outlook-summary h2{font-size:clamp(1.42rem,3.4vw,2.2rem);line-height:1.26;letter-spacing:-.03em;color:#233e33;margin:7px 0}
@@ -532,6 +540,33 @@ button{font:inherit;cursor:pointer}
     for(const point of points)list.append(el('li','',point));
     short.append(list);msg.append(short);
    }
+  }
+  // Optional quick links to independently checked private source evidence.
+  // The original long-form outlook and charts remain untouched below.
+  if(!isQa&&data.presentation==='independent-financial-outlook'&&
+    Array.isArray(data.actions)&&data.actions.length){
+   const actions=el('section','outlook-actions');
+   actions.append(el('h2','','Suggested next steps (source checked)'));
+   info(actions,'Suggestions only. Nothing has been changed in your bank, categories or forecast.');
+   const list=el('ol','outlook-action-list');
+   for(const [index,action] of data.actions.slice(0,3).entries()){
+    if(!action||typeof action.title!=='string'||typeof action.nextStep!=='string'||
+      !Array.isArray(action.evidence)||!action.evidence.length)continue;
+    const item=el('li');
+    item.append(el('strong','',action.title),el('p','',action.nextStep));
+    addEvidence(item,action.evidence);
+    const source=item.querySelector('details.evidence');
+    if(source){
+     const ref='ledger-action-evidence-'+index;
+     source.id=ref;
+     const link=el('a','action-evidence-link','See '+action.evidence.length+' Ledger source records');
+     link.href='#'+ref;
+     link.addEventListener('click',()=>{source.open=true});
+     item.insertBefore(link,source);
+    }
+    list.append(item);
+   }
+   if(list.childElementCount){actions.append(list);msg.append(actions)}
   }
   if(isQa&&data.tokenUsage){
    const t=data.tokenUsage,usage=el('p','muted');
