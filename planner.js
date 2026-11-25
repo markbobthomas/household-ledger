@@ -146,6 +146,7 @@ let scheduleKindFilter='all';
 let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
+let accountNicknameBusy=false,accountNicknameNotice='';
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
  if(live())return window.HouseholdLiveSource.persistForecast(liveState.predictions||{})
@@ -3585,6 +3586,27 @@ function summaryPage(bundle,s,chosen,derived,fresh){
  });
 }
 function settingsPage(bundle,s,chosen){
+ const nicknames=state().predictions?.accountNicknames||{};
+ const accountNames='<section class="panel ledger-account-names" aria-label="Account names">'+
+  '<div class="section-title"><h2>Account names</h2></div>'+
+  '<p class="lead">Give each bank or credit card a familiar name. These names appear across Ledger and are saved privately for your household. Bank records and account connections do not change.</p>'+
+  activeAccounts(s).map(a=>{
+   const original=s.accounts.find(raw=>String(raw.id)===String(a.id))||a;
+   const nickname=typeof nicknames[a.id]==='string'?nicknames[a.id]:'';
+   return '<form class="ledger-account-name-row" data-account-nickname="'+escapeHTML(a.id)+'">'+
+    '<div class="ledger-account-name-identity"><strong>'+escapeHTML(a.name)+'</strong>'+
+    '<small>Bank label: '+escapeHTML(original.name||'Account')+'</small></div>'+
+    '<label class="minimal-control-label"><span class="visually-hidden">Name for '+escapeHTML(original.name||'Account')+'</span>'+
+    '<input name="nickname" type="text" maxlength="48" autocomplete="off" value="'+escapeHTML(nickname)+
+    '" placeholder="Enter a name" aria-label="Name for '+escapeHTML(original.name||'Account')+'"'+
+    (accountNicknameBusy?' disabled':'')+'></label>'+
+    '<button type="submit" class="btn primary"'+(accountNicknameBusy?' disabled':'')+'>Save</button>'+
+    (nickname?'<button type="button" class="btn" data-clear-account-nickname="'+escapeHTML(a.id)+'"'+
+     (accountNicknameBusy?' disabled':'')+'>Reset</button>':'')+
+    '</form>';
+  }).join('')+
+  (accountNicknameNotice?'<p class="ledger-account-name-message" role="status">'+escapeHTML(accountNicknameNotice)+'</p>':'')+
+  '</section>';
  const rules=Object.entries(state().learning?.categoryRules||{});
  const categoryLearning=rules.length?
   '<details class="panel mini-panel planner-settings" data-settings-learned-rules>'+
@@ -3597,7 +3619,7 @@ function settingsPage(bundle,s,chosen){
     ' <button type="button" class="btn" data-forget-category-rule="'+escapeHTML(key)+
     '">Forget rule</button></div>').join('')+'</details>':'';
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
-  '<h2>Settings</h2></div></div>'+
+  '<h2>Settings</h2></div></div>'+accountNames+
   '<section class="panel ledger-opening-page-settings">'+
    '<label for="ledger-opening-page">Default opening page</label>'+
    '<select id="ledger-opening-page" aria-label="Default opening page">'+
@@ -5276,6 +5298,51 @@ function showRecurringScheduleChoice(form,error){
  holder.querySelector('select')?.focus();
  return true;
 }
+async function saveAccountNickname(id,value){
+ if(accountNicknameBusy)return;
+ const original=snapshot().accounts.find(a=>String(a.id)===String(id));
+ if(!original)throw Error('Account not found. Refresh Ledger.');
+ const nickname=String(value||'').trim().replace(/\\s+/g,' ');
+ if(nickname.length>48||/[\\u0000-\\u001f\\u007f]/.test(nickname))
+  throw Error('Use a name of 48 characters or fewer, without control characters.');
+ const prefs=state().predictions??={},
+  before={...(prefs.accountNicknames||{})},next={...before};
+ if(nickname&&nickname!==String(original.name||''))next[String(id)]=nickname;
+ else delete next[String(id)];
+ if(JSON.stringify(before)===JSON.stringify(next)){
+  accountNicknameNotice='Name is already up to date.';render();return;
+ }
+ accountNicknameBusy=true;
+ const form=[...document.querySelectorAll('[data-account-nickname]')].find(el=>el.dataset.accountNickname===String(id));
+ form?.querySelectorAll('button,input').forEach(el=>el.disabled=true);
+ try{
+  prefs.accountNicknames=next;
+  const result=await savePlanning();
+  if(live()&&(!result||result.saved!==true))throw Error('The private server did not confirm the save.');
+  accountNicknameNotice=nickname?'Name saved.':'Bank name restored.';
+  // Rebuild cached labels, but the canonical forecast and bank history remain cached.
+  render();
+ }catch(error){
+  prefs.accountNicknames=before;
+  const msg=document.createElement('p');msg.setAttribute('role','alert');
+  msg.className='ledger-account-name-error';
+  msg.textContent='Could not save name: '+String(error.message||error);
+  form?.appendChild(msg);
+  form?.querySelectorAll('button,input').forEach(el=>el.disabled=false);
+ }finally{accountNicknameBusy=false}
+}
+document.addEventListener('submit',e=>{
+ const form=e.target.closest?.('[data-account-nickname]');
+ if(!form)return;
+ e.preventDefault();
+ void saveAccountNickname(form.dataset.accountNickname,form.elements.namedItem('nickname')?.value);
+});
+document.addEventListener('click',e=>{
+ const button=e.target.closest?.('[data-clear-account-nickname]');
+ if(!button)return;
+ e.preventDefault();
+ void saveAccountNickname(button.dataset.clearAccountNickname,'');
+});
 async function commitForecastChange(action){
  await reviewCatalogSave.catch(()=>{});
  const current=state(),before=JSON.stringify(current.predictions||{}),operation=++forecastSaveSequence;
