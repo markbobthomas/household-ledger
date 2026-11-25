@@ -90,6 +90,7 @@ function quality(transactions={},adjustments={}){
    out.splitItemLines+=lines.length;
    out.unclassifiedItemLines+=lines.filter(line=>!specific(line.category)).length;
   }
+  const origin=provenance[tx.id];
   // A mismatched item allocation is NOT proof of a fully categorized
   // new bank amount. Retain a separately confirmed whole-charge manual
   // override, but do not count old imported split categories as valid.
@@ -97,7 +98,6 @@ function quality(transactions={},adjustments={}){
    allocation?origin?.source==='manual'&&specific(categories[tx.id]):
     specific(categories[tx.id]);
   if(categorized)out.specificCategoryCharges++;
-  const origin=provenance[tx.id];
   const sources=[origin?.source,...Object.values(origin?.lines||{}).map(x=>x?.source)];
   if(sources.some(x=>x==='manual'||x==='manual-item'))out.manuallyReviewedCharges++;
   if(sources.some(x=>x==='amazon-ai-reviewed'||x==='amazon-ai-reviewed-item'))
