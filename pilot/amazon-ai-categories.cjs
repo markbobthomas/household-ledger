@@ -31,7 +31,31 @@ function eligible(transactions,adjustments={},categories=[],replaceOther=false){
   if(kind.status==='not-imported')continue;
   stats.importerNotes++;
   const old=overrides[id];
-  if(allocations[id]){stats.allocated++;continue}
+  if(allocations[id]){
+   const allocation=allocations[id],lineItems=allocation.lines;
+   const canReview=Array.isArray(lineItems)&&lineItems.length>0&&
+    allocation.amountCents===Math.round(Number(tx.amount)*100)&&
+    lineItems.every(line=>Number.isSafeInteger(line.cents)&&line.cents>0)&&
+    lineItems.reduce((n,line)=>n+line.cents,0)===allocation.amountCents&&
+    !(old&&old!=='Uncategorized'&&!(old==='Other'&&replaceOther));
+   if(!canReview){stats.allocated++;continue}
+   let added=0;
+   for(let lineIndex=0;lineIndex<lineItems.length;lineIndex++){
+    const line=lineItems[lineIndex];
+    if(!['Uncategorized','Other'].includes(line.category))continue;
+    const product=String(line.title||'');
+    if(!product||product.length>240){stats.unsafeNote++;continue}
+    const cost=Buffer.byteLength(product,'utf8')+160;
+    if(candidates.length>=MAX_TITLES||titleBudget+cost>14500){
+     stats.limited++;continue;
+    }
+    titleBudget+=cost;added++;
+    candidates.push({transactionId:id,accountId:tx.accountId,noteKey:keyFor(tx),
+     note,product,previous:old||null,lineIndex});
+   }
+   if(!added)stats.allocated++;
+   continue;
+  }
   if(old&&old!=='Uncategorized'&&!(old==='Other'&&replaceOther)){
    stats.alreadyAssigned++;continue;
   }
@@ -131,7 +155,8 @@ async function classify({candidates,categories,apiKey,fetchImpl=fetch}){
   // Never emit null or an unavailable category as a proposal.
   if(typeof category!=='string'||!allowedNames.has(category.toLowerCase()))continue;
   proposals.push({transactionId:c.transactionId,accountId:c.accountId,
-   noteKey:c.noteKey,note:c.note,category,previous:c.previous});
+   noteKey:c.noteKey,note:c.note,category,previous:c.previous,
+   ...(Number.isInteger(c.lineIndex)?{lineIndex:c.lineIndex,product:c.product}:{})});
  }
  const input=Number(data.usage?.input_tokens),out=Number(data.usage?.output_tokens);
  const costUsd=Number.isFinite(input)&&Number.isFinite(out)?
