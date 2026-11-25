@@ -15,6 +15,7 @@ button.primary{color:white;background:#175f50;border-color:#175f50}button:disabl
 #message{min-height:24px;font-weight:600}#message.error{color:#ab2935}#preview[hidden]{display:none}
 .item{border-top:1px solid #e8ece9;padding:12px 0}.item span{display:block;font-size:.9rem;color:#546660}
 summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
+.ai-suggestion{padding:13px 0;border-top:1px solid #e8ece9}.ai-suggestion label{margin:10px 0;font-weight:500}.ai-suggestion select{display:block;width:100%;padding:10px;margin-top:5px;font:inherit;border:1px solid #a5b6ae;border-radius:8px;background:white}.ai-suggestion input{margin-right:7px}.ai-warning{color:#805000;font-size:.9rem}.ai-meta{font-size:.9rem;color:#586d66}
 </style></head>
 <body><main><a href="/">← Ledger</a><h1>Amazon purchase import</h1>
 <p>Import Amazon purchases to your existing bank charges and <strong>save product names in transaction Notes</strong>. Ledger assigns a category only when supported by the product description. Existing personal Notes and bank balances are preserved.</p>
@@ -32,11 +33,14 @@ OpenAI to suggest categories using the product descriptions and the names of
 your existing Ledger budget categories. <strong>No amounts, dates, bank details,
 account numbers or transaction identifiers are sent.</strong> This is optional.
 One classification request is capped below <strong>$0.05</strong> and is separate
-from Ledger's Financial Analysis. You will review the suggestions before
-anything changes. Incomplete or date-only matches remain for manual review.</p>
+from Ledger's Financial Analysis. Each suggestion starts unselected: approve it,
+change its category, or leave it skipped. A <strong>Possible Amazon</strong> Note
+requires you to confirm its product-to-charge match before approving. Nothing
+changes until you explicitly apply your selected items. Incomplete or date-only
+matches remain for manual review.</p>
 <div class="actions">
 <button type="button" id="ai-check" class="primary">AI suggest categories (OpenAI)</button>
-<button type="button" id="ai-apply" disabled>Apply AI category suggestions</button>
+<button type="button" id="ai-apply" disabled>Apply selected categories</button>
 </div>
 <p id="ai-message" role="status" aria-live="polite"></p>
 <div id="ai-preview" hidden></div>
@@ -79,10 +83,25 @@ Saving an import does not add expenses or alter bank transaction amounts.</p>
  const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
  let payload=null,revision='',ready=0,aiToken=null;
  function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
+ function selectedAiChoices(){
+  return [...$('ai-preview').querySelectorAll('.ai-suggestion')].flatMap(row=>{
+   if(!row.querySelector('.ai-select')?.checked)return [];
+   const verified=!!row.querySelector('.ai-verify')?.checked;
+   if(row.dataset.possible==='1'&&!verified)return [];
+   return [{index:Number(row.dataset.index),category:row.querySelector('.ai-category').value,verified}];
+  });
+ }
+ function updateAiChoices(){
+  const count=selectedAiChoices().length;
+  $('ai-apply').disabled=!aiToken||!count;
+  const status=$('ai-choice-status');
+  if(status)status.textContent=count+' item'+(count===1?'':'s')+
+   ' approved for saving. Unchecked or unverified items will be skipped.';
+ }
  function setBusy(b){
   $('import').disabled=b;$('check').disabled=b;$('notes-check').disabled=b;
   $('apply').disabled=b||!payload||!ready;
-  $('ai-check').disabled=b;$('ai-apply').disabled=b||!aiToken;
+  $('ai-check').disabled=b;$('ai-apply').disabled=b||!aiToken||!selectedAiChoices().length;
  }
  async function request(dryRun){
   // Send original Blob bytes, not a 105 MB base64 JSON body for a 79 MB file.
@@ -178,13 +197,13 @@ Saving an import does not add expenses or alter bank transaction amounts.</p>
   $('preview').hidden=false;
  }
  $('file').addEventListener('change',()=>{payload=null;revision='';ready=0;$('apply').disabled=true;$('preview').hidden=true;message('')});
- async function aiRequest(action,token){
+ async function aiRequest(action,token,selections){
   const response=await fetch('/api/ledger/amazon-ai',{
    method:'POST',credentials:'same-origin',cache:'no-store',
    headers:{'Content-Type':'application/json','X-Pilot-Action':'1'},
    body:JSON.stringify(action==='preview'?
     {action,consent:true,replaceOther:$('include-other').checked}:
-    {action,token})
+    {action,token,selections})
   });
   if(!(response.headers.get('content-type')||'').includes('application/json'))
    throw Error('Ledger AI categorization is unavailable');
@@ -212,19 +231,35 @@ Saving an import does not add expenses or alter bank transaction amounts.</p>
      '$'+Number(data.costUsd).toFixed(4)],
     ['Per-run cost limit','$'+Number(data.costCeilingUsd||0.05).toFixed(2)]
    ];
-   const proposals=(data.examples||[]).map(x=>
-    '<div class="item"><strong>'+esc(x.category)+'</strong>'+
-    '<span>'+esc(x.note)+'</span><span>'+
-    (x.previous?'Previously: '+esc(x.previous)+' · ':'')+
-    'Proposed by AI; review before applying</span></div>').join('');
+   const available=Array.isArray(data.allowedCategories)?data.allowedCategories:[];
+   const proposals=(data.examples||[]).map((x,i)=>{
+    const index=Number.isSafeInteger(x.index)?x.index:i;
+    const isPossible=x.possibleMatch===true||
+     String(x.note||'').startsWith('Possible Amazon: ')||
+     String(x.note||'').startsWith('Possible Amazon (verify): ');
+    const options=available.map(category=>
+     '<option value="'+esc(category)+'"'+(category===x.category?' selected':'')+'>'+
+     esc(category)+'</option>').join('');
+    return '<section class="ai-suggestion" data-index="'+index+'" data-possible="'+
+     (isPossible?'1':'0')+'"><strong>'+esc(x.note)+'</strong>'+
+     '<p class="ai-meta">AI suggested '+esc(x.category)+
+     (x.previous?' · Previously '+esc(x.previous):'')+
+     (x.date?' · Bank charge '+esc(x.date)+' · '+esc(money(x.amountCents||0)):'')+
+     '</p><label><input type="checkbox" class="ai-select">Approve this item</label>'+
+     '<label>Category<select class="ai-category">'+options+'</select></label>'+
+     (isPossible?'<p class="ai-warning">Possible product match — the item is not confirmed against the bank charge.</p>'+
+      '<label><input type="checkbox" class="ai-verify">I verified this item matches the bank charge</label>':'')+
+     '</section>';
+   }).join('');
    $('ai-preview').innerHTML=stats.map(([k,v])=>
     '<div class="row"><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong></div>').join('')+
     '<details><summary>Review proposed product categories</summary>'+
-    (proposals||'<p>No safe category suggestions were found.</p>')+'</details>';
+    (proposals||'<p>No safe category suggestions were found.</p>')+'</details>'+
+    (proposals?'<p id="ai-choice-status" class="muted">0 items approved for saving. Select each item you want to apply.</p>':'');
    $('ai-preview').hidden=false;
    $('ai-message').textContent=aiToken?
     'AI suggested '+data.proposed+' categor'+(data.proposed===1?'y':'ies')+
-    '. Review them and select Apply; nothing has been changed yet.':
+    '. Approve, correct or skip each item, then Apply selected categories. Nothing has been changed yet.':
     'No eligible category changes. Existing category choices remain protected.';
   }catch(error){$('ai-message').textContent=error.message;aiToken=null}
   finally{setBusy(false)}
@@ -233,15 +268,18 @@ Saving an import does not add expenses or alter bank transaction amounts.</p>
   if(!aiToken)return;
   const token=aiToken;aiToken=null;setBusy(true);
   $('ai-message').textContent='Saving reviewed AI category suggestions…';
+  const selections=selectedAiChoices();
+  if(!selections.length)return;
   try{
-   const result=await aiRequest('apply',token);
+   const result=await aiRequest('apply',token,selections);
    $('ai-message').textContent='Saved '+result.applied+
-    ' AI category assignment'+(result.applied===1?'':'s')+
-    '. Existing product Notes and bank amounts were not changed.';
+    ' selected AI category assignment'+(result.applied===1?'':'s')+
+    '. Unselected items, product Notes and bank amounts were not changed.';
    $('ai-preview').hidden=true;
   }catch(error){$('ai-message').textContent=error.message}
   finally{setBusy(false)}
  });
+ $('ai-preview').addEventListener('change',updateAiChoices);
  $('include-other').addEventListener('change',()=>{
   payload=null;revision='';ready=0;aiToken=null;
   $('apply').disabled=true;$('preview').hidden=true;

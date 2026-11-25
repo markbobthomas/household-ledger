@@ -52,17 +52,24 @@ module.exports=(async()=>{
      assert.equal(d.consent,true,'AI product-name disclosure requires user consent');
      await route.fulfill({status:200,contentType:'application/json',
       body:JSON.stringify({
-       reviewed:2,proposed:1,notConfident:1,
-       eligibleStats:{importerNotes:69,eligible:2,alreadyAssigned:54,
+       reviewed:3,proposed:2,notConfident:1,
+       eligibleStats:{importerNotes:69,eligible:3,alreadyAssigned:54,
         allocated:9,unsafeNote:4},
        model:'gpt-6-luna',costUsd:0.0013,costCeilingUsd:0.05,
        previewToken:'a'.repeat(48),
-       examples:[{note:'Possible Amazon: Pet grooming brush',
-        category:'Shopping',previous:null}]
+       allowedCategories:['Shopping','Pets','Kids & Family','Childcare','Healthcare','Insurance'],
+       examples:[{index:0,note:'Possible Amazon: Pet grooming brush',
+        category:'Shopping',previous:'Other',possibleMatch:true,
+        date:'2026-11-24',amountCents:2400},
+        {index:1,note:'Amazon: Child car seat travel bag',
+         category:'Childcare',previous:'Other',possibleMatch:false,
+         date:'2026-11-23',amountCents:1800}]
       })});
     }else{
      assert.equal(d.action,'apply');
      assert.equal(d.token,'a'.repeat(48));
+     assert.deepEqual(d.selections,[{index:1,category:'Kids & Family',verified:false}],
+      'Only the explicitly selected corrected category can be applied');
      await route.fulfill({status:200,contentType:'application/json',
       body:JSON.stringify({applied:1})});
     }
@@ -196,17 +203,35 @@ module.exports=(async()=>{
    assert.equal(await page.locator('#ai-apply').isDisabled(),true);
    await page.locator('#ai-check').click();
    await page.waitForFunction(()=>
-    document.getElementById('ai-message').textContent.includes('AI suggested 1 category'));
+    document.getElementById('ai-message').textContent.includes('AI suggested 2 categories'));
    await page.locator('#ai-preview details summary').click();
    assert.match(await page.locator('#ai-preview').innerText(),/Pet grooming brush/);
+   assert.match(await page.locator('#ai-preview').innerText(),/Child car seat travel bag/);
    assert.match(await page.locator('#ai-preview').innerText(),/Per-run cost limit/);
    assert.equal(aiRequests.length,1,name+' previews AI suggestions once');
    assert.equal(aiRequests[0].action,'preview');
    assert.equal(aiRequests[0].replaceOther,true);
+   assert.equal(await page.locator('#ai-apply').isDisabled(),true,
+    'All AI proposals start unselected');
+   await page.locator('.ai-suggestion').nth(0).locator('.ai-select').check();
+   assert.equal(await page.locator('#ai-apply').isDisabled(),true,
+    'Possible Amazon product needs separate match verification');
+   assert.match(await page.locator('.ai-suggestion').nth(0).innerText(),
+    /Possible product match/);
+   await page.locator('.ai-suggestion').nth(0).locator('.ai-verify').check();
+   assert.equal(await page.locator('#ai-apply').isDisabled(),false,
+    'Verified possible item can be approved');
+   await page.locator('.ai-suggestion').nth(0).locator('.ai-select').uncheck();
+   assert.equal(await page.locator('#ai-apply').isDisabled(),true,
+    'Skipping a proposed item removes it from Apply');
+   await page.locator('.ai-suggestion').nth(1).locator('.ai-select').check();
+   await page.locator('.ai-suggestion').nth(1).locator('.ai-category')
+    .selectOption('Kids & Family');
    assert.equal(await page.locator('#ai-apply').isDisabled(),false);
+   assert.match(await page.locator('#ai-choice-status').innerText(),/1 item approved/);
    await page.locator('#ai-apply').click();
    await page.waitForFunction(()=>
-    document.getElementById('ai-message').textContent.includes('Saved 1 AI category assignment'));
+    document.getElementById('ai-message').textContent.includes('Saved 1 selected AI category assignment'));
    assert.equal(aiRequests.length,2,name+' AI suggestions require a second Apply click');
    assert.equal(aiRequests[1].action,'apply');
    assert.equal(await page.locator('#ai-apply').isDisabled(),true);
