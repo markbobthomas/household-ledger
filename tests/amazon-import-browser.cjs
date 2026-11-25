@@ -85,6 +85,8 @@ module.exports=(async()=>{
     await page.locator('#review-card #accept').waitFor();
     assert.match(await page.locator('#review-count').innerText(),/2 remaining/);
     assert.equal(await page.locator('#results').isHidden(),true,'No diagnostics before import');
+    assert.equal(await page.locator('#quick-categories .quick').count()>0,true,
+      'Common spending categories are available as one-tap choices');
     await page.locator('#accept').click();
     await page.waitForFunction(()=>document.getElementById('review-count').textContent.includes('1 remaining'));
     assert.deepEqual(writes[0],{transactionId:'fictional-exact',category:'Home & Maintenance',
@@ -117,7 +119,7 @@ module.exports=(async()=>{
     assert.match(await page.locator('#stats').innerText(),/Categories assigned/);
     assert.match(await page.locator('#stats').innerText(),/Need review/);
     assert.match(await page.locator('#stats').innerText(),/Unmatched/);
-    assert.match(await page.locator('#import-summary').innerText(),/full product-evidence records saved privately/);
+    assert.match(await page.locator('#import-summary').innerText(),/Product information saved privately/);
     const dimensions=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,
      width:document.documentElement.clientWidth}));
     assert(dimensions.scrollWidth<=dimensions.width+2,name+' mobile layout must fit');
