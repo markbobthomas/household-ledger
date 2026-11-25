@@ -76,7 +76,8 @@ function review(transactions={},adjustments={},categories=[]){
    if(origin?.source==='manual')continue;
    for(let lineIndex=0;lineIndex<splitLines.length;lineIndex++){
     const line=splitLines[lineIndex];
-    if(!['Uncategorized','Other'].includes(line.category)||items.length>=500)continue;
+    if(!['Uncategorized','Other'].includes(line.category)||items.length>=500||
+       origin?.lines?.[lineIndex]?.source==='manual')continue;
     const proposed=classify(line.title,categories);
     items.push({id:String(tx.id),lineIndex,date:String(tx.date),
      amountCents:line.cents,merchant:String(tx.merchant||tx.name||'Amazon').slice(0,100),
