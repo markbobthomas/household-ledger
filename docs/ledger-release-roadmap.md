@@ -1,12 +1,12 @@
 # Ledger refinements — durable three-release roadmap
 
-Updated: November 24, 2026 (Pacific). Owner explicitly authorized Release 1 only, not Releases 2 or 3. Start new chats by reading `AGENTS.md`, `PROJECT_LEDGER.md`, this file, current `main`, and deployment status before making changes. This roadmap is a persistent project handoff, not a promise of a future automated task.
+Updated: November 24, 2026 (Pacific). Release 1 is completed, merged and verified live. Releases 2 and 3 are planned and require explicit owner authorization. Start new chats by reading `AGENTS.md`, `PROJECT_LEDGER.md`, this file, current `main`, and deployment status before making changes. This roadmap is a persistent project handoff, not a promise of a future automated task.
 
 ## Principle
 
 Calendar-first checking-cash forecast, one canonical future ledger, actual bank records read-only. No duplicate parallel budgeting or forecasting engines, extra top-level navigation tabs, secrets in public GitHub, or simultaneous unsupervised storage migration. Treat current live behavior, code, tests, and owner decisions as the authority.
 
-## Release 1 — clarity and fast actions (authorized, staged pending CI/merge)
+## Release 1 — clarity and fast actions (merged, verified live)
 
 1. **One prioritized task queue:** On Things to check, put unconfirmed payments, risky older estimates, and recurring predictions before routine category labels. Offer All tasks by default with a simple secondary filter. Preserve all existing issue records, badge counts, payment adjustment/ignore/skip, category bulk-save, and history/schedule actions. Explicit missing mortgage evidence should be visible as a high-priority prompt.
 2. **One-tap category decisions:** Show easy choices on each category item, including a reasoned suggestion when one exists. Reuse the exact existing category save paths, preserving financial source data and protected splits. Auto-save a selection; temporary Skip never dismisses the issue or changes the badge. Provide a last-choice Undo that restores the prior explicit/manual state. Keep the full category chooser and batch tools accessible.
@@ -32,6 +32,6 @@ Calendar-first checking-cash forecast, one canonical future ledger, actual bank 
 
 ## Status ledger
 
-- Release 1: implementation staged, mandatory tests/merge/private Render verification pending at this entry. Replace this status through a dated verified ledger update after the actual checks.
+- Release 1: **Completed and verified live.** PR #742, merge `430c3bbb6da3130bc391c41ad993a10316f03023`; final banking/forecast CI #45546479822 and Chromium/iPhone WebKit #45546479889 passed. Existing private Render deploy `dep-dc366ogjo6nc73eb3910` is live and independently verified by the same `/healthz` SHA. Real-household acceptance remains untested.
 - Release 2: planned; explicit owner authorization pending.
 - Release 3: planned; explicit owner authorization pending.
