@@ -1,6 +1,6 @@
 # Ledger refinements — durable three-release roadmap
 
-Updated: November 24, 2026 (Pacific). Release 1 is completed, merged and verified live. Releases 2 and 3 are planned and require explicit owner authorization. Start new chats by reading `AGENTS.md`, `PROJECT_LEDGER.md`, this file, current `main`, and deployment status before making changes. This roadmap is a persistent project handoff, not a promise of a future automated task.
+Updated: November 24, 2026 (Pacific). Releases 1 and 2 are merged, CI green and independently verified live. Release 3 remains planned and requires explicit owner authorization. Start new chats by reading `AGENTS.md`, `PROJECT_LEDGER.md`, this file, current `main`, and deployment status before making changes. This roadmap is a persistent project handoff, not a promise of a future automated task.
 
 ## Principle
 
@@ -13,7 +13,7 @@ Calendar-first checking-cash forecast, one canonical future ledger, actual bank 
 3. **Clear Home forecast warnings:** Explain the low for the displayed month, with dated, scheduled withdrawals already present in the canonical projection and corresponding warnings for unverified major obligations, older estimates, or missing expected pay. Show real account observation date only when available. Make everyday unplanned spending and forecasting limitations explicit. Never present new or independent balance math.
 4. **Acceptance:** Mandatory banking/forecast CI and desktop Chromium + iPhone WebKit browser tests. Review filter actions do not rebuild forecasts. Bank facts remain read-only. Confirm GitHub merge and private Render independently.
 
-## Release 2 — make financial planning effortless (not yet authorized)
+## Release 2 — make financial planning effortless (completed, merged, verified live)
 
 1. Use one consistent contextual transaction editor from Home, Bills, Transactions and Review, with actual bank fields read-only, editable category/Note and prediction settings clearly separated.
 2. Add Home's date-specific hypothetical expense/deposit with live comparison to the canonical monthly low and affected balances, no saved state until owner selects Save; do not double count an existing bill.
@@ -33,5 +33,5 @@ Calendar-first checking-cash forecast, one canonical future ledger, actual bank 
 ## Status ledger
 
 - Release 1: **Completed and verified live.** PR #742, merge `430c3bbb6da3130bc391c41ad993a10316f03023`; final banking/forecast CI #45546479822 and Chromium/iPhone WebKit #45546479889 passed. Existing private Render deploy `dep-dc366ogjo6nc73eb3910` is live and independently verified by the same `/healthz` SHA. Real-household acceptance remains untested.
-- Release 2: planned; explicit owner authorization pending.
-- Release 3: planned; explicit owner authorization pending.
+- Release 2: **Completed and independently verified live.** Owner-authorized PR [#744](https://github.com/markbobthomas/household-ledger/pull/744) merged as `8b4f9721ed532e2297937ba588a7e99acc46d00b`. Mandatory final-head banking/forecast CI [#45553392999](https://github.com/markbobthomas/household-ledger/actions/runs/45553392999) and Chromium/iPhone WebKit CI [#45553393107](https://github.com/markbobthomas/household-ledger/actions/runs/45553393107) succeeded. GitHub Pages [#45553668168](https://github.com/markbobthomas/household-ledger/actions/runs/45553668168) succeeded. Existing private Render deploy `dep-dc373b5g1s2s73e82qlg` is live; independent `/healthz` returned `ok:true`, `mode:multi-account-private`, and the exact merged SHA. Home has a no-save hypothetical one-off cash debit/credit and before/after selected-day/selected-month low using its existing canonical projected daily points, bank-business-day effect, no-duplicate guard, and explicit canonical Save. Reuses common transaction modal with actual record facts read-only and the established one-payment vs future-schedule controls. Tested on fictional bank/browser fixtures; private household acceptance and financial scenario accuracy on real use remain untested.
+- Release 3: planned; explicit owner authorization pending. Do not start automatically.
