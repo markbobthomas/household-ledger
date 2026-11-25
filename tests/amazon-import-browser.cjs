@@ -44,7 +44,7 @@ module.exports=(async()=>{
      body:JSON.stringify({items:remaining,categories:['Home & Maintenance','Pets','Shopping','Other'],
       stats:{amazonCharges:2,confirmed:1,possible:1,unmatched:0,notes:2,review:remaining.length}})});
    });
-   await page.route('**/api/ledger/category',async route=>{
+   await page.route('**/api/ledger/amazon-review-choice',async route=>{
     const d=route.request().postDataJSON();writes.push(d);
     assert.equal(route.request().headers()['x-ledger-revision'],'fictional-revision');
     assert(!('amount' in d),'Manual category write contains no bank amounts');
@@ -87,7 +87,8 @@ module.exports=(async()=>{
     assert.equal(await page.locator('#results').isHidden(),true,'No diagnostics before import');
     await page.locator('#accept').click();
     await page.waitForFunction(()=>document.getElementById('review-count').textContent.includes('1 remaining'));
-    assert.deepEqual(writes[0],{transactionId:'fictional-exact',category:'Home & Maintenance'});
+    assert.deepEqual(writes[0],{transactionId:'fictional-exact',category:'Home & Maintenance',
+     lineIndex:null,verified:true});
     await page.locator('#ai-check').click();
     await page.waitForFunction(()=>document.getElementById('ai-status').textContent.includes('1 proposed'));
     assert.match(await page.locator('#ai-status').innerText(),/\$0\.0007/);
@@ -97,7 +98,8 @@ module.exports=(async()=>{
     await page.locator('#verified').check();
     await page.locator('#accept').click();
     await page.waitForFunction(()=>!document.getElementById('finish').hidden);
-    assert.deepEqual(writes[1],{transactionId:'fictional-possible',category:'Pets'});
+    assert.deepEqual(writes[1],{transactionId:'fictional-possible',category:'Pets',
+     lineIndex:null,verified:true});
     assert.match(await page.locator('#finished-message').innerText(),/up to date/);
     await page.locator('#file').setInputFiles({name:'Amazon-orders.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
     await page.locator('#ai-consent').check();
