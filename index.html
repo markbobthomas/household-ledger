@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#f7f9f6">
+<meta name="theme-color" content="#14202d">
 <meta name="ledger-ui-revision" content="shown-month-low-20261031-v1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ledger">
@@ -12,8 +12,9 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/ledger-icon.png">
 <title>Ledger · Balance Planner</title>
 <link rel="stylesheet" href="planner.css?v=ui-cleanup-20261125">
+<link rel="stylesheet" href="ledger-interface.css?v=graphite-ui-20261125">
 </head>
-<body>
+<body class="ledger-app">
 <main class="shell"><div class="content">
   <header class="topbar">
     <div>
@@ -76,10 +77,10 @@
 <style>
 /* A tab click is visible even while a fresh set of views is rebuilding. */
 #planner-main{position:relative}
-.ledger-page-wait{position:absolute;inset:0;z-index:5;min-height:220px;background:#fff;
- display:flex;justify-content:center;align-items:flex-start;padding-top:72px;gap:12px;color:#344b43;font-weight:650}
+.ledger-page-wait{position:absolute;inset:0;z-index:5;min-height:220px;background:#f3f5f7;
+ display:flex;justify-content:center;align-items:flex-start;padding-top:72px;gap:12px;color:#172c40;font-weight:650}
 .ledger-page-wait:before{content:"";width:20px;height:20px;border-radius:50%;
- border:3px solid #dce7df;border-top-color:#238b74;animation:ledger-wait .7s linear infinite}
+ border:3px solid #cdd7e2;border-top-color:#175dad;animation:ledger-wait .7s linear infinite}
 @keyframes ledger-wait{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.ledger-page-wait:before{animation:none}}
 </style>
