@@ -28,7 +28,7 @@ function snapshot(state){
  const itemizedNeedsReview=new Set();
  for(const [id,allocation] of Object.entries(adjustments.amazonAllocations||{})){
   const lines=allocation?.lines;
-  if(Array.isArray(lines)&&lines.some(line=>['Other','Uncategorized'].includes(line.category)))
+  if(Array.isArray(lines)&&lines.length&&Number.isSafeInteger(allocation?.amountCents))
    itemizedNeedsReview.add(String(id));
  }
  const transactions=candidates.transactions.filter(t=>!t.creditKind&&
