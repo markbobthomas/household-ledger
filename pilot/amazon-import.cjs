@@ -117,13 +117,13 @@ function classify(title,categories){
  const name=String(title).toLowerCase();
  const pick=options=>options.map(o=>categories.find(c=>c.toLowerCase()===o.toLowerCase())).find(Boolean);
  const rules=[
-  [/(\bdiapers?\b|\bwipes?\b.*\bbaby\b|\bbaby\b.*\bwipes?\b|\btoddler\b|\bstroller\b|\bcrib\b|\bchildren'?s\b|\bkids?\b.*\b(toy|clothes|pajama|shoe|book|jacket|shirt|dress|pants|clothing)\b|\bpreschool\b|\blego\b|\bformula\b)/i,['Kids & Family','Kids','Children']],
+  [/(\bdiapers?\b|\bwipes?\b.*\bbaby\b|\bbaby\b.*\bwipes?\b|\btoddler\b|\bstroller\b|\bcrib\b|\bchildren'?s\b|\bkids?\b.*\b(toy|clothes|pajama|shoe|book|jacket|shirt|dress|pants|clothing)\b|\bpreschool\b|\blego\b|\bformula\b)/i,['Boys','Kids & Family','Kids','Children']],
   [/(\bcoffee\b|\bcereal\b|\bsnack\b|\bfood\b|\bprotein bar\b|\bpasta\b|\brice\b|\btea bags?\b|\bspices?\b|\bgranola\b|\bchocolate\b|\bcandy\b|\bbeverage\b|\bdrink mix\b|\boatmeal\b|\bpantry\b|\bolive oil\b|\bnuts?\b)/i,['Groceries','Food']],
   [/(\bvitamin\b|\bsupplements?\b|\bmedicine\b|\bibuprofen\b|\bfirst aid\b|\bbandages?\b|\bthermometer\b|\bskin care\b|\btoothpaste\b|\btoothbrush\b|\bdental floss\b|\bshampoo\b|\blotion\b|\bsunscreen\b|\bprescription\b)/i,['Health','Medical']],
   [/(\bauto\b|\bautomotive\b|\bcar battery\b|\bengine\b|\boil filter\b|\bwiper blade\b|\btires?\b|\bbrake pads?\b|\bvehicle\b|\bcar seat cover\b)/i,['Transportation','Auto']],
   [/(\bxbox\b|\bplaystation\b|\bnintendo\b|\bvideo game\b|\bboard game\b|\bpuzzle game\b|\bmovie\b|\bblu-?ray\b|\bgaming\b)/i,['Entertainment']],
   [/(\bprime membership\b|\bkindle unlimited\b|\bsubscription\b)/i,['Subscriptions']],
-  [/(\bdetergent\b|\bcleaner\b|\blaundry\b|\bpaper towels?\b|\btoilet paper\b|\btrash bags?\b|\bdish soap\b|\bhand soap\b|\bsponges?\b|\bvacuum\b|\btools?\b|\bhardware\b|\bhome\b|\bpaint\b|\bfaucet\b|\bfilter\b|\bkitchen\b|\bfurniture\b|\bbedding\b)/i,['Home & Maintenance','Household','Shopping']],
+  [/(\bdetergent\b|\bcleaner\b|\blaundry\b|\bpaper towels?\b|\btoilet paper\b|\btrash bags?\b|\bdish soap\b|\bhand soap\b|\bsponges?\b|\bvacuum\b|\btools?\b|\bhardware\b|\bhome\b|\bpaint\b|\bfaucet\b|\bfilter\b|\bkitchen\b|\bfurniture\b|\bbedding\b)/i,['Maintenance','Home & Maintenance','Household','Shopping']],
   [/(\bclothes?\b|\bshirt\b|\bpants\b|\bjeans\b|\bsocks?\b|\bshoes?\b|\bdress\b|\bjackets?\b|\bshorts\b|\bhoodie\b|\bcharger\b|\bcables?\b|\bkeyboard\b|\bcomputer\b|\bheadphones?\b|\bphone case\b|\blaptop\b|\bbatteries?\b|\bbook\b|\bnotebook\b|\bpens?\b|\boffice\b|\blamp\b|\baccessor(?:y|ies)\b)/i,['Shopping']]
  ];
  for(const [pattern,choices] of rules)if(pattern.test(name)){
@@ -133,17 +133,17 @@ function classify(title,categories){
  // intentionally purpose-based rather than brand-based: Amazon sells almost
  // anything, and an unknown title must never become a confident category.
  const additional=[
-  [/(\\b(?:infant|newborn|baby monitor|baby bottle|nursing|breast pump|pacifier|swaddle|school supplies|children's toy|kids' toy|dolls?|action figures?|toy cars?)\\b)/i,
+  [/(\b(?:infant|newborn|baby monitor|baby bottle|nursing|breast pump|pacifier|swaddle|school supplies|children's toy|kids' toy|dolls?|action figures?|toy cars?)\b)/i,
    ['Kids & Family']],
-  [/(\\b(?:cookies?|crackers?|meal replacement|protein powder|energy bars?|soup|sauce|condiments?|peanut butter|jam|granola bars?|breakfast food|coffee beans|k-cups?|ground coffee|sparkling water|soda|electrolyte drink)\\b)/i,
+  [/(\b(?:cookies?|crackers?|meal replacement|protein powder|energy bars?|soup|sauce|condiments?|peanut butter|jam|granola bars?|breakfast food|coffee beans|k-cups?|ground coffee|sparkling water|soda|electrolyte drink)\b)/i,
    ['Groceries']],
-  [/(\\b(?:body wash|deodorant|moisturizer|face wash|antifungal|acne|eczema|allergy medicine|skin cream|hand sanitizer|mouthwash|razor blades|contact lens|eye drops|cold medicine|pain relief|pill organizer)\\b)/i,
+  [/(\b(?:body wash|deodorant|moisturizer|face wash|antifungal|acne|eczema|allergy medicine|skin cream|hand sanitizer|mouthwash|razor blades|contact lens|eye drops|cold medicine|pain relief|pill organizer)\b)/i,
    ['Health','Healthcare']],
-  [/(\\b(?:car detailing|vehicle fluids?|motor oil|windshield|car wash|automotive parts?|air filter for car|motorcycle|garage door remote)\\b)/i,
+  [/(\b(?:car detailing|vehicle fluids?|motor oil|windshield|car wash|automotive parts?|air filter for car|motorcycle|garage door remote)\b)/i,
    ['Transportation']],
-  [/(\\b(?:blender|coffee maker|humidifier|dehumidifier|air purifier|lamps?|light bulbs?|pillows?|blankets?|mattress|curtains?|storage bins?|shelving|wall shelves?|power drill|screwdriver|caulk|dishwasher|dish rack|broom|mop|shower head|toilet brush|trash can|garden hose|kitchen utensils?)\\b)/i,
+  [/(\b(?:blender|coffee maker|humidifier|dehumidifier|air purifier|lamps?|light bulbs?|pillows?|blankets?|mattress|curtains?|storage bins?|shelving|wall shelves?|power drill|screwdriver|caulk|dishwasher|dish rack|broom|mop|shower head|toilet brush|trash can|garden hose|kitchen utensils?)\b)/i,
    ['Home & Maintenance','Household','Shopping']],
-  [/(\\b(?:usb|hdmi|ethernet|bluetooth|wireless mouse|ipad|iphone|smartphone|android phone|tablet|printer|ink cartridge|webcam|flash drive|memory card|sd card|screen protector|protective case|power bank|adapter|headset|earbuds?|earphones?|camera|backpack|handbag|wallet|sunglasses|sneakers|sandals|boots|t-shirts?|sweatshirts?|sweaters?|water bottles?|tumbler|lunch bag|label maker|scissors|school binder)\\b)/i,
+  [/(\b(?:usb|hdmi|ethernet|bluetooth|wireless mouse|ipad|iphone|smartphone|android phone|tablet|printer|ink cartridge|webcam|flash drive|memory card|sd card|screen protector|protective case|power bank|adapter|headset|earbuds?|earphones?|camera|backpack|handbag|wallet|sunglasses|sneakers|sandals|boots|t-shirts?|sweatshirts?|sweaters?|water bottles?|tumbler|lunch bag|label maker|scissors|school binder)\b)/i,
    ['Shopping']]
  ];
  for(const [pattern,choices] of additional)if(pattern.test(name)){
