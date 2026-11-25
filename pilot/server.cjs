@@ -1111,12 +1111,12 @@ async function start(port=Number(env.PORT||8788)){
       costCeilingUsd:ai.COST_CEILING_USD,model:response.model,
       previewToken:amazonAiPreview?.token||null,
       // Authenticated user's Notes are already in their encrypted Ledger;
-      // never include transaction IDs in the preview or model prompt.
-      // Category options are names only. Never send IDs to the browser,
-      // nor any bank metadata to the AI provider.
+      // transaction IDs are provided ONLY to this authenticated browser,
+      // never to the external model prompt.
+      // Category options are names only; bank metadata never goes to AI.
       allowedCategories:ai.categoriesForAi(cats),
       examples:response.proposals.map((p,index)=>({
-       index,note:p.note,category:p.category,previous:p.previous,
+       index,transactionId:p.transactionId,note:p.note,category:p.category,previous:p.previous,
        possibleMatch:p.note.startsWith('Possible Amazon: ')||
         p.note.startsWith('Possible Amazon (verify): '),
        date:state.transactions[p.transactionId]?.date||'',
@@ -1462,11 +1462,13 @@ async function start(port=Number(env.PORT||8788)){
      preservedEvidence={...(previousPrivate.amazonEvidence||{})},
      preservedOrigins={...(previousPrivate.categoryProvenance||{})},
      preservedAmazon={...(previousPrivate.amazonAllocations||{})};
-    if(body.categoryOverrides)for(const id of Object.keys(preservedAmazon)){
-     if(body.categoryOverrides[id]!==state.ledgerAdjustments?.categoryOverrides?.[id])
-      delete preservedAmazon[id]; // Bulk manual category changes take priority.
-     if(body.categoryOverrides?.[id]!==previousPrivate.categoryOverrides?.[id])
-      preservedOrigins[id]={source:'manual',category:body.categoryOverrides[id]};
+    if(body.categoryOverrides)for(const id of new Set([
+      ...Object.keys(previousPrivate.categoryOverrides||{}),
+      ...Object.keys(body.categoryOverrides)])){
+     if(body.categoryOverrides[id]===previousPrivate.categoryOverrides?.[id])continue;
+     delete preservedAmazon[id]; // Bulk manual choices supersede item splits.
+     if(body.categoryOverrides[id]===undefined)delete preservedOrigins[id];
+     else preservedOrigins[id]={source:'manual',category:body.categoryOverrides[id]};
     }
     state.ledgerAdjustments={...Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]])),
      amazonAllocations:preservedAmazon,
