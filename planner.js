@@ -4355,6 +4355,17 @@ document.addEventListener('click',async e=>{
   if(live()&&refresh){refresh.click();return;}
   window.location.href='/bank-connect';return;
  }
+ const whatIf=e.target.closest?.('[data-calendar-whatif]');
+ if(whatIf){
+  const info=window.HouseholdPlannerSummary?.whatIfContext?.();
+  if(!info||info.card||info.date<=info.asOf){
+   setNotice('Select a future day on a checking or savings calendar.');return;
+  }
+  transactionDetail={kind:'what-if',preset:info};detailReturnFocus=whatIf;
+  drawTransactionDetail(forecastFor(snapshot()),snapshot());
+  document.querySelector('[data-whatif-form] [name=amount]')?.focus();
+  return;
+ }
  const addCalendar=e.target.closest('[data-calendar-add]');
  const gap=e.target.closest('[data-calendar-fill-gap]');
  if(addCalendar||gap){
@@ -5654,6 +5665,46 @@ document.addEventListener('submit',async e=>{
    message.setAttribute('role','alert');form.appendChild(message);
   }
   message.textContent=String(err.message||err);
+ }
+});
+
+document.addEventListener('input',e=>{
+ const form=e.target.closest?.('[data-whatif-form]');
+ if(form)updateWhatIfPreview(form);
+});
+document.addEventListener('change',e=>{
+ const form=e.target.closest?.('[data-whatif-form]');
+ if(form)updateWhatIfPreview(form);
+});
+document.addEventListener('submit',async e=>{
+ const form=e.target.closest?.('[data-whatif-form]');
+ if(!form)return;
+ e.preventDefault();
+ const fields=Object.fromEntries(new FormData(form)),summary=window.HouseholdPlannerSummary,
+  preview=summary?.previewWhatIf?.(fields),submit=form.querySelector('[type=submit]'),
+  error=form.querySelector('[data-whatif-error]');
+ if(!preview?.valid||!preview.saveReady){
+  if(error)error.textContent=preview?.message||'Complete the payment details.';
+  return;
+ }
+ if(submit)submit.disabled=true;
+ try{
+  const s=snapshot();
+  if(!activeAccounts(s).some(a=>String(a.id)===String(fields.accountId)&&accountType(a)!=='credit'))
+   throw Error('Choose a valid checking or savings account.');
+  // Check the canonical projected rows again before saving, then reuse the
+  // standard saved one-off path for duplicate detection and persistence.
+  const fresh=summary.previewWhatIf(fields);
+  if(!fresh.valid||!fresh.saveReady)throw Error(fresh.message||'Preview changed. Review again.');
+  await commitForecastChange(()=>window.HouseholdPlannerTransactions.add(
+   state(),fields,activeAccounts(s),s.asOf));
+  transactionDetail=null;
+  render();
+  summary.navigate(fresh.effectiveDate);
+  summary.refreshNotice('One-time payment saved. Balances were recalculated.');
+ }catch(err){
+  if(submit)submit.disabled=false;
+  if(error)error.textContent='Could not save: '+String(err.message||err);
  }
 });
 document.addEventListener('submit',async e=>{
