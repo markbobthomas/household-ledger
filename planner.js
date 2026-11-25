@@ -5301,10 +5301,12 @@ function showRecurringScheduleChoice(form,error){
 async function saveAccountNickname(id,value){
  if(accountNicknameBusy)return;
  const original=snapshot().accounts.find(a=>String(a.id)===String(id));
- if(!original)throw Error('Account not found. Refresh Ledger.');
- const nickname=String(value||'').trim().replace(/\\s+/g,' ');
- if(nickname.length>48||/[\\u0000-\\u001f\\u007f]/.test(nickname))
-  throw Error('Use a name of 48 characters or fewer, without control characters.');
+ if(!original){accountNicknameNotice='Account not found. Refresh Ledger.';render();return;}
+ const nickname=String(value||'').trim().replace(/\s+/g,' ');
+ if(nickname.length>48||/[\u0000-\u001f\u007f]/.test(nickname)){
+  accountNicknameNotice='Use a name of 48 characters or fewer, without control characters.';
+  render();return;
+ }
  const prefs=state().predictions??={},
   before={...(prefs.accountNicknames||{})},next={...before};
  if(nickname&&nickname!==String(original.name||''))next[String(id)]=nickname;
