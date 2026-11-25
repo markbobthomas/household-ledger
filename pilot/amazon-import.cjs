@@ -142,7 +142,7 @@ function classify(title,categories){
   [/(\b(?:car detailing|vehicle fluids?|motor oil|windshield|car wash|automotive parts?|air filter for car|motorcycle|garage door remote)\b)/i,
    ['Transportation']],
   [/(\b(?:blender|coffee maker|humidifier|dehumidifier|air purifier|lamps?|light bulbs?|pillows?|blankets?|mattress|curtains?|storage bins?|shelving|wall shelves?|power drill|screwdriver|caulk|dishwasher|dish rack|broom|mop|shower head|toilet brush|trash can|garden hose|kitchen utensils?)\b)/i,
-   ['Maintenance','Home & Maintenance','Household','Shopping']],
+   ['Home & Maintenance','Maintenance','Household','Shopping']],
   [/(\b(?:usb|hdmi|ethernet|bluetooth|wireless mouse|ipad|iphone|smartphone|android phone|tablet|printer|ink cartridge|webcam|flash drive|memory card|sd card|screen protector|protective case|power bank|adapter|headset|earbuds?|earphones?|camera|backpack|handbag|wallet|sunglasses|sneakers|sandals|boots|t-shirts?|sweatshirts?|sweaters?|water bottles?|tumbler|lunch bag|label maker|scissors|school binder)\b)/i,
    ['Shopping']]
  ];
