@@ -175,7 +175,7 @@ const auth=require('./session-auth.cjs')({
 // Compare values rather than object identity: saves replace the preferences.
 function projectedPreferencesSignature(predictions){
  const {transactionNotes,categoryDisplayOrder,categoryMonthlyBudgets,
-  cardPaymentReviewAcks,...financial}=predictions||{};
+  cardPaymentReviewAcks,accountNicknames,...financial}=predictions||{};
  return JSON.stringify(financial);
 }
 async function saveForecast(predictions,expectedRevision){
@@ -828,8 +828,11 @@ async function start(port=Number(env.PORT||8788)){
   }
   if(req.method==='GET'&&requestPath==='/api/status'){
    const refs=new Map(accountForecastLinks(state).map(x=>[x.id,x]));
+   const nicknames=state.ledgerAdjustments?.predictions?.accountNicknames||{};
    return respond(200,{connected:state.items.length>0,account:state.accounts[0]||null,
-    accounts:state.accounts.map(a=>({...a,forecastUsage:refs.get(String(a.id)),
+    accounts:state.accounts.map(a=>({...a,
+      displayName:typeof nicknames[a.id]==='string'&&nicknames[a.id].trim()?nicknames[a.id].trim():a.name,
+      forecastUsage:refs.get(String(a.id)),
       needsReconnect:state.items.some(i=>i.reconnectRequired&&i.accountIds.includes(String(a.id))),
       syncIssue:state.items.find(i=>i.accountIds.includes(String(a.id)))?.syncIssue||null})),
     lastSync:state.lastSync,diagnostics:bankDiagnostics(),
@@ -1481,6 +1484,15 @@ async function start(port=Number(env.PORT||8788)){
        !body.predictions||typeof body.predictions!=='object'||
        Array.isArray(body.predictions))
      return respond(400,{error:'Invalid forecast preferences'});
+    // Nicknames are labels, not bank account identifiers. Reject malformed maps.
+    const nicknames=body.predictions.accountNicknames;
+    if(nicknames!==undefined&&(nicknames===null||typeof nicknames!=='object'||
+       Array.isArray(nicknames)||Object.keys(nicknames).length>50||
+       Object.entries(nicknames).some(([id,name])=>id.length>220||
+        ['__proto__','constructor','prototype'].includes(id)||
+        typeof name!=='string'||!name.trim()||name.length>48||
+        /[\u0000-\u001f\u007f]/.test(name))))
+      return respond(400,{error:'Invalid account name'});
     // All bank facts are untouched. A retry of this snapshot is idempotent.
     await saveForecast(body.predictions,req.headers['x-ledger-revision']);
     return respond(200,{saved:true,scope:'predictions'});
