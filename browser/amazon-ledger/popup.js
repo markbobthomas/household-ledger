@@ -1,6 +1,7 @@
 'use strict';
 const el=id=>document.getElementById(id);
 const AMAZON_ACCESS='https://www.amazon.com/*';
+let current={ledgerOrigin:null,autoEnabled:false};
 function originOf(value){
  const u=new URL(String(value||'').trim());
  if(u.username||u.password||u.search||u.hash||u.pathname!=='/')
@@ -25,6 +26,7 @@ async function send(type,args={}){
 async function refresh(){
  const data=await chrome.storage.local.get([
   'ledgerOrigin','autoEnabled','lastAutoAttempt','lastAutoSuccess','lastAutoError','lastAutoResult']);
+ current={ledgerOrigin:data.ledgerOrigin,autoEnabled:!!data.autoEnabled};
  if(data.ledgerOrigin)el('ledger').value=data.ledgerOrigin;
  el('auto-toggle').textContent=data.autoEnabled?'Turn off automatic sync':'Enable automatic sync';
  el('run-now').hidden=!data.autoEnabled;
@@ -56,16 +58,17 @@ el('save').addEventListener('click',async()=>{
 el('auto-toggle').addEventListener('click',async()=>{
  busy(true);message('');
  try{
-  const {autoEnabled,ledgerOrigin}=await chrome.storage.local.get(['autoEnabled','ledgerOrigin']);
-  if(autoEnabled){
+  // Prompt for Amazon access directly from the click gesture: no
+  // asynchronous storage read may intervene before permissions.request.
+  if(current.autoEnabled){
    await send('LEDGER_AMAZON_AUTO_DISABLE');
    message('Automatic sync turned off.');
   }else{
-   if(!ledgerOrigin)throw Error('Connect your private Ledger website first.');
-   const ledgerAccess=await chrome.permissions.contains({origins:[ledgerOrigin+'/*']});
-   if(!ledgerAccess)throw Error('Reconnect to Ledger above to approve site access.');
+   if(!current.ledgerOrigin)throw Error('Connect your private Ledger website first.');
    const granted=await chrome.permissions.request({origins:[AMAZON_ACCESS]});
    if(!granted)throw Error('Automatic sync needs permission to read Amazon order pages.');
+   const ledgerAccess=await chrome.permissions.contains({origins:[current.ledgerOrigin+'/*']});
+   if(!ledgerAccess)throw Error('Reconnect to Ledger above to approve site access.');
    await send('LEDGER_AMAZON_AUTO_ENABLE');
    message('Automatic sync enabled. Checking current Amazon orders…');
    await refresh();
