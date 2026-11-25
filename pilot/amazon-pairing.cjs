@@ -39,12 +39,13 @@ function choiceNote(choices){
 function match(rows,transactions,adjustments,validCategories,allocate){
  const notes=adjustments?.predictions?.transactionNotes||{},
   overrides=adjustments?.categoryOverrides||{},
-  existing=adjustments?.amazonAllocations||{};
+  existing=adjustments?.amazonAllocations||{},
+  evidence=adjustments?.amazonEvidence||{};
  // Only count charges where an item Note or a category is still useful.
  // Already completed manual notes/categories must not consume an order match.
  const txs=Object.values(transactions||{}).filter(amazon).filter(t=>
   !String(notes[keyFor(t)]||'').trim()||
-  overrides[t.id]===undefined||overrides[t.id]==='Uncategorized');
+  overrides[t.id]===undefined||overrides[t.id]==='Uncategorized'||!evidence[t.id]);
  const needed=[...new Set(txs.map(cents))].sort((a,b)=>a-b);
  const nearby=(amount)=>{
   if(needed.includes(amount))return true;
@@ -146,6 +147,7 @@ function match(rows,transactions,adjustments,validCategories,allocate){
   for(const id of group.ids)usedItems.add(id);
   matches.push({transactionId:tx.id,orderId:group.id,date:tx.date,accountId:tx.accountId,
    amountCents:cents(tx),lines,categories,note:itemNote(group.items),
+   items:group.items.map(i=>({title:i.title,cents:i.cents,date:i.date,shipmentDate:i.shipmentDate})),
    needsReview:categories.includes('Uncategorized'),notesOnly:manual,
    alreadyImported:Boolean(existing[tx.id]),confidence:'exact'});
  }
@@ -237,6 +239,7 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    if(note)suggestions.push({transactionId:t.id,accountId:t.accountId,
     date:t.date,amountCents:cents(t),orderId:best.c.id,note,
     confidence:'possible',source:alone?best.c.source:'alternatives',
+    choices:options.map(c=>({orderId:c.id,date:c.date,items:c.items.map(i=>({title:i.title,cents:i.cents}))})),
     suggestedCategory,_candidateIds:options.flatMap(c=>c.ids)});
    continue;
   }
@@ -256,7 +259,9 @@ function match(rows,transactions,adjustments,validCategories,allocate){
    accountId:t.accountId,date:t.date,amountCents:cents(t),
    orderId:around[0].id,
    note:itemNote(around[0].items,'Possible Amazon (date only): '),
-   confidence:'possible',source:'date-only'});
+   confidence:'possible',source:'date-only',
+   choices:[{orderId:around[0].id,date:around[0].date,
+    items:around[0].items.map(i=>({title:i.title,cents:i.cents}))}]});
  }
  // If two posted charges claim the same physical product, a match may be
  // useful as a Note, but assigning either category would be unjustified.
