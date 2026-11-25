@@ -194,7 +194,8 @@ Saving an import does not add expenses or alter bank transaction amounts.</p>
  }
  $('ai-check').addEventListener('click',async()=>{
   aiToken=null;$('ai-apply').disabled=true;$('ai-preview').hidden=true;
-  setBusy(true);$('ai-message').textContent='Reviewing saved product descriptions with OpenAI…';
+  setBusy(true);
+  $('ai-message').textContent='Reviewing saved product descriptions with OpenAI…';
   try{
    const data=await aiRequest('preview');
    aiToken=data.previewToken||null;
@@ -208,9 +209,40 @@ Saving an import does not add expenses or alter bank transaction amounts.</p>
     ['Existing item allocations (protected)',e.allocated??0],
     ['Incomplete or date-only (review manually)',e.unsafeNote??0],
     ['AI classification cost',data.costUsd==null?'Not reported':
-     '
-  // The requested replacement scope must never change between a preview
-  // and Apply. Force a fresh server-side preview and revision.
+     '$'+Number(data.costUsd).toFixed(4)],
+    ['Per-run cost limit','$'+Number(data.costCeilingUsd||0.05).toFixed(2)]
+   ];
+   const proposals=(data.examples||[]).map(x=>
+    '<div class="item"><strong>'+esc(x.category)+'</strong>'+
+    '<span>'+esc(x.note)+'</span><span>'+
+    (x.previous?'Previously: '+esc(x.previous)+' · ':'')+
+    'Proposed by AI; review before applying</span></div>').join('');
+   $('ai-preview').innerHTML=stats.map(([k,v])=>
+    '<div class="row"><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong></div>').join('')+
+    '<details><summary>Review proposed product categories</summary>'+
+    (proposals||'<p>No safe category suggestions were found.</p>')+'</details>';
+   $('ai-preview').hidden=false;
+   $('ai-message').textContent=aiToken?
+    'AI suggested '+data.proposed+' categor'+(data.proposed===1?'y':'ies')+
+    '. Review them and select Apply; nothing has been changed yet.':
+    'No eligible category changes. Existing category choices remain protected.';
+  }catch(error){$('ai-message').textContent=error.message;aiToken=null}
+  finally{setBusy(false)}
+ });
+ $('ai-apply').addEventListener('click',async()=>{
+  if(!aiToken)return;
+  const token=aiToken;aiToken=null;setBusy(true);
+  $('ai-message').textContent='Saving reviewed AI category suggestions…';
+  try{
+   const result=await aiRequest('apply',token);
+   $('ai-message').textContent='Saved '+result.applied+
+    ' AI category assignment'+(result.applied===1?'':'s')+
+    '. Existing product Notes and bank amounts were not changed.';
+   $('ai-preview').hidden=true;
+  }catch(error){$('ai-message').textContent=error.message}
+  finally{setBusy(false)}
+ });
+ $('include-other').addEventListener('change',()=>{
   payload=null;revision='';ready=0;aiToken=null;
   $('apply').disabled=true;$('preview').hidden=true;
   $('ai-apply').disabled=true;$('ai-preview').hidden=true;
