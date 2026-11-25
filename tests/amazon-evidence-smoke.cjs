@@ -68,4 +68,37 @@ assert.equal(inferred.next.amazonEvidence.unknown.match,'possible');
 assert.equal(Evidence.review({unknown},inferred.next,cats).items[0].requiresVerification,true);
 assert.deepEqual(tx,{id:'fictional-1',accountId:'card-1',name:'Amazon Marketplace',
  date:'2026-11-24',amount:54.5,pending:false},'Bank source is unchanged');
+
+const ReviewChoice=require('../pilot/amazon-review-choice.cjs');
+const mixed={...tx,id:'mixed',amount:40};
+const mixProducts=[
+ {orderId:'mixed-order',date:'2026-11-20',shipmentDate:'2026-11-22',
+  title:'Packaged coffee beans',cents:2000},
+ {orderId:'mixed-order',date:'2026-11-20',shipmentDate:'2026-11-22',
+  title:'Unrecognized ZZ-941 object',cents:2000}
+];
+const mixMatch=Import.match(mixProducts,{mixed},{},cats);
+const mixState=Apply.prepare(mixMatch,{}, {transactions:{mixed},categories:cats}).next;
+assert.equal(mixState.amazonAllocations.mixed.lines.length,2);
+assert.deepEqual(mixState.amazonAllocations.mixed.lines.map(x=>x.category),
+ ['Groceries','Uncategorized']);
+const mixReview=Evidence.review({mixed},mixState,cats);
+assert.equal(mixReview.items.length,1);
+assert.equal(mixReview.items[0].lineIndex,1,
+ 'Only unknown item in a mixed Amazon charge needs review');
+assert.equal(AI.eligible({mixed},mixState,cats,false).candidates[0].lineIndex,1,
+ 'AI fallback sees unknown original product line, not the whole basket');
+const decision={transactionId:'mixed',category:'Shopping',lineIndex:1,verified:true};
+const improved=ReviewChoice.change({mixed},mixState,decision,cats).next;
+assert.deepEqual(improved.amazonAllocations.mixed.lines.map(x=>x.category),
+ ['Groceries','Shopping']);
+assert.equal(improved.amazonAllocations.mixed.lines.reduce((n,x)=>n+x.cents,0),4000,
+ 'Manual correction must preserve per-item cents and bank-charge sum');
+assert.equal(improved.categoryProvenance.mixed.lines[1].source,'manual');
+assert.equal(Evidence.review({mixed},improved,cats).items.length,0);
+assert.throws(()=>ReviewChoice.change({mixed},mixState,
+ {...decision,lineIndex:null},cats),/no longer needs|no longer/);
+assert.throws(()=>ReviewChoice.change({mixed},mixState,
+ {...decision,lineIndex:0},cats),/allocations changed/i);
+
 console.log('Amazon full evidence, AI fallback, shared taxonomy, provenance and no-double-counting PASS');
