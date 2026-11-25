@@ -54,6 +54,7 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal((await req('/categorize')).status,200,'Shared landing page needs no household password');
   assert.equal((await req('/categorize/manage')).status,303,'Only owner may open link manager');
   assert.equal((await req('/api/share/categorize')).status,401,'Uncredentialed queue must be private');
+  assert.equal((await req('/api/share/budget')).status,401,'Budget requires scoped link or owner login');
   const login=await req('/auth/login','POST',{password:pass});
   assert.equal(login.status,200);
   const cookie=login.headers['set-cookie'].find(x=>x.startsWith('__Host-ledger_session='));
@@ -67,6 +68,13 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal((await req('/api/ledger','GET',undefined,shared)).status,401,
    'Scoped token must NEVER access the full banking endpoint');
   assert.equal((await req('/api/status','GET',undefined,shared)).status,401);
+  const initialBudget=await req('/api/share/budget','GET',undefined,shared);
+  assert.equal(initialBudget.status,200,'Shared link can see read-only Budget');
+  assert.ok(Array.isArray(initialBudget.data().rows));
+  assert.equal(initialBudget.body.includes('Fictional Checking'),false,'Budget does not reveal accounts');
+  assert.equal(initialBudget.body.includes('dummy-token-not-connected'),false,'Budget excludes provider credentials');
+  assert.equal((await req('/api/share/budget','POST',{},shared)).status,403,
+   'Shared link never writes budget targets');
   const list=await req('/api/share/categorize','GET',undefined,shared);
   assert.equal(list.status,200,'Shared link can read only category questions');
   const initial=list.data();
@@ -92,6 +100,12 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.ok(!after.data().items.some(x=>x.id==='fictional-purchase'),'Saved transaction leaves the queue');
   assert.equal(open(file).transactions[tx.id].amount,42.25,'Bank source amount is immutable');
   assert.equal(open(file).ledgerAdjustments.categoryOverrides[tx.id],'Groceries');
+  const afterBudget=await req('/api/share/budget','GET',undefined,shared);
+  assert.equal(afterBudget.status,200);
+  assert.equal(afterBudget.data().rows.find(r=>r.name==='Groceries').spentCents,4225,
+   'Shared Budget reflects the same authoritative posted purchase in cents');
+  assert.equal(afterBudget.data().spentCents,4225,
+   'One posted purchase is counted exactly once in the monthly budget');
   const bill=await req('/api/share/categorize','POST',{
    kind:'schedule',id:'future-1',category:'Insurance'},
    {...shared,'X-Ledger-Revision':after.data().revision});
@@ -107,6 +121,8 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal((await req('/api/ledger/category-share','POST',{action:'revoke'},owner)).status,200);
   assert.equal((await req('/api/share/categorize','GET',undefined,newer)).status,401,
    'Revocation cuts off the shared access');
+  assert.equal((await req('/api/share/budget','GET',undefined,newer)).status,401,
+   'Revocation cuts off the read-only Budget view too');
   console.log('PASS private spouse categorization: scope, save, forecast, consent and revocation');
  }finally{child.kill('SIGTERM');fs.rmSync(folder,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
