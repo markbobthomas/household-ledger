@@ -197,6 +197,7 @@ module.exports=(async()=>{
    await page.locator('#ai-check').click();
    await page.waitForFunction(()=>
     document.getElementById('ai-message').textContent.includes('AI suggested 1 category'));
+   await page.locator('#ai-preview details summary').click();
    assert.match(await page.locator('#ai-preview').innerText(),/Pet grooming brush/);
    assert.match(await page.locator('#ai-preview').innerText(),/Per-run cost limit/);
    assert.equal(aiRequests.length,1,name+' previews AI suggestions once');
