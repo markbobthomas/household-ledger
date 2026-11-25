@@ -11,7 +11,7 @@
 
 The authenticated endpoint `POST /api/backup/export` requires the existing private session or compatible Basic auth, a same-origin request, and `X-Pilot-Action: 1`. It serializes against bank mutations and completed forecast/session saves, checks the source AES-256-GCM authentication tags, and returns a **single passphrase-encrypted** bundle. The download is marked `no-store`, exposes no plaintext through headers, does not write an archive to Render's persistent disk, and never alters Plaid connections. Both the existing Render source key and its private bank files remain unchanged.
 
-The portable file includes bank history, account links and metadata, category decisions, forecast settings, and session state when the corresponding files exist. The complete payload is encrypted with **AES-256-GCM** using a separate scrypt-derived key (N=32768, r=8, p=1 and a random 32-byte salt), so a replacement Render service does **not** need the original `PILOT_ENCRYPTION_KEY` to decrypt the archive. **Only the owner-held recovery passphrase can open it.** Treat the encrypted archive and passphrase as highly sensitive.
+The portable file includes bank history, account links and metadata, category decisions, forecast settings, session state, and separately encrypted AI Financial Analysis and QA/QC results when those sidecar files exist. Older four-part backups without QA/QC remain readable. The complete payload is encrypted with **AES-256-GCM** using a separate scrypt-derived key (N=32768, r=8, p=1 and a random 32-byte salt), so a replacement Render service does **not** need the original `PILOT_ENCRYPTION_KEY` to decrypt the archive. **Only the owner-held recovery passphrase can open it.** Treat the encrypted archive and passphrase as highly sensitive.
 
 ## Verify or rehearse an isolated restore
 
@@ -30,8 +30,15 @@ Do not take restored files live until a separate authorized migration procedure 
 
 ## What is verified and what remains open
 
-The mandatory regression suite covers a fictional bank with checking account and card-like history, category edits, separate recurring forecasts and saved sessions: authenticated download, anonymous/cross-origin rejection, stable original encrypted files, wrong-passphrase/tamper rejection, a separate-secret isolated restore, file permissions and refusal to overwrite. The **fictional** archive is verified independently; this does **not** certify that a real off-site backup is currently present.
+The mandatory regression suite covers a fictional bank with checking account and card-like history, category edits, separate recurring forecasts, saved sessions, independently saved Financial Analysis and QA/QC reports: authenticated download, anonymous/cross-origin rejection, stable original encrypted files, wrong-passphrase/tamper rejection, a separate-secret isolated restore, file permissions and refusal to overwrite. The **fictional** archive is verified independently; this does **not** certify that a real off-site backup is currently present.
 
 Render documents daily persistent-disk snapshots with seven-day retention, but the snapshot inventory and a restore of the owner's **actual** encrypted disk have not been directly verified here. Unlike the portable archive, Render snapshots are a short-retention, provider-bound recovery option. Never run a snapshot restore on the live Ledger service as a test.
 
 **Open operational step:** An actual independent backup exists only once the owner securely downloads and saves the portable archive outside the Render service, retains its passphrase, and verifies access to that file. An ongoing **automatic** off-site schedule would additionally require an authorized separate backup destination and credentials; none are configured by this code.
+
+
+## Release 3 isolated recovery and observation checks (November 24, 2026)
+
+The existing portable archive previously captured four encrypted private components, but the separately stored QA/QC report sidecar was not included. Release 3 adds the optional `.qaqc` sidecar to the passphrase-protected portable archive, while continuing to read older archives that did not include it. The existing offline restore refuses any destination directory that already exists, writes only to a new isolated directory, decrypts the newly encrypted files with the replacement key and byte-for-byte compares their structured contents. The mandatory fictional smoke suite rehearses the five-part round trip with the separate AI/QA reports, wrong passphrases, tamper rejection, source-file immutability, and the standalone offline CLI. **No live private disk was restored, replaced or probed for its contents.**
+
+The private Bank connections screen also shows each connected account's existing balance-observation timestamp and a plain-English stale or error warning. That observation is not evidence that every recent pending transaction has settled, and it does not perform an automatic Plaid refresh. Source freshness and the existence of an actual household off-site recovery copy still require owner verification; public CI cannot certify them.
