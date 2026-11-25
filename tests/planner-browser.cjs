@@ -74,6 +74,59 @@ module.exports=(async()=>{
    'Transaction row must not overflow the viewport in '+location+': '+JSON.stringify(p));
  }
 
+
+ // A previous styling layer enlarged the Note button beyond its grid track.
+ // Assert measured geometry on fictional data so later visual changes cannot
+ // silently reintroduce touching category and action controls.
+ async function verifyEditableGutters(page,kind,width){
+  const selectors=kind==='activity'?
+   {parent:'.history-entry .history-actual-row',a:'.ledger-row-category-wrap select',
+    b:'.transaction-note-trigger'}:
+   {parent:'.schedule-card .schedule-compact-row',a:'.ledger-row-category-wrap select',
+    b:'.schedule-more > summary'};
+  const geo=await page.locator(selectors.parent).first().evaluate((row,selectors)=>{
+   const a=row.querySelector(selectors.a),b=row.querySelector(selectors.b);
+   if(!a||!b)return null;
+   const x=a.getBoundingClientRect(),y=b.getBoundingClientRect(),
+    z=row.getBoundingClientRect();
+   return {left:x.left,right:x.right,top:x.top,height:x.height,width:x.width,
+    bLeft:y.left,bRight:y.right,bTop:y.top,bHeight:y.height,bWidth:y.width,
+    rowRight:z.right,rowOverflow:row.scrollWidth-row.clientWidth,
+    viewportOverflow:document.documentElement.scrollWidth-innerWidth,
+    noteLabel:selectors.b==='.transaction-note-trigger'?
+     getComputedStyle(b,'::after').content:null};
+  },selectors);
+  assert.ok(geo,kind+' Category and adjacent action both exist at '+width);
+  assert.ok(geo.height>=43&&geo.bHeight>=43&&geo.width>=85&&geo.bWidth>=42,
+   kind+' editable controls need accessible hit areas at '+width+': '+JSON.stringify(geo));
+  assert.ok(geo.right+6<=geo.bLeft&&Math.abs(geo.top-geo.bTop)<=7,
+   kind+' category/action controls need a clear gutter at '+width+': '+JSON.stringify(geo));
+  assert.ok(geo.bRight<=geo.rowRight+1&&geo.rowOverflow<=1&&geo.viewportOverflow<=3,
+   kind+' controls may not overflow the row at '+width+': '+JSON.stringify(geo));
+  if(kind==='activity')
+   assert.ok(geo.bWidth>=70&&geo.noteLabel.includes('Note'),
+    'Note action retains its visible label at '+width+': '+JSON.stringify(geo));
+ }
+ async function verifySeparateActionSpacing(page,selector,width){
+  if(!await page.locator(selector).count())return;
+  const measure=await page.locator(selector).first().evaluate(container=>{
+   const boxes=[...container.querySelectorAll(':scope > button,:scope > .btn')]
+    .filter(el=>!el.hidden&&getComputedStyle(el).display!=='none')
+    .map(el=>el.getBoundingClientRect());
+   const gaps=[];
+   for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
+    const a=boxes[i],b=boxes[j],
+     vertical=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top),
+     horizontal=Math.min(a.right,b.right)-Math.max(a.left,b.left);
+    if(vertical>4)gaps.push(Math.max(a.left,b.left)-Math.min(a.right,b.right));
+    else if(horizontal>4)gaps.push(Math.max(a.top,b.top)-Math.min(a.bottom,b.bottom));
+   }
+   return {gaps,overflow:document.documentElement.scrollWidth-innerWidth};
+  });
+  assert.ok(measure.gaps.every(gap=>gap>=5)&&measure.overflow<=3,
+   selector+' separate actions must not touch at '+width+': '+JSON.stringify(measure));
+ }
+
  // Verify the OPEN menu, not only the closed Account/Months triggers.
  async function verifyMonthOptionsDoNotOverlap(page,label){
   await page.locator('.history-budget-month-field [data-history-month-toggle]').click();
@@ -534,8 +587,9 @@ module.exports=(async()=>{
        scrollWidth:document.documentElement.scrollWidth};
      });
     assert.ok(Math.abs(controls.monthTop-controls.accountTop)<=2&&
-     controls.monthHeight===40&&controls.accountHeight===40&&
-     controls.monthRight<=controls.accountLeft+1&&
+     controls.monthHeight>=43&&controls.accountHeight>=43&&
+      Math.abs(controls.monthHeight-controls.accountHeight)<=1&&
+     controls.monthRight+7<=controls.accountLeft&&
      controls.monthRadius===controls.accountRadius&&
      controls.monthBackground===controls.accountBackground&&
      controls.scrollWidth<=width+3,
@@ -1718,7 +1772,7 @@ module.exports=(async()=>{
      Math.abs(grid[0].top-grid[1].top)<=2&&
      filter.right<=filter.containerRight+2&&filter.left>=filter.containerLeft-2&&
      Math.abs(filter.top-filter.accountTop)<=2&&
-     filter.accountHeight===40&&Math.abs(filter.bottom-filter.top-40)<=1&&
+     filter.accountHeight>=43&&Math.abs(filter.bottom-filter.top-filter.accountHeight)<=1&&
      filter.right<=filter.accountLeft+1&&
      filter.monthRadius===filter.accountRadius&&
      filter.monthBackground===filter.accountBackground&&
@@ -2564,8 +2618,11 @@ module.exports=(async()=>{
    await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
    const posted=await design(page.locator('.history-entry .history-actual-row').first(),
     '.history-entry','.history-actual-description strong','.history-actual-amount');
-   assert.ok(posted.height>=60&&Math.abs(posted.height-ref.height)<=30,
-    'Activity matches Upcoming Bills vertical rhythm: '+JSON.stringify({ref,posted}));
+   // At phone/tablet widths Category and Note intentionally take a separate
+   // 44px-tall line instead of squeezing the merchant into an unreadable strip.
+   const postedRowAllowance=page.viewportSize().width<950?50:30;
+   assert.ok(posted.height>=60&&Math.abs(posted.height-ref.height)<=postedRowAllowance,
+    'Activity preserves list rhythm with room for the two-line editor: '+JSON.stringify({ref,posted}));
    assert.ok(Math.abs(ref.merchant-posted.merchant)<=1&&
     Math.abs(ref.amount-posted.amount)<=1,
     'Activity text matches Upcoming Bills: '+JSON.stringify({ref,posted}));
@@ -2609,7 +2666,7 @@ module.exports=(async()=>{
     assert.ok(actual.width<=actual.viewport+3,
      label+' must not introduce horizontal overflow: '+JSON.stringify(actual));
    };
-   for(const width of (mobile?[320,390]:[768,1280])){
+   for(const width of (mobile?[320,390]:[768,820,1024,1280])){
     await page.setViewportSize({width,height:mobile?844:900});
     await page.locator('.planner-nav-primary [data-view="schedules"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
@@ -2619,11 +2676,13 @@ module.exports=(async()=>{
     assert.deepEqual([baseline.name,baseline.value],width<=390?[13,13]:width<=850?[14,14]:[15,16],
      'Upcoming Bills is the reference for desktop and phone font sizes at '+width);
     await page.locator('[data-bills-tab="repeating"]').click();
+    await verifyEditableGutters(page,'repeating',width);
     assertFontsMatch('Repeating '+width,await transactionFonts(
      '.schedule-row-main.ledger-transaction-row',
      '.schedule-row-title strong','.schedule-row-amount strong'),baseline);
     await page.locator('.planner-nav-primary [data-view="activity"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
+    await verifyEditableGutters(page,'activity',width);
     assertFontsMatch('Posted Activity '+width,await transactionFonts(
      '.history-row-open.ledger-transaction-row',
      '.history-actual-description strong','.history-actual-amount'),baseline);
@@ -2634,12 +2693,15 @@ module.exports=(async()=>{
     await page.locator('.planner-nav-primary [data-view="summary"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     await page.locator('[data-calendar-day="2026-10-23"]').click();
+    await verifySeparateActionSpacing(page,'.calendar-nav-actions',width);
+    await verifySeparateActionSpacing(page,'.calendar-detail-actions',width);
     assertFontsMatch('Calendar prediction '+width,await transactionFonts(
      '.calendar-day-detail .calendar-monthly-row.ledger-transaction-row',
      '.calendar-monthly-name strong','.ledger-transaction-amount'),baseline);
     await page.locator('.attention-link[data-view="reviews"]').click();
     await page.waitForFunction(()=>!document.querySelector('#planner-main .ledger-page-wait'),null,{timeout:30000});
     if(await page.locator('.category-review-open.ledger-transaction-row').count()){
+     await verifySeparateActionSpacing(page,'.review-one-tap-choices',width);
      assertFontsMatch('Review categorization '+width,await transactionFonts(
       '.category-review-open.ledger-transaction-row',
       '.ledger-transaction-identity strong','.ledger-transaction-amount'),baseline);

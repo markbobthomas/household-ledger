@@ -290,3 +290,209 @@ body.ledger-app .planner-menu-content{
 
 /* Recurring bills remain one continuous ledger list, not a stack of cards. */
 body.ledger-app .schedule-card{border:0!important;box-shadow:none!important;border-radius:0!important}
+
+/* Control spacing audit — Nov 25, 2026.
+   Interaction targets must never be painted into the adjacent grid track.
+   In particular, the previous 36px "Note" track was smaller than the
+   62px Note control and let its border collide with Category. */
+body.ledger-app{
+ --ledger-control-gap:12px;
+ --ledger-touch-height:44px;
+}
+/* Activity: checkbox | transaction detail | category | Note.
+   Reserve an actual column for the label and keep 12px between fields. */
+@media(min-width:950px){
+ body.ledger-app .history-page .history-actual-row.ledger-list-row{
+  grid-template-columns:28px minmax(0,1fr) minmax(140px,160px) 88px!important;
+  column-gap:12px!important;
+  row-gap:8px!important;
+  padding:10px 9px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.history-select-wrap{
+  grid-column:1;grid-row:1;
+ }
+ body.ledger-app .history-page .history-actual-row>.history-row-open{
+  grid-column:2;grid-row:1;
+ }
+ body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap{
+  grid-column:3;grid-row:1;
+  padding:0!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.transaction-note-trigger{
+  grid-column:4;grid-row:1;
+ }
+}
+/* Category and Note have comparable hit areas and visible interior padding.
+   No unrelated button receives a min-width that could break a list. */
+body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap{
+ min-width:0!important;min-height:44px!important;
+ justify-content:stretch;align-self:center;
+}
+body.ledger-app .history-page .history-actual-row .ledger-row-category{
+ box-sizing:border-box;width:100%!important;max-width:100%!important;
+ min-width:0!important;height:44px!important;min-height:44px!important;
+ padding:9px 10px!important;margin:0!important;
+}
+body.ledger-app .history-page .history-actual-row>.transaction-note-trigger{
+ box-sizing:border-box;display:inline-flex!important;
+ align-items:center;justify-content:center;gap:4px;
+ width:100%!important;min-width:0!important;max-width:100%!important;
+ height:44px!important;min-height:44px!important;
+ margin:0!important;padding:9px 10px!important;
+ font-size:16px!important;line-height:1.25!important;
+ white-space:nowrap;align-self:center;justify-self:stretch;
+}
+body.ledger-app .history-page .history-actual-row>.transaction-note-trigger::after{
+ content:" Note";font-size:12px!important;font-weight:750!important;
+}
+body.ledger-app .history-page .history-actual-row>.history-select-wrap{
+ min-height:44px;
+}
+/* Phone: first line is the transaction; second line puts Category and Note
+   in their own tracks, with a real gutter rather than absolute positioning. */
+@media(max-width:650px){
+ body.ledger-app .history-page .history-actual-row.ledger-list-row{
+  grid-template-columns:26px minmax(0,1fr) 82px!important;
+  column-gap:10px!important;row-gap:8px!important;
+  padding:5px 3px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.history-row-open{
+  grid-column:2/-1!important;grid-row:1!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap{
+  grid-column:2!important;grid-row:2!important;
+  padding-left:53px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.transaction-note-trigger{
+  grid-column:3!important;grid-row:2!important;
+  padding:8px 6px!important;
+ }
+}
+@media(max-width:380px){
+ body.ledger-app .history-page .history-actual-row.ledger-list-row{
+  grid-template-columns:24px minmax(0,1fr) 74px!important;
+  column-gap:7px!important;row-gap:7px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap{
+  padding-left:47px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.transaction-note-trigger{
+  padding:7px 4px!important;
+ }
+}
+/* Repeating Bills: same distinct editable fields and action spacing. */
+@media(min-width:851px){
+ body.ledger-app .schedule-page .schedule-compact-row.ledger-list-row{
+  grid-template-columns:minmax(0,1fr) minmax(140px,175px) 46px!important;
+  column-gap:12px!important;
+ }
+}
+@media(max-width:850px){
+ body.ledger-app .schedule-page .schedule-compact-row.ledger-list-row{
+  grid-template-columns:minmax(0,1fr) 46px!important;
+  column-gap:10px!important;row-gap:8px!important;
+ }
+}
+body.ledger-app .schedule-page .schedule-compact-row .ledger-row-category-wrap{
+ min-width:0;min-height:44px;
+}
+body.ledger-app .schedule-page .schedule-compact-row .ledger-row-category{
+ min-height:44px!important;height:44px!important;box-sizing:border-box;
+ padding:8px 10px!important;max-width:100%;width:100%;
+}
+body.ledger-app .schedule-page .schedule-compact-row .schedule-more{
+ min-width:44px;width:44px;align-self:center;justify-self:center;
+}
+body.ledger-app .schedule-page .schedule-compact-row .schedule-more>summary{
+ display:grid;place-items:center;min-height:44px;width:44px;
+}
+/* Apply an even rhythm to the other clusters of separately actionable
+   controls: toolbar fields, view actions, review choices, editors. */
+body.ledger-app .planner-page :is(
+ .ledger-primary-filter-bar,.history-activity-filters,.history-report-filters,
+ .history-budget-filters,.schedule-toolbar,.history-filters
+){
+ column-gap:12px!important;row-gap:10px!important;
+}
+body.ledger-app .planner-page :is(
+ .future-form-actions,.calendar-quick-actions,.calendar-detail-actions,
+ .transaction-note-actions,.review-bulk-toolbar,.review-candidate-actions,
+ .review-one-tap-choices,.bills-heading-actions,.calendar-nav-actions
+){
+ column-gap:10px!important;row-gap:10px!important;
+}
+body.ledger-app .reviews-page .category-review-row{
+ column-gap:12px!important;row-gap:10px!important;
+}
+body.ledger-app .reviews-page .category-review-row>label.minimal-control-label select{
+ min-height:44px;padding:9px 10px;
+}
+body.ledger-app .planner-page :is(
+ .future-form-actions,.calendar-quick-actions,.transaction-note-actions,
+ .review-bulk-toolbar,.review-candidate-actions
+) :is(button,.btn){
+ min-height:44px;padding:9px 12px;
+}
+/* Same 44px field height on every comparable Spending/Activity toolbar,
+   including Budget and Month Insights. Inherit the existing widths/radii. */
+body.ledger-app .planner-page :is(
+ .history-budget-filters,.history-report-filters,.history-activity-filters,
+ .ledger-primary-filter-bar,.financial-recap-header
+) :is(.history-month-trigger,select[name="historyAccount"],select[name="historyCategory"],select[name="historySort"],input[name="search"]){
+ min-height:44px!important;height:44px!important;box-sizing:border-box;
+}
+/* Bills Upcoming uses the same comfortable field height as Spending. */
+body.ledger-app .schedule-page .ledger-toolbar.bills-upcoming-filters
+ :is(select[data-bills-month],select[name="transactionFilter"]){
+ height:44px!important;min-height:44px!important;box-sizing:border-box;
+}
+/* Prevent small phone controls from overflowing their own filter grid. */
+@media(max-width:650px){
+ body.ledger-app .planner-page :is(
+  .ledger-primary-filter-bar,.history-activity-filters,.history-report-filters,
+  .history-budget-filters,.schedule-toolbar,.history-filters
+ ){
+  column-gap:8px!important;row-gap:9px!important;
+ }
+ body.ledger-app .planner-page .history-activity-filters>label,
+ body.ledger-app .planner-page .history-activity-filters>.history-activity-month-field{
+  min-width:0;
+ }
+ body.ledger-app .calendar-nav-actions{column-gap:6px!important}
+ body.ledger-app .schedule-page .schedule-compact-row .ledger-row-category{
+  max-width:100%!important;min-height:44px!important;
+ }
+}
+
+/* Bills Upcoming month and account controls share the same target size. */
+body.ledger-app .schedule-page .bills-upcoming-filters
+ :is(select[data-bills-month],select[name="transactionFilter"]){
+ box-sizing:border-box!important;height:44px!important;min-height:44px!important;
+}
+
+/* Tablet and compact desktop: transaction gets the full first row, while
+   Category and Note sit neatly together on a second line. Never shrink the
+   merchant column to make room for editable controls. */
+@media(min-width:651px) and (max-width:949px){
+ body.ledger-app .history-page .history-actual-row.ledger-list-row{
+  grid-template-columns:28px minmax(0,1fr) 88px!important;
+  column-gap:12px!important;row-gap:10px!important;
+  padding:10px 8px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.history-select-wrap{
+  grid-column:1!important;grid-row:1!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.history-row-open{
+  grid-column:2/-1!important;grid-row:1!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap{
+  grid-column:2!important;grid-row:2!important;
+  padding:0!important;justify-content:flex-end!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.ledger-row-category-wrap .ledger-row-category{
+  width:min(255px,100%)!important;max-width:255px!important;
+ }
+ body.ledger-app .history-page .history-actual-row>.transaction-note-trigger{
+  grid-column:3!important;grid-row:2!important;
+ }
+}
