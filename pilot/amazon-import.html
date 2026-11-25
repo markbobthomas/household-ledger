@@ -17,7 +17,7 @@ button.primary{color:white;background:#175f50;border-color:#175f50}button:disabl
 summary{cursor:pointer}code{font-size:.9em;overflow-wrap:anywhere}
 </style></head>
 <body><main><a href="/">← Ledger</a><h1>Amazon purchase import</h1>
-<p>Match Amazon purchases to your existing bank charges, <strong>add the actual product names to transaction Notes</strong>, and assign categories when confident. Existing personal notes and bank balances are never changed.</p>
+<p>Import Amazon purchases to your existing bank charges and <strong>save product names in transaction Notes</strong>. Ledger assigns a category only when supported by the product description. Existing personal Notes and bank balances are preserved.</p>
 <section class="panel">
 <h2>Categorize saved Amazon Notes</h2>
 <p>Already imported products? Review their saved item names and assign recognizable categories <strong>without uploading your ZIP again</strong>. Existing handwritten Notes and categories you chose remain unchanged.</p>
@@ -31,7 +31,14 @@ Also propose replacing existing <strong>Other</strong> category choices when an 
 <label for="file">Amazon CSV or ZIP file
 <input id="file" type="file" accept=".csv,.zip,text/csv,application/zip"></label>
 <p class="muted">Private: your file is processed only by Ledger's authenticated server. No Amazon password is needed, and nothing is sent to an AI provider. Maximum file size: 79 MB. Ledger checks posted Amazon charges missing an item Note or a category.</p>
-<div class="actions"><button type="button" id="check" class="primary">Check matches</button><button type="button" id="apply" disabled>Apply item Notes &amp; categories</button></div>
+<div class="actions">
+<button type="button" id="import" class="primary">Import &amp; Save product Notes</button>
+<button type="button" id="check">Preview only (does not save)</button>
+<button type="button" id="apply" disabled>Save previewed changes</button>
+</div>
+<p class="muted">The Import button saves eligible Notes and categories in one pass.
+The Preview button only checks the file; it does not save any Notes or categories.
+Saving an import does not add expenses or alter bank transaction amounts.</p>
 <p id="message" role="status" aria-live="polite"></p>
 </section>
 <section class="panel" id="preview" hidden>
@@ -56,7 +63,7 @@ Also propose replacing existing <strong>Other</strong> category choices when an 
  const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
  let payload=null,revision='',ready=0;
  function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':''}
- function setBusy(b){$('check').disabled=b;$('notes-check').disabled=b;$('apply').disabled=b||!payload||!ready}
+ function setBusy(b){$('import').disabled=b;$('check').disabled=b;$('notes-check').disabled=b;$('apply').disabled=b||!payload||!ready}
  async function request(dryRun){
   // Send original Blob bytes, not a 105 MB base64 JSON body for a 79 MB file.
   // Preview and Apply are separate authenticated requests with revision checks;
@@ -171,6 +178,44 @@ Also propose replacing existing <strong>Other</strong> category choices when an 
   }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}
  });
+ $('import').addEventListener('click',async()=>{
+  const file=$('file').files?.[0];
+  if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
+  if(file.size>79*1024*1024){message('This file exceeds the 79 MB limit.',true);return}
+  payload={mode:'zip',fileName:file.name,file};revision='';ready=0;
+  setBusy(true);message('Importing and saving Amazon product Notes…');
+  try{
+   // Unlike Preview, the user's Import click directly commits changes.
+   // The ZIP is processed/uploaded only once, not a second time to Apply.
+   const applied=await request(false);
+   const expected=applied.savedNoteStats?.itemNotes??0;
+   const added=applied.notesReady??0;
+   const categories=applied.confidentCategories??0;
+   // Prove that a separate authenticated request sees persisted Notes,
+   // rather than trusting a dry-run proposal or the write response alone.
+   payload={mode:'saved-notes',replaceOther:false};revision='';
+   let verification;
+   try{verification=await request(true)}
+   catch(error){
+    show(applied);ready=0;payload=null;
+    message('The import was submitted, but a fresh saved-Notes check failed: '+
+     error.message+'. Open Check saved item Notes to verify before retrying.',true);
+    return;
+   }
+   const found=verification.savedNoteStats?.itemNotes??0;
+   show(verification);
+   ready=verification.ready??0;
+   if(found<expected||found<added){
+    message('Import verification did not find all the product Notes expected from the saved import. No duplicate expenses were created. Review the preview before retrying.',true);
+   }else{
+    message('Import saved and verified: '+added+' new product Note'+(added===1?'':'s')+
+     ', '+categories+' category assignment'+(categories===1?'':'s')+
+     '. '+found+' importer product Note'+(found===1?' is':'s are')+
+     ' now stored in Ledger.');
+   }
+  }catch(e){message(e.message,true);payload=null;ready=0;$('preview').hidden=true}
+  finally{setBusy(false)}
+ });
  $('check').addEventListener('click',async()=>{
   const file=$('file').files?.[0];
   if(!file){message('Select your Amazon CSV or ZIP file first.',true);return}
@@ -179,7 +224,11 @@ Also propose replacing existing <strong>Other</strong> category choices when an 
   try{
    payload={mode:'zip',fileName:file.name,file};
    const data=await request(true);
-   show(data);ready=data.ready;message(data.ready?'Matches checked. Review the totals, then apply categories.':data.noUncategorizedAmazonCharges?'There are no outstanding Amazon charges requiring Notes or categories.':'No new safe matches found.');
+   show(data);ready=data.ready;
+   message(data.ready?
+    'Preview only: NO changes have been saved. '+(data.notesReady??0)+
+     ' product Notes can be added. Choose Save previewed changes or Import & Save product Notes.':
+    'Preview only: no changes were saved. Check the counts and skipped reasons.');
    $('apply').disabled=!data.ready;
   }catch(e){message(e.message,true);payload=null;$('preview').hidden=true}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}
@@ -189,7 +238,8 @@ Also propose replacing existing <strong>Other</strong> category choices when an 
   setBusy(true);message('Saving category assignments…');
   try{
    const data=await request(false);show(data);
-   message('Updated '+data.applied+' Amazon transaction'+(data.applied===1?'':'s')+' with item Notes and/or confident categories. Return to Ledger to review their Notes.');
+   message('Saved '+(data.notesReady??0)+' new product Notes and '+
+    (data.confidentCategories??0)+' category assignments. To confirm saved Notes, choose Check saved item Notes.');
    payload=null;ready=0;$('apply').disabled=true;
   }catch(e){message(e.message,true)}
   finally{setBusy(false);if(!payload)$('apply').disabled=true}

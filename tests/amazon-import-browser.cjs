@@ -103,7 +103,7 @@ module.exports=(async()=>{
     file.dispatchEvent(new Event('change',{bubbles:true}));
     document.getElementById('check').click();
    },csv);
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Matches checked'));
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Preview only: NO changes have been saved'));
    await page.locator('#preview details summary').click();
    assert.match(await page.locator('#details').innerText(),/Amazon: Laundry detergent/);
    assert.match(await page.locator('#details').innerText(),/Possible Amazon: Coffee beans/);
@@ -112,7 +112,7 @@ module.exports=(async()=>{
    assert.equal(requests[0].dryRun,true,name+' does not save automatically');
    assert.equal(await page.locator('#apply').isDisabled(),false,name+' can approve reviewed match');
    await page.locator('#apply').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Updated 1'));
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Saved 1 new product Notes'));
    assert.equal(requests.length,2,name+' explicitly applies exactly once');
    assert.equal(requests[1].dryRun,false);
    const uploads=await page.evaluate(()=>window.__amazonUploads);
@@ -143,7 +143,7 @@ module.exports=(async()=>{
    assert.equal(noteRequests[1].dryRun,true);
    assert.match(await page.locator('#details').innerText(),/Groceries/);
    await page.locator('#apply').click();
-   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Updated 1'));
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Saved 0 new product Notes'));
    assert.equal(noteRequests.length,3,'Saved Notes require a fresh approved preview');
    assert.equal(noteRequests[2].dryRun,false);
    assert.equal(noteRequests[2].replaceOther,true);
@@ -152,6 +152,25 @@ module.exports=(async()=>{
    assert.equal(after.uploads,2,'No-upload Note category action never sends the ZIP');
    assert.equal(after.calls.length,3);
    assert(after.calls.every(c=>c.contentType==='application/json'));
+
+   // Regression for the real failure: previewed item Notes were never saved.
+   // The primary Import action commits in ONE binary upload and follows with
+   // a lightweight saved-Notes read that must confirm persisted state.
+   assert.equal(await page.locator('#import').isEnabled(),true);
+   await page.locator('#import').click();
+   await page.waitForFunction(()=>document.getElementById('message').textContent.includes('Import saved and verified'));
+   const finalUploads=await page.evaluate(()=>window.__amazonUploads);
+   assert.equal(finalUploads.length,3,
+    name+' one-click import adds exactly one ZIP/CSV upload, not two');
+   assert.equal(finalUploads[2].name,'Amazon-browser-sync.csv');
+   assert.equal(finalUploads[2].bytes,csv);
+   assert.equal(finalUploads[2].dryRun,'0','Primary Import must actually save Notes');
+   assert.equal(noteRequests.length,4,
+    'Import must perform an independent small saved-Notes verification');
+   assert.equal(noteRequests[3].mode,'saved-notes');
+   assert.equal(noteRequests[3].dryRun,true);
+   assert.equal(noteRequests[3].replaceOther,false);
+   assert.match(await page.locator('#message').innerText(),/3 importer product Notes are now stored/);
    assert.deepEqual(errors,[],name+' has no JavaScript errors');
    await context.close();
   }
