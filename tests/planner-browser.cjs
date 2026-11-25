@@ -587,8 +587,9 @@ module.exports=(async()=>{
        scrollWidth:document.documentElement.scrollWidth};
      });
     assert.ok(Math.abs(controls.monthTop-controls.accountTop)<=2&&
-     controls.monthHeight===40&&controls.accountHeight===40&&
-     controls.monthRight<=controls.accountLeft+1&&
+     controls.monthHeight>=43&&controls.accountHeight>=43&&
+      Math.abs(controls.monthHeight-controls.accountHeight)<=1&&
+     controls.monthRight+7<=controls.accountLeft&&
      controls.monthRadius===controls.accountRadius&&
      controls.monthBackground===controls.accountBackground&&
      controls.scrollWidth<=width+3,
@@ -1771,7 +1772,7 @@ module.exports=(async()=>{
      Math.abs(grid[0].top-grid[1].top)<=2&&
      filter.right<=filter.containerRight+2&&filter.left>=filter.containerLeft-2&&
      Math.abs(filter.top-filter.accountTop)<=2&&
-     filter.accountHeight===40&&Math.abs(filter.bottom-filter.top-40)<=1&&
+     filter.accountHeight>=43&&Math.abs(filter.bottom-filter.top-filter.accountHeight)<=1&&
      filter.right<=filter.accountLeft+1&&
      filter.monthRadius===filter.accountRadius&&
      filter.monthBackground===filter.accountBackground&&
