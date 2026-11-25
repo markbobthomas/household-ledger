@@ -1,0 +1,228 @@
+/* Ledger interface system — 2026-11-25.
+   One presentation-only layer after planner.css. No financial or cache logic.
+   Graphite = structure, blue = interaction, amber/red = financial risk. */
+:root{
+ --ink:#15202c;--muted:#526071;--line:#cfd7df;--soft:#f3f5f7;
+ --nav:#14202d;--blue:#175dad;--pink:#b42332;--red:#b42332;
+ --ledger-action:#175dad;--ledger-action-hover:#0f478a;
+ --ledger-control-border:#8d9cab;--ledger-surface:#fff;
+}
+body.ledger-app{background:#f3f5f7;color:var(--ink);font-size:13px}
+body.ledger-app .content{max-width:1440px;padding:17px 24px 48px}
+body.ledger-app .topbar{
+ align-items:center;margin:0 0 12px;min-height:50px;
+ padding:0 2px 12px;border-bottom:2px solid #172635;
+}
+body.ledger-app .topbar h1{font-size:22px;line-height:1.1;font-weight:850;letter-spacing:-.7px;color:#14202d}
+body.ledger-app .top-actions{gap:9px}
+body.ledger-app .main-navigation{padding:4px 7px;background:#14202d;border-radius:7px;margin-bottom:13px}
+body.ledger-app .planner-tabs.planner-nav-primary{
+ display:flex!important;gap:3px!important;padding:0!important;margin:0!important;
+ border:0!important;border-radius:0!important;background:transparent!important;
+}
+body.ledger-app .planner-nav-primary .tab-link{
+ display:inline-flex;align-items:center;justify-content:center;gap:7px;
+ min-height:44px!important;padding:10px 18px!important;font-size:13px!important;
+ border:0!important;border-bottom:3px solid transparent!important;
+ border-radius:4px 4px 0 0!important;background:transparent!important;
+ color:#c8d3df!important;font-weight:720!important;box-shadow:none!important;
+}
+body.ledger-app .planner-nav-primary .tab-link svg{width:17px;height:17px;stroke:currentColor}
+body.ledger-app .planner-nav-primary .tab-link:hover{background:#273747!important;color:#fff!important}
+body.ledger-app .planner-nav-primary .tab-link.active,
+body.ledger-app .planner-nav-primary .tab-link[aria-current="page"]{
+ color:#fff!important;background:#273747!important;border-bottom-color:#5fa5f5!important;
+ box-shadow:none!important;
+}
+body.ledger-app :is(.panel,.schedule-card,.history-insight-panel,.financial-recap-card){
+ background:#fff;border-color:#d0d9e1;border-radius:7px;box-shadow:none!important;
+}
+body.ledger-app .panel{border:1px solid #d0d9e1}
+body.ledger-app .planner-page :is(.page-heading h2,.review-intro h2){
+ color:#162332;font-weight:800!important;letter-spacing:-.3px;
+}
+body.ledger-app .planner-page :is(.section-title h2,.schedule-category-heading h3,.financial-recap-card h3){
+ color:#1d2d3c;font-weight:780!important;
+}
+body.ledger-app :is(.btn,button.btn,button.calendar-whatif){
+ min-height:38px;border-radius:5px;border:1px solid #9cabb9;background:#fff;
+ color:#19334a;font-size:13px;font-weight:720;box-shadow:none;
+}
+body.ledger-app :is(.btn,button.btn,button.calendar-whatif):hover:not(:disabled){
+ background:#eaf2fb;border-color:#386da8;color:#0f478a;text-decoration:none;
+}
+body.ledger-app :is(.btn.primary,button.btn.primary,.bills-add-transaction){
+ border-color:#175dad!important;background:#175dad!important;color:#fff!important;
+ font-weight:770;
+}
+body.ledger-app :is(.btn.primary,button.btn.primary,.bills-add-transaction):hover:not(:disabled){
+ border-color:#0e457e!important;background:#0e457e!important;color:#fff!important;
+}
+body.ledger-app .top-actions :is(.planner-menu>summary,.attention-link){
+ min-height:42px;border-radius:5px;font-size:12px;font-weight:720;
+}
+body.ledger-app .attention-link{
+ background:#fff;color:#8d2c22;border:1px solid #aebbc8;
+}
+body.ledger-app .attention-link:hover{background:#fff5f2;border-color:#b6534b}
+body.ledger-app .review-tab-count{background:#ae2531;color:#fff}
+body.ledger-app .topbar .planner-menu>summary{
+ display:flex;align-items:center;gap:7px;padding:9px 13px;
+ background:#fff;color:#233444;border:1px solid #9cabb9;
+}
+body.ledger-app .planner-menu-content{
+ background:#fff;border:1px solid #abb9c6;border-radius:7px;
+ box-shadow:0 12px 25px #14202d20;
+}
+body.ledger-app .planner-menu-content > :is(button,a){
+ color:#19334a!important;border-radius:4px!important;font-weight:700;
+}
+body.ledger-app .planner-menu-content > :is(button,a):hover{
+ background:#edf3fb!important;color:#124b89!important;
+}
+body.ledger-app .planner-menu-advanced{border-top-color:#d2dbe3}
+body.ledger-app .planner-menu-advanced>summary{color:#415364;border-radius:4px}
+body.ledger-app .planner-menu-advanced .planner-menu-bank{background:#f3f5f7;border-radius:4px}
+body.ledger-app .planner-menu-advanced>#deployment-version{color:#526071;border-top-color:#d2dbe3}
+/* One clear input language: a visible border, white field, strong focus. */
+body.ledger-app .planner-page :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),select,textarea),
+body.ledger-app .planner-menu :is(input,select){
+ background:#fff;color:#15202c;border:1.5px solid #879bab;
+ border-radius:5px;box-shadow:none;font-weight:590;
+}
+body.ledger-app .planner-page :is(.ledger-toolbar,.schedule-toolbar,.history-period-controls,.review-queue-controls,.future-edit-form,.schedule-form,.transaction-detail,.planner-settings) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),select,textarea){
+ min-height:40px;font-size:13px;
+}
+body.ledger-app .ledger-row-category-wrap select,
+body.ledger-app .category-review-row select{
+ background:#fff!important;border:1.5px solid #789ab9!important;
+ color:#144f8a!important;font-weight:740!important;min-height:35px;
+ cursor:pointer;
+}
+body.ledger-app :is(button,a,summary,select,input,textarea):focus-visible{
+ outline:3px solid #256fc7!important;outline-offset:2px!important;
+}
+body.ledger-app input[type="checkbox"],body.ledger-app input[type="radio"]{accent-color:#175dad}
+body.ledger-app :is(button,a,summary):disabled{cursor:not-allowed}
+body.ledger-app :is(.planner-page .history-subtabs,.planner-page .spending-tabs,.planner-page .ledger-section-tabs){
+ background:transparent!important;border:0!important;border-bottom:1px solid #bfccd6!important;
+ border-radius:0!important;padding:0!important;box-shadow:none!important;
+}
+body.ledger-app :is(.history-subtab,.planner-page .history-subtab){
+ border:0!important;border-bottom:3px solid transparent!important;
+ border-radius:0!important;box-shadow:none!important;
+ background:transparent!important;color:#526071!important;
+ font-weight:720!important;min-height:42px;
+}
+body.ledger-app .history-subtab:hover{background:#e9eff6!important;color:#19334a!important}
+body.ledger-app .history-subtab.active{
+ color:#1257a0!important;border-bottom-color:#175dad!important;
+ background:#fff!important;box-shadow:none!important;
+}
+/* A list row is a control, not a static spreadsheet label. */
+body.ledger-app button:is(.ledger-row-open,.ledger-transaction-row,.category-review-open,.calendar-monthly-row,.unified-payment-trigger){
+ cursor:pointer;border-radius:4px;
+}
+body.ledger-app button:is(.ledger-row-open,.ledger-transaction-row,.category-review-open,.calendar-monthly-row,.unified-payment-trigger):hover{
+ background:#eaf2fb!important;box-shadow:inset 3px 0 #175dad;
+}
+body.ledger-app button:is(.ledger-row-open,.ledger-transaction-row,.category-review-open,.calendar-monthly-row,.unified-payment-trigger):focus-visible{
+ background:#eaf2fb!important;
+}
+body.ledger-app .schedule-card{
+ border:1px solid #cdd7df!important;margin-bottom:6px;
+}
+body.ledger-app .schedule-row-title strong,
+body.ledger-app .transaction-merchant-title{color:#172c40;font-weight:780}
+body.ledger-app button[data-schedule-edit] .schedule-row-chevron,
+body.ledger-app button[data-historical-transaction] .history-row-hint{color:#175dad!important;font-size:0!important}
+body.ledger-app button[data-schedule-edit] .schedule-row-chevron::after{
+ content:"Edit ›";font-size:11px;font-weight:800;letter-spacing:0;color:#175dad;
+}
+body.ledger-app button[data-historical-transaction] .history-row-hint::after{
+ content:"Open ›";font-size:11px;font-weight:800;letter-spacing:0;color:#175dad;
+}
+body.ledger-app .transaction-note-trigger{
+ min-width:62px!important;min-height:35px!important;
+ border:1px solid #8fa8bd!important;background:#fff!important;
+ color:#175dad!important;border-radius:4px!important;
+ font-size:15px!important;font-weight:750!important;white-space:nowrap;
+}
+body.ledger-app .transaction-note-trigger::after{
+ content:" Note";font-size:11px;font-weight:740;letter-spacing:0;
+}
+body.ledger-app .transaction-note-trigger:hover{background:#eaf2fb!important}
+body.ledger-app :is(.review-one-tap-choices button,.review-category-chip){
+ border-color:#a4b8cb!important;color:#15518b!important;
+ background:#fff!important;border-radius:5px!important;font-weight:720;
+}
+body.ledger-app :is(.review-one-tap-choices button,.review-category-chip):hover{
+ background:#e7f1fc!important;border-color:#175dad!important;
+}
+body.ledger-app .review-one-tap-choices button.review-skip{
+ color:#526071!important;border-color:transparent!important;
+}
+body.ledger-app .review-risk-banner{
+ border-left:4px solid #b06a19;background:#fffaf0;color:#67461c;
+}
+body.ledger-app .summary-forecast-clarity,
+body.ledger-app .ledger-whatif-result{
+ border:1px solid #d0d9e1;background:#f7f9fb;border-radius:6px;color:#263f55;
+}
+body.ledger-app :is(.summary-forecast-clarity,.ledger-whatif-result) :is(p,strong,small,span){
+ color:inherit;
+}
+body.ledger-app .ledger-whatif-comparison>div{border-color:#d0d9e1;border-radius:5px}
+body.ledger-app .calendar-whatif{
+ background:#fff!important;color:#15518b!important;border-color:#8ea9c1!important;
+}
+body.ledger-app .calendar-day:not(.negative):not(.low):not(.selected){background:#fff}
+body.ledger-app .summary-page .calendar-day.weekend:not(.selected):not(.month-minimum):not(.negative):not(.low){
+ background:#f0f2f5!important;border-color:#dce3e9!important;
+}
+body.ledger-app .calendar-day:hover{border-color:#175dad!important;background:#eaf2fb!important}
+body.ledger-app .calendar-day.selected{
+ background:#eaf2fb!important;border:2px solid #175dad!important;
+ box-shadow:inset 0 0 0 1px #175dad!important;
+}
+body.ledger-app .calendar-day.today .calendar-day-number,
+body.ledger-app .calendar-day.today .calendar-day-number::after{color:#155dab!important}
+body.ledger-app .calendar-day.negative{background:#fff1f0!important}
+body.ledger-app .calendar-day.low:not(.negative){background:#fff5e4!important}
+body.ledger-app .calendar-day-balance{color:#172c40}
+body.ledger-app .calendar-day.low .calendar-day-balance{color:#936019}
+body.ledger-app .calendar-day.negative .calendar-day-balance{color:#a32633}
+body.ledger-app :is(.budget-row-projection.over-budget,.budget-overview-projection.over-budget,.budget-overage){
+ color:#b42332!important;font-weight:800;
+}
+body.ledger-app .budget-meter>div{background:#175dad}
+body.ledger-app .budget-item.over .budget-meter>div{background:#b42332}
+body.ledger-app .status-tag.good{background:#eaf4ef;color:#246747}
+body.ledger-app .status-tag.warn{background:#fff2db;color:#885612}
+body.ledger-app .status-tag.bad{background:#fff0ef;color:#a32633}
+body.ledger-app :is(.transaction-overlay,.transaction-detail) .btn.primary{
+ background:#175dad!important;border-color:#175dad!important;
+}
+@media(max-width:780px){
+ body.ledger-app .content{padding:12px 11px 32px}
+ body.ledger-app .topbar{padding-bottom:9px}
+ body.ledger-app .topbar h1{font-size:20px}
+ body.ledger-app .main-navigation{padding:3px 4px;margin-bottom:10px}
+ body.ledger-app .planner-nav-primary .tab-link{
+  min-height:44px!important;padding:9px 12px!important;
+  font-size:12px!important;gap:5px;
+ }
+ body.ledger-app .planner-nav-primary .tab-link svg{width:15px;height:15px}
+ body.ledger-app .transaction-note-trigger{
+  min-width:38px!important;min-height:38px!important;
+ }
+ body.ledger-app .transaction-note-trigger::after{content:none}
+}
+@media(max-width:390px){
+ body.ledger-app .planner-nav-primary .tab-link{padding:9px 10px!important;font-size:11px!important}
+ body.ledger-app button[data-schedule-edit] .schedule-row-chevron::after{content:"Edit";font-size:10px}
+ body.ledger-app button[data-historical-transaction] .history-row-hint::after{content:"›";font-size:16px}
+}
+@media(prefers-reduced-motion:reduce){
+ body.ledger-app *{scroll-behavior:auto}
+}
