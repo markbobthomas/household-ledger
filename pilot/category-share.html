@@ -41,6 +41,34 @@ hr{border:0;border-top:1px solid #e6ebe4;margin:24px 0}
 .budget-item.over .budget-meter>div{background:#ba4874}
 .budget-item.over .budget-head strong{color:#9a2659}
 @media(max-width:350px){.choices{grid-template-columns:1fr}}
+
+/* Shared Ledger visual language. Keep this page self-contained: link recipients
+   may not be signed in to the private Ledger. */
+:root{color:#15202c;background:#f3f5f7;color-scheme:light}
+body{background:#f3f5f7;color:#15202c}
+.brand{color:#14202d;font-weight:850;letter-spacing:.075em}
+.count{border-radius:5px;background:#eaf2fb;color:#15518b;border:1px solid #b9cde2}
+.card{border-color:#cbd5df;border-radius:8px;box-shadow:none}
+h1,.merchant,.amount{color:#172635}
+.tiny{color:#526071}.muted,.note small,.budget-sub,.budget-meta,.footer{color:#536172}
+.note{background:#f1f4f7;border:1px solid #dce3e9;border-radius:5px}
+.chip{border:1.5px solid #8e9eaf;border-radius:6px;color:#152b3f;background:#fff;min-height:54px}
+.chip.suggested{border:2px solid #175dad;background:#eaf2fb;color:#124c89}
+.chip:active{background:#dfeafa}
+.primary{border-radius:5px;background:#175dad;border-color:#175dad;color:#fff;min-height:50px}
+.primary:hover:not(:disabled){background:#0f478a;border-color:#0f478a}
+.secondary{border-radius:5px;color:#12569c;border:1px solid #a6b9cb;background:#fff;min-height:44px;padding:11px 14px}
+.secondary:hover{background:#eaf2fb}
+summary{color:#234461}
+input.shareurl{border:1.5px solid #8d9eaf;border-radius:5px;color:#15202c}
+.notice{background:#fff7e8;border:1px solid #e4c390;color:#744c1a;border-radius:5px}
+.budget-meter{background:#e3e7ec;border-radius:4px}
+.budget-meter>div{background:#175dad;border-radius:4px}
+.budget-item.over .budget-meter>div{background:#b42332}
+.budget-item.over .budget-head strong{color:#b42332}
+button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #256fc7;outline-offset:2px}
+@media(max-width:430px){.card{padding:18px 15px}.buttons{align-items:stretch;flex-wrap:wrap}.buttons>button{flex:1 1 130px}}
+
 </style></head><body><main>
 <header><div class="brand">LEDGER</div><div id="count" class="count" hidden></div></header>
 <section id="owner" class="hide">
