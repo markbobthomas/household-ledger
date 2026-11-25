@@ -3250,7 +3250,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   const key=legacy?.seriesKey||'',
    isOpen=expanded(r,key),
    title=merchant||r?.merchant||'Unidentified payment',
-   account=accountName||r?.accountName||'Account',
+   account=(r?.accountId||r?.sourceAccountId)?
+    accountLabelById(r.accountId||r.sourceAccountId,s):accountName||r?.accountName||'Account',
    cadence=frequency||r?.frequency||'Repeating',
    date=nextDate||r?.nextDate||s.asOf,
    value=amount??r?.amount,
@@ -3997,7 +3998,11 @@ function render({navigationOnly=false}={}){
    const saved=state().predictions?.cardPaymentReviewAcks?.[
     String(matched.cardId)+'|'+String(matched.periodEnd)];
    if(saved===matched.signature)return null;
-   return {text:message,action:'card-statement',
+   const namedCard=creditCards.find(a=>String(a.id)===String(matched.cardId));
+   const original=s.accounts?.find(a=>String(a.id)===String(matched.cardId))?.name;
+   const shown=original&&message.startsWith(original+':')?
+    namedCard.name+message.slice(original.length):message;
+   return {text:shown,action:'card-statement',
     cardId:String(matched.cardId),periodEnd:String(matched.periodEnd)};
   }
   const card=creditCards.find(a=>message.startsWith(String(s.accounts?.find(raw=>String(raw.id)===String(a.id))?.name||a.name)+':'));
