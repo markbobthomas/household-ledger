@@ -45,7 +45,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cardPaymentReviewAcks','cashCushion','lowAlertThreshold','warnBelow',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','categoryDisplayOrder','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','categoryDisplayOrder','accountNicknames','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
@@ -155,7 +155,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cardPaymentReviewAcks:p.cardPaymentReviewAcks,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,categoryDisplayOrder:p.categoryDisplayOrder,
+   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,categoryDisplayOrder:p.categoryDisplayOrder,accountNicknames:p.accountNicknames,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,overdueReviewDismissals:p.overdueReviewDismissals,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
@@ -176,13 +176,30 @@ function isChecking(a){return accountType(a)==='cash'&&
   String(a.type||'').toLowerCase()==='depository'&&String(a.subtype||'').toLowerCase()!=='savings')}
 function freshness(a){const status=a.balanceStatus;return status==='fresh'||status==='simulated'}
 function sourceTag(){if(requestedReal()&&!live())return window.HouseholdLiveSource?.error?'REAL · UNAVAILABLE':'CONNECTING';return live()?'REAL BANK':'DEMO DATA'}
-function activeAccounts(s){return Array.isArray(s?.accounts)?s.accounts:[]}
+// Nicknames are display-only private preferences keyed by stable account IDs.
+function accountDisplayName(account){
+ if(!account)return 'Account';
+ const nickname=state().predictions?.accountNicknames?.[String(account.id)];
+ return typeof nickname==='string'&&nickname.trim()?nickname.trim():
+  String(account.name||'Account');
+}
+function activeAccounts(s){
+ return (Array.isArray(s?.accounts)?s.accounts:[]).map(a=>{
+  const name=accountDisplayName(a);
+  return name===a.name?a:{...a,name};
+ });
+}
+function accountLabelById(id,s=snapshot()){
+ const a=activeAccounts(s).find(item=>String(item.id)===String(id));
+ return a?.name||'Account';
+}
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  const source=state(),prefs=source.predictions||{};
  // Budgets are reporting preferences and never change forecast projections.
  const {categoryMonthlyBudgets:_reportOnly,categoryDisplayOrder:_displayOrder,
-  transactionNotes:_annotations,cardPaymentReviewAcks:_cardReviewsOnly,...forecastPrefs}=prefs;
+  transactionNotes:_annotations,cardPaymentReviewAcks:_cardReviewsOnly,
+   accountNicknames:_displayOnlyNames,...forecastPrefs}=prefs;
  // The live bank adapter replaces the source state on every refresh. Saved
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
@@ -3961,8 +3978,10 @@ function render({navigationOnly=false}={}){
    return {text:message,action:'card-statement',
     cardId:String(matched.cardId),periodEnd:String(matched.periodEnd)};
   }
-  const card=creditCards.find(a=>message.startsWith(String(a.name)+':'));
-  return {text:message,action:card?'settings-card':'reviews-payments',
+  const card=creditCards.find(a=>message.startsWith(String(s.accounts?.find(raw=>String(raw.id)===String(a.id))?.name||a.name)+':'));
+  const sourceName=card&&s.accounts?.find(raw=>String(raw.id)===String(card.id))?.name;
+  return {text:sourceName&&message.startsWith(sourceName+':')?
+   card.name+message.slice(sourceName.length):message,action:card?'settings-card':'reviews-payments',
    cardId:card?String(card.id):''};
  };
  const caution=[
