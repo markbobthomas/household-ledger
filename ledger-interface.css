@@ -247,3 +247,39 @@ body.ledger-app .summary-page .summary-numbers [data-bank-available-value].summa
 body.ledger-app .summary-page :is(.summary-forecast-head strong,.summary-forecast-caveat){
  color:#263f55;
 }
+
+/* Reset the former mint shell's !important declarations at their exact scope.
+   The source palette stays in its legacy file for safe rollback. */
+body.ledger-app .topbar{
+ border:0!important;border-bottom:2px solid #172635!important;
+ padding:0 2px 12px!important;margin:0 0 12px!important;
+ color:#172635!important;background:transparent!important;
+}
+body.ledger-app .topbar h1{
+ color:#14202d!important;font-size:22px!important;
+ font-weight:850!important;letter-spacing:-.7px!important;
+}
+body.ledger-app .topbar h1::before{
+ background:#175dad!important;border-radius:5px!important;
+ box-shadow:none!important;width:25px;height:25px;
+}
+body.ledger-app .main-navigation{
+ background:#14202d!important;border:1px solid #14202d!important;
+ border-radius:7px!important;box-shadow:none!important;
+ padding:4px 7px!important;margin:0 0 13px!important;gap:0!important;
+}
+body.ledger-app .topbar .planner-menu>summary{
+ background:#fff!important;color:#233444!important;
+ border:1px solid #9cabb9!important;border-radius:5px!important;
+ box-shadow:none!important;min-height:42px!important;
+}
+body.ledger-app .topbar .planner-menu>summary:hover{
+ background:#eaf2fb!important;border-color:#386da8!important;
+}
+body.ledger-app .planner-menu-content{
+ border:1px solid #abb9c6!important;border-radius:7px!important;
+ box-shadow:0 12px 25px #14202d20!important;
+}
+@media(max-width:780px){
+ body.ledger-app .main-navigation{padding:3px 4px!important;margin-bottom:10px!important}
+}
