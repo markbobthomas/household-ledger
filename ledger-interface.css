@@ -441,6 +441,11 @@ body.ledger-app .planner-page :is(
 ) :is(.history-month-trigger,select[name="historyAccount"],select[name="historyCategory"],select[name="historySort"],input[name="search"]){
  min-height:44px!important;height:44px!important;box-sizing:border-box;
 }
+/* Bills Upcoming uses the same comfortable field height as Spending. */
+body.ledger-app .schedule-page .ledger-toolbar.bills-upcoming-filters
+ :is(select[data-bills-month],select[name="transactionFilter"]){
+ height:44px!important;min-height:44px!important;box-sizing:border-box;
+}
 /* Prevent small phone controls from overflowing their own filter grid. */
 @media(max-width:650px){
  body.ledger-app .planner-page :is(
