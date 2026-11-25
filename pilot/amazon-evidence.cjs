@@ -61,8 +61,11 @@ function review(transactions={},adjustments={},categories=[]){
   if(!isAmazon(tx))continue;
   total++;
   const e=evidence[tx.id],good=valid(e,tx),saved=notes[keyFor(tx)]||'';
-  if(saved)hasNotes++;
-  if(good){if(e.match==='exact')confirmed++;else possible++}else unmatched++;
+  const imported=/^(?:Amazon: |Possible Amazon(?:: | \())/.test(saved);
+  if(imported)hasNotes++;
+  if(good){if(e.match==='exact')confirmed++;else possible++}
+  else if(imported){if(saved.startsWith('Amazon: '))confirmed++;else possible++}
+  else unmatched++;
   const existing=overrides[tx.id]||null,origin=provenance[tx.id];
   const allocation=adjustments.amazonAllocations?.[tx.id];
   const splitLines=Array.isArray(allocation?.lines)?allocation.lines:null;
