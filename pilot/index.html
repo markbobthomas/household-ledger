@@ -55,6 +55,7 @@ button{margin:5px 8px 5px 0;min-height:44px;padding:10px 14px}button:focus-visib
 <script>
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const money=n=>n==null?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+const displayName=a=>a?.displayName||a?.name||'Account';
 const status=document.getElementById('status'),choices=document.getElementById('account-choices');
 let pendingToken=null,pendingAccounts=[],lastAccounts=[],removalBusy=false,repairBusy=false;
 const usageLabels={
@@ -156,7 +157,7 @@ async function refresh(){
   issuePanel.hidden=!uniqueFailed.length;
   document.getElementById('sync-issue-details').innerHTML=uniqueFailed.map(a=>{
    const issue=a.syncIssue||{};
-   return '<p><strong>'+esc(a.name)+'</strong> · '+esc(issue.code||'Sync error')+
+   return '<p><strong>'+esc(displayName(a))+'</strong> · '+esc(issue.code||'Sync error')+
     (issue.endpoint?' · API '+esc(issue.endpoint):'')+
     (issue.httpStatus?' · HTTP '+esc(issue.httpStatus):'')+
     (issue.errorType?' · Type '+esc(issue.errorType):'')+
@@ -173,15 +174,16 @@ async function refresh(){
    alert=document.getElementById('repair-alert');
   alert.hidden=!unique.length;
   document.getElementById('repair-actions').innerHTML=unique.map(a=>
-   '<button type="button" class="repair-button" data-reconnect-account="'+esc(a.id)+'">Reconnect '+esc(a.name)+'</button>').join('');
+   '<button type="button" class="repair-button" data-reconnect-account="'+esc(a.id)+'">Reconnect '+esc(displayName(a))+'</button>').join('');
   if(unique.length)status.textContent='Bank refresh needs attention · last successful sync '+(d.lastSync||'unknown')+
    '. Reconnect the indicated institution(s) below.';
   document.getElementById('sync').disabled=!accounts.length;document.getElementById('disconnect').disabled=!accounts.length;
   const connections=[...new Set(accounts.map(a=>String(a.itemId||a.id)))];
-  document.getElementById('report').innerHTML=accounts.map(a=>
-   '<div class="panel"><h3>'+esc(a.name)+' ••'+esc(a.mask||'')+'</h3>'+
+  document.getElementById('report').innerHTML=(accounts.length?'<p class="muted">Rename accounts in <a href="/">Ledger Settings</a> under Account names.</p>':'')+accounts.map(a=>
+   '<div class="panel"><h3>'+esc(displayName(a))+(a.displayName&&a.displayName!==a.name?'':' ••'+esc(a.mask||''))+'</h3>'+
    '<p><strong>'+money(a.current)+'</strong> '+(a.type==='credit'?'card debt':'current balance')+
    ' · '+money(a.available)+' available</p>'+
+   (a.displayName&&a.displayName!==a.name?'<p class="muted">Bank label: '+esc(a.name)+' ••'+esc(a.mask||'')+'</p>':'')+
    '<p class="muted">Last observed '+esc(a.balanceObservedAt||'unknown')+' · '+esc(a.type)+
    ' · Bank connection '+(connections.indexOf(String(a.itemId||a.id))+1)+'</p>'+ 
    '<p class="muted" data-source-freshness>'+esc(sourceFreshness(a))+'</p>'+
@@ -191,10 +193,10 @@ async function refresh(){
    usageText(a)+
    '<button type="button" class="remove-account" data-remove-account="'+esc(a.id)+
    '" '+(!a.forecastUsage||a.forecastUsage.protected?'disabled title="This account has saved changes or its forecast links have not been verified"':'')+
-   ' aria-label="Remove '+esc(a.name)+' ending '+esc(a.mask||'unknown')+'">Remove account</button>'+
+   ' aria-label="Remove '+esc(displayName(a))+' ending '+esc(a.mask||'unknown')+'">Remove account</button>'+
    '</div>').join('')+
    (accounts.length?'<div class="panel"><h3>Recent imported transactions ('+transactions.length+' shown)</h3><table><thead><tr><th>Date</th><th>Account</th><th>Merchant</th><th>Bank amount</th></tr></thead><tbody>'+
-   transactions.slice(0,50).map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(accounts.find(a=>a.id===t.accountId)?.name||'')+'</td><td>'+esc(t.merchant)+'</td><td>'+money(t.amount)+'</td></tr>').join('')+'</tbody></table></div>':'');
+   transactions.slice(0,50).map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(displayName(accounts.find(a=>a.id===t.accountId)))+'</td><td>'+esc(t.merchant)+'</td><td>'+money(t.amount)+'</td></tr>').join('')+'</tbody></table></div>':'');
  }catch(e){status.textContent=e.message}
 }
 document.getElementById('connect').onclick=async()=>{
@@ -225,7 +227,7 @@ async function reconnect(accountId){
  if(!account){status.textContent='That account is no longer connected. Refresh this page.';return}
  repairBusy=true;
  try{
-  status.textContent='Renewing the original connection for '+account.name+'. Your Ledger edits and history will stay attached…';
+  status.textContent='Renewing the original connection for '+displayName(account)+'. Your Ledger edits and history will stay attached…';
   const token=await api('link-token',{reconnectAccountId:String(account.id)});
   if(token.mode!=='update')throw Error('The bank server did not open the existing connection. Try again.');
   const link=Plaid.create({token:token.link_token,
@@ -276,7 +278,7 @@ document.getElementById('report').addEventListener('click',async e=>{
   status.textContent='This account has saved forecast or category changes. Removal is blocked until they are reassigned.';return;
  }
  const last=lastAccounts.filter(a=>String(a.itemId)===String(account.itemId)).length===1;
- const label=account.name+(account.mask?' ending '+account.mask:'');
+ const label=displayName(account)+(account.mask?' ending '+account.mask:'');
  if(!confirm('Remove '+label+' from Household Ledger?\\n\\nNo linked saved prediction edits were found for this account. This removes its imported transactions and bank balance; any automatic forecasts based on its historical transactions will stop. Other accounts and their saved settings remain. '+
   (last?'Its Plaid bank connection will also be disconnected.':'Other accounts using this Plaid bank connection will remain linked.')+
   '\\n\\nYour actual bank account will NOT be closed.'))return;
