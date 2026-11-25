@@ -45,7 +45,7 @@ try{
  const saved=JSON.parse(localStorage.getItem(DEMO_SETTINGS)||'{}');
  if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
   const keys=['primaryAccountId','plannerRoutineDecisions','paymentRules','cardPaymentReviewAcks','cashCushion','lowAlertThreshold','warnBelow',
-    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','categoryDisplayOrder','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
+    'futureTransactionEdits','futureTransactionAdds','futureSeriesEdits','futureRecurringRules','scheduleCategories','deletedCategories','categoryMonthlyBudgets','categoryDisplayOrder','accountNicknames','futureRecurrenceExclusions','overdueReviewDismissals','mortgageReviewDismissals','historyPatternDecisions','mortgageCoverageRules','coverageAssignments','repeatingRecommendations','repeatingRecommendationDecisions','recurringForecastMode','transactionNotes'];
   for(const key of keys)if(saved[key]!==undefined)demoState.predictions[key]=saved[key];
   if(saved.categoryOverrides&&typeof saved.categoryOverrides==='object'&&!Array.isArray(saved.categoryOverrides))
    demoState.categoryOverrides=saved.categoryOverrides;
@@ -146,6 +146,7 @@ let scheduleKindFilter='all';
 let scheduleSort='value-desc',scheduleCategoryFilter='',scheduleSearch='',scheduleAccount='all',billsExpanded=false,billsPane='upcoming',billsSelectedMonth='',billsStatementAccount='',billsStatementPeriod='';
  let transactionDetail=null,detailReturnFocus=null,detailOriginTab=null,detailParentSchedule=null,planStopPending='';
 let audit=null,auditAccount=null,auditError='',auditMeta=null;
+let accountNicknameBusy=false,accountNicknameNotice='';
 function clearAudit(){audit=null;auditAccount=null;auditError='';auditMeta=null}
 function savePlanning(){
  if(live())return window.HouseholdLiveSource.persistForecast(liveState.predictions||{})
@@ -155,7 +156,7 @@ function savePlanning(){
    plannerRoutineDecisions:p.plannerRoutineDecisions,paymentRules:p.paymentRules,cardPaymentReviewAcks:p.cardPaymentReviewAcks,cashCushion:p.cashCushion,lowAlertThreshold:p.lowAlertThreshold,warnBelow:p.warnBelow,
    futureTransactionEdits:p.futureTransactionEdits,futureTransactionAdds:p.futureTransactionAdds,
    futureSeriesEdits:p.futureSeriesEdits,futureRecurringRules:p.futureRecurringRules,
-   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,categoryDisplayOrder:p.categoryDisplayOrder,
+   scheduleCategories:p.scheduleCategories,deletedCategories:p.deletedCategories,categoryMonthlyBudgets:p.categoryMonthlyBudgets,categoryDisplayOrder:p.categoryDisplayOrder,accountNicknames:p.accountNicknames,
    futureRecurrenceExclusions:p.futureRecurrenceExclusions,overdueReviewDismissals:p.overdueReviewDismissals,mortgageReviewDismissals:p.mortgageReviewDismissals,historyPatternDecisions:p.historyPatternDecisions,
     mortgageCoverageRules:p.mortgageCoverageRules,coverageAssignments:p.coverageAssignments,
     repeatingRecommendations:p.repeatingRecommendations,repeatingRecommendationDecisions:p.repeatingRecommendationDecisions,
@@ -176,13 +177,30 @@ function isChecking(a){return accountType(a)==='cash'&&
   String(a.type||'').toLowerCase()==='depository'&&String(a.subtype||'').toLowerCase()!=='savings')}
 function freshness(a){const status=a.balanceStatus;return status==='fresh'||status==='simulated'}
 function sourceTag(){if(requestedReal()&&!live())return window.HouseholdLiveSource?.error?'REAL · UNAVAILABLE':'CONNECTING';return live()?'REAL BANK':'DEMO DATA'}
-function activeAccounts(s){return Array.isArray(s?.accounts)?s.accounts:[]}
+// Nicknames are display-only private preferences keyed by stable account IDs.
+function accountDisplayName(account){
+ if(!account)return 'Account';
+ const nickname=state().predictions?.accountNicknames?.[String(account.id)];
+ return typeof nickname==='string'&&nickname.trim()?nickname.trim():
+  String(account.name||'Account');
+}
+function activeAccounts(s){
+ return (Array.isArray(s?.accounts)?s.accounts:[]).map(a=>{
+  const name=accountDisplayName(a);
+  return name===a.name?a:{...a,name};
+ });
+}
+function accountLabelById(id,s=snapshot()){
+ const a=activeAccounts(s).find(item=>String(item.id)===String(id));
+ return a?.name||'Account';
+}
 function forecastFor(s){
  if(!s||!activeAccounts(s).length)return null;
  const source=state(),prefs=source.predictions||{};
  // Budgets are reporting preferences and never change forecast projections.
  const {categoryMonthlyBudgets:_reportOnly,categoryDisplayOrder:_displayOrder,
-  transactionNotes:_annotations,cardPaymentReviewAcks:_cardReviewsOnly,...forecastPrefs}=prefs;
+  transactionNotes:_annotations,cardPaymentReviewAcks:_cardReviewsOnly,
+   accountNicknames:_displayOnlyNames,...forecastPrefs}=prefs;
  // The live bank adapter replaces the source state on every refresh. Saved
  // user choices edit the predictions object in place, so compare its CONTENT,
  // not just its identity. A new as-of day, balance, account, override or
@@ -3232,7 +3250,8 @@ function reviewsPage(bundle,s,queue=reviewQueue(bundle,s)){
   const key=legacy?.seriesKey||'',
    isOpen=expanded(r,key),
    title=merchant||r?.merchant||'Unidentified payment',
-   account=accountName||r?.accountName||'Account',
+   account=(r?.accountId||r?.sourceAccountId)?
+    accountLabelById(r.accountId||r.sourceAccountId,s):accountName||r?.accountName||'Account',
    cadence=frequency||r?.frequency||'Repeating',
    date=nextDate||r?.nextDate||s.asOf,
    value=amount??r?.amount,
@@ -3568,6 +3587,27 @@ function summaryPage(bundle,s,chosen,derived,fresh){
  });
 }
 function settingsPage(bundle,s,chosen){
+ const nicknames=state().predictions?.accountNicknames||{};
+ const accountNames='<section class="panel ledger-account-names" aria-label="Account names">'+
+  '<div class="section-title"><h2>Account names</h2></div>'+
+  '<p class="lead">Give each bank or credit card a familiar name. These names appear across Ledger and are saved privately for your household. Bank records and account connections do not change.</p>'+
+  activeAccounts(s).map(a=>{
+   const original=s.accounts.find(raw=>String(raw.id)===String(a.id))||a;
+   const nickname=typeof nicknames[a.id]==='string'?nicknames[a.id]:'';
+   return '<form class="ledger-account-name-row" data-account-nickname="'+escapeHTML(a.id)+'">'+
+    '<div class="ledger-account-name-identity"><strong>'+escapeHTML(a.name)+'</strong>'+
+    '<small>Bank label: '+escapeHTML(original.name||'Account')+'</small></div>'+
+    '<label class="minimal-control-label"><span class="visually-hidden">Name for '+escapeHTML(original.name||'Account')+'</span>'+
+    '<input name="nickname" type="text" maxlength="48" autocomplete="off" value="'+escapeHTML(nickname)+
+    '" placeholder="Enter a name" aria-label="Name for '+escapeHTML(original.name||'Account')+'"'+
+    (accountNicknameBusy?' disabled':'')+'></label>'+
+    '<button type="submit" class="btn primary"'+(accountNicknameBusy?' disabled':'')+'>Save</button>'+
+    (nickname?'<button type="button" class="btn" data-clear-account-nickname="'+escapeHTML(a.id)+'"'+
+     (accountNicknameBusy?' disabled':'')+'>Reset</button>':'')+
+    '</form>';
+  }).join('')+
+  (accountNicknameNotice?'<p class="ledger-account-name-message" role="status">'+escapeHTML(accountNicknameNotice)+'</p>':'')+
+  '</section>';
  const rules=Object.entries(state().learning?.categoryRules||{});
  const categoryLearning=rules.length?
   '<details class="panel mini-panel planner-settings" data-settings-learned-rules>'+
@@ -3580,7 +3620,7 @@ function settingsPage(bundle,s,chosen){
     ' <button type="button" class="btn" data-forget-category-rule="'+escapeHTML(key)+
     '">Forget rule</button></div>').join('')+'</details>':'';
  return '<div class="planner-page settings-page"><div class="page-heading"><div>'+
-  '<h2>Settings</h2></div></div>'+
+  '<h2>Settings</h2></div></div>'+accountNames+
   '<section class="panel ledger-opening-page-settings">'+
    '<label for="ledger-opening-page">Default opening page</label>'+
    '<select id="ledger-opening-page" aria-label="Default opening page">'+
@@ -3958,11 +3998,17 @@ function render({navigationOnly=false}={}){
    const saved=state().predictions?.cardPaymentReviewAcks?.[
     String(matched.cardId)+'|'+String(matched.periodEnd)];
    if(saved===matched.signature)return null;
-   return {text:message,action:'card-statement',
+   const namedCard=creditCards.find(a=>String(a.id)===String(matched.cardId));
+   const original=s.accounts?.find(a=>String(a.id)===String(matched.cardId))?.name;
+   const shown=original&&message.startsWith(original+':')?
+    namedCard.name+message.slice(original.length):message;
+   return {text:shown,action:'card-statement',
     cardId:String(matched.cardId),periodEnd:String(matched.periodEnd)};
   }
-  const card=creditCards.find(a=>message.startsWith(String(a.name)+':'));
-  return {text:message,action:card?'settings-card':'reviews-payments',
+  const card=creditCards.find(a=>message.startsWith(String(s.accounts?.find(raw=>String(raw.id)===String(a.id))?.name||a.name)+':'));
+  const sourceName=card&&s.accounts?.find(raw=>String(raw.id)===String(card.id))?.name;
+  return {text:sourceName&&message.startsWith(sourceName+':')?
+   card.name+message.slice(sourceName.length):message,action:card?'settings-card':'reviews-payments',
    cardId:card?String(card.id):''};
  };
  const caution=[
@@ -5257,6 +5303,54 @@ function showRecurringScheduleChoice(form,error){
  holder.querySelector('select')?.focus();
  return true;
 }
+async function saveAccountNickname(id,value){
+ if(accountNicknameBusy)return;
+ const original=snapshot().accounts.find(a=>String(a.id)===String(id));
+ if(!original){accountNicknameNotice='Account not found. Refresh Ledger.';render();return;}
+ const nickname=String(value||'').trim().replace(/\s+/g,' ');
+ if(nickname.length>48||/[\u0000-\u001f\u007f]/.test(nickname)){
+  accountNicknameNotice='Use a name of 48 characters or fewer, without control characters.';
+  render();return;
+ }
+ const prefs=state().predictions??={},
+  before={...(prefs.accountNicknames||{})},next={...before};
+ if(nickname&&nickname!==String(original.name||''))next[String(id)]=nickname;
+ else delete next[String(id)];
+ if(JSON.stringify(before)===JSON.stringify(next)){
+  accountNicknameNotice='Name is already up to date.';render();return;
+ }
+ accountNicknameBusy=true;
+ const form=[...document.querySelectorAll('[data-account-nickname]')].find(el=>el.dataset.accountNickname===String(id));
+ form?.querySelectorAll('button,input').forEach(el=>el.disabled=true);
+ try{
+  prefs.accountNicknames=next;
+  const result=await savePlanning();
+  if(live()&&(!result||result.saved!==true))throw Error('The private server did not confirm the save.');
+  accountNicknameNotice=nickname?'Name saved.':'Bank name restored.';
+  accountNicknameBusy=false;
+  // Rebuild cached labels, but the canonical forecast and bank history remain cached.
+  render();
+ }catch(error){
+  prefs.accountNicknames=before;
+  const msg=document.createElement('p');msg.setAttribute('role','alert');
+  msg.className='ledger-account-name-error';
+  msg.textContent='Could not save name: '+String(error.message||error);
+  form?.appendChild(msg);
+  form?.querySelectorAll('button,input').forEach(el=>el.disabled=false);
+ }finally{accountNicknameBusy=false}
+}
+document.addEventListener('submit',e=>{
+ const form=e.target.closest?.('[data-account-nickname]');
+ if(!form)return;
+ e.preventDefault();
+ void saveAccountNickname(form.dataset.accountNickname,form.elements.namedItem('nickname')?.value);
+});
+document.addEventListener('click',e=>{
+ const button=e.target.closest?.('[data-clear-account-nickname]');
+ if(!button)return;
+ e.preventDefault();
+ void saveAccountNickname(button.dataset.clearAccountNickname,'');
+});
 async function commitForecastChange(action){
  await reviewCatalogSave.catch(()=>{});
  const current=state(),before=JSON.stringify(current.predictions||{}),operation=++forecastSaveSequence;

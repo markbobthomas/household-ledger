@@ -811,7 +811,7 @@ function render(input){
   '<option value="all"'+(allAccounts?' selected':'')+'>All accounts</option>':'')+
   accounts.map(a=>'<option value="'+esc(a.id)+'"'+
   ((view==='calendar'?calendarScope===String(a.id):String(a.id)===String(chosen.id))?' selected':'')+'>'+
-  esc(a.name+(a.mask?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
+  esc(a.name+(a.mask&&!prefs?.accountNicknames?.[a.id]?' · '+a.mask:'')+(String(a.id)===String(prefs?.primaryAccountId)?' · Main':''))+
   '</option>').join('');
  const lead=()=>'<div class="summary-heading calendar-toolbar">'+
   '<label class="summary-account-picker"><span class="visually-hidden">Account</span><select id="summary-account" aria-label="Summary account">'+
@@ -848,7 +848,7 @@ function render(input){
    const movement=e.transferGroupId?String(e.transferGroupId):null;
    if(movement&&alreadyShownTransfers.has(movement))continue;
    if(movement)alreadyShownTransfers.add(movement);
-   const item={...e,_calendarAccount:account.name||account.id,
+   const item={...e,_calendarAccount:accounts.find(a=>String(a.id)===String(account.id))?.name||account.name||account.id,
     _calendarCard:account.type==='credit'};
    if(!outside.has(e.date))outside.set(e.date,[]);
    outside.get(e.date).push(item);

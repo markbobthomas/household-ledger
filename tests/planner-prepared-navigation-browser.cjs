@@ -747,6 +747,64 @@ module.exports=(async()=>{
    await page.locator('[data-device-perf-refresh]').click();
    assert.match(await page.locator('[data-device-perf]').innerText(),/Prepared page switches/);
    assert.match(await page.locator('[data-device-perf]').innerText(),/median/);
+   // These fictional nickname edits change labels, not account IDs or cash flow.
+   // The preceding what-if saved a financial edit; one stale-cache refresh
+   // can be necessary. Label changes must never affect bank facts or
+   // repeatedly rebuild the canonical projection.
+   const beforeAliasBuilds=await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds);
+   const beforeAliasBankFacts=await page.evaluate(()=>
+    window.HouseholdBankFeed.getSnapshot('2026-10-19').accounts.map(a=>[a.id,a.current,a.available]));
+   const saveAlias=async(id,name)=>{
+    const form=page.locator('[data-account-nickname="'+id+'"]');
+    await form.locator('input[name="nickname"]').fill(name);
+    await form.locator('button[type=submit]').click();
+    await page.waitForFunction(({id,name})=>{
+     const form=document.querySelector('[data-account-nickname="'+id+'"]');
+     return form?.querySelector('input[name=nickname]')?.value===name&&
+      form?.querySelector('button[type=submit]')?.disabled===false&&
+      document.querySelector('.ledger-account-name-message')?.textContent?.includes('saved');
+    },{id,name},{timeout:20000});
+   };
+   await saveAlias('demo-checking','Daily Checking');
+   await saveAlias('demo-visa','Household Credit');
+   const afterAliasBuilds=await page.evaluate(()=>window.HouseholdPlannerWorkStats().forecastBuilds);
+   assert.ok(afterAliasBuilds-beforeAliasBuilds<=1,
+    device+': account names should not repeatedly recalculate forecasts after a prior financial edit');
+   assert.deepEqual(await page.evaluate(()=>
+    window.HouseholdBankFeed.getSnapshot('2026-10-19').accounts.map(a=>[a.id,a.current,a.available])),
+    beforeAliasBankFacts,device+': nickname saves cannot alter source balances or IDs');
+   const geometry=await page.locator('[data-account-nickname="demo-checking"]').evaluate(row=>({
+    overflow:document.documentElement.scrollWidth-innerWidth,
+    fieldHeight:row.querySelector('input').getBoundingClientRect().height,
+    buttonHeight:row.querySelector('button').getBoundingClientRect().height
+   }));
+   assert.ok(geometry.overflow<=3&&geometry.fieldHeight>=44&&geometry.buttonHeight>=44,
+    device+': account name controls fit the phone and remain accessible: '+JSON.stringify(geometry));
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   await page.waitForFunction(()=>window.HouseholdAllViewsReady(),null,{timeout:35000});
+   assert.match(await page.locator('#summary-account').innerText(),/Daily Checking/);
+   assert.match(await page.locator('#summary-account').innerText(),/Household Credit/);
+   assert.doesNotMatch(await page.locator('#summary-account').innerText(),/0042|3201/,
+    'Nicknamed accounts do not show the former masked numbers');
+   await page.locator('.planner-nav-primary [data-view="schedules"]').click();
+   assert.match(await page.locator('.bills-upcoming-filters select').last().innerText(),/Daily Checking/);
+   await page.locator('[data-bills-tab="statements"]').click();
+   assert.match(await page.locator('[data-bills-statement-account]').innerText(),/Household Credit/);
+   await page.reload({waitUntil:'load'});
+   await page.waitForFunction(()=>window.HouseholdAllViewsReady(),null,{timeout:35000});
+   await page.locator('#planner-menu>summary').click();
+   await page.locator('#planner-menu [data-view="settings"]').click();
+   assert.equal(await page.locator('[data-account-nickname="demo-checking"] input').inputValue(),'Daily Checking',
+    'Account nickname survives a new browser load');
+   assert.equal(await page.locator('[data-account-nickname="demo-visa"] input').inputValue(),'Household Credit',
+    'Credit-card nickname survives a new browser load');
+   await page.locator('[data-clear-account-nickname="demo-checking"]').click();
+   await page.waitForFunction(()=>
+    document.querySelector('[data-account-nickname="demo-checking"] input')?.value==='',
+    null,{timeout:20000});
+   await page.locator('.planner-nav-primary [data-view="summary"]').click();
+   assert.match(await page.locator('#summary-account').innerText(),/Everyday Checking/,
+    'Reset restores the bank-provided account name');
    await context.close();
    assert.deepEqual(errors,[],device+' console errors');
   }
