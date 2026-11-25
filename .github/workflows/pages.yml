@@ -22,5 +22,10 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
+      # GitHub's artifact lookup can lag a successful upload. A rerun of the
+      # same workflow creates duplicate 'github-pages' artifacts, so give the
+      # initial upload time to become visible before deployment.
+      - name: Wait for Pages artifact indexing
+        run: sleep 20
       - id: deployment
         uses: actions/deploy-pages@v4
