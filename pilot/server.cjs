@@ -1007,38 +1007,67 @@ async function start(port=Number(env.PORT||8788)){
       previewToken:amazonAiPreview?.token||null,
       // Authenticated user's Notes are already in their encrypted Ledger;
       // never include transaction IDs in the preview or model prompt.
-      examples:response.proposals.slice(0,45).map(p=>({
-       note:p.note,category:p.category,previous:p.previous
+      // Category options are names only. Never send IDs to the browser,
+      // nor any bank metadata to the AI provider.
+      allowedCategories:ai.categoriesForAi(cats),
+      examples:response.proposals.slice(0,45).map((p,index)=>({
+       index,note:p.note,category:p.category,previous:p.previous,
+       possibleMatch:p.note.startsWith('Possible Amazon: ')||
+        p.note.startsWith('Possible Amazon (verify): '),
+       date:state.transactions[p.transactionId]?.date||'',
+       amountCents:Math.round(Number(state.transactions[p.transactionId]?.amount||0)*100)
       }))
      });
     }
     if(body.action==='apply'){
-     if(Object.keys(body).sort().join(',')!=='action,token'||
-        typeof body.token!=='string'||body.token.length!==48)
-      return respond(400,{error:'Preview categories before applying'});
+     if(Object.keys(body).sort().join(',')!=='action,selections,token'||
+        typeof body.token!=='string'||body.token.length!==48||
+        !Array.isArray(body.selections)||!body.selections.length||
+        body.selections.length>45)
+      return respond(400,{error:'Select and review the categories to save'});
      const pending=amazonAiPreview;
-     // One-time, unguessable token and unchanged preferences required.
      if(!pending||!crypto.timingSafeEqual(
         Buffer.from(pending.token),Buffer.from(body.token))||
         Date.now()>pending.expires||settingsRevision()!==pending.revision)
-      return respond(409,{error:'AI preview expired or Ledger changed. Check again.'});
-     amazonAiPreview=null;
-     const before=structuredClone(state.ledgerAdjustments||{}),
+      return respond(409,{error:'AI preview expired or Ledger changed. Review again.'});
+     const ai=require('./amazon-ai-categories.cjs'),
+      before=structuredClone(state.ledgerAdjustments||{}),
       overrides={...(before.categoryOverrides||{})},
       notes=before.predictions?.transactionNotes||{},
       allocations=before.amazonAllocations||{},
       valid=savedCategoryChoices(before.predictions,before.customCategories,
        before.categoryOverrides),
-      allowed=new Set(valid),
-      applied=[];
-     for(const p of pending.proposals){
-      const tx=state.transactions?.[p.transactionId],old=overrides[p.transactionId];
+      allowed=new Set(ai.categoriesForAi(valid)),
+      indices=new Set(),approved=[];
+     // Client only chooses an index in the one-time server-side preview,
+     // never an account ID or source-bank transaction identifier.
+     for(const s of body.selections){
+      if(!s||typeof s!=='object'||Array.isArray(s)||
+         Object.keys(s).sort().join(',')!=='category,index,verified'||
+         !Number.isSafeInteger(s.index)||s.index<0||
+         s.index>=pending.proposals.length||indices.has(s.index)||
+         typeof s.category!=='string'||!allowed.has(s.category)||
+         typeof s.verified!=='boolean')
+       return respond(400,{error:'Invalid category selection. Review again.'});
+      const p=pending.proposals[s.index],
+       possible=p.note.startsWith('Possible Amazon: ')||
+        p.note.startsWith('Possible Amazon (verify): ');
+      if(possible&&!s.verified)
+       return respond(400,{error:'Verify the suggested Amazon item against the charge before approving'});
+      indices.add(s.index);
+      const tx=state.transactions?.[p.transactionId],
+       old=overrides[p.transactionId];
       if(!tx||String(tx.accountId)!==String(p.accountId)||
          notes[p.noteKey]!==p.note||allocations[p.transactionId]||
-         !allowed.has(p.category)||
          (old!==undefined&&old!=='Uncategorized'&&
-          !(old==='Other'&&pending.replaceOther))||
-         old===p.category)continue;
+          !(old==='Other'&&pending.replaceOther)))
+       return respond(409,{error:'Amazon transaction or category changed. Review again.'});
+      approved.push({...p,category:s.category});
+     }
+     amazonAiPreview=null; // Single use even when selected categories are unchanged.
+     const applied=[];
+     for(const p of approved){
+      if(overrides[p.transactionId]===p.category)continue;
       overrides[p.transactionId]=p.category;
       applied.push(p);
      }
