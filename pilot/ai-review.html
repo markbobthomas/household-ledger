@@ -171,6 +171,28 @@ button{font:inherit;cursor:pointer}
 .outlook-report .metric>strong{font-size:clamp(1.18rem,2.8vw,1.55rem);font-variant-numeric:tabular-nums}
 @media(max-width:650px){.outlook-report .metric-grid{gap:8px}
 .outlook-report .outlook-section h2{font-size:1.14rem}}
+
+/* Match the primary Ledger's graphite navigation and explicit blue actions. */
+:root{color:#15202c;background:#f3f5f7}
+body{background:#f3f5f7;color:#15202c}
+header{border-bottom:2px solid #172635;padding:0 0 15px;margin-bottom:22px}
+header a{color:#155ca9;font-weight:750}
+h1,h2,h3{color:#172635}
+.muted,small{color:#526071}
+.consent,.analysis-report,.export-panel{border-color:#cdd7e0}
+.consent,.analysis-report{border-radius:7px;background:#fff}
+.consent input{accent-color:#175dad}
+#run,#run-qaqc{background:#175dad;color:#fff;border:1px solid #175dad;border-radius:5px;min-height:44px;font-weight:760}
+#run:hover:not(:disabled),#run-qaqc:hover:not(:disabled){background:#0e478a;border-color:#0e478a}
+#export-data{background:#fff;border:1px solid #8faac4;border-radius:5px;color:#15518b;min-height:44px;font-weight:730}
+#export-data:hover:not(:disabled){background:#eaf2fb}
+.finding h3,.key-points h2{color:#183a57}
+.finding p,.hero .keyline,.callout p,.key-points li{color:#314458}
+.ranked-fill{background:#175dad}.ranked-value{color:#15518b}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{
+ outline:3px solid #256fc7;outline-offset:2px
+}
+
 </style></head><body><main>
 <header><strong>Ledger</strong><a href="/">Back to calendar</a></header>
 <div class="intro"><h1>AI Financial Analysis</h1>
