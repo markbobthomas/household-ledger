@@ -358,6 +358,40 @@ assert.equal(NoteCats.categoryForNote('Possible Amazon (verify): Coffee beans OR
 assert.equal(NoteCats.categoryForNote('Possible Amazon (date only): Coffee beans',categories).status,'date-only');
 assert.equal(NoteCats.categoryForNote('My personal note: Coffee beans',categories).status,'not-imported');
 
+
+const zeroCategoryCharge={
+ id:'fictional-noun-unknown',accountId:'fictional-card',name:'AMAZON MKTPL',
+ date:'2026-11-20',amount:42.11,pending:false
+};
+const zeroCategoryProposal={
+ matches:[],suggestions:[{
+  transactionId:zeroCategoryCharge.id,accountId:zeroCategoryCharge.accountId,
+  date:zeroCategoryCharge.date,amountCents:4211,
+  note:'Possible Amazon: ZT-WIDGET UNKNOWN MODEL 9381',
+  confidence:'possible',source:'item',suggestedCategory:null
+ }],importedItems:1,orderGroups:1,
+ bankCharges:1,verifiedBankCharges:0,possibleBankCharges:1,
+ unmatchedBankCharges:0,ambiguousOrders:0,unmatchedOrders:0
+};
+const zeroCategoryPlan=Apply.prepare(zeroCategoryProposal,{},{
+ transactions:{one:zeroCategoryCharge},categories
+});
+assert.equal(zeroCategoryPlan.report.notesReady,1,
+ 'Product Notes must remain savable when NO categories are recognizable');
+assert.equal(zeroCategoryPlan.report.confidentCategories,0);
+assert.equal(zeroCategoryPlan.ready,1,
+ 'Category count zero must not prevent saving a legitimate product Note');
+const unknownKey=Pair.keyFor(zeroCategoryCharge);
+assert.match(zeroCategoryPlan.nextPredictions.transactionNotes[unknownKey],
+ /^Possible Amazon:/);
+const zeroCategoryRepeat=Apply.prepare(zeroCategoryProposal,zeroCategoryPlan.next,{
+ transactions:{one:zeroCategoryCharge},categories
+});
+assert.equal(zeroCategoryRepeat.ready,0,
+ 'Rerunning an applied import must never duplicate a saved product Note');
+assert.deepEqual(zeroCategoryRepeat.nextPredictions.transactionNotes,
+ zeroCategoryPlan.nextPredictions.transactionNotes);
+
 console.log('Amazon item import: CSV/ZIP, exact match, category splits, review, manual priority, ambiguity PASS');
 
 
