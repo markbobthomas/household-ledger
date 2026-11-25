@@ -330,8 +330,11 @@ function dayDetail(point,card){
  return '<section class="calendar-day-detail" data-calendar-detail aria-label="Selected day predictions">'+
   '<div class="calendar-detail-heading"><div><strong>'+
    esc(dateLabel(point.date))+'</strong></div>'+
+   '<div class="calendar-detail-actions">'+
+   '<button type="button" class="calendar-whatif" data-calendar-whatif'+
+    (point.date<=calendarContext.asOf||card?' disabled':'')+'>Try what-if</button>'+
    '<button type="button" class="calendar-add" data-calendar-add'+
-   (point.date===first.date?' disabled':'')+'>+ Add prediction</button></div>'+
+    (point.date===first.date?' disabled':'')+'>+ Add prediction</button></div></div>'+
   (todayActivity.length?'<div class="calendar-today-actual" data-calendar-today-actual>'+
    '<strong>BANK ACTIVITY · NOT FORECAST AGAIN</strong>'+
    '<div class="calendar-detail-items">'+postedEntries(point.date)+'</div>'+
@@ -1154,7 +1157,62 @@ document.addEventListener('keydown',e=>{
   document.querySelector('[data-calendar-day="'+next+'"],[data-calendar-actual-day="'+next+'"]')?.focus();
 });
 
+
+/* Release 2: ephemeral one-off scenario using the authoritative account's
+ * already materialized daily balances. No state mutation or competing forecast.
+ * The actual Save action revalidates via planner-transactions.add(). */
+function whatIfContext(){
+ const c=calendarContext;
+ if(!c)return null;
+ const a=c.accounts.find(x=>String(x.id)===String(c.chosen));
+ return {accountId:c.chosen,accountName:a?.name||'Selected account',
+  date:calendarDate,asOf:c.asOf,through:c.through,card:c.card};
+}
+function previewWhatIf(data){
+ const c=calendarContext,context=whatIfContext(),invalid=message=>({valid:false,message});
+ if(!c||!context||!Array.isArray(c.points)||c.points.length<2)
+  return invalid('A balance projection is needed to compare this scenario.');
+ if(context.card)return invalid('Select a checking or savings account for a cash-balance scenario.');
+ if(String(data.accountId)!==String(context.accountId))
+  return invalid('The selected account changed. Close and reopen this scenario.');
+ const type=String(data.type||''),date=String(data.date||''),
+  amount=Number(data.amount),merchant=String(data.merchant||'').trim();
+ if(!['expense','income'].includes(type))return invalid('Choose money out or money in.');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date<=c.asOf||date>c.through)
+  return invalid('Choose a future date within this balance projection.');
+ if(!Number.isFinite(amount)||amount<=0||amount>999999999||
+  Math.abs(amount*100-Math.round(amount*100))>0.00001)
+  return invalid('Enter a positive amount with no more than two decimal places.');
+ const tools=root.HouseholdPlannerTransactions;
+ const effective=tools?.forecastBusinessDate?.(date,c.asOf,type==='income'?'in':'out')||date;
+ if(effective<=c.asOf||effective>c.through)
+  return invalid('The bank-business-day date falls outside the forecast.');
+ const point=c.points.find(p=>p.date===effective);
+ const monthPoints=c.points.filter(p=>p.date.startsWith(effective.slice(0,7))&&
+  Number.isFinite(p.balance));
+ if(!point||!monthPoints.length||!Number.isFinite(point.balance))
+  return invalid('No usable daily balance is available for that date.');
+ const cents=Math.round(amount*100),delta=type==='income'?cents:-cents;
+ const normalized=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ const sameBill=Boolean(merchant)&&c.projectedEvents.some(e=>
+  String(e.date)===effective&&String(e.accountId)===String(c.chosen)&&
+  String(e.kind)===type&&Math.round(Number(e.amount||0)*100)===cents&&
+  normalized(e.merchant)===normalized(merchant));
+ if(sameBill)return invalid('This exact payment is already in the forecast. Open it to edit instead of counting it twice.');
+ const beforeDay=Math.round(point.balance*100),
+  beforeLow=Math.min(...monthPoints.map(p=>Math.round(p.balance*100))),
+  afterLow=Math.min(...monthPoints.map(p=>
+   Math.round(p.balance*100)+(p.date>=effective?delta:0)));
+ return {valid:true,saveReady:Boolean(merchant),accountName:context.accountName,
+  effectiveDate:effective,requestedDate:date,month:effective.slice(0,7),
+  beforeDay:beforeDay/100,afterDay:(beforeDay+delta)/100,
+  beforeLow:beforeLow/100,afterLow:afterLow/100,
+  change:delta/100,
+  message:merchant?'Preview only — no transaction has been saved.':
+   'Preview only — add a description before saving.'};
+}
 root.HouseholdPlannerSummary={render,getPoints,knownGaps,reconstructedHistory,
+ whatIfContext,previewWhatIf,
  setCalendarScope:(value,redraw=true)=>{
   // A scope change is display-only: reuse prepared projection and replace
   // just the visible calendar without invalidating the other prepared tabs.
