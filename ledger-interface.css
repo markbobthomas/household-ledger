@@ -354,7 +354,7 @@ body.ledger-app .history-page .history-actual-row>.history-select-wrap{
  body.ledger-app .history-page .history-actual-row.ledger-list-row{
   grid-template-columns:26px minmax(0,1fr) 82px!important;
   column-gap:10px!important;row-gap:8px!important;
-  padding:10px 3px!important;
+  padding:5px 3px!important;
  }
  body.ledger-app .history-page .history-actual-row>.history-row-open{
   grid-column:2/-1!important;grid-row:1!important;
