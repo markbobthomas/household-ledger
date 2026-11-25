@@ -32,6 +32,14 @@ hr{border:0;border-top:1px solid #e6ebe4;margin:24px 0}
 .hide{display:none!important}input.shareurl{font:inherit;width:100%;padding:13px;border:1px solid #cad2c8;border-radius:10px;background:white;color:#323c31;margin:8px 0 12px}
 .footer{text-align:center;font-size:13px;color:#737e71;margin-top:22px}
 .notice{padding:12px 14px;background:#faf1dd;color:#6c4c21;border-radius:10px}
+.budget-total{font-size:35px;font-weight:800;letter-spacing:-.035em;margin:12px 0 4px}
+.budget-sub{color:#636f64;font-size:14px}.budget-item{padding:14px 0;border-top:1px solid #e7ece5}
+.budget-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:15px}
+.budget-head strong{font-size:16px}.budget-meta{font-size:13px;color:#73796e;margin:4px 0 7px}
+.budget-meter{height:8px;background:#e7eae4;border-radius:20px;overflow:hidden}
+.budget-meter>div{height:100%;background:#63856a;border-radius:20px}
+.budget-item.over .budget-meter>div{background:#ba4874}
+.budget-item.over .budget-head strong{color:#9a2659}
 @media(max-width:350px){.choices{grid-template-columns:1fr}}
 </style></head><body><main>
 <header><div class="brand">LEDGER</div><div id="count" class="count" hidden></div></header>
@@ -65,7 +73,16 @@ hr{border:0;border-top:1px solid #e6ebe4;margin:24px 0}
 <div class="buttons"><button id="skip" class="secondary" type="button">Skip for now</button><button id="reload" class="secondary" type="button">Refresh</button></div>
 <p id="feedback" class="status" role="status" aria-live="polite"></p>
 </section>
-<section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p><button id="again" class="primary" type="button" hidden>Review skipped items</button></section>
+<section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p>
+<button id="budget-button" class="primary wide" type="button">See our budget</button>
+<button id="again" class="secondary" type="button" hidden>Review skipped items</button></section>
+<section id="budget" class="hide"><h1>Our budget</h1><p id="budget-period" class="muted context"></p>
+<div class="card"><div class="tiny">BUDGET LEFT THIS MONTH</div><div id="budget-total" class="budget-total"></div>
+<div id="budget-sub" class="budget-sub"></div></div>
+<p class="subhead">Spending by category</p><div id="budget-rows" class="card"></div>
+<p class="muted">Read-only. Categories and amounts update in Ledger when purchases are categorized.</p>
+<button id="budget-back" class="secondary" type="button">Back to categorizing</button>
+<p id="budget-error" class="status" role="status"></p></section>
 <section id="error" class="hide"><h1>Link unavailable</h1><p id="errormsg" class="muted">Ask for a new private link.</p></section>
 <p class="footer">Only category decisions are available here. Bank accounts and balances stay in Ledger.</p>
 </main><script>
@@ -74,7 +91,7 @@ const $=id=>document.getElementById(id);
 const manage=location.pathname==='/categorize/manage',token=location.hash.slice(1);
 let view={items:[],categories:[]},revision='',skipped=new Set(),index=0,busy=false,link='';
 const text=(id,s)=>$(id).textContent=String(s??'');
-const show=which=>['owner','review','empty','error'].forEach(id=>$(id).classList.toggle('hide',id!==which));
+const show=which=>['owner','review','empty','budget','error'].forEach(id=>$(id).classList.toggle('hide',id!==which));
 function money(v){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Math.abs(Number(v)||0))}
 async function api(path,body,shared=false){
  const headers=shared?{'X-Ledger-Share':token}: {};
@@ -168,6 +185,42 @@ async function save(item,category){
 $('skip').onclick=()=>{if(busy)return;const x=view.items[index];if(x)skipped.add(x.kind+':'+x.id);index=(index+1)%view.items.length;render()};
 $('reload').onclick=async()=>{if(busy)return;try{await load()}catch(e){text('feedback',e.message)}};
 $('again').onclick=()=>{skipped.clear();index=0;render()};
+$('budget-button').onclick=async()=>{
+ show('budget');text('budget-total','Loading…');text('budget-sub','');$('budget-rows').replaceChildren();
+ text('budget-error','');
+ try{
+  const result=await api('/api/share/budget',undefined,true);
+  const month=new Date(result.month+'-01T12:00:00Z').toLocaleDateString('en-US',
+   {month:'long',year:'numeric',timeZone:'UTC'});
+  text('budget-period',month+' · All accounts');
+  const remaining=result.totalBudgetCents-result.usedCents;
+  text('budget-total',!result.budgetSet?'No budget set':
+   remaining<0?'Over by '+money(-remaining/100):money(remaining/100));
+  text('budget-sub',money(result.usedCents/100)+' used of '+
+   money(result.totalBudgetCents/100)+' monthly budget · '+
+   money(result.spentCents/100)+' posted'+
+   (result.pendingCents?' · '+money(result.pendingCents/100)+' pending':'')+
+   (result.expectedIncluded?' · '+money(result.expectedCents/100)+' expected':''));
+  if(!result.expectedIncluded)text('budget-error','Future expected expenses are temporarily unavailable; only posted and pending spending is shown.');
+  for(const item of result.rows||[]){
+   const block=document.createElement('div');block.className='budget-item'+
+    (item.targetCents!==null&&item.usedCents>item.targetCents?' over':'');
+   const head=document.createElement('div');head.className='budget-head';
+   const title=document.createElement('span');title.textContent=item.name;
+   const spent=document.createElement('strong');spent.textContent=money(item.usedCents/100);
+   head.append(title,spent);
+   const detail=document.createElement('div');detail.className='budget-meta';
+   detail.textContent=item.targetCents===null?'No monthly budget set':
+    'of '+money(item.targetCents/100)+' budget'+
+    (item.usedCents>item.targetCents?' · Over '+money((item.usedCents-item.targetCents)/100):'');
+   const meter=document.createElement('div');meter.className='budget-meter';
+   const fill=document.createElement('div');fill.style.width=
+    (item.targetCents>0?Math.max(0,Math.min(100,100*item.usedCents/item.targetCents)):item.usedCents>0?100:0)+'%';
+   meter.append(fill);block.append(head,detail,meter);$('budget-rows').append(block);
+  }
+ }catch(e){text('budget-total','Unavailable');text('budget-error',e.message)}
+};
+$('budget-back').onclick=async()=>{try{await load()}catch(e){show('error');text('errormsg',e.message)}};
 if(manage){show('owner');ownerStatus()}
 else if(!/^[a-f0-9]{64}$/.test(token)){show('error');text('errormsg','This link is incomplete. Ask for a new categorization link.')}
 else load().catch(e=>{show('error');text('errormsg',e.message)});
