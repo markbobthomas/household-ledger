@@ -550,7 +550,9 @@ async function start(port=Number(env.PORT||8788)){
      state.ledgerAdjustments?.customCategories),
     notes=state.ledgerAdjustments?.predictions?.transactionNotes||{},
     txs=Object.values(state.transactions||{}),
-    tagged=note=>/^(Amazon: |Possible Amazon(?:: | \\(verify\\): | \\(date only\\): ))/.test(String(note||'')),
+    tagged=note=>['Amazon: ','Possible Amazon: ',
+     'Possible Amazon (verify): ','Possible Amazon (date only): ']
+     .some(prefix=>String(note||'').startsWith(prefix)),
     byKey=new Set(txs.map(keyFor)),
     annotated=txs.filter(t=>tagged(notes[keyFor(t)])),
     noOther=analyze(state.transactions,state.ledgerAdjustments||{},cats),
