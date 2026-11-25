@@ -21,7 +21,7 @@ const rows=[
  make('c','Possible Amazon (date only): Pet food'),
  make('d','Amazon: Pet grooming brush for a cat'),
  make('e','Amazon: Pet grooming brush for a cat'),
- make('f','Possible Amazon: Unknown professional coffee filter device')
+ make('f','Possible Amazon: Single-use neoprene gasket 8mm')
 ];
 const notes=Object.fromEntries(rows.map(t=>[keyFor(t),t.note]));
 const adjustments={predictions:{transactionNotes:notes},
