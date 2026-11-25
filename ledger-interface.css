@@ -433,9 +433,13 @@ body.ledger-app .planner-page :is(
 ) :is(button,.btn){
  min-height:44px;padding:9px 12px;
 }
-body.ledger-app .planner-page .history-activity-filters :is(input,select),
-body.ledger-app .planner-page .ledger-primary-filter-bar :is(select,.history-month-trigger){
- min-height:44px!important;
+/* Same 44px field height on every comparable Spending/Activity toolbar,
+   including Budget and Month Insights. Inherit the existing widths/radii. */
+body.ledger-app .planner-page :is(
+ .history-budget-filters,.history-report-filters,.history-activity-filters,
+ .ledger-primary-filter-bar,.financial-recap-header
+) :is(.history-month-trigger,select[name="historyAccount"],select[name="historyCategory"],select[name="historySort"],input[name="search"]){
+ min-height:44px!important;height:44px!important;box-sizing:border-box;
 }
 /* Prevent small phone controls from overflowing their own filter grid. */
 @media(max-width:650px){
