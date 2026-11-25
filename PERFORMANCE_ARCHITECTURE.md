@@ -49,3 +49,10 @@ The existing fictional server and desktop Chromium/iPhone browser regression scr
 Before merging: identify whether an edit is *display-only*, *reporting preference*, *bank history classification*, or *forecast-affecting*; document which cache is invalidated and why; keep unnecessary work off the main thread; verify the fictional UI invariants and banking checks; test category edits and calendar month movement; update `PROJECT_LEDGER.md`. Avoid declaring Render deployed from a GitHub merge or a public Pages publish—verify the private `/healthz` commit separately.
 
 **Known limit:** Filter changes still generate HTML for the visible report, and category-classification edits still conservatively refresh wider caches. These are deliberate follow-on profiling candidates, not a reason to abandon the scoped-update architecture.
+
+
+## Release 3 session-only device timing (November 24, 2026)
+
+The Settings advanced diagnostics include a local, read-only `HouseholdLedgerDeviceTiming()` summary of prepared page switches and Activity/Spending display filters. It uses the current device's next painted frame after a user interaction, with a bounded in-memory sample list and median/p95 values. No private payees, account numbers, balances, transaction records, interaction samples, or timestamps are persisted, sent to Render or logged. Reloading the tab resets the measurements. The counters complement (not replace) `HouseholdPlannerWorkStats()` and `HouseholdPreparedViewGeneration()`; rendering must not invalidate a three-year forecast or re-fetch bank data for a display-only filter.
+
+**Measurement limit:** Automated Chromium/iPhone WebKit tests can verify the instrumentation and cache conservation, but cannot measure the owner's actual iPhone responsiveness. Actual device results need owner-side use of Home, Bills, Activity and Spending before deciding whether any historical compatibility path, duplicated CSS, or client markup may be safely removed. None are removed in this release without observed evidence. Keep the full 1,095-day projection.
