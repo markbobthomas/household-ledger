@@ -683,15 +683,6 @@ async function start(port=Number(env.PORT||8788)){
     error:error.httpStatus===409?staleMessage:'Could not save this category. No bank transactions were changed.'})}
    finally{release()}
   }
-  if(requestPath==='/api/share/budget'){
-   if(!validCategoryShare(req))return respond(401,{error:'This private link expired or has been replaced.'});
-   if(req.method!=='GET')return respond(403,{error:'Budget view is read-only'});
-   try{
-    const prepared=preparedFor(ledgerPayload());
-    const budget=require('./category-share-budget.cjs').build(state,prepared);
-    return budget?respond(200,budget):respond(409,{error:'No bank data to show'});
-   }catch{return respond(503,{error:'Budget is temporarily unavailable. Try again.'})}
-  }
   const expected=Buffer.from('pilot:'+env.PILOT_PASSWORD).toString('base64');
   const supplied=String(req.headers.authorization||'').replace(/^Basic /,'');
   const basic=supplied.length===expected.length&&crypto.timingSafeEqual(Buffer.from(supplied),Buffer.from(expected));
