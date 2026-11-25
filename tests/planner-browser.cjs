@@ -322,15 +322,17 @@ module.exports=(async()=>{
      header:header.backgroundColor,active:selected.backgroundColor,
      mark:logo.content,accent:css('.btn.primary').borderTopLeftRadius};
    });
-   assert.equal(newTheme.background,'rgb(247, 249, 246)',
-    'The warm Ledger theme must be loaded, not the retired dark one');
-   assert.equal(newTheme.nav,'rgb(255, 255, 255)');
-   assert.ok(newTheme.rounding>=18,'Navigation uses soft rounded surfaces');
+   assert.equal(newTheme.background,'rgb(243, 245, 247)',
+    'The graphite Ledger stylesheet must be loaded');
+   assert.equal(newTheme.nav,'rgb(20, 32, 45)',
+    'Primary navigation uses the high-contrast graphite surface');
+   assert.ok(newTheme.rounding>=5&&newTheme.rounding<=9,
+    'Navigation uses the restrained shared corner radius');
    assert.equal(newTheme.header,'rgba(0, 0, 0, 0)',
-    'Dark industrial top bar is removed');
-   assert.equal(newTheme.active,'rgb(230, 244, 237)',
-    'Current destination is the calm mint-tinted pill');
-   assert.notEqual(newTheme.mark,'none','Ledger has the new soft brand mark');
+    'Header stays an unobtrusive content row');
+   assert.equal(newTheme.active,'rgb(39, 55, 71)',
+    'Current destination is visibly selected on graphite');
+   assert.notEqual(newTheme.mark,'none','Ledger retains a visible brand mark');
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').allTextContents(),
     ['Home','Spending','Bills','Transactions']);
    assert.deepEqual(await page.locator('.planner-nav-primary .tab-link').evaluateAll(
@@ -710,8 +712,8 @@ module.exports=(async()=>{
         assert.ok(spread(metricLayout.valueBottoms)<=2,
          'Calendar metric values must align at '+width+': '+JSON.stringify(metricLayout));
         if(metricLayout.bankColor&&!/^-|Not reported/.test(metricLayout.bankText.trim()))
-         assert.equal(metricLayout.bankColor,'rgb(9, 159, 83)',
-          'Available Balance should use the brighter green accent');
+         assert.equal(metricLayout.bankColor,'rgb(23, 38, 53)',
+          'Available Balance uses neutral graphite, leaving color for risks');
        }
       }
       const headerGeometry=await page.evaluate(()=>{
@@ -803,7 +805,8 @@ module.exports=(async()=>{
     const s=getComputedStyle(el);
     return {radius:parseFloat(s.borderTopLeftRadius),background:s.backgroundColor};
    });
-   assert.ok(historySoftStyle.radius>=16,'History lines live in soft shared cards');
+   assert.ok(historySoftStyle.radius>=5&&historySoftStyle.radius<=9,
+    'History uses the shared compact surface radius');
    assert.equal(historySoftStyle.background,'rgb(255, 255, 255)');
    const currentDates=await page.locator('.history-actual-row').evaluateAll(rows=>
     rows.map(row=>row.dataset.historySortDate));
@@ -1098,7 +1101,7 @@ module.exports=(async()=>{
      assert.match(await remaining.innerText(),/^Over by \$/,
       'Overspending is labeled as an overage, not a negative amount left');
      assert.equal(await remaining.evaluate(el=>getComputedStyle(el).color),
-      'rgb(208, 0, 115)','Overall budget overage uses the existing vivid pink treatment');
+      'rgb(180, 35, 50)','Overall over-budget amount uses the consistent red risk treatment');
     }else{
      assert.match(await remaining.innerText(),/^\$/,
       'Available budget is displayed as an ordinary dollar amount');
@@ -1216,16 +1219,16 @@ module.exports=(async()=>{
     assert.ok(overageBounds.left>=-1&&overageBounds.right<=overageBounds.budgetRight+1&&
      overageBounds.screen<=overageBounds.viewport+3,
      'The overage fits under the target with no horizontal spill: '+JSON.stringify(overageBounds));
-    assert.equal(overageBounds.color,'rgb(208, 0, 115)',
-     'The overage dollar figure uses legible vivid pink emphasis');
+    assert.equal(overageBounds.color,'rgb(180, 35, 50)',
+     'The overage dollar figure uses legible red risk emphasis');
     const overageColor=await budgetRow.locator('.history-category-actual').evaluate(el=>({
      over:el.classList.contains('over'),color:getComputedStyle(el).color
     }));
     assert.equal(overageColor.over,true,'Over-budget spent amount receives its own overage state');
-    assert.equal(overageColor.color,'rgb(208, 0, 115)',
-     'The over-budget dollar amount itself turns vivid pink');
+    assert.equal(overageColor.color,'rgb(180, 35, 50)',
+     'The over-budget dollar amount uses red risk emphasis');
     assert.equal(await budgetRow.locator('.history-budget-fill').evaluate(el=>getComputedStyle(el).backgroundColor),
-      'rgb(255, 20, 147)','Over-budget progress fill is neon pink');
+      'rgb(180, 35, 50)','Over-budget progress fill is red');
      assert.equal(Number.parseFloat(await budgetRow.locator('.history-budget-fill').evaluate(el=>el.style.width)),100,
      'The over-budget fill caps at its full track width');
     await checkOverall(3);
