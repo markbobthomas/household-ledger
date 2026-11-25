@@ -289,6 +289,33 @@ module.exports=(async()=>{
     'the separate QA/QC report is unchanged');
    assert.equal(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+2),true,
     'analysis fits narrow mobile width');
+   // Source-linked next steps are optional and never replace full analysis.
+   // A verified private report can expose the evidence inside the same page
+   // without inventing a bank URL, leaking IDs or creating a provider call.
+   state.report={...data,presentation:'independent-financial-outlook',
+    actions:[{title:'Review a fictional recurring cost',
+     nextStep:'Compare the verified monthly cost with your needs.',
+     evidence:[{id:'fictional-proof-1',text:'Fictional source-backed monthly charge'}]}],
+    blocks:[...data.blocks,{kind:'callout',
+     title:'Action: Review a fictional recurring cost',
+     text:'Compare the verified monthly cost with your needs.',
+     detail:'Check recurring merchant evidence before changing a payment.',
+     evidence:[{id:'fictional-proof-1',text:'Fictional source-backed monthly charge'}]}]};
+   await page.reload();
+   await page.locator('#analysis .outlook-actions').waitFor({state:'visible'});
+   assert.equal(await page.locator('#analysis .outlook-action-list li').count(),1);
+   assert.match(await page.locator('.outlook-action-list').innerText(),/Review a fictional recurring cost/);
+   await page.locator('.outlook-action-list .action-evidence-link').click();
+   assert.equal(await page.locator('#ledger-action-evidence-0').getAttribute('open'),'',
+    'Action link opens exactly the cited private source proof');
+   assert.match(await page.locator('#ledger-action-evidence-0').innerText(),/Fictional source-backed/);
+   assert.ok(await page.locator('#analysis .outlook-section').count()>=data.blocks.length-2,
+    'Concise action guide does not discard or compress the full financial report');
+   assert.equal(await page.locator('#analysis .graph').count()>=3,true,
+    'Full sourced charts remain visible in long-form analysis');
+   assert.equal(requests.length,1,'Action guide makes no extra paid model request');
+   assert.equal(await page.locator('#qaqc-analysis .outlook-actions').count(),0,
+    'The QA/QC report never turns into a financial action list');
    assert.deepEqual(errors,[],name+' AI analysis should not throw');
    await context.close();await browser.close();
   }
