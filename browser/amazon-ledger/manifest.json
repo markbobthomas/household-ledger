@@ -1,10 +1,24 @@
 {
   "manifest_version": 3,
   "name": "Ledger Amazon Orders Sync",
-  "version": "0.1.0",
-  "description": "Privately read Amazon order pages and preview item categories in your signed-in Ledger.",
-  "permissions": ["activeTab", "scripting", "storage"],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
-  "action": {"default_title": "Sync Amazon orders to Ledger", "default_popup": "popup.html"},
-  "background": {"service_worker": "background.js"}
+  "version": "0.2.0",
+  "description": "Automatically refresh Amazon order details in Ledger while your desktop browser is running.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_title": "Amazon order sync for Ledger",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
 }

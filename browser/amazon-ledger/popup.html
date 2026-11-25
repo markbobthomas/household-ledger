@@ -1,22 +1,45 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Ledger Amazon sync</title><style>
-body{font:14px system-ui,-apple-system,sans-serif;width:330px;margin:0;padding:18px;color:#202c2b;background:#fff}
-h1{font-size:18px;margin:0 0 8px}p{line-height:1.5;color:#405950}label{font-weight:600}
-input{width:100%;padding:10px;margin:8px 0 12px;box-sizing:border-box;border:1px solid #a6b9ae;border-radius:7px}
-button{padding:10px 12px;border:1px solid #175f50;border-radius:7px;background:white;color:#175f50;font:inherit;cursor:pointer}
-button.primary{background:#175f50;color:white}button:disabled{opacity:.5}
-.actions{display:flex;gap:8px;flex-wrap:wrap}#message{min-height:28px;white-space:pre-wrap}
-small{color:#63746e;line-height:1.45;display:block;margin-top:13px}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Amazon sync · Ledger</title>
+<style>
+:root{font:14px system-ui,-apple-system,sans-serif;color:#182535;background:#f3f5f7}
+*{box-sizing:border-box}body{width:348px;margin:0;padding:16px}
+h1{font-size:19px;margin:0 0 8px}h2{font-size:15px;margin:0 0 7px}
+p{line-height:1.5;margin:8px 0;color:#3d5060}
+section{background:white;border:1px solid #cbd5df;border-radius:7px;padding:13px;margin-top:12px}
+label{font-weight:700;display:block;margin:10px 0 5px}
+input{width:100%;padding:11px;font:inherit;border:1px solid #8d9eaf;border-radius:5px}
+button{font:inherit;min-height:42px;padding:9px 12px;border:1px solid #175dad;border-radius:5px;background:white;color:#175dad;cursor:pointer;font-weight:700}
+button.primary{background:#175dad;color:white}button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #256fc7;outline-offset:2px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
+.muted{font-size:12px;color:#546273}
+#auto-details{margin:12px 0 4px;white-space:pre-wrap;font-size:12px;color:#425364}
+#message{min-height:22px;white-space:pre-wrap}
+a{color:#175dad}
 </style></head><body>
 <h1>Amazon → Ledger</h1>
-<p><strong>1.</strong> Sign in to your private Ledger in this browser, paste its website address below, then Connect Ledger once.</p>
-<label for="ledger">Your private Ledger address</label>
+<p class="muted">Match Amazon items to existing bank charges. Never adds purchases.</p>
+<section>
+<h2>Connect once</h2>
+<label for="ledger">Private Ledger website address</label>
 <input id="ledger" type="url" placeholder="https://your-ledger.onrender.com" autocomplete="off" spellcheck="false">
 <div class="actions"><button id="save" type="button">Connect Ledger</button></div>
-<p><strong>2.</strong> Open Amazon <strong>Your Orders</strong> in this browser while signed in. Choose an order period.</p>
-<div class="actions"><button id="sync" class="primary" type="button">Sync Amazon orders</button></div>
-<p><strong>3.</strong> Review the CSV opened in Ledger, then click <strong>Import and save</strong> there.</p>
+</section>
+<section>
+<h2>Automatic order sync</h2>
+<p>When enabled, checks Amazon about every 6 hours while this desktop browser is running. Saves item Notes and confident categories directly to Ledger. Uncertain categories stay for review.</p>
+<div class="actions"><button class="primary" id="auto-toggle" type="button">Enable automatic sync</button>
+<button id="run-now" type="button" hidden>Sync now</button></div>
+<div id="auto-details" role="status" aria-live="polite">Automatic sync is off.</div>
+<p class="muted">Uses your existing Amazon and Ledger sign-ins. No passwords are saved in the extension. It may ask you to sign in again if either session expires.</p>
+</section>
+<details>
+<summary>Manual import (optional)</summary>
+<p>Open Amazon <strong>Your Orders</strong> in this browser, then load a review-only CSV into Ledger.</p>
+<button id="sync" type="button">Open manual import preview</button>
+</details>
 <p id="message" role="status" aria-live="polite"></p>
-<small>Experimental, desktop Chrome/Edge only. Reads up to five pages of clearly priced single-item orders. Multi-item and uncertain orders are skipped. No passwords, cookies or order history are stored. The ZIP/CSV importer remains available.</small>
-<p><a href="https://github.com/markbobthomas/household-ledger/blob/main/browser/amazon-ledger/README.md" target="_blank" rel="noopener noreferrer">Setup and troubleshooting guide</a></p>
+<p class="muted">Currently scans up to five pages of clearly priced single-item orders; mixed orders and refunds still need ZIP import. Not compatible with iPad/iPhone.</p>
+<a href="https://github.com/markbobthomas/household-ledger/blob/main/browser/amazon-ledger/README.md" target="_blank" rel="noopener noreferrer">Setup and troubleshooting guide</a>
 <script src="popup.js"></script></body></html>
