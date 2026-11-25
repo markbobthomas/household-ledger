@@ -36,7 +36,8 @@ function prepare(result,before={},context={}){
   addedNotes.add(proposal.transactionId);
  }
  for(const proposal of result.matches||[]){
-  if(proposal.notesOnly||provenance[proposal.transactionId]?.source==='manual')continue;
+  if(proposal.notesOnly||['manual','manual-item','amazon-ai-reviewed-item','amazon-ai-reviewed'].includes(
+     provenance[proposal.transactionId]?.source))continue;
   const id=proposal.transactionId,prior=allocations[id];
   const changed=!prior||prior.orderId!==proposal.orderId||
    JSON.stringify(prior.lines)!==JSON.stringify(proposal.lines);
