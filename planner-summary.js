@@ -463,7 +463,7 @@ function forecastClarityMarkup(){
  const low=displayedMonthLow(),cutoff=low?.date||'',
   start=cutoff?addDay(cutoff,-14):'',
   withdrawals=(c.projectedEvents||[]).filter(e=>
-   e.kind==='expense'&&cutoff&&e.date>=start&&e.date<=cutoff&&
+   ['expense','transfer_out'].includes(e.kind)&&cutoff&&e.date>=start&&e.date<=cutoff&&
    Number.isFinite(Number(e.amount))).sort((a,b)=>
     Math.abs(Number(b.amount))-Math.abs(Number(a.amount))).slice(0,3),
   why=withdrawals.length?withdrawals.map(e=>

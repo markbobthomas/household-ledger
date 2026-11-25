@@ -5460,7 +5460,7 @@ document.addEventListener('change',async e=>{
  const prior=item.querySelector('[data-category-review-error]');
  if(prior)prior.remove();
  try{
-  if(kind==='transaction')await saveTransactionCategory(id,chosen,true);
+  if(kind==='transaction')await saveTransactionCategory(id,chosen,true,false);
   else await saveReviewPlanCategory(kind,id,chosen);
   reviewSkipped.delete(reviewCategoryKey(kind,id));
   reviewLastSave=undoChoice;
