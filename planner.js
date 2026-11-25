@@ -79,6 +79,37 @@ let forecastCache=null,serverPreparedForecast=null;
 let historyDataCache=null;
 const workStats={forecastBuilds:0,historyNormalizations:0,historyPageBuilds:0,filterRefreshes:0};
 window.HouseholdPlannerWorkStats=()=>({...workStats});
+/* Session-only interaction timing; no financial data, labels or identifiers
+ * are persisted, transmitted or logged. Metrics reflect this browser's
+ * next painted frame, not a synthetic speed promise. */
+const deviceTimings={navigation:[],activityFilter:[],spendingFilter:[]};
+function recordDeviceTiming(kind,start){
+ if(!Object.hasOwn(deviceTimings,kind)||!Number.isFinite(start)||
+   typeof window.performance?.now!=='function')return;
+ const finish=()=>{
+  const sample=Math.max(0,Math.round((performance.now()-start)*10)/10),
+   values=deviceTimings[kind];
+  values.push(sample);
+  if(values.length>80)values.shift();
+ };
+ if(typeof requestAnimationFrame==='function')
+  requestAnimationFrame(()=>requestAnimationFrame(finish));
+ else finish();
+}
+window.HouseholdLedgerDeviceTiming=()=>Object.fromEntries(
+ Object.entries(deviceTimings).map(([kind,values])=>{
+  const sorted=values.slice().sort((a,b)=>a-b),point=p=>sorted.length?
+   sorted[Math.max(0,Math.ceil(sorted.length*p)-1)]:null;
+  return [kind,{samples:sorted.length,medianMs:point(.5),p95Ms:point(.95)}];
+ }));
+function deviceTimingText(){
+ const entries=window.HouseholdLedgerDeviceTiming(),
+  label={navigation:'Prepared page switches',activityFilter:'Transaction filters',
+   spendingFilter:'Spending filters and subtabs'};
+ return Object.entries(entries).map(([kind,t])=>label[kind]+': '+
+  (t.samples?'median '+t.medianMs+' ms · p95 '+t.p95Ms+' ms across '+t.samples+' interactions':
+   'no samples yet')).join(' | ');
+}
 let activeTab=window.HouseholdPlannerSummary?.render?preferredOpeningPage():'overview',transactionFilter='all',editingKey='',showNewTransaction=false,transactionNotice='',mortgageDraft=null;
 let lastMissingMortgages=[],lastHistoryRows=[],lastReviewCandidates=[],lastRecommendedRepeating=[];
 // A tab switch does not alter bank history or review decisions. Keep the
@@ -3576,7 +3607,13 @@ function settingsPage(bundle,s,chosen){
      ' <button type="button" class="btn" data-restore-recurrence="'+escapeHTML(key)+
      '">Restore legacy estimate</button></div>').join('')+
    '</section>':'')+
-  auditPanel(chosen)+'</details>'+categoryLearning+
+  auditPanel(chosen)+
+   '<section class="panel mini-panel" aria-label="This device interaction timings">'+
+   '<strong>Device performance (this tab only)</strong>'+
+   '<p>Measures prepared page and report interactions after paint on this device. No measurements or financial data leave the browser. Results reset on reload; initial sign-in and cold page rebuilding are excluded.</p>'+
+   '<p data-device-perf>'+escapeHTML(deviceTimingText())+'</p>'+
+   '<button type="button" class="btn" data-device-perf-refresh>Update measurements</button>'+
+   '</section></details>'+categoryLearning+
    (available()?'<section class="panel" aria-label="Private recovery backup"><div class="section-title"><h2>Recovery backup</h2></div>'+
     '<p>Keep an encrypted copy of your bank history and saved planning settings outside Render.</p>'+
     '<a class="btn" href="/bank-connect#backup">Download encrypted backup</a></section>':'')+
@@ -3765,6 +3802,7 @@ function activatePreparedView(view,from,fromHistoryView){
 // Spending's four presentation tabs change no bank data. Render only that
 // current pane; keep all other main destinations ready for an instant tap.
 function renderHistorySubview(previousView){
+ const timingStart=performance.now();
  const root=$('planner-main'),context=preparedContext;
  if(!preparedReady||!context||!root){render();return}
  const prior=root.firstElementChild;
@@ -3784,6 +3822,7 @@ function renderHistorySubview(previousView){
  }
  if(historyView==='categories')preparedViews.delete('history');
  updateHistorySelectionSummary();
+ recordDeviceTiming('spendingFilter',timingStart);
 }
 // Bills and Review selectors do not edit financial inputs. Refresh only their
 // view; keep the prepared Home and Spending DOM and canonical ledger intact.
@@ -3806,6 +3845,7 @@ function renderReviewFilters(){
 // and account filters are shared by all Spending/Activity panes, whereas
 // Activity search/sort and Budget display preferences are local.
 function renderHistoryFilters(scope='shared'){
+ const timingStart=performance.now();
  if(!preparedContext||!preparedReady){render({navigationOnly:true});return}
  if(scope==='shared'){
   preparedViews.delete('history');preparedViews.delete('activity');
@@ -3825,6 +3865,7 @@ function renderHistoryFilters(scope='shared'){
  $('planner-main').innerHTML=pageMarkup(c.bundle,c.s,c.selectedSource,c.derived,c.fresh,c.reviewData);
  updateHistorySelectionSummary();
  workStats.filterRefreshes++;
+ recordDeviceTiming(activeTab==='activity'?'activityFilter':'spendingFilter',timingStart);
 }
 function switchExistingPane(buttonAttr,paneAttr,newValue){
  const root=$('planner-main');
@@ -4614,6 +4655,11 @@ document.addEventListener('click',async e=>{
   }
   return;
  }
+ if(e.target.closest?.('[data-device-perf-refresh]')){
+  const node=document.querySelector('[data-device-perf]');
+  if(node)node.textContent=deviceTimingText();
+  return;
+ }
  const billsTab=e.target.closest?.('[data-bills-tab]');
  if(billsTab){
   const next=billsTab.dataset.billsTab;
@@ -4639,6 +4685,7 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('[data-bills-more]')){billsExpanded=!billsExpanded;renderScheduleFilters();return;}
  const view=e.target.closest('[data-view]');
  if(view){
+  const timingStart=performance.now();
   if(!preparedReady)return;
   const previousTab=activeTab,previousHistoryView=historyView;
   // The Summary can offer twelve future months; those optional unchecked
@@ -4687,6 +4734,7 @@ document.addEventListener('click',async e=>{
   // Tab navigation should not animate the global header's position.
   // 'auto' inherits html's smooth scrolling and briefly shifts the header.
   if(!view.dataset.focusTarget)window.scrollTo({top:0,behavior:'instant'});
+  recordDeviceTiming('navigation',timingStart);
   return;
  }
  const selectBankPlan=e.target.closest?.('[data-history-inline-rule]');
