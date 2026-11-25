@@ -303,7 +303,7 @@ body.ledger-app{
    Reserve an actual column for the label and keep 12px between fields. */
 @media(min-width:651px){
  body.ledger-app .history-page .history-actual-row.ledger-list-row{
-  grid-template-columns:28px minmax(0,1fr) minmax(140px,170px) 88px!important;
+  grid-template-columns:28px minmax(0,1fr) minmax(140px,160px) 88px!important;
   column-gap:12px!important;
   row-gap:8px!important;
   padding:10px 9px!important;
