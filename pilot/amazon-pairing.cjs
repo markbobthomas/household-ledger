@@ -45,7 +45,7 @@ function match(rows,transactions,adjustments,validCategories,allocate){
  // Already completed manual notes/categories must not consume an order match.
  const txs=Object.values(transactions||{}).filter(amazon).filter(t=>
   !String(notes[keyFor(t)]||'').trim()||
-  overrides[t.id]===undefined||overrides[t.id]==='Uncategorized'||!evidence[t.id]);
+  overrides[t.id]===undefined||overrides[t.id]==='Uncategorized');
  const needed=[...new Set(txs.map(cents))].sort((a,b)=>a-b);
  const nearby=(amount)=>{
   if(needed.includes(amount))return true;
