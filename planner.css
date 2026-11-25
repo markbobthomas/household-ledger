@@ -7024,3 +7024,22 @@ a:hover{color:#166e61}
  .reviews-page .category-review-row>.review-one-tap-choices{grid-column:2;padding:4px 0 10px}
  .review-one-tap-choices button{min-height:44px}
 }
+
+/* Release 2 — contextual, unsaved one-off cash scenarios. */
+.calendar-detail-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:7px;min-width:0}
+.calendar-whatif{min-height:37px;border:1px solid #becfc2;background:#f6faf6;border-radius:8px;padding:7px 12px;color:#2d5138;font-size:12px;font-weight:720;cursor:pointer}
+.calendar-whatif:hover,.calendar-whatif:focus-visible{background:#e8f3e9}
+.calendar-whatif:disabled{opacity:.45;cursor:default}
+.ledger-whatif-result{border:1px solid #d7e5da;border-radius:11px;background:#f6faf6;padding:13px 15px;font-size:13px;line-height:1.5;margin:12px 0;overflow-wrap:anywhere}
+.ledger-whatif-heading{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.ledger-whatif-heading span{font-size:12px;color:#486455}
+.ledger-whatif-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:11px 0}
+.ledger-whatif-comparison>div{display:flex;flex-direction:column;gap:6px;background:white;padding:11px;border:1px solid #deebdf;border-radius:8px;min-width:0}
+.ledger-whatif-comparison small{font-size:11px;color:#4e6759}
+.ledger-whatif-comparison span{font-size:13px;overflow-wrap:anywhere}
+.ledger-whatif-result p{margin:8px 0 0;color:#4f695a;font-size:12px}
+@media(max-width:420px){
+ .calendar-detail-actions{width:100%;justify-content:stretch}
+ .calendar-detail-actions button{flex:1 1 auto;padding:8px;min-width:0}
+ .ledger-whatif-comparison{grid-template-columns:1fr}
+}
