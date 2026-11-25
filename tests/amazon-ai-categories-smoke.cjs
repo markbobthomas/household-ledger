@@ -139,6 +139,18 @@ const fakeFetch=async(url,opts)=>{
   })});
  assert.equal(low.proposals.length,0,
   'Low confidence and invented labels must not become categories');
+ const membership=await Ai.classify({
+  candidates:[{...available.candidates[0],product:'Generic annual club membership subscription'}],
+  categories:[...categories,'Subscriptions'],apiKey:'fictional-key',
+  fetchImpl:async()=>({ok:true,json:async()=>({
+   status:'completed',usage:{input_tokens:120,output_tokens:40},
+   output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({
+    choices:[{i:0,category:'Subscriptions',confidence:'high'}]
+   })}]}]
+  })})
+ });
+ assert.equal(membership.proposals.length,0,'Digital-only safeguard must abstain instead of emitting null category');
+
  assert.equal((await Ai.classify({candidates:[],categories,
   apiKey:'fictional-key',fetchImpl:()=>{throw Error('must not call')}})).proposals.length,0);
  console.log('Amazon AI categories: consent input, high-confidence validation, cost limits and manual priority PASS');
