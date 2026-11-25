@@ -88,7 +88,7 @@ function selectionIsValid(view,selection){
   view.categories.includes(selection.category)&&
   view.items.some(i=>i.id===selection.id&&i.kind===selection.kind);
 }
-function change(state,choice){
+function change(state,choice,allowedCategories){
  const before=state.ledgerAdjustments||{};
  if(choice.kind==='amazon-item'){
   // selectionIsValid was checked against a fresh server-side queue.
@@ -99,9 +99,8 @@ function change(state,choice){
    throw Error('Invalid Amazon item review');
   const result=require('./amazon-review-choice.cjs').change(
    state.transactions,before,{transactionId:pair[0],lineIndex:pair[1],
-    category:choice.category,verified:true},model.categories(
-     model.migrate({customCategories:before.customCategories||[],
-      predictions:before.predictions||{},categoryOverrides:before.categoryOverrides||{}})));
+    category:choice.category,verified:true},
+   Array.isArray(allowedCategories)?allowedCategories:snapshot(state).categories);
   return result.next;
  }
  if(choice.kind==='transaction'){
