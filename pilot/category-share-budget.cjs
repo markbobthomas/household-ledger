@@ -22,7 +22,7 @@ function build(state,prepared){
  const group=name=>{
   const category=model.canonicalCategory(ledger,name)||name||'Other';
   if(!grouped.has(category))grouped.set(category,{name:category,spentCents:0,
-   pendingCents:0,expectedCents:0});
+   pendingCents:0,expectedCents:0,items:[]});
   return grouped.get(category);
  };
  let spentCents=0,pendingCents=0,expectedCents=0;
@@ -35,10 +35,24 @@ function build(state,prepared){
    valid=posted>0&&Array.isArray(parts)&&parts.length&&
     parts.every(l=>Number.isSafeInteger(l.cents)&&l.cents>0&&typeof l.category==='string')&&
     parts.reduce((n,l)=>n+l.cents,0)===posted;
+  const merchant=String(row.merchant||row.name||'Purchase').slice(0,140);
   if(valid){
-   for(const line of parts)group(line.category).spentCents+=line.cents;
-  }else group(row.category||'Other').spentCents+=posted;
-  if(pending)group(row.category||'Other').pendingCents+=pending;
+   for(const line of parts){
+    const category=group(line.category);
+    category.spentCents+=line.cents;
+    category.items.push({date:row.date,merchant:String(line.title||merchant).slice(0,140),
+     cents:line.cents,source:'posted'});
+   }
+  }else if(posted){
+   const category=group(row.category||'Other');
+   category.spentCents+=posted;
+   category.items.push({date:row.date,merchant,cents:posted,source:'posted'});
+  }
+  if(pending){
+   const category=group(row.category||'Other');
+   category.pendingCents+=pending;
+   category.items.push({date:row.date,merchant,cents:pending,source:'pending'});
+  }
  }
  const projection=prepared?.bundle?.projection;
  if(projection){
@@ -77,7 +91,12 @@ function build(state,prepared){
    if(!cents)continue;
    const name=rule?.category||event.category||additions.get(id)?.category||'Other',
     category=['Income','Transfer'].includes(name)?'Other':name;
-   group(category).expectedCents+=cents;expectedCents+=cents;
+   const entry=group(category);
+   entry.expectedCents+=cents;expectedCents+=cents;
+   entry.items.push({date:event.date,
+    merchant:String(event.merchant||event.description||rule?.merchant||
+      additions.get(id)?.merchant||'Expected expense').slice(0,140),
+    cents,source:'expected'});
   }
  }
  for(const name of model.categories(ledger))if(name!=='Uncategorized')group(name);
@@ -91,7 +110,8 @@ function build(state,prepared){
     set=raw!==null&&raw!==''&&Number.isFinite(Number(raw))&&Number(raw)>=0,
     targetCents=set?Math.round(Number(raw)*100):null,
     usedCents=r.spentCents+r.pendingCents+r.expectedCents;
-   return {...r,targetCents,usedCents};
+   return {...r,targetCents,usedCents,items:r.items.slice().sort((a,b)=>
+    b.date.localeCompare(a.date)||a.merchant.localeCompare(b.merchant))};
   }).sort((a,b)=>
    Number(!order.has(a.name))-Number(!order.has(b.name))||
    (order.get(a.name)||0)-(order.get(b.name)||0)||
