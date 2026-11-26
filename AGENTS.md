@@ -1,6 +1,6 @@
 # Household Ledger — instructions for every future development chat
 
-**Start here:** Read [PROJECT_LEDGER.md](PROJECT_LEDGER.md) at the beginning of **every task** in this repository. Treat the latest ledger snapshot as the handoff, then inspect the current `main` branch, source code, relevant existing technical docs, recent merged PRs, and deployment status before acting. The ledger describes intent, not proof of deployed code; if it conflicts with current code, investigate and reconcile.
+**Start here:** Read the **compact** [PROJECT_LEDGER.md](PROJECT_LEDGER.md) at the beginning of every task. The full historic handoff was preserved unchanged at [docs/archive/PROJECT_LEDGER_full_through_2026-11-26.md](docs/archive/PROJECT_LEDGER_full_through_2026-11-26.md); open targeted archived sections **only** for a needed historic decision. Do not re-read or copy the entire 1.45 MB archive for routine changes. Inspect current `main`, source code, relevant technical docs, recent merged PRs, and deployment before acting. The handoff records intent, not proof of code; investigate any conflict.
 
 ## Non-negotiable workflow: update the ledger for EVERY user request
 
@@ -8,13 +8,13 @@ For **every prompt/task about Household Ledger**, including design discussion, i
 
 1. Check the latest GitHub `main`, read this file and `PROJECT_LEDGER.md`, and understand the current objective and any prior explicit decisions.
 2. Do the requested work. Favor simple calendar-first checking-balance forecasting over conventional budgeting, extra screens, or multi-step interactions. Preserve existing infrastructure and financial safety.
-3. **Before reporting the task complete, update `PROJECT_LEDGER.md` in GitHub** with a concise dated entry: the user's requested outcome, the decision/rationale, actual work done (or explicitly *no code change*), file/PR/commit refs, checks and their outcomes, confirmed vs unverified deployment, and outstanding items. Refresh the current ledger first and append rather than replacing previous history.
-4. Update the compact **Current state / Next action** portion if anything changed. If an earlier entry was wrong, correct it with a dated clarification rather than silently rewriting history.
+3. **Before reporting complete, update the compact `PROJECT_LEDGER.md`** with a short dated entry (goal, verified change or *no code change*, PR/commit, checks, deployment and outstanding items). Refresh its current content first, append rather than overwriting its recent entries, and update **Current state / Next action**. Link to the archive for older context; do not duplicate full prior summaries. Aim for under ~10 lines per dated entry. If the active file approaches 40 KB, archive a chronological older segment in `docs/archive/` before pruning only the archived segment; verify the archived copy preserves every removed entry.
+4. Keep **Current state / Next action** accurate and concise. If an earlier claim was wrong, add a dated correction rather than silently rewriting history. Never erase or overwrite archived records.
 5. **Merge every requested completed change into `main` during the same task** after relevant safety checks; opening a PR alone is not completion. Prefer committing ledger changes together with related code on a feature branch and merging the checked PR. For discussion-only prompts, use a small docs-only PR/commit and merge it as well. If a check, conflict, or permissions block the merge, report the blocker and leave the change explicitly unfinished. Do not claim that a ledger update, merge, test, or deployment happened until verified.
 6. In your response, say briefly where the ledger update is and whether it's merged. If you have no authorized GitHub write access in the chat, state that plainly and provide the proposed entry; do not suggest that GitHub was updated.
 7. Never wait to accumulate multiple turns: the user wants a durable handoff even when the conversation ends abruptly.
 
-**Keep entries concise**: log decisions, results, and follow-ups, not the full private chat transcript. Preserve the full longitudinal history through append-only dated entries, not by duplicating prior entries verbatim.
+**Keep entries concise**: log decisions, evidence, results and follow-ups, not full chat transcripts. The archived file preserves original longitudinal history byte-for-byte; compact append-only entries now preserve new history without creating an ever-growing hot document.
 
 ## Product and engineering guardrails
 
