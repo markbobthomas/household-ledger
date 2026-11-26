@@ -19,6 +19,13 @@ Ledger is a **calendar-first checking-balance forecaster**, not primarily a budg
 - All categories need a home; user overrides control manual categorization. Owner-defined category rules: Groceries = food/drinks and delivery fees; Dining = restaurants/takeout/coffee; Insurance = insurance premiums plus protection plans/deductibles, excluding health premiums (Healthcare); Subscriptions = digital services only; mixed Costco/Target/Walmart purchases use the predominant category.
 - Expose important warnings first and secondary explanations on demand, with evident edit controls, legible spacing, and fast phone/tablet operation.
 
+## Product interfaces: Ledger Simple and full Ledger
+
+- **Ledger Simple** names the existing mobile-first household categorization page and its concluding expandable Budget view. The full application remains **Ledger** (the advanced financial management interface). The name is a user-interface distinction, not a fork of financial records or calculation rules.
+- Preserve the stable permanent /categorize share URL and /categorize/manage owner manager. Existing share tokens are intentionally limited to the current categorization, personal-note editing and read-only spending Budget scope; they do not authenticate someone into full Ledger or grant access to bank balances, account controls or forecast management.
+- **Future direction, not yet implemented:** grow Ledger Simple into a focused everyday interface with a small task queue, quick notes and categorization, recent spending and expandable budget; keep bill scheduling, future checking-balance planning, AI analysis, settings and diagnostics in full Ledger. Both must use the same authoritative encrypted data and server-owned accounting, revisions and conflict checks.
+- Increasing scope, especially financial balances or account activity beyond current Budget, requires a new explicit privacy/access design (for example independently authenticated household roles). Never silently broaden the bearer link's permissions or duplicate transaction/budget logic. Both interfaces should remain coherent on desktop and mobile; "Simple" is a UX choice, not a separate physical app.
+
 ## Deployment, privacy and safety
 
 - **Public GitHub repo.** Use only fictional test records and aggregate descriptions. Do **not** put private banking values, transaction identifiers, passwords, secrets, category-sharing tokens or real financial exports in this file or public tests.
@@ -42,7 +49,7 @@ Ledger is a **calendar-first checking-balance forecaster**, not primarily a budg
 
 **NOV 26 BACKEND MAINTENANCE — SOURCE MERGED, BANKING CI GREEN, PRIVATE RENDER UNVERIFIED:** [PR #777](https://github.com/markbobthomas/household-ledger/pull/777) merged as `b700bf69b64af53b93975fe1e56cbe7274e78817`. Source inspection confirmed the original archive blob matches exactly and the active handoff is 8.7 KB instead of ~1.45 MB. Idle hourly work no longer rebuilds unchanged same-day 1,095-day forecasts; saved forecast edits and bank sync still invalidate caches, and Pacific day rollover triggers re-preparation. Banking/forecast core and browser gate passed on the feature head. Private Render SHA has not been independently verified; no real-device speed claim.
 
-**Next actions:** (1) Verify current private Render SHA without changing its configuration, including PR #779's share changes; (2) reconcile actual checking flows and large bills/card payments vs the next 90 days' predicted transactions; (3) accept-test Amazon extension and household share/revocation, personal note saves and budget drilldown with real signed-in devices; (4) verify owner-held encrypted backup and isolated recovery. Keep any transactional-store cutover separately gated; old proof-of-concept was never a live migration.
+**Next actions:** (1) Verify the private Render revision and Ledger Simple naming separately from GitHub; (2) accept-test permanent sharing, personal Notes and expandable Budget on actual household phones; (3) design any expanded Ledger Simple permissions before exposing more sensitive data; (4) reconcile the next 90 days' checking forecast with actual large payments; (5) validate owner-held encrypted backup/recovery and browser-based Amazon import. Keep any transactional-store cutover separately gated; old proof-of-concept was never a live migration.
 
 ## Reference map
 
