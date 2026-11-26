@@ -43,7 +43,8 @@ function snapshot(state){
   return annotations(['Saved note',saved],['Transaction note',raw?.note],
    ['Amazon product details',product]);
  };
- const withNotes=(item,entries)=>({...item,notes:entries,note:entries[0]?.text||''});
+ const withNotes=(item,entries,editableNote='')=>({...item,notes:entries,
+  note:entries[0]?.text||'',editableNote});
  // A deliberately chosen Other is a final decision, including legacy manual
  // overrides predating categoryProvenance. Automated Other remains reviewable.
  const ownerChosenOther=new Set(Object.entries(adjustments.categoryOverrides||{})
@@ -66,7 +67,8 @@ function snapshot(state){
    const original=source.get(t.id);
    return withNotes({kind:'transaction',id:t.id,merchant:t.merchant.slice(0,140),
     amount:t.amount,date:t.date,reason:t.reason,category:t.category,
-    suggested:t.suggested||null},chargeNotes(original.id));
+    suggested:t.suggested||null},chargeNotes(original.id),
+    notes[keyFor(state.transactions[original.id])]||'');
   });
  // Include identifiable Amazon products still parked in a broad "Other"
  // category. These are review choices, never automatic overrides; specific
@@ -87,7 +89,7 @@ function snapshot(state){
     reason:'Review one Amazon product',category:item.currentCategory,
     suggested:item.suggestedCategory},
     annotations(...chargeNotes(item.id).map(n=>[n.label,n.text]),
-     ['Amazon item',item.note])));
+     ['Amazon item',item.note]),notes[keyFor(state.transactions[item.id])]||''));
    continue;
   }
   if(known.has(item.id)||item.currentCategory!=='Other'||
@@ -109,7 +111,8 @@ function snapshot(state){
    amount:p.amount,date:p.date,reason:p.reason,category:p.category,
    suggested:null},
    annotations(['Saved note',notes['forecast:'+p.id]],
-    ['Payment note',row?.note],['Payment note',row?.memo]));
+    ['Payment note',row?.note],['Payment note',row?.memo]),
+   notes['forecast:'+p.id]||'');
  });
  const names=model.categories(ledger).filter(c=>!excluded.has(c));
  const categories=[...names].sort((a,b)=>{
@@ -158,4 +161,39 @@ function change(state,choice,allowedCategories){
  return {...before,predictions:{...old,[key]:list.map(p=>String(p.id)===choice.id?
   {...p,category:choice.category,categoryReviewed:true}:p)}};
 }
-module.exports={snapshot,selectionIsValid,change};
+
+// The share token can edit only the personal note for an item still in the
+// live category queue. Imported Amazon evidence and read-only bank facts are
+// never writable through this endpoint.
+function noteSelectionIsValid(view,choice){
+ return !!choice&&typeof choice==='object'&&!Array.isArray(choice)&&
+  Object.keys(choice).sort().join(',')==='id,kind,note'&&
+  typeof choice.id==='string'&&typeof choice.kind==='string'&&
+  typeof choice.note==='string'&&choice.note.length<=1000&&
+  view.items.some(i=>i.id===choice.id&&i.kind===choice.kind);
+}
+function noteKeyFor(state,choice){
+ if(['schedule','oneoff','bill'].includes(choice.kind))
+  return 'forecast:'+choice.id;
+ let id=choice.id;
+ if(choice.kind==='amazon-item'){
+  let parsed;
+  try{parsed=JSON.parse(id.slice('amazon-item:'.length))}catch{}
+  if(!id.startsWith('amazon-item:')||!Array.isArray(parsed)||
+     typeof parsed[0]!=='string'||!Number.isSafeInteger(parsed[1]))return null;
+  id=parsed[0];
+ }
+ const transaction=state.transactions?.[id];
+ return transaction?keyFor(transaction):null;
+}
+function changeNote(state,choice){
+ const key=noteKeyFor(state,choice);
+ if(!key)throw Error('Category task changed; refresh the page');
+ const before=state.ledgerAdjustments||{},predictions=before.predictions||{},
+  transactionNotes={...(predictions.transactionNotes||{})};
+ const value=choice.note.trim();
+ if(value)transactionNotes[key]=value;
+ else delete transactionNotes[key];
+ return {...predictions,transactionNotes};
+}
+module.exports={snapshot,selectionIsValid,change,noteSelectionIsValid,changeNote};
