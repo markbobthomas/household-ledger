@@ -49,10 +49,10 @@ module.exports=(async()=>{
   }
   if(url.pathname==='/api/share/budget'&&req.method==='GET')
    return json(200,{month:'2026-11',asOf:'2026-11-24',budgetSet:true,
-    spentCents:4225,pendingCents:0,expectedCents:0,expectedIncluded:true,
+    spentCents:3025,pendingCents:0,expectedCents:1200,expectedIncluded:true,
     usedCents:4225,totalBudgetCents:10000,
-    rows:[{name:'Groceries',spentCents:4225,pendingCents:0,
-     expectedCents:0,usedCents:4225,targetCents:10000,
+    rows:[{name:'Groceries',spentCents:3025,pendingCents:0,
+     expectedCents:1200,usedCents:4225,targetCents:10000,
      items:[{date:'2026-11-17',merchant:'Fictional purchase',source:'posted',cents:3025},
       {date:'2026-11-23',merchant:'Fictional planned charge',source:'expected',cents:1200}]}]});
   json(404,{error:'Not found'});
@@ -105,10 +105,10 @@ module.exports=(async()=>{
    assert.match(await page.locator('#budget-rows').textContent(),/Groceries/);
    const breakdown=page.locator('.budget-breakdown');
    assert.equal(await breakdown.count(),1);
-   assert.equal(await page.locator('.budget-entry').count(),0,
+   assert.equal(await page.locator('.budget-entry:visible').count(),0,
     name+': detailed transactions are collapsed by default');
    await breakdown.locator('summary').click();
-   assert.equal(await page.locator('.budget-entry').count(),2,
+   assert.equal(await page.locator('.budget-entry:visible').count(),2,
     name+': category expands to source transactions');
    assert.match(await page.locator('.budget-entries').textContent(),/Fictional planned charge/);
    assert.match(await page.locator('.budget-entries').textContent(),/Expected/);
