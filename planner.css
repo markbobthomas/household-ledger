@@ -7102,3 +7102,15 @@ a:hover{color:#166e61}
 @media(prefers-reduced-motion:reduce){
  .planner-menu-advanced>summary::after{transition:none}
 }
+
+/* Budget transaction drilldown: compact Edit action on narrow phones. */
+.history-page .history-budget-detail-name .history-budget-edit{
+ min-height:30px;width:auto;max-width:max-content;
+ padding:4px 9px;font-size:11px;line-height:1.2;
+ margin-top:5px;white-space:nowrap;
+}
+@media(max-width:650px){
+ .history-page .history-budget-detail-name .history-budget-edit{
+  min-height:28px;padding:3px 8px;font-size:11px;
+ }
+}
