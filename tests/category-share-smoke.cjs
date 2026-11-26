@@ -86,6 +86,9 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal(savedShare.expiresAt,undefined,'Permanent link has no expiry');
   assert.equal((await req('/api/ledger','GET',undefined,shared)).status,401,
    'Scoped token must NEVER access the full banking endpoint');
+  const fullApp=(await req('/','GET',undefined,shared));
+  assert.equal(fullApp.status,303,'Full Ledger is still behind independent sign-in');
+  assert.equal(fullApp.headers.location,'/login');
   assert.equal((await req('/api/status','GET',undefined,shared)).status,401);
   const initialBudget=await req('/api/share/budget','GET',undefined,shared);
   assert.equal(initialBudget.status,200,'Shared link can see read-only Budget');
