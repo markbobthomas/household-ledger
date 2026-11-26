@@ -1787,7 +1787,16 @@ async function start(port=Number(env.PORT||8788)){
   schedulePrepared();
   // Server restart never makes a paid AI call.
   const hourly=setInterval(()=>{
-   invalidatePrepared();schedulePrepared();scheduleRevocationRecovery();
+   // Actual bank/forecast changes already invalidate the cached projection.
+   // Idle hourly maintenance only needs a rebuild at the Pacific day boundary,
+   // after a failed build or if another route explicitly invalidated it.
+   const worker=require('./prepared-forecast.cjs');
+   const today=worker.pacificDate();
+   if(worker.needsHourlyRebuild(state.items.length>0,preparedCache,preparedGeneration,today)){
+    if(preparedCache&&preparedCache.asOf!==today)invalidatePrepared();
+    schedulePrepared();
+   }
+   scheduleRevocationRecovery();
   },60*60*1000);
   hourly.unref();
   server.once('close',()=>clearInterval(hourly));
