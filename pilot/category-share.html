@@ -77,7 +77,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid
 <p class="muted context">Send one link. Your wife can categorize purchases on her phone without signing in or using the rest of Ledger.</p>
 <div class="card">
 <p id="owner-status" class="muted">Checking your sharing link…</p>
-<button id="create" class="primary wide" type="button">Create private link</button>
+<button id="create" class="primary wide" type="button">Create permanent link</button>
 <div id="sharebox" class="hide">
 <label for="shareurl" class="tiny">Private link</label><input id="shareurl" class="shareurl" type="text" readonly>
 <div class="buttons"><button id="send" class="primary" type="button">Share link</button><button id="copy" class="secondary" type="button">Copy link</button></div>
@@ -85,7 +85,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid
 <p id="owner-feedback" class="status" role="status" aria-live="polite"></p>
 <hr><button id="revoke" class="secondary" type="button" hidden>Turn off shared access</button>
 </div>
-<p class="muted">The link works for 30 days. Anyone who has it can see transaction names, dates, amounts, and saved item notes, and change spending categories. It does not show balances or let them manage accounts. Creating another link immediately disables the previous one.</p>
+<p class="muted">The same private link remains active until you turn sharing off. Each visit shows the latest purchases needing categorization, including new ones. Anyone who has it can see their descriptions, dates, amounts and saved Notes, and change categories. It does not expose bank balances or let them manage accounts.</p>
 <a href="/" class="secondary">Return to Ledger</a>
 </section>
 <section id="review" class="hide">
@@ -136,7 +136,19 @@ async function api(path,body,shared=false){
 }
 async function ownerStatus(){
  try{const d=await api('/api/ledger/category-share');
-  text('owner-status',d.active?'A link is active until '+new Date(d.expiresAt).toLocaleDateString()+'. Create another link to share again.':'No active sharing link.');
+  if(d.active&&d.token){
+   link=location.origin+'/categorize#'+d.token;
+   $('shareurl').value=link;$('sharebox').classList.remove('hide');
+   $('create').hidden=true;
+   text('owner-status','Your permanent link is ready. Copy or share it again anytime. The page always shows the latest category tasks.');
+  }else{
+   link='';$('shareurl').value='';$('sharebox').classList.add('hide');
+   $('create').hidden=false;
+   $('create').textContent=d.needsUpgrade?'Make current link permanent':'Create permanent link';
+   text('owner-status',d.needsUpgrade?
+    'Your older temporary link still works. Make a permanent link once; the older link will keep working too.':
+    'No active sharing link.');
+  }
   $('revoke').hidden=!d.active;
  }catch(e){text('owner-status',e.message)}
 }
@@ -146,7 +158,7 @@ $('create').onclick=async()=>{
   const d=await api('/api/ledger/category-share',{action:'create'});
   link=location.origin+'/categorize#'+d.token;
   $('shareurl').value=link;$('sharebox').classList.remove('hide');
-  text('owner-feedback','Private link ready. Share it in a message.');
+  text('owner-feedback','Permanent link ready. Send it once and reuse it anytime.');
   await ownerStatus();
  }catch(e){text('owner-feedback',e.message)}
  finally{$('create').disabled=false}
@@ -261,6 +273,14 @@ $('budget-button').onclick=async()=>{
  }catch(e){text('budget-total','Unavailable');text('budget-error',e.message)}
 };
 $('budget-back').onclick=async()=>{try{await load()}catch(e){show('error');text('errormsg',e.message)}};
+// This is a live queue, not a frozen report. Recheck after returning to the
+// tab so new bank transactions and other household decisions appear.
+function refreshOnReturn(){
+ if(manage||busy||!/^[a-f0-9]{64}$/.test(token))return;
+ load().catch(e=>{show('error');text('errormsg',e.message)});
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOnReturn()});
+window.addEventListener('pageshow',event=>{if(event.persisted)refreshOnReturn()});
 if(manage){show('owner');ownerStatus()}
 else if(!/^[a-f0-9]{64}$/.test(token)){show('error');text('errormsg','This link is incomplete. Ask for a new categorization link.')}
 else load().catch(e=>{show('error');text('errormsg',e.message)});
