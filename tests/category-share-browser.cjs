@@ -63,6 +63,12 @@ module.exports=(async()=>{
    assert.equal(await page.getByText('Possible Amazon item match. Check the item before using it to decide.').count(),1);
    await page.getByRole('button',{name:'Groceries',exact:true}).click();
    await page.getByRole('heading',{name:'All caught up'}).waitFor();
+   // The same open tab should pick up fresh work when a recipient returns.
+   server.pending=true;
+   await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+   await page.getByText('Fictional purchase').waitFor();
+   await page.getByRole('button',{name:'Groceries',exact:true}).click();
+   await page.getByRole('heading',{name:'All caught up'}).waitFor();
    await page.getByRole('button',{name:'See our budget'}).click();
    await page.getByRole('heading',{name:'Our budget'}).waitFor();
    await page.waitForFunction(()=>document.querySelector('#budget-total')?.textContent?.includes('$57.75'));
