@@ -14,6 +14,16 @@ module.exports=(async()=>{
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
    return res.end(pageSource);
   }
+  if(url.pathname==='/'){
+   // The shared token is not a Ledger sign-in; the real server redirects
+   // unauthenticated visitors to /login before serving private app assets.
+   res.writeHead(303,{'Location':'/login','Cache-Control':'no-store'});
+   return res.end();
+  }
+  if(url.pathname==='/login'){
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
+   return res.end('<!doctype html><title>Ledger sign-in</title><h1>Ledger sign-in required</h1>');
+  }
   if(req.headers['x-ledger-share']!==token)return json(401,{error:'Link unavailable'});
   if(url.pathname==='/api/share/categorize'&&req.method==='GET')
    return json(200,{revision:'f'.repeat(64),categories:['Groceries','Dining','Shopping'],
@@ -63,6 +73,10 @@ module.exports=(async()=>{
    assert.equal(await page.getByText('Possible Amazon item match. Check the item before using it to decide.').count(),1);
    await page.getByRole('button',{name:'Groceries',exact:true}).click();
    await page.getByRole('heading',{name:'All caught up'}).waitFor();
+   const finishLink=page.locator('#open-ledger-after-review');
+   assert.equal(await finishLink.getAttribute('href'),'/',
+    name+': completion points to the full Ledger app, not the share URL');
+   assert.equal(await finishLink.isVisible(),true);
    // The same open tab should pick up fresh work when a recipient returns.
    server.pending=true;
    await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
@@ -71,12 +85,22 @@ module.exports=(async()=>{
    await page.getByRole('heading',{name:'All caught up'}).waitFor();
    await page.getByRole('button',{name:'See our budget'}).click();
    await page.getByRole('heading',{name:'Our budget'}).waitFor();
+   const budgetLink=page.locator('#open-ledger-after-budget');
+   assert.equal(await budgetLink.getAttribute('href'),'/',
+    name+': shared Budget links to full Ledger without a share token');
+   assert.equal(await budgetLink.isVisible(),true);
    await page.waitForFunction(()=>document.querySelector('#budget-total')?.textContent?.includes('$57.75'));
    assert.match(await page.locator('#budget-total').textContent(),/\$57\.75/);
    assert.match(await page.locator('#budget-rows').textContent(),/Groceries/);
    assert.equal(await page.getByRole('button',{name:'Back to categorizing'}).count(),1);
    assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth<=window.innerWidth),true,
     name+': no horizontal scrolling in the shared budget');
+   await budgetLink.click();
+   await page.getByRole('heading',{name:'Ledger sign-in required'}).waitFor();
+   assert.equal(new URL(page.url()).pathname,'/login',
+    name+': unauthenticated full app opens sign-in, not a private bank screen');
+   assert.equal(new URL(page.url()).hash,'',
+    name+': the share token must never be forwarded to full Ledger');
    assert.deepEqual(errors,[],name+': no browser errors while categorizing and viewing budget');
    await context.close();
   }
