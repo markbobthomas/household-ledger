@@ -44,14 +44,22 @@ let state=freshState(),forecastWrites=Promise.resolve(),householdEditQueue=Promi
 // preview replaces the old one; applying after any settings edit is rejected.
 let amazonAiPreview=null;
 const settingsRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify(state.ledgerAdjustments||{})).digest('hex');
- // Scoped sharing token is stored only as an HMAC on the encrypted private disk.
+ // A long-lived scoped link derives from a random seed in the encrypted
+ // household snapshot. The owner can recover it without storing the bearer token.
  const categoryShareHash=token=>crypto.createHmac('sha256',key).update('category-share-v1:'+token).digest('hex');
+ const stableCategoryShareToken=share=>/^[a-f0-9]{64}$/.test(String(share?.seed||''))?
+  crypto.createHmac('sha256',key).update('category-share-stable-v1:'+share.seed).digest('hex'):null;
  function validCategoryShare(req){
   const token=String(req.headers['x-ledger-share']||''),share=state.categoryShare;
-  if(!state.items.length||!/^[a-f0-9]{64}$/.test(token)||!share||
-     !/^[a-f0-9]{64}$/.test(String(share.hash||''))||
-     !Number.isSafeInteger(share.expiresAt)||share.expiresAt<=Date.now())return false;
-  return crypto.timingSafeEqual(Buffer.from(share.hash,'hex'),Buffer.from(categoryShareHash(token),'hex'));
+  if(!state.items.length||!/^[a-f0-9]{64}$/.test(token)||!share)return false;
+  const candidate=Buffer.from(categoryShareHash(token),'hex');
+  // Do not resurrect expired legacy links. Preserve an active older link
+  // after migration so a recipient's previously saved bookmark still works.
+  const stable=stableCategoryShareToken(share);
+  const hashes=[stable?share.hash:share.expiresAt>Date.now()?share.hash:null,
+   stable?share.legacyHash:null];
+  return hashes.some(hash=>/^[a-f0-9]{64}$/.test(String(hash||''))&&
+   crypto.timingSafeEqual(Buffer.from(hash,'hex'),candidate));
  }
 const staleMessage='Ledger was updated on another device. This edit was not saved. Reload the page to review the latest changes.';
 function normalizeState(){
@@ -652,7 +660,7 @@ async function start(port=Number(env.PORT||8788)){
   }
   if(requestPath==='/api/share/categorize'){
    // A bearer link can NEVER access a normal household API or owner session.
-   if(!validCategoryShare(req))return respond(401,{error:'This private link expired or has been replaced. Ask for a new link.'});
+   if(!validCategoryShare(req))return respond(401,{error:'Shared access is no longer active. Ask the owner for the private link.'});
    if(req.method==='GET'){
     try{return respond(200,{...require('./category-share.cjs').snapshot(state),revision:settingsRevision()})}
     catch{return respond(503,{error:'Category list temporarily unavailable'})}
@@ -689,7 +697,7 @@ async function start(port=Number(env.PORT||8788)){
    finally{release()}
   }
   if(requestPath==='/api/share/budget'){
-   if(!validCategoryShare(req))return respond(401,{error:'This private link expired or has been replaced.'});
+   if(!validCategoryShare(req))return respond(401,{error:'Shared access is no longer active.'});
    if(req.method!=='GET')return respond(403,{error:'Budget view is read-only'});
    try{
     const prepared=preparedFor(ledgerPayload());
@@ -790,8 +798,11 @@ async function start(port=Number(env.PORT||8788)){
     state.transactions,before,categories));
   }
   if(req.method==='GET'&&requestPath==='/api/ledger/category-share'){
-   const active=!!(state.items.length&&state.categoryShare?.expiresAt>Date.now());
-   return respond(200,{active,expiresAt:active?state.categoryShare.expiresAt:null});
+   const share=state.categoryShare,token=stableCategoryShareToken(share);
+   const legacyActive=!!(share?.hash&&share.expiresAt>Date.now());
+   const active=!!(state.items.length&&(token||legacyActive));
+   return respond(200,{active,token:active?token:null,
+    needsUpgrade:active&&!token});
   }
   if(req.method==='GET'&&requestPath==='/api/ledger'){
    const payload=ledgerPayload();
@@ -1060,16 +1071,20 @@ async function start(port=Number(env.PORT||8788)){
    ].includes(requestPath))
     return respond(409,{error:'An account removal is in progress. Refresh and try again.'});
    if(requestPath==='/api/ledger/category-share'){
-    // Owner-only issuance; reissuing a link immediately revokes the old one.
+    // Creating and reopening the owner's link are idempotent; only explicit
+    // revocation invalidates the permanent bearer link.
     if(!body||typeof body!=='object'||Array.isArray(body)||
        Object.keys(body).length!==1||!['create','revoke'].includes(body.action))
      return respond(400,{error:'Invalid sharing action'});
     if(!state.items.length)return respond(409,{error:'Connect a bank before sharing categories'});
     if(body.action==='create'){
-     const token=crypto.randomBytes(32).toString('hex'),previous=state.categoryShare;
-     state.categoryShare={hash:categoryShareHash(token),expiresAt:Date.now()+30*24*60*60*1000};
+     const previous=state.categoryShare,existing=stableCategoryShareToken(previous);
+     if(existing)return respond(200,{token:existing});
+     const seed=crypto.randomBytes(32).toString('hex'),token=stableCategoryShareToken({seed});
+     state.categoryShare={seed,hash:categoryShareHash(token),
+      ...(previous?.hash&&previous.expiresAt>Date.now()?{legacyHash:previous.hash}:{})};
      try{await save()}catch(error){state.categoryShare=previous;throw error}
-     return respond(200,{token,expiresAt:state.categoryShare.expiresAt});
+     return respond(200,{token});
     }
     const previous=state.categoryShare;delete state.categoryShare;
     try{await save()}catch(error){state.categoryShare=previous;throw error}

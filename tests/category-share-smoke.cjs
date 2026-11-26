@@ -20,7 +20,10 @@ function open(filename){
 const tx={id:'fictional-purchase',accountId:'fake-checking',itemId:'fake-item',
  date:'2026-11-10',name:'Fictional marketplace',merchant:'Fictional marketplace',
  amount:42.25,pending:false,category:null};
-const fixture={items:[{id:'fake-item',token:'dummy-token-not-connected',cursor:null,accountIds:['fake-checking']}],
+const legacyToken='b'.repeat(64),legacyHash=crypto.createHmac('sha256',key)
+ .update('category-share-v1:'+legacyToken).digest('hex');
+const fixture={categoryShare:{hash:legacyHash,expiresAt:Date.now()+5*24*60*60*1000},
+ items:[{id:'fake-item',token:'dummy-token-not-connected',cursor:null,accountIds:['fake-checking']}],
  accounts:[{id:'fake-checking',itemId:'fake-item',name:'Fictional Checking',
   type:'depository',subtype:'checking',current:100,available:100}],
  transactions:{[tx.id]:tx},lastSync:'2026-11-10T11:00:00Z',
@@ -59,12 +62,28 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal(login.status,200);
   const cookie=login.headers['set-cookie'].find(x=>x.startsWith('__Host-ledger_session='));
   const owner={'Cookie':cookie};
-  assert.equal((await req('/api/ledger/category-share','GET',undefined,owner)).data().active,false);
+  const legacyStatus=(await req('/api/ledger/category-share','GET',undefined,owner)).data();
+  assert.equal(legacyStatus.active,true);
+  assert.equal(legacyStatus.needsUpgrade,true);
+  assert.equal(legacyStatus.token,null,'Legacy hash does not expose the bearer');
+  const legacy={'X-Ledger-Share':legacyToken};
+  assert.equal((await req('/api/share/categorize','GET',undefined,legacy)).status,200);
   const minted=await req('/api/ledger/category-share','POST',{action:'create'},owner);
   assert.equal(minted.status,200,'Owner can issue a private link');
   const token=minted.data().token;
   assert.match(token,/^[a-f0-9]{64}$/);
   const shared={'X-Ledger-Share':token};
+  assert.notEqual(token,legacyToken);
+  assert.equal((await req('/api/ledger/category-share','POST',{action:'create'},owner)).data().token,token,
+   'Create does not generate another URL');
+  assert.equal((await req('/api/ledger/category-share','GET',undefined,owner)).data().token,token,
+   'Owner can recover the identical URL later');
+  assert.equal((await req('/api/share/categorize','GET',undefined,legacy)).status,200,
+   'Legacy link survives upgrade');
+  const savedShare=open(file).categoryShare;
+  assert.ok(savedShare.seed&&savedShare.hash&&savedShare.legacyHash);
+  assert.equal(savedShare.token,undefined,'Bearer token is not stored');
+  assert.equal(savedShare.expiresAt,undefined,'Permanent link has no expiry');
   assert.equal((await req('/api/ledger','GET',undefined,shared)).status,401,
    'Scoped token must NEVER access the full banking endpoint');
   assert.equal((await req('/api/status','GET',undefined,shared)).status,401);
@@ -112,17 +131,24 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal(bill.status,200,'Upcoming payment categories save to authoritative forecast preferences');
   assert.equal(open(file+'.forecasts').futureRecurringRules[0].categoryReviewed,true);
   assert.equal((await req('/api/share/categorize','GET',undefined,shared)).data().items.length,0);
-  const replacement=await req('/api/ledger/category-share','POST',{action:'create'},owner);
-  assert.equal(replacement.status,200);
-  assert.equal((await req('/api/share/categorize','GET',undefined,shared)).status,401,
-   'Creating a new link invalidates the old link');
-  const newer={'X-Ledger-Share':replacement.data().token};
-  assert.equal((await req('/api/share/categorize','GET',undefined,newer)).status,200);
+  // Newly uncategorized work must appear at the same URL after completion.
+  assert.equal((await req('/api/ledger/category','POST',{
+   transactionId:tx.id,category:'Uncategorized'},owner)).status,200);
+  const newWork=await req('/api/share/categorize','GET',undefined,shared);
+  assert.equal(newWork.status,200);
+  assert.ok(newWork.data().items.some(x=>x.id===tx.id),
+   'Same URL displays new category tasks');
+  assert.equal((await req('/api/share/categorize','POST',{
+   kind:'transaction',id:tx.id,category:'Dining'},
+   {...shared,'X-Ledger-Revision':newWork.data().revision})).status,200);
+  assert.equal((await req('/api/share/categorize','GET',undefined,shared)).data().items.length,0);
   assert.equal((await req('/api/ledger/category-share','POST',{action:'revoke'},owner)).status,200);
-  assert.equal((await req('/api/share/categorize','GET',undefined,newer)).status,401,
-   'Revocation cuts off the shared access');
-  assert.equal((await req('/api/share/budget','GET',undefined,newer)).status,401,
-   'Revocation cuts off the read-only Budget view too');
+  assert.equal((await req('/api/share/categorize','GET',undefined,shared)).status,401,
+   'Revocation cuts off permanent URL');
+  assert.equal((await req('/api/share/categorize','GET',undefined,legacy)).status,401,
+   'Revocation cuts off legacy URL too');
+  assert.equal((await req('/api/share/budget','GET',undefined,shared)).status,401,
+   'Revocation cuts off read-only Budget');
   // A mixed-item Amazon charge may be categorized by the shared link only
   // one product at a time. A whole-charge edit would destroy known allocations.
   const shareLogic=require('../pilot/category-share.cjs');
