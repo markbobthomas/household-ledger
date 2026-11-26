@@ -35,6 +35,18 @@ assert.equal(produced.asOf,asOf);
 assert.equal(produced.horizon,1095);
 assert.equal(JSON.stringify(produced).includes('FICTIONAL-TOKEN'),false);
 assert.equal(worker.prepare({connected:false}),null);
+// Hourly background maintenance checks the cached financial forecast rather
+// than unconditionally rebuilding a three-year result every hour.
+assert.equal(worker.needsHourlyRebuild(false,null,0,asOf),false,
+ 'Disconnected households need no hourly forecast work');
+assert.equal(worker.needsHourlyRebuild(true,null,0,asOf),true,
+ 'A missing projection should be rebuilt');
+assert.equal(worker.needsHourlyRebuild(true,{generation:7,asOf},7,asOf),false,
+ 'Unchanged same-day projection remains cached');
+assert.equal(worker.needsHourlyRebuild(true,{generation:7,asOf},8,asOf),true,
+ 'Changed financial generation must be recalculated');
+assert.equal(worker.needsHourlyRebuild(true,{generation:7,asOf},7,tx.shift(asOf,1)),true,
+ 'New Pacific day invalidates yesterday projection');
 
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hl-prepared-'));
 const store=path.join(dir,'pilot.enc'),password='fictional-'+crypto.randomBytes(24).toString('hex');
