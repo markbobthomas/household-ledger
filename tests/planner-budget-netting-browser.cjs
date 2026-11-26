@@ -221,6 +221,15 @@ module.exports=(async()=>{
     rows.reduce((sum,row)=>sum+Number(row.dataset.budgetCents),0));
    assert.equal(itemizedCents,centsOf(await category('Uncategorized')),
     name+': itemized Unassigned amounts reconcile exactly to the Budget total');
+   const edit=details.locator('button.history-budget-edit');
+   assert.equal(await edit.count(),1,name+': posted items retain their Edit action');
+   assert.equal(await edit.first().innerText(),'Edit',
+    name+': compact Budget action has a short label');
+   const editSize=await edit.first().evaluate(el=>({
+    height:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width
+   }));
+   assert.ok(editSize.height<=36&&editSize.width<=90,
+    name+': Budget Edit stays compact on both desktop and phones');
    assert.equal(await page.locator('[data-history-category-insights]').count(),1,
     name+': Budget category expansion does not switch to posted-only Activity');
    await unassigned.locator('[data-history-drill-category]').click();
