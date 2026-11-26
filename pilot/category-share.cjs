@@ -100,7 +100,7 @@ function snapshot(state){
    reason:'Review Amazon product category',category:'Other',
    suggested:item.suggestedCategory},
    annotations(...chargeNotes(item.id).map(n=>[n.label,n.text]),
-    ['Amazon item',item.note])));
+    ['Amazon item',item.note]),notes[keyFor(state.transactions[item.id])]||''));
  }
  const planLists={schedule:'futureRecurringRules',oneoff:'futureTransactionAdds',
   bill:'paymentBills'};
