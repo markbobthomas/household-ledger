@@ -93,6 +93,12 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   const initialBudget=await req('/api/share/budget','GET',undefined,shared);
   assert.equal(initialBudget.status,200,'Shared link can see read-only Budget');
   assert.ok(Array.isArray(initialBudget.data().rows));
+  const entries=initialBudget.data().rows.flatMap(r=>r.items||[]);
+  assert.ok(entries.some(x=>x.date===tx.date&&x.cents===4225&&x.source==='posted'),
+   'Shared Budget exposes the exact posted purchase behind the total');
+  for(const row of initialBudget.data().rows)
+   assert.equal((row.items||[]).reduce((sum,x)=>sum+x.cents,0),row.usedCents,
+    'Every expandable category reconciles to its displayed cents');
   assert.equal(initialBudget.body.includes('Fictional Checking'),false,'Budget does not reveal accounts');
   assert.equal(initialBudget.body.includes('dummy-token-not-connected'),false,'Budget excludes provider credentials');
   assert.equal((await req('/api/share/budget','POST',{},shared)).status,403,
@@ -107,16 +113,43 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal(list.body.includes('dummy-token-not-connected'),false,'Plaid tokens must not be disclosed');
   assert.equal(list.body.includes('available'),false,'Bank balances are never shared');
   assert.ok(initial.categories.includes('Groceries'));
+  assert.equal(initial.items.find(x=>x.id===tx.id).editableNote,'Amazon: Fictional water bottle');
+  const bankNoteKey='bank:'+JSON.stringify(['fake-checking',tx.id]);
+  const originalBankRow=structuredClone(open(file).transactions[tx.id]);
+  assert.equal((await req('/api/share/categorize','POST',{
+   kind:'transaction',id:tx.id,note:'Family reviewed this charge'},shared)).status,409,
+   'Shared note edits require a current private revision');
+  assert.equal((await req('/api/share/categorize','POST',{
+   kind:'transaction',id:'not-in-review',note:'Would be unauthorized'},
+   {...shared,'X-Ledger-Revision':initial.revision})).status,409,
+   'Share token cannot edit notes of transactions outside the live review queue');
+  assert.equal((await req('/api/share/categorize','POST',{
+   kind:'transaction',id:tx.id,note:'x'.repeat(1001)},
+   {...shared,'X-Ledger-Revision':initial.revision})).status,409,
+   'Shared notes have a bounded size');
+  assert.equal((await req('/api/share/categorize','POST',{
+   kind:'transaction',id:tx.id,note:'New note',category:'Groceries'},
+   {...shared,'X-Ledger-Revision':initial.revision})).status,409,
+   'One request cannot smuggle a category update into a note save');
+  const noteSaved=await req('/api/share/categorize','POST',{
+   kind:'transaction',id:tx.id,note:'Family reviewed this charge'},
+   {...shared,'X-Ledger-Revision':initial.revision});
+  assert.equal(noteSaved.status,200,'Spouse can save the personal note');
+  assert.equal(open(file+'.forecasts').transactionNotes[bankNoteKey],'Family reviewed this charge');
+  assert.deepEqual(open(file).transactions[tx.id],originalBankRow,
+   'Shared note updates do not alter source bank transactions');
+  const noted= (await req('/api/share/categorize','GET',undefined,shared)).data();
+  assert.equal(noted.items.find(x=>x.id===tx.id).editableNote,'Family reviewed this charge');
   assert.equal((await req('/api/share/categorize','POST',{
    kind:'transaction',id:'fictional-purchase',category:'Groceries'},shared)).status,409,
    'A category save requires the current private revision');
   assert.equal((await req('/api/share/categorize','POST',{
    kind:'transaction',id:'fictional-purchase',category:'NotARealCategory'},
-   {...shared,'X-Ledger-Revision':initial.revision})).status,409,
+   {...shared,'X-Ledger-Revision':noted.revision})).status,409,
    'Custom category text is not accepted');
   const save=await req('/api/share/categorize','POST',{
    kind:'transaction',id:'fictional-purchase',category:'Groceries'},
-   {...shared,'X-Ledger-Revision':initial.revision});
+   {...shared,'X-Ledger-Revision':noted.revision});
   assert.equal(save.status,200,'A one-tap category assignment persists');
   const after=await req('/api/share/categorize','GET',undefined,shared);
   assert.ok(!after.data().items.some(x=>x.id==='fictional-purchase'),'Saved transaction leaves the queue');
@@ -128,9 +161,16 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
    'Shared Budget reflects the same authoritative posted purchase in cents');
   assert.equal(afterBudget.data().spentCents,4225,
    'One posted purchase is counted exactly once in the monthly budget');
+  const planNote=await req('/api/share/categorize','POST',{
+   kind:'schedule',id:'future-1',note:'Confirm the invoice amount'},
+   {...shared,'X-Ledger-Revision':after.data().revision});
+  assert.equal(planNote.status,200,'Spouse can annotate an upcoming review task');
+  assert.equal(open(file+'.forecasts').transactionNotes['forecast:future-1'],'Confirm the invoice amount');
+  const afterPlanNote=(await req('/api/share/categorize','GET',undefined,shared)).data();
+  assert.equal(afterPlanNote.items.find(x=>x.id==='future-1').editableNote,'Confirm the invoice amount');
   const bill=await req('/api/share/categorize','POST',{
    kind:'schedule',id:'future-1',category:'Insurance'},
-   {...shared,'X-Ledger-Revision':after.data().revision});
+   {...shared,'X-Ledger-Revision':afterPlanNote.revision});
   assert.equal(bill.status,200,'Upcoming payment categories save to authoritative forecast preferences');
   assert.equal(open(file+'.forecasts').futureRecurringRules[0].categoryReviewed,true);
   assert.equal((await req('/api/share/categorize','GET',undefined,shared)).data().items.length,0);
@@ -148,6 +188,10 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal((await req('/api/ledger/category-share','POST',{action:'revoke'},owner)).status,200);
   assert.equal((await req('/api/share/categorize','GET',undefined,shared)).status,401,
    'Revocation cuts off permanent URL');
+  assert.equal((await req('/api/share/categorize','POST',{
+   kind:'transaction',id:tx.id,note:'Not allowed'},
+   {...shared,'X-Ledger-Revision':newWork.data().revision})).status,401,
+   'Revocation cuts off note editing too');
   assert.equal((await req('/api/share/categorize','GET',undefined,legacy)).status,401,
    'Revocation cuts off legacy URL too');
   assert.equal((await req('/api/share/budget','GET',undefined,shared)).status,401,
