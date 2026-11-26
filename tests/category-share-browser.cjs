@@ -73,8 +73,8 @@ module.exports=(async()=>{
    const errors=[];page.on('pageerror',e=>errors.push(e.message));
    await page.goto(url);
    await page.getByRole('heading',{name:'Categorize purchases'}).waitFor();
-   assert.equal(await page.title(),'Ledger Simple · Categorize',name+': title uses product name');
-   assert.equal(await page.locator('.brand').innerText(),'LEDGER SIMPLE',name+': mobile brand uses product name');
+   assert.equal(await page.title(),'Ledger Lite · Categorize',name+': title uses product name');
+   assert.equal(await page.locator('.brand').innerText(),'LEDGER LITE',name+': mobile brand uses product name');
    assert.equal(await page.getByText('Fictional purchase').count(),1);
    assert.equal(await page.locator('#shared-note').inputValue(),'Household reminder');
    await page.locator('#shared-note').fill('Reviewed together');
