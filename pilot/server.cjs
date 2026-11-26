@@ -683,6 +683,12 @@ async function start(port=Number(env.PORT||8788)){
     if(!req.headers['x-ledger-revision']||req.headers['x-ledger-revision']!==settingsRevision())
      return respond(409,{error:staleMessage,code:'STALE_LEDGER'});
     const share=require('./category-share.cjs'),view=share.snapshot(state);
+    if(share.noteSelectionIsValid(view,choice)){
+     // Personal notes are forecast metadata only; never edit original Plaid
+     // records, product evidence or the live transaction classification.
+     await saveForecast(share.changeNote(state,choice),req.headers['x-ledger-revision']);
+     return respond(200,{saved:true,remaining:view.items.length});
+    }
     if(!share.selectionIsValid(view,choice))
      return respond(409,{error:'This item or category changed. Refresh to see the latest list.'});
     const before=state.ledgerAdjustments||{},next=share.change(state,choice,view.categories);
@@ -693,7 +699,7 @@ async function start(port=Number(env.PORT||8788)){
     }else await saveForecast(next.predictions,req.headers['x-ledger-revision']);
     return respond(200,{saved:true,remaining:Math.max(0,view.items.length-1)});
    }catch(error){return respond(error.httpStatus||503,{
-    error:error.httpStatus===409?staleMessage:'Could not save this category. No bank transactions were changed.'})}
+    error:error.httpStatus===409?staleMessage:'Could not save this change. No bank transactions were changed.'})}
    finally{release()}
   }
   if(requestPath==='/api/share/budget'){
