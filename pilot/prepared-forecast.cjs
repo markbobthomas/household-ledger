@@ -29,4 +29,10 @@ function prepare(payload,asOf=pacificDate()){
  // passwords, encryption keys, or an extra raw bank-history copy.
  return {version:VERSION,asOf,horizon:HORIZON,bundle};
 }
-module.exports={prepare,pacificDate,VERSION,HORIZON};
+// Retain the expensive 1,095-day projection across idle hourly ticks.
+// Bank and forecast writes explicitly invalidate the cache elsewhere; the
+// Pacific date boundary is the only time-based reason to rebuild.
+function needsHourlyRebuild(connected,cache,generation,today){
+ return !!connected&&(!cache||cache.generation!==generation||cache.asOf!==today);
+}
+module.exports={prepare,pacificDate,needsHourlyRebuild,VERSION,HORIZON};
