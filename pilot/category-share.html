@@ -60,6 +60,8 @@ h1,.merchant,.amount{color:#172635}
 .primary:hover:not(:disabled){background:#0f478a;border-color:#0f478a}
 .secondary{border-radius:5px;color:#12569c;border:1px solid #a6b9cb;background:#fff;min-height:44px;padding:11px 14px}
 .secondary:hover{background:#eaf2fb}
+.full-ledger-link{display:block;width:100%;margin-top:14px;text-align:center;text-decoration:none;font-size:16px;font-weight:700}
+.full-ledger-note{text-align:center;font-size:13px;margin:8px 0 0;color:#536172}
 summary{color:#234461}
 input.shareurl{border:1.5px solid #8d9eaf;border-radius:5px;color:#15202c}
 .notice{background:#fff7e8;border:1px solid #e4c390;color:#744c1a;border-radius:5px}
@@ -104,13 +106,17 @@ button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid
 </section>
 <section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p>
 <button id="budget-button" class="primary wide" type="button">See our budget</button>
-<button id="again" class="secondary" type="button" hidden>Review skipped items</button></section>
+<button id="again" class="secondary" type="button" hidden>Review skipped items</button>
+<a id="open-ledger-after-review" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
+<p class="full-ledger-note">Full Ledger requires a separate sign-in.</p></section>
 <section id="budget" class="hide"><h1>Our budget</h1><p id="budget-period" class="muted context"></p>
 <div class="card"><div class="tiny">BUDGET LEFT THIS MONTH</div><div id="budget-total" class="budget-total"></div>
 <div id="budget-sub" class="budget-sub"></div></div>
 <p class="subhead">Spending by category</p><div id="budget-rows" class="card"></div>
 <p class="muted">Read-only. Categories and amounts update in Ledger when purchases are categorized.</p>
 <button id="budget-back" class="secondary" type="button">Back to categorizing</button>
+<a id="open-ledger-after-budget" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
+<p class="full-ledger-note">Full Ledger requires a separate sign-in.</p>
 <p id="budget-error" class="status" role="status"></p></section>
 <section id="error" class="hide"><h1>Link unavailable</h1><p id="errormsg" class="muted">Ask for a new private link.</p></section>
 <p class="footer">Only category decisions are available here. Bank accounts and balances stay in Ledger.</p>
