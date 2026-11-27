@@ -99,9 +99,15 @@ module.exports=(async()=>{
    const context=await browser.newContext(options),page=await context.newPage();
    const errors=[];page.on('pageerror',e=>errors.push(e.message));
    await page.goto(url);
-   await page.getByRole('heading',{name:'Categorize purchases'}).waitFor();
+   await page.getByRole('heading',{name:'Categorize',exact:true}).waitFor();
    assert.equal(await page.title(),'Ledger Lite · Categorize',name+': title uses product name');
-   assert.equal(await page.locator('.brand').innerText(),'LEDGER LITE',name+': mobile brand uses product name');
+   assert.equal(await page.locator('.brand').innerText(),'Ledger Lite',name+': compact brand uses product name');
+   assert.equal(await page.locator('header > *').count(),2,name+': top bar contains only brand and Full link');
+   assert.equal(await page.locator('header #count,header #lite-share-link,.mode-switch').count(),0,name+': no count, sharing or segmented switch in top bar');
+   assert.equal(await page.locator('.review-heading h1').innerText(),'Categorize');
+   assert.equal(await page.locator('#count').innerText(),'2 left');
+   assert.equal(await page.getByText('Tap the category that fits best.').count(),0,name+': redundant review introduction removed');
+   assert.equal(await page.locator('#lite-share-footer').isVisible(),false,name+': recipient has no owner sharing control');
    assert.equal(await page.getByText('Fictional purchase').count(),1);
    // Skip advances without writing a decision. Both Refresh controls restart at
    // the first still-uncategorized purchase, including previously passed items.
@@ -121,7 +127,7 @@ module.exports=(async()=>{
    await page.locator('#reload').click();
    // The previous purchase is already onscreen. Wait for the new GET to finish
    // before editing; otherwise a response can replace the note draft.
-   await page.waitForFunction(()=>document.querySelector('#count')?.textContent==='1 uncategorized');
+   await page.waitForFunction(()=>document.querySelector('#count')?.textContent==='1 left');
    await page.getByText('Fictional purchase',{exact:true}).waitFor();
    assert.equal(await page.locator('#shared-note').inputValue(),'Household reminder');
    await page.locator('#shared-note').fill('Reviewed together');
@@ -194,9 +200,11 @@ module.exports=(async()=>{
     domain:'127.0.0.1',path:'/'}]);
    const ownerPage=await ownerContext.newPage();
    await ownerPage.goto(url.split('#')[0]);
-   await ownerPage.getByRole('heading',{name:'Categorize purchases'}).waitFor();
-   assert.equal(await ownerPage.getByRole('link',{name:'Share'}).isVisible(),true,
-    name+': owner can access old permanent sharing manager from Lite');
+   await ownerPage.getByRole('heading',{name:'Categorize',exact:true}).waitFor();
+   assert.equal(await ownerPage.getByRole('link',{name:'Manage sharing'}).isVisible(),true,
+    name+': owner can manage permanent sharing outside the top bar');
+   assert.equal(await ownerPage.locator('header > *').count(),2,
+    name+': owner header remains compact');
    await ownerContext.close();
   }
   console.log('PASS spouse completion Budget navigation and phone layouts in Chromium and WebKit');

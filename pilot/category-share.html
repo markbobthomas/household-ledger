@@ -8,7 +8,7 @@
 *{box-sizing:border-box}body{margin:0}main{max-width:540px;margin:0 auto;padding:env(safe-area-inset-top) 18px calc(28px + env(safe-area-inset-bottom))}
 header{padding:24px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-size:15px;letter-spacing:.02em;font-weight:750;color:#60685e}
-.count{font-size:14px;font-weight:700;color:#435444;padding:7px 10px;background:#edf1e9;border-radius:20px}
+.review-count{color:#536172;font-size:13px;font-weight:650;white-space:nowrap}
 h1{font-size:clamp(25px,7vw,34px);line-height:1.15;letter-spacing:-.04em;margin:12px 0 9px}
 p{line-height:1.5}.muted{color:#656b63;font-size:15px}.context{margin:0 0 22px}
 .card{background:#fff;border:1px solid #e4e8e0;border-radius:20px;padding:21px 19px;margin:16px 0;box-shadow:0 3px 20px #26352708}
@@ -48,7 +48,7 @@ hr{border:0;border-top:1px solid #e6ebe4;margin:24px 0}
 :root{color:#15202c;background:#f3f5f7;color-scheme:light}
 body{background:#f3f5f7;color:#15202c}
 .brand{color:#14202d;font-weight:850;letter-spacing:.075em}
-.count{border-radius:5px;background:#eaf2fb;color:#15518b;border:1px solid #b9cde2}
+.review-count{font-variant-numeric:tabular-nums}
 .card{border-color:#cbd5df;border-radius:8px;box-shadow:none}
 h1,.merchant,.amount{color:#172635}
 .tiny{color:#526071}.muted,.note small,.budget-sub,.budget-meta,.footer{color:#536172}
@@ -84,14 +84,14 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 .budget-entry-name{min-width:0;overflow-wrap:anywhere;font-weight:650}
 .budget-entry-date{color:#526172;font-size:12px;margin-top:4px}
 .budget-entry-amount{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:750}
-/* Two clear destinations; all edits stay behind the existing review/Budget flow. */
-.mode-switch{display:inline-flex;align-items:stretch;border:1px solid #a6b9cc;border-radius:6px;overflow:hidden;font-size:13px;font-weight:750;white-space:nowrap}
-.mode-switch a,.mode-switch span{display:inline-flex;align-items:center;justify-content:center;min-height:35px;padding:6px 11px;text-decoration:none;color:#175dad;background:#fff}
-.mode-switch .active{background:#175dad;color:#fff}
-.mode-switch a:focus-visible{outline:3px solid #256fc7;outline-offset:-3px}
-.lite-header-actions{display:flex;gap:9px;align-items:center}
-.lite-share-link{font-size:12px;color:#175dad;text-decoration:underline}
-.lite-share-link[hidden]{display:none}
+/* Minimal top bar: Lite is the current destination, Full is one direct link. */
+.top-full-link{font-size:13px;font-weight:700;color:#175dad;text-decoration:none;padding:10px 0;white-space:nowrap}
+.top-full-link:hover,.top-full-link:focus-visible{text-decoration:underline}
+.review-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:10px 0 12px}
+.review-heading h1{margin:0}
+.lite-share-footer{text-align:center;margin:16px 0 0;font-size:13px}
+.lite-share-footer[hidden]{display:none}
+.lite-share-link{color:#175dad;font-weight:650;text-decoration:underline}
 .budget-edit-button{border:1px solid #a6b9cb;background:#fff;color:#175dad;border-radius:5px;padding:4px 8px;margin-top:5px;min-height:29px;font-size:12px;font-weight:700}
 .budget-edit-form{grid-column:1/-1;background:#f3f6fa;border:1px solid #dae4ec;border-radius:6px;padding:12px;margin-top:4px}
 .budget-edit-form label{display:block;color:#394f64;font-size:12px;font-weight:700;margin-bottom:5px}
@@ -101,11 +101,10 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 .budget-edit-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
 .budget-edit-actions button{min-height:35px;padding:6px 13px;font-size:13px}
 .budget-edit-actions .status{margin:0;min-height:0}
-@media(max-width:430px){.card{padding:18px 15px}.buttons{align-items:stretch;flex-wrap:wrap}.buttons>button{flex:1 1 130px}.brand{font-size:13px;letter-spacing:.03em}.mode-switch a,.mode-switch span{padding:6px 9px}}
-@media(max-width:365px){header{flex-wrap:wrap}.lite-header-actions{flex-wrap:wrap;justify-content:flex-end}}
+@media(max-width:430px){.card{padding:18px 15px}.buttons{align-items:stretch;flex-wrap:wrap}.buttons>button{flex:1 1 130px}.brand{font-size:14px;letter-spacing:0}}
 
 </style></head><body><main>
-<header><div class="brand">LEDGER LITE</div><div class="lite-header-actions"><div class="mode-switch" aria-label="Ledger interface"><a href="/" aria-label="Open full Ledger">Full</a><span class="active" aria-current="page">Lite</span></div><a id="lite-share-link" class="lite-share-link" href="/categorize/manage" hidden>Share</a><div id="count" class="count" hidden></div></div></header>
+<header><div class="brand">Ledger Lite</div><a class="top-full-link" href="/" aria-label="Open full Ledger">Full Ledger</a></header>
 <section id="owner" class="hide">
 <h1>Share Ledger Lite</h1>
 <p class="muted context">Send one link to Ledger Lite. Your household can categorize purchases and review the budget on a phone without signing in to full Ledger.</p>
@@ -123,7 +122,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 <a href="/" class="secondary">Return to Ledger</a>
 </section>
 <section id="review" class="hide">
-<h1>Categorize purchases</h1><p class="muted context">Tap the category that fits best. It saves automatically. You can also edit and save a note.</p>
+<div class="review-heading"><h1>Categorize</h1><span id="count" class="review-count" hidden></span></div>
 <div id="card" class="card">
 <div id="meta" class="tiny"></div><div id="merchant" class="merchant"></div>
 <div id="amount" class="amount"></div>
@@ -134,7 +133,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 <div id="note" class="note hide"></div>
 <p id="possible" class="warning hide">Possible Amazon item match. Check the item before using it to decide.</p>
 <div id="reason" class="muted"></div>
-<p class="subhead">What kind of purchase was this?</p>
+<p class="subhead">Category</p>
 <div id="quick" class="choices"></div>
 <details id="more"><summary>More categories</summary><div id="extra" class="choices"></div></details>
 </div>
@@ -156,7 +155,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 <p class="full-ledger-note">Full Ledger requires a separate sign-in.</p>
 <p id="budget-error" class="status" role="status"></p></section>
 <section id="error" class="hide"><h1>Link unavailable</h1><p id="errormsg" class="muted">Ask for a new private link.</p></section>
-<p class="footer">Category decisions and personal notes are available here. Bank accounts and balances stay in Ledger.</p>
+<p class="lite-share-footer" id="lite-share-footer" hidden><a id="lite-share-link" class="lite-share-link" href="/categorize/manage">Manage sharing</a></p>
 </main><script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -232,7 +231,7 @@ function chip(name,item){
  return b;
 }
 function render(){
- text('count',view.items.length+' uncategorized');$('count').hidden=false;
+ text('count',view.items.length+' left');$('count').hidden=false;
  if(!view.items.length){show('empty');text('emptytitle','All caught up');text('emptymsg','There are no spending categories waiting for review.');$('again').hidden=true;return}
  if(index>=view.items.length){show('empty');text('emptytitle','That’s everything for now');text('emptymsg','Refresh to review everything still uncategorized.');$('again').hidden=false;return}
  const item=view.items[index];show('review');
@@ -437,7 +436,7 @@ else if(token&&!/^[a-f0-9]{64}$/.test(token)){
  // Owner arriving through Full → Lite uses the existing signed-in session;
  // opening Lite does not mint or expose a household sharing token.
  api('/api/ledger/category-share').then(()=>{
-  $('lite-share-link').hidden=false;return load();
+  $('lite-share-footer').hidden=false;return load();
  }).catch(()=>{show('error');text('errormsg','Sign in to Full Ledger first, or use your household Lite link.')});
 }else load().catch(e=>{show('error');text('errormsg',e.message)});
 </script></body></html>
