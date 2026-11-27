@@ -3633,11 +3633,11 @@ function settingsPage(bundle,s,chosen){
     '<input type="number" name="warnBelow" min="0" step="1" max="999999999" value="'+
     escapeHTML(warningThreshold(state().predictions))+'" required></label>'+
     '<button class="btn primary" type="submit">Save</button></form></section>'+
-  (live()?'<section class="panel" aria-label="Amazon order import">'+
+  (live()?'<section class="panel" aria-label="Amazon purchases">'+
     '<div class="section-title"><h2>Amazon purchases</h2></div>'+
-    '<p>Categorize Amazon charges from your downloaded order history. '+
-    'Matches never create duplicate bank spending.</p>'+
-    '<a class="btn primary" href="/amazon-import">Import Amazon orders</a></section>':'')+
+    '<p>Automatically match Amazon orders without keeping a computer on. '+
+    'Set up TinyFish once; a manual order-history import is still available.</p>'+
+    '<a class="btn primary" href="/amazon-import">Set up Amazon updates</a></section>':'')+
    autopayPanel(s,bundle)+connectionPanel(s,bundle)+
   '<details class="panel ledger-advanced-settings"><summary>Advanced settings and diagnostics</summary>'+
   (state().predictions?.recurringForecastMode!=='approved-only'&&
