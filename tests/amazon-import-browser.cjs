@@ -162,6 +162,9 @@ module.exports=(async()=>{
     await page.locator('#cloud-setup-steps summary').click();
     assert.equal(await page.locator('#cloud-setup-steps').getAttribute('open'),'',
      'Connected owner can reopen full instructions when a login expires');
+    await page.waitForFunction(()=>!document.getElementById('cloud-toggle').disabled);
+    assert.equal(await page.locator('#cloud-toggle').isEnabled(),true,
+     'After a successful connection, Turn on automatic updates must be usable');
     await page.locator('#cloud-toggle').click();
     await page.waitForFunction(()=>document.querySelector('#cloud-status').textContent.includes('Automatic updates ON'));
     assert.deepEqual(tinyfishRequests,[{
