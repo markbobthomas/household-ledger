@@ -311,6 +311,29 @@ const twoSameDay=[payRules[0],{...payRules[0],id:'independent-pay'}];
 const ambiguousPay=futurePay([earlyPay],twoSameDay);
 assert.equal(ambiguousPay.ledger.filter(e=>e.date==='2026-11-27').length,2,
  'One posted deposit cannot settle two indistinguishable independent plans');
+assert(ambiguousPay.postedMatchReview.some(r=>r.bankId==='posted-pay-early'&&
+ r.candidates.length===2),'Two plausible payroll streams appear in Review rather than guessed settlement');
+const narrowEarly=futurePay([earlyPay],[{...payRules[0],
+ matchDaysBefore:0,matchDaysAfter:0}]);
+assert(narrowEarly.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A saved strict posting window must take precedence over general early-pay tolerance');
+const wrongChecking=futurePay([{...earlyPay,accountId:'savings'}]);
+assert(wrongChecking.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A deposit to another bank account must not settle the expected paycheck');
+const priorAutoPay=[
+ tx('auto-p1','2026-10-02','Pine Payroll',3200,'income'),
+ tx('auto-p2','2026-10-16','Pine Payroll',3200,'income'),
+ tx('auto-p3','2026-10-30','Pine Payroll',3200,'income'),
+ tx('auto-p4','2026-11-13','Pine Payroll',3200,'income')
+];
+const autoProjected=C.materialize(earlyAsOf,priorAutoPay,{},T,P,55);
+assert(autoProjected.ledger.some(e=>e.type==='income'&&e.date==='2026-11-27'),
+ 'An inferred paycheck is forecast when no new actual deposit exists');
+const autoSettled=C.materialize(earlyAsOf,priorAutoPay.concat(
+ tx('posted-new-descriptor','2026-11-25','Updated ACH Deposit',3200,'income')),{},T,P,55);
+assert(!autoSettled.ledger.some(e=>e.type==='income'&&e.date==='2026-11-27'),
+ 'Automatically inferred income must also reconcile against an early renamed deposit');
+
 const refundPlan={id:'one-refund',date:'2026-11-27',amount:57.41,
  type:'refund',merchant:'River Return',accountId:'checking'};
 const refunded=futurePay([tx('return-posted','2026-11-25',
