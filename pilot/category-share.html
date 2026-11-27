@@ -102,6 +102,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 .budget-edit-actions button{min-height:35px;padding:6px 13px;font-size:13px}
 .budget-edit-actions .status{margin:0;min-height:0}
 @media(max-width:430px){.card{padding:18px 15px}.buttons{align-items:stretch;flex-wrap:wrap}.buttons>button{flex:1 1 130px}.brand{font-size:13px;letter-spacing:.03em}.mode-switch a,.mode-switch span{padding:6px 9px}}
+@media(max-width:365px){header{flex-wrap:wrap}.lite-header-actions{flex-wrap:wrap;justify-content:flex-end}}
 
 </style></head><body><main>
 <header><div class="brand">LEDGER LITE</div><div class="lite-header-actions"><div class="mode-switch" aria-label="Ledger interface"><a href="/" aria-label="Open full Ledger">Full</a><span class="active" aria-current="page">Lite</span></div><a id="lite-share-link" class="lite-share-link" href="/categorize/manage" hidden>Share</a><div id="count" class="count" hidden></div></div></header>
@@ -118,7 +119,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 <p id="owner-feedback" class="status" role="status" aria-live="polite"></p>
 <hr><button id="revoke" class="secondary" type="button" hidden>Turn off shared access</button>
 </div>
-<p class="muted">The same private link remains active until you turn sharing off. Each visit shows the latest purchases needing categorization, including new ones. Anyone with the link can see the current review purchases and their Notes, change the review categories and personal Notes, and open the budget to see individual spending transactions across categories. It does not expose bank balances or let them manage accounts.</p>
+<p class="muted">The same private link remains active until you turn sharing off. Each visit shows the latest purchases needing categorization, including new ones. Anyone with the link can review and categorize new purchases, edit their Notes, and see the current month’s Budget. They can also change categories and personal Notes for posted purchases shown in that Budget. Bank balances, account controls, and the full Ledger app still require a separate sign-in.</p>
 <a href="/" class="secondary">Return to Ledger</a>
 </section>
 <section id="review" class="hide">
@@ -143,13 +144,16 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 <section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p>
 <button id="budget-button" class="primary wide" type="button">See our budget</button>
 <button id="again" class="secondary" type="button" hidden>Review skipped items</button>
-</section>
+<a id="open-ledger-after-review" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
+<p class="full-ledger-note">Full Ledger requires a separate sign-in.</p></section>
 <section id="budget" class="hide"><h1>Our budget</h1><p id="budget-period" class="muted context"></p>
 <div class="card"><div class="tiny">BUDGET LEFT THIS MONTH</div><div id="budget-total" class="budget-total"></div>
 <div id="budget-sub" class="budget-sub"></div></div>
 <p class="subhead">Spending by category</p><div id="budget-rows" class="card"></div>
 <p class="muted">Tap a posted purchase to correct its category or note. Expected expenses remain read-only.</p>
 <button id="budget-back" class="secondary" type="button">Back to categorizing</button>
+<a id="open-ledger-after-budget" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
+<p class="full-ledger-note">Full Ledger requires a separate sign-in.</p>
 <p id="budget-error" class="status" role="status"></p></section>
 <section id="error" class="hide"><h1>Link unavailable</h1><p id="errormsg" class="muted">Ask for a new private link.</p></section>
 <p class="footer">Category decisions and personal notes are available here. Bank accounts and balances stay in Ledger.</p>
