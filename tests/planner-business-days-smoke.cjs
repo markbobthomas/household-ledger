@@ -95,8 +95,8 @@ assert.equal(Tools.bankBusinessDay('2027-06-18'),true,'Reserve Banks open Friday
 assert.equal(Tools.bankBusinessDay('2027-12-31'),true,'Reserve Banks open Friday before Saturday New Year');
 assert.equal(Tools.forecastBusinessDate('2027-07-05','2027-07-01'),'2027-07-02');
 assert.equal(Tools.forecastBusinessDate('2027-07-05','2027-07-01','in'),'2027-07-06');
-assert.equal(Tools.forecastBusinessDate('2026-12-25','2026-12-24'),'2026-12-28',
- 'Do not retroactively debit a bank balance already observed');
+assert.equal(Tools.forecastBusinessDate('2026-12-25','2026-12-24'),'2026-12-24',
+ 'An unpaid Christmas-day debit moves to the previous open day, even when that is today');
 assert.equal(business.ledger.filter(e=>!Tools.bankBusinessDay(e.date)).length,0,
  'No modeled future event or linked transfer posts on a weekend or bank holiday');
 const statement=business.payments.statements.find(s=>s.cardId==='visa');
@@ -121,6 +121,10 @@ assert.equal(friday.balance,sat.balance,'Weekend has no new predicted cash chang
 assert.equal(Core.auditProjection(business.projection).ok,true,'Canonical accounts reconcile');
 assert.equal(JSON.stringify(posted),immutable,'Actual Sunday bank transactions stay unchanged');
 assert.deepEqual(prefs.futureTransactionAdds,extras,'Saved predicted dates remain unmodified');
-assert.equal(Tools.forecastBusinessDate('2026-10-24','2026-10-23'),'2026-10-26',
- 'If Friday is already included in an actual bank snapshot, do not retroactively debit or drop it');
+assert.equal(Tools.forecastBusinessDate('2026-10-24','2026-10-23'),'2026-10-23',
+ 'An unsettled Saturday nominal debit stays on its prior-Friday forecast day');
+assert.equal(Tools.forecastBusinessDate('2026-10-24','2026-10-24'),'2026-10-24',
+ 'Once Friday passes unpaid, a weekend debit rolls onto Saturday rather than Monday');
+assert.equal(Tools.forecastBusinessDate('2026-12-25','2026-12-26'),'2026-12-26',
+ 'An unpaid holiday debit carries on Saturday, not the next bank business day');
 console.log('PASS bank-day forecasts: earlier debits, later deposits, Fed holidays, weekend cutoff, card settlement and immutable history');
