@@ -244,6 +244,32 @@ function calendarNote(key){
  const stored=calendarContext?.prefs?.transactionNotes;
  return stored&&typeof stored[key]==='string'?stored[key]:'';
 }
+// Account nicknames and nominal billing months are presentation data only.
+ // Resolve card payments by immutable movement identity, never by a merchant substring.
+function calendarPaymentLabel(event){
+ const item=calendarContext?.cardPaymentById?.get(String(event?.transferGroupId||''));
+ if(item){
+  const card=calendarContext.accounts.find(a=>String(a.id)===String(item.cardId));
+  const name=card?.name||item.cardName||'Credit card';
+  const scheduled=String(item.scheduledPaymentDate||item.dueDate||'');
+  const withdraw=String(item.withdrawalDate||event.date||'');
+  if(validDay(scheduled)){
+   const movedMonth=validDay(withdraw)&&withdraw.slice(0,7)!==scheduled.slice(0,7);
+   return {name:name+' · '+monthName(scheduled.slice(0,7))+' payment'+
+     (movedMonth?' (withdraws '+shortDate(withdraw)+')':''),
+    detail:validDay(withdraw)&&withdraw!==scheduled?
+     'Scheduled '+dateLabel(scheduled)+' · withdraws '+dateLabel(withdraw):''};
+  }
+  return {name:name+' · Credit-card payment',detail:''};
+ }
+ // Other explicit checking-to-card transfers should show the saved card name
+ // even when their source merchant is a generic "ACCOUNT ••xxxx" label.
+ const card=calendarContext?.accounts?.find(a=>String(a.id)===String(event?.toAccountId)&&
+  String(a.accountType||a.type||'').toLowerCase()==='credit');
+ if(card&&event?.transferGroupId&&['transfer_out','transfer_in'].includes(event.kind))
+  return {name:card.name+' · Card payment',detail:''};
+ return {name:event?.merchant||'Predicted payment',detail:''};
+}
 function paymentDetail(event){
  const id=String(event?.transferGroupId||'');
  return calendarContext?.paymentDetails?.find(x=>String(x.id)===id)||null;
@@ -263,14 +289,15 @@ function outsideLabel(e){
  return type+' · '+String(e._calendarAccount||'Account')+' · no selected-balance change';
 }
 function predictionEntry(date,e,index,card,selected=false,other=false){
- const d=paymentDetail(e),key=esc(predictionIdentity(e));
+ const d=paymentDetail(e),label=calendarPaymentLabel(e),key=esc(predictionIdentity(e));
  const entry='<button type="button" class="calendar-monthly-row calendar-detail-item ledger-transaction-row" '+
   'data-calendar-list-date="'+date+'" data-calendar-list-index="'+index+
   '" data-open-transaction="'+key+'" aria-expanded="false" aria-label="'+
-  esc('Edit '+(e.merchant||'predicted payment')+' on '+shortDate(date))+'">'+
+  esc('Edit '+label.name+' on '+shortDate(date))+'">'+
   '<span class="calendar-monthly-date ledger-transaction-date">'+esc(shortDate(date))+'</span>'+
   '<span class="calendar-monthly-name ledger-transaction-identity">'+
-  calendarTitle(e.merchant||'Predicted payment','forecast:'+predictionIdentity(e))+
+  calendarTitle(label.name,'forecast:'+predictionIdentity(e))+
+  (label.detail?'<small class="calendar-payment-timing">'+esc(label.detail)+'</small>':'')+
   (e.amountEstimate?'<small>Estimated</small>':'')+
   (other?'<small class="calendar-account-context">'+esc(outsideLabel(e))+'</small>':'')+'</span>'+
   '<strong class="ledger-transaction-amount '+(other?'external':signed(e,card)>0?'in':'out')+'">'+
@@ -650,13 +677,14 @@ function calendarGrid(){
        (t.pending?'Pending':'Posted')+'</span></span>';
     }
     const {event:e,external,card}=item;
+    const label=calendarPaymentLabel(e);
     const amount=external&&e.kind==='card_purchase'?
      shortMoney(Number(e.amount)):
      (signed(e,card)>0?'+':'−')+shortMoney(Number(e.amount));
     return '<span class="calendar-event '+(external?'external':signed(e,card)>0?'in':'out')+
-     '" title="'+esc((e.merchant||'Predicted transaction')+' · '+
+     '" title="'+esc(label.name+' · '+(label.detail?label.detail+' · ':'')+
       (external?outsideLabel(e):fullSigned(e,card)))+'">'+
-     '<span class="calendar-event-name">'+esc(e.merchant||'Payment')+'</span>'+
+     '<span class="calendar-event-name">'+esc(label.name)+'</span>'+
      '<span class="calendar-event-amount">'+amount+'</span></span>';
    }).join('');
   const aria=dateLabel(iso)+', '+money(p.balance)+
@@ -868,6 +896,11 @@ function render(input){
  }
  const history=reconstructedHistory(chosen,derived,bundle?.rows||[],
   snapshot.asOf,historyStart,accountOf,accounts);
+ // Prepare a small lookup once for the displayed calendar, not once per cell.
+ const cardPaymentById=new Map((bundle?.payments?.paymentDetails||[])
+  .filter(p=>p?.id&&p.cardId).map(p=>[String(p.id),p]));
+ for(const p of bundle?.payments?.statements||[])
+  if(p?.id&&!p.alreadyPaid)cardPaymentById.set(String(p.id),p);
  calendarContext={points:series,actual,outside,history,
   // The first date's balance may include today's still-unposted payments.
   // Show the bank-observed starting amount in its reconciliation trail.
@@ -876,7 +909,7 @@ function render(input){
   scope:allAccounts?'all':String(chosen.id),
   coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],
-  paymentDetails:bundle?.payments?.paymentDetails||[],
+  paymentDetails:bundle?.payments?.paymentDetails||[],cardPaymentById,
   cushion:alertThreshold(prefs),accounts,
   chosen:String(chosen.id),through:series.at(-1)?.date,
   gaps:!credit&&series.length>1?knownGaps(prefs,snapshot.asOf,

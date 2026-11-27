@@ -59,6 +59,7 @@ assert.equal(visa[0].historicalAverage,null,
 assert.deepEqual(visa[0].predictedTransactions.map(x=>x.merchant),['Subscription','Service']);
 const detail=plan.paymentDetails.find(x=>x.cardId==='visa'&&x.withdrawalDate==='2026-12-12');
 assert.equal(detail.calculated,200);
+assert.equal(detail.scheduledPaymentDate,'2026-12-12');
 assert.deepEqual(detail.postedTransactions.map(x=>x.id),['visa-grocery','visa-gas','visa-refund']);
 assert.deepEqual(detail.predictedTransactions.map(x=>x.amount),[20,30]);
 assert.equal(detail.calculated,detail.postedTransactions.reduce((v,t)=>v+(t.type==='refund'?-t.amount:t.amount),0)+
@@ -70,10 +71,12 @@ assert.equal(visa[0].pendingExcluded,1,'Pending charges are not silently present
 assert.equal(visa[0].estimated,true);
 assert.equal(visa[0].confirmed,false);
 assert.equal(visa[0].dueDate,'2026-12-13');
+assert.equal(visa[0].scheduledPaymentDate,'2026-12-12','Nominal billing date is retained for display');
 assert.equal(visa[0].withdrawalDate,'2026-12-12');
 assert.equal(visa[1].periodStart,'2026-11-19','Following cycle starts the day after prior close');
 assert.equal(visa[1].periodEnd,'2026-12-18');
 assert.equal(visa[1].statementBalance,20,'Next cycle does not repeat prior card purchases');
+assert.equal(visa[1].scheduledPaymentDate,'2027-01-12');
 assert.equal(visa[1].withdrawalDate,'2027-01-12');
 assert.equal(amex[0].statementBalance,140);
 assert.equal(amex[0].fromAccountId,'savings','Each card has a separate chosen payment account');
