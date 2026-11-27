@@ -14,21 +14,60 @@ const id=cloud.eligible(fixture)[0].key;
 const attempted=structuredClone(fixture);attempted.amazonCloud.scanned[id]='2026-11-27T11:00:00Z';
 assert.equal(cloud.eligible(attempted).length,0,'One successful check removes the charge from automatic rechecks');
 assert.equal(cloud.eligible(attempted,{retry:true}).length,1,'Explicit retry can inspect unresolved charges');
-assert.equal(cloud.due({enabled:true,lastScheduledDay:null},new Date('2026-11-30T17:05:00Z')),true,
+assert.equal(cloud.due({enabled:true,baselineAt:'2026-11-20T00:00:00Z',lastScheduledDay:null},new Date('2026-11-30T17:05:00Z')),true,
  'Monday 9 AM Pacific is a valid scheduled check');
-assert.equal(cloud.due({enabled:true,lastScheduledDay:'2026-11-30'},new Date('2026-11-30T17:05:00Z')),false,
+assert.equal(cloud.due({enabled:true,baselineAt:'2026-11-20T00:00:00Z',lastScheduledDay:'2026-11-30'},new Date('2026-11-30T17:05:00Z')),false,
  'Never repeat a scheduled day');
 assert.equal(cloud.due({enabled:true},new Date('2026-12-01T17:05:00Z')),false,
  'Tuesday cannot start a browser run');
 assert.equal(cloud.due({enabled:false},new Date('2026-11-30T17:05:00Z')),false);
-const rows=cloud.parseOrders({status:'COMPLETED',result:{signedIn:true,
+const rows=cloud.parseOrders({status:'COMPLETED',result:{signedIn:true,complete:true,
  orders:[{orderId:'123-1234567-1234567',title:'Test item',date:today,
   shipmentDate:'',cents:2325,charged:2325}]}});
 assert.equal(rows[0].cents,2325);
-assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{signedIn:false,orders:[]}}),/sign-in/);
-assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{signedIn:true,
+assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{signedIn:false,complete:true,orders:[]}}),/sign-in/);
+assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{signedIn:true,complete:false,orders:[]}}),/incomplete/,
+ 'A provider that admits the export was incomplete cannot be recorded as successful');
+assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{signedIn:true,orders:[]}}),/incomplete/,
+ 'Missing completeness is not proof of a good report');
+assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{signedIn:true,complete:true,
  orders:[{orderId:'123-1234567-1234567',title:'Test item',date:'2026-99-99',
  shipmentDate:'',cents:2325,charged:2325}]}}),/invalid|RangeError/);
+
+const baseline=cloud.baseline(fixture,{enabled:false,scanned:{}},new Date());
+assert.ok(baseline.baselineAt,'A safe first-enable point must be durable');
+assert.equal(cloud.eligible({...fixture,amazonCloud:{...baseline,enabled:true}}).length,0,
+ 'Enabling cannot launch TinyFish for historical Amazon charges without consent');
+const newTx=t('just-posted-later');
+const afterBaseline={...fixture,transactions:{...fixture.transactions,[newTx.id]:newTx},
+ amazonCloud:{...baseline,enabled:true}};
+assert.equal(cloud.eligible(afterBaseline).length,1,
+ 'A new posted Amazon purchase after enable must be eligible');
+assert.equal(cloud.due({enabled:true},new Date('2026-11-30T17:05:00Z')),false,
+ 'A legacy enabled state without a safe baseline must not launch');
+assert.equal(cloud.due({...baseline,enabled:true,pausedReason:'invalid-report'},
+ new Date('2026-11-30T17:05:00Z')),false,
+ 'Paused connections never launch automatically');
+const at=new Date('2026-11-30T17:05:00Z');
+const last30=Array.from({length:13},(_,i)=>
+ new Date(at.getTime()-(i+1)*86400000).toISOString());
+assert.equal(cloud.limit({runStarts:last30},at),'30-day limit reached',
+ 'At most 13 provider starts in any rolling 30 days');
+assert.equal(cloud.limit({runStarts:[new Date(at.getTime()-3600000).toISOString()]},at),
+ 'One Amazon browser check already started today');
+assert.equal(cloud.due({...baseline,enabled:true,runStarts:last30},at),false,
+ 'Rolling run cap blocks an otherwise due weekly schedule');
+const uncertainState={transactions:{'fictional-possible':{
+ ...t('fictional-possible'),amount:39.99}},ledgerAdjustments:{predictions:{}}};
+const uncertainProposal=cloud.prepare(uncertainState,[{
+ orderId:'123-1234567-1234567',date:today,shipmentDate:today,
+ title:'Fictional household storage tote',cents:1999,charged:1999
+}],['Home & Maintenance','Shopping','Other']);
+assert.equal(uncertainProposal.report.matches,0,
+ 'Approximate item-to-charge amounts must not be treated as exact');
+assert.equal(uncertainProposal.hasNotes,false,
+ 'Automatic TinyFish import never writes speculative Possible Amazon Notes');
+
 assert.equal(cloud.MAX_STEPS,45,'Cap browser-agent steps per run');
 assert.ok(cloud.MAX_ESTIMATED_RUN_USD<=1,'Configured run estimate ceiling is not more than $1');
 const fakeFetch=async (url,options)=>{
@@ -36,12 +75,15 @@ const fakeFetch=async (url,options)=>{
  if(url.endsWith('/v1/automation/run-async')){
   const request=JSON.parse(options.body);
   assert.equal(request.use_profile,true,'Reuse TinyFish saved Amazon sign-in');
-  assert.match(request.session_id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,'Each TinyFish request must have a unique session ID');
+  assert.equal(request.session_id,undefined,
+   'Do not send undocumented session_id to TinyFish Agent endpoint');
+  assert.equal(request.agent_config.mode,undefined,
+   'Do not send beta-gated mode configuration to ordinary accounts');
   assert.equal(request.agent_config.max_steps,45);
   assert(!JSON.stringify(request).includes('fictional-card'),'Do not send bank IDs to TinyFish');
   return {ok:true,json:async()=>({run_id:'12345678-1234-1234-1234-123456789012'})};
  }
- return {ok:true,json:async()=>({status:'COMPLETED',result:{signedIn:true,orders:[]}})};
+ return {ok:true,json:async()=>({status:'COMPLETED',result:{signedIn:true,complete:true,orders:[]}})};
 };
 (async()=>{
  await cloud.validateKey('fictional-tinyfish-key-example-1',fakeFetch);
