@@ -695,7 +695,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    assignedRules=tools.historicalScheduleMatches?.(bank,accounts,rules)||[];
   for(const item of candidatesForReconcile){
    if(item.account!==from||item.direction!==bankKind)continue;
-   const planned=item.e,ruleId=String(planned.ruleId||planned.recurringRuleId||'');
+   const planned=item.e,ruleId=String(planned.ruleId||planned.recurringRuleId||''),
+    rule=rules.find(r=>String(r.id)===ruleId);
    if(assignedRules.length&&(!ruleId||
     !assignedRules.some(r=>String(r.id)===ruleId)))continue;
    // A carried-forward overdue forecast uses its ORIGINAL unpaid due date
@@ -714,6 +715,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     maxGap=bankKind==='income'||bankKind==='refund'?
      cadence==='weekly'?2:cadence==='biweekly'?4:6:3;
    if(gap>maxGap)continue;
+   const bounds=rule&&tools.matchWindow?.(rule);
+   if(bounds&&(bounds.customDays||bounds.min!==null||bounds.max!==null)&&
+    !reference.some(d=>tools.postedWithinMatchWindow(rule,bank,d,
+     planned.amount,false,true)))continue;
    if(item.cardId){
     if(!cardDebit(bank))continue;
     const card=accounts.find(a=>String(a.id)===String(item.cardId));
@@ -726,10 +731,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     // General recurring bills already have the mature mortgage/ACH amount
     // fallback above. In this *second* pass require a merchant identity;
     // a dollars-and-date-only guess could reuse unrelated same-size debits.
-    const rule=rules.find(r=>String(r.id)===ruleId);
     const named=[planned.merchant,planned._forecastOriginalMerchant,
      rule?.originalMerchant,...(rule?.matchNames||[])]
-     .some(name=>samePayee(bank.merchant||bank.description,name));
+     .some(name=>samePayee(bankText(bank)+' '+String(bank.name||''),name));
     // A renamed ACH/payroll posting may not share any words with its saved
     // label. Permit a near-exact amount only with a short date gap AND a
     // globally unique bank-to-forecast assignment (enforced below).
@@ -740,6 +744,33 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    }
    pairs.push({bank,item,gap});
   }
+ }
+ // If a settled deposit could belong to two confirmed streams, retain both
+ // until the owner chooses the correct rule. Reuse the existing Review action
+ // rather than hide an unexplained duplicate income prediction.
+ const fallbackPostedReview=[],pairsByBank=new Map();
+ for(const edge of pairs){
+  const bankId=String(edge.bank.id);
+  if(!pairsByBank.has(bankId))pairsByBank.set(bankId,[]);
+  pairsByBank.get(bankId).push(edge);
+ }
+ for(const [bankId,matches] of pairsByBank){
+  if(matches.length<2||(covered.review||[]).some(r=>String(r.bankId)===bankId))continue;
+  const ruleIds=matches.map(x=>String(x.item.e.ruleId||x.item.e.recurringRuleId||''));
+  if(ruleIds.some(id=>!id)||new Set(ruleIds).size!==matches.length){
+   warnings.push('A posted transaction may match multiple future predictions. Confirm the correct occurrence before relying on the forecast.');
+   continue;
+  }
+  const bank=matches[0].bank;
+  fallbackPostedReview.push({bankId,merchant:String(bank.merchant||bank.name||'Bank transaction'),
+   amount:Number(bank.amount),date:bank.date,
+   accountId:String(tools.accountRef(bank.accountId||bank.account,accounts)),
+   candidates:matches.map((match,i)=>{
+    const rule=rules.find(r=>String(r.id)===ruleIds[i]);
+    return {ruleId:ruleIds[i],date:match.item.e._seriesDate||match.item.e.date,
+     amount:Number(match.item.e.amount),label:String(rule?.scheduleLabel||
+      rule?.merchant||match.item.e.merchant||'Predicted transaction')};
+   })});
  }
  const pendingBankByAccount=new Map();
  for(const t of rows){
@@ -881,7 +912,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
-  postedMatchReview:covered.review||[],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[],paymentReconciliations.filter(m=>m.status==='pending'&&m.reservedInAvailable)),paymentReconciliations,overduePayments};
+  postedMatchReview:[...(covered.review||[]),...fallbackPostedReview],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[],paymentReconciliations.filter(m=>m.status==='pending'&&m.reservedInAvailable)),paymentReconciliations,overduePayments};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){
