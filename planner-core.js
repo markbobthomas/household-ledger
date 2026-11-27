@@ -288,8 +288,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // if the bank has not posted it, or the future checking projection is too
  // optimistic. Never rewrite the bank observation or the recurrence anchor.
  // Every independent overdue occurrence is eligible, bounded to the last 90 days.
- const nextBusiness=from=>tools.nextBankBusinessDate(from);
- const overduePayments=[],nextPosting=nextBusiness(asOf),
+ // A missed obligation rolls one CALENDAR day at a time. At the next
+ // daily snapshot it belongs on that day, including Saturday or Sunday.
+ // Bank-day adjustment applies only to the original scheduled occurrence.
+ const overduePayments=[],nextPosting=asOf,
   cashIds=new Set(accounts.filter(a=>
    String(a.accountType||a.type||'').toLowerCase()!=='credit')
    .map(a=>String(a.id))),
