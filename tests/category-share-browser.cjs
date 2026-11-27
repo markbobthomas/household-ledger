@@ -116,6 +116,18 @@ module.exports=(async()=>{
    await page.getByRole('button',{name:'Skip for now'}).click();
    await page.getByRole('heading',{name:'That’s everything for now'}).waitFor();
    assert.equal(await page.locator('#again').textContent(),'Refresh');
+   // Completion buttons stack with room to tap, and Full Ledger stays separate.
+   const completion=await page.evaluate(()=>{
+    const rect=id=>document.getElementById(id).getBoundingClientRect();
+    const budget=rect('budget-button'),refresh=rect('again'),full=rect('open-ledger-after-review');
+    return {actionGap:refresh.top-budget.bottom,footerGap:full.top-refresh.bottom,
+     widthDifference:Math.abs(budget.width-refresh.width),
+     horizontalOverflow:document.body.scrollWidth>window.innerWidth};
+   });
+   assert.ok(completion.actionGap>=10,name+': completion buttons have room between them');
+   assert.ok(completion.footerGap>=24,name+': Full Ledger link stays in a separate footer');
+   assert.ok(completion.widthDifference<=1,name+': completion buttons have equal width');
+   assert.equal(completion.horizontalOverflow,false,name+': completion has no sideways overflow');
    await page.locator('#again').click();
    await page.getByText('Fictional purchase',{exact:true}).waitFor();
    await page.getByRole('button',{name:'Skip for now'}).click();
@@ -174,6 +186,14 @@ module.exports=(async()=>{
    assert.equal(await page.locator('.budget-edit-button').count(),1,
     name+': only posted purchase is editable; expected remains read-only');
    await page.getByRole('button',{name:'Edit Fictional purchase'}).click();
+   assert.equal(await page.locator('.budget-edit-form select').isVisible(),true,
+    name+': category field appears when Edit is tapped');
+   assert.equal(await page.locator('.budget-edit-form textarea').isVisible(),true,
+    name+': Notes field appears alongside category');
+   assert.equal(await page.locator('.budget-edit-form select').evaluate(el=>document.activeElement===el),false,
+    name+': opening Edit must not focus and auto-open the native category picker');
+   assert.equal(await page.locator('.budget-edit-form select').inputValue(),'Groceries',
+    name+': existing category stays selected until user changes it');
    await page.locator('.budget-edit-form select').selectOption('Dining');
    await page.locator('.budget-edit-form textarea').fill('Corrected purchase note');
    await page.locator('.budget-edit-form button.primary').click();
