@@ -629,7 +629,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // than the outdated estimate. Neither case rewrites a source transaction.
  const paymentReconciliations=[];
  const priorBankMatches=new Set([
-  ...[...usedBank].map(bankId=>({bankId})),
+  ...[...usedBank,...(covered.matchedBankIds||[])].map(bankId=>({bankId})),
   ...pendingPaymentMatches,...(payment.pendingPaymentMatches||[]),
   ...(payment.statements||[]).flatMap(s=>s.actualPayments||[])
  ].map(m=>String(m.bankId||m.id||'')));
@@ -708,8 +708,6 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     maxGap=bankKind==='income'||bankKind==='refund'?
      cadence==='weekly'?2:cadence==='biweekly'?4:6:3;
    if(gap>maxGap)continue;
-   const closeAmount=Math.abs(Number(bank.amount)-Number(planned.amount))<=
-    Math.max(2,Number(planned.amount)*.02);
    if(item.cardId){
     if(!cardDebit(bank))continue;
     const card=accounts.find(a=>String(a.id)===String(item.cardId));
@@ -729,7 +727,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     // A renamed ACH/payroll posting may not share any words with its saved
     // label. Permit a near-exact amount only with a short date gap AND a
     // globally unique bank-to-forecast assignment (enforced below).
-    const strongUnnamed=Math.abs(Number(bank.amount)-Number(planned.amount))<=
+    const strongUnnamed=bankKind==='income'&&
+     Math.abs(Number(bank.amount)-Number(planned.amount))<=
      Math.max(2,Number(planned.amount)*.003)&&gap<=3;
     if((!named&&!strongUnnamed)||bank.accountingKind==='card_payment')continue;
    }
