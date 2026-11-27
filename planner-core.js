@@ -629,15 +629,21 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // than the outdated estimate. Neither case rewrites a source transaction.
  const paymentReconciliations=[];
  const priorBankMatches=new Set([
+  ...[...usedBank,...(covered.matchedBankIds||[])].map(bankId=>({bankId})),
   ...pendingPaymentMatches,...(payment.pendingPaymentMatches||[]),
   ...(payment.statements||[]).flatMap(s=>s.actualPayments||[])
  ].map(m=>String(m.bankId||m.id||'')));
  const closeToBank=e=>[e.originalDueDate,e.baseDate,e.anchorDate,
-  e._seriesDate,e.date].some(d=>valid(d)&&d>=add(asOf,-90)&&d<=add(asOf,3));
+  e._seriesDate,e.date].some(d=>valid(d)&&d>=add(asOf,-90)&&d<=add(asOf,7));
+ // Every settled cash movement (in OR out) must be reconciled once against
+ // the bank balance. Early payroll and refunds need the same protection as
+ // debits; a pending deposit is NOT proof of money in the current balance.
  const candidatesForReconcile=[
-  ...finalEvents.filter(e=>e.type==='expense'&&closeToBank(e)).map(e=>({e,kind:'event',
-   account:String(e.accountId),cardId:null})),
-  ...finalPlans.filter(closeToBank).map(e=>({e,kind:'movement',account:String(e.fromAccountId),
+  ...finalEvents.filter(e=>['expense','income','refund'].includes(e.type)&&
+   cashIds.has(String(e.accountId))&&closeToBank(e)).map(e=>({e,kind:'event',
+   direction:e.type,account:String(e.accountId),cardId:null})),
+  ...finalPlans.filter(closeToBank).map(e=>({e,kind:'movement',direction:'expense',
+   account:String(e.fromAccountId),
    cardId:accounts.find(a=>String(a.id)===String(e.toAccountId)&&
     String(a.accountType||a.type).toLowerCase()==='credit')?.id||null}))
  ];
@@ -675,22 +681,44 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // second independent same-payee schedule (house / garden, multiple loans).
  const reconciliableRows=rows.filter(t=>t&&t.id&&!priorBankMatches.has(String(t.id))&&
   valid(t.date)&&t.date<=asOf&&t.date>=add(asOf,-90)&&Number(t.amount)>0&&
-  (t.pending||!(tools.historicalScheduleMatches?.(t,accounts,rules)||[]).length)&&
-  tools.bankDirection(t)==='expense'&&
+  // Pending income/refunds are not yet incorporated into current cash; do
+  // not remove a forecast deposit merely because a pending credit exists.
+  (!t.pending||tools.bankDirection(t)==='expense')&&
+  ['expense','income','refund'].includes(tools.bankDirection(t))&&
   cashIds.has(String(tools.accountRef(t.accountId||t.account,accounts))));
  const pairs=[];
  for(const bank of reconciliableRows){
-  const from=String(tools.accountRef(bank.accountId||bank.account,accounts));
+  const from=String(tools.accountRef(bank.accountId||bank.account,accounts)),
+   bankKind=tools.bankDirection(bank),
+   // A bank posting already identified as belonging to a different owner
+   // schedule cannot be borrowed by an unrelated prediction.
+   assignedRules=tools.historicalScheduleMatches?.(bank,accounts,rules)||[];
   for(const item of candidatesForReconcile){
-   if(item.account!==from)continue;
-   const planned=item.e;
-   const reference=[planned.originalDueDate,planned.baseDate,planned.anchorDate,
-    planned._seriesDate,planned.date].filter(valid);
+   if(item.account!==from||item.direction!==bankKind)continue;
+   const planned=item.e,ruleId=String(planned.ruleId||planned.recurringRuleId||''),
+    rule=rules.find(r=>String(r.id)===ruleId);
+   if(assignedRules.length&&(!ruleId||
+    !assignedRules.some(r=>String(r.id)===ruleId)))continue;
+   // A carried-forward overdue forecast uses its ORIGINAL unpaid due date
+   // for matching, not the future placeholder date assigned to the carry.
+   // Otherwise a random recent posting could falsely settle an old bill.
+   const reference=(planned._unpostedEstimated?
+    [planned._overdueFrom,planned.originalDueDate,planned.baseDate,
+     planned.anchorDate,planned._seriesDate]:
+    [planned.originalDueDate,planned.baseDate,planned.anchorDate,
+     planned._seriesDate,planned.date]).filter(valid);
    if(!reference.length)continue;
    const gap=Math.min(...reference.map(d=>Math.abs(diff(bank.date,d))));
-   if(gap>3)continue;
-   const closeAmount=Math.abs(Number(bank.amount)-Number(planned.amount))<=
-    Math.max(2,Number(planned.amount)*.02);
+   // Short streams must never borrow a previous/next installment. Monthly or
+   // four-week deposits can legitimately arrive several business days early.
+   const cadence=planned.cadence||planned.frequency||'',
+    maxGap=bankKind==='income'||bankKind==='refund'?
+     cadence==='weekly'?2:cadence==='biweekly'?4:6:3;
+   if(gap>maxGap)continue;
+   const bounds=rule&&tools.matchWindow?.(rule);
+   if(bounds&&(bounds.customDays||bounds.min!==null||bounds.max!==null)&&
+    !reference.some(d=>tools.postedWithinMatchWindow(rule,bank,d,
+     planned.amount,false,true)))continue;
    if(item.cardId){
     if(!cardDebit(bank))continue;
     const card=accounts.find(a=>String(a.id)===String(item.cardId));
@@ -703,11 +731,48 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     // General recurring bills already have the mature mortgage/ACH amount
     // fallback above. In this *second* pass require a merchant identity;
     // a dollars-and-date-only guess could reuse unrelated same-size debits.
-    const named=samePayee(bank.merchant||bank.description,planned.merchant);
-    if(!named||bank.accountingKind==='card_payment')continue;
+    const named=[planned.merchant,planned._forecastOriginalMerchant,
+     rule?.originalMerchant,...(rule?.matchNames||[])]
+     .some(name=>samePayee(bankText(bank)+' '+String(bank.name||''),name));
+    // A renamed ACH/payroll posting may not share any words with its saved
+    // label. Permit a near-exact amount only with a short date gap AND a
+    // globally unique bank-to-forecast assignment (enforced below).
+    const strongUnnamed=bankKind==='income'&&
+     Math.abs(Number(bank.amount)-Number(planned.amount))<=
+     Math.max(2,Number(planned.amount)*.003)&&gap<=3;
+    if((!named&&!strongUnnamed)||bank.accountingKind==='card_payment')continue;
    }
    pairs.push({bank,item,gap});
   }
+ }
+ // If a settled deposit could belong to two confirmed streams, retain both
+ // until the owner chooses the correct rule. Reuse the existing Review action
+ // rather than hide an unexplained duplicate income prediction.
+ const fallbackPostedReview=[],pairsByBank=new Map();
+ for(const edge of pairs){
+  const bankId=String(edge.bank.id);
+  if(!pairsByBank.has(bankId))pairsByBank.set(bankId,[]);
+  pairsByBank.get(bankId).push(edge);
+ }
+ for(const [bankId,matches] of pairsByBank){
+  if(matches.length<2||matches[0].bank.pending||
+   (covered.review||[]).some(r=>String(r.bankId)===bankId))continue;
+  const ruleIds=matches.map(x=>String(x.item.e.ruleId||x.item.e.recurringRuleId||''));
+  if(matches.some(x=>x.item.kind!=='event')||ruleIds.some(id=>!id)||
+   new Set(ruleIds).size!==matches.length){
+   warnings.push('A posted transaction may match multiple future predictions. Confirm the correct occurrence before relying on the forecast.');
+   continue;
+  }
+  const bank=matches[0].bank;
+  fallbackPostedReview.push({bankId,merchant:String(bank.merchant||bank.name||'Bank transaction'),
+   amount:Number(bank.amount),date:bank.date,
+   accountId:String(tools.accountRef(bank.accountId||bank.account,accounts)),
+   candidates:matches.map((match,i)=>{
+    const rule=rules.find(r=>String(r.id)===ruleIds[i]);
+    return {ruleId:ruleIds[i],date:match.item.e._seriesDate||match.item.e.date,
+     amount:Number(match.item.e.amount),label:String(rule?.scheduleLabel||
+      rule?.merchant||match.item.e.merchant||'Predicted transaction')};
+   })});
  }
  const pendingBankByAccount=new Map();
  for(const t of rows){
@@ -785,7 +850,8 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   // A uniquely matched pending debit already has one correct cash reserve.
   // This is routine bank settlement, not an actionable forecast exception:
   // retain pending status in paymentReconciliations, not the red Review banner.
-  if(!pending&&Math.abs(actualAmount-Number(planned.amount))>.01)
+  if(!pending&&pair.item.direction==='expense'&&
+   Math.abs(actualAmount-Number(planned.amount))>.01)
    warnings.push('A posted bank withdrawal matches '+String(planned.merchant||'a planned payment')+
     ' but differs from the estimate. Review the amount, not a second withdrawal.');
  }
@@ -848,7 +914,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   missingMortgages:[],historyCandidates:detected.review,
   automaticRecurrence:{events:detected.automatic,review:[]},
   duplicateChecks:checks,duplicateConflicts:detected.conflicts,
-  postedMatchReview:covered.review||[],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[],paymentReconciliations.filter(m=>m.status==='pending'&&m.reservedInAvailable)),paymentReconciliations,overduePayments};
+  postedMatchReview:[...(covered.review||[]),...fallbackPostedReview],pendingPaymentMatches:pendingPaymentMatches.concat(payment.pendingPaymentMatches||[],paymentReconciliations.filter(m=>m.status==='pending'&&m.reservedInAvailable)),paymentReconciliations,overduePayments};
 }
 /* Fail-closed arithmetic audit: every day uses only its canonical ledger event legs. */
 function auditProjection(projection){

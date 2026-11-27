@@ -1196,6 +1196,8 @@ function postedCoverage(generated,rules,records,accounts,asOf){
  return {
   events:(generated.events||[]).filter((_,i)=>!usedItems.has(i)),
   plans:(generated.plans||[]).filter((_,i)=>!usedItems.has(n+i)),
+  // These posted facts already settled other obligations; never reuse them.
+  matchedBankIds:[...usedPosted].map(p=>String(posted[p].id)),
   review
  };
 }

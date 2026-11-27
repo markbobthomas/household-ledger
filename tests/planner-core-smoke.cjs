@@ -264,6 +264,89 @@ assert.ok(adjustedCard.projection.plans.filter(p=>p.toAccountId==='visa')
  .every(p=>p.amount===675),
  'Editing card autopay for all future dates replaces each linked payment amount once');
 
+// A bank deposit posting before its predicted payday has ALREADY changed the
+// immutable opening bank balance. Never add the same cash again on its due day.
+const earlyAsOf={...snapshot,asOf:'2026-11-26',accounts:accounts.map(a=>
+ a.id==='checking'?{...a,current:8200,available:8200}:a)};
+const payRules=[
+ {id:'wage-a',kind:'event',accountId:'checking',originalAccountId:'checking',
+  type:'income',merchant:'Cedar Payroll',originalMerchant:'Cedar Payroll',
+  matchNames:['cedar payroll'],frequency:'every-4-weeks',
+  anchorDate:'2026-11-27',amount:3200},
+ {id:'wage-b',kind:'event',accountId:'checking',originalAccountId:'checking',
+  type:'income',merchant:'Cedar Payroll',originalMerchant:'Cedar Payroll',
+  matchNames:['cedar payroll'],frequency:'every-4-weeks',
+  anchorDate:'2026-12-11',amount:2800}
+];
+const futurePay=(records,rules=payRules,extras=[])=>C.materialize(earlyAsOf,records,{
+ recurringForecastMode:'approved-only',futureRecurringRules:rules,
+ futureTransactionAdds:extras},T,P,55);
+const earlyPay=tx('posted-pay-early','2026-11-25','Renamed ACH Deposit',3200,'income');
+const paidEarly=futurePay([earlyPay]);
+assert(!paidEarly.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A renamed paycheck posted two days early must not be counted a second time');
+assert(paidEarly.ledger.some(e=>e.ruleId==='wage-b'&&e.date==='2026-12-11'),
+ 'Early paycheck reconciliation must preserve the other four-week payroll stream');
+assert(paidEarly.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-12-25'),
+ 'Only the paid occurrence disappears; later installments continue');
+assert(paidEarly.paymentReconciliations.some(e=>
+ e.bankId==='posted-pay-early'&&e.status==='posted'),
+ 'Actual deposit should be traceable to its reconciled forecast occurrence');
+assert.equal(earlyPay.amount,3200,'Bank facts remain immutable');
+assert.equal(paidEarly.projection.accounts.find(a=>a.id==='checking').openingCurrent,8200,
+ 'A settled deposit stays in actual cash, not the future projection');
+const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
+assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A pending deposit must never be mistaken for cash already in the current balance');
+const variablePay=futurePay([tx('variable-pay','2026-11-22',
+ 'Cedar Payroll Processing',3657.33,'income')]);
+assert(!variablePay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Named payroll that posts five days early must reconcile despite a variable amount');
+assert(variablePay.ledger.some(e=>e.ruleId==='wage-b'&&e.date==='2026-12-11'));
+const unrelatedPay=futurePay([tx('unrelated','2026-11-25',
+ 'Unrelated ACH Credit',675,'income')]);
+assert(unrelatedPay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An unrelated deposit must not erase a scheduled paycheck');
+const twoSameDay=[payRules[0],{...payRules[0],id:'independent-pay'}];
+const ambiguousPay=futurePay([earlyPay],twoSameDay);
+assert.equal(ambiguousPay.ledger.filter(e=>e.date==='2026-11-27').length,2,
+ 'One posted deposit cannot settle two indistinguishable independent plans');
+assert(ambiguousPay.postedMatchReview.some(r=>r.bankId==='posted-pay-early'&&
+ r.candidates.length===2),'Two plausible payroll streams appear in Review rather than guessed settlement');
+const narrowEarly=futurePay([earlyPay],[{...payRules[0],
+ matchDaysBefore:0,matchDaysAfter:0}]);
+assert(narrowEarly.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A saved strict posting window must take precedence over general early-pay tolerance');
+const wrongChecking=futurePay([{...earlyPay,accountId:'savings'}]);
+assert(wrongChecking.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A deposit to another bank account must not settle the expected paycheck');
+const priorAutoPay=[
+ tx('auto-p1','2026-10-02','Pine Payroll',3200,'income'),
+ tx('auto-p2','2026-10-16','Pine Payroll',3200,'income'),
+ tx('auto-p3','2026-10-30','Pine Payroll',3200,'income'),
+ tx('auto-p4','2026-11-13','Pine Payroll',3200,'income')
+];
+const autoProjected=C.materialize(earlyAsOf,priorAutoPay,{},T,P,55);
+assert(autoProjected.ledger.some(e=>e.type==='income'&&e.date==='2026-11-27'),
+ 'An inferred paycheck is forecast when no new actual deposit exists');
+const autoSettled=C.materialize(earlyAsOf,priorAutoPay.concat(
+ tx('posted-new-descriptor','2026-11-25','Updated ACH Deposit',3200,'income')),{},T,P,55);
+assert(!autoSettled.ledger.some(e=>e.type==='income'&&e.date==='2026-11-27'),
+ 'Automatically inferred income must also reconcile against an early renamed deposit');
+
+const refundPlan={id:'one-refund',date:'2026-11-27',amount:57.41,
+ type:'refund',merchant:'River Return',accountId:'checking'};
+const refunded=futurePay([tx('return-posted','2026-11-25',
+ 'River Return',57.41,'refund')],[],[refundPlan]);
+assert(!refunded.ledger.some(e=>e.merchant==='River Return'),
+ 'A posted refund must not also remain as an expected cash credit');
+const debitPlan={id:'one-debit',date:'2026-11-27',amount:120,
+ type:'expense',merchant:'West Insurance',accountId:'checking'};
+const paidDebit=futurePay([tx('debit-posted','2026-11-25',
+ 'West Insurance',120)],[],[debitPlan]);
+assert(!paidDebit.ledger.some(e=>e.merchant==='West Insurance'),
+ 'The universal settlement guard must preserve existing expense coverage');
+
 const priorTZ=process.env.TZ;
 try {
  for(const zone of ['America/Los_Angeles','Asia/Tokyo','America/New_York']){
