@@ -352,8 +352,8 @@ function connectionPanel(s){
 }
 
 function cardStatementPreview(s,bundle,cardId){
- const next=(bundle?.payments?.statements||[]).filter(x=>String(x.cardId)===String(cardId))
-  .sort((a,b)=>a.withdrawalDate.localeCompare(b.withdrawalDate)).slice(0,2);
+ const next=window.HouseholdPaymentObligations.upcomingStatementsForCard(
+  bundle?.payments?.statements,cardId,s.asOf,2);
  if(!next.length)return '<p class="card-preview-placeholder">Save the billing period and payment dates to see posted spending and projected card payments.</p>';
  return '<div class="card-statement-previews">'+next.map((p,i)=>
   '<div class="card-statement-preview" aria-label="'+escapeHTML(p.cardName)+' statement estimate">'+
@@ -3529,7 +3529,8 @@ function incomeStatus(bundle,s,chosen,derived){
 function upcomingCardBills(bundle,s){
  const all=(bundle?.payments?.statements||[]),cards=activeAccounts(s).filter(a=>accountType(a)==='credit');
  if(!cards.length)return '';
- const earliest=cards.map(c=>all.find(p=>String(p.cardId)===String(c.id))).filter(Boolean)
+ const earliest=cards.map(c=>window.HouseholdPaymentObligations.upcomingStatementsForCard(
+  all,c.id,s.asOf,1)[0]).filter(Boolean)
   .sort((a,b)=>a.withdrawalDate.localeCompare(b.withdrawalDate));
  return '<section class="panel upcoming-card-bills" aria-label="Upcoming credit card statements">'+
   '<div class="section-title"><h2>Upcoming credit-card bills</h2>'+
