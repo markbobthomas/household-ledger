@@ -92,6 +92,9 @@ document.addEventListener('click',async ev=>{
    ai:key==='ai'?!settings.ai:settings.ai});
   settings={...settings,...saved};
   paint();
+  // Only a real category-behavior change warrants refreshing the prepared
+  // spending views. Changing the paid-AI switch is display-only.
+  if(key==='automatic')await window.HouseholdLiveSource.enterReal();
   statusText('Categorization settings saved.'+(key==='ai'&&saved.ai?
    ' AI will check unreviewed purchases the next time you open Ledger.':''));
  }catch(err){statusText('Could not save categorization settings: '+err.message)}
