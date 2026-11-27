@@ -723,6 +723,16 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   for(const item of candidatesForReconcile){
    if(item.account!==from||
     cashDirectionOf(item.direction)!==bankCashDirection(bank))continue;
+   // A paired internal transfer is not outside income or a paid bill.
+   // It can settle only a linked movement with the SAME destination account.
+   // Never borrow a transfer between savings/checking to erase salary or rent.
+   if(bank.pairedTransactionId){
+    if(item.kind!=='movement')continue;
+    const counter=rows.find(x=>String(x.id)===String(bank.pairedTransactionId)),
+     destination=counter?tools.accountRef(
+      counter.accountId||counter.account,accounts):bank.toAccountId;
+    if(!destination||String(destination)!==String(item.e.toAccountId))continue;
+   }
    const planned=item.e,ruleId=String(planned.ruleId||planned.recurringRuleId||''),
     rule=rules.find(r=>String(r.id)===ruleId);
    if(assignedRules.length&&(!ruleId||
