@@ -29,6 +29,8 @@ input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:7
 .cloud-key-actions{margin-top:9px}
 #cloud-api-key{font-size:16px}
 #cloud-setup-steps .button{margin:4px 0 6px}
+#cloud-activity{margin-top:10px;font-size:.9rem}
+#cloud-activity summary{color:#526071;padding:8px 0}
 @media(max-width:480px){.cloud-key-actions>*{width:100%}.cloud-steps{padding-left:21px}.panel{padding:15px}}
 .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
 .stat{background:#f3f7f3;padding:12px;border-radius:10px;text-align:center}
@@ -63,8 +65,8 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
 <p class="muted">Connect TinyFish once to match Amazon purchases automatically, without leaving a computer on. No new expenses are created. You can still import an Amazon order file manually below.</p>
 <section class="panel" id="amazon-cloud" aria-label="Automatic Amazon updates">
  <h2>Automatic Amazon updates</h2>
- <p>Keep product names up to date without leaving your computer on. Ledger checks for new Amazon bank charges <strong>Monday, Thursday and Saturday</strong>. TinyFish opens Amazon only when there is something new to match.</p>
- <p class="muted">No new Amazon charges means no TinyFish browser charge. Ledger requests a 45-step limit (roughly $0.75 at current TinyFish rates). If TinyFish cannot enforce the limit for your account, Ledger will not start a paid browser run.</p>
+ <p>Set this up once. Then Ledger checks <strong>Monday, Thursday and Saturday</strong> for new, posted Amazon charges. It opens TinyFish only when there is something new to match.</p>
+ <p class="muted">Older purchases already in Ledger are left alone. At most one paid Amazon check per Pacific day, and 13 in any 30 days. No new Amazon charges = no TinyFish browser charge.</p>
  <p id="cloud-status" role="status" aria-live="polite">Checking setup…</p>
  <details id="cloud-setup-steps" open>
   <summary><strong>Step-by-step setup — start here</strong></summary>
@@ -123,10 +125,11 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
   <button id="cloud-now" type="button">Check now</button>
   <button id="cloud-disconnect" type="button">Disconnect</button>
  </div>
- <p id="cloud-detail" class="muted"></p>
+ <details id="cloud-activity"><summary>Last check and troubleshooting</summary><p id="cloud-detail" class="muted"></p></details>
  <details id="cloud-explanation"><summary>Cost, privacy and what gets matched</summary>
-  <p>The cloud browser can read your Amazon order pages but never your bank account. Ledger checks order IDs, prices and dates against existing posted bank charges. No duplicate expenses or guessed matches. Split orders and uncertain items remain available for review.</p>
-  <p>Automatic checks require a working bank connection and a TinyFish Amazon sign-in. If Amazon requests verification or TinyFish runs out of funds, updates pause for attention. Turning updates off stops future new runs; a browser run already started may finish and cost money.</p>
+  <p>TinyFish reads Amazon order pages, not your bank account. Ledger privately matches order details to existing posted bank charges; it never creates a second purchase or rewrites bank balances. Only exact matches can add product Notes/categories automatically. Uncertain purchases stay for review.</p>
+  <p>First setup starts with <strong>new charges going forward</strong>, not a surprise paid import of old history. Each run requests a 45-agent-step and 10-minute limit (roughly $0.74 at the current published rates, not an exact bill). If TinyFish does not support that limit on your account, Ledger will not run uncapped. A maximum of 13 browser starts is permitted in any rolling 30 days, including Check now.</p>
+  <p>If Amazon needs a new sign-in, a run fails, no valid orders are returned, or no orders match bank charges, updates turn OFF and show a problem instead of silently retrying. Turn them back on only after checking the problem. A run already started may still finish and incur charges.</p>
   <p>The ZIP/CSV import below remains available for complete order history.</p>
  </details>
 </section>
@@ -187,25 +190,31 @@ async function cloudApi(path,action){
 function renderCloud(data){
  const wasConnected=cloud?.connected;
  cloud=data;
- // Keep instructions available after connection; simply fold them once
- // the owner succeeds. They can reopen them later to reconnect Amazon.
- if(wasConnected!==data.connected){
-  $('cloud-setup-steps').open=!data.connected;
- }
+ // The nine-step guide remains available, but successful connections
+ // collapse it so regular status is not a wall of setup instructions.
+ if(wasConnected!==data.connected)$('cloud-setup-steps').open=!data.connected;
  $('cloud-actions').hidden=!data.connected;
  $('cloud-toggle').textContent=data.enabled?'Turn off automatic updates':'Turn on automatic updates';
  $('cloud-toggle').classList.toggle('primary',!data.enabled);
- $('cloud-now').disabled=!data.enabled||data.runActive;
- const summary=data.runActive?'Amazon check in progress.':data.enabled?
-  'Automatic updates ON. Ledger checks up to three days a week.':
+ $('cloud-now').disabled=!data.enabled||data.runActive||!!data.runLimitReason||!!data.needsAttention;
+ const summary=data.runActive?'Amazon check in progress. A second check will not start.':
+  data.needsAttention?'Amazon updates PAUSED. Read the problem below before turning them on again.':
+  data.enabled?'Automatic updates ON. New Amazon charges will be checked on scheduled days.':
+  data.connected&&data.amazonSignInConfirmed===false?'TinyFish connected, but its Amazon login was not confirmed. Save the Amazon login in TinyProfiles before turning on updates.':
   data.connected?'TinyFish connected. Automatic updates are OFF. Tap Turn on automatic updates below.':
   'Not connected. Follow the numbered setup steps below.';
  cloudMessage(summary);
- const parts=['New posted Amazon charges awaiting a first scan: '+Number(data.pendingAmazonCharges||0)+'.',
-  'Last result: '+(data.lastOutcome||'Not checked yet')+'.'];
- if(data.lastSuccessAt)parts.push('Last success: '+new Date(data.lastSuccessAt).toLocaleString()+'.');
- if(data.lastError)parts.push('Attention: '+data.lastError);
+ const parts=[
+  'New Amazon charges not yet checked: '+Number(data.pendingAmazonCharges||0)+'.',
+  'Last result: '+(data.lastOutcome||'Not checked yet')+'.',
+  'Browser starts in the last 30 days: '+Number(data.runsLast30Days||0)+' of '+Number(data.maxRuns30Days||13)+'.'
+ ];
+ if(data.runLimitReason)parts.push('Next paid check held: '+data.runLimitReason+'.');
+ if(data.connected&&data.amazonSignInConfirmed===false)parts.push('TinyFish did not confirm a saved Amazon login. See setup steps and Save the Amazon session before allowing paid checks.');
+ if(data.lastSuccessAt)parts.push('Last successful order match: '+new Date(data.lastSuccessAt).toLocaleString()+'.');
+ if(data.lastError)parts.push('Action needed: '+data.lastError);
  $('cloud-detail').textContent=parts.join(' ');
+ if(data.needsAttention||data.lastError)$('cloud-activity').open=true;
 }
 async function refreshCloud(){
  try{renderCloud(await cloudApi(''))}
@@ -216,20 +225,25 @@ async function cloudAction(action){
  cloudBusy=true;
  for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect'])$(id).disabled=true;
  cloudMessage('Saving Amazon settings…');
- try{const data=await cloudApi(action.action==='run'?'/run':'/settings',action.action==='run'?
-  {consent:true}:action);
+ let problem=null;
+ try{
+  const data=await cloudApi(action.action==='run'?'/run':'/settings',
+   action.action==='run'?{consent:true}:action);
   renderCloud(data);
   if(action.action==='connect')$('cloud-api-key').value='';
-  if(data.started)cloudMessage('TinyFish started an Amazon check. You can close this page.');
+  if(data.started)cloudMessage('TinyFish started one Amazon check. You can close this page.');
   if(data.skipped)cloudMessage('No new Amazon charges; TinyFish was not started.');
- }catch(error){cloudMessage(error.message)}
+  if(data.error||data.limitReached||data.needsAttention)
+   problem=data.error||data.lastError||data.lastOutcome||'Please check the Amazon update details.';
+ }catch(error){problem=error.message}
  finally{
   cloudBusy=false;
-  // Restore buttons after a connection/update attempt. renderCloud() then
-  // applies the correct disabled state for Check now and connection status.
-  for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect'])
-   $(id).disabled=false;
+  for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect'])$(id).disabled=false;
   await refreshCloud();
+  if(problem){
+   cloudMessage('Amazon updates need attention: '+problem);
+   $('cloud-activity').open=true;
+  }
  }
 }
 $('cloud-connect').onclick=()=>{
@@ -239,7 +253,7 @@ $('cloud-connect').onclick=()=>{
 };
 $('cloud-toggle').onclick=()=>cloudAction({action:cloud?.enabled?'disable':'enable'});
 $('cloud-now').onclick=()=>{
- if(!confirm('Check new Amazon purchases now? If any unmatched posted charges are found, TinyFish may charge up to about $1 for a browser run. Continue?'))return;
+ if(!confirm('Check new Amazon purchases now? If any new unmatched posted charges are found and the daily limit allows, TinyFish may charge for one capped browser run. Continue?'))return;
  cloudAction({action:'run'});
 };
 $('cloud-disconnect').onclick=()=>{

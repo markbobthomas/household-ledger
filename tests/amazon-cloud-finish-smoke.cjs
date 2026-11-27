@@ -33,7 +33,7 @@ const base={items:[{id:'fictional-item',token:'fictional-plaidsafe',accountIds:[
    status:'running',startedAt:new Date().toISOString()}}};
 writeEncrypted(file,base);
 fs.writeFileSync(resultFile,JSON.stringify({status:'COMPLETED',result:{
- signedIn:true,orders:[{orderId:'123-1234567-1234567',title:'Fictional household storage bin',
+ signedIn:true,complete:true,orders:[{orderId:'123-1234567-1234567',title:'Fictional household storage bin',
  date:orderDate,shipmentDate:orderDate,cents:2199,charged:2199}]}}));
 const env={...process.env,PORT:String(port),PILOT_PASSWORD:'fictional-test-password',
  PILOT_ENCRYPTION_KEY:secret,PILOT_STATE_PATH:file,PLAID_ENV:'sandbox',
