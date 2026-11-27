@@ -408,6 +408,31 @@ const pendingUnclassified=C.materialize(onPayday,[
 },T,P,55,{weekendPolicy:'friday'});
 assert(pendingUnclassified.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'An unposted bank credit never counts as already settled');
+// Distinguish a real paycheck from moving the same dollars between two
+// linked bank accounts. An internal transfer NEVER settles wages or housing.
+const savingsMovement=[
+ tx('move-checking','2026-11-25','Opaque account move',3200,
+  'transfer','checking',{cashDirection:'out',pairedTransactionId:'move-savings'}),
+ tx('move-savings','2026-11-25','Opaque account move',3200,
+  'transfer','savings',{cashDirection:'in',pairedTransactionId:'move-checking'})
+];
+const notWages=C.materialize(onPayday,savingsMovement,{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(notWages.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An internal transfer into savings is not evidence that payroll was paid');
+const linkedMovementRule={id:'bank-transfer-plan',kind:'movement',
+ fromAccountId:'checking',toAccountId:'savings',
+ originalAccountId:'checking',frequency:'monthly',anchorDate:'2026-11-27',
+ merchant:'Internal Movement Plan',amount:3200};
+const paidMovement=C.materialize(onPayday,savingsMovement,{
+ recurringForecastMode:'approved-only',futureRecurringRules:[linkedMovementRule]
+},T,P,55,{weekendPolicy:'friday'});
+assert(!paidMovement.ledger.some(e=>e.recurringRuleId==='bank-transfer-plan'&&
+ e.date==='2026-11-27'),
+ 'A posted paired transfer settles the corresponding linked movement exactly once');
+assert(paidMovement.ledger.some(e=>e.recurringRuleId==='bank-transfer-plan'&&
+ e.date==='2026-12-25'),'The next distinct linked transfer schedule remains intact');
 const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
 assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'A pending deposit must never be mistaken for cash already in the current balance');
