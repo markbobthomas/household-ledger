@@ -706,12 +706,51 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // Confirmed recurring rules already received their own posted-bank evidence
  // above. A later generic fallback must not reuse that bank debit to clear a
  // second independent same-payee schedule (house / garden, multiple loans).
+ // The available bank balance can ALREADY contain a pending ACH credit
+ // even when the posted/current balance and Plaid's transaction record do not.
+ // For example, Wednesday payroll can be spendable on Wednesday while still
+ // pending on Friday. Re-adding it to the available-based forecast would count
+ // the SAME CASH twice. Verify the account-level pending net from immutable
+ // bank-reported current/available balances before crediting pending income.
+ //
+ // Also account for reserved pending withdrawals in that net, so a credited
+ // deposit and a reserved debit do not each get subtracted/added twice.
+ // If only some pending items are reflected, or an unrelated bank hold
+ // prevents exact reconciliation, do NOT guess which credit has settled.
+ const pendingCashByAccount=new Map();
+ for(const t of rows){
+  if(!t?.pending||!valid(t.date)||t.date>asOf||!(Number(t.amount)>0)||
+   t.pairedTransactionId)continue;
+  const aid=String(tools.accountRef(t.accountId||t.account,accounts)),
+   dir=bankCashDirection(t);
+  if(!cashIds.has(aid)||!['in','out'].includes(dir))continue;
+  const totals=pendingCashByAccount.get(aid)||{credits:0,debits:0};
+  totals[dir==='in'?'credits':'debits']+=cents(t.amount);
+  pendingCashByAccount.set(aid,totals);
+ }
+ const pendingCreditsAvailable=new Set(),heldAccounts=new Set();
+ for(const account of accounts){
+  const aid=String(account.id),totals=pendingCashByAccount.get(aid);
+  if(!totals||!cashIds.has(aid)||account.current==null||
+   account.available==null||!Number.isFinite(Number(account.current))||
+   !Number.isFinite(Number(account.available)))continue;
+  const delta=cents(Number(account.available)-Number(account.current)),
+   credits=totals.credits,debits=totals.debits,
+   near=(a,b)=>Math.abs(a-b)<=2,
+   netReconciled=credits>0&&near(delta,credits-debits),
+   creditOnly=credits>0&&near(delta,credits);
+  if(netReconciled||creditOnly)pendingCreditsAvailable.add(aid);
+  if(debits>0&&(netReconciled||-delta+1>=debits))
+   heldAccounts.add(aid);
+ }
  const knownBankById=new Map(rows.filter(t=>t?.id).map(t=>[String(t.id),t]));
  const reconciliableRows=rows.filter(t=>t&&t.id&&!priorBankMatches.has(String(t.id))&&
   valid(t.date)&&t.date<=asOf&&t.date>=add(asOf,-90)&&Number(t.amount)>0&&
-  // Pending income/refunds are not yet incorporated into current cash; do
-  // not remove a forecast deposit merely because a pending credit exists.
-  (!t.pending||tools.bankDirection(t)==='expense')&&
+  // An unposted credit is settlement evidence only when its available-cash
+  // impact is independently verified by bank-reported balance arithmetic.
+  (!t.pending||bankCashDirection(t)==='out'||
+   pendingCreditsAvailable.has(String(
+    tools.accountRef(t.accountId||t.account,accounts))))&&
   bankCashDirection(t)&&
   cashIds.has(String(tools.accountRef(t.accountId||t.account,accounts))));
  const pairs=[];
@@ -800,7 +839,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   pairsByBank.get(bankId).push(edge);
  }
  for(const [bankId,matches] of pairsByBank){
-  if(matches.length<2||matches[0].bank.pending||
+  const candidateBank=matches[0].bank;
+  if(matches.length<2||candidateBank.pending&&
+   !pendingCreditsAvailable.has(String(tools.accountRef(
+    candidateBank.accountId||candidateBank.account,accounts)))||
    (covered.review||[]).some(r=>String(r.bankId)===bankId))continue;
   const ruleIds=matches.map(x=>String(x.item.e.ruleId||x.item.e.recurringRuleId||''));
   if(matches.some(x=>x.item.kind!=='event')||ruleIds.some(id=>!id)||
@@ -819,19 +861,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
       rule?.merchant||match.item.e.merchant||'Predicted transaction')};
    })});
  }
- const pendingBankByAccount=new Map();
- for(const t of rows){
-  if(!t?.pending||!valid(t.date)||t.date>asOf||
-   !(Number(t.amount)>0)||tools.bankDirection(t)!=='expense')continue;
-  const aid=String(tools.accountRef(t.accountId||t.account,accounts));
-  pendingBankByAccount.set(aid,(pendingBankByAccount.get(aid)||0)+Number(t.amount));
- }
- const heldAccounts=new Set(accounts.filter(a=>{
-  const id=String(a.id),total=pendingBankByAccount.get(id)||0;
-  return cashIds.has(id)&&total>0&&a.current!=null&&a.available!=null&&
-   Number.isFinite(Number(a.current))&&Number.isFinite(Number(a.available))&&
-   Number(a.current)-Number(a.available)+.01>=total;
- }).map(a=>String(a.id)));
+
  const usedPredicted=new Set(),usedActual=new Set();
  for(const pair of pairs){
   const id=String(pair.item.e.id),bankId=String(pair.bank.id);
@@ -839,7 +869,11 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(pairs.filter(x=>String(x.bank.id)===bankId).length!==1||
    pairs.filter(x=>String(x.item.e.id)===id).length!==1)continue;
   usedPredicted.add(id);usedActual.add(bankId);
-  const pending=Boolean(pair.bank.pending),held=pending&&heldAccounts.has(pair.item.account);
+  const pending=Boolean(pair.bank.pending),
+   held=pending&&bankCashDirection(pair.bank)==='out'&&
+    heldAccounts.has(pair.item.account),
+   credited=pending&&bankCashDirection(pair.bank)==='in'&&
+    pendingCreditsAvailable.has(pair.item.account);
   const actualAmount=money(pair.bank.amount),planned=pair.item.e;
   const record={id,bankId,accountId:pair.item.account,
    ...(pair.item.cardId?{cardId:pair.item.cardId}:{}),
@@ -850,14 +884,15 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     planned.anchorDate||planned.baseDate||planned.date,
    merchant:String(planned.merchant||'Scheduled payment'),
    amount:actualAmount,
-   status:pending?'pending':'posted',reservedInAvailable:Boolean(held),
+   status:pending?'pending':'posted',
+   reservedInAvailable:Boolean(held),includedInAvailable:Boolean(credited),
    actualAmount,forecastAmount:money(planned.amount),
    difference:money(actualAmount-Number(planned.amount))};
   paymentReconciliations.push(record);
   const list=pair.item.kind==='event'?finalEvents:finalPlans,
    index=list.findIndex(x=>String(x.id)===id);
   if(index<0)continue;
-  if(!pending||held)list.splice(index,1);
+  if(!pending||held||credited)list.splice(index,1);
   else list[index]={...list[index],amount:actualAmount,
    _bankPendingId:bankId,_pendingEstimated:true};
   // A pending ACH isn't a posted card payment. Keep that distinction in
