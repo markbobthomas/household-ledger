@@ -447,6 +447,98 @@ assert(paidMovement.ledger.some(e=>e.recurringRuleId==='bank-transfer-plan'&&
 const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
 assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'A pending deposit must never be mistaken for cash already in the current balance');
+
+// The bank can make a Friday paycheck AVAILABLE on Wednesday while still
+// labeling the original ACH as pending. Its CURRENT balance has not changed;
+// its AVAILABLE balance already includes the money. Reforecasting the income
+// from the available opening balance creates an inflated second paycheck.
+const pendingWage={...earlyPay,id:'pending-early-credit',amount:3060,
+ merchant:'ORIG CO NAME: FICTIONAL WORK',type:'transfer',
+ cashDirection:'in',pending:true};
+const pendingCashSnapshot={...onPayday,accounts:accounts.map(a=>
+ a.id==='checking'?{...a,current:5000,available:8060}:a)};
+const pendingCreditForecast=C.materialize(pendingCashSnapshot,[pendingWage],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!pendingCreditForecast.ledger.some(e=>e.ruleId==='wage-a'&&
+ e.date==='2026-11-27'),
+ 'A pending paycheck already INCLUDED in bank available cash must not be forecast a second time');
+assert(pendingCreditForecast.ledger.some(e=>e.ruleId==='wage-b'&&
+ e.date==='2026-12-11'),
+ 'Credited pending payroll must preserve the other independent four-week schedule');
+const creditCash=pendingCreditForecast.projection.accounts.find(a=>a.id==='checking');
+assert.equal(creditCash.openingCurrent,5000,
+ 'Bank-reported CURRENT is never changed to pretend a pending ACH settled');
+assert.equal(creditCash.openingAvailable,8060,
+ 'Bank-reported AVAILABLE already reflects the early pending paycheck');
+assert.equal(creditCash.series[0].income,0,
+ 'No phantom income may be added to the available-balance projection');
+assert(pendingCreditForecast.paymentReconciliations.some(e=>
+ e.bankId===pendingWage.id&&e.status==='pending'&&
+ e.includedInAvailable===true),
+ 'Pending early deposit is linked as bank-available, not falsely labeled POSTED');
+const pendingNotAvailable=C.materialize({...pendingCashSnapshot,accounts:
+ accounts.map(a=>a.id==='checking'?{...a,current:5000,available:5000}:a)},
+ [pendingWage],{recurringForecastMode:'approved-only',
+ futureRecurringRules:payRules},T,P,55,{weekendPolicy:'friday'});
+assert(pendingNotAvailable.ledger.some(e=>e.ruleId==='wage-a'&&
+ e.date==='2026-11-27'),
+ 'A pending credit not included in available cash must remain forecast');
+const pendingBillRule={id:'another-housing',kind:'event',accountId:'checking',
+ originalAccountId:'checking',type:'expense',merchant:'Example Housing ACH',
+ originalMerchant:'Example Housing ACH',matchNames:['example housing ach'],
+ frequency:'monthly',anchorDate:'2026-11-27',amount:160};
+const pendingBill=tx('reserved-housing','2026-11-27','Example Housing ACH',160,
+ 'expense','checking',{pending:true});
+const netPending=C.materialize({...pendingCashSnapshot,accounts:
+ accounts.map(a=>a.id==='checking'?{...a,current:5000,available:7900}:a)},
+ [pendingWage,pendingBill],{recurringForecastMode:'approved-only',
+ futureRecurringRules:[...payRules,pendingBillRule]},T,P,55,
+ {weekendPolicy:'friday'});
+assert(!netPending.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Net available cash includes the pending credit even when a debit is reserved');
+assert(!netPending.ledger.some(e=>e.ruleId==='another-housing'&&
+ e.date==='2026-11-27'),
+ 'A pending debit already netted from available cash must not be deducted twice');
+assert.deepEqual(netPending.projection.diagnostics.balanceMismatches,[],
+ 'Net pending credits and debits preserve the canonical balance audit');
+const unrelatedPendingAccount=C.materialize(pendingCashSnapshot,
+ [{...pendingWage,accountId:'savings'}],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+ },T,P,55,{weekendPolicy:'friday'});
+assert(unrelatedPendingAccount.ledger.some(e=>e.ruleId==='wage-a'&&
+ e.date==='2026-11-27'),
+ 'A deposit to savings cannot satisfy a checking paycheck');
+const pendingUncertainBalance=C.materialize({...pendingCashSnapshot,accounts:
+ accounts.map(a=>a.id==='checking'?{...a,current:5000,available:6400}:a)},
+ [pendingWage],{recurringForecastMode:'approved-only',
+ futureRecurringRules:payRules},T,P,55,{weekendPolicy:'friday'});
+assert(pendingUncertainBalance.ledger.some(e=>e.ruleId==='wage-a'&&
+ e.date==='2026-11-27'),
+ 'A bank available/current difference that does not reconcile to the pending credit cannot erase payday');
+const pendingBankCopy=JSON.stringify(pendingWage);
+assert.equal(JSON.stringify(pendingWage),pendingBankCopy,
+ 'Pending bank source records remain immutable');
+const pendingAmbiguous=C.materialize(pendingCashSnapshot,[pendingWage],{
+ recurringForecastMode:'approved-only',futureRecurringRules:[
+ payRules[0],{...payRules[0],id:'independent-equal-pay'}
+ ]},T,P,55,{weekendPolicy:'friday'});
+assert.equal(pendingAmbiguous.ledger.filter(e=>e.type==='income'&&
+ e.date==='2026-11-27').length,2,
+ 'An available pending credit cannot silently clear two indistinguishable paychecks');
+assert(pendingAmbiguous.postedMatchReview.some(r=>r.bankId===pendingWage.id&&
+ r.candidates.length===2),
+ 'Ambiguous pending-available deposits must request the correct prediction in Review');
+const pendingRefundBank={...pendingWage,id:'pending-return',amount:73.25,
+ type:'income',merchant:'Unknown credited refund'};
+const pendingRefundPlan={id:'expected-return',date:'2026-11-27',
+ amount:74.50,type:'refund',merchant:'Fictional Return',accountId:'checking'};
+const pendingRefund=C.materialize({...pendingCashSnapshot,accounts:
+ accounts.map(a=>a.id==='checking'?{...a,current:5000,available:5073.25}:a)},
+ [pendingRefundBank],{recurringForecastMode:'approved-only',
+ futureTransactionAdds:[pendingRefundPlan]},T,P,55,{weekendPolicy:'friday'});
+assert(!pendingRefund.ledger.some(e=>e.id==='expected-return'),
+ 'Refund forecasts also cannot double count bank-available pending credits');
 const variablePay=futurePay([tx('variable-pay','2026-11-22',
  'Cedar Payroll Processing',3657.33,'income')]);
 assert(!variablePay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
@@ -483,6 +575,13 @@ const autoSettled=C.materialize(earlyAsOf,priorAutoPay.concat(
 assert(!autoSettled.ledger.some(e=>e.type==='income'&&e.date==='2026-11-27'),
  'Automatically inferred income must also reconcile against an early renamed deposit');
 
+const autoPending=C.materialize({...earlyAsOf,asOf:'2026-11-27',
+ accounts:accounts.map(a=>a.id==='checking'?{...a,current:5000,
+ available:8200}:a)},priorAutoPay.concat({...earlyPay,
+ id:'auto-credit-pending',pending:true}),{},T,P,55,{weekendPolicy:'friday'});
+assert(!autoPending.ledger.some(e=>e.type==='income'&&
+ e.date==='2026-11-27'),
+ 'Inferred (not owner-confirmed) payroll must also honor credited pending bank income');
 const refundPlan={id:'one-refund',date:'2026-11-27',amount:57.41,
  type:'refund',merchant:'River Return',accountId:'checking'};
 const refunded=futurePay([tx('return-posted','2026-11-25',
