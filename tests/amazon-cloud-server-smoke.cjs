@@ -55,8 +55,14 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   const connected=await req('/api/amazon-cloud/settings','POST',{action:'connect',apiKey:secretKey},owner);
   assert.equal(connected.status,200);
   assert.equal(connected.data().connected,true);
+  assert.equal(unseal().amazonCloud.profileId,'prof_fictional_amazon123',
+   'Saved Amazon profile identity is fixed at connection time');
   assert.equal(connected.raw.includes(secretKey),false,'Never return the TinyFish API key to clients');
-  assert.equal((await req('/api/amazon-cloud/settings','POST',{action:'enable'},owner)).data().enabled,true);
+  const activated=(await req('/api/amazon-cloud/settings','POST',{action:'enable'},owner)).data();
+  assert.equal(activated.enabled,true);
+  assert.equal(activated.pendingAmazonCharges,0,
+   'Enabling does not unexpectedly bill for previously posted Amazon purchases');
+  assert.ok(unseal().amazonCloud.baselineAt,'First enablement saves a durable starting point');
   assert.equal(unseal().amazonCloud.apiKey,secretKey,'TinyFish connection stored only encrypted');
   assert.deepEqual(unseal().transactions,fixture.transactions,'Original posted bank data is immutable');
   assert.equal((await req('/api/amazon-cloud/settings','POST',{action:'disable'},owner)).data().enabled,false);
@@ -70,7 +76,7 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.doesNotMatch(html.raw,/Load unpacked|chrome:\/\/extensions/,
    'PC installation was replaced by TinyFish cloud setup');
   assert.equal(fs.readFileSync(log,'utf8').trim().split('\n').length,1,
-   'Only free key validation was sent to TinyFish');
+   'Only free TinyProfile validation was sent to TinyFish');
   console.log('PASS private TinyFish setup: auth, encrypted key, no source-bank mutations, off by default, no paid run, Lite denial');
  }finally{child.kill('SIGTERM');fs.rmSync(folder,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
