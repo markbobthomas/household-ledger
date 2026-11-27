@@ -615,7 +615,7 @@ async function finishCloudAmazon(){
     state.ledgerAdjustments?.predictions,
     state.ledgerAdjustments?.customCategories,
     state.ledgerAdjustments?.categoryOverrides);
-   const proposal=cloudAmazon.prepare(state,orders,categories);
+   const proposal=cloudAmazon.prepare(state,orders,categories,run.targets);
    if(!(proposal.report.matches>0)){
     updated.enabled=false;updated.pausedReason='no-matches';
     updated.lastCount=orders.length;updated.lastMatched=0;
