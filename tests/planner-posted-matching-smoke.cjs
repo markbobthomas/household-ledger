@@ -494,4 +494,72 @@ T.defineRecurring(sourceState,{date:nextForEdit,merchant:sourceRef.merchant,
  originalType:sourceRef.type,sourceAmount:1200,date:sourceRef.anchorDate});
 assert.equal(sourceState.predictions.futureRecurringRules[0].reconciliationAnchorDate,
  '2026-09-26','Original audit anchor survives future schedule edits');
+// Today is a forecasting date, not a completed bank statement day.
+// Fictional Friday after Thanksgiving: an unpaid mortgage stays Friday,
+// not Monday. The bank-reported opening cash remains read-only.
+const today='2026-11-27',todayAccounts=accounts.map(a=>
+ a.id==='checking'?{...a,current:8000,available:8000}:a);
+const todaySnap={asOf:today,mode:'demo',accounts:todayAccounts};
+const todayRule={...lateRule,id:'today-housing',anchorDate:today,
+ amount:1827.31,merchant:'Example Housing ACH',originalMerchant:'Example Housing ACH',
+ matchNames:['example housing ach']};
+const todayPrefs={futureRecurringRules:[todayRule]};
+const todayBundle=Core.materialize(todaySnap,[],todayPrefs,T,null,45,policy);
+assert.equal(T.bankBusinessDay(today),true,'Friday after Thanksgiving is a bank business day');
+assert.deepEqual(todayBundle.ledger.filter(x=>x.ruleId===todayRule.id)
+ .map(x=>x.date).slice(0,2),[today,'2026-12-28'],
+ 'Unposted current-day mortgage remains on Friday with its next monthly recurrence');
+assert.equal(todayBundle.overduePayments.length,0,
+ 'The mortgage must not be flagged overdue before Friday ends');
+assert.equal(todayBundle.projection.accounts.find(x=>x.id==='checking').openingCurrent,8000);
+const todayPoint=todayBundle.projection.accounts.find(x=>x.id==='checking')
+ .series.find(x=>x.date===today);
+assert.equal(todayPoint.balance,6172.69,
+ 'Today end-of-day forecast deducts the still-unposted mortgage from actual starting cash');
+assert.equal(todayPoint.events.length,1,'The day-zero forecast includes the scheduled mortgage');
+const paidToday=Core.materialize(todaySnap,[
+ post('paid-today','Example Housing ACH',1827.31,today)],todayPrefs,T,null,45,policy);
+assert.equal(paidToday.ledger.some(x=>x.ruleId===todayRule.id&&x.date===today),false,
+ 'A posted same-day mortgage is already in current cash and must not be deducted again');
+assert.equal(paidToday.projection.accounts.find(x=>x.id==='checking').series[0].balance,8000);
+const pendingToday=Core.materialize(todaySnap,[{
+ ...post('pending-today','Example Housing ACH',1827.31,today),pending:true
+}],todayPrefs,T,null,45,policy);
+assert.equal(pendingToday.ledger.some(x=>x.ruleId===todayRule.id&&x.date===today),true,
+ 'Pending debit without an available-balance reserve must remain forecast for today');
+const shiftedWeekend={futureRecurringRules:[{...todayRule,id:'weekend-housing',
+ anchorDate:'2026-11-28'}]};
+const shifted=Core.materialize(todaySnap,[],shiftedWeekend,T,null,45,policy);
+assert.equal(T.forecastBusinessDate('2026-11-28',today),'2026-11-27',
+ 'A weekend debit shifted onto today must not be delayed until Monday');
+assert.equal(shifted.ledger.filter(x=>x.ruleId==='weekend-housing')[0].date,today,
+ 'The weekend-adjusted mortgage remains visible on its Friday posting date');
+const movedToday={futureRecurringRules:[{...todayRule,id:'moved-housing',
+ anchorDate:'2026-11-25'}],
+ futureTransactionEdits:{
+  [T.keyEvent('user|moved-housing|2026-11-25','checking')]:{
+   date:today,merchant:'Example Housing ACH',amount:1827.31,
+   type:'expense',accountId:'checking'
+  }
+ }};
+const moved=Core.materialize(todaySnap,[],movedToday,T,null,45,policy);
+assert.equal(moved.ledger.filter(x=>x.ruleId==='moved-housing')[0].date,today,
+ 'An individually postponed bill explicitly moved onto today must remain today');
+assert.equal(moved.overduePayments.length,0,
+ 'A manually revised today date is not yet overdue');
+const oneOffToday={futureTransactionAdds:[{id:'fictional-today-only',date:today,
+ accountId:'checking',type:'expense',merchant:'Example Water',amount:104.61}]};
+assert.equal(Core.materialize(todaySnap,[],oneOffToday,T,null,45,policy)
+ .ledger.filter(x=>x.merchant==='Example Water')[0].date,today,
+ 'A manually scheduled one-time bill for today must not roll to Monday');
+assert.equal(Core.materialize(todaySnap,[],oneOffToday,T,null,45,policy)
+ .overduePayments.length,0);
+const olderDay={...todaySnap,asOf:'2026-11-30'};
+const missedOlder=Core.materialize(olderDay,[],todayPrefs,T,null,45,policy);
+assert.equal(missedOlder.overduePayments.length,1,
+ 'A still-unposted payment from a prior date continues to be protected as overdue');
+assert.equal(missedOlder.ledger.filter(x=>x.ruleId===todayRule.id)[0].date,'2026-12-01',
+ 'Previously missed Friday obligations still roll forward only after their due date');
+assert.equal(Core.materialize(todaySnap,[],todayPrefs,T,null,45,policy).projection
+ .diagnostics.balanceMismatches.length,0,'Same-day projection retains arithmetic integrity');
 console.log('PASS posted matching: overdue per occurrence, one-off, pending, ACH, saved anchors, manual matching windows and immutable bank facts');
