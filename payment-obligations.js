@@ -652,7 +652,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    const statement={id:'autopay|'+id+'|'+due,
     cardId:id,cardName:card.name,fromAccountId:from?.id||null,
     fromName:from?.name||'No autopay source',periodStart:cycleStart,periodEnd:cycleClose,
-    dueDate:actualDue,withdrawalDate:expectedWithdrawal(due),closingDate:cycleClose,amount,
+    dueDate:actualDue,scheduledPaymentDate:due,withdrawalDate:expectedWithdrawal(due),closingDate:cycleClose,amount,
     statementBalance:statementAmount,bankPurchases,purchases,refunds,
     actualPeriodNet,periodComplete,statementReconciliation,postedTransactions,predictedTransactions,
     estimatedCharges:futureCharges,pendingExcluded:pendingRows.length,
@@ -675,7 +675,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
      merchant:card.name+' Credit-card payment (autopay)',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
     paymentDetails.push({id:plan.id,cardId:id,cardName:card.name,
-     fromAccountId:from.id,withdrawalDate:expectedWithdrawal(due),
+     fromAccountId:from.id,scheduledPaymentDate:due,withdrawalDate:expectedWithdrawal(due),
      periodStart:cycleStart,periodEnd:cycleClose,periodSource:'configured-statement',
      method,amount,calculated,statementReconciliation,postedTransactions,predictedTransactions,
      confirmed:confirmedFirst,issuedAmount:confirmedFirst?Number(rule.lastStatementBalance):null,
