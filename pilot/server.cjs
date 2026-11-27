@@ -43,6 +43,9 @@ let state=freshState(),forecastWrites=Promise.resolve(),householdEditQueue=Promi
 // Ephemeral, private single-use preview; never persisted or logged. A new
 // preview replaces the old one; applying after any settings edit is rejected.
 let amazonAiPreview=null;
+// A newly requested OFF switch must stop the NEXT paid batch immediately,
+// even while a previous approved batch is awaiting the provider.
+let aiCategoryStopRequested=false,autoCategoryStopRequested=false;
 const settingsRevision=()=>crypto.createHmac('sha256',key).update(JSON.stringify(state.ledgerAdjustments||{})).digest('hex');
  // A long-lived scoped link derives from a random seed in the encrypted
  // household snapshot. The owner can recover it without storing the bearer token.
@@ -1116,6 +1119,12 @@ async function start(port=Number(env.PORT||8788)){
     return respond(503,{error:'AI analysis could not complete. No financial data was changed.',code});
    }
   }
+  // Turning paid categorization off takes effect for future batches before
+  // the serialized settings write waits for an in-flight provider request.
+  if(requestPath==='/api/ledger/category-automation'&&body?.action==='set'){
+   if(body.ai===false)aiCategoryStopRequested=true;
+   if(body.automatic===false)autoCategoryStopRequested=true;
+  }
   // Bank sync and account connection changes share the same state and encrypted
   // bank file as category/forecast edits. Serialize the entire mutation,
   // including Plaid staging, not merely the final rename: a sync must not
@@ -1175,6 +1184,8 @@ async function start(port=Number(env.PORT||8788)){
      categoryAutomation:{automatic:body.automatic,ai:body.ai}};
     try{await save()}catch(error){state.ledgerAdjustments=previous;
      return respond(503,{error:'Could not save categorization switches'})}
+    aiCategoryStopRequested=!body.ai;
+    autoCategoryStopRequested=!body.automatic;
     return respond(200,{saved:true,...state.ledgerAdjustments.categoryAutomation});
    }
    if(requestPath==='/api/ledger/category-automation/run'){
@@ -1199,7 +1210,7 @@ async function start(port=Number(env.PORT||8788)){
     let remaining=ceiling,reviewed=0,assigned=0,unable=0,suggested=0;
     for(const batch of plan.batches){
      if(batch.maximumUsd>remaining+0.000000001)break;
-     if(!ai.settings(state.ledgerAdjustments).ai)break;
+     if(!ai.settings(state.ledgerAdjustments).ai||aiCategoryStopRequested)break;
      // Commit an encrypted in-flight marker BEFORE the potentially billable
      // request. An unknown result after a crash must not be billed twice.
      const previous=state.ledgerAdjustments||{};
@@ -1225,7 +1236,7 @@ async function start(port=Number(env.PORT||8788)){
      const current=state.ledgerAdjustments||{},nextChecks={...(current.categoryAiChecks||{})},
       overrides={...(current.categoryOverrides||{})},
       origins={...(current.categoryProvenance||{})},
-      automatic=ai.settings(current).automatic;
+      automatic=ai.settings(current).automatic&&!autoCategoryStopRequested;
      for(const item of response.result){
       const row=item.row,id=row.id,category=item.category;
       if(category&&automatic&&!ai.confirmed(current,id)){
