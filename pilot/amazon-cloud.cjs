@@ -1,13 +1,14 @@
 'use strict';
 // TinyFish reads Amazon only. The private Ledger server matches its structured
 // results to authoritative posted bank charges; no Plaid data goes to TinyFish.
-const crypto=require('node:crypto');
 const Evidence=require('./amazon-evidence.cjs');
 const pairing=require('./amazon-pairing.cjs');
 const amazon=require('./amazon-import.cjs');
 const apply=require('./amazon-apply.cjs');
 const API='https://agent.tinyfish.ai';
 const MAX_STEPS=45,MAX_DURATION=600,MAX_ORDERS=250;
+const MAX_RUNS_30_DAYS=13; // includes deliberate owner-triggered runs
+const MAX_RUNS_PER_PACIFIC_DAY=1;
 const MAX_ESTIMATED_RUN_USD=1.00; // 45*$0.016 + 10 minutes*$0.002 ~= $0.74
 const DAYS=new Set([1,4,6]); // Monday / Thursday / Saturday, Pacific time
 const isoDate=s=>{
@@ -15,7 +16,6 @@ const isoDate=s=>{
  const date=new Date(s+'T12:00:00Z');
  return !Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===s;
 };
-const isId=s=>/^[\w-]{6,100}$/.test(String(s||''));
 const keyFor=pairing.keyFor;
 function local(now=new Date()){
  const pieces=Object.fromEntries(new Intl.DateTimeFormat('en-US',{
@@ -26,9 +26,38 @@ function local(now=new Date()){
   weekday:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(pieces.weekday),
   hour:Number(pieces.hour)};
 }
+function runsInWindow(cloud,now=new Date()){
+ const end=now.getTime(),start=end-30*86400000;
+ const starts=(cloud?.runStarts||[]).filter(t=>{
+  const ms=Date.parse(t);
+  return Number.isFinite(ms)&&ms>start&&ms<=end;
+ });
+ return {month:starts.length,
+  today:starts.filter(t=>local(new Date(t)).day===local(now).day).length,
+  starts};
+}
+function limit(cloud,now=new Date()){
+ const tally=runsInWindow(cloud,now);
+ if(tally.month>=MAX_RUNS_30_DAYS)return '30-day limit reached';
+ if(tally.today>=MAX_RUNS_PER_PACIFIC_DAY)return 'One Amazon browser check already started today';
+ return null;
+}
+function baseline(state,cloud,now=new Date()){
+ const at=now.toISOString(),scanned={...(cloud.scanned||{})};
+ // Existing transactions at first enablement are not a surprise paid
+ // historical import; only newly posted/unmatched charges after setup
+ // trigger unattended browsing. Manual ZIP import handles earlier history.
+ for(const t of Object.values(state.transactions||{}))if(Evidence.isAmazon(t))
+  scanned[keyFor(t)]=at;
+ const keys=Object.keys(scanned);
+ if(keys.length>4000)for(const k of keys.sort((a,b)=>scanned[a].localeCompare(scanned[b]))
+  .slice(0,keys.length-4000))delete scanned[k];
+ return {...cloud,baselineAt:cloud.baselineAt||at,scanned};
+}
 function due(cloud,now=new Date()){
  const slot=local(now);
- return cloud?.enabled===true&&!cloud?.run&&DAYS.has(slot.weekday)&&slot.hour>=8&&
+ return cloud?.enabled===true&&!!cloud?.baselineAt&&!cloud?.pausedReason&&!cloud?.run&&
+  !limit(cloud,now)&&DAYS.has(slot.weekday)&&slot.hour>=8&&
   cloud.lastScheduledDay!==slot.day;
 }
 function eligible(state,options={}){
@@ -50,12 +79,17 @@ function eligible(state,options={}){
   .map(t=>({key:keyFor(t),id:String(t.id),accountId:String(t.accountId)}));
 }
 function safeStatus(state){
- const c=state.amazonCloud||{},waiting=eligible(state).length;
+ const c=state.amazonCloud||{},waiting=eligible(state).length,usage=runsInWindow(c);
  return {enabled:c.enabled===true,connected:!!c.apiKey,
   lastAttemptAt:c.lastAttemptAt||null,lastSuccessAt:c.lastSuccessAt||null,
+  lastCheckedAt:c.lastCheckedAt||null,
   lastOutcome:c.lastOutcome||'Not yet checked',lastCount:c.lastCount||0,
-  lastMatched:c.lastMatched||0,runActive:!!c.run,
+  lastMatched:c.lastMatched||0,lastUnmatched:c.lastUnmatched||0,
+  runActive:!!c.run,runStatus:c.run?.status||null,
+  needsAttention:!!c.pausedReason||c.run?.status==='uncertain',
   pendingAmazonCharges:waiting,maxCostUsd:MAX_ESTIMATED_RUN_USD,
+  runsLast30Days:usage.month,maxRuns30Days:MAX_RUNS_30_DAYS,
+  runLimitReason:limit(c),initialSetupReady:!!c.baselineAt,
   schedule:'Monday, Thursday and Saturday after 8 AM Pacific',
   lastError:c.lastError||null};
 }
@@ -103,20 +137,21 @@ function goal(){
  'cents (integer cents per item), charged (integer order total cents or null). '+
  'Skip cancelled or unavailable items. Stop if not signed in or challenged and '+
  'report that clearly rather than inventing purchase details. Limit 250 items. '+
- 'No bank account or Ledger website access is needed.';
+ 'If any order pages cannot be read or any of the last 45 days cannot be covered, set complete=false. ' +
+ 'Never claim the order report is complete if blocked or truncated. No bank or Ledger access is needed.';
 }
 const orderSchema={type:'object',properties:{
  orders:{type:'array',items:{type:'object',properties:{
   orderId:{type:'string'},title:{type:'string'},date:{type:'string'},
   shipmentDate:{type:'string'},cents:{type:'integer'},charged:{type:['integer','null']}
  },required:['orderId','title','date','shipmentDate','cents','charged']}},
- signedIn:{type:'boolean'}
-},required:['orders','signedIn']};
+ signedIn:{type:'boolean'},complete:{type:'boolean'}
+},required:['orders','signedIn','complete']};
 async function start(apiKey,fetcher){
  const result=await request(apiKey,API+'/v1/automation/run-async',{
-  method:'POST',body:JSON.stringify({session_id:crypto.randomUUID(),url:'https://www.amazon.com/your-orders',
+  method:'POST',body:JSON.stringify({url:'https://www.amazon.com/your-orders',
    goal:goal(),use_profile:true,browser_profile:'lite',
-   agent_config:{mode:'default',max_steps:MAX_STEPS,max_duration_seconds:MAX_DURATION},
+   agent_config:{max_steps:MAX_STEPS,max_duration_seconds:MAX_DURATION},
    output_schema:orderSchema})
  },fetcher);
  if(typeof result.run_id!=='string'||!/^[a-zA-Z0-9-]{16,90}$/.test(result.run_id))
@@ -131,6 +166,7 @@ function parseOrders(run){
  if(run?.status!=='COMPLETED')throw Error('TinyFish has not completed this run');
  const data=typeof run.result==='string'?JSON.parse(run.result):run.result;
  if(data?.signedIn!==true)throw Error('Amazon sign-in is needed in TinyFish');
+ if(data.complete!==true)throw Error('Amazon returned an incomplete report. No purchases were changed');
  if(!Array.isArray(data.orders)||data.orders.length>MAX_ORDERS)
   throw Error('Amazon order report was not complete or was too large');
  const seen=new Set(),out=[];
@@ -151,7 +187,12 @@ function parseOrders(run){
 function prepare(state,orders,categories){
  const before=state.ledgerAdjustments||{};
  const match=amazon.match(orders,state.transactions||{},before,categories);
- return apply.prepare(match,before,{transactions:state.transactions||{},categories,
+ // Automatic cloud imports are narrower than the manual importer: they may
+ // save only true exact reconciliations, not speculative Possible notes,
+ // fuzzy suggestions or suggested categories from unverified items.
+ return apply.prepare({...match,matches:(match.matches||[]).filter(m=>
+   m.confidence==='exact'),suggestions:[]},before,{
+  transactions:state.transactions||{},categories,
   automatic:before.categoryAutomation?.automatic!==false,replaceOther:false});
 }
 function visited(cloud,run){
@@ -165,4 +206,5 @@ function visited(cloud,run){
  return scanned;
 }
 module.exports={local,due,eligible,safeStatus,ensureKey,validateKey,start,getRun,
- parseOrders,prepare,visited,MAX_ESTIMATED_RUN_USD,MAX_STEPS,MAX_DURATION,goal,orderSchema};
+ parseOrders,prepare,visited,baseline,limit,runsInWindow,MAX_RUNS_30_DAYS,
+ MAX_ESTIMATED_RUN_USD,MAX_STEPS,MAX_DURATION,goal,orderSchema};
