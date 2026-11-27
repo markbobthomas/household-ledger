@@ -313,6 +313,59 @@ const saturdayPay=C.materialize({...earlyAsOf,asOf:'2026-11-28'},[earlyPay],{
 },T,P,55,{weekendPolicy:'friday'});
 assert(!saturdayPay.ledger.some(e=>e.ruleId==='wage-a'&&e.date<='2026-11-28'),
  'Advancing one calendar day must not resurrect the settled paycheck');
+// Holiday-week income may arrive five days before a weekend-shifted payday.
+const fiveDaysEarly={...earlyPay,id:'wages-five-days-before',
+ date:'2026-11-22',amount:3200};
+const fiveDayPlan=C.materialize(onPayday,[fiveDaysEarly],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!fiveDayPlan.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An early renamed paycheck must be reconciled throughout the six-day payroll window');
+assert(fiveDayPlan.ledger.some(e=>e.ruleId==='wage-b'&&e.date==='2026-12-11'),
+ 'The second independent paycheck must remain forecast after the first one settles');
+assert(fiveDayPlan.paymentReconciliations.some(x=>x.bankId===fiveDaysEarly.id&&
+ x.status==='posted'),'Early settled bank income must be traceable');
+const changedDescriptor={...earlyPay,id:'wages-variable-amount',
+ merchant:'Unnamed ACH Credit',amount:3372,
+ personal_finance_category:{detailed:'INCOME_WAGES'}};
+const variedOnDay=C.materialize(onPayday,[changedDescriptor],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!variedOnDay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Renamed variable net payroll is already included in observed bank cash');
+const variedOnly={...earlyPay,id:'wages-small-change',amount:3296};
+const smallVariance=C.materialize(onPayday,[variedOnly],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!smallVariance.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Small payroll net-pay variance with a changed ACH label must not inflate Friday cash');
+const unrelatedHigh={...earlyPay,id:'unrelated-credit-higher',
+ amount:1800,merchant:'Unknown Reimbursement'};
+const unmatchedDifferent=C.materialize(onPayday,[unrelatedHigh],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(unmatchedDifferent.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An uncorrelated credit must never erase a confirmed paycheck');
+const duplicateSimilarDeposits=C.materialize(onPayday,[
+ {...earlyPay,id:'duplicate-a'},{...earlyPay,id:'duplicate-b'}],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(duplicateSimilarDeposits.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Two equally plausible cash deposits must require review, not silently hide salary');
+// Cross-feature: settled early income and unpaid day-zero mortgage must
+// coexist without a phantom deposit or pushing the housing bill to Monday.
+const joined=C.materialize(onPayday,[changedDescriptor],{
+ recurringForecastMode:'approved-only',futureRecurringRules:[
+ ...payRules,{id:'housing-day-zero',kind:'event',accountId:'checking',
+ originalAccountId:'checking',type:'expense',merchant:'Example Rent ACH',
+ originalMerchant:'Example Rent ACH',matchNames:['example rent ach'],
+ frequency:'monthly',anchorDate:'2026-11-27',amount:1926}
+ ]},T,P,55,{weekendPolicy:'friday'});
+const todayEvents=joined.projection.accounts.find(a=>a.id==='checking')
+ .series.find(x=>x.date==='2026-11-27').events;
+assert.deepEqual(todayEvents.map(e=>e.merchant),['Example Rent ACH'],
+ 'Early payroll reconciles while unposted mortgage-like bill still debits today');
+assert.equal(joined.projection.accounts.find(a=>a.id==='checking').series[0].income,0);
 const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
 assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'A pending deposit must never be mistaken for cash already in the current balance');
