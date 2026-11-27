@@ -421,6 +421,17 @@ const notWages=C.materialize(onPayday,savingsMovement,{
 },T,P,55,{weekendPolicy:'friday'});
 assert(notWages.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'An internal transfer into savings is not evidence that payroll was paid');
+const transferIntoChecking=[
+ tx('savings-debit','2026-11-25','Opaque account move',3200,
+  'transfer','savings',{cashDirection:'out',pairedTransactionId:'checking-credit'}),
+ tx('checking-credit','2026-11-25','Opaque account move',3200,
+  'transfer','checking',{cashDirection:'in',pairedTransactionId:'savings-debit'})
+];
+const cashMovedNotWages=C.materialize(onPayday,transferIntoChecking,{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(cashMovedNotWages.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Even a same-amount internal credit INTO checking must not masquerade as early payroll');
 const linkedMovementRule={id:'bank-transfer-plan',kind:'movement',
  fromAccountId:'checking',toAccountId:'savings',
  originalAccountId:'checking',frequency:'monthly',anchorDate:'2026-11-27',
