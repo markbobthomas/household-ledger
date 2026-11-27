@@ -140,9 +140,10 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   return d;
  };
  const overdueSince=shift(asOf,-90);
- // A payment due TODAY can still be unposted; only earlier unpaid cycles
- // roll forward to the next bank business day.
- const expectedWithdrawal=due=>due<asOf?nextBusiness(asOf):postingDate(due);
+ // Today is not overdue. Earlier unpaid statement withdrawals remain on
+ // the current CALENDAR day (including weekends); only the original
+ // scheduled due date is adjusted for bank holidays/weekends.
+ const expectedWithdrawal=due=>due<asOf?asOf:postingDate(due);
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
