@@ -89,7 +89,7 @@ document.addEventListener('click',async ev=>{
  loading=true;button.disabled=true;
  try{
   const saved=await api('',{action:'set',automatic:key==='automatic'?!settings.automatic:settings.automatic,
-   ai:key==='ai'?!settings.ai:settings.ai},true);
+   ai:key==='ai'?!settings.ai:settings.ai});
   settings={...settings,...saved};
   paint();
   statusText('Categorization settings saved.'+(key==='ai'&&saved.ai?
