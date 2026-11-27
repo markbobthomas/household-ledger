@@ -259,7 +259,9 @@ function migrate(input){
   }
   return record;
  });
- return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,amazonAllocations,predictions,reviews,learning,sync,customCategories:[]};
+ return {version:VERSION,transactions,accounts,items:Array.isArray(old.items)?copy(old.items):[],categoryOverrides,amazonAllocations,predictions,reviews,learning,sync,customCategories:[],
+  categoryAutomation:old.categoryAutomation||{automatic:true,ai:false},
+  humanConfirmedCategoryIds:Array.isArray(old.humanConfirmedCategoryIds)?old.humanConfirmedCategoryIds.map(String):null};
 }
 // Category learning never edits authoritative ledger rows. A learned rule can
 // automatically resolve an unclassified/low-confidence transaction only when
@@ -339,6 +341,13 @@ function confirmedRepeatCategory(row,index){
 }
 function resolution(state,t,index,recurringCategories){
  const explicit=state.categoryOverrides?.[t.id];
+ const human=Array.isArray(state.humanConfirmedCategoryIds)?
+  state.humanConfirmedCategoryIds.includes(String(t.id)):
+  Boolean(explicit&&explicit!=='Uncategorized');
+ if(state.categoryAutomation?.automatic===false&&t.type==='expense'&&!human)
+  return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',
+   suggested:explicit&&explicit!=='Uncategorized'?explicit:
+    t.category&&t.category!=='Other'?t.category:null,ruleKey:null};
  if(explicit==='Uncategorized'||explicit&&removedCategory(state,explicit))
   return {category:'Uncategorized',method:'unassigned',confidence:'Needs review',ruleKey:null};
  // Explicit bank fuel descriptions supersede legacy Groceries assignments,
@@ -397,6 +406,9 @@ function records(state){
   // Itemized categories allocate ONE posted bank purchase, not extra charges.
   // Reject stale or malformed entries without altering bank-derived totals.
   const valid=lines&&lines.length&&t.type==='expense'&&!t.pending&&
+   (state.categoryAutomation?.automatic!==false||
+    !Array.isArray(state.humanConfirmedCategoryIds)||
+    state.humanConfirmedCategoryIds.includes(String(t.id)))&&
    Number.isSafeInteger(amount)&&amount>0&&
    lines.every(l=>typeof l.title==='string'&&typeof l.category==='string'&&
     Number.isSafeInteger(l.cents)&&l.cents>0)&&
@@ -433,7 +445,10 @@ function categoryReviewQueue(state){
     category=knownKind&&missingCategory(t.category)?
      (t.type==='income'?'Income':'Transfer'):
      String(t.category||'Other'),
-    manual=knownKind||t.method==='fuel-description'||Boolean(state.categoryOverrides?.[t.id]&&state.categoryOverrides[t.id]!=='Uncategorized')||
+    manual=state.categoryAutomation?.automatic===false&&t.type==='expense'?
+     (Array.isArray(state.humanConfirmedCategoryIds)?state.humanConfirmedCategoryIds.includes(String(t.id)):
+      Boolean(state.categoryOverrides?.[t.id]&&state.categoryOverrides[t.id]!=='Uncategorized')):
+     knownKind||t.method==='fuel-description'||Boolean(state.categoryOverrides?.[t.id]&&state.categoryOverrides[t.id]!=='Uncategorized')||
      ['manual','learned','recurring'].includes(t.method),
     // An explicitly saved Other category is a reviewed choice, not a gap.
     missing=missingCategory(category)&&!manual,

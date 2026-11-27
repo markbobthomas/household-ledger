@@ -18,8 +18,10 @@ function snapshot(state){
  const ledger=model.migrate({transactions:rows,accounts:accounts.map(a=>({
   id:a.id,name:a.name,type:a.type,subtype:a.subtype,itemId:a.itemId
  })),...Object.fromEntries(['categoryOverrides','predictions','reviews','learning',
-  'customCategories','amazonAllocations'].filter(k=>adjustments[k]!==undefined)
-  .map(k=>[k,adjustments[k]]))});
+  'customCategories','amazonAllocations','categoryAutomation'].filter(k=>adjustments[k]!==undefined)
+  .map(k=>[k,adjustments[k]])),
+  humanConfirmedCategoryIds:Object.keys(adjustments.categoryOverrides||{}).filter(id=>
+   require('./category-ai-automation.cjs').confirmed(adjustments,id))});
  const candidates=model.categoryReviewQueue(ledger);
  const source=new Map(rows.map(t=>[String(t.id),t]));
  const notes=adjustments.predictions?.transactionNotes||{};
@@ -40,8 +42,12 @@ function snapshot(state){
   const raw=state.transactions?.[id],saved=raw?notes[keyFor(raw)]:null,
    imported=raw&&adjustments.amazonEvidence?.[id],
    product=imported&&evidence.valid(imported,raw)?evidence.note(imported):'';
+  const check=raw&&adjustments.categoryAiChecks?.[keyFor(raw)],
+   aiText=check?.status==='unable'?'AI checked — unable to categorize':
+    ['interrupted','pending'].includes(check?.status)?'AI attempt interrupted — not retried automatically':
+    check?.status==='suggested'?'AI suggested '+check.category+' (not yet confirmed)':null;
   return annotations(['Saved note',saved],['Transaction note',raw?.note],
-   ['Amazon product details',product]);
+   ['Amazon product details',product],['AI review',aiText]);
  };
  const withNotes=(item,entries,editableNote='')=>({...item,notes:entries,
   note:entries[0]?.text||'',editableNote});
@@ -67,7 +73,7 @@ function snapshot(state){
    const original=source.get(t.id);
    return withNotes({kind:'transaction',id:t.id,merchant:t.merchant.slice(0,140),
     amount:t.amount,date:t.date,reason:t.reason,category:t.category,
-    suggested:t.suggested||null},chargeNotes(original.id),
+    suggested:adjustments.categoryAiChecks?.[keyFor(state.transactions[original.id])]?.category||t.suggested||null},chargeNotes(original.id),
     notes[keyFor(state.transactions[original.id])]||'');
   });
  // Include identifiable Amazon products still parked in a broad "Other"

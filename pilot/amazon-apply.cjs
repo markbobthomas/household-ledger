@@ -13,6 +13,7 @@ function prepare(result,before={},context={}){
   amazonEvidence={...(before.amazonEvidence||{})},
   provenance={...(before.categoryProvenance||{})};
  const entries=[...(result.matches||[]),...(result.suggestions||[])];
+ const mayAutoCategorize=context.automatic!==false;
  // Preserve original full products and candidate alternatives, independently
  // of the existing 160-character Note overlay. Do not replace a verified
  // product pairing with a weaker possible pairing during re-import.
@@ -35,7 +36,7 @@ function prepare(result,before={},context={}){
   nextNotes[key]=proposal.note;
   addedNotes.add(proposal.transactionId);
  }
- for(const proposal of result.matches||[]){
+ for(const proposal of mayAutoCategorize?result.matches||[]:[]){
   if(proposal.notesOnly||['manual','manual-item','amazon-ai-reviewed-item','amazon-ai-reviewed'].includes(
      provenance[proposal.transactionId]?.source))continue;
   const id=proposal.transactionId,prior=allocations[id];
@@ -52,7 +53,7 @@ function prepare(result,before={},context={}){
  // A product whose amount/date is uniquely close AND whose items all share
  // one recognizable category can fill an empty category. Its Note remains
  // explicitly Possible, and no cent allocations are invented.
- for(const proposal of result.suggestions||[]){
+ for(const proposal of mayAutoCategorize?result.suggestions||[]:[]){
   if(!proposal.suggestedCategory)continue;
   const id=proposal.transactionId;
   if(allocations[id])continue;
@@ -67,7 +68,7 @@ function prepare(result,before={},context={}){
  // importer Notes. A ZIP amount mismatch must not block a clear product
  // category. Do not overwrite a user category, an imported allocation or a
  // handwritten Note. Uncertain product identity remains labeled Possible.
- const noteAnalysis=context.transactions?
+ const noteAnalysis=mayAutoCategorize&&context.transactions?
   require('./amazon-note-categories.cjs').analyze(context.transactions,{
    ...before,
    predictions:{...(before.predictions||{}),transactionNotes:nextNotes},
