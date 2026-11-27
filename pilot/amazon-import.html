@@ -253,7 +253,7 @@ $('cloud-connect').onclick=()=>{
 };
 $('cloud-toggle').onclick=()=>cloudAction({action:cloud?.enabled?'disable':'enable'});
 $('cloud-now').onclick=()=>{
- if(!confirm('Check new Amazon purchases now? If any new unmatched posted charges are found and today's limit allows, TinyFish may charge for one capped browser run. Continue?'))return;
+ if(!confirm('Check new Amazon purchases now? If any new unmatched posted charges are found and the daily limit allows, TinyFish may charge for one capped browser run. Continue?'))return;
  cloudAction({action:'run'});
 };
 $('cloud-disconnect').onclick=()=>{
