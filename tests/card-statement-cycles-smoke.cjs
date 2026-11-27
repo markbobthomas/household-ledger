@@ -451,8 +451,8 @@ assert.equal(firstCard(calculate('2026-11-03',[],skipped)).length,0,
 const twoCycles=calculate('2026-12-03');
 const carried=cardMoves(twoCycles).filter(p=>['2026-11-02','2026-12-02'].includes(p.originalDueDate));
 assert.equal(carried.length,2,'Independent overdue statement cycles must not collapse as duplicates');
-assert.deepEqual(carried.map(p=>p.date),['2026-12-04','2026-12-04'],
- 'Both unconfirmed card cycles reserve the next business day');
+assert.deepEqual(carried.map(p=>p.date),['2026-12-03','2026-12-03'],
+ 'Both missed card installments stay on the current calendar day');
 const postedBeforeDue=calculate('2026-11-02',paidBank);
 assert.equal(firstCard(postedBeforeDue).length,0,'Bank posting on the due date prevents a second forecast debit');
 assert.deepEqual(paid.projection.diagnostics.balanceMismatches,[],
