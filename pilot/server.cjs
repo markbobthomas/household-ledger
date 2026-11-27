@@ -465,12 +465,14 @@ async function changeCloudSettings(body){
  if(!body||typeof body!=='object'||Array.isArray(body)||
     !['connect','enable','disable','disconnect'].includes(body.action))
   throw Object.assign(Error('Choose a valid Amazon sync action'),{httpStatus:400});
+ let verifiedProfile=null;
  if(body.action==='connect'){
   if(Object.keys(body).sort().join(',')!=='action,apiKey'||
      !cloudAmazon.ensureKey(body.apiKey))
    throw Object.assign(Error('Paste a valid TinyFish API key'),{httpStatus:400});
-  // Key validation is a free wallet lookup, never a paid Amazon browser run.
-  await cloudAmazon.validateKey(body.apiKey);
+  // Read-only connection validation: requires a default TinyProfile, and
+  // checks Amazon signed-in evidence when TinyFish exposes that metadata.
+  verifiedProfile=await cloudAmazon.validateKey(body.apiKey);
  }
  return withHouseholdEdit(async()=>{
   const old=state.amazonCloud||{};
@@ -478,11 +480,12 @@ async function changeCloudSettings(body){
    throw Object.assign(Error('An Amazon check may still be running. Turn automatic updates OFF; wait for the check to finish before reconnecting or disconnecting. If it is stuck, check your runs in TinyFish before changing the key.'),{httpStatus:409});
   let next={...old};
   if(body.action==='connect'){
-   next.apiKey=body.apiKey;next.enabled=false;
-   next.lastError=null;next.pausedReason=null;
+   next.apiKey=body.apiKey;next.profileId=verifiedProfile.profileId;
+   next.amazonSignInClaimed=verifiedProfile.amazonSignInClaimed;
+   next.enabled=false;next.lastError=null;next.pausedReason=null;
   }else if(body.action==='enable'){
-   if(Object.keys(body).length!==1||!next.apiKey)
-    throw Object.assign(Error('Connect TinyFish before enabling Amazon sync'),{httpStatus:409});
+   if(Object.keys(body).length!==1||!next.apiKey||!next.profileId)
+    throw Object.assign(Error('Connect TinyFish and save your Amazon TinyProfile before enabling updates'),{httpStatus:409});
    if(!state.items.length)
     throw Object.assign(Error('Connect your bank in Ledger before turning on Amazon updates'),{httpStatus:409});
    // First activation never imports older unrelated charges or backfills a
@@ -496,7 +499,8 @@ async function changeCloudSettings(body){
     'Updates OFF. An already-started check may still finish.':'Automatic updates OFF';
   }else{
    if(Object.keys(body).length!==1)throw Object.assign(Error('Unexpected setting'),{httpStatus:400});
-   next.enabled=false;delete next.apiKey;
+   next.enabled=false;delete next.apiKey;delete next.profileId;
+   delete next.amazonSignInClaimed;
    next.lastOutcome='Disconnected from TinyFish';next.pausedReason=null;
   }
   state.amazonCloud=next;
@@ -510,6 +514,7 @@ async function runCloudAmazon(manual=false){
  try{return await withHouseholdEdit(async()=>{
   const current=state.amazonCloud||{};
   if(!current.enabled||!current.apiKey)return {disabled:true,...cloudStatus()};
+  if(!current.profileId)return {error:'Reconnect TinyFish to verify its saved Amazon profile before running',...cloudStatus()};
   if(current.run)return {busy:true,...cloudStatus()};
   if(accountRemovalBusy||!state.items.length)return {error:'Connect a bank before Amazon can sync'};
   if(current.pausedReason)return {needsAttention:true,...cloudStatus()};
@@ -543,7 +548,7 @@ async function runCloudAmazon(manual=false){
    runStarts:[...recent,startedAt]}; // durable, shared 30-day limit
   await save();
   let id;
-  try{id=await cloudAmazon.start(state.amazonCloud.apiKey)}
+  try{id=await cloudAmazon.start(state.amazonCloud.apiKey,state.amazonCloud.profileId)}
   catch(error){
    // Definitive 4xx rejection cannot be a paid run; release its reservation.
    // Network failures/5xx could already be billable, so never retry them
@@ -1178,7 +1183,7 @@ async function start(port=Number(env.PORT||8788)){
    try{return respond(200,await changeCloudSettings(body))}
    catch(error){return respond(error.httpStatus||503,{
     error:error.httpStatus?String(error.message):
-     'Could not connect TinyFish or save settings. No Amazon run was started.'})}
+     'TinyFish could not verify this connection or save its settings. Check the TinyFish API key and try again; no paid run started.'})}
   }
   if(requestPath==='/api/amazon-cloud/run'){
    if(!body||typeof body!=='object'||Array.isArray(body)||
