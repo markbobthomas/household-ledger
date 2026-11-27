@@ -440,6 +440,167 @@ async function sync(){
  return {transactions:Object.keys(next).length,accounts:state.accounts.length,institutions:state.items.length};
  }catch(error){lastSyncAttempt.outcome='failed';throw error}
 }
+
+// Amazon cloud sync is independent of paid AI categorization and of the
+// browser extension. It never exposes Plaid or TinyFish credentials in API responses.
+const cloudAmazon=require('./amazon-cloud.cjs');
+let cloudWorkBusy=false;
+async function withHouseholdEdit(work){
+ const previous=householdEditQueue;let release;
+ householdEditQueue=new Promise(resolve=>{release=resolve});
+ await previous;try{return await work()}finally{release()}
+}
+const cloudStatus=()=>cloudAmazon.safeStatus(state);
+async function changeCloudSettings(body){
+ if(!body||typeof body!=='object'||Array.isArray(body)||
+    !['connect','enable','disable','disconnect'].includes(body.action))
+  throw Object.assign(Error('Choose a valid Amazon sync action'),{httpStatus:400});
+ if(body.action==='connect'){
+  if(Object.keys(body).sort().join(',')!=='action,apiKey'||
+     !cloudAmazon.ensureKey(body.apiKey))
+   throw Object.assign(Error('Paste a valid TinyFish API key'),{httpStatus:400});
+  // Key validation is a free wallet lookup, never a paid Amazon browser run.
+  await cloudAmazon.validateKey(body.apiKey);
+ }
+ return withHouseholdEdit(async()=>{
+  const old=state.amazonCloud||{},next={...old};
+  if(body.action==='connect'){next.apiKey=body.apiKey;next.enabled=false;next.lastError=null}
+  else if(body.action==='enable'){
+   if(Object.keys(body).length!==1||!next.apiKey)
+    throw Object.assign(Error('Connect TinyFish before enabling Amazon sync'),{httpStatus:409});
+   next.enabled=true;next.lastError=null;
+  }else if(body.action==='disable'){
+   if(Object.keys(body).length!==1)throw Object.assign(Error('Unexpected setting'),{httpStatus:400});
+   next.enabled=false;
+  }else{
+   if(Object.keys(body).length!==1)throw Object.assign(Error('Unexpected setting'),{httpStatus:400});
+   // Do not discard an in-flight run's identifying ID. Even on disconnect
+   // there may be a paid result pending; it cannot be billed a second time.
+   next.enabled=false;delete next.apiKey;
+   next.lastOutcome='Disconnected from TinyFish';
+  }
+  state.amazonCloud=next;
+  try{await save()}catch(error){state.amazonCloud=old;throw error}
+  return cloudStatus();
+ });
+}
+async function runCloudAmazon(manual=false){
+ if(cloudWorkBusy)return {busy:true,...cloudStatus()};
+ cloudWorkBusy=true;
+ try{return await withHouseholdEdit(async()=>{
+  const current=state.amazonCloud||{};
+  if(!current.enabled||!current.apiKey)return {disabled:true,...cloudStatus()};
+  if(current.run)return {busy:true,...cloudStatus()};
+  if(accountRemovalBusy||!state.items.length)return {error:'Connect a bank before Amazon can sync'};
+  const slot=cloudAmazon.local();
+  if(!manual&&!cloudAmazon.due(current))return {notDue:true,...cloudStatus()};
+  const cfg={...current,lastAttemptAt:stamp(),
+   ...(manual?{}:{lastScheduledDay:slot.day}),
+   lastOutcome:'Checking for new Amazon bank charges',lastError:null};
+  state.amazonCloud=cfg;
+  await save(); // Durable reservation avoids duplicate automatic work on restart.
+  try{await sync()}catch(error){
+   state.amazonCloud={...state.amazonCloud,
+    lastOutcome:'Bank refresh failed; Amazon browser was not started',
+    lastError:'Bank refresh needs attention. Use Sync in Ledger.'};
+   await save();return cloudStatus();
+  }
+  const targets=cloudAmazon.eligible(state);
+  if(!targets.length){
+   state.amazonCloud={...state.amazonCloud,lastOutcome:'No new Amazon charges to match',
+    lastCount:0,lastMatched:0,lastSuccessAt:stamp()};
+   await save();return {skipped:true,...cloudStatus()};
+  }
+  // Reserve the exact target set BEFORE the provider can charge. An unknown
+  // outcome remains blocked and needs manual reconciliation, never auto-retry.
+  state.amazonCloud={...state.amazonCloud,run:{status:'launching',
+   startedAt:stamp(),targets:targets.map(t=>t.key)}};
+  await save();
+  let id;
+  try{id=await cloudAmazon.start(state.amazonCloud.apiKey)}
+  catch(error){
+   // Launch outcome could be unknown. Keep a blocking reservation rather
+   // than accidentally submit a second paid request on the next interval.
+   state.amazonCloud={...state.amazonCloud,
+    run:{...state.amazonCloud.run,status:'uncertain'},
+    lastOutcome:'Could not confirm TinyFish start',
+    lastError:String(error.message||error).slice(0,150)};
+   await save();return cloudStatus();
+  }
+  state.amazonCloud={...state.amazonCloud,
+   run:{...state.amazonCloud.run,id,status:'running'},
+   lastOutcome:'TinyFish is reading Amazon orders'};
+  await save();
+  return {started:true,...cloudStatus()};
+ })}
+ finally{cloudWorkBusy=false}
+}
+async function finishCloudAmazon(){
+ if(cloudWorkBusy||!state.amazonCloud?.run?.id||!state.amazonCloud?.apiKey)return;
+ cloudWorkBusy=true;
+ try{
+  const id=state.amazonCloud.run.id;
+  let result;
+  try{result=await cloudAmazon.getRun(state.amazonCloud.apiKey,id)}
+  catch(error){
+   await withHouseholdEdit(async()=>{
+    if(state.amazonCloud?.run?.id!==id)return;
+    state.amazonCloud={...state.amazonCloud,
+     lastError:String(error.message||error).slice(0,150)};
+    await save();
+   });return;
+  }
+  if(!['COMPLETED','FAILED','CANCELLED'].includes(result.status))return;
+  await withHouseholdEdit(async()=>{
+   const before=state.amazonCloud||{},run=before.run;
+   if(run?.id!==id)return; // Another process/device completed it.
+   const updated={...before,run:null,lastError:null};
+   if(result.status!=='COMPLETED'){
+    updated.lastOutcome='Amazon browser check did not finish';
+    updated.lastError='Open TinyFish to check its Amazon sign-in, then retry in Ledger.';
+    state.amazonCloud=updated;await save();return;
+   }
+   let orders;
+   try{orders=cloudAmazon.parseOrders(result)}
+   catch(error){
+    updated.lastOutcome='Amazon sign-in or order report needs attention';
+    updated.lastError=String(error.message||error).slice(0,150);
+    state.amazonCloud=updated;await save();return;
+   }
+   if(!before.enabled){
+    updated.lastOutcome='Amazon sync paused; no order information saved';
+    state.amazonCloud=updated;await save();return;
+   }
+   const categories=savedCategoryChoices(
+    state.ledgerAdjustments?.predictions,
+    state.ledgerAdjustments?.customCategories,
+    state.ledgerAdjustments?.categoryOverrides);
+   const proposal=cloudAmazon.prepare(state,orders,categories);
+   // The existing importer writes ONLY category/Note overlays; never Plaid.
+   if(proposal.hasNotes)await saveForecast(proposal.nextPredictions);
+   const oldAdjustments=state.ledgerAdjustments;
+   updated.scanned=cloudAmazon.visited(before,run);
+   updated.lastOutcome=orders.length?
+    'Amazon orders checked and matched against Ledger':'No readable Amazon orders returned';
+   updated.lastCount=orders.length;
+   updated.lastMatched=proposal.report.matches||0;
+   updated.lastSuccessAt=stamp();
+   state.ledgerAdjustments=proposal.next;
+   state.amazonCloud=updated;
+   try{await save()}catch(error){
+    state.ledgerAdjustments=oldAdjustments;
+    state.amazonCloud=before;
+    throw error;
+   }
+   if(proposal.categoryChanged){invalidatePrepared();schedulePrepared()}
+  });
+ }finally{cloudWorkBusy=false}
+}
+async function cloudTick(){
+ if(state.amazonCloud?.run?.id)return finishCloudAmazon();
+ if(cloudAmazon.due(state.amazonCloud))return runCloudAmazon(false);
+}
+
 async function html(){return fs.readFile(path.join(__dirname,'index.html'),'utf8')}
 // The same authenticated payload still owns all immutable bank facts. The
 // prepared projection is a derived, versioned extra attached atomically to it.
