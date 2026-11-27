@@ -751,12 +751,28 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     const named=[planned.merchant,planned._forecastOriginalMerchant,
      rule?.originalMerchant,...(rule?.matchNames||[])]
      .some(name=>samePayee(bankText(bank)+' '+String(bank.name||''),name));
-    // A renamed ACH/payroll posting may not share any words with its saved
-    // label. Permit a near-exact amount only with a short date gap AND a
-    // globally unique bank-to-forecast assignment (enforced below).
-    const strongUnnamed=bankKind==='income'&&
-     Math.abs(Number(bank.amount)-Number(planned.amount))<=
-     Math.max(2,Number(planned.amount)*.003)&&gap<=3;
+    // A bank can rename an ACH credit, and a real paycheck can vary with
+    // deductions. Keep bank-to-forecast reconciliation anchored to account,
+    // income direction, posting date and amount, with final GLOBAL one-to-one
+    // assignment below. Never infer a settlement from a payee word alone.
+    const payName=[planned.merchant,planned._forecastOriginalMerchant,
+      rule?.originalMerchant,rule?.scheduleLabel,...(rule?.matchNames||[])]
+      .filter(Boolean).some(name=>/\\b(?:payroll|paycheck|salary|wage|employer)\\b/i.test(name)),
+     paycheckCadence=['weekly','biweekly','every-4-weeks','twice-monthly',
+      'monthly'].includes(cadence),
+     wageCategory=/INCOME_WAGES/.test(String(
+      bank.personal_finance_category?.detailed||
+      bank.source?.personalFinanceCategory?.detailed||'').toUpperCase()),
+     bankWageLabel=/\\b(?:payroll|paycheck|salary|wages)\\b/i.test(bankText(bank)),
+     variance=Math.abs(Number(bank.amount)-Number(planned.amount))/
+      Math.max(1,Number(planned.amount)),
+     // The nearest occurrence of alternating payroll is 14 days away.
+     // Six days can cover an early holiday/weekend deposit without borrowing
+     // the other independently confirmed four-week payday.
+     strongUnnamed=bankKind==='income'&&paycheckCadence&&payName&&gap<=6&&
+      (variance<=.003||wageCategory&&variance<=.35||
+       bankWageLabel&&variance<=.15||gap<=3&&variance<=.08)||
+      bankKind==='income'&&gap<=3&&variance<=.003;
     if((!named&&!strongUnnamed)||bank.accountingKind==='card_payment')continue;
    }
    pairs.push({bank,item,gap});
