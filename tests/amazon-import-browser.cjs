@@ -98,6 +98,31 @@ module.exports=(async()=>{
       examples:[{transactionId:'fictional-possible',note:'Possible Amazon: Pet grooming brush',
        category:'Pets',possibleMatch:true}]})});
    });
+   let tinyfishConnected=false,tinyfishEnabled=false;
+   const tinyfishRequests=[];
+   const cloudSnapshot=()=>({
+    connected:tinyfishConnected,enabled:tinyfishEnabled,
+    pendingAmazonCharges:2,lastOutcome:'Not yet checked',runActive:false,
+    lastError:null,maxCostUsd:1
+   });
+   await page.route('**/api/amazon-cloud',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify(cloudSnapshot())});
+   });
+   await page.route('**/api/amazon-cloud/settings',async route=>{
+    const action=route.request().postDataJSON();
+    tinyfishRequests.push(action);
+    if(action.action==='connect'){
+     assert.equal(action.apiKey,'fictional-tinyfish-key-not-a-real-secret',
+      'Only the typed key is sent to the private authenticated connection endpoint');
+     tinyfishConnected=true;tinyfishEnabled=false;
+    }else if(action.action==='enable'){
+     assert.equal(tinyfishConnected,true);
+     tinyfishEnabled=true;
+    }else throw Error('Unexpected setup control mutation: '+action.action);
+    await route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify(cloudSnapshot())});
+   });
    try{
     await page.goto(url);
     await page.locator('#review-card #accept').waitFor();
@@ -111,6 +136,42 @@ module.exports=(async()=>{
     assert.match(await page.locator('#amazon-cloud').innerText(),/No new Amazon charges/);
     assert.equal(await page.locator('#cloud-api-key').getAttribute('type'),'password');
     assert.equal(await page.locator('#cloud-setup-steps').isVisible(),true);
+    assert.equal(await page.locator('#cloud-setup-steps').getAttribute('open'),'',
+     'Detailed instructions start expanded for first-time users');
+    assert.equal(await page.locator('#cloud-setup-steps .cloud-steps > li').count(),9,
+     'All nine actions are visible and numbered');
+    assert.equal(await page.locator('a[href="https://agent.tinyfish.ai/api-keys"]').count(),1,
+     'Direct verified TinyFish API Keys link must be included');
+    assert.equal(await page.locator('a[href="https://docs.tinyfish.ai/key-concepts/tinyprofile"]').count(),1,
+     'Provide official TinyProfile setup help');
+    const setupText=await page.locator('#cloud-setup-steps').innerText();
+    for(const phrase of ['Sign up','TinyProfiles','Default','Set as default',
+     'Create and set up','www.amazon.com/your-orders','Save setup session',
+     'Create API Key','Copy','Paste TinyFish API key here',
+     'Connect TinyFish','Turn on automatic updates']){
+     assert(setupText.includes(phrase),name+' is missing essential setup instruction: '+phrase);
+    }
+    assert.match(await page.locator('#cloud-status').innerText(),/Not connected/);
+    await page.locator('#cloud-api-key').fill('fictional-tinyfish-key-not-a-real-secret');
+    await page.locator('#cloud-connect').click();
+    await page.waitForFunction(()=>document.querySelector('#cloud-status').textContent.includes('TinyFish connected'));
+    assert.equal(await page.locator('#cloud-actions').isVisible(),true,
+     'Enable button becomes visible after connection');
+    assert.equal(await page.locator('#cloud-setup-steps').getAttribute('open'),null,
+     'Instructions collapse after success but remain re-openable');
+    await page.locator('#cloud-setup-steps summary').click();
+    assert.equal(await page.locator('#cloud-setup-steps').getAttribute('open'),'',
+     'Connected owner can reopen full instructions when a login expires');
+    await page.waitForFunction(()=>!document.getElementById('cloud-toggle').disabled);
+    assert.equal(await page.locator('#cloud-toggle').isEnabled(),true,
+     'After a successful connection, Turn on automatic updates must be usable');
+    await page.locator('#cloud-toggle').click();
+    await page.waitForFunction(()=>document.querySelector('#cloud-status').textContent.includes('Automatic updates ON'));
+    assert.deepEqual(tinyfishRequests,[{
+     action:'connect',apiKey:'fictional-tinyfish-key-not-a-real-secret'
+    },{action:'enable'}],'Nine-step setup must save key and enable only after the explicit click');
+    assert.equal(await page.locator('#cloud-api-key').inputValue(),'',
+     'Connection code is cleared from the browser field after success');
     assert.equal(await page.evaluate(()=>Boolean(document.querySelector('#amazon-cloud').compareDocumentPosition(document.querySelector('#file')) & Node.DOCUMENT_POSITION_FOLLOWING)),true,
       'TinyFish setup should appear before the manual file-import fallback');
 
