@@ -111,6 +111,8 @@ module.exports=(async()=>{
     assert.match(await page.locator('#amazon-cloud').innerText(),/No new Amazon charges/);
     assert.equal(await page.locator('#cloud-api-key').getAttribute('type'),'password');
     assert.equal(await page.locator('#cloud-setup-steps').isVisible(),true);
+    assert.equal(await page.evaluate(()=>Boolean(document.querySelector('#amazon-cloud').compareDocumentPosition(document.querySelector('#file')) & Node.DOCUMENT_POSITION_FOLLOWING)),true,
+      'TinyFish setup should appear before the manual file-import fallback');
 
     assert.equal(await page.locator('#quick-categories .quick').count()>0,true,
       'Common spending categories are available as one-tap choices');
