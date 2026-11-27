@@ -473,21 +473,31 @@ async function changeCloudSettings(body){
   await cloudAmazon.validateKey(body.apiKey);
  }
  return withHouseholdEdit(async()=>{
-  const old=state.amazonCloud||{},next={...old};
-  if(body.action==='connect'){next.apiKey=body.apiKey;next.enabled=false;next.lastError=null}
-  else if(body.action==='enable'){
+  const old=state.amazonCloud||{};
+  if(old.run&&['connect','disconnect','enable'].includes(body.action))
+   throw Object.assign(Error('An Amazon check may still be running. Turn automatic updates OFF; wait for the check to finish before reconnecting or disconnecting. If it is stuck, check your runs in TinyFish before changing the key.'),{httpStatus:409});
+  let next={...old};
+  if(body.action==='connect'){
+   next.apiKey=body.apiKey;next.enabled=false;
+   next.lastError=null;next.pausedReason=null;
+  }else if(body.action==='enable'){
    if(Object.keys(body).length!==1||!next.apiKey)
     throw Object.assign(Error('Connect TinyFish before enabling Amazon sync'),{httpStatus:409});
-   next.enabled=true;next.lastError=null;
+   if(!state.items.length)
+    throw Object.assign(Error('Connect your bank in Ledger before turning on Amazon updates'),{httpStatus:409});
+   // First activation never imports older unrelated charges or backfills a
+   // surprise 45-day history. New postings after activation are eligible.
+   if(!next.baselineAt)next=cloudAmazon.baseline(state,next);
+   next.enabled=true;next.lastError=null;next.pausedReason=null;
+   next.lastOutcome='Automatic checks enabled. Waiting for new Amazon charges.';
   }else if(body.action==='disable'){
    if(Object.keys(body).length!==1)throw Object.assign(Error('Unexpected setting'),{httpStatus:400});
-   next.enabled=false;
+   next.enabled=false;next.lastOutcome=next.run?
+    'Updates OFF. An already-started check may still finish.':'Automatic updates OFF';
   }else{
    if(Object.keys(body).length!==1)throw Object.assign(Error('Unexpected setting'),{httpStatus:400});
-   // Do not discard an in-flight run's identifying ID. Even on disconnect
-   // there may be a paid result pending; it cannot be billed a second time.
    next.enabled=false;delete next.apiKey;
-   next.lastOutcome='Disconnected from TinyFish';
+   next.lastOutcome='Disconnected from TinyFish';next.pausedReason=null;
   }
   state.amazonCloud=next;
   try{await save()}catch(error){state.amazonCloud=old;throw error}
@@ -502,6 +512,10 @@ async function runCloudAmazon(manual=false){
   if(!current.enabled||!current.apiKey)return {disabled:true,...cloudStatus()};
   if(current.run)return {busy:true,...cloudStatus()};
   if(accountRemovalBusy||!state.items.length)return {error:'Connect a bank before Amazon can sync'};
+  if(current.pausedReason)return {needsAttention:true,...cloudStatus()};
+  if(!current.baselineAt)return {error:'Turn automatic updates off and back on to finish the safe starting-point setup',...cloudStatus()};
+  const limitReason=cloudAmazon.limit(current);
+  if(limitReason)return {limitReached:true,error:limitReason,...cloudStatus()};
   const slot=cloudAmazon.local();
   if(!manual&&!cloudAmazon.due(current))return {notDue:true,...cloudStatus()};
   const cfg={...current,lastAttemptAt:stamp(),
@@ -517,14 +531,16 @@ async function runCloudAmazon(manual=false){
   }
   const targets=cloudAmazon.eligible(state);
   if(!targets.length){
-   state.amazonCloud={...state.amazonCloud,lastOutcome:'No new Amazon charges to match',
-    lastCount:0,lastMatched:0,lastSuccessAt:stamp()};
+   state.amazonCloud={...state.amazonCloud,lastOutcome:'No new Amazon charges; TinyFish was not started',
+    lastCount:0,lastMatched:0,lastUnmatched:0,lastCheckedAt:stamp()};
    await save();return {skipped:true,...cloudStatus()};
   }
   // Reserve the exact target set BEFORE the provider can charge. An unknown
   // outcome remains blocked and needs manual reconciliation, never auto-retry.
+  const startedAt=stamp(),recent=cloudAmazon.runsInWindow(state.amazonCloud).starts;
   state.amazonCloud={...state.amazonCloud,run:{status:'launching',
-   startedAt:stamp(),targets:targets.map(t=>t.key)}};
+   startedAt,targets:targets.map(t=>t.key)},
+   runStarts:[...recent,startedAt]}; // durable, shared 30-day limit
   await save();
   let id;
   try{id=await cloudAmazon.start(state.amazonCloud.apiKey)}
@@ -535,9 +551,11 @@ async function runCloudAmazon(manual=false){
    const definitelyNotStarted=error.notStarted===true;
    state.amazonCloud={...state.amazonCloud,
     run:definitelyNotStarted?null:{...state.amazonCloud.run,status:'uncertain'},
+    runStarts:definitelyNotStarted?recent:state.amazonCloud.runStarts,
+    enabled:false,pausedReason:'tinyfish-start',
     lastOutcome:definitelyNotStarted?
-     'TinyFish declined this request; no browser run started':
-     'Could not confirm TinyFish start — automatic retry blocked',
+     'Paused: TinyFish declined the request; no paid run started':
+     'Paused: could not verify whether TinyFish started; duplicate runs blocked',
     lastError:String(error.message||error).slice(0,260)};
    await save();return cloudStatus();
   }
@@ -570,19 +588,27 @@ async function finishCloudAmazon(){
    if(run?.id!==id)return; // Another process/device completed it.
    const updated={...before,run:null,lastError:null};
    if(result.status!=='COMPLETED'){
-    updated.lastOutcome='Amazon browser check did not finish';
-    updated.lastError='Open TinyFish to check its Amazon sign-in, then retry in Ledger.';
+    updated.enabled=false;updated.pausedReason='run-failed';
+    updated.lastOutcome='Paused: Amazon browser check did not finish';
+    updated.lastError='Open TinyFish to check Amazon sign-in. Re-enable updates in Ledger after fixing it.';
     state.amazonCloud=updated;await save();return;
    }
    let orders;
    try{orders=cloudAmazon.parseOrders(result)}
    catch(error){
-    updated.lastOutcome='Amazon sign-in or order report needs attention';
-    updated.lastError=String(error.message||error).slice(0,150);
+    updated.enabled=false;updated.pausedReason='invalid-report';
+    updated.lastOutcome='Paused: incomplete Amazon report';
+    updated.lastError=String(error.message||error).slice(0,150)+'. Verify TinyFish and re-enable updates to retry.';
     state.amazonCloud=updated;await save();return;
    }
    if(!before.enabled){
     updated.lastOutcome='Amazon sync paused; no order information saved';
+    state.amazonCloud=updated;await save();return;
+   }
+   if(!orders.length){
+    updated.enabled=false;updated.pausedReason='empty-report';
+    updated.lastOutcome='Paused: Amazon returned no readable orders';
+    updated.lastError='No purchases were changed. Check your Amazon sign-in in TinyFish, then re-enable updates.';
     state.amazonCloud=updated;await save();return;
    }
    const categories=savedCategoryChoices(
@@ -590,6 +616,13 @@ async function finishCloudAmazon(){
     state.ledgerAdjustments?.customCategories,
     state.ledgerAdjustments?.categoryOverrides);
    const proposal=cloudAmazon.prepare(state,orders,categories);
+   if(!(proposal.report.matches>0)){
+    updated.enabled=false;updated.pausedReason='no-matches';
+    updated.lastCount=orders.length;updated.lastMatched=0;
+    updated.lastOutcome='Paused: Amazon orders could not be verified against bank charges';
+    updated.lastError='Nothing was changed. Review the unmatched Amazon purchases, then re-enable if you want another check.';
+    state.amazonCloud=updated;await save();return;
+   }
    // The existing importer writes ONLY category/Note overlays; never Plaid.
    if(proposal.hasNotes)await saveForecast(proposal.nextPredictions);
    const oldAdjustments=state.ledgerAdjustments;
@@ -598,6 +631,7 @@ async function finishCloudAmazon(){
     'Amazon orders checked and matched against Ledger':'No readable Amazon orders returned';
    updated.lastCount=orders.length;
    updated.lastMatched=proposal.report.matches||0;
+   updated.lastUnmatched=Math.max(0,(run.targets||[]).length-updated.lastMatched);
    updated.lastSuccessAt=stamp();
    state.ledgerAdjustments=proposal.next;
    state.amazonCloud=updated;
