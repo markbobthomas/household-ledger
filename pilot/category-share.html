@@ -143,7 +143,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 </section>
 <section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p>
 <button id="budget-button" class="primary wide" type="button">See our budget</button>
-<button id="again" class="secondary" type="button" hidden>Review skipped items</button>
+<button id="again" class="secondary" type="button" hidden>Refresh</button>
 <a id="open-ledger-after-review" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
 <p class="full-ledger-note">Full Ledger requires a separate sign-in.</p></section>
 <section id="budget" class="hide"><h1>Our budget</h1><p id="budget-period" class="muted context"></p>
@@ -235,7 +235,7 @@ function render(){
  text('count',view.items.length+' left');$('count').hidden=false;
  let remaining=view.items.map((x,i)=>({x,i})).filter(p=>!skipped.has(p.x.kind+':'+p.x.id));
  if(!view.items.length){show('empty');text('emptytitle','All caught up');text('emptymsg','There are no spending categories waiting for review.');$('again').hidden=true;return}
- if(!remaining.length){show('empty');text('emptytitle','That’s everything for now');text('emptymsg',view.items.length+' item(s) skipped. You can review them whenever you want.');$('again').hidden=false;return}
+ if(!remaining.length){show('empty');text('emptytitle','That’s everything for now');text('emptymsg','Skipped purchases will appear again when you refresh.');$('again').hidden=false;return}
  const next=remaining.find(p=>p.i>=index)||remaining[0];index=next.i;
  const item=next.x;show('review');
  text('meta',(item.kind==='amazon-item'?'AMAZON ITEM':item.kind==='transaction'?'TRANSACTION':'UPCOMING PAYMENT')+' · '+(item.date||'Date not set'));
@@ -264,9 +264,10 @@ function render(){
  $('more').open=false;
  text('feedback','');
 }
-async function load(){
+async function load(restart=false){
  const data=await api('/api/share/categorize',undefined,true);
  view=data;revision=data.revision||revision;
+ if(restart){skipped.clear();index=0;}
  if(index>=view.items.length)index=0;
  render();
 }
@@ -308,8 +309,8 @@ $('skip').onclick=async()=>{
  }catch(e){text('feedback',e.message+'. Note not saved.')}
  finally{busy=false;disableEdits(false)}
 };
-$('reload').onclick=async()=>{if(busy)return;try{await load()}catch(e){text('feedback',e.message)}};
-$('again').onclick=()=>{skipped.clear();index=0;render()};
+$('reload').onclick=async()=>{if(busy)return;try{await load(true)}catch(e){text('feedback',e.message)}};
+$('again').onclick=async()=>{if(busy)return;try{await load(true)}catch(e){text('emptymsg',e.message)}};
 async function showBudget(){
  show('budget');text('budget-total','Loading…');text('budget-sub','');$('budget-rows').replaceChildren();
  text('budget-error','');
