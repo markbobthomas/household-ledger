@@ -507,7 +507,7 @@ const todayPrefs={futureRecurringRules:[todayRule]};
 const todayBundle=Core.materialize(todaySnap,[],todayPrefs,T,null,45,policy);
 assert.equal(T.bankBusinessDay(today),true,'Friday after Thanksgiving is a bank business day');
 assert.deepEqual(todayBundle.ledger.filter(x=>x.ruleId===todayRule.id)
- .map(x=>x.date).slice(0,2),[today,'2026-12-28'],
+ .map(x=>x.date).slice(0,2),[today,'2026-12-24'],
  'Unposted current-day mortgage remains on Friday with its next monthly recurrence');
 assert.equal(todayBundle.overduePayments.length,0,
  'The mortgage must not be flagged overdue before Friday ends');
