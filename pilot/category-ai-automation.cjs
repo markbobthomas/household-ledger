@@ -131,7 +131,7 @@ function parseResponse(data,batch,categories){
   const category=typeof x.category==='string'?allowed.get(x.category.toLowerCase()):null;
   const row=batch.rows[x.i];
   // No AI confidence can substitute for a verified Amazon item identity.
-  const generic=/\b(?:amazon|amzn|costco|walmart|target|ebay|paypal)\b/i.test(row.merchant);
+  const generic=/\b(?:amazon|amzn|costco|walmart|target|ebay|paypal|marketplace|superstore|general store)\b/i.test(row.merchant);
   const chosen=x.confidence==='high'&&category&&(!generic||row.product)?category:null;
   results.push({row,category:chosen||null});
  }
