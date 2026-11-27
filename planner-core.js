@@ -698,8 +698,14 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    const planned=item.e,ruleId=String(planned.ruleId||planned.recurringRuleId||'');
    if(assignedRules.length&&(!ruleId||
     !assignedRules.some(r=>String(r.id)===ruleId)))continue;
-   const reference=[planned.originalDueDate,planned.baseDate,planned.anchorDate,
-    planned._seriesDate,planned.date].filter(valid);
+   // A carried-forward overdue forecast uses its ORIGINAL unpaid due date
+   // for matching, not the future placeholder date assigned to the carry.
+   // Otherwise a random recent posting could falsely settle an old bill.
+   const reference=(planned._unpostedEstimated?
+    [planned._overdueFrom,planned.originalDueDate,planned.baseDate,
+     planned.anchorDate,planned._seriesDate]:
+    [planned.originalDueDate,planned.baseDate,planned.anchorDate,
+     planned._seriesDate,planned.date]).filter(valid);
    if(!reference.length)continue;
    const gap=Math.min(...reference.map(d=>Math.abs(diff(bank.date,d))));
    // Short streams must never borrow a previous/next installment. Monthly or
