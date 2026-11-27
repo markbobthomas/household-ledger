@@ -519,6 +519,26 @@ assert(pendingUncertainBalance.ledger.some(e=>e.ruleId==='wage-a'&&
 const pendingBankCopy=JSON.stringify(pendingWage);
 assert.equal(JSON.stringify(pendingWage),pendingBankCopy,
  'Pending bank source records remain immutable');
+const pendingAmbiguous=C.materialize(pendingCashSnapshot,[pendingWage],{
+ recurringForecastMode:'approved-only',futureRecurringRules:[
+ payRules[0],{...payRules[0],id:'independent-equal-pay'}
+ ]},T,P,55,{weekendPolicy:'friday'});
+assert.equal(pendingAmbiguous.ledger.filter(e=>e.type==='income'&&
+ e.date==='2026-11-27').length,2,
+ 'An available pending credit cannot silently clear two indistinguishable paychecks');
+assert(pendingAmbiguous.postedMatchReview.some(r=>r.bankId===pendingWage.id&&
+ r.candidates.length===2),
+ 'Ambiguous pending-available deposits must request the correct prediction in Review');
+const pendingRefundBank={...pendingWage,id:'pending-return',amount:73.25,
+ type:'income',merchant:'Unknown credited refund'};
+const pendingRefundPlan={id:'expected-return',date:'2026-11-27',
+ amount:74.50,type:'refund',merchant:'Fictional Return',accountId:'checking'};
+const pendingRefund=C.materialize({...pendingCashSnapshot,accounts:
+ accounts.map(a=>a.id==='checking'?{...a,current:5000,available:5073.25}:a)},
+ [pendingRefundBank],{recurringForecastMode:'approved-only',
+ futureTransactionAdds:[pendingRefundPlan]},T,P,55,{weekendPolicy:'friday'});
+assert(!pendingRefund.ledger.some(e=>e.id==='expected-return'),
+ 'Refund forecasts also cannot double count bank-available pending credits');
 const variablePay=futurePay([tx('variable-pay','2026-11-22',
  'Cedar Payroll Processing',3657.33,'income')]);
 assert(!variablePay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
@@ -555,6 +575,13 @@ const autoSettled=C.materialize(earlyAsOf,priorAutoPay.concat(
 assert(!autoSettled.ledger.some(e=>e.type==='income'&&e.date==='2026-11-27'),
  'Automatically inferred income must also reconcile against an early renamed deposit');
 
+const autoPending=C.materialize({...earlyAsOf,asOf:'2026-11-27',
+ accounts:accounts.map(a=>a.id==='checking'?{...a,current:5000,
+ available:8200}:a)},priorAutoPay.concat({...earlyPay,
+ id:'auto-credit-pending',pending:true}),{},T,P,55,{weekendPolicy:'friday'});
+assert(!autoPending.ledger.some(e=>e.type==='income'&&
+ e.date==='2026-11-27'),
+ 'Inferred (not owner-confirmed) payroll must also honor credited pending bank income');
 const refundPlan={id:'one-refund',date:'2026-11-27',amount:57.41,
  type:'refund',merchant:'River Return',accountId:'checking'};
 const refunded=futurePay([tx('return-posted','2026-11-25',
