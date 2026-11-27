@@ -706,6 +706,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // Confirmed recurring rules already received their own posted-bank evidence
  // above. A later generic fallback must not reuse that bank debit to clear a
  // second independent same-payee schedule (house / garden, multiple loans).
+ const knownBankById=new Map(rows.filter(t=>t?.id).map(t=>[String(t.id),t]));
  const reconciliableRows=rows.filter(t=>t&&t.id&&!priorBankMatches.has(String(t.id))&&
   valid(t.date)&&t.date<=asOf&&t.date>=add(asOf,-90)&&Number(t.amount)>0&&
   // Pending income/refunds are not yet incorporated into current cash; do
@@ -728,7 +729,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    // Never borrow a transfer between savings/checking to erase salary or rent.
    if(bank.pairedTransactionId){
     if(item.kind!=='movement')continue;
-    const counter=rows.find(x=>String(x.id)===String(bank.pairedTransactionId)),
+    const counter=knownBankById.get(String(bank.pairedTransactionId)),
      destination=counter?tools.accountRef(
       counter.accountId||counter.account,accounts):bank.toAccountId;
     if(!destination||String(destination)!==String(item.e.toAccountId))continue;
