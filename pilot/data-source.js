@@ -109,7 +109,7 @@ function prepare(payload,asOf=today()){
   transactions:rows,items:[],
   accounts:banks.map(a=>({id:a.id,name:a.name,type:a.type,subtype:a.subtype,
    institution:'Connected via Plaid',itemId:a.itemId||'connected-bank-item'})),
-  ...Object.fromEntries(['categoryOverrides','predictions','reviews','learning','customCategories','amazonAllocations']
+  ...Object.fromEntries(['categoryOverrides','predictions','reviews','learning','customCategories','amazonAllocations','categoryAutomation','humanConfirmedCategoryIds']
    .filter(k=>adjustments[k]!==undefined).map(k=>[k,adjustments[k]]))
  });
  const snapshot={asOf,mode:'plaid',connected:true,source:'Plaid bank-reported balances',
@@ -132,6 +132,10 @@ async function enter(){
   const data=prepare(await request(''));
   host.enterReal(data.state,data.snapshot,data.preparedForecast);
   loadedAccount=data.account;live=true;
+  // Only a full owner Ledger load may offer an AI categorization run.
+  // This event is never sent by the standalone shared Ledger Lite page.
+  if(typeof document!=='undefined')setTimeout(()=>
+   document.dispatchEvent(new Event('ledger-full-loaded')),0);
   if(data.reconnectAccounts.length)lastError=reconnectMessage;
   else if(data.syncIssues.length)lastError=syncIssueMessage(data.syncIssues);
   localStorage.setItem(MODE,'real');
