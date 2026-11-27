@@ -185,10 +185,11 @@ async function cloudApi(path,action){
  return data;
 }
 function renderCloud(data){
+ const wasConnected=cloud?.connected;
  cloud=data;
  // Keep instructions available after connection; simply fold them once
  // the owner succeeds. They can reopen them later to reconnect Amazon.
- if(cloud===null||cloud.connected!==data.connected){
+ if(wasConnected!==data.connected){
   $('cloud-setup-steps').open=!data.connected;
  }
  $('cloud-actions').hidden=!data.connected;
