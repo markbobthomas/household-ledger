@@ -58,10 +58,17 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal((await req('/categorize/manage')).status,303,'Only owner may open link manager');
   assert.equal((await req('/api/share/categorize')).status,401,'Uncredentialed queue must be private');
   assert.equal((await req('/api/share/budget')).status,401,'Budget requires scoped link or owner login');
+  assert.equal((await req('/api/share/budget/edit','POST',{
+   id:tx.id,lineIndex:null,category:'Dining',note:'Unsafe'
+  })).status,401,'No bearer or owner access means no Budget edits');
   const login=await req('/auth/login','POST',{password:pass});
   assert.equal(login.status,200);
   const cookie=login.headers['set-cookie'].find(x=>x.startsWith('__Host-ledger_session='));
   const owner={'Cookie':cookie};
+  assert.equal((await req('/api/share/categorize','GET',undefined,owner)).status,200,
+   'Signed-in owner can use Lite without creating a sharing token');
+  assert.equal((await req('/api/share/budget','GET',undefined,owner)).status,200,
+   'Owner Full-to-Lite switch works without a bearer');
   const legacyStatus=(await req('/api/ledger/category-share','GET',undefined,owner)).data();
   assert.equal(legacyStatus.active,true);
   assert.equal(legacyStatus.needsUpgrade,true);
@@ -161,6 +168,46 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
    'Shared Budget reflects the same authoritative posted purchase in cents');
   assert.equal(afterBudget.data().spentCents,4225,
    'One posted purchase is counted exactly once in the monthly budget');
+  const postedBudget=afterBudget.data().rows.flatMap(row=>row.items||[])
+   .find(x=>x.id===tx.id&&x.source==='posted');
+  assert.equal(postedBudget.category,'Groceries');
+  assert.equal(postedBudget.lineIndex,null);
+  const budgetEdit={id:tx.id,lineIndex:null,category:'Dining',
+   note:'Corrected in Lite'};
+  const bRev=afterBudget.data().revision;
+  assert.ok(bRev,'Budget includes a private revision for conflict checks');
+  assert.equal((await req('/api/share/budget/edit','POST',budgetEdit,shared)).status,409,
+   'Budget edit without revision is rejected');
+  for(const invalid of [
+   {...budgetEdit,id:'unseen-transaction'},
+   {...budgetEdit,lineIndex:0},
+   {...budgetEdit,category:'Income'},
+   {...budgetEdit,note:'x'.repeat(1001)},
+   {...budgetEdit,originalAmount:0}
+  ])assert.equal((await req('/api/share/budget/edit','POST',invalid,
+    {...shared,'X-Ledger-Revision':bRev})).status,409,
+   'Out-of-scope, mixed-shape and invalid Budget writes are rejected');
+  assert.equal((await req('/api/share/budget/edit','POST',budgetEdit,
+   {...shared,'X-Ledger-Revision':bRev})).status,200,
+   'Lite can correct a categorized posted purchase and personal Note');
+  assert.equal(open(file).ledgerAdjustments.categoryOverrides[tx.id],'Dining',
+   'Historical classification is an override, not a Plaid source edit');
+  assert.equal(open(file+'.forecasts').transactionNotes[bankNoteKey],'Corrected in Lite');
+  assert.deepEqual(open(file).transactions[tx.id],originalBankRow,
+   'Lite cannot modify posted source details');
+  const movedBudget=(await req('/api/share/budget','GET',undefined,shared)).data();
+  assert.equal(movedBudget.spentCents,4225,'Moving categories never duplicates spending');
+  assert.equal(movedBudget.rows.find(r=>r.name==='Dining').spentCents,4225);
+  assert.equal(movedBudget.rows.find(r=>r.name==='Groceries').spentCents,0);
+  assert.equal(movedBudget.rows.flatMap(r=>r.items||[])
+   .find(x=>x.id===tx.id).editableNote,'Corrected in Lite',
+   'The changed Note survives a fresh Budget view');
+  assert.equal((await req('/api/share/budget/edit','POST',budgetEdit,
+   {...shared,'X-Ledger-Revision':bRev})).status,409,
+   'Stale Budget revisions cannot overwrite newer decisions');
+  assert.equal((await req('/api/share/categorize','GET',undefined,shared)).data()
+   .items.some(x=>x.id===tx.id),false,
+   'A corrected specific category does not reopen the review queue');
   const planNote=await req('/api/share/categorize','POST',{
    kind:'schedule',id:'future-1',note:'Confirm the invoice amount'},
    {...shared,'X-Ledger-Revision':after.data().revision});
@@ -195,7 +242,12 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal((await req('/api/share/categorize','GET',undefined,legacy)).status,401,
    'Revocation cuts off legacy URL too');
   assert.equal((await req('/api/share/budget','GET',undefined,shared)).status,401,
-   'Revocation cuts off read-only Budget');
+   'Revocation cuts off shared Budget');
+  assert.equal((await req('/api/share/budget/edit','POST',budgetEdit,
+   {...shared,'X-Ledger-Revision':bRev})).status,401,
+   'Revocation also cuts off historical category and Note editing');
+  assert.equal((await req('/api/share/budget','GET',undefined,owner)).status,200,
+   'Signed-in owner may still open Lite after revocation');
   // A mixed-item Amazon charge may be categorized by the shared link only
   // one product at a time. A whole-charge edit would destroy known allocations.
   const shareLogic=require('../pilot/category-share.cjs');
@@ -221,6 +273,22 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
    ...(sourceState.ledgerAdjustments.categoryOverrides||{}),
    [mixedTx.id]:'Uncategorized'
   };
+  const budgetLogic=require('../pilot/category-share-budget.cjs');
+  const mockVisible={categories:['Groceries','Dining','Shopping'],
+   rows:[{items:[{id:mixedTx.id,lineIndex:0,category:'Groceries',
+    source:'posted',cents:2000}]}]};
+  assert.equal(budgetLogic.selection(sourceState,mockVisible,{
+   id:mixedTx.id,lineIndex:null,category:'Dining',note:''}),null,
+   'Lite cannot overwrite the entire Amazon split allocation');
+  const splitChange={id:mixedTx.id,lineIndex:0,category:'Dining',note:''};
+  const splitEntry=budgetLogic.selection(sourceState,mockVisible,splitChange);
+  assert.ok(splitEntry,'A posted allocated Amazon item may be corrected');
+  const nextSplit=budgetLogic.change(sourceState,splitChange,splitEntry);
+  assert.equal(nextSplit.adjustments.amazonAllocations[mixedTx.id].lines[0].category,'Dining');
+  assert.equal(nextSplit.adjustments.amazonAllocations[mixedTx.id].lines[1].category,
+   'Uncategorized','Correcting one Amazon item preserves sibling items');
+  assert.equal(sourceState.transactions[mixedTx.id].amount,40,
+   'Source bank amount stays fixed during split correction');
   const mixedView=shareLogic.snapshot(sourceState);
   assert.ok(!mixedView.items.some(x=>x.kind==='transaction'&&x.id===mixedTx.id),
    'Spouse review must not show unsafe whole-transaction choice for mixed allocation');
