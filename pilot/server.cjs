@@ -658,9 +658,13 @@ async function start(port=Number(env.PORT||8788)){
     'Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"});
    return res.end(page);
   }
+  // Full Ledger's signed-in owner can switch to Lite without creating or
+  // forwarding a permanent bearer link. An invalid supplied bearer is never
+  // rescued by an owner cookie; revocation remains meaningful to recipients.
+  const canUseLite=()=>validCategoryShare(req)||
+   (!req.headers['x-ledger-share']&&auth.authenticated(req));
   if(requestPath==='/api/share/categorize'){
-   // A bearer link can NEVER access a normal household API or owner session.
-   if(!validCategoryShare(req))return respond(401,{error:'Shared access is no longer active. Ask the owner for the private link.'});
+   if(!canUseLite())return respond(401,{error:'Lite access has ended. Open Full Ledger or ask for the private link.'});
    if(req.method==='GET'){
     try{return respond(200,{...require('./category-share.cjs').snapshot(state),revision:settingsRevision()})}
     catch{return respond(503,{error:'Category list temporarily unavailable'})}
@@ -678,7 +682,7 @@ async function start(port=Number(env.PORT||8788)){
    const prior=householdEditQueue;let release;
    householdEditQueue=new Promise(resolve=>{release=resolve});await prior;
    try{
-    if(!validCategoryShare(req))return respond(401,{error:'Shared access has ended'});
+    if(!canUseLite())return respond(401,{error:'Lite access has ended'});
     if(accountRemovalBusy)return respond(409,{error:'Account changes are in progress. Refresh and retry.'});
     if(!req.headers['x-ledger-revision']||req.headers['x-ledger-revision']!==settingsRevision())
      return respond(409,{error:staleMessage,code:'STALE_LEDGER'});
@@ -703,13 +707,53 @@ async function start(port=Number(env.PORT||8788)){
    finally{release()}
   }
   if(requestPath==='/api/share/budget'){
-   if(!validCategoryShare(req))return respond(401,{error:'Shared access is no longer active.'});
-   if(req.method!=='GET')return respond(403,{error:'Budget view is read-only'});
+   if(!canUseLite())return respond(401,{error:'Lite access has ended.'});
+   if(req.method!=='GET')return respond(403,{error:'Use the Edit action for a posted transaction'});
    try{
     const prepared=preparedFor(ledgerPayload());
     const budget=require('./category-share-budget.cjs').build(state,prepared);
-    return budget?respond(200,budget):respond(409,{error:'No bank data to show'});
+    return budget?respond(200,{...budget,revision:settingsRevision()}):
+     respond(409,{error:'No bank data to show'});
    }catch{return respond(503,{error:'Budget is temporarily unavailable. Try again.'})}
+  }
+  if(requestPath==='/api/share/budget/edit'){
+   if(!canUseLite())return respond(401,{error:'Lite access has ended.'});
+   if(req.method!=='POST'||req.headers['x-pilot-action']!=='1'||
+      !/^application\/json(?:;|$)/i.test(String(req.headers['content-type']||'')))
+    return respond(403,{error:'Transaction edit rejected'});
+   if(Number(req.headers['content-length'])>8192)return respond(413,{error:'Transaction edit too large'});
+   let choice;
+   try{
+    const chunks=[];let total=0;
+    for await(const chunk of req){total+=chunk.length;if(total>8192)return respond(413,{error:'Transaction edit too large'});chunks.push(chunk)}
+    choice=JSON.parse(Buffer.concat(chunks).toString());
+   }catch{return respond(400,{error:'Invalid transaction edit'})}
+   const prior=householdEditQueue;let release;
+   householdEditQueue=new Promise(resolve=>{release=resolve});await prior;
+   try{
+    if(!canUseLite())return respond(401,{error:'Lite access has ended'});
+    if(accountRemovalBusy)return respond(409,{error:'Account changes are in progress. Refresh and retry.'});
+    if(!req.headers['x-ledger-revision']||req.headers['x-ledger-revision']!==settingsRevision())
+     return respond(409,{error:staleMessage,code:'STALE_LEDGER'});
+    const module=require('./category-share-budget.cjs');
+    const visible=module.build(state,preparedFor(ledgerPayload()));
+    const entry=visible&&module.selection(state,visible,choice);
+    if(!entry)return respond(409,{error:'This purchase changed or cannot be edited in Lite. Refresh Budget.'});
+    const {adjustments,categoryChanged,noteChanged}=module.change(state,choice,entry);
+    // Notes belong to the separately encrypted forecast preferences. Preserve
+    // the canonical saved predictions and do not rewrite Plaid transactions.
+    if(noteChanged)await saveForecast(adjustments.predictions,req.headers['x-ledger-revision']);
+    if(categoryChanged){
+     const previous=state.ledgerAdjustments;
+     state.ledgerAdjustments={...adjustments,predictions:state.ledgerAdjustments.predictions};
+     try{await save()}catch(error){state.ledgerAdjustments=previous;throw error}
+     invalidatePrepared();schedulePrepared();
+    }
+    return respond(200,{saved:true,categoryChanged,noteChanged});
+   }catch(error){return respond(error.httpStatus||503,{
+    error:error.httpStatus===409?staleMessage:
+     'Could not confirm the complete edit. Refresh Budget to check the saved values. Bank transactions were not changed.'})}
+   finally{release()}
   }
   const expected=Buffer.from('pilot:'+env.PILOT_PASSWORD).toString('base64');
   const supplied=String(req.headers.authorization||'').replace(/^Basic /,'');

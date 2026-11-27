@@ -7114,3 +7114,11 @@ a:hover{color:#166e61}
   min-height:28px;padding:3px 8px;font-size:11px;
  }
 }
+
+/* Ledger Full/Lite selector: always visible, even on narrow phones. */
+.top-actions .mode-switch{display:inline-flex;align-items:stretch;overflow:hidden;border:1px solid #9fb1c3;border-radius:6px;white-space:nowrap;flex:none}
+.top-actions .mode-switch a,.top-actions .mode-switch span{display:flex;align-items:center;justify-content:center;min-height:36px;padding:6px 12px;font-size:13px;font-weight:750;line-height:1.2;text-decoration:none;color:#175dad;background:#fff}
+.top-actions .mode-switch .active{background:#175dad;color:#fff}
+.top-actions .mode-switch a:hover{background:#edf4fd}
+.top-actions .mode-switch a:focus-visible{outline:3px solid #256fc7;outline-offset:-3px}
+@media(max-width:780px){.top-actions .mode-switch a,.top-actions .mode-switch span{padding:6px 10px}}
