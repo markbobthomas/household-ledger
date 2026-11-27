@@ -140,8 +140,9 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   return d;
  };
  const overdueSince=shift(asOf,-90);
- // The bank snapshot does not prove that today's predicted payment occurred.
- const expectedWithdrawal=due=>due<=asOf?nextBusiness(asOf):postingDate(due);
+ // A payment due TODAY can still be unposted; only earlier unpaid cycles
+ // roll forward to the next bank business day.
+ const expectedWithdrawal=due=>due<asOf?nextBusiness(asOf):postingDate(due);
  if(!date(asOf))throw Error('Missing as-of date');
  const accounts=snapshot.accounts||[],byId=new Map(accounts.map(a=>[String(a.id),a]));
  const cards=predictions.paymentRules||{},bills=predictions.paymentBills||[];
@@ -609,7 +610,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    // bank-match pass. Until then its planned payment is still counted in this
    // engine, so subtracting it from current card debt a second time would
    // produce a falsely low payment cap for the following statement.
-   if(due<=asOf&&!paid)unreconciledOverdue=true;
+   if(due<asOf&&!paid)unreconciledOverdue=true;
    const postedPaymentTotal=round(postedForCycle.reduce((n,t)=>n+t.amount,0));
    if(paid&&Math.abs(postedPaymentTotal-amount)>.011){
     const message=card.name+': actual payment '+postedPaymentTotal.toFixed(2)+
@@ -668,7 +669,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
    if(amount>0&&autopay&&!paid&&!pendingReserved){
     const plan={id:'autopay|'+id+'|'+due,fromAccountId:from.id,toAccountId:id,
      anchorDate:expectedWithdrawal(due),
-     ...(due<=asOf?{originalDueDate:due,_unpostedEstimated:true,_overdueFrom:due}:{}),
+     ...(due<asOf?{originalDueDate:due,_unpostedEstimated:true,_overdueFrom:due}:{}),
      amount,frequency:'once',status:'scheduled',origin:'card-autopay',
      merchant:card.name+' Credit-card payment (autopay)',amountEstimate:confirmedFirst?null:'estimated-statement'};
     plans.push(plan);
@@ -705,7 +706,7 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
   for(let n=0;n<13;n++){
    const due=b.frequency==='monthly'?plus(b.date,n):n===0?b.date:null;
    if(!due||due>through)break;
-   if(due<=asOf)continue;
+   if(due<asOf)continue;
    const label=String(b.name||'Automatic payment').trim();
    // One mortgage is one checking withdrawal, even when the owner calls the
    // saved bill "Mortgage" and Plaid calls it "Home Mortgage ACH" or "PENNYMAC".
