@@ -62,11 +62,33 @@ const uncertainState={transactions:{'fictional-possible':{
 const uncertainProposal=cloud.prepare(uncertainState,[{
  orderId:'123-1234567-1234567',date:today,shipmentDate:today,
  title:'Fictional household storage tote',cents:1999,charged:1999
-}],['Home & Maintenance','Shopping','Other']);
+}],['Home & Maintenance','Shopping','Other'],
+ [cloud.eligible({...uncertainState,amazonCloud:{scanned:{}}})[0].key]);
 assert.equal(uncertainProposal.report.matches,0,
  'Approximate item-to-charge amounts must not be treated as exact');
 assert.equal(uncertainProposal.hasNotes,false,
  'Automatic TinyFish import never writes speculative Possible Amazon Notes');
+
+const exactTx={...t('fictional-exact-match'),amount:21.99};
+const otherTx={...t('fictional-other-historical'),amount:21.99};
+const scopedState={transactions:{[exactTx.id]:exactTx,[otherTx.id]:otherTx},
+ ledgerAdjustments:{predictions:{}}};
+const scopedResult=cloud.prepare(scopedState,[{
+ orderId:'123-1234567-1234567',title:'Fictional household storage bin',
+ date:today,shipmentDate:today,cents:2199,charged:2199
+}],['Home & Maintenance','Shopping','Other'],[cloud.eligible({
+ ...scopedState,amazonCloud:{scanned:{[cloud.eligible({
+  ...scopedState,amazonCloud:{scanned:{}}
+ }).find(x=>x.id===otherTx.id).key]:'2026-11-27T00:00:00Z'}}
+})[0].key]);
+assert.equal(scopedResult.report.bankCharges,1,
+ 'Cloud importer sees only the bank charge reserved for this run');
+assert.equal(scopedResult.report.matches,1,
+ 'A single scoped exact match can be saved');
+assert.equal(scopedResult.next.predictions.transactionNotes[
+ cloud.eligible({...scopedState,amazonCloud:{scanned:{}}}).find(x=>x.id===otherTx.id).key
+],undefined,'Unrelated prior purchases never receive a cloud Note');
+
 
 assert.equal(cloud.MAX_STEPS,45,'Cap browser-agent steps per run');
 assert.ok(cloud.MAX_ESTIMATED_RUN_USD<=1,'Configured run estimate ceiling is not more than $1');
