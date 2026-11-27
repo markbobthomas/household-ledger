@@ -84,10 +84,27 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 .budget-entry-name{min-width:0;overflow-wrap:anywhere;font-weight:650}
 .budget-entry-date{color:#526172;font-size:12px;margin-top:4px}
 .budget-entry-amount{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:750}
-@media(max-width:430px){.card{padding:18px 15px}.buttons{align-items:stretch;flex-wrap:wrap}.buttons>button{flex:1 1 130px}}
+/* Two clear destinations; all edits stay behind the existing review/Budget flow. */
+.mode-switch{display:inline-flex;align-items:stretch;border:1px solid #a6b9cc;border-radius:6px;overflow:hidden;font-size:13px;font-weight:750;white-space:nowrap}
+.mode-switch a,.mode-switch span{display:inline-flex;align-items:center;justify-content:center;min-height:35px;padding:6px 11px;text-decoration:none;color:#175dad;background:#fff}
+.mode-switch .active{background:#175dad;color:#fff}
+.mode-switch a:focus-visible{outline:3px solid #256fc7;outline-offset:-3px}
+.lite-header-actions{display:flex;gap:9px;align-items:center}
+.lite-share-link{font-size:12px;color:#175dad;text-decoration:underline}
+.lite-share-link[hidden]{display:none}
+.budget-edit-button{border:1px solid #a6b9cb;background:#fff;color:#175dad;border-radius:5px;padding:4px 8px;margin-top:5px;min-height:29px;font-size:12px;font-weight:700}
+.budget-edit-form{grid-column:1/-1;background:#f3f6fa;border:1px solid #dae4ec;border-radius:6px;padding:12px;margin-top:4px}
+.budget-edit-form label{display:block;color:#394f64;font-size:12px;font-weight:700;margin-bottom:5px}
+.budget-edit-form select,.budget-edit-form textarea{width:100%;font:inherit;font-size:14px;color:#15202c;background:#fff;border:1px solid #9fb0c2;border-radius:5px;padding:9px}
+.budget-edit-form textarea{resize:vertical;min-height:60px}
+.budget-edit-form .editor-note-label{margin-top:10px}
+.budget-edit-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
+.budget-edit-actions button{min-height:35px;padding:6px 13px;font-size:13px}
+.budget-edit-actions .status{margin:0;min-height:0}
+@media(max-width:430px){.card{padding:18px 15px}.buttons{align-items:stretch;flex-wrap:wrap}.buttons>button{flex:1 1 130px}.brand{font-size:13px;letter-spacing:.03em}.mode-switch a,.mode-switch span{padding:6px 9px}}
 
 </style></head><body><main>
-<header><div class="brand">LEDGER LITE</div><div id="count" class="count" hidden></div></header>
+<header><div class="brand">LEDGER LITE</div><div class="lite-header-actions"><div class="mode-switch" aria-label="Ledger interface"><a href="/" aria-label="Open full Ledger">Full</a><span class="active" aria-current="page">Lite</span></div><a id="lite-share-link" class="lite-share-link" href="/categorize/manage" hidden>Share</a><div id="count" class="count" hidden></div></div></header>
 <section id="owner" class="hide">
 <h1>Share Ledger Lite</h1>
 <p class="muted context">Send one link to Ledger Lite. Your household can categorize purchases and review the budget on a phone without signing in to full Ledger.</p>
@@ -126,16 +143,13 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 <section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p>
 <button id="budget-button" class="primary wide" type="button">See our budget</button>
 <button id="again" class="secondary" type="button" hidden>Review skipped items</button>
-<a id="open-ledger-after-review" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
-<p class="full-ledger-note">Full Ledger requires a separate sign-in.</p></section>
+</section>
 <section id="budget" class="hide"><h1>Our budget</h1><p id="budget-period" class="muted context"></p>
 <div class="card"><div class="tiny">BUDGET LEFT THIS MONTH</div><div id="budget-total" class="budget-total"></div>
 <div id="budget-sub" class="budget-sub"></div></div>
 <p class="subhead">Spending by category</p><div id="budget-rows" class="card"></div>
-<p class="muted">Read-only. Categories and amounts update in Ledger when purchases are categorized.</p>
+<p class="muted">Tap a posted purchase to correct its category or note. Expected expenses remain read-only.</p>
 <button id="budget-back" class="secondary" type="button">Back to categorizing</button>
-<a id="open-ledger-after-budget" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
-<p class="full-ledger-note">Full Ledger requires a separate sign-in.</p>
 <p id="budget-error" class="status" role="status"></p></section>
 <section id="error" class="hide"><h1>Link unavailable</h1><p id="errormsg" class="muted">Ask for a new private link.</p></section>
 <p class="footer">Category decisions and personal notes are available here. Bank accounts and balances stay in Ledger.</p>
@@ -143,13 +157,13 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 'use strict';
 const $=id=>document.getElementById(id);
 const manage=location.pathname==='/categorize/manage',token=location.hash.slice(1);
-let view={items:[],categories:[]},revision='',skipped=new Set(),index=0,busy=false,link='';
+let view={items:[],categories:[]},revision='',skipped=new Set(),index=0,busy=false,link='',budgetData=null;
 const text=(id,s)=>$(id).textContent=String(s??'');
 const show=which=>['owner','review','empty','budget','error'].forEach(id=>$(id).classList.toggle('hide',id!==which));
 function money(v){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Math.abs(Number(v)||0))}
 function signedMoney(v){return Number(v)<0?'−'+money(v):money(v)}
 async function api(path,body,shared=false){
- const headers=shared?{'X-Ledger-Share':token}: {};
+ const headers=shared&&token?{'X-Ledger-Share':token}: {};
  if(body!==undefined){headers['X-Pilot-Action']='1';headers['Content-Type']='application/json';if(revision)headers['X-Ledger-Revision']=revision}
  const response=await fetch(path,{method:body===undefined?'GET':'POST',headers,credentials:'same-origin',
   cache:'no-store',body:body===undefined?undefined:JSON.stringify(body)});
@@ -292,11 +306,12 @@ $('skip').onclick=async()=>{
 };
 $('reload').onclick=async()=>{if(busy)return;try{await load()}catch(e){text('feedback',e.message)}};
 $('again').onclick=()=>{skipped.clear();index=0;render()};
-$('budget-button').onclick=async()=>{
+async function showBudget(){
  show('budget');text('budget-total','Loading…');text('budget-sub','');$('budget-rows').replaceChildren();
  text('budget-error','');
  try{
   const result=await api('/api/share/budget',undefined,true);
+  budgetData=result;view.categories=result.categories||view.categories;
   const month=new Date(result.month+'-01T12:00:00Z').toLocaleDateString('en-US',
    {month:'long',year:'numeric',timeZone:'UTC'});
   text('budget-period',month+' · All accounts');
@@ -338,24 +353,81 @@ $('budget-button').onclick=async()=>{
      date.textContent=tx.date+(tx.source==='expected'?' · Expected':
       tx.source==='pending'?' · Pending':' · Posted');
      amount.className='budget-entry-amount';amount.textContent=signedMoney(tx.cents/100);
-     left.append(name,date);row.append(left,amount);entries.append(row);
+     left.append(name,date);
+     if(tx.source==='posted'&&tx.id){
+      const edit=document.createElement('button');edit.type='button';
+      edit.className='budget-edit-button';edit.textContent='Edit';
+      edit.setAttribute('aria-label','Edit '+tx.merchant);
+      edit.onclick=()=>{
+       if(busy)return;
+       document.querySelectorAll('.budget-edit-form').forEach(el=>el.remove());
+       const form=document.createElement('div');form.className='budget-edit-form';
+       const categoryLabel=document.createElement('label');categoryLabel.textContent='Category';
+       const select=document.createElement('select');
+       const formId='lite-edit-'+(Math.random().toString(36).slice(2,9));
+       select.id=formId;categoryLabel.htmlFor=formId;
+       for(const category of budgetData.categories||[]){
+        const option=document.createElement('option');option.value=category;option.textContent=category;
+        select.append(option);
+       }
+       select.value=tx.category||item.name;
+       const noteLabel=document.createElement('label');noteLabel.className='editor-note-label';
+       noteLabel.textContent=tx.lineIndex===null?'Your note':'Note for this Amazon charge';
+       const note=document.createElement('textarea');
+       note.maxLength=1000;note.rows=2;note.value=tx.editableNote||'';
+       const noteId=formId+'-note';note.id=noteId;noteLabel.htmlFor=noteId;
+       const actions=document.createElement('div');actions.className='budget-edit-actions';
+       const save=document.createElement('button');save.type='button';
+       save.className='primary';save.textContent='Save';
+       const cancel=document.createElement('button');cancel.type='button';
+       cancel.className='secondary';cancel.textContent='Cancel';
+       const feedback=document.createElement('span');feedback.className='status';
+       feedback.setAttribute('role','status');
+       cancel.onclick=()=>form.remove();
+       save.onclick=async()=>{
+        if(busy)return;
+        busy=true;save.disabled=true;cancel.disabled=true;feedback.textContent='Saving…';
+        try{
+         await api('/api/share/budget/edit',{id:tx.id,lineIndex:tx.lineIndex,
+          category:select.value,note:note.value},true);
+         await showBudget();
+         text('budget-error','Saved');
+        }catch(error){feedback.textContent=error.message+'. Refresh Budget before retrying.'}
+        finally{busy=false;save.disabled=false;cancel.disabled=false}
+       };
+       actions.append(save,cancel,feedback);
+       form.append(categoryLabel,select,noteLabel,note,actions);
+       row.append(form);select.focus();
+      };
+      left.append(edit);
+     }
+     row.append(left,amount);entries.append(row);
     }
     expansion.append(toggle,entries);block.append(expansion);
    }
    $('budget-rows').append(block);
   }
  }catch(e){text('budget-total','Unavailable');text('budget-error',e.message)}
-};
+}
+$('budget-button').onclick=showBudget;
 $('budget-back').onclick=async()=>{try{await load()}catch(e){show('error');text('errormsg',e.message)}};
 // This is a live queue, not a frozen report. Recheck after returning to the
 // tab so new bank transactions and other household decisions appear.
 function refreshOnReturn(){
- if(manage||busy||!/^[a-f0-9]{64}$/.test(token))return;
- load().catch(e=>{show('error');text('errormsg',e.message)});
+ if(manage||busy||token&&!/^[a-f0-9]{64}$/.test(token))return;
+ const budgetOpen=!$('budget').classList.contains('hide');
+ (budgetOpen?showBudget():load()).catch(e=>{show('error');text('errormsg',e.message)});
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOnReturn()});
 window.addEventListener('pageshow',event=>{if(event.persisted)refreshOnReturn()});
 if(manage){show('owner');ownerStatus()}
-else if(!/^[a-f0-9]{64}$/.test(token)){show('error');text('errormsg','This link is incomplete. Ask for a new categorization link.')}
-else load().catch(e=>{show('error');text('errormsg',e.message)});
+else if(token&&!/^[a-f0-9]{64}$/.test(token)){
+ show('error');text('errormsg','This link is invalid. Ask for a new Lite link.');
+}else if(!token){
+ // Owner arriving through Full → Lite uses the existing signed-in session;
+ // opening Lite does not mint or expose a household sharing token.
+ api('/api/ledger/category-share').then(()=>{
+  $('lite-share-link').hidden=false;return load();
+ }).catch(()=>{show('error');text('errormsg','Sign in to Full Ledger first, or use your household Lite link.')});
+}else load().catch(e=>{show('error');text('errormsg',e.message)});
 </script></body></html>
