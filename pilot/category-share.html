@@ -275,7 +275,7 @@ async function writeNote(item){
  item.editableNote=note.trim();
 }
 function disableEdits(disabled){
- document.querySelectorAll('.chip,#skip,#reload,#save-note,#shared-note').forEach(b=>b.disabled=disabled);
+ document.querySelectorAll('.chip,#skip,#reload,#again,#save-note,#shared-note').forEach(b=>b.disabled=disabled);
 }
 $('save-note').onclick=async()=>{
  if(busy)return;
@@ -306,8 +306,16 @@ $('skip').onclick=async()=>{
  }catch(e){text('feedback',e.message+'. Note not saved.')}
  finally{busy=false;disableEdits(false)}
 };
-$('reload').onclick=async()=>{if(busy)return;try{await load(true)}catch(e){text('feedback',e.message)}};
-$('again').onclick=async()=>{if(busy)return;try{await load(true)}catch(e){text('emptymsg',e.message)}};
+async function restartReview(errorTarget='feedback',fatal=false){
+ if(busy)return;
+ busy=true;disableEdits(true);
+ text(errorTarget,'Refreshing…');
+ try{await load(true)}
+ catch(e){if(fatal){show('error');text('errormsg',e.message)}else text(errorTarget,e.message)}
+ finally{busy=false;disableEdits(false)}
+}
+$('reload').onclick=()=>restartReview('feedback');
+$('again').onclick=()=>restartReview('emptymsg');
 async function showBudget(){
  show('budget');text('budget-total','Loading…');text('budget-sub','');$('budget-rows').replaceChildren();
  text('budget-error','');
@@ -412,13 +420,13 @@ async function showBudget(){
  }catch(e){text('budget-total','Unavailable');text('budget-error',e.message)}
 }
 $('budget-button').onclick=showBudget;
-$('budget-back').onclick=async()=>{try{await load(true)}catch(e){show('error');text('errormsg',e.message)}};
+$('budget-back').onclick=()=>restartReview('feedback',true);
 // This is a live queue, not a frozen report. Recheck after returning to the
 // tab so new bank transactions and other household decisions appear.
 function refreshOnReturn(){
  if(manage||busy||token&&!/^[a-f0-9]{64}$/.test(token))return;
  const budgetOpen=!$('budget').classList.contains('hide');
- (budgetOpen?showBudget():load(true)).catch(e=>{show('error');text('errormsg',e.message)});
+ (budgetOpen?showBudget():restartReview('feedback',true)).catch(e=>{show('error');text('errormsg',e.message)});
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOnReturn()});
 window.addEventListener('pageshow',event=>{if(event.persisted)refreshOnReturn()});
