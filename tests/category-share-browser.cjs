@@ -163,6 +163,7 @@ module.exports=(async()=>{
    assert.deepEqual(errors,[],name+': no browser errors while categorizing and viewing budget');
    await context.close();
    // Signed-in owner can use Lite directly, without creating a share link.
+   server.pending=true;
    const ownerContext=await browser.newContext(options);
    await ownerContext.addCookies([{name:'fictional-owner-session',value:'1',
     domain:'127.0.0.1',path:'/'}]);
