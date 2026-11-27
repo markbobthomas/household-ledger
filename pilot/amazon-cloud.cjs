@@ -6,7 +6,7 @@ const pairing=require('./amazon-pairing.cjs');
 const amazon=require('./amazon-import.cjs');
 const apply=require('./amazon-apply.cjs');
 const API='https://agent.tinyfish.ai';
-const MAX_STEPS=45,MAX_DURATION=600,MAX_ORDERS=100;
+const MAX_STEPS=45,MAX_DURATION=600,MAX_ORDERS=250;
 const MAX_ESTIMATED_RUN_USD=1.00; // 45*$0.016 + 10 minutes*$0.002 ~= $0.74
 const DAYS=new Set([1,4,6]); // Monday / Thursday / Saturday, Pacific time
 const isoDate=s=>{
@@ -88,7 +88,7 @@ function goal(){
  'title, date (YYYY-MM-DD order date), shipmentDate (YYYY-MM-DD or empty), '+
  'cents (integer cents per item), charged (integer order total cents or null). '+
  'Skip cancelled or unavailable items. Stop if not signed in or challenged and '+
- 'report that clearly rather than inventing purchase details. Limit 100 items. '+
+ 'report that clearly rather than inventing purchase details. Limit 250 items. '+
  'No bank account or Ledger website access is needed.';
 }
 const orderSchema={type:'object',properties:{
