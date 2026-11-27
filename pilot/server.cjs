@@ -452,7 +452,9 @@ function ledgerPayload(){
   })),
   adjustments:(()=>{const {amazonEvidence:_privateItems,
   categoryProvenance:_privateOrigins,categoryAiChecks:_privateCategoryChecks,...publicSettings}=state.ledgerAdjustments||{};
-  return publicSettings})()};
+  return {...publicSettings,humanConfirmedCategoryIds:
+   Object.keys(publicSettings.categoryOverrides||{}).filter(id=>
+    require('./category-ai-automation.cjs').confirmed(state.ledgerAdjustments||{},id))}})()};
 }
 // RAM only. Bank and forecast persistence remain separately encrypted on disk.
 // Forecast-only writes invalidate here only when cash-flow inputs change.
