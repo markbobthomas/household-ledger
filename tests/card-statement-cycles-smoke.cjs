@@ -384,18 +384,25 @@ const cardMoves=b=>b.ledger.filter(x=>x.kind==='movement'&&x.toAccountId==='card
 const firstCard=b=>cardMoves(b).filter(p=>p.id==='autopay|card-due|2026-11-02');
 const todayUnposted=calculate('2026-11-02');
 assert.equal(firstCard(todayUnposted).length,1,'Due-today card autopay is not discarded');
-assert.equal(firstCard(todayUnposted)[0].date,'2026-11-03','Unposted payment reserves next business day');
-assert.equal(firstCard(todayUnposted)[0].originalDueDate,'2026-11-02','Stable original statement date retained');
-assert.equal(todayUnposted.overduePayments.length,1,'Due-today unpaid autopay appears in Review');
-assert.equal(todayUnposted.overduePayments[0].kind,'movement','Overdue card item uses linked-transfer editing');
+assert.equal(firstCard(todayUnposted)[0].date,'2026-11-02','Unposted payment remains on its scheduled day');
+assert.equal(firstCard(todayUnposted)[0].originalDueDate||firstCard(todayUnposted)[0].baseDate,'2026-11-02','Stable original statement date retained');
+assert.equal(todayUnposted.overduePayments.length,0,'Payment due today must not be marked overdue');
+assert.equal(firstCard(todayUnposted)[0].kind,'movement','Due-today card item remains a linked transfer');
 assert.equal(todayUnposted.projection.accounts.find(a=>a.id==='checking-due')
- .series.find(p=>p.date==='2026-11-03').balance,1300,
+ .series.find(p=>p.date==='2026-11-02').balance,1300,
  'The projected checking balance must reserve the unposted card payment');
 const nextDay=calculate('2026-11-03');
 assert.equal(firstCard(nextDay).length,1,'Missing bank posting still has exactly one debit');
-assert.equal(firstCard(nextDay)[0].date,'2026-11-04','Unpaid card is carried forward again');
+assert.equal(firstCard(nextDay)[0].date,'2026-11-03','Unpaid card carries forward to the current calendar day');
 assert.equal(firstCard(calculate('2026-11-12')).filter(x=>x.originalDueDate==='2026-11-02').length,1,
  'Missing card payment survives more than a week of bank posting delay');
+const weekendDue=calculate('2026-11-07');
+assert.equal(firstCard(weekendDue)[0].date,'2026-11-07',
+ 'Missed card autopay stays forecast on Saturday, not the next bank business day');
+const holidayDue=calculate('2026-11-11');
+assert.equal(firstCard(holidayDue)[0].date,'2026-11-11',
+ 'Overdue card autopay remains on the current holiday');
+
 const paidBank=[
  {id:'actual-checking',date:'2026-11-02',accountId:'checking-due',
   type:'transfer',accountingKind:'card_payment',cashDirection:'out',amount:700,
