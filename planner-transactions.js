@@ -261,16 +261,17 @@ const nextBankBusinessDate=from=>{
  while(!bankBusinessDay(date))date=shift(date,1);
  return date;
 };
-/* Cash outflows move to the previous bank business day; cash inflows
- * (payroll, refunds, incoming transfers) move to the next business day.
- * Today is not an elapsed day: an unpaid bill shifted onto today stays
- * today. Only prior-day installments roll forward after bank reconciliation. */
+/* Adjust the ORIGINAL scheduled date: outflows on a bank holiday or weekend
+ * shift to the prior working day; inflows continue to use the next working
+ * day under existing payroll policy. When that earlier outflow date has
+ * ALREADY passed without a match, carry it on the current calendar day,
+ * including weekends. Never arbitrarily postpone it to Monday. */
 const forecastBusinessDate=(iso,asOf='',direction='out')=>{
  if(!validDate(iso)||bankBusinessDay(iso))return iso;
  if(direction==='in')return nextBankBusinessDate(iso);
  let prior=shift(iso,-1);
  while(!bankBusinessDay(prior))prior=shift(prior,-1);
- return prior>=asOf?prior:nextBankBusinessDate(iso);
+ return prior>=asOf||!validDate(asOf)?prior:asOf;
 };
 const monthEnd=m=>new Date(Date.UTC(Number(m.slice(0,4)),Number(m.slice(5,7)),0)).getUTCDate();
 function applySeries(source,baseDate,seriesKey,rules){
