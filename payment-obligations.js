@@ -737,7 +737,17 @@ function build(snapshot,records=[],expected=[],predictions={},options={}){
  return {plans,billEvents,suppressedExpectedIds,...(pendingPaymentMatches.length?{pendingPaymentMatches}:{}),obligations:obligations.sort((a,b)=>a.date.localeCompare(b.date)),warnings,warningActions,statements,
   cardEstimates,paymentDetails,historyStatements:historyStatements.slice().sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd))};
 }
-const api={build,plus,closeFor,ready,inferPayment,statementPeriodFor};
+// Previews and Upcoming must start at the first outstanding billing cycle.
+// A posted previous payment remains in statement history, not the next bill.
+function upcomingStatementsForCard(statements,cardId,asOf,count=2){
+ return (Array.isArray(statements)?statements:[])
+  .filter(s=>String(s.cardId)===String(cardId)&&!s.alreadyPaid&&
+   date(s.withdrawalDate)&&s.withdrawalDate>=asOf)
+  .sort((a,b)=>a.withdrawalDate.localeCompare(b.withdrawalDate)||
+   String(a.dueDate||'').localeCompare(String(b.dueDate||'')))
+  .slice(0,count);
+}
+const api={build,plus,closeFor,ready,inferPayment,statementPeriodFor,upcomingStatementsForCard};
 root.HouseholdPaymentObligations=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

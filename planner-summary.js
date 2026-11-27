@@ -735,10 +735,10 @@ function rawBalanceMarkup(account,real,allAccounts=false){
 // differentiated by the canonical card obligations engine. Never substitute
 // an outstanding card debt balance for a statement amount.
 function cardCalendarMetrics(bundle,cardId,asOf,points){
- const statements=(bundle?.payments?.statements||[]).filter(p=>
-  String(p.cardId)===String(cardId)&&String(p.dueDate||'')>=asOf)
-  .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))||
-   String(a.withdrawalDate).localeCompare(String(b.withdrawalDate)));
+ const payments=root.HouseholdPaymentObligations||
+  (typeof require==='function'?require('./payment-obligations.js'):null);
+ const statements=payments?.upcomingStatementsForCard(
+  bundle?.payments?.statements,cardId,asOf,2)||[];
  const next=statements[0]||null,
   hasStatement=next&&next.statementBalance!==null&&next.statementBalance!==undefined&&
    Number.isFinite(Number(next.statementBalance))&&Number(next.statementBalance)>=0,

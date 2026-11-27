@@ -714,4 +714,22 @@ const competingIssuer=Payments.build({...clearedSnapshot,accounts:[
 assert.equal(competingIssuer.statements.find(s=>s.dueDate==='2026-11-03').alreadyPaid,false,
  'Two indistinguishable issuer credits cannot prove which card was paid');
 
-console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, opt-out, issued statement override and immutable sources');
+// A settled prior card payment must not hide the upcoming estimated cycle in
+// Settings or Upcoming Bills; those views consume the same canonical preview.
+const upcoming=Payments.upcomingStatementsForCard(
+ cleared.statements,'cleared-card',clearedSnapshot.asOf,2);
+assert.equal(upcoming[0]?.dueDate,'2026-12-03',
+ 'Upcoming card bill must skip the posted November cycle and show December');
+assert.equal(upcoming[0]?.amount,130,
+ 'Next-month estimate retains its posted-card-activity/debt-cap calculation');
+assert.ok(!upcoming.some(s=>s.alreadyPaid),
+ 'Paid card cycles remain in statement history, not upcoming previews');
+const unpaidOverdue=cleared.statements.map(s=>({...s,
+ alreadyPaid:false,withdrawalDate:s.dueDate==='2026-11-03'?clearedSnapshot.asOf:s.withdrawalDate}));
+assert.equal(Payments.upcomingStatementsForCard(
+ unpaidOverdue,'cleared-card',clearedSnapshot.asOf,1)[0]?.dueDate,'2026-11-03',
+ 'Still-unpaid overdue installments remain visible when rolled to today');
+assert.equal(Payments.upcomingStatementsForCard(cleared.statements,
+ 'not-the-card',clearedSnapshot.asOf,2).length,0,
+ 'Preview never borrows another card payment');
+console.log('PASS two-card billing cycles, purchase/refund/forecast sums, pending exclusion, linked checking autodebits, future cycles, paid-cycle preview selection, opt-out, issued statement override and immutable sources');
