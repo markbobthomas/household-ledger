@@ -9,8 +9,11 @@ const API='https://agent.tinyfish.ai';
 const MAX_STEPS=45,MAX_DURATION=600,MAX_ORDERS=100;
 const MAX_ESTIMATED_RUN_USD=1.00; // 45*$0.016 + 10 minutes*$0.002 ~= $0.74
 const DAYS=new Set([1,4,6]); // Monday / Thursday / Saturday, Pacific time
-const isoDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))&&
- new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;
+const isoDate=s=>{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(s||'')))return false;
+ const date=new Date(s+'T12:00:00Z');
+ return !Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===s;
+};
 const isId=s=>/^[\w-]{6,100}$/.test(String(s||''));
 const keyFor=pairing.keyFor;
 function local(now=new Date()){
