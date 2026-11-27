@@ -1455,6 +1455,7 @@ async function start(port=Number(env.PORT||8788)){
       transactions:state.transactions,categories:validCategories,
       // Replacing a previously saved Other category is a separate, explicit
       // choice for the no-upload Note review; never on ordinary ZIP imports.
+      automatic:state.ledgerAdjustments?.categoryAutomation?.automatic!==false,
       replaceOther:savedNotesOnly&&body.replaceOther===true
      }),
      {report,next,nextPredictions,hasNotes,categoryChanged}=plan;
