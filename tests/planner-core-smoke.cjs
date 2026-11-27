@@ -366,6 +366,48 @@ const todayEvents=joined.projection.accounts.find(a=>a.id==='checking')
 assert.deepEqual(todayEvents.map(e=>e.merchant),['Example Rent ACH'],
  'Early payroll reconciles while unposted mortgage-like bill still debits today');
 assert.equal(joined.projection.accounts.find(a=>a.id==='checking').series[0].income,0);
+// These bank descriptions/types have no knowledge of the forecast category.
+// What matters is a settled CASH movement, not the app's label.
+const postedUnclassified={...earlyPay,id:'posted-uncategorized-ach',
+ type:'unclassified_credit',merchant:'Incoming bank transfer'};
+const unclassifiedForecast=C.materialize(onPayday,[postedUnclassified],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!unclassifiedForecast.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A posted uncategorized cash credit settles the same scheduled income exactly once');
+assert(unclassifiedForecast.paymentReconciliations.some(x=>
+ x.bankId===postedUnclassified.id&&x.status==='posted'));
+const incomingTransfer={...earlyPay,id:'posted-incoming-transfer',
+ type:'transfer',cashDirection:'in',merchant:'Internal ACH credit'};
+const incomingTransferForecast=C.materialize(onPayday,[incomingTransfer],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!incomingTransferForecast.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An unpaired ACH categorized as incoming transfer must not duplicate posted income');
+const dueRefund={id:'return-due',date:'2026-11-27',amount:83.25,
+ type:'refund',merchant:'Return expected',accountId:'checking'};
+const bankClassifiedCredit={...earlyPay,id:'refund-classed-income',
+ date:'2026-11-25',amount:83.25,merchant:'Unidentified credit'};
+const cashRefund=C.materialize(onPayday,[bankClassifiedCredit],{
+ recurringForecastMode:'approved-only',futureTransactionAdds:[dueRefund]
+},T,P,55,{weekendPolicy:'friday'});
+assert(!cashRefund.ledger.some(e=>e.id===dueRefund.id),
+ 'An early posted bank income credit can settle a predicted refund without a second deposit');
+const dueOneOff={id:'utility-due',date:'2026-11-27',amount:218.50,
+ type:'expense',merchant:'Fictional Utility',accountId:'checking'};
+const debitBank={...earlyPay,id:'utility-posted',amount:218.50,type:'expense',
+ merchant:'Unidentified ACH debit'};
+const paidUtility=C.materialize(onPayday,[debitBank],{
+ recurringForecastMode:'approved-only',futureTransactionAdds:[dueOneOff]
+},T,P,55,{weekendPolicy:'friday'});
+assert(!paidUtility.ledger.some(e=>e.id===dueOneOff.id),
+ 'A renamed bank debit also settles its uniquely matched one-time expense');
+const pendingUnclassified=C.materialize(onPayday,[
+ {...postedUnclassified,pending:true}],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(pendingUnclassified.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An unposted bank credit never counts as already settled');
 const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
 assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'A pending deposit must never be mistaken for cash already in the current balance');
