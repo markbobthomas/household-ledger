@@ -143,7 +143,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 </section>
 <section id="empty" class="hide"><h1 id="emptytitle">All caught up</h1><p id="emptymsg" class="muted"></p>
 <button id="budget-button" class="primary wide" type="button">See our budget</button>
-<button id="again" class="secondary" type="button" hidden>Review skipped items</button>
+<button id="again" class="secondary" type="button" hidden>Refresh</button>
 <a id="open-ledger-after-review" class="secondary full-ledger-link" href="/">Open full Ledger app</a>
 <p class="full-ledger-note">Full Ledger requires a separate sign-in.</p></section>
 <section id="budget" class="hide"><h1>Our budget</h1><p id="budget-period" class="muted context"></p>
@@ -161,7 +161,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 'use strict';
 const $=id=>document.getElementById(id);
 const manage=location.pathname==='/categorize/manage',token=location.hash.slice(1);
-let view={items:[],categories:[]},revision='',skipped=new Set(),index=0,busy=false,link='',budgetData=null;
+let view={items:[],categories:[]},revision='',index=0,busy=false,link='',budgetData=null;
 const text=(id,s)=>$(id).textContent=String(s??'');
 const show=which=>['owner','review','empty','budget','error'].forEach(id=>$(id).classList.toggle('hide',id!==which));
 function money(v){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Math.abs(Number(v)||0))}
@@ -232,12 +232,10 @@ function chip(name,item){
  return b;
 }
 function render(){
- text('count',view.items.length+' left');$('count').hidden=false;
- let remaining=view.items.map((x,i)=>({x,i})).filter(p=>!skipped.has(p.x.kind+':'+p.x.id));
+ text('count',view.items.length+' uncategorized');$('count').hidden=false;
  if(!view.items.length){show('empty');text('emptytitle','All caught up');text('emptymsg','There are no spending categories waiting for review.');$('again').hidden=true;return}
- if(!remaining.length){show('empty');text('emptytitle','That’s everything for now');text('emptymsg',view.items.length+' item(s) skipped. You can review them whenever you want.');$('again').hidden=false;return}
- const next=remaining.find(p=>p.i>=index)||remaining[0];index=next.i;
- const item=next.x;show('review');
+ if(index>=view.items.length){show('empty');text('emptytitle','That’s everything for now');text('emptymsg','Refresh to review everything still uncategorized.');$('again').hidden=false;return}
+ const item=view.items[index];show('review');
  text('meta',(item.kind==='amazon-item'?'AMAZON ITEM':item.kind==='transaction'?'TRANSACTION':'UPCOMING PAYMENT')+' · '+(item.date||'Date not set'));
  text('merchant',item.merchant);text('amount',money(item.amount));
  $('shared-note').value=item.editableNote||'';text('note-feedback','');
@@ -264,10 +262,10 @@ function render(){
  $('more').open=false;
  text('feedback','');
 }
-async function load(){
+async function load(restart=false){
  const data=await api('/api/share/categorize',undefined,true);
  view=data;revision=data.revision||revision;
- if(index>=view.items.length)index=0;
+ if(restart)index=0;
  render();
 }
 function currentNoteChanged(item){return $('shared-note').value!==(item.editableNote||'')}
@@ -277,7 +275,7 @@ async function writeNote(item){
  item.editableNote=note.trim();
 }
 function disableEdits(disabled){
- document.querySelectorAll('.chip,#skip,#reload,#save-note,#shared-note').forEach(b=>b.disabled=disabled);
+ document.querySelectorAll('.chip,#skip,#reload,#again,#save-note,#shared-note').forEach(b=>b.disabled=disabled);
 }
 $('save-note').onclick=async()=>{
  if(busy)return;
@@ -295,7 +293,7 @@ async function save(item,category){
  try{
   if(currentNoteChanged(item))await writeNote(item);
   await api('/api/share/categorize',{kind:item.kind,id:item.id,category},true);
-  skipped.delete(item.kind+':'+item.id);await load();
+  await load();
  }catch(e){text('feedback',e.message+'. Category not saved.');if(/changed|refresh/i.test(e.message))try{await load()}catch{}}
  finally{busy=false;disableEdits(false)}
 }
@@ -304,12 +302,20 @@ $('skip').onclick=async()=>{
  busy=true;disableEdits(true);
  try{
   if(currentNoteChanged(x))await writeNote(x);
-  skipped.add(x.kind+':'+x.id);index=(index+1)%view.items.length;render();
+  index+=1;render();
  }catch(e){text('feedback',e.message+'. Note not saved.')}
  finally{busy=false;disableEdits(false)}
 };
-$('reload').onclick=async()=>{if(busy)return;try{await load()}catch(e){text('feedback',e.message)}};
-$('again').onclick=()=>{skipped.clear();index=0;render()};
+async function restartReview(errorTarget='feedback',fatal=false){
+ if(busy)return;
+ busy=true;disableEdits(true);
+ text(errorTarget,'Refreshing…');
+ try{await load(true)}
+ catch(e){if(fatal){show('error');text('errormsg',e.message)}else text(errorTarget,e.message)}
+ finally{busy=false;disableEdits(false)}
+}
+$('reload').onclick=()=>restartReview('feedback');
+$('again').onclick=()=>restartReview('emptymsg');
 async function showBudget(){
  show('budget');text('budget-total','Loading…');text('budget-sub','');$('budget-rows').replaceChildren();
  text('budget-error','');
@@ -414,13 +420,13 @@ async function showBudget(){
  }catch(e){text('budget-total','Unavailable');text('budget-error',e.message)}
 }
 $('budget-button').onclick=showBudget;
-$('budget-back').onclick=async()=>{try{await load()}catch(e){show('error');text('errormsg',e.message)}};
+$('budget-back').onclick=()=>restartReview('feedback',true);
 // This is a live queue, not a frozen report. Recheck after returning to the
 // tab so new bank transactions and other household decisions appear.
 function refreshOnReturn(){
  if(manage||busy||token&&!/^[a-f0-9]{64}$/.test(token))return;
  const budgetOpen=!$('budget').classList.contains('hide');
- (budgetOpen?showBudget():load()).catch(e=>{show('error');text('errormsg',e.message)});
+ (budgetOpen?showBudget():restartReview('feedback',true)).catch(e=>{show('error');text('errormsg',e.message)});
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOnReturn()});
 window.addEventListener('pageshow',event=>{if(event.persisted)refreshOnReturn()});

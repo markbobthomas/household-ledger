@@ -33,16 +33,19 @@ module.exports=(async()=>{
   if(req.headers['x-ledger-share']!==token&&!owner)return json(401,{error:'Link unavailable'});
   if(url.pathname==='/api/share/categorize'&&req.method==='GET')
    return json(200,{revision:'f'.repeat(64),categories:['Groceries','Dining','Shopping'],
-    items:server.pending?[{kind:'transaction',id:'fixture-1',
+    items:[...(server.pending?[{kind:'transaction',id:'fixture-1',
      merchant:'Fictional purchase',date:'2026-11-17',amount:42.25,
      category:'Other',reason:'Missing category',
      note:server.note,editableNote:server.note,notes:[
       {label:'Saved note',text:server.note},
       {label:'Amazon product details',text:'Possible Amazon: Fictional lunch bag'}
-     ],suggested:null}]:[]});
+     ],suggested:null}]:[]),...(server.addSecond?[{kind:'transaction',id:'fixture-2',
+      merchant:'Fictional second purchase',date:'2026-11-18',amount:16.75,
+      category:'Other',reason:'Missing category',notes:[],editableNote:'',suggested:null}]:[])]});
   if(url.pathname==='/api/share/categorize'&&req.method==='POST'){
    const chunks=[];req.on('data',x=>chunks.push(x));return req.on('end',()=>{
     const choice=JSON.parse(Buffer.concat(chunks).toString());
+    server.writeCount++;
     assert.equal(choice.id,'fixture-1');
     if(Object.hasOwn(choice,'note')){
      assert.equal(choice.note,'Reviewed together');
@@ -81,7 +84,7 @@ module.exports=(async()=>{
        date:'2026-11-17',merchant:'Fictional purchase',source:'posted',cents:3025}]:[]}]});
   json(404,{error:'Not found'});
  });
- server.pending=true;server.note='Household reminder';server.budgetCategory='Groceries';server.budgetNote='Household reminder';
+ server.pending=true;server.note='Household reminder';server.budgetCategory='Groceries';server.budgetNote='Household reminder';server.addSecond=false;server.writeCount=0;
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const url='http://127.0.0.1:'+server.address().port+'/categorize#'+token;
  let desktop,iphone;
@@ -90,7 +93,7 @@ module.exports=(async()=>{
    ['Desktop Chromium',chromium,{viewport:{width:1200,height:900}}],
    ['iPhone WebKit',webkit,{viewport:{width:390,height:844},isMobile:true,hasTouch:true}]])
   {
-   server.pending=true;server.note='Household reminder';server.budgetCategory='Groceries';server.budgetNote='Household reminder';
+   server.pending=true;server.note='Household reminder';server.budgetCategory='Groceries';server.budgetNote='Household reminder';server.addSecond=true;server.writeCount=0;
    const browser=await driver.launch({headless:true});
    if(name.startsWith('Desktop'))desktop=browser;else iphone=browser;
    const context=await browser.newContext(options),page=await context.newPage();
@@ -100,6 +103,26 @@ module.exports=(async()=>{
    assert.equal(await page.title(),'Ledger Lite · Categorize',name+': title uses product name');
    assert.equal(await page.locator('.brand').innerText(),'LEDGER LITE',name+': mobile brand uses product name');
    assert.equal(await page.getByText('Fictional purchase').count(),1);
+   // Skip advances without writing a decision. Both Refresh controls restart at
+   // the first still-uncategorized purchase, including previously passed items.
+   await page.getByRole('button',{name:'Skip for now'}).click();
+   await page.getByText('Fictional second purchase').waitFor();
+   await page.getByRole('button',{name:'Skip for now'}).click();
+   await page.getByRole('heading',{name:'That’s everything for now'}).waitFor();
+   assert.equal(await page.locator('#again').textContent(),'Refresh');
+   await page.locator('#again').click();
+   await page.getByText('Fictional purchase',{exact:true}).waitFor();
+   await page.getByRole('button',{name:'Skip for now'}).click();
+   await page.getByText('Fictional second purchase').waitFor();
+   await page.locator('#reload').click();
+   await page.getByText('Fictional purchase',{exact:true}).waitFor();
+   assert.equal(server.writeCount,0,name+': Skip and Refresh never save categorization decisions');
+   server.addSecond=false;
+   await page.locator('#reload').click();
+   // The previous purchase is already onscreen. Wait for the new GET to finish
+   // before editing; otherwise a response can replace the note draft.
+   await page.waitForFunction(()=>document.querySelector('#count')?.textContent==='1 uncategorized');
+   await page.getByText('Fictional purchase',{exact:true}).waitFor();
    assert.equal(await page.locator('#shared-note').inputValue(),'Household reminder');
    await page.locator('#shared-note').fill('Reviewed together');
    await page.getByRole('button',{name:'Save note'}).click();
@@ -109,6 +132,8 @@ module.exports=(async()=>{
    assert.equal(await page.getByText('Amazon product details').count(),1);
    assert.equal(await page.getByText('Possible Amazon item match. Check the item before using it to decide.').count(),1);
    await page.getByRole('button',{name:'Groceries',exact:true}).click();
+   await page.getByRole('heading',{name:'All caught up'}).waitFor();
+   await page.reload();
    await page.getByRole('heading',{name:'All caught up'}).waitFor();
    const fullLink=page.getByRole('link',{name:'Open full Ledger',exact:true});
    const finishLink=page.locator('#open-ledger-after-review');
