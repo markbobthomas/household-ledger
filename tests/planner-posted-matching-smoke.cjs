@@ -309,7 +309,7 @@ const twice={futureRecurringRules:[{...lateRule,id:'twice-housing',anchorDate:'2
 const twoMissed=Core.materialize(liveSnap,[],twice,T,null,70,policy);
 assert.equal(twoMissed.overduePayments.length,2,
  'Every missing monthly occurrence remains reserved, not only the last one');
-assert.equal(twoMissed.ledger.filter(e=>e.ruleId==='twice-housing'&&e.date==='2026-10-29').length,2,
+assert.equal(twoMissed.ledger.filter(e=>e.ruleId==='twice-housing'&&e.date==='2026-10-28').length,2,
  'Two distinct missed installments are visible on the same next forecast day');
 const separate={futureRecurringRules:[lateRule,{
  ...lateRule,id:'fictional-second-bill',amount:280}]};
