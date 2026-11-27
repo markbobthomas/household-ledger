@@ -86,6 +86,7 @@ function safeStatus(state){
   lastOutcome:c.lastOutcome||'Not yet checked',lastCount:c.lastCount||0,
   lastMatched:c.lastMatched||0,lastUnmatched:c.lastUnmatched||0,
   runActive:!!c.run,runStatus:c.run?.status||null,
+  amazonSignInConfirmed:c.amazonSignInClaimed===true,
   needsAttention:!!c.pausedReason||c.run?.status==='uncertain',
   pendingAmazonCharges:waiting,maxCostUsd:MAX_ESTIMATED_RUN_USD,
   runsLast30Days:usage.month,maxRuns30Days:MAX_RUNS_30_DAYS,
