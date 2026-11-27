@@ -432,7 +432,7 @@ assert(!paidMovement.ledger.some(e=>e.recurringRuleId==='bank-transfer-plan'&&
  e.date==='2026-11-27'),
  'A posted paired transfer settles the corresponding linked movement exactly once');
 assert(paidMovement.ledger.some(e=>e.recurringRuleId==='bank-transfer-plan'&&
- e.date==='2026-12-25'),'The next distinct linked transfer schedule remains intact');
+ e.date==='2026-12-24'),'The next linked movement still respects the initial bank-holiday adjustment');
 const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
 assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'A pending deposit must never be mistaken for cash already in the current balance');
