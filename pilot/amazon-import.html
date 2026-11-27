@@ -19,6 +19,17 @@ input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:7
 .error{color:#a12f38}.ok{color:#175e51}summary{cursor:pointer}
 #cloud-api-key{flex:1;min-width:155px;max-width:100%;min-height:42px;padding:10px 11px;border:1px solid #93a6b8;border-radius:5px}
 #amazon-cloud li{margin:9px 0;line-height:1.5}
+#cloud-setup-steps{margin:16px 0}
+#cloud-setup-steps summary{font-size:1rem;padding:9px 0}
+.cloud-steps{padding-left:23px;margin:12px 0 18px}
+.cloud-steps>li{padding:10px 0 16px;border-bottom:1px solid #e4e8ee}
+.cloud-steps>li:last-child{border-bottom:0}
+.cloud-steps>li>strong{font-size:1rem;color:#172635}
+.cloud-steps p{font-size:.94rem;margin:9px 0}
+.cloud-key-actions{margin-top:9px}
+#cloud-api-key{font-size:16px}
+#cloud-setup-steps .button{margin:4px 0 6px}
+@media(max-width:480px){.cloud-key-actions>*{width:100%}.cloud-steps{padding-left:21px}.panel{padding:15px}}
 .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
 .stat{background:#f3f7f3;padding:12px;border-radius:10px;text-align:center}
 .stat strong{display:block;font-size:1.6rem}.stat small{display:block}
@@ -55,16 +66,58 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  <p>Keep product names up to date without leaving your computer on. Ledger checks for new Amazon bank charges <strong>Monday, Thursday and Saturday</strong>. TinyFish opens Amazon only when there is something new to match.</p>
  <p class="muted">No new Amazon charges means no TinyFish browser charge. Ledger requests a 45-step limit (roughly $0.75 at current TinyFish rates). If TinyFish cannot enforce the limit for your account, Ledger will not start a paid browser run.</p>
  <p id="cloud-status" role="status" aria-live="polite">Checking setup…</p>
- <div id="cloud-setup-steps">
-  <h3>Set up once</h3>
-  <ol>
-   <li><strong>Connect Amazon.</strong> <a href="https://agent.tinyfish.ai" target="_blank" rel="noopener noreferrer">Open TinyFish</a>, open your saved browser profile, sign in to Amazon, and save that sign-in. You do not enter an Amazon password into Ledger.</li>
-   <li><strong>Connect TinyFish.</strong> In TinyFish, copy an API key. Paste it below. Ledger stores it privately in its encrypted settings.</li>
-   <li><strong>Turn on updates.</strong> Ledger will do the rest on scheduled days, even when this page is closed.</li>
+ <details id="cloud-setup-steps" open>
+  <summary><strong>Step-by-step setup — start here</strong></summary>
+  <p class="muted">You only do these steps once. You can do them on your phone or a computer. You do not need to download software or leave a computer on.</p>
+  <ol class="cloud-steps">
+   <li>
+    <strong>Open TinyFish and sign in.</strong>
+    <p>Tap <strong>Open TinyFish</strong> below. If you do not have an account, choose <strong>Sign up</strong> and create one. Otherwise sign in. Keep this Ledger page open so you can return to it.</p>
+    <a class="button" href="https://agent.tinyfish.ai" target="_blank" rel="noopener noreferrer">Open TinyFish</a>
+   </li>
+   <li>
+    <strong>Find TinyProfiles.</strong>
+    <p>In your TinyFish dashboard, open the menu and choose <strong>TinyProfiles</strong>. A TinyProfile is a saved browser sign-in, so TinyFish can open your Amazon orders without you signing in on every check. Do not choose <strong>Browser Profiles</strong> (Lite/Stealth); that is a different feature.</p>
+    <p class="muted">Can't find it? <a href="https://docs.tinyfish.ai/key-concepts/tinyprofile" target="_blank" rel="noopener noreferrer">See TinyFish's official TinyProfiles instructions</a>.</p>
+   </li>
+   <li>
+    <strong>Use the default TinyProfile.</strong>
+    <p>If you see a profile marked <strong>Default</strong>, open it and start its sign-in/setup browser. If you have no default profile, select <strong>Create Profile</strong>, name it <strong>Ledger Amazon</strong>, select <strong>Set as default</strong>, and press <strong>Create and set up</strong>.</p>
+    <p class="muted">Important: Ledger uses the <strong>default</strong> TinyProfile. Saving Amazon in a different profile will not connect it to Ledger.</p>
+   </li>
+   <li>
+    <strong>Sign in to Amazon inside TinyFish.</strong>
+    <p>In the setup browser that TinyFish opens, go to <strong>www.amazon.com/your-orders</strong>. Enter your usual Amazon login there, complete any verification code Amazon requests, and open <strong>Your Orders</strong>.</p>
+    <p>Wait until you can see your actual Amazon orders. Enter your Amazon password <strong>only on Amazon's sign-in page inside TinyFish</strong>, never in Ledger.</p>
+   </li>
+   <li>
+    <strong>Save the Amazon sign-in.</strong>
+    <p>Return to the TinyFish setup controls and select <strong>Save</strong> or <strong>Save setup session</strong>. Make sure the setup confirms the profile was saved. <strong>Don't just close the TinyFish window.</strong></p>
+   </li>
+   <li>
+    <strong>Open TinyFish's API Keys page.</strong>
+    <p>Tap the link below. If asked, sign in to the <strong>same TinyFish account</strong> you used for the Amazon profile. Select <strong>Create API Key</strong>. You can name it <strong>Ledger Amazon</strong>.</p>
+    <a class="button" href="https://agent.tinyfish.ai/api-keys" target="_blank" rel="noopener noreferrer">Open TinyFish API Keys</a>
+   </li>
+   <li>
+    <strong>Copy the new API key.</strong>
+    <p>After you create it, select <strong>Copy</strong>. TinyFish may show the full key only once. This key is a private connection code, <strong>not</strong> your Amazon password. Do not put it in a chat message or public document.</p>
+   </li>
+   <li>
+    <strong>Paste the key here in Ledger.</strong>
+    <p>Return to this Ledger page. Tap the box labeled <strong>Paste TinyFish API key here</strong>, paste the copied code, then tap <strong>Connect TinyFish</strong>. Wait until Ledger says <strong>TinyFish connected</strong>. Ledger saves the key in its encrypted private settings.</p>
+    <label for="cloud-api-key"><strong>Paste TinyFish API key here</strong></label>
+    <div class="actions cloud-key-actions">
+     <input id="cloud-api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste the key copied from TinyFish" aria-label="Paste TinyFish API key here">
+     <button id="cloud-connect" class="primary" type="button">Connect TinyFish</button>
+    </div>
+   </li>
+   <li>
+    <strong>Turn on automatic updates.</strong>
+    <p>Once Ledger shows <strong>TinyFish connected</strong>, tap the <strong>Turn on automatic updates</strong> button just below these instructions. You are finished when Ledger says <strong>Automatic updates ON</strong>. No desktop browser or extension is required.</p>
+   </li>
   </ol>
-  <label for="cloud-api-key">TinyFish API key</label>
-  <div class="actions"><input id="cloud-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste API key" aria-label="TinyFish API key"><button id="cloud-connect" class="primary" type="button">Connect TinyFish</button></div>
- </div>
+ </details>
  <div id="cloud-actions" class="actions" hidden>
   <button id="cloud-toggle" class="primary" type="button">Turn on automatic updates</button>
   <button id="cloud-now" type="button">Check now</button>
@@ -74,7 +127,7 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  <details id="cloud-explanation"><summary>Cost, privacy and what gets matched</summary>
   <p>The cloud browser can read your Amazon order pages but never your bank account. Ledger checks order IDs, prices and dates against existing posted bank charges. No duplicate expenses or guessed matches. Split orders and uncertain items remain available for review.</p>
   <p>Automatic checks require a working bank connection and a TinyFish Amazon sign-in. If Amazon requests verification or TinyFish runs out of funds, updates pause for attention. Turning updates off stops future new runs; a browser run already started may finish and cost money.</p>
-  <p>The ZIP/CSV import above remains available for complete order history.</p>
+  <p>The ZIP/CSV import below remains available for complete order history.</p>
  </details>
 </section>
 <section class="panel">
@@ -133,15 +186,19 @@ async function cloudApi(path,action){
 }
 function renderCloud(data){
  cloud=data;
- $('cloud-setup-steps').hidden=!!data.connected;
+ // Keep instructions available after connection; simply fold them once
+ // the owner succeeds. They can reopen them later to reconnect Amazon.
+ if(cloud===null||cloud.connected!==data.connected){
+  $('cloud-setup-steps').open=!data.connected;
+ }
  $('cloud-actions').hidden=!data.connected;
  $('cloud-toggle').textContent=data.enabled?'Turn off automatic updates':'Turn on automatic updates';
  $('cloud-toggle').classList.toggle('primary',!data.enabled);
  $('cloud-now').disabled=!data.enabled||data.runActive;
  const summary=data.runActive?'Amazon check in progress.':data.enabled?
   'Automatic updates ON. Ledger checks up to three days a week.':
-  data.connected?'TinyFish connected. Automatic updates are OFF.':
-  'Not connected. Complete the three steps below.';
+  data.connected?'TinyFish connected. Automatic updates are OFF. Tap Turn on automatic updates below.':
+  'Not connected. Follow the numbered setup steps below.';
  cloudMessage(summary);
  const parts=['New posted Amazon charges awaiting a first scan: '+Number(data.pendingAmazonCharges||0)+'.',
   'Last result: '+(data.lastOutcome||'Not checked yet')+'.'];
