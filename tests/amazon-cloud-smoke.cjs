@@ -36,6 +36,7 @@ const fakeFetch=async (url,options)=>{
  if(url.endsWith('/v1/automation/run-async')){
   const request=JSON.parse(options.body);
   assert.equal(request.use_profile,true,'Reuse TinyFish saved Amazon sign-in');
+  assert.match(request.session_id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,'Each TinyFish request must have a unique session ID');
   assert.equal(request.agent_config.max_steps,45);
   assert(!JSON.stringify(request).includes('fictional-card'),'Do not send bank IDs to TinyFish');
   return {ok:true,json:async()=>({run_id:'12345678-1234-1234-1234-123456789012'})};
@@ -47,6 +48,13 @@ const fakeFetch=async (url,options)=>{
  const run=await cloud.start('fictional-tinyfish-key-example-1',fakeFetch);
  assert.equal(run,'12345678-1234-1234-1234-123456789012');
  assert.equal((await cloud.getRun('fictional-tinyfish-key-example-1',run,fakeFetch)).status,'COMPLETED');
+ await assert.rejects(
+  cloud.start('fictional-tinyfish-key-example-1',async()=>({
+   ok:false,status:403,text:async()=>JSON.stringify({message:'max_steps beta feature not enabled'})
+  })),
+  /step limits for this account/,
+  'The provider rejecting a step cap must not be retried without that cap'
+ );
  assert.deepEqual(fixture.transactions.new,t('fictional-new'),'Cloud checks do not mutate source bank facts');
  console.log('PASS conditional TinyFish planning, 3-day scheduling, safe schema, no-repeat records and API preflight');
 })().catch(e=>{console.error(e);process.exitCode=1});
