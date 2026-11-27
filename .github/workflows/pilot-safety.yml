@@ -21,6 +21,8 @@ jobs:
           node --check pilot/server.cjs
           node --check pilot/transactional-store.cjs
           node --check pilot/data-source.js
+          node --check pilot/category-ai-ui.js
+          node --check pilot/category-ai-automation.cjs
           node --check planner-core.js
           node --check planner-history.js
           node --check planner-transactions.js
