@@ -123,8 +123,28 @@ async function request(apiKey,url,options={},fetcher=fetch){
  return data;
 }
 async function validateKey(apiKey,fetcher){
- await request(apiKey,API+'/v1/wallet',{},fetcher);
- return true;
+ // A wallet lookup can return 404 for valid legacy TinyFish API keys.
+ // Profile listing is a documented, read-only authenticated endpoint that
+ // also verifies the actual saved browser this integration needs.
+ const data=await request(apiKey,API+'/v1/profiles',{},fetcher);
+ if(!Array.isArray(data.profiles))throw Error('TinyFish did not return a usable profile list');
+ const profile=data.profiles.find(p=>p?.is_default===true);
+ if(!profile||!/^prof_[a-zA-Z0-9_-]{6,100}$/.test(String(profile.id||''))){
+  const error=new Error('In TinyFish → TinyProfiles, create or select a profile and set it as Default before connecting Ledger.');
+  error.httpStatus=409;throw error;
+ }
+ const sites=profile.signed_in_sites;
+ const seen=Array.isArray(sites)?sites.some(p=>{
+  const site=String(typeof p==='string'?p:p?.site||p?.domain||'').toLowerCase();
+  return /(?:^|\\.)amazon\\.com$/.test(site);
+ }):null;
+ if(seen===false){
+  const error=new Error('Amazon is not saved in the Default TinyProfile. Open its setup browser, sign into Amazon, choose Save, and then press Connect TinyFish again.');
+  error.httpStatus=409;throw error;
+ }
+ // Some accounts omit signed_in_sites metadata; that is not proof of a
+ // saved login. The first real read will still fail closed if absent.
+ return {profileId:profile.id,amazonSignInClaimed:seen===true};
 }
 function goal(){
  return 'Read only Amazon.com Your Orders for the last 45 days using the already signed-in saved browser profile. '+
@@ -147,10 +167,12 @@ const orderSchema={type:'object',properties:{
  },required:['orderId','title','date','shipmentDate','cents','charged']}},
  signedIn:{type:'boolean'},complete:{type:'boolean'}
 },required:['orders','signedIn','complete']};
-async function start(apiKey,fetcher){
+async function start(apiKey,profileId,fetcher){
+ if(!/^prof_[a-zA-Z0-9_-]{6,100}$/.test(String(profileId||'')))
+  throw Error('TinyFish saved Amazon profile is not connected. Reconnect in Ledger settings.');
  const result=await request(apiKey,API+'/v1/automation/run-async',{
   method:'POST',body:JSON.stringify({url:'https://www.amazon.com/your-orders',
-   goal:goal(),use_profile:true,browser_profile:'lite',
+   goal:goal(),use_profile:true,profile_id:profileId,browser_profile:'lite',
    agent_config:{max_steps:MAX_STEPS,max_duration_seconds:MAX_DURATION},
    output_schema:orderSchema})
  },fetcher);
