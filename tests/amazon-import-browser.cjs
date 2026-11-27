@@ -103,17 +103,14 @@ module.exports=(async()=>{
     await page.locator('#review-card #accept').waitFor();
     assert.match(await page.locator('#review-count').innerText(),/2 remaining/);
     assert.equal(await page.locator('#results').isHidden(),true,'No diagnostics before import');
-    assert.equal(await page.locator('#browser-sync-setup').isHidden(),false,
-      'Optional desktop setup remains available without opening it');
-    await page.locator('#browser-sync-setup summary').click();
-    assert.match(await page.locator('#browser-sync-setup').innerText(),/Load unpacked/);
-    assert.match(await page.locator('#browser-sync-setup').innerText(),/Enable automatic sync/);
-    assert.match(await page.locator('#browser-sync-setup').innerText(),/six hours/);
-    assert.equal(await page.locator('#copy-ledger-address').count(),1);
-    await page.locator('#copy-ledger-address').click();
-    await page.waitForFunction(()=>/Address copied|Copy the address/.test(
-      document.getElementById('copy-ledger-feedback').textContent));
-    assert.match(await page.locator('#copy-ledger-feedback').innerText(),/Address copied|Copy the address/);
+    assert.equal(await page.locator('#browser-sync-setup').count(),0,
+     'Desktop setup was replaced rather than duplicated');
+    assert.equal(await page.locator('#amazon-cloud').isVisible(),true,
+     'Cloud setup is available on desktop and iPhone');
+    assert.match(await page.locator('#amazon-cloud').innerText(),/Monday, Thursday and Saturday/);
+    assert.match(await page.locator('#amazon-cloud').innerText(),/No new Amazon charges/);
+    assert.equal(await page.locator('#cloud-api-key').getAttribute('type'),'password');
+    assert.equal(await page.locator('#cloud-setup-steps').isVisible(),true);
 
     assert.equal(await page.locator('#quick-categories .quick').count()>0,true,
       'Common spending categories are available as one-tap choices');

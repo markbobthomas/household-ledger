@@ -1,3 +1,9 @@
+# Legacy Amazon desktop extension (superseded)
+
+**Recommended setup:** [Automatic Amazon updates using TinyFish](../../docs/AMAZON_CLOUD_SETUP.md). This no-PC-required flow is now shown in Ledger's Amazon purchases page. Existing extension files are kept for compatibility but should not be installed for a new setup; turn off the legacy extension if switching to TinyFish.
+
+---
+
 # Automatic Amazon → Ledger sync (desktop Chrome / Edge)
 
 **Status:** Implemented as an opt-in desktop extension. Fictional tests cover
