@@ -292,7 +292,8 @@ function dayDetail(point,card){
    .reduce((sum,e)=>sum+Number(e.amount||0),0),
   first=calendarContext.points[0],
   previousIndex=calendarContext.points.indexOf(point)-1,
-  previous=previousIndex>=0?calendarContext.points[previousIndex].balance:point.balance,
+  previous=previousIndex>=0?calendarContext.points[previousIndex].balance:
+   calendarContext.startingBalance??point.balance,
   gaps=calendarContext.gaps.get(point.date)||[],
   // Sum the exact signed amounts displayed in the editable rows. Integer
   // cents avoid rounding drift; this is presentation only, not forecast math.
@@ -391,7 +392,7 @@ function monthlyPredictions(state){
    Number(Boolean(a.event))-Number(Boolean(b.event))||
    String(a.transaction?.merchant||a.event?.merchant||'').localeCompare(
     String(b.transaction?.merchant||b.event?.merchant||'')));
- const futureDays=state.points.filter(p=>p.date>state.asOf&&p.date.startsWith(calendarMonth)),
+ const futureDays=state.points.filter(p=>p.date>=state.asOf&&p.date.startsWith(calendarMonth)),
   from=futureDays[0]?.date,to=futureDays.at(-1)?.date,
   period=from?(shortDate(from)+(from===to?'':' – '+shortDate(to))):
    'No remaining forecast days';
@@ -844,7 +845,7 @@ function render(input){
  for(const account of (allAccounts?bundle?.projection?.accounts||[]:[])){
   if(String(account.id)===String(chosen.id))continue;
   for(const e of account.events||[]){
-   if(e.date<=snapshot.asOf||e.date>through)continue;
+   if(e.date<snapshot.asOf||e.date>through)continue;
    const movement=e.transferGroupId?String(e.transferGroupId):null;
    if(movement&&alreadyShownTransfers.has(movement))continue;
    if(movement)alreadyShownTransfers.add(movement);
@@ -868,6 +869,10 @@ function render(input){
  const history=reconstructedHistory(chosen,derived,bundle?.rows||[],
   snapshot.asOf,historyStart,accountOf,accounts);
  calendarContext={points:series,actual,outside,history,
+  // The first date's balance may include today's still-unposted payments.
+  // Show the bank-observed starting amount in its reconciliation trail.
+  startingBalance:credit?derived?.openingCurrent:
+   (derived?.openingAvailable??derived?.openingCurrent),
   scope:allAccounts?'all':String(chosen.id),
   coverage:null,asOf:snapshot.asOf,card:credit,prefs,
   cardEstimates:bundle?.payments?.cardEstimates||[],

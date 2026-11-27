@@ -180,7 +180,7 @@ function analyze(rows,accounts,asOf,prefs={},days=90){
     const dates=freq==='twice-monthly'?twiceDates(t.date,slots,end):
      Array.from({length:Math.ceil(days/7)+12},(_,i)=>next(t.date,freq,i+1)).filter(d=>d<=end);
     for(const when of dates){
-     if(when<=asOf)continue;
+     if(when<asOf)continue;
      const steps=freq==='biweekly'?Math.round(diff(when,t.date)/14):0,
       fourWeekPhase=alternating,
       semiSlot=semiMonthlyExact?slots.findIndex(day=>monthDate(when,0,day)===when):-1,
@@ -288,8 +288,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // if the bank has not posted it, or the future checking projection is too
  // optimistic. Never rewrite the bank observation or the recurrence anchor.
  // Every independent overdue occurrence is eligible, bounded to the last 90 days.
- const nextBusiness=from=>tools.nextBankBusinessDate(from);
- const overduePayments=[],nextPosting=nextBusiness(asOf),
+ // A missed obligation rolls one CALENDAR day at a time. At the next
+ // daily snapshot it belongs on that day, including Saturday or Sunday.
+ // Bank-day adjustment applies only to the original scheduled occurrence.
+ const overduePayments=[],nextPosting=asOf,
   cashIds=new Set(accounts.filter(a=>
    String(a.accountType||a.type||'').toLowerCase()!=='credit')
    .map(a=>String(a.id))),
@@ -454,19 +456,28 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    accountId:account,bankId:String(t.id),status:'pending',
    reservedInAvailable:true});
  }
- // Check both current future rows and overdue roll-forwards against the same
- // one-to-one posted evidence, including manually postponed occurrences.
- for(const e of covered.events)if(!paid.has(e.id)&&e.date>asOf&&e.date<=end&&
-  expectedPosting(e)>asOf)seen(e);
+ // The as-of bank snapshot is an observation DURING today, not proof that
+ // every payment scheduled later today has posted. Preserve a still-unpaid
+ // occurrence on today's date; carry forward only earlier missed obligations.
+ // Include weekend-adjusted bills whose effective Friday is today.
+ const coveredEventIds=new Set(covered.events.map(e=>String(e.id)));
+ for(const e of covered.events)if(!paid.has(e.id)&&e.date>=asOf&&e.date<=end&&
+  expectedPosting(e)>=asOf)seen(e);
  for(const e of ownerEntries){
-  if(!isDebit(e)||paid.has(e.id))continue;
+  if(!isDebit(e)||paid.has(e.id)||!coveredEventIds.has(String(e.id)))continue;
   const due=dueOf(e);
   if(due>asOf){
-   if(expectedPosting(e)<=asOf)
+   if(expectedPosting(e)<asOf)
     seen({...e,date:due,_unpostedEstimated:true});
    continue;
   }
-  if(due<add(asOf,-90)||paid.has(e.id))continue;
+  if(due===asOf){
+   // An edited due date can be today even when the original recurrence anchor
+   // was in the past. Add it once, without generating an overdue warning.
+   if(!ids.has(e.id))seen(e);
+   continue;
+  }
+  if(due<add(asOf,-90))continue;
   const key=eventKey(tools,e),edit=edits[key];
   seen({...e,date:nextPosting,_overdueFrom:due,_unpostedEstimated:true});
   overduePayments.push({key,id:e.id,ruleId:String(e.ruleId),accountId:e.accountId,
@@ -498,6 +509,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    usedBank.add(String(matches[0].id));continue;
   }
   const key=eventKey(tools,e);
+  if(due===asOf){
+   seen({...e,...edit,date:asOf,source:'manual',_forecastExtra:true});
+   continue;
+  }
   seen({...e,...edit,date:nextPosting,source:'manual',_forecastExtra:true,
    _unpostedEstimated:true,_overdueFrom:due});
   overduePayments.push({key,id:e.id,ruleId:null,accountId:e.accountId,
@@ -508,7 +523,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(!configuredCard(event.accountId)||
    ownerFor(event)||suppressedRecurrence(prefs,event))continue;
   const base=event.date,adjusted=tools.applySeries(event,base,event._seriesKey,series);
-  if(adjusted.date<=asOf||adjusted.date>end)continue;
+  if(adjusted.date<asOf||adjusted.date>end)continue;
   seen({...adjusted,_seriesDate:base,_forecastOriginalMerchant:event.merchant,
    _forecastOriginalAccountId:event.accountId,_forecastOriginalType:event.type,
    _forecastOriginalAmount:event.amount});
@@ -517,7 +532,9 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  for(const e of extras){
   if(e.type==='transfer'||
    rules.some(r=>r.sourceAddedId===e.id))continue;
-  if(!valid(e.date)||e.date<=asOf||e.date>end)continue;
+  if(!valid(e.date)||e.date<asOf||e.date>end||
+   // Same-day one-off withdrawals were already settled or included above.
+   e.date===asOf&&e.type==='expense'||ids.has(e.id))continue;
   // A one-time explicit payment from the same payee is NOT the recurring
   // schedule. Only an explicitly promoted sourceAddedId replaces that entry.
   const clash=entries.find(a=>a.accountId===e.accountId&&
@@ -545,10 +562,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    const result=edit?{...e,...edit}:e;
    // Expired one-off postponements retain their original rule identity:
    // never silently discard an unpaid mortgage after its revised day passes.
-   if(e._unpostedEstimated&&result.date<=asOf)result.date=nextPosting;
-   if(result.date<=asOf||result.date>end)return [];
+   if(e._unpostedEstimated&&result.date<asOf)result.date=nextPosting;
+   if(result.date<asOf||result.date>end)return [];
    const date=effective(result.date,result);
-   return date>asOf&&date<=end?[date===result.date?result:{...result,date}]:[];
+   return date>=asOf&&date<=end?[date===result.date?result:{...result,date}]:[];
   });
  }
  const adjusted=adjust(entries);
@@ -591,7 +608,7 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    cadence:p.cadence||(p.origin==='card-autopay'?'monthly':
     p.frequency==='once'?null:p.frequency||null),
    baseDate:p.originalDueDate||p.anchorDate,recurringRuleId:p.seriesRuleId||null}))];
- for(const e of extras.filter(x=>x.type==='transfer'&&x.date>asOf&&x.date<=end)){
+ for(const e of extras.filter(x=>x.type==='transfer'&&x.date>=asOf&&x.date<=end)){
   // An explicit one-off transfer to a credit card supersedes a provisional
   // same-cycle history estimate. It must not create two checking withdrawals.
   const provisional=plans.findIndex(p=>p.origin==='card-history-estimate'&&
@@ -611,10 +628,10 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   if(edit?.skipped)continue;
   const v=edit?{...moved,...edit}:moved;
   // A manually postponed but still-unpaid card transfer must not expire.
-  if(v._unpostedEstimated&&v.date<=asOf)v.date=nextPosting;
-  if(v.date>asOf&&v.date<=end){
+  if(v._unpostedEstimated&&v.date<asOf)v.date=nextPosting;
+  if(v.date>=asOf&&v.date<=end){
    const date=effective(v.date,v);
-   if(date>asOf&&date<=end)finalPlans.push(date===v.date?v:{...v,date});
+   if(date>=asOf&&date<=end)finalPlans.push(date===v.date?v:{...v,date});
   }
  }
  // Reconcile every remaining future cash withdrawal with uniquely attributable
@@ -994,7 +1011,7 @@ function project(snapshot,ledger,days=90){
   posted.push(x);
  };
  for(const e of ledger||[]){
-  if(!valid(e.date)||e.date<=asOf||e.date>end||!(Number(e.amount)>0))continue;
+  if(!valid(e.date)||e.date<asOf||e.date>end||!(Number(e.amount)>0))continue;
   if(e.kind==='movement'){
    const f=byId.get(String(e.fromAccountId)),t=byId.get(String(e.toAccountId));
    if(!f||!t||f.id===t.id){diagnostics.unmatchedTransfers.push({id:e.id});continue;}
