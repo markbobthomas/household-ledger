@@ -134,7 +134,8 @@ async function enter(){
   loadedAccount=data.account;live=true;
   // Only a full owner Ledger load may offer an AI categorization run.
   // This event is never sent by the standalone shared Ledger Lite page.
-  if(typeof document!=='undefined')setTimeout(()=>
+  if(typeof document!=='undefined'&&typeof document.dispatchEvent==='function'&&
+     typeof Event==='function'&&typeof setTimeout==='function')setTimeout(()=>
    document.dispatchEvent(new Event('ledger-full-loaded')),0);
   if(data.reconnectAccounts.length)lastError=reconnectMessage;
   else if(data.syncIssues.length)lastError=syncIssueMessage(data.syncIssues);
