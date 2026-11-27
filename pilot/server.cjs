@@ -529,12 +529,16 @@ async function runCloudAmazon(manual=false){
   let id;
   try{id=await cloudAmazon.start(state.amazonCloud.apiKey)}
   catch(error){
-   // Launch outcome could be unknown. Keep a blocking reservation rather
-   // than accidentally submit a second paid request on the next interval.
+   // Definitive 4xx rejection cannot be a paid run; release its reservation.
+   // Network failures/5xx could already be billable, so never retry them
+   // automatically without first reconciling the provider run history.
+   const definitelyNotStarted=error.notStarted===true;
    state.amazonCloud={...state.amazonCloud,
-    run:{...state.amazonCloud.run,status:'uncertain'},
-    lastOutcome:'Could not confirm TinyFish start',
-    lastError:String(error.message||error).slice(0,150)};
+    run:definitelyNotStarted?null:{...state.amazonCloud.run,status:'uncertain'},
+    lastOutcome:definitelyNotStarted?
+     'TinyFish declined this request; no browser run started':
+     'Could not confirm TinyFish start — automatic retry blocked',
+    lastError:String(error.message||error).slice(0,260)};
    await save();return cloudStatus();
   }
   state.amazonCloud={...state.amazonCloud,
