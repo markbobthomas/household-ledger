@@ -443,7 +443,17 @@ async function sync(){
 
 // Amazon cloud sync is independent of paid AI categorization and of the
 // browser extension. It never exposes Plaid or TinyFish credentials in API responses.
-const cloudAmazon=require('./amazon-cloud.cjs');
+const cloudAmazon=(()=>{
+ try{return require('./amazon-cloud.cjs')}
+ catch(error){
+  if(error.code!=='MODULE_NOT_FOUND')throw error;
+  // During partial upgrades the bank service must still start and expose
+  // its independent health checks. Do not start any paid provider work.
+  return {safeStatus:()=>({enabled:false,connected:false,unavailable:true,
+    lastOutcome:'Amazon cloud component unavailable; verify the deployment'}),
+   due:()=>false};
+ }
+})();
 let cloudWorkBusy=false;
 async function withHouseholdEdit(work){
  const previous=householdEditQueue;let release;
