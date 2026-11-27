@@ -223,7 +223,14 @@ async function cloudAction(action){
   if(data.started)cloudMessage('TinyFish started an Amazon check. You can close this page.');
   if(data.skipped)cloudMessage('No new Amazon charges; TinyFish was not started.');
  }catch(error){cloudMessage(error.message)}
- finally{cloudBusy=false;await refreshCloud()}
+ finally{
+  cloudBusy=false;
+  // Restore buttons after a connection/update attempt. renderCloud() then
+  // applies the correct disabled state for Check now and connection status.
+  for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect'])
+   $(id).disabled=false;
+  await refreshCloud();
+ }
 }
 $('cloud-connect').onclick=()=>{
  const key=$('cloud-api-key').value.trim();
