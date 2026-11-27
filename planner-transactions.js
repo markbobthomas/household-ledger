@@ -350,8 +350,13 @@ const accountRef=(value,accounts)=>{
 };
 // Account + cash direction + merchant identity determine a recurring stream.
  // The payment amount is evidence for estimation, never part of its identity.
+// Cash direction is a bank fact, not the merchant or Ledger category.
+// In particular an unclassified incoming ACH/credit is still bank income
+// eligible to settle an existing income forecast, never a new prediction.
+// Paired internal transfers retain their linked-transfer treatment.
 const bankDirection=t=>t.type==='transfer'&&!t.pairedTransactionId?
- (t.cashDirection==='in'?'income':t.cashDirection==='out'?'expense':null):t.type;
+ (t.cashDirection==='in'?'income':t.cashDirection==='out'?'expense':null):
+ t.type==='unclassified_credit'?'income':t.type;
 const sameDirection=(t,type)=>bankDirection(t)===type||
  (type==='transfer'&&t.type==='transfer'&&Boolean(t.pairedTransactionId));
 // Saved matching boundaries describe acceptable BANK POSTING evidence only.
