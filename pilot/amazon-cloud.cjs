@@ -72,12 +72,17 @@ async function request(apiKey,url,options={},fetcher=fetch){
   // a rejected step-capped request without its cap, which could bill more.
   let reason='';
   try{reason=(await res.text()).slice(0,2000)}catch{}
-  if(res.status===403&&/max[_ -]?steps|beta|step limit|feature gate/i.test(reason))
-   throw Error('TinyFish has not enabled per-run step limits for this account. Automatic Amazon checks remain stopped to protect your cost limit.');
-  if(res.status===401||res.status===403)
-   throw Error('TinyFish key not accepted, or your account is not permitted to use this feature. Check the TinyFish connection.');
-  if(res.status===402)throw Error('TinyFish wallet needs funds. Open your TinyFish account.');
-  throw Error('TinyFish could not complete the request ('+res.status+').');
+  const message=res.status===403&&/max[_ -]?steps|beta|step limit|feature gate/i.test(reason)?
+   'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable this feature; Ledger will not submit an uncapped browser run.':
+   res.status===401||res.status===403?
+   'TinyFish key not accepted, or your account is not permitted to use this feature. Check the TinyFish connection.':
+   res.status===402?'TinyFish wallet needs funds. Open your TinyFish account.':
+   'TinyFish could not complete the request ('+res.status+').';
+  const error=new Error(message);
+  // A definitive 4xx rejection means the paid run did not start. A timeout,
+  // a 5xx or a malformed successful response may have started billing.
+  if([400,401,402,403,422].includes(res.status))error.notStarted=true;
+  throw error;
  }
  const data=await res.json();
  if(!data||typeof data!=='object')throw Error('TinyFish returned an invalid response');
