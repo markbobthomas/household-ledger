@@ -451,7 +451,7 @@ function ledgerPayload(){
    accountIds:i.accountIds.map(String),...i.syncIssue
   })),
   adjustments:(()=>{const {amazonEvidence:_privateItems,
-  categoryProvenance:_privateOrigins,...publicSettings}=state.ledgerAdjustments||{};
+  categoryProvenance:_privateOrigins,categoryAiChecks:_privateCategoryChecks,...publicSettings}=state.ledgerAdjustments||{};
   return publicSettings})()};
 }
 // RAM only. Bank and forecast persistence remain separately encrypted on disk.
@@ -577,7 +577,8 @@ async function start(port=Number(env.PORT||8788)){
     if(requestPath.startsWith('/api/'))headers['X-Ledger-Revision']=settingsRevision();
     if(req.method==='POST'&&status>=200&&status<300&&
        (requestPath.startsWith('/api/ledger/')&&!['/api/ledger/forecasts','/api/ledger/amazon-import',
-        '/api/ledger/amazon-ai','/api/ledger/category-share'].includes(requestPath)||
+        '/api/ledger/amazon-ai','/api/ledger/category-share',
+        '/api/ledger/category-automation','/api/ledger/category-automation/run'].includes(requestPath)||
         ['/api/sync','/api/exchange','/api/disconnect'].includes(requestPath))){
      invalidatePrepared();
      schedulePrepared();
@@ -846,6 +847,27 @@ async function start(port=Number(env.PORT||8788)){
     before.categoryOverrides);
    return respond(200,require('./amazon-evidence.cjs').review(
     state.transactions,before,categories));
+  }
+  if(req.method==='GET'&&requestPath==='/api/ledger/category-automation'){
+   const ai=require('./category-ai-automation.cjs');
+   const mode=ai.settings(state.ledgerAdjustments||{});
+   const checked=Object.values(state.ledgerAdjustments?.categoryAiChecks||{});
+   return respond(200,{...mode,autoThresholdUsd:ai.AUTO_LIMIT_USD,
+    reviewed:checked.filter(x=>['categorized','suggested','unable'].includes(x?.status)).length,
+    unavailable:checked.filter(x=>x?.status==='unable').length,
+    interrupted:checked.filter(x=>x?.status==='interrupted'||x?.status==='pending').length,
+    model:ai.MODEL,available:!!env.OPENAI_API_KEY});
+  }
+  if(req.method==='GET'&&requestPath==='/api/ledger/category-automation/plan'){
+   const ai=require('./category-ai-automation.cjs');
+   if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+   if(!ai.settings(state.ledgerAdjustments).ai)
+    return respond(200,{enabled:false,count:0,maximumUsd:0,autoThresholdUsd:ai.AUTO_LIMIT_USD});
+   if(!env.OPENAI_API_KEY)return respond(503,{error:'AI categorization is not configured'});
+   const p=ai.plan(state);
+   return respond(200,{enabled:true,count:p.count,maximumUsd:p.maximumUsd,
+    autoThresholdUsd:ai.AUTO_LIMIT_USD,planHash:p.hash,model:p.model,
+    requiresApproval:p.maximumUsd>ai.AUTO_LIMIT_USD,revision:settingsRevision()});
   }
   if(req.method==='GET'&&requestPath==='/api/ledger/category-share'){
    const share=state.categoryShare,token=stableCategoryShareToken(share);
@@ -1140,7 +1162,98 @@ async function start(port=Number(env.PORT||8788)){
     try{await save()}catch(error){state.categoryShare=previous;throw error}
     return respond(200,{revoked:true});
    }
+   if(requestPath==='/api/ledger/category-automation'){
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+       Object.keys(body).sort().join(',')!=='action,ai,automatic'||
+       body.action!=='set'||typeof body.ai!=='boolean'||
+       typeof body.automatic!=='boolean')
+     return respond(400,{error:'Choose valid categorization settings'});
+    const previous=state.ledgerAdjustments||{};
+    state.ledgerAdjustments={...previous,
+     categoryAutomation:{automatic:body.automatic,ai:body.ai}};
+    try{await save()}catch(error){state.ledgerAdjustments=previous;
+     return respond(503,{error:'Could not save categorization switches'})}
+    return respond(200,{saved:true,...state.ledgerAdjustments.categoryAutomation});
+   }
+   if(requestPath==='/api/ledger/category-automation/run'){
+    const ai=require('./category-ai-automation.cjs');
+    if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
+    if(!ai.settings(state.ledgerAdjustments).ai)
+     return respond(409,{error:'AI categorization is turned off'});
+    if(!env.OPENAI_API_KEY)return respond(503,{error:'AI categorization is not configured'});
+    if(!body||typeof body!=='object'||Array.isArray(body)||
+       Object.keys(body).sort().join(',')!=='approved,maximumUsd,planHash'||
+       typeof body.approved!=='boolean'||typeof body.planHash!=='string'||
+       !Number.isFinite(body.maximumUsd)||body.maximumUsd<0)
+     return respond(400,{error:'Invalid AI approval'});
+    const plan=ai.plan(state);
+    if(plan.hash!==body.planHash)return respond(409,{error:'Purchases changed. Reload the cost estimate before authorizing AI.'});
+    if(plan.maximumUsd>ai.AUTO_LIMIT_USD&&
+       (!body.approved||body.maximumUsd<plan.maximumUsd-0.00000001||
+        body.maximumUsd>plan.maximumUsd+0.00000001))
+     return respond(403,{error:'Approve this exact cost estimate before any paid API request'});
+    if(!plan.count)return respond(200,{reviewed:0,assigned:0,unable:0,suggested:0,estimatedMaximumUsd:0});
+    const ceiling=plan.maximumUsd>ai.AUTO_LIMIT_USD?body.maximumUsd:ai.AUTO_LIMIT_USD;
+    let remaining=ceiling,reviewed=0,assigned=0,unable=0,suggested=0;
+    for(const batch of plan.batches){
+     if(batch.maximumUsd>remaining+0.000000001)break;
+     if(!ai.settings(state.ledgerAdjustments).ai)break;
+     // Commit an encrypted in-flight marker BEFORE the potentially billable
+     // request. An unknown result after a crash must not be billed twice.
+     const previous=state.ledgerAdjustments||{};
+     const checks={...(previous.categoryAiChecks||{})};
+     const startedAt=stamp();
+     for(const row of batch.rows)checks[row.key]={status:'pending',checkedAt:startedAt};
+     state.ledgerAdjustments={...previous,categoryAiChecks:checks};
+     try{await save()}catch(error){state.ledgerAdjustments=previous;
+      return respond(503,{error:'Cannot safely reserve AI purchases; no API request made'})}
+     remaining-=batch.maximumUsd;
+     let response;
+     try{response=await ai.classify(batch,ai.eligible(state).categories,
+       env.OPENAI_API_KEY)}
+     catch(error){
+      // Unknown provider outcome can have a charge. Never auto-retry it.
+      const interrupted={...(state.ledgerAdjustments.categoryAiChecks||{})};
+      for(const row of batch.rows)interrupted[row.key]={status:'interrupted',checkedAt:startedAt};
+      state.ledgerAdjustments={...state.ledgerAdjustments,categoryAiChecks:interrupted};
+      try{await save()}catch{}
+      return respond(503,{error:'AI categorization could not finish. Uncertain attempts will not be rebilled automatically.',
+       reviewed,assigned,unable,suggested});
+     }
+     const current=state.ledgerAdjustments||{},nextChecks={...(current.categoryAiChecks||{})},
+      overrides={...(current.categoryOverrides||{})},
+      origins={...(current.categoryProvenance||{})},
+      automatic=ai.settings(current).automatic;
+     for(const item of response.result){
+      const row=item.row,id=row.id,category=item.category;
+      if(category&&automatic&&!ai.confirmed(current,id)){
+       overrides[id]=category;origins[id]={source:'ai-automatic',category};
+       nextChecks[row.key]={status:'categorized',category,checkedAt:startedAt};assigned++;
+      }else if(category){
+       nextChecks[row.key]={status:'suggested',category,checkedAt:startedAt};suggested++;
+      }else{
+       nextChecks[row.key]={status:'unable',checkedAt:startedAt};unable++;
+      }
+      reviewed++;
+     }
+     const snapshot=state.ledgerAdjustments;
+     state.ledgerAdjustments={...snapshot,categoryAiChecks:nextChecks,
+      categoryOverrides:overrides,categoryProvenance:origins};
+     try{await save()}catch(error){
+      state.ledgerAdjustments=snapshot;
+      return respond(503,{error:'AI completed but its category results could not be confirmed saved. Automatic retry is blocked.',
+       reviewed:reviewed-response.result.length,assigned:0,unable:0,suggested:0});
+     }
+     if(automatic&&response.result.some(x=>x.category)){
+      invalidatePrepared();schedulePrepared();
+     }
+    }
+    return respond(200,{reviewed,assigned,unable,suggested,
+      estimatedMaximumUsd:plan.maximumUsd,remaining:plan.count-reviewed});
+   }
    if(requestPath==='/api/ledger/amazon-ai'){
+    if(body?.action==='preview'&&state.ledgerAdjustments?.categoryAutomation?.ai!==true)
+     return respond(409,{error:'AI categorization is OFF. Enable it in Full Ledger Settings.'});
     if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
     if(!body||typeof body!=='object'||Array.isArray(body))
      return respond(400,{error:'Invalid Amazon AI category request'});
