@@ -49,23 +49,11 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
 <body><main>
 <a href="/">← Ledger</a>
 <h1>Amazon purchases</h1>
-<p class="muted">Match Amazon products to the bank charges already in Ledger. Product names are saved to transaction Notes, and clear categories are assigned automatically. No new expenses are created.</p>
-<section class="panel">
- <h2>Import Amazon order history</h2>
- <p class="muted">Upload the Amazon Orders ZIP or item-level CSV (up to 79 MB). Older saved Notes still work without another upload.</p>
- <input id="file" type="file" aria-label="Amazon order CSV or ZIP" accept=".zip,.csv,text/csv,application/zip">
- <label class="checkline"><input type="checkbox" id="ai-consent"> Use AI to suggest categories for unfamiliar products after import <small>(optional; product titles and category names only; at most $0.05 per request)</small></label>
- <div class="actions"><button class="primary" id="import" type="button">Import and save</button></div>
- <p id="message" role="status" aria-live="polite"></p>
- <section id="results" hidden aria-label="Import results">
-  <div id="stats" class="stats"></div>
-  <p class="muted" id="import-summary"></p>
- </section>
-</section>
+<p class="muted">Connect TinyFish once to match Amazon purchases automatically, without leaving a computer on. No new expenses are created. You can still import an Amazon order file manually below.</p>
 <section class="panel" id="amazon-cloud" aria-label="Automatic Amazon updates">
  <h2>Automatic Amazon updates</h2>
  <p>Keep product names up to date without leaving your computer on. Ledger checks for new Amazon bank charges <strong>Monday, Thursday and Saturday</strong>. TinyFish opens Amazon only when there is something new to match.</p>
- <p class="muted">No new Amazon charges means no TinyFish browser charge. A browser run is limited to 45 agent steps (roughly $0.75 at current TinyFish rates; allow up to $1). Runs are billed by TinyFish, not Ledger AI.</p>
+ <p class="muted">No new Amazon charges means no TinyFish browser charge. Ledger requests a 45-step limit (roughly $0.75 at current TinyFish rates). If TinyFish cannot enforce the limit for your account, Ledger will not start a paid browser run.</p>
  <p id="cloud-status" role="status" aria-live="polite">Checking setup…</p>
  <div id="cloud-setup-steps">
   <h3>Set up once</h3>
@@ -88,6 +76,18 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
   <p>Automatic checks require a working bank connection and a TinyFish Amazon sign-in. If Amazon requests verification or TinyFish runs out of funds, updates pause for attention. Turning updates off stops future new runs; a browser run already started may finish and cost money.</p>
   <p>The ZIP/CSV import above remains available for complete order history.</p>
  </details>
+</section>
+<section class="panel">
+ <h2>Import Amazon order history</h2>
+ <p class="muted">Upload the Amazon Orders ZIP or item-level CSV (up to 79 MB). Older saved Notes still work without another upload.</p>
+ <input id="file" type="file" aria-label="Amazon order CSV or ZIP" accept=".zip,.csv,text/csv,application/zip">
+ <label class="checkline"><input type="checkbox" id="ai-consent"> Use AI to suggest categories for unfamiliar products after import <small>(optional; product titles and category names only; at most $0.05 per request)</small></label>
+ <div class="actions"><button class="primary" id="import" type="button">Import and save</button></div>
+ <p id="message" role="status" aria-live="polite"></p>
+ <section id="results" hidden aria-label="Import results">
+  <div id="stats" class="stats"></div>
+  <p class="muted" id="import-summary"></p>
+ </section>
 </section>
 <section class="panel" id="review" hidden>
  <div class="toolbar"><h2>Review remaining purchases</h2><span id="review-count"></span></div>

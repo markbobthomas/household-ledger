@@ -1,6 +1,7 @@
 'use strict';
 // TinyFish reads Amazon only. The private Ledger server matches its structured
 // results to authoritative posted bank charges; no Plaid data goes to TinyFish.
+const crypto=require('node:crypto');
 const Evidence=require('./amazon-evidence.cjs');
 const pairing=require('./amazon-pairing.cjs');
 const amazon=require('./amazon-import.cjs');
@@ -66,10 +67,23 @@ async function request(apiKey,url,options={},fetcher=fetch){
   ...options,headers:{'X-API-Key':apiKey,'Content-Type':'application/json',
    ...(options.headers||{})},signal:AbortSignal.timeout(12000)
  });
- if(!res.ok)throw Error(res.status===401||res.status===403?
-  'TinyFish key not accepted. Reconnect it in Amazon settings.':
-  res.status===402?'TinyFish wallet needs funds. Open your TinyFish account.':
-  'TinyFish could not complete the request ('+res.status+').');
+ if(!res.ok){
+  // TinyFish currently gates the max_steps feature by account. Never retry
+  // a rejected step-capped request without its cap, which could bill more.
+  let reason='';
+  try{reason=(await res.text()).slice(0,2000)}catch{}
+  const message=res.status===403&&/max[_ -]?steps|beta|step limit|feature gate/i.test(reason)?
+   'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable this feature; Ledger will not submit an uncapped browser run.':
+   res.status===401||res.status===403?
+   'TinyFish key not accepted, or your account is not permitted to use this feature. Check the TinyFish connection.':
+   res.status===402?'TinyFish wallet needs funds. Open your TinyFish account.':
+   'TinyFish could not complete the request ('+res.status+').';
+  const error=new Error(message);
+  // A definitive 4xx rejection means the paid run did not start. A timeout,
+  // a 5xx or a malformed successful response may have started billing.
+  if([400,401,402,403,422].includes(res.status))error.notStarted=true;
+  throw error;
+ }
  const data=await res.json();
  if(!data||typeof data!=='object')throw Error('TinyFish returned an invalid response');
  return data;
@@ -100,7 +114,7 @@ const orderSchema={type:'object',properties:{
 },required:['orders','signedIn']};
 async function start(apiKey,fetcher){
  const result=await request(apiKey,API+'/v1/automation/run-async',{
-  method:'POST',body:JSON.stringify({url:'https://www.amazon.com/your-orders',
+  method:'POST',body:JSON.stringify({session_id:crypto.randomUUID(),url:'https://www.amazon.com/your-orders',
    goal:goal(),use_profile:true,browser_profile:'lite',
    agent_config:{mode:'default',max_steps:MAX_STEPS,max_duration_seconds:MAX_DURATION},
    output_schema:orderSchema})
