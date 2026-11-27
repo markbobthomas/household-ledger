@@ -27,6 +27,7 @@ jobs:
           node --check tests/amazon-cloud-smoke.cjs
           node --check tests/amazon-cloud-server-smoke.cjs
           node --check tests/amazon-cloud-finish-smoke.cjs
+          node --check tests/amazon-cloud-failure-smoke.cjs
           node --check planner-core.js
           node --check planner-history.js
           node --check planner-transactions.js
