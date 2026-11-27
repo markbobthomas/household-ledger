@@ -1006,6 +1006,10 @@ async function start(port=Number(env.PORT||8788)){
    ...(upgradeCookie?{'Set-Cookie':upgradeCookie}:{})});
    return res.end(body);
   }
+  if(req.method==='GET'&&requestPath==='/api/amazon-cloud'){
+   // Read-only; never returns TinyFish API key, bank details or order data.
+   return respond(200,cloudStatus());
+  }
   if(req.method==='GET'&&requestPath==='/api/ledger/amazon-review'){
    if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
    const before=state.ledgerAdjustments||{};
@@ -1122,6 +1126,19 @@ async function start(port=Number(env.PORT||8788)){
      fileBytes:Buffer.concat(chunks)};
    }else body=JSON.parse(Buffer.concat(chunks).toString()||'{}');
   }catch{return respond(400,{error:amazonBinary?'Invalid Amazon upload':'Invalid JSON'})}
+  if(requestPath==='/api/amazon-cloud/settings'){
+   try{return respond(200,await changeCloudSettings(body))}
+   catch(error){return respond(error.httpStatus||503,{
+    error:error.httpStatus?String(error.message):
+     'Could not connect TinyFish or save settings. No Amazon run was started.'})}
+  }
+  if(requestPath==='/api/amazon-cloud/run'){
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).sort().join(',')!=='consent'||body.consent!==true)
+    return respond(400,{error:'Confirm this Amazon check before starting a paid run'});
+   try{return respond(202,await runCloudAmazon(true))}
+   catch(error){return respond(503,{error:'Could not check Amazon. No changes to bank transactions.'})}
+  }
   if(requestPath==='/api/ai/settings'){
    // Backward-compatible opt-out: old clients cannot re-enable automatic calls.
    if(!body||typeof body!=='object'||Array.isArray(body)||
@@ -2137,7 +2154,13 @@ async function start(port=Number(env.PORT||8788)){
    scheduleRevocationRecovery();
   },60*60*1000);
   hourly.unref();
-  server.once('close',()=>clearInterval(hourly));
+  // Scheduled bank polling happens ONLY on three opted-in Amazon-sync days;
+  // idle minutes and ordinary page views do not contact Plaid or TinyFish.
+  const cloudInterval=setInterval(()=>cloudTick().catch(()=>{}),3*60*1000);
+  cloudInterval.unref();
+  setImmediate(()=>cloudTick().catch(()=>{}));
+  server.once('close',()=>{clearInterval(hourly);clearInterval(cloudInterval)});
+
   resolve(server);
  })});
 }
