@@ -1,12 +1,14 @@
 'use strict';
 // Read-only shared Budget: the same normalized Plaid records, accounting
 // measures, monthly targets, Amazon allocations and prepared forecast used by
-// the main Ledger Budget. The bearer link has no write access to budgets.
+// the main Ledger Budget. Budget targets remain read-only; a guarded posted
+// transaction editor changes only the household's category override and note.
 const model=require('../ledger-data.js');
 const Accounting=require('../accounting.js');
 const T=require('../planner-transactions.js');
 const feed=require('./data-source.js');
 const {pacificDate}=require('./prepared-forecast.cjs');
+const {keyFor}=require('./amazon-pairing.cjs');
 function build(state,prepared){
  if(!state.items?.length)return null;
  const asOf=prepared?.asOf||pacificDate(),month=asOf.slice(0,7);
@@ -18,6 +20,13 @@ function build(state,prepared){
  const settlements=Accounting.budgetCardSettlementIds(all);
  const monthRows=all.filter(r=>r.date.slice(0,7)===month);
  const prefs=ledger.predictions||{},targets=prefs.categoryMonthlyBudgets||{};
+ const notes=prefs.transactionNotes||{};
+ const postedIdentity=row=>{
+  const raw=state.transactions?.[String(row.id)];
+  return raw&&!raw.pending&&String(raw.accountId)===String(row.accountId)?{
+   id:String(row.id),editableNote:String(notes[keyFor(raw)]||'').slice(0,1000)}:{};
+ };
+ const categories=model.categories(ledger).filter(c=>!['Uncategorized','Income','Transfer','Savings'].includes(c));
  const grouped=new Map();
  const group=name=>{
   const category=model.canonicalCategory(ledger,name)||name||'Other';
@@ -37,16 +46,18 @@ function build(state,prepared){
     parts.reduce((n,l)=>n+l.cents,0)===posted;
   const merchant=String(row.merchant||row.name||'Purchase').slice(0,140);
   if(valid){
-   for(const line of parts){
-    const category=group(line.category);
+   for(let lineIndex=0;lineIndex<parts.length;lineIndex++){
+    const line=parts[lineIndex],category=group(line.category);
     category.spentCents+=line.cents;
     category.items.push({date:row.date,merchant:String(line.title||merchant).slice(0,140),
-     cents:line.cents,source:'posted'});
+     cents:line.cents,source:'posted',...postedIdentity(row),lineIndex,
+     category:category.name});
    }
   }else if(posted){
    const category=group(row.category||'Other');
    category.spentCents+=posted;
-   category.items.push({date:row.date,merchant,cents:posted,source:'posted'});
+   category.items.push({date:row.date,merchant,cents:posted,source:'posted',
+    ...postedIdentity(row),lineIndex:null,category:category.name});
   }
   if(pending){
    const category=group(row.category||'Other');
@@ -121,8 +132,64 @@ function build(state,prepared){
    Number.isFinite(Number(v))&&Number(v)>=0?sum+Math.round(Number(v)*100):sum,0);
  const budgetSet=Object.entries(targets).some(([name,v])=>
   !['Income','Transfer'].includes(name)&&v!==null&&v!==''&&Number.isFinite(Number(v))&&Number(v)>=0);
- return {month,asOf,rows,spentCents,pendingCents,expectedCents,
+ return {month,asOf,rows,categories,spentCents,pendingCents,expectedCents,
   usedCents:spentCents+pendingCents+expectedCents,totalBudgetCents,
   budgetSet,expectedIncluded:!!projection};
 }
-module.exports={build};
+
+// Only already-visible posted Budget lines can be edited. Never allow a
+// bearer to classify unknown transaction IDs, money movement, other months,
+// pending charges, expected bills or a whole split Amazon charge.
+function selection(state,visible,choice){
+ if(!choice||typeof choice!=='object'||Array.isArray(choice)||
+    Object.keys(choice).sort().join(',')!=='category,id,lineIndex,note'||
+    typeof choice.id!=='string'||!choice.id||choice.id.length>200||
+    typeof choice.category!=='string'||!visible.categories.includes(choice.category)||
+    typeof choice.note!=='string'||choice.note.length>1000||
+    !(choice.lineIndex===null||Number.isSafeInteger(choice.lineIndex)&&choice.lineIndex>=0))
+  return null;
+ const entry=visible.rows.flatMap(r=>r.items||[]).find(e=>
+  e.source==='posted'&&e.id===choice.id&&e.lineIndex===choice.lineIndex);
+ const raw=state.transactions?.[choice.id];
+ if(!entry||!raw||raw.pending||!entry.id||!Number.isSafeInteger(entry.cents)||
+    entry.cents<=0)return null;
+ const split=state.ledgerAdjustments?.amazonAllocations?.[choice.id];
+ // Split identities must be validated again against the immutable bank
+ // charge, not trusted from an arbitrary browser payload.
+ if(choice.lineIndex!==null){
+  if(!Array.isArray(split?.lines)||split.amountCents!==Math.round(Number(raw.amount)*100)||
+    split.lines.reduce((n,l)=>n+l.cents,0)!==split.amountCents||
+    !split.lines[choice.lineIndex]||
+    split.lines[choice.lineIndex].cents!==entry.cents)return null;
+ }else if(Array.isArray(split?.lines)&&split.lines.length)return null;
+ return entry;
+}
+function change(state,choice,entry){
+ const previous=state.ledgerAdjustments||{},id=choice.id;
+ const overrides={...(previous.categoryOverrides||{})},
+  provenance={...(previous.categoryProvenance||{})},
+  allocations={...(previous.amazonAllocations||{})};
+ let categoryChanged=entry.category!==choice.category;
+ if(categoryChanged&&choice.lineIndex!==null){
+  const prior=allocations[id],lines=prior.lines.map((x,i)=>i===choice.lineIndex?
+   {...x,category:choice.category}:x);
+  allocations[id]={...prior,lines};
+  overrides[id]=lines.some(x=>x.category==='Uncategorized')?
+   'Uncategorized':lines[0].category;
+  provenance[id]={...provenance[id],source:'manual-item',
+   category:overrides[id],lines:{...(provenance[id]?.lines||{}),
+    [choice.lineIndex]:{source:'manual',category:choice.category}}};
+ }else if(categoryChanged){
+  overrides[id]=choice.category;
+  provenance[id]={source:'manual',category:choice.category};
+ }
+ const predictions=previous.predictions||{},transactionNotes={...(predictions.transactionNotes||{})},
+  noteKey=keyFor(state.transactions[id]),value=choice.note.trim(),
+  noteChanged=(transactionNotes[noteKey]||'')!==value;
+ if(noteChanged){if(value)transactionNotes[noteKey]=value;else delete transactionNotes[noteKey]}
+ return {adjustments:{...previous,categoryOverrides:overrides,
+  categoryProvenance:provenance,amazonAllocations:allocations,
+  predictions:noteChanged?{...predictions,transactionNotes}:predictions},
+  categoryChanged,noteChanged};
+}
+module.exports={build,selection,change};
