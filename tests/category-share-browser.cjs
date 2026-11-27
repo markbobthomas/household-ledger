@@ -119,6 +119,9 @@ module.exports=(async()=>{
    assert.equal(server.writeCount,0,name+': Skip and Refresh never save categorization decisions');
    server.addSecond=false;
    await page.locator('#reload').click();
+   // The previous purchase is already onscreen. Wait for the new GET to finish
+   // before editing; otherwise a response can replace the note draft.
+   await page.waitForFunction(()=>document.querySelector('#count')?.textContent==='1 uncategorized');
    await page.getByText('Fictional purchase',{exact:true}).waitFor();
    assert.equal(await page.locator('#shared-note').inputValue(),'Household reminder');
    await page.locator('#shared-note').fill('Reviewed together');
