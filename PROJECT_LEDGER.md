@@ -40,6 +40,8 @@ Ledger is a **calendar-first checking-balance forecaster**, not primarily a budg
 
 **Last independently verified private Render app revision:** 2026-11-25 account-nickname release PR #763, app SHA `414bf7ac521b17b26721eaf4d29983aba681c10e`; later changes were merged but *their private deployment was not independently verified*. This is the last **verified** revision, not a claim the service is still running it.
 
+**Latest merged Lite UI:** [PR #794](https://github.com/markbobthomas/household-ledger/pull/794), main `b22c5ec0624f896240405b3c2443daa3858905de`, leaves the Budget Category dropdown closed when Edit opens and separates completed-review Budget/Refresh actions from the quieter Full Ledger link. Banking and desktop/iPhone browser CI passed; connected Render workspace exposes only a fictional test service, so private production rollout is not verified.
+
 **Prior November releases:** PR #775 merged `67160c2468d1a82f1700614fd3a0f1489bb7f4d4` (documentation-only). The 2026-11-26 prioritization PR #776 merged `dbe0c7429ac6b91878a5e5b94a7c518670cedb51`.
 
 **Recent behavior already merged to source:**
@@ -54,7 +56,7 @@ Ledger is a **calendar-first checking-balance forecaster**, not primarily a budg
 
 **NOV 26 BACKEND MAINTENANCE — SOURCE MERGED, BANKING CI GREEN, PRIVATE RENDER UNVERIFIED:** [PR #777](https://github.com/markbobthomas/household-ledger/pull/777) merged as `b700bf69b64af53b93975fe1e56cbe7274e78817`. Source inspection confirmed the original archive blob matches exactly and the active handoff is 8.7 KB instead of ~1.45 MB. Idle hourly work no longer rebuilds unchanged same-day 1,095-day forecasts; saved forecast edits and bank sync still invalidate caches, and Pacific day rollover triggers re-preparation. Banking/forecast core and browser gate passed on the feature head. Private Render SHA has not been independently verified; no real-device speed claim.
 
-**Next actions:** (1) Independently verify the private Render SHA and household real-phone compact Lite header/Full link, owner sharing access, live posted Budget edits, skip/Refresh restart, and shared-link revocation; (2) keep Lite ultra-simple, with no additional Budget navigation, Undo or month selector unless separately requested; (3) protect Lite sharing permission boundaries before new financial scopes; (4) separately reconcile checking forecast, backup/recovery and Amazon browser integration. Keep any transactional-store cutover separately gated; old proof-of-concept was never a live migration.
+**Next actions:** (1) Independently verify the private Render SHA and household real-phone Lite completion spacing, passive Budget Edit fields, compact header/Full link, owner sharing access, saved edits, skip/Refresh restart, and shared-link revocation; (2) keep Lite ultra-simple, with no additional Budget navigation, Undo or month selector unless separately requested; (3) protect Lite sharing permission boundaries before new financial scopes; (4) separately reconcile checking forecast, backup/recovery and Amazon browser integration. Keep any transactional-store cutover separately gated; old proof-of-concept was never a live migration.
 
 ## Reference map
 
@@ -130,3 +132,10 @@ Ledger is a **calendar-first checking-balance forecaster**, not primarily a budg
 **Change:** [PR #792](https://github.com/markbobthomas/household-ledger/pull/792) merged to `main` as `223e335a022e06009654b836dfab8a99422e9295`. The header shows only Ledger Lite and direct Full Ledger access. The review has a short heading and inline remaining count, with no paragraph of instructions. The signed-in owner can still use `Manage sharing` below the page; recipient access and tokens are unchanged.  
 **Checks:** Final feature `73502cec1b364eeafe2f54a50468765d3e6d7f4e` passed [banking/forecast safety #45919884443](https://github.com/markbobthomas/household-ledger/actions/runs/45919884443) and [desktop Chromium/iPhone WebKit #45919884465](https://github.com/markbobthomas/household-ledger/actions/runs/45919884465), including compact header, owner-only sharing and original saved-category/Note flow. Independently verified merged PR and `main` UI source.  
 **Deployment:** Private Render live revision **not independently verified**. No bank, forecasting, sharing permissions, or infrastructure changed.
+
+### 2026-11-26 — Lite Budget edit and completion layout (merged source)
+
+**Request:** Opening Edit on a posted transaction in Lite Budget should reveal Category and Note without automatically opening Category, and the end-of-categorization controls needed less clutter.  
+**Change:** [PR #794](https://github.com/markbobthomas/household-ledger/pull/794) merged as `b22c5ec0624f896240405b3c2443daa3858905de`. Removed forced select focus; existing category/Note editor and save behavior remain. The completed review screen now has full-width Budget/Refresh actions with consistent spacing and a separate unobtrusive Full Ledger sign-in link. No bank, forecast, session or share-scope changes.  
+**Checks:** Feature head `2e85c7509f5ae05f518a76dbe86380bd5800b14a` passed [banking/forecast safety #45921963658](https://github.com/markbobthomas/household-ledger/actions/runs/45921963658) and [desktop Chromium/iPhone WebKit #45921963632](https://github.com/markbobthomas/household-ledger/actions/runs/45921963632), including new no-auto-focus, editor visibility, action spacing and overflow assertions. Verified merge commit on `main`.  
+**Deployment:** Public Pages publishing is independent; private Render live SHA and real-device behavior are **unverified** because only the fictional test service was available through the connected workspace. No infrastructure or private bank state changed.
