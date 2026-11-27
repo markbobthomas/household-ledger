@@ -21,7 +21,7 @@ That's it. You can close Ledger and turn off your PC. The cloud **server** perfo
 
 ## Cost and limits
 
-At TinyFish's observed November 2026 rates, the run is limited to **45 Agent steps** and **10 minutes**. At $0.016/step plus $0.002/browser-minute, the maximum modeled amount is approximately **$0.74** per completed run, before any other applicable provider fees. This is a safety estimate rather than an exact provider invoice cap. The UI conservatively says **up to about $1 per run**. The routine schedule provides no more than three opportunities per week. User-initiated extra checks are billed separately.
+At TinyFish's observed November 2026 rates, Ledger **requests** a 45-Agent-step and 10-minute ceiling. At $0.016/step plus $0.002/browser-minute, that is approximately **$0.74** in the model; provider billing could differ. **TinyFish currently restricts custom step limits to some accounts.** Ledger does not silently drop the limit if TinyFish rejects it. It shows a setup error instead; ask TinyFish to enable per-run step limits. No uncapped browser run is authorized. The routine schedule provides no more than three opportunities per week. User-initiated extra checks are billed separately.
 
 TinyFish browser costs are **separate** from Ledger's **$0.08 AI categorization** approval limit.
 
