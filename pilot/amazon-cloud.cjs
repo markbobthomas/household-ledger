@@ -136,7 +136,7 @@ async function validateKey(apiKey,fetcher){
  const sites=profile.signed_in_sites;
  const seen=Array.isArray(sites)?sites.some(p=>{
   const site=String(typeof p==='string'?p:p?.site||p?.domain||'').toLowerCase();
-  return /(?:^|\\.)amazon\\.com$/.test(site);
+  return site==='amazon.com'||site.endsWith('.amazon.com');
  }):null;
  if(seen===false){
   const error=new Error('Amazon is not saved in the Default TinyProfile. Open its setup browser, sign into Amazon, choose Save, and then press Connect TinyFish again.');
