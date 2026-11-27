@@ -295,6 +295,155 @@ assert(paidEarly.paymentReconciliations.some(e=>
 assert.equal(earlyPay.amount,3200,'Bank facts remain immutable');
 assert.equal(paidEarly.projection.accounts.find(a=>a.id==='checking').openingCurrent,8200,
  'A settled deposit stays in actual cash, not the future projection');
+// Preserve the settled early-pay check when the as-of date advances ONTO the
+// promised payday (and then to Saturday). This regressed when same-day bills
+// were allowed back into the future projection.
+const onPayday={...earlyAsOf,asOf:'2026-11-27'};
+const fridayPay=C.materialize(onPayday,[earlyPay],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!fridayPay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'PAYROLL/MORTGAGE INTEGRATION: a Wednesday paid paycheck is not added on Friday as-of payday');
+assert(fridayPay.ledger.some(e=>e.ruleId==='wage-b'&&e.date==='2026-12-11'),
+ 'The independently confirmed alternating paycheck must remain forecast');
+assert.equal(fridayPay.projection.accounts.find(a=>a.id==='checking').series[0].income,0,
+ 'Friday opening cash already incorporates the posted early paycheck');
+const saturdayPay=C.materialize({...earlyAsOf,asOf:'2026-11-28'},[earlyPay],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!saturdayPay.ledger.some(e=>e.ruleId==='wage-a'&&e.date<='2026-11-28'),
+ 'Advancing one calendar day must not resurrect the settled paycheck');
+// Holiday-week income may arrive five days before a weekend-shifted payday.
+const fiveDaysEarly={...earlyPay,id:'wages-five-days-before',
+ date:'2026-11-22',amount:3200};
+const fiveDayPlan=C.materialize(onPayday,[fiveDaysEarly],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!fiveDayPlan.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An early renamed paycheck must be reconciled throughout the six-day payroll window');
+assert(fiveDayPlan.ledger.some(e=>e.ruleId==='wage-b'&&e.date==='2026-12-11'),
+ 'The second independent paycheck must remain forecast after the first one settles');
+assert(fiveDayPlan.paymentReconciliations.some(x=>x.bankId===fiveDaysEarly.id&&
+ x.status==='posted'),'Early settled bank income must be traceable');
+const changedDescriptor={...earlyPay,id:'wages-variable-amount',
+ merchant:'Unnamed ACH Credit',amount:3372,
+ personal_finance_category:{detailed:'INCOME_WAGES'}};
+const variedOnDay=C.materialize(onPayday,[changedDescriptor],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!variedOnDay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Renamed variable net payroll is already included in observed bank cash');
+const variedOnly={...earlyPay,id:'wages-small-change',amount:3296};
+const smallVariance=C.materialize(onPayday,[variedOnly],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!smallVariance.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Small payroll net-pay variance with a changed ACH label must not inflate Friday cash');
+const unrelatedHigh={...earlyPay,id:'unrelated-credit-higher',
+ amount:1800,merchant:'Unknown Reimbursement'};
+const unmatchedDifferent=C.materialize(onPayday,[unrelatedHigh],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(unmatchedDifferent.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An uncorrelated credit must never erase a confirmed paycheck');
+const duplicateSimilarDeposits=C.materialize(onPayday,[
+ {...earlyPay,id:'duplicate-a'},{...earlyPay,id:'duplicate-b'}],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(duplicateSimilarDeposits.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Two equally plausible cash deposits must require review, not silently hide salary');
+// Cross-feature: settled early income and unpaid day-zero mortgage must
+// coexist without a phantom deposit or pushing the housing bill to Monday.
+const joined=C.materialize(onPayday,[changedDescriptor],{
+ recurringForecastMode:'approved-only',futureRecurringRules:[
+ ...payRules,{id:'housing-day-zero',kind:'event',accountId:'checking',
+ originalAccountId:'checking',type:'expense',merchant:'Example Rent ACH',
+ originalMerchant:'Example Rent ACH',matchNames:['example rent ach'],
+ frequency:'monthly',anchorDate:'2026-11-27',amount:1926}
+ ]},T,P,55,{weekendPolicy:'friday'});
+const todayEvents=joined.projection.accounts.find(a=>a.id==='checking')
+ .series.find(x=>x.date==='2026-11-27').events;
+assert.deepEqual(todayEvents.map(e=>e.merchant),['Example Rent ACH'],
+ 'Early payroll reconciles while unposted mortgage-like bill still debits today');
+assert.equal(joined.projection.accounts.find(a=>a.id==='checking').series[0].income,0);
+// These bank descriptions/types have no knowledge of the forecast category.
+// What matters is a settled CASH movement, not the app's label.
+const postedUnclassified={...earlyPay,id:'posted-uncategorized-ach',
+ type:'unclassified_credit',merchant:'Incoming bank transfer'};
+const unclassifiedForecast=C.materialize(onPayday,[postedUnclassified],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!unclassifiedForecast.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'A posted uncategorized cash credit settles the same scheduled income exactly once');
+assert(unclassifiedForecast.paymentReconciliations.some(x=>
+ x.bankId===postedUnclassified.id&&x.status==='posted'));
+const incomingTransfer={...earlyPay,id:'posted-incoming-transfer',
+ type:'transfer',cashDirection:'in',merchant:'Internal ACH credit'};
+const incomingTransferForecast=C.materialize(onPayday,[incomingTransfer],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!incomingTransferForecast.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An unpaired ACH categorized as incoming transfer must not duplicate posted income');
+const dueRefund={id:'return-due',date:'2026-11-27',amount:83.25,
+ type:'refund',merchant:'Return expected',accountId:'checking'};
+const bankClassifiedCredit={...earlyPay,id:'refund-classed-income',
+ date:'2026-11-25',amount:83.25,merchant:'Unidentified credit'};
+const cashRefund=C.materialize(onPayday,[bankClassifiedCredit],{
+ recurringForecastMode:'approved-only',futureTransactionAdds:[dueRefund]
+},T,P,55,{weekendPolicy:'friday'});
+assert(!cashRefund.ledger.some(e=>e.id===dueRefund.id),
+ 'An early posted bank income credit can settle a predicted refund without a second deposit');
+const dueOneOff={id:'utility-due',date:'2026-11-27',amount:218.50,
+ type:'expense',merchant:'Fictional Utility',accountId:'checking'};
+const debitBank={...earlyPay,id:'utility-posted',amount:218.50,type:'expense',
+ merchant:'Unidentified ACH debit'};
+const paidUtility=C.materialize(onPayday,[debitBank],{
+ recurringForecastMode:'approved-only',futureTransactionAdds:[dueOneOff]
+},T,P,55,{weekendPolicy:'friday'});
+assert(!paidUtility.ledger.some(e=>e.id===dueOneOff.id),
+ 'A renamed bank debit also settles its uniquely matched one-time expense');
+const pendingUnclassified=C.materialize(onPayday,[
+ {...postedUnclassified,pending:true}],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(pendingUnclassified.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An unposted bank credit never counts as already settled');
+// Distinguish a real paycheck from moving the same dollars between two
+// linked bank accounts. An internal transfer NEVER settles wages or housing.
+const savingsMovement=[
+ tx('move-checking','2026-11-25','Opaque account move',3200,
+  'transfer','checking',{cashDirection:'out',pairedTransactionId:'move-savings'}),
+ tx('move-savings','2026-11-25','Opaque account move',3200,
+  'transfer','savings',{cashDirection:'in',pairedTransactionId:'move-checking'})
+];
+const notWages=C.materialize(onPayday,savingsMovement,{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(notWages.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'An internal transfer into savings is not evidence that payroll was paid');
+const transferIntoChecking=[
+ tx('savings-debit','2026-11-25','Opaque account move',3200,
+  'transfer','savings',{cashDirection:'out',pairedTransactionId:'checking-credit'}),
+ tx('checking-credit','2026-11-25','Opaque account move',3200,
+  'transfer','checking',{cashDirection:'in',pairedTransactionId:'savings-debit'})
+];
+const cashMovedNotWages=C.materialize(onPayday,transferIntoChecking,{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(cashMovedNotWages.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'Even a same-amount internal credit INTO checking must not masquerade as early payroll');
+const linkedMovementRule={id:'bank-transfer-plan',kind:'movement',
+ fromAccountId:'checking',toAccountId:'savings',
+ originalAccountId:'checking',frequency:'monthly',anchorDate:'2026-11-27',
+ merchant:'Internal Movement Plan',amount:3200};
+const paidMovement=C.materialize(onPayday,savingsMovement,{
+ recurringForecastMode:'approved-only',futureRecurringRules:[linkedMovementRule]
+},T,P,55,{weekendPolicy:'friday'});
+assert(!paidMovement.ledger.some(e=>e.recurringRuleId==='bank-transfer-plan'&&
+ e.date==='2026-11-27'),
+ 'A posted paired transfer settles the corresponding linked movement exactly once');
+assert(paidMovement.ledger.some(e=>e.recurringRuleId==='bank-transfer-plan'&&
+ e.date==='2026-12-24'),'The next linked movement still respects the initial bank-holiday adjustment');
 const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
 assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'A pending deposit must never be mistaken for cash already in the current balance');

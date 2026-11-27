@@ -664,6 +664,16 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    cardId:accounts.find(a=>String(a.id)===String(e.toAccountId)&&
     String(a.accountType||a.type).toLowerCase()==='credit')?.id||null}))
  ];
+ // A deposit/refund can be classified differently by different bank feeds.
+ // Reconciliation uses ACTUAL cash direction first; transaction categories
+ // remain unchanged in bank history and budget reporting.
+ const cashDirectionOf=kind=>kind==='income'||kind==='refund'?'in':
+  kind==='expense'?'out':null;
+ const bankCashDirection=t=>{
+  const kind=tools.bankDirection(t);
+  return kind==='transfer'&&['in','out'].includes(t.cashDirection)?
+   t.cashDirection:cashDirectionOf(kind);
+ };
  const bankText=t=>String(t.merchant||'')+' '+String(t.description||'');
  const issuerName=s=>{
   const v=String(s||'').toLowerCase();
@@ -696,12 +706,13 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
  // Confirmed recurring rules already received their own posted-bank evidence
  // above. A later generic fallback must not reuse that bank debit to clear a
  // second independent same-payee schedule (house / garden, multiple loans).
+ const knownBankById=new Map(rows.filter(t=>t?.id).map(t=>[String(t.id),t]));
  const reconciliableRows=rows.filter(t=>t&&t.id&&!priorBankMatches.has(String(t.id))&&
   valid(t.date)&&t.date<=asOf&&t.date>=add(asOf,-90)&&Number(t.amount)>0&&
   // Pending income/refunds are not yet incorporated into current cash; do
   // not remove a forecast deposit merely because a pending credit exists.
   (!t.pending||tools.bankDirection(t)==='expense')&&
-  ['expense','income','refund'].includes(tools.bankDirection(t))&&
+  bankCashDirection(t)&&
   cashIds.has(String(tools.accountRef(t.accountId||t.account,accounts))));
  const pairs=[];
  for(const bank of reconciliableRows){
@@ -711,7 +722,18 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
    // schedule cannot be borrowed by an unrelated prediction.
    assignedRules=tools.historicalScheduleMatches?.(bank,accounts,rules)||[];
   for(const item of candidatesForReconcile){
-   if(item.account!==from||item.direction!==bankKind)continue;
+   if(item.account!==from||
+    cashDirectionOf(item.direction)!==bankCashDirection(bank))continue;
+   // A paired internal transfer is not outside income or a paid bill.
+   // It can settle only a linked movement with the SAME destination account.
+   // Never borrow a transfer between savings/checking to erase salary or rent.
+   if(bank.pairedTransactionId){
+    if(item.kind!=='movement')continue;
+    const counter=knownBankById.get(String(bank.pairedTransactionId)),
+     destination=counter?tools.accountRef(
+      counter.accountId||counter.account,accounts):bank.toAccountId;
+    if(!destination||String(destination)!==String(item.e.toAccountId))continue;
+   }
    const planned=item.e,ruleId=String(planned.ruleId||planned.recurringRuleId||''),
     rule=rules.find(r=>String(r.id)===ruleId);
    if(assignedRules.length&&(!ruleId||
@@ -751,12 +773,18 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     const named=[planned.merchant,planned._forecastOriginalMerchant,
      rule?.originalMerchant,...(rule?.matchNames||[])]
      .some(name=>samePayee(bankText(bank)+' '+String(bank.name||''),name));
-    // A renamed ACH/payroll posting may not share any words with its saved
-    // label. Permit a near-exact amount only with a short date gap AND a
-    // globally unique bank-to-forecast assignment (enforced below).
-    const strongUnnamed=bankKind==='income'&&
-     Math.abs(Number(bank.amount)-Number(planned.amount))<=
-     Math.max(2,Number(planned.amount)*.003)&&gap<=3;
+    // Universal posted/forecast reconciliation: verified bank cash can
+    // settle ONE anticipated occurrence regardless of its source (inferred,
+    // confirmed, or one-off), without depending on a stable payee descriptor.
+    // A strict amount match allows early posting across the cadence window.
+    // Small net CREDIT changes are also expected, but never use that relaxed
+    // tolerance to erase a still-owed expense. Account/direction/date,
+    // unique one-to-one assignment and owner-specific windows still apply.
+    const variance=Math.abs(Number(bank.amount)-Number(planned.amount))/
+      Math.max(1,Number(planned.amount)),
+     unchangedAmount=variance<=.005&&gap<=6,
+     changedCashCredit=bankCashDirection(bank)==='in'&&gap<=3&&variance<=.08,
+     strongUnnamed=unchangedAmount||changedCashCredit;
     if((!named&&!strongUnnamed)||bank.accountingKind==='card_payment')continue;
    }
    pairs.push({bank,item,gap});
