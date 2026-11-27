@@ -110,7 +110,7 @@ module.exports=(async()=>{
    assert.equal(await page.getByText('Possible Amazon item match. Check the item before using it to decide.').count(),1);
    await page.getByRole('button',{name:'Groceries',exact:true}).click();
    await page.getByRole('heading',{name:'All caught up'}).waitFor();
-   const fullLink=page.getByRole('link',{name:'Open full Ledger'});
+   const fullLink=page.getByRole('link',{name:'Open full Ledger',exact:true});
    const finishLink=page.locator('#open-ledger-after-review');
    assert.equal(await finishLink.getAttribute('href'),'/',name+': end of review retains Full link');
    assert.equal(await finishLink.isVisible(),true);
