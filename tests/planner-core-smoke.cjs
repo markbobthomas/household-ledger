@@ -295,6 +295,24 @@ assert(paidEarly.paymentReconciliations.some(e=>
 assert.equal(earlyPay.amount,3200,'Bank facts remain immutable');
 assert.equal(paidEarly.projection.accounts.find(a=>a.id==='checking').openingCurrent,8200,
  'A settled deposit stays in actual cash, not the future projection');
+// Preserve the settled early-pay check when the as-of date advances ONTO the
+// promised payday (and then to Saturday). This regressed when same-day bills
+// were allowed back into the future projection.
+const onPayday={...earlyAsOf,asOf:'2026-11-27'};
+const fridayPay=C.materialize(onPayday,[earlyPay],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!fridayPay.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
+ 'PAYROLL/MORTGAGE INTEGRATION: a Wednesday paid paycheck is not added on Friday as-of payday');
+assert(fridayPay.ledger.some(e=>e.ruleId==='wage-b'&&e.date==='2026-12-11'),
+ 'The independently confirmed alternating paycheck must remain forecast');
+assert.equal(fridayPay.projection.accounts.find(a=>a.id==='checking').series[0].income,0,
+ 'Friday opening cash already incorporates the posted early paycheck');
+const saturdayPay=C.materialize({...earlyAsOf,asOf:'2026-11-28'},[earlyPay],{
+ recurringForecastMode:'approved-only',futureRecurringRules:payRules
+},T,P,55,{weekendPolicy:'friday'});
+assert(!saturdayPay.ledger.some(e=>e.ruleId==='wage-a'&&e.date<='2026-11-28'),
+ 'Advancing one calendar day must not resurrect the settled paycheck');
 const depositNotYetPosted=futurePay([{...earlyPay,pending:true}]);
 assert(depositNotYetPosted.ledger.some(e=>e.ruleId==='wage-a'&&e.date==='2026-11-27'),
  'A pending deposit must never be mistaken for cash already in the current balance');
