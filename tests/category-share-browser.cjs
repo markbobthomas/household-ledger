@@ -111,6 +111,9 @@ module.exports=(async()=>{
    await page.getByRole('button',{name:'Groceries',exact:true}).click();
    await page.getByRole('heading',{name:'All caught up'}).waitFor();
    const fullLink=page.getByRole('link',{name:'Open full Ledger'});
+   const finishLink=page.locator('#open-ledger-after-review');
+   assert.equal(await finishLink.getAttribute('href'),'/',name+': end of review retains Full link');
+   assert.equal(await finishLink.isVisible(),true);
    assert.equal(await fullLink.getAttribute('href'),'/',name+': Full switch has no bearer');
    assert.equal(await fullLink.isVisible(),true);
    // The same open tab should pick up fresh work when a recipient returns.
@@ -122,6 +125,9 @@ module.exports=(async()=>{
    await page.getByRole('button',{name:'See our budget'}).click();
    await page.getByRole('heading',{name:'Our budget'}).waitFor();
    assert.equal(await fullLink.isVisible(),true,name+': Full switch stays visible in Budget');
+   const budgetLink=page.locator('#open-ledger-after-budget');
+   assert.equal(await budgetLink.getAttribute('href'),'/',name+': Budget retains a Full link');
+   assert.equal(await budgetLink.isVisible(),true);
    await page.waitForFunction(()=>document.querySelector('#budget-total')?.textContent?.includes('$57.75'));
    assert.match(await page.locator('#budget-total').textContent(),/\$57\.75/);
    assert.match(await page.locator('#budget-rows').textContent(),/Groceries/);
