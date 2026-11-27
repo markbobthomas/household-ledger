@@ -93,10 +93,15 @@ assert.equal(scopedResult.next.predictions.transactionNotes[
 assert.equal(cloud.MAX_STEPS,45,'Cap browser-agent steps per run');
 assert.ok(cloud.MAX_ESTIMATED_RUN_USD<=1,'Configured run estimate ceiling is not more than $1');
 const fakeFetch=async (url,options)=>{
- if(url.endsWith('/v1/wallet'))return {ok:true,json:async()=>({available_balance:'4.0',currency:'USD'})};
+ if(url.endsWith('/v1/profiles'))return {ok:true,json:async()=>({profiles:[{
+  id:'prof_fictional_amazon123',name:'Fictional Amazon',is_default:true,
+  signed_in_sites:[{site:'amazon.com'}]
+ }]})};
  if(url.endsWith('/v1/automation/run-async')){
   const request=JSON.parse(options.body);
   assert.equal(request.use_profile,true,'Reuse TinyFish saved Amazon sign-in');
+  assert.equal(request.profile_id,'prof_fictional_amazon123',
+   'Always pin a run to the Amazon profile verified during setup');
   assert.equal(request.session_id,undefined,
    'Do not send undocumented session_id to TinyFish Agent endpoint');
   assert.equal(request.agent_config.mode,undefined,
@@ -108,17 +113,28 @@ const fakeFetch=async (url,options)=>{
  return {ok:true,json:async()=>({status:'COMPLETED',result:{signedIn:true,complete:true,orders:[]}})};
 };
 (async()=>{
- await cloud.validateKey('fictional-tinyfish-key-example-1',fakeFetch);
- const run=await cloud.start('fictional-tinyfish-key-example-1',fakeFetch);
+ const profile=await cloud.validateKey('fictional-tinyfish-key-example-1',fakeFetch);
+ assert.equal(profile.profileId,'prof_fictional_amazon123');
+ assert.equal(profile.amazonSignInClaimed,true);
+ const run=await cloud.start('fictional-tinyfish-key-example-1',profile.profileId,fakeFetch);
  assert.equal(run,'12345678-1234-1234-1234-123456789012');
  assert.equal((await cloud.getRun('fictional-tinyfish-key-example-1',run,fakeFetch)).status,'COMPLETED');
  await assert.rejects(
-  cloud.start('fictional-tinyfish-key-example-1',async()=>({
+  cloud.start('fictional-tinyfish-key-example-1','prof_fictional_amazon123',async()=>({
    ok:false,status:403,text:async()=>JSON.stringify({message:'max_steps beta feature not enabled'})
   })),
   /step limits for this account/,
   'The provider rejecting a step cap must not be retried without that cap'
  );
+ await assert.rejects(cloud.validateKey('fictional-key-with-no-amazon',
+  async()=>({ok:true,json:async()=>({profiles:[{id:'prof_fictional_other123',
+   is_default:true,signed_in_sites:[{site:'example.com'}]}]})})),
+  /Amazon is not saved/,
+  'Wrong default profile cannot be silently used for paid Amazon browsing');
+ await assert.rejects(cloud.validateKey('fictional-key-with-no-profile',
+  async()=>({ok:true,json:async()=>({profiles:[]})})),
+  /set it as Default/,
+  'No default profile fails setup before paid work');
  assert.deepEqual(fixture.transactions.new,t('fictional-new'),'Cloud checks do not mutate source bank facts');
  console.log('PASS conditional TinyFish planning, 3-day scheduling, safe schema, no-repeat records and API preflight');
 })().catch(e=>{console.error(e);process.exitCode=1});
