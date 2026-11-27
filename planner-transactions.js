@@ -28,7 +28,7 @@ const keyMovement=id=>'movement|'+encodeURIComponent(String(id));
 function normalFields(data,accounts,asOf){
  const date=String(data.date||''),accountId=String(data.accountId||'').trim(),
   name=String(data.merchant||'').trim().slice(0,160),amount=Number(data.amount),type=String(data.type||'');
- if(!validDate(date)||date<=asOf)throw Error('Choose a future date');
+ if(!validDate(date)||date<asOf)throw Error('Choose today or a future date');
  if(!ids(accounts).has(accountId))throw Error('Choose one of your connected accounts');
  if(!name)throw Error('Enter a transaction name');
  if(!validAmount(data.amount))throw Error('Enter a positive dollar amount');
@@ -42,7 +42,7 @@ function normalFields(data,accounts,asOf){
 function transferFields(data,accounts,asOf){
  const date=String(data.date||''),fromAccountId=String(data.fromAccountId||''),
   toAccountId=String(data.toAccountId||''),amount=Number(data.amount);
- if(!validDate(date)||date<=asOf)throw Error('Choose a future date');
+ if(!validDate(date)||date<asOf)throw Error('Choose today or a future date');
  const known=ids(accounts);
  if(!known.has(fromAccountId)||!known.has(toAccountId)||fromAccountId===toAccountId)
   throw Error('Choose two different linked accounts for this transfer');
@@ -263,15 +263,14 @@ const nextBankBusinessDate=from=>{
 };
 /* Cash outflows move to the previous bank business day; cash inflows
  * (payroll, refunds, incoming transfers) move to the next business day.
- * If a debit's preceding business day is already in the bank snapshot,
- * move the forecast to the next future business day rather than double-count
- * an earlier withdrawal or silently dropping the obligation. */
+ * Today is not an elapsed day: an unpaid bill shifted onto today stays
+ * today. Only prior-day installments roll forward after bank reconciliation. */
 const forecastBusinessDate=(iso,asOf='',direction='out')=>{
  if(!validDate(iso)||bankBusinessDay(iso))return iso;
  if(direction==='in')return nextBankBusinessDate(iso);
  let prior=shift(iso,-1);
  while(!bankBusinessDay(prior))prior=shift(prior,-1);
- return prior>asOf?prior:nextBankBusinessDate(iso);
+ return prior>=asOf?prior:nextBankBusinessDate(iso);
 };
 const monthEnd=m=>new Date(Date.UTC(Number(m.slice(0,4)),Number(m.slice(5,7)),0)).getUTCDate();
 function applySeries(source,baseDate,seriesKey,rules){
@@ -1134,7 +1133,7 @@ function postedCoverage(generated,rules,records,accounts,asOf){
    const effective=kind==='movement'&&item._postedView?item._postedView:item,
     date=String(effective.date||effective.anchorDate||item.anchorDate||''),
     account=String(kind==='movement'?effective.fromAccountId:effective.accountId);
-   if(!validDate(date)||date<=asOf||
+   if(!validDate(date)||date<asOf||
     !sameDirection(t,kind==='event'&&r.type==='transfer'?
      (r.cashDirection==='out'?'expense':'income'):
      kind==='event'?r.type:'transfer')||
