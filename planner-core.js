@@ -757,13 +757,13 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     // assignment below. Never infer a settlement from a payee word alone.
     const payName=[planned.merchant,planned._forecastOriginalMerchant,
       rule?.originalMerchant,rule?.scheduleLabel,...(rule?.matchNames||[])]
-      .filter(Boolean).some(name=>/\\b(?:payroll|paycheck|salary|wage|employer)\\b/i.test(name)),
+      .filter(Boolean).some(name=>/\b(?:payroll|paycheck|salary|wage|employer)\b/i.test(name)),
      paycheckCadence=['weekly','biweekly','every-4-weeks','twice-monthly',
       'monthly'].includes(cadence),
      wageCategory=/INCOME_WAGES/.test(String(
       bank.personal_finance_category?.detailed||
       bank.source?.personalFinanceCategory?.detailed||'').toUpperCase()),
-     bankWageLabel=/\\b(?:payroll|paycheck|salary|wages)\\b/i.test(bankText(bank)),
+     bankWageLabel=/\b(?:payroll|paycheck|salary|wages)\b/i.test(bankText(bank)),
      variance=Math.abs(Number(bank.amount)-Number(planned.amount))/
       Math.max(1,Number(planned.amount)),
      // The nearest occurrence of alternating payroll is 14 days away.
