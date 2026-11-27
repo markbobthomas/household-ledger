@@ -2,14 +2,21 @@
 
 You no longer need a PC or Chrome extension for the recommended setup. Ledger uses the TinyFish cloud browser to read Amazon orders and privately match them to *existing* bank charges.
 
-## Set up once
+## Set up once — no technical knowledge required
 
-1. Open **Ledger → Settings → Amazon purchases**.
-2. Open **TinyFish** from that page. In TinyFish, open your saved browser profile, sign in to your Amazon account, and save the session. This is the only Amazon sign-in; **never enter your Amazon password in Ledger**.
-3. In your TinyFish account, get an API key and paste it into the **TinyFish API key** box in Ledger. Press **Connect TinyFish**. Ledger checks the key without starting a paid browser run.
-4. Press **Turn on automatic updates**.
+In Full Ledger, open **Settings → Amazon purchases → Set up Amazon updates**. The Ledger page includes these nine actions, including the links and the place to paste your key:
 
-That's it. You can close Ledger and turn off your PC. The cloud **server** performs the checks while its Render service is running.
+1. **Open TinyFish.** Tap **Open TinyFish** in Ledger, or open https://agent.tinyfish.ai. Sign in to TinyFish, or select **Sign up** if you are new. No desktop installation is required.
+2. **Find TinyProfiles.** From the TinyFish dashboard menu, choose **TinyProfiles**. This is the feature that saves a website login. Do not choose **Browser Profiles** (Lite/Stealth); that controls browser behavior, not saved Amazon sign-in. TinyFish's current [official TinyProfiles guide](https://docs.tinyfish.ai/key-concepts/tinyprofile) explains the setup.
+3. **Use the default TinyProfile.** If a profile is marked **Default**, open it and begin its sign-in/setup session. If none exists, select **Create Profile**, name it **Ledger Amazon**, select **Set as default**, then press **Create and set up**. Ledger's current TinyFish API uses the default profile, so this distinction matters.
+4. **Sign in to Amazon *inside the TinyFish setup browser*.** Visit **www.amazon.com/your-orders**, enter Amazon credentials on Amazon's own page and complete any verification requested. Make sure you can see real orders.
+5. **Save the login.** In TinyFish, select **Save** or **Save setup session**. Do not simply close the setup browser before saving.
+6. **Get an API key.** Open TinyFish's official [API Keys page](https://agent.tinyfish.ai/api-keys). Sign into the **same TinyFish account** used for your saved Amazon session. Select **Create API Key** and optionally name it **Ledger Amazon**.
+7. **Copy the key.** Select **Copy** immediately when it is displayed; it may only be shown in full once. An API key is a private connection code, not your Amazon password. Do not share it in chat, screenshots, public code or messages.
+8. **Paste into Ledger.** Return to the Amazon setup page, find **Paste TinyFish API key here**, paste your key, and press **Connect TinyFish**. Wait until Ledger says **TinyFish connected**. Ledger validates the key without launching a paid Agent browser job and saves it in private encrypted state.
+9. **Enable.** Press **Turn on automatic updates** (below the instructions). Confirm the page shows **Automatic updates ON**. You can close Ledger and your computer; the private Render server performs checks when enabled and running.
+
+The numbered instructions remain available in a collapsible section, even after TinyFish is connected. You can reopen them to repair an Amazon login. If a key has been connected already, **Disconnect** is available to revoke Ledger's saved copy.
 
 ## When it checks
 
@@ -35,6 +42,6 @@ The TinyFish API key is stored in Ledger's encrypted private state, not in GitHu
 
 ## Troubleshooting
 
-If **Connect TinyFish** fails, check the API key in TinyFish's settings and retry. If an Amazon run says sign-in is required, reopen the saved TinyFish browser profile, sign into Amazon again, and save it. If the bank isn't updating, sign in to Ledger and use **Sync** to repair the existing bank connection. If an order cannot be matched to a posted bank charge, use Lite or the ZIP/CSV fallback instead of guessing.
+If **Connect TinyFish** fails, return to the **API Keys** page and copy the correct key from the same TinyFish account as your Amazon sign-in. If an Amazon run says sign-in is required, go to TinyFish **TinyProfiles**, reopen the **default** profile's setup, sign in to Amazon inside that browser, and save it again. If the bank isn't updating, sign in to Ledger and use **Sync** to repair the existing bank connection. If an order cannot be matched to a posted bank charge, use Lite or the ZIP/CSV fallback instead of guessing.
 
 **Release boundary:** Connecting TinyFish and a successful live signed-in Amazon extraction require one-time owner action. Repository tests use fictional data and do not establish that your private Render deployment is current. The retired desktop-extension source remains archived for existing users but is no longer the recommended setup.
