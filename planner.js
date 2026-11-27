@@ -546,7 +546,7 @@ function futureRows(bundle,s){
  if(!projection)return rows;
  const monthEnd=shiftDay(s.asOf,horizon);
  for(const p of projection.plans||[]){
-  if(p.date<=s.asOf||p.date>monthEnd)continue;
+  if(p.date<s.asOf||p.date>monthEnd)continue;
   const key=window.HouseholdPlannerTransactions.keyMovement(p.id);
   rows.push({key,kind:'movement',id:p.id,date:p.date,amount:p.amount,
    merchant:p.merchant||(p.kind==='card_payment'?'Credit-card payment':'Account transfer'),
@@ -562,7 +562,7 @@ function futureRows(bundle,s){
    addedId:p.id.startsWith('future|future-add|')?p.id.slice(7):null});
  }
  for(const e of projection.events||[]){
-  if(e.transferGroupId||e.date<=s.asOf||e.date>monthEnd)continue;
+  if(e.transferGroupId||e.date<s.asOf||e.date>monthEnd)continue;
   const accountId=String(e.accountId||'');
   const key=e.predictionKey||window.HouseholdPlannerTransactions.keyEvent(e.id,accountId);
   rows.push({key,kind:'event',id:String(e.id||''),date:e.date,amount:e.amount,
