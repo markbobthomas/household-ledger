@@ -719,7 +719,7 @@ async function start(port=Number(env.PORT||8788)){
   if(requestPath==='/api/share/budget/edit'){
    if(!canUseLite())return respond(401,{error:'Lite access has ended.'});
    if(req.method!=='POST'||req.headers['x-pilot-action']!=='1'||
-      !/^application\\/json(?:;|$)/i.test(String(req.headers['content-type']||'')))
+      !/^application\/json(?:;|$)/i.test(String(req.headers['content-type']||'')))
     return respond(403,{error:'Transaction edit rejected'});
    if(Number(req.headers['content-length'])>8192)return respond(413,{error:'Transaction edit too large'});
    let choice;
