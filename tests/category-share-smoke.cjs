@@ -208,9 +208,10 @@ const req=(route,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
   assert.equal((await req('/api/share/categorize','GET',undefined,shared)).data()
    .items.some(x=>x.id===tx.id),false,
    'A corrected specific category does not reopen the review queue');
+  const latestReview=(await req('/api/share/categorize','GET',undefined,shared)).data();
   const planNote=await req('/api/share/categorize','POST',{
    kind:'schedule',id:'future-1',note:'Confirm the invoice amount'},
-   {...shared,'X-Ledger-Revision':after.data().revision});
+   {...shared,'X-Ledger-Revision':latestReview.revision});
   assert.equal(planNote.status,200,'Spouse can annotate an upcoming review task');
   assert.equal(open(file+'.forecasts').transactionNotes['forecast:future-1'],'Confirm the invoice amount');
   const afterPlanNote=(await req('/api/share/categorize','GET',undefined,shared)).data();
