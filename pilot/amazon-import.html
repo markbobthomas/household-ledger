@@ -200,6 +200,7 @@ function renderCloud(data){
  const summary=data.runActive?'Amazon check in progress. A second check will not start.':
   data.needsAttention?'Amazon updates PAUSED. Read the problem below before turning them on again.':
   data.enabled?'Automatic updates ON. New Amazon charges will be checked on scheduled days.':
+  data.connected&&data.amazonSignInConfirmed===false?'TinyFish connected, but its Amazon login was not confirmed. Save the Amazon login in TinyProfiles before turning on updates.':
   data.connected?'TinyFish connected. Automatic updates are OFF. Tap Turn on automatic updates below.':
   'Not connected. Follow the numbered setup steps below.';
  cloudMessage(summary);
@@ -209,6 +210,7 @@ function renderCloud(data){
   'Browser starts in the last 30 days: '+Number(data.runsLast30Days||0)+' of '+Number(data.maxRuns30Days||13)+'.'
  ];
  if(data.runLimitReason)parts.push('Next paid check held: '+data.runLimitReason+'.');
+ if(data.connected&&data.amazonSignInConfirmed===false)parts.push('TinyFish did not confirm a saved Amazon login. See setup steps and Save the Amazon session before allowing paid checks.');
  if(data.lastSuccessAt)parts.push('Last successful order match: '+new Date(data.lastSuccessAt).toLocaleString()+'.');
  if(data.lastError)parts.push('Action needed: '+data.lastError);
  $('cloud-detail').textContent=parts.join(' ');
