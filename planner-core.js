@@ -751,28 +751,18 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
     const named=[planned.merchant,planned._forecastOriginalMerchant,
      rule?.originalMerchant,...(rule?.matchNames||[])]
      .some(name=>samePayee(bankText(bank)+' '+String(bank.name||''),name));
-    // A bank can rename an ACH credit, and a real paycheck can vary with
-    // deductions. Keep bank-to-forecast reconciliation anchored to account,
-    // income direction, posting date and amount, with final GLOBAL one-to-one
-    // assignment below. Never infer a settlement from a payee word alone.
-    const payName=[planned.merchant,planned._forecastOriginalMerchant,
-      rule?.originalMerchant,rule?.scheduleLabel,...(rule?.matchNames||[])]
-      .filter(Boolean).some(name=>/\b(?:payroll|paycheck|salary|wage|employer)\b/i.test(name)),
-     paycheckCadence=['weekly','biweekly','every-4-weeks','twice-monthly',
-      'monthly'].includes(cadence),
-     wageCategory=/INCOME_WAGES/.test(String(
-      bank.personal_finance_category?.detailed||
-      bank.source?.personalFinanceCategory?.detailed||'').toUpperCase()),
-     bankWageLabel=/\b(?:payroll|paycheck|salary|wages)\b/i.test(bankText(bank)),
-     variance=Math.abs(Number(bank.amount)-Number(planned.amount))/
+    // Universal posted/forecast reconciliation: verified bank cash can
+    // settle ONE anticipated occurrence regardless of its source (inferred,
+    // confirmed, or one-off), without depending on a stable payee descriptor.
+    // A strict amount match allows early posting across the cadence window.
+    // Small net CREDIT changes are also expected, but never use that relaxed
+    // tolerance to erase a still-owed expense. Account/direction/date,
+    // unique one-to-one assignment and owner-specific windows still apply.
+    const variance=Math.abs(Number(bank.amount)-Number(planned.amount))/
       Math.max(1,Number(planned.amount)),
-     // The nearest occurrence of alternating payroll is 14 days away.
-     // Six days can cover an early holiday/weekend deposit without borrowing
-     // the other independently confirmed four-week payday.
-     strongUnnamed=bankKind==='income'&&paycheckCadence&&payName&&gap<=6&&
-      (variance<=.003||wageCategory&&variance<=.35||
-       bankWageLabel&&variance<=.15||gap<=3&&variance<=.08)||
-      bankKind==='income'&&gap<=3&&variance<=.003;
+     unchangedAmount=variance<=.005&&gap<=6,
+     changedCashCredit=bankKind==='income'&&gap<=3&&variance<=.08,
+     strongUnnamed=unchangedAmount||changedCashCredit;
     if((!named&&!strongUnnamed)||bank.accountingKind==='card_payment')continue;
    }
    pairs.push({bank,item,gap});
