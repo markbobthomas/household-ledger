@@ -44,7 +44,7 @@ function snapshot(state){
    product=imported&&evidence.valid(imported,raw)?evidence.note(imported):'';
   const check=raw&&adjustments.categoryAiChecks?.[keyFor(raw)],
    aiText=check?.status==='unable'?'AI checked — unable to categorize':
-    check?.status==='interrupted'?'AI attempt interrupted — not retried automatically':
+    ['interrupted','pending'].includes(check?.status)?'AI attempt interrupted — not retried automatically':
     check?.status==='suggested'?'AI suggested '+check.category+' (not yet confirmed)':null;
   return annotations(['Saved note',saved],['Transaction note',raw?.note],
    ['Amazon product details',product],['AI review',aiText]);
