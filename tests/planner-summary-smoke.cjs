@@ -301,3 +301,54 @@ assert.equal(JSON.stringify(series),balanceBefore,'Weekend navigation does not s
 const title=require('../planner-transactions.js').transactionTitle('<Shop>','bank:key','<Private note>');
 assert.match(title,/transaction-title-line/);assert.match(title,/&lt;Private note&gt;/);
 assert.doesNotMatch(title,/<small/,'Same shared inline note markup in Calendar and Activity');
+
+
+ // Cross-year weekend/holiday bank shifting must not make a January card
+ // obligation appear to belong to December. Use only fictional aliases.
+tool.setCalendarScope('all',false);
+const renamedAccounts=[
+ {id:'cash-fixture',name:'Family Checking',accountType:'checking',type:'depository',
+  current:5000,available:5000},
+ {id:'card-fixture',name:'Household Rewards',accountType:'credit',type:'credit',current:250}
+];
+const cardMove={
+ id:'autopay|card-fixture|2027-01-02',accountId:'cash-fixture',date:'2026-12-31',
+ amount:125,merchant:'ACCOUNT ••0000 Credit-card payment (autopay)',
+ kind:'transfer_out',transferGroupId:'autopay|card-fixture|2027-01-02',
+ toAccountId:'card-fixture',fromAccountId:'cash-fixture',amountEstimate:'estimated-statement'
+};
+const billPoints=Array.from({length:45},(_,i)=>{
+ const d=new Date('2026-12-31T12:00:00Z');d.setUTCDate(d.getUTCDate()+i);
+ return {date:d.toISOString().slice(0,10),balance:4875,events:i===0?[cardMove]:[]};
+});
+const nicknameProjection={id:'cash-fixture',type:'cash',balanceStatus:'fresh',
+ openingAvailable:5000,openingCurrent:5000,series:billPoints,events:[cardMove]};
+const fakePayment={
+ id:cardMove.transferGroupId,cardId:'card-fixture',cardName:'ACCOUNT ••0000',
+ scheduledPaymentDate:'2027-01-02',dueDate:'2027-01-02',
+ withdrawalDate:'2026-12-31',amount:125,statementBalance:125,alreadyPaid:false
+};
+const nicknameInput={
+ snapshot:{asOf:'2026-12-31',accounts:[
+  renamedAccounts[0],{...renamedAccounts[1],name:'ACCOUNT ••0000'}]},
+ chosen:renamedAccounts[0],derived:nicknameProjection,days:44,fresh:true,view:'calendar',
+ prefs:{primaryAccountId:'cash-fixture',accountNicknames:{'card-fixture':'Household Rewards'},
+  cashCushion:500},
+ accounts:renamedAccounts,
+ bundle:{rows:[],projection:{accounts:[nicknameProjection,
+  {id:'card-fixture',type:'credit',balanceStatus:'fresh',series:billPoints.map(p=>({
+   ...p,balance:250,events:[]})),events:[]}]},
+  payments:{statements:[fakePayment],paymentDetails:[fakePayment],cardEstimates:[],warnings:[]}}
+};
+const beforeCardLabel=JSON.stringify([cardMove,fakePayment]);
+const renamedHtml=tool.render(nicknameInput);
+assert.match(renamedHtml,/Household Rewards · January 2027 payment \(withdraws Dec 31\)/,
+ 'Calendar cell and monthly list show saved card nickname and intended January payment month');
+assert.match(renamedHtml,/Scheduled Jan 2, 2027 · withdraws Dec 31, 2026/,
+ 'Day and month details explain the original date separately from the earlier withdrawal');
+assert.doesNotMatch(renamedHtml,/calendar-event-name">ACCOUNT ••0000/,
+ 'Raw issuer account description never replaces a configured display nickname');
+assert.match(renamedHtml,/\$125\.00/,
+ 'Display-only calendar changes preserve the original forecast cash amount');
+assert.equal(JSON.stringify([cardMove,fakePayment]),beforeCardLabel,
+ 'Rendering card names and billing months must not mutate the canonical forecast data');
