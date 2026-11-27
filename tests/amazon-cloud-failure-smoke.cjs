@@ -41,7 +41,7 @@ async function verify(label,provider,reason){
  fs.writeFileSync(file,encode(root));
  fs.writeFileSync(json,JSON.stringify(provider));
  const env={...process.env,PORT:String(port),PILOT_STATE_PATH:file,
-  PILOT_ENCRYPTION_KEY:secret,PILOT_PASSWORD:'fictional-password',
+  PILOT_ENCRYPTION_KEY:secret,PILOT_PASSWORD:'fictional-password-with-valid-length',
   PLAID_ENV:'sandbox',PLAID_CLIENT_ID:'fictional-id',
   PLAID_SECRET:'fictional-secret',
   TINYFISH_MOCK_RESULT:json,TINYFISH_MOCK_LOG:log,
