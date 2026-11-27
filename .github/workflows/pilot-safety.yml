@@ -23,6 +23,9 @@ jobs:
           node --check pilot/data-source.js
           node --check pilot/category-ai-ui.js
           node --check pilot/category-ai-automation.cjs
+          node --check pilot/amazon-cloud.cjs
+          node --check tests/amazon-cloud-smoke.cjs
+          node --check tests/amazon-cloud-server-smoke.cjs
           node --check planner-core.js
           node --check planner-history.js
           node --check planner-transactions.js
