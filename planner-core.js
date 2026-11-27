@@ -755,9 +755,11 @@ function materialize(snapshot,rows,prefs={},tools,paymentEngine,days=90,options=
   pairsByBank.get(bankId).push(edge);
  }
  for(const [bankId,matches] of pairsByBank){
-  if(matches.length<2||(covered.review||[]).some(r=>String(r.bankId)===bankId))continue;
+  if(matches.length<2||matches[0].bank.pending||
+   (covered.review||[]).some(r=>String(r.bankId)===bankId))continue;
   const ruleIds=matches.map(x=>String(x.item.e.ruleId||x.item.e.recurringRuleId||''));
-  if(ruleIds.some(id=>!id)||new Set(ruleIds).size!==matches.length){
+  if(matches.some(x=>x.item.kind!=='event')||ruleIds.some(id=>!id)||
+   new Set(ruleIds).size!==matches.length){
    warnings.push('A posted transaction may match multiple future predictions. Confirm the correct occurrence before relying on the forecast.');
    continue;
   }
