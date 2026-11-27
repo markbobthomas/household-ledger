@@ -95,7 +95,7 @@ function plan(state){
  const {rows,mode,categories}=eligible(state);
  if(!categories.length)return {rows:[],batches:[],maximumUsd:0,mode,count:0,hash:'none'};
  const batches=[];
- for(let i=0;i<rows.length;i+=MAX_BATCH){
+ for(let i=0;i<rows.length;){
   // A long product name may exceed a single request budget: shrink this batch
   // rather than dropping the purchase and claiming it was checked.
   let end=Math.min(rows.length,i+MAX_BATCH),part=rows.slice(i,end),preflight;
@@ -107,7 +107,7 @@ function plan(state){
   }
   if(!preflight)break;
   batches.push({rows:part,request:preflight.request,maximumUsd:preflight.maximumUsd});
-  i=end-1;
+  i=end;
  }
  const maximumUsd=batches.reduce((n,b)=>n+b.maximumUsd,0);
  const hash=crypto.createHash('sha256').update(JSON.stringify({
