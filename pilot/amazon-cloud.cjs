@@ -184,15 +184,26 @@ function parseOrders(run){
  }
  return out;
 }
-function prepare(state,orders,categories){
- const before=state.ledgerAdjustments||{};
- const match=amazon.match(orders,state.transactions||{},before,categories);
- // Automatic cloud imports are narrower than the manual importer: they may
- // save only true exact reconciliations, not speculative Possible notes,
- // fuzzy suggestions or suggested categories from unverified items.
- return apply.prepare({...match,matches:(match.matches||[]).filter(m=>
-   m.confidence==='exact'),suggestions:[]},before,{
-  transactions:state.transactions||{},categories,
+function prepare(state,orders,categories,targets){
+ const before=state.ledgerAdjustments||{},
+  chosen=new Set(Array.isArray(targets)?targets:[]);
+ if(!chosen.size)throw Error('Amazon run did not reserve any bank charges');
+ // CRITICAL: Never let a new cloud batch rewrite Notes/categories on earlier
+ // historical charges, manually reviewed charges, or another account.
+ // The read-only bank matcher receives only the exact charge IDs reserved
+ // before the external TinyFish request.
+ const scoped=Object.fromEntries(Object.values(state.transactions||{}).filter(t=>
+  Evidence.isAmazon(t)&&chosen.has(keyFor(t))).map(t=>[t.id,t]));
+ if(!Object.keys(scoped).length)throw Error('Reserved Amazon charges are no longer posted');
+ const match=amazon.match(orders,scoped,before,categories);
+ const exactMatches=(match.matches||[]).filter(m=>m.confidence==='exact');
+ // Automatic cloud imports are narrower than manual imports: no speculative
+ // Possible notes or inferred broad categories from uncertain identity.
+ // The follow-up category pass also sees only those exactly matched charges.
+ const exactTransactions=Object.fromEntries(exactMatches.map(m=>[m.transactionId,
+  scoped[m.transactionId]]).filter(([_,tx])=>!!tx));
+ return apply.prepare({...match,matches:exactMatches,suggestions:[]},before,{
+  transactions:exactTransactions,categories,
   automatic:before.categoryAutomation?.automatic!==false,replaceOther:false});
 }
 function visited(cloud,run){
