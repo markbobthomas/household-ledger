@@ -90,10 +90,10 @@ const missed=Core.materialize(liveSnap,[],latePrefs,T,null,70,policy);
 assert.equal(missed.overduePayments.length,1,'Thirteen-day-old missed bill remains actionable');
 assert.equal(missed.overduePayments[0].expectedDate,'2026-10-15');
 assert.deepEqual(missed.ledger.filter(e=>e.ruleId===lateRule.id).map(e=>e.date).slice(0,2),
- ['2026-10-29','2026-11-13'],
+ ['2026-10-28','2026-11-13'],
  'A missed withdrawal rolls forward once, while the next monthly anchor is intact');
 assert.equal(missed.projection.accounts.find(a=>a.id==='checking').series
- .find(e=>e.date==='2026-10-29').balance,6800,
+ .find(e=>e.date==='2026-10-28').balance,6800,
  'The previously missed debit reduces projected cash balance exactly once');
 const stillPending=Core.materialize(liveSnap,[{...post('pending-housing',
  'Fictional Housing ACH',1275,'2026-10-18'),pending:true}],latePrefs,T,null,70,policy);
@@ -554,12 +554,43 @@ assert.equal(Core.materialize(todaySnap,[],oneOffToday,T,null,45,policy)
  'A manually scheduled one-time bill for today must not roll to Monday');
 assert.equal(Core.materialize(todaySnap,[],oneOffToday,T,null,45,policy)
  .overduePayments.length,0);
+
+const saturdaySnap={...todaySnap,asOf:'2026-11-28'};
+const saturday=Core.materialize(saturdaySnap,[],todayPrefs,T,null,45,policy);
+assert.equal(saturday.ledger.filter(x=>x.ruleId===todayRule.id)[0].date,'2026-11-28',
+ 'Friday mortgage without a posting carries to Saturday (not Monday)');
+assert.equal(saturday.overduePayments[0].proposedDate,'2026-11-28',
+ 'Review must identify Saturday as the next expected date after Friday');
+assert.equal(saturday.projection.accounts.find(x=>x.id==='checking')
+ .series.find(x=>x.date==='2026-11-28').balance,6172.69,
+ 'Saturday projected closing cash already reserves the missed Friday mortgage');
+const sunday=Core.materialize({...todaySnap,asOf:'2026-11-29'},
+ [],todayPrefs,T,null,45,policy);
+assert.equal(sunday.ledger.filter(x=>x.ruleId===todayRule.id)[0].date,'2026-11-29',
+ 'Still-unpaid mortgage continues Sunday if Saturday also passes');
+const weekendCarried=Core.materialize(saturdaySnap,[],shiftedWeekend,T,null,45,policy);
+assert.equal(weekendCarried.ledger.filter(x=>x.ruleId==='weekend-housing')[0].date,'2026-11-28',
+ 'A nominal Saturday bill moves to prior Friday, then rolls to Saturday only if missed');
+const holidayRule={...todayRule,id:'holiday-housing',anchorDate:'2026-11-26'};
+const holidayBefore=Core.materialize({...todaySnap,asOf:'2026-11-24'},[],
+ {futureRecurringRules:[holidayRule]},T,null,5,policy);
+assert.equal(holidayBefore.ledger.filter(x=>x.ruleId==='holiday-housing')[0].date,
+ '2026-11-25','Thanksgiving initial scheduled debit moves backward to Wednesday');
+const holidayMissed=Core.materialize({...todaySnap,asOf:'2026-11-26'},[],
+ {futureRecurringRules:[holidayRule]},T,null,5,policy);
+assert.equal(holidayMissed.ledger.filter(x=>x.ruleId==='holiday-housing')[0].date,
+ '2026-11-26','Unpaid Wednesday debit carries onto Thanksgiving, without a Monday jump');
+const oneOffSaturday=Core.materialize(saturdaySnap,[],oneOffToday,T,null,45,policy);
+assert.equal(oneOffSaturday.ledger.filter(x=>x.merchant==='Example Water')[0].date,
+ '2026-11-28','A missed one-off debit also follows daily calendar carry-forward');
+assert.equal(T.forecastBusinessDate('2026-11-28','2026-11-28'),'2026-11-28',
+ 'A Saturday overdue debit is not shifted forward to Monday');
 const olderDay={...todaySnap,asOf:'2026-11-30'};
 const missedOlder=Core.materialize(olderDay,[],todayPrefs,T,null,45,policy);
 assert.equal(missedOlder.overduePayments.length,1,
  'A still-unposted payment from a prior date continues to be protected as overdue');
-assert.equal(missedOlder.ledger.filter(x=>x.ruleId===todayRule.id)[0].date,'2026-12-01',
- 'Previously missed Friday obligations still roll forward only after their due date');
+assert.equal(missedOlder.ledger.filter(x=>x.ruleId===todayRule.id)[0].date,'2026-11-30',
+ 'Missed Friday payment continues on the current calendar day, not Tuesday');
 assert.equal(Core.materialize(todaySnap,[],todayPrefs,T,null,45,policy).projection
  .diagnostics.balanceMismatches.length,0,'Same-day projection retains arithmetic integrity');
 console.log('PASS posted matching: overdue per occurrence, one-off, pending, ACH, saved anchors, manual matching windows and immutable bank facts');
