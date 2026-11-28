@@ -150,6 +150,17 @@ const twoChargeState={transactions:{a:{...t('priced-test')},
 assert.equal(cloud.prepare(twoChargeState,noteSource,['Shopping'],
  cloud.eligible(twoChargeState).map(t=>t.key)).report.matches,0,
  'One unpriced order cannot be claimed by two bank charges');
+const separatelyScanned={...twoChargeState,amazonCloud:{scanned:{
+ [cloud.eligible(twoChargeState).find(x=>x.id==='b').key]:'2026-11-01T00:00:00Z'
+}}};
+assert.equal(cloud.prepare(separatelyScanned,noteSource,['Shopping'],
+ [cloud.eligible(separatelyScanned)[0].key]).report.matches,0,
+ 'A previously checked bank charge still competes for an order total');
+const ownedEvidence={...pricedOnlyState,ledgerAdjustments:{predictions:{},
+ amazonEvidence:{b:{match:'exact',orderId:'123-5555555-5555555'}}}};
+assert.equal(cloud.prepare(ownedEvidence,noteSource,['Shopping'],
+ [noteKey]).report.matches,0,
+ 'A previously verified order cannot be claimed again by another charge');
 
 const baseline=cloud.baseline(fixture,{enabled:false,scanned:{}},new Date());
 assert.ok(baseline.baselineAt,'A safe first-enable point must be durable');
