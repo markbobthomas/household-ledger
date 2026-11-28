@@ -655,7 +655,7 @@ async function finishCloudAmazon(){
     updated.lastOutcome='Amazon sync paused; no order information saved';
     state.amazonCloud=updated;await save();return;
    }
-   if(!orders.length){
+   if(!orders.length&&!(orders.unpricedOrders||[]).length){
     updated.enabled=false;updated.pausedReason='empty-report';
     updated.lastFailedRunId=id;
     updated.lastOutcome='Paused: no fully priced Amazon orders available';
@@ -671,9 +671,9 @@ async function finishCloudAmazon(){
     updated.enabled=false;updated.pausedReason='no-matches';
     updated.lastFailedRunId=id;
     updated.lastCount=orders.length;updated.lastMatched=0;
-    updated.lastOutcome='Paused: no unambiguous priced Amazon order matched the new bank charge';
+    updated.lastOutcome='Paused: no safely verified Amazon order matched the posted bank charge';
     updated.lastError=(orders.unpricedOrders?.length||0)+
-     ' orders had missing item prices and were excluded. No purchase was changed; review the charge manually or recheck the saved result without another paid browser run.';
+     ' orders lacked item prices; verified full-order totals were also checked for Note-only matches. No matching bank purchase was changed. Review manually or recheck the existing result after an update; no paid browser retry is needed.';
     state.amazonCloud=updated;await save();return;
    }
    // The existing importer writes ONLY category/Note overlays; never Plaid.
@@ -691,10 +691,13 @@ async function finishCloudAmazon(){
    updated.pausedReason=partial?'partial-report':null;
    updated.lastFailedRunId=partial?id:null;
    updated.lastOutcome=partial?
-    'Paused: '+updated.lastMatched+' exact Amazon matches saved; remaining orders require review':
+    'Paused: '+updated.lastMatched+' verified Amazon matches saved'+
+    (proposal.noteOnlyMatches?' ('+proposal.noteOnlyMatches+' order-total Notes only)':'')+
+    '; remaining orders require review':
     'Amazon orders checked and matched against Ledger';
    updated.lastError=partial?
-    (orders.unpricedOrders?.length||0)+' unpriced orders excluded; '+
+    (orders.unpricedOrders?.length||0)+' orders lacked item prices; '+
+    (proposal.noteOnlyMatches||0)+' matched using verified order totals (Notes only, no inferred item categories). '+
     updated.lastUnmatched+' bank charges still need review. No further paid checks will start automatically.':null;
    state.ledgerAdjustments=proposal.next;
    state.amazonCloud=updated;

@@ -79,6 +79,89 @@ assert.equal(cloud.safeStatus({amazonCloud:{apiKey:'fictional',profileId:'prof_t
  enabled:false,pausedReason:'invalid-report'}}).replayAvailable,true,
  'A paused prior run can be read again without another paid browser start');
 
+// Real-world failure mode: Amazon exposes an order total and product titles
+// but no individual prices. An exact unique bank debit may get a Note ONLY.
+const unpricedSource=(extra=[])=>cloud.parseOrders({status:'COMPLETED',
+ result:{signedIn:true,complete:true,orders:[
+  {orderId:'123-5555555-5555555',title:'Fictional storage bin',
+   date:today,shipmentDate:today,cents:0,charged:2325},
+  {orderId:'123-5555555-5555555',title:'Fictional light bulb',
+   date:today,shipmentDate:today,cents:null,charged:2325},
+  ...extra
+ ]}});
+const noteSource=unpricedSource();
+assert.equal(noteSource.length,0,'No item-level priced rows for the order');
+assert.equal(noteSource.unpricedOrders.length,1);
+assert.equal(noteSource.unpricedOrders[0].charged,2325);
+const noteOnly=cloud.prepare(pricedOnlyState,noteSource,['Shopping','Home & Maintenance'],
+ [cloud.eligible(pricedOnlyState)[0].key]);
+const noteKey=cloud.eligible(pricedOnlyState)[0].key;
+assert.equal(noteOnly.report.matches,1,
+ 'A single exact order-level total may recover an otherwise missing product Note');
+assert.equal(noteOnly.noteOnlyMatches,1);
+assert.match(noteOnly.next.predictions.transactionNotes[noteKey],/Fictional storage bin/);
+assert.equal(noteOnly.next.amazonAllocations['priced-test'],undefined,
+ 'Never infer a split of the known order amount across unpriced items');
+assert.equal(noteOnly.next.categoryOverrides['priced-test'],undefined,
+ 'No automatically assigned category from an unpriced order');
+const noteEvidence=noteOnly.next.amazonEvidence['priced-test'];
+assert.equal(noteEvidence.uncertainty,'order-total-no-item-price');
+assert.equal(noteEvidence.match,'exact');
+assert.equal(require('../pilot/amazon-evidence.cjs').category(noteEvidence,
+ ['Shopping','Home & Maintenance']),null,
+ 'A verified whole-order Note must NEVER become an inferred item category');
+assert.equal(noteOnly.matchedKeys[0],noteKey);
+const unknownTotal=unpricedSource([
+ {orderId:'123-6666666-6666666',title:'Fictional second unknown order',
+  date:today,shipmentDate:today,cents:0,charged:null}
+]);
+assert.equal(cloud.prepare(pricedOnlyState,unknownTotal,['Shopping'],
+ [noteKey]).report.matches,0,
+ 'Unknown competing order totals must block automatic attribution');
+const duplicatedTotal=unpricedSource([
+ {orderId:'123-7777777-7777777',title:'Fictional duplicate order',
+  date:today,shipmentDate:today,cents:0,charged:2325}
+]);
+assert.equal(cloud.prepare(pricedOnlyState,duplicatedTotal,['Shopping'],
+ [noteKey]).report.matches,0,
+ 'Two unpriced orders sharing the same total and time are ambiguous');
+const multiShipment=cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,orders:[
+ {orderId:'123-8888888-8888888',title:'Fictional part one',
+  date:today,shipmentDate:today,cents:0,charged:2325},
+ {orderId:'123-8888888-8888888',title:'Fictional part two',
+  date:today,shipmentDate:'2026-01-05',cents:0,charged:2325}
+ ]}});
+assert.equal(cloud.prepare(pricedOnlyState,multiShipment,['Shopping'],
+ [noteKey]).report.matches,0,
+ 'Full order total cannot be attributed to one of multiple shipments');
+const competingPrice=cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,orders:[
+ {orderId:'123-4444444-4444444',title:'Fictional item with exact price',
+  date:today,shipmentDate:today,cents:2325,charged:2325},
+ {orderId:'123-5555555-5555555',title:'Fictional unpriced order',
+  date:today,shipmentDate:today,cents:0,charged:2325}
+ ]}});
+assert.equal(cloud.prepare(pricedOnlyState,competingPrice,['Shopping'],
+ [noteKey]).report.matches,0,
+ 'A competing complete priced order blocks order-total-only attribution');
+const twoChargeState={transactions:{a:{...t('priced-test')},
+ b:{...t('second-same-amount')}},ledgerAdjustments:{predictions:{}}};
+assert.equal(cloud.prepare(twoChargeState,noteSource,['Shopping'],
+ cloud.eligible(twoChargeState).map(t=>t.key)).report.matches,0,
+ 'One unpriced order cannot be claimed by two bank charges');
+const separatelyScanned={...twoChargeState,amazonCloud:{scanned:{
+ [cloud.eligible(twoChargeState).find(x=>x.id==='second-same-amount').key]:'2026-11-01T00:00:00Z'
+}}};
+assert.equal(cloud.prepare(separatelyScanned,noteSource,['Shopping'],
+ [cloud.eligible(separatelyScanned)[0].key]).report.matches,0,
+ 'A previously checked bank charge still competes for an order total');
+const ownedEvidence={...pricedOnlyState,ledgerAdjustments:{predictions:{},
+ amazonEvidence:{b:{match:'exact',orderId:'123-5555555-5555555'}}}};
+assert.equal(cloud.prepare(ownedEvidence,noteSource,['Shopping'],
+ [noteKey]).report.matches,0,
+ 'A previously verified order cannot be claimed again by another charge');
+
 const baseline=cloud.baseline(fixture,{enabled:false,scanned:{}},new Date());
 assert.ok(baseline.baselineAt,'A safe first-enable point must be durable');
 assert.equal(cloud.eligible({...fixture,amazonCloud:{...baseline,enabled:true}}).length,0,
