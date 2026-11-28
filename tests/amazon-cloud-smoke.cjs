@@ -100,11 +100,11 @@ assert.equal(noteOnly.report.matches,1,
  'A single exact order-level total may recover an otherwise missing product Note');
 assert.equal(noteOnly.noteOnlyMatches,1);
 assert.match(noteOnly.next.predictions.transactionNotes[noteKey],/Fictional storage bin/);
-assert.equal(noteOnly.next.amazonAllocations.a,undefined,
+assert.equal(noteOnly.next.amazonAllocations['priced-test'],undefined,
  'Never infer a split of the known order amount across unpriced items');
-assert.equal(noteOnly.next.categoryOverrides.a,undefined,
+assert.equal(noteOnly.next.categoryOverrides['priced-test'],undefined,
  'No automatically assigned category from an unpriced order');
-const noteEvidence=noteOnly.next.amazonEvidence.a;
+const noteEvidence=noteOnly.next.amazonEvidence['priced-test'];
 assert.equal(noteEvidence.uncertainty,'order-total-no-item-price');
 assert.equal(noteEvidence.match,'exact');
 assert.equal(require('../pilot/amazon-evidence.cjs').category(noteEvidence,
