@@ -142,15 +142,24 @@ module.exports=(async()=>{
      'All nine actions are visible and numbered');
     assert.equal(await page.locator('a[href="https://agent.tinyfish.ai/api-keys"]').count(),1,
      'Direct verified TinyFish API Keys link must be included');
-    assert.equal(await page.locator('a[href="https://docs.tinyfish.ai/key-concepts/tinyprofile"]').count(),1,
-     'Provide official TinyProfile setup help');
+    assert.equal(await page.locator('a[href="https://agent.tinyfish.ai/profiles"]').count(),1,
+     'Direct verified TinyFish saved-profiles link bypasses the Agent prompt');
+    assert.equal(await page.locator('a[href="https://docs.tinyfish.ai/agent/how-to/create-google-form-with-profile"]').count(),1,
+     'Offer official illustrated profile setup for users who cannot find it');
     const setupText=await page.locator('#cloud-setup-steps').innerText();
-    for(const phrase of ['Sign up','TinyProfiles','Default','Set as default',
-     'Create and set up','www.amazon.com/your-orders','Save setup session',
-     'Create API Key','Copy','Paste TinyFish API key here',
-     'Connect TinyFish','Turn on automatic updates']){
-     assert(setupText.includes(phrase),name+' is missing essential setup instruction: '+phrase);
+    for(const phrase of ['What do you want your agent to do?','Agent Playground',
+     'do not type an Amazon task','Create profile','Next','Open a browser and sign in',
+     'www.amazon.com/your-orders','Save','Default','Create API Key','Copy',
+     'Paste TinyFish API key here','Connect TinyFish','Turn on automatic updates']){
+     assert(setupText.includes(phrase),name+' is missing a critical actual TinyFish UI instruction: '+phrase);
     }
+    await page.locator('#cloud-profile-help summary').click();
+    assert.match(await page.locator('#cloud-profile-help').innerText(),/stop setup here/,
+     'When saved profiles are unavailable, forbid a charged Agent prompt workaround');
+    assert.equal(await page.locator('a[href="#manual-amazon-import"]').count(),1,
+     'Offer functional fallback to local manual import');
+    assert.equal(await page.locator('#manual-amazon-import').isVisible(),true);
+    await page.locator('#cloud-profile-help summary').click();
     assert.match(await page.locator('#cloud-status').innerText(),/Not connected/);
     await page.locator('#cloud-api-key').fill('fictional-tinyfish-key-not-a-real-secret');
     await page.locator('#cloud-connect').click();
