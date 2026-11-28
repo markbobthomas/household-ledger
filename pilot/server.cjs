@@ -724,7 +724,7 @@ async function finishCloudAmazon(){
     (partial?'; '+updated.lastUnmatched+' charge(s) inspected but still need product Notes':
      '; new charges can be checked on the normal schedule');
    updated.lastError=partial?
-    'Some Amazon charges still lack a product Note because this completed report did not show a sufficiently relevant order. These charges will not trigger repeat paid runs; use Check now for a free saved-result recheck or import the Amazon order file.':null;
+    'Some Amazon charges still lack product Notes because this completed report had no sufficiently relevant order. They will not trigger repeat paid runs. Check now will reuse saved evidence for free only when useful; otherwise review the cost limit or import the Amazon order file.':null;
    state.ledgerAdjustments=proposal.next;
    state.amazonCloud=updated;
    try{await save()}catch(error){
