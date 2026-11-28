@@ -89,9 +89,12 @@ function safeStatus(state){
   missing=unnoted.length,
   replayId=c.lastCompletedRunId||c.lastFailedRunId||null,
   lastRead=Date.parse(c.lastCompletedRunAt||''),
+  tried=new Set(c.lastFreeReplayRunId===replayId&&
+   c.lastFreeReplayVersion===RECOVERY_VERSION?
+    c.lastFreeReplayTargets||[]:[]),
   earlier=unnoted.some(t=>{
    const tx=state.transactions?.[t.id];
-   return tx&&(!Number.isFinite(lastRead)||
+   return tx&&!tried.has(t.key)&&(!Number.isFinite(lastRead)||
     Date.parse(tx.date+'T12:00:00Z')<=lastRead+86400000);
   }),
   replayReady=!!c.apiKey&&!c.run&&!!replayId&&earlier;
