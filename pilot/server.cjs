@@ -518,10 +518,19 @@ async function runCloudAmazon(manual=false){
   if(!current.profileId)return {error:'Reconnect TinyFish to verify its saved Amazon profile before running',...cloudStatus()};
   if(current.run)return {busy:true,...cloudStatus()};
   if(accountRemovalBusy||!state.items.length)return {error:'Connect a bank before Amazon can sync'};
-  if(current.pausedReason)return {needsAttention:true,...cloudStatus()};
+  // A legacy partial-order mismatch is not a payment-first failure; the
+  // owner may run the one expressly consented improved manual pilot.
+  if(current.pausedReason&&!(manual&&!cloudAmazon.paymentPilotPassed(current)&&
+    ['no-matches','partial-report'].includes(current.pausedReason)))
+   return {needsAttention:true,...cloudStatus()};
   if(!current.baselineAt)return {error:'Turn automatic updates off and back on to finish the safe starting-point setup',...cloudStatus()};
   const limitReason=cloudAmazon.limit(current);
   if(limitReason)return {limitReached:true,error:limitReason,...cloudStatus()};
+  // Do not silently spend on a newly redesigned extraction workflow.
+  // Existing paid schedules resume only after a manual payment-to-product
+  // match has actually been verified by the stricter parser/matcher.
+  if(!manual&&!cloudAmazon.paymentPilotPassed(current))
+   return {pilotRequired:true,...cloudStatus()};
   const slot=cloudAmazon.local();
   if(!manual&&!cloudAmazon.due(current))return {notDue:true,...cloudStatus()};
   const cfg={...current,lastAttemptAt:stamp(),
@@ -549,7 +558,8 @@ async function runCloudAmazon(manual=false){
   // outcome remains blocked and needs manual reconciliation, never auto-retry.
   const startedAt=stamp(),recent=cloudAmazon.runsInWindow(state.amazonCloud).starts;
   state.amazonCloud={...state.amazonCloud,run:{status:'launching',
-   startedAt,manual,targets:targets.map(t=>t.key)},
+   startedAt,manual,strategy:cloudAmazon.PAYMENT_VERSION,
+   targets:targets.map(t=>t.key)},
    runStarts:[...recent,startedAt]}; // durable, shared 30-day limit
   await save();
   let id;
@@ -571,7 +581,7 @@ async function runCloudAmazon(manual=false){
   }
   state.amazonCloud={...state.amazonCloud,
    run:{...state.amazonCloud.run,id,status:'running'},
-   lastOutcome:'TinyFish is reading Amazon orders'};
+   lastOutcome:'TinyFish is reading Amazon payments and linked products'};
   await save();
   return {started:true,...cloudStatus()};
  })}
@@ -600,7 +610,7 @@ async function reprocessCloudAmazon(runId,{automatic=false}={}){
   const at=Date.parse(provider.created_at);
   if(provider.status!=='COMPLETED'||provider.run_id!==runId||
      provider.profile_attached!==true||provider.profile_id!==before.profileId||
-     !String(provider.goal||'').includes('Read only Amazon.com Your Orders')||
+     !cloudAmazon.knownGoal(provider.goal)||
      !Number.isFinite(at)||at>Date.now()+300000||at<Date.now()-30*86400000)
    throw Object.assign(Error('This is not a recent completed run from the connected Amazon profile'),{httpStatus:409});
   // No new/post-run bank charges may be imported using an earlier result.
@@ -678,7 +688,8 @@ async function finishCloudAmazon(){
     updated.lastOutcome='Amazon sync paused; no order information saved';
     state.amazonCloud=updated;await save();return;
    }
-   if(!orders.length&&!(orders.unpricedOrders||[]).length){
+   if(!orders.length&&!(orders.unpricedOrders||[]).length&&
+      !(orders.payments||[]).length){
     updated.enabled=false;updated.pausedReason='empty-report';
     updated.lastFailedRunId=id;
     updated.lastOutcome='Paused: no fully priced Amazon orders available';
@@ -690,6 +701,15 @@ async function finishCloudAmazon(){
     state.ledgerAdjustments?.customCategories,
     state.ledgerAdjustments?.categoryOverrides);
    const proposal=cloudAmazon.prepare(state,orders,categories,run.targets);
+   const paymentFirst=Array.isArray(orders.payments);
+   // A paid manual pilot must yield at least one unique charge-to-shipment
+   // product association before future automatic checks are allowed.
+   if(paymentFirst){
+    updated.lastPaymentCount=orders.payments.filter(p=>p.kind==='charge').length;
+    updated.lastPaymentMatches=proposal.paymentMatches||0;
+    if(run.manual&&!run.replay&&proposal.paymentMatches>0)
+     updated.paymentPilotVersion=cloudAmazon.PAYMENT_VERSION;
+   }
    // The existing importer writes ONLY category/Note overlays; never Plaid.
    if(proposal.hasNotes)await saveForecast(proposal.nextPredictions);
    const oldAdjustments=state.ledgerAdjustments;
@@ -719,9 +739,12 @@ async function finishCloudAmazon(){
    updated.pausedReason=null;
    updated.lastFailedRunId=partial||possible?id:null;
    updated.lastOutcome=
+    (paymentFirst?'Payment-first: ':'')+
     updated.lastMatched+' confirmed Amazon match'+(updated.lastMatched===1?'':'es')+
     ', '+possible+' Possible Amazon Note'+(possible===1?'':'s')+' saved'+
-    (partial?'; '+updated.lastUnmatched+' charge(s) inspected but still need product Notes':
+    (paymentFirst&&!cloudAmazon.paymentPilotPassed(updated)?
+     '; automatic paid checks remain on hold until a verified payment-to-product match':
+     partial?'; '+updated.lastUnmatched+' charge(s) inspected but still need product Notes':
      '; new charges can be checked on the normal schedule');
    updated.lastError=partial?
     'Some Amazon charges still lack product Notes because this completed report had no sufficiently relevant order. They will not trigger repeat paid runs. Check now will reuse saved evidence for free only when useful; otherwise review the cost limit or import the Amazon order file.':null;
@@ -757,7 +780,8 @@ async function cloudTick(){
    return;
   }
  }
- if(cloudAmazon.due(state.amazonCloud))return runCloudAmazon(false);
+ if(cloudAmazon.paymentPilotPassed(state.amazonCloud)&&cloudAmazon.due(state.amazonCloud))
+  return runCloudAmazon(false);
 }
 
 async function html(){return fs.readFile(path.join(__dirname,'index.html'),'utf8')}

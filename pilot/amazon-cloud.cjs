@@ -10,6 +10,8 @@ const DEFAULT_AGENT_MAX_STEPS=150,MAX_DURATION=600,MAX_ORDERS=250;
 const MAX_RUNS_30_DAYS=13; // includes deliberate owner-triggered runs
 const MAX_RUNS_PER_PACIFIC_DAY=1;
 const RECOVERY_VERSION='possible-cloud-matches-v1';
+const PAYMENT_VERSION='payment-first-v1';
+const PAYMENT_URL='https://www.amazon.com/cpe/yourpayments/transactions';
 const MAX_ESTIMATED_RUN_USD=2.42; // model: default 150*$0.016 + 10 minutes*$0.002; NOT a provider-enforced dollar cap
 const DAYS=new Set([1,4,6]); // Monday / Thursday / Saturday, Pacific time
 const isoDate=s=>{
@@ -79,6 +81,9 @@ function eligible(state,options={}){
  }).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,200)
   .map(t=>({key:keyFor(t),id:String(t.id),accountId:String(t.accountId)}));
 }
+function paymentPilotPassed(cloud){
+ return cloud?.paymentPilotVersion===PAYMENT_VERSION;
+}
 function safeStatus(state){
  const c=state.amazonCloud||{},waiting=eligible(state).length,usage=runsInWindow(c),
   possible=Object.values(state.ledgerAdjustments?.amazonEvidence||{}).filter(e=>
@@ -100,6 +105,9 @@ function safeStatus(state){
   }),
   replayReady=!!c.apiKey&&!c.run&&!!replayId&&earlier;
  return {enabled:c.enabled===true,connected:!!c.apiKey,
+  paymentPilotRequired:!!c.apiKey&&!paymentPilotPassed(c),
+  lastPaymentCount:c.lastPaymentCount||0,
+  lastPaymentMatches:c.lastPaymentMatches||0,
   lastAttemptAt:c.lastAttemptAt||null,lastSuccessAt:c.lastSuccessAt||null,
   lastCheckedAt:c.lastCheckedAt||null,
   lastOutcome:c.lastOutcome||'Not yet checked',lastCount:c.lastCount||0,
@@ -188,22 +196,31 @@ async function validateKey(apiKey,fetcher){
  return {profileId:profile.id,amazonSignInClaimed:seen===true};
 }
 function goal(){
- return 'Read only Amazon.com Your Orders for the last 45 days using the already signed-in saved browser profile. '+
- 'Do not buy, cancel, change settings, submit forms, contact sellers or open payment details. '+
- 'Do not scan older order-history pages; stop when order dates are older than 45 days. '+
- 'Open the order details/invoice for EACH in-range order and read each item\'s own final price, '+
- 'including documented tax, shipping and discounts where available. '+
- 'An order-level total is NOT an item price and must never be copied onto its items. '+
- 'If an individual item price is not shown, return cents=null for that item, NEVER zero or a guess. '+
- 'If the order total cannot be verified, return charged=null, NEVER zero or a guess. '+
- 'Return an orders array containing orderId (Amazon format 123-1234567-1234567), '+
- 'title, date (YYYY-MM-DD order date), shipmentDate (YYYY-MM-DD or empty), '+
- 'cents (positive integer cents per item or null), charged (positive integer full order total cents or null). '+
- 'Use complete=false whenever pages are blocked, truncated, inaccessible or outside known coverage; '+
- 'include all actually observed items, even those with null prices. '+
- 'Stop if not signed in or challenged and report that clearly. Limit 250 items. '+
- 'Never claim a complete report if any page is unreadable. No bank or Ledger access is needed.';
+ return 'Read only Amazon.com Your Payments > Transactions for the last 45 days '+
+ 'using the existing signed-in saved browser profile. Start at the Transactions page, '+
+ 'NOT the Your Orders list. Find actual completed CHARGES and their posted payment amounts/dates. '+
+ 'Amazon may charge separate shipments from one order separately; never substitute an order total for a payment amount. '+
+ 'For EACH visible completed charge, follow its transaction details and linked order/shipment, '+
+ 'and read the associated product names if Amazon reveals them. '+
+ 'productScope="payment" ONLY if Amazon specifically links those product names to THAT charge/shipment; '+
+ 'productScope="order" if only all products for the entire order are shown; '+
+ 'productScope="unknown" if the payment cannot be linked to any products. '+
+ 'Never claim all products of a multi-shipment order were paid for by one shipment. '+
+ 'Return a payments array of records with transactionDate (YYYY-MM-DD actual Amazon payment date), '+
+ 'amountCents (positive integer charge amount in cents, null if missing), '+
+ 'orderId (Amazon order number or empty string if missing), kind (charge, refund, authorization, or unknown), '+
+ 'productScope (payment, order, or unknown), and titles (array of observed product names; empty if unknown). '+
+ 'Return only observed information: NEVER zero instead of an unknown charge amount, never invented names/dates or duplicated charges. '+
+ 'Do not return card numbers, card last-four digits, payment methods, addresses, emails or billing details. '+
+ 'Do NOT buy, cancel, submit forms, change settings, contact sellers or open payment-method editing. '+
+ 'Read-only transaction details and order details are permitted; payment-method management is not. '+
+ 'Stop before dates older than 45 days. Include all observed completed charges, even if their linked order cannot be read. '+
+ 'Set complete=false if the date range is not fully covered, transaction pages cannot be read, or the list is truncated. '+
+ 'Stop if signed out or challenged and set signedIn=false. Limit 100 payment entries. '+
+ 'No bank or Ledger access is needed.';
 }
+// The old order format stays readable for no-cost replay of already completed
+// browser runs. NEW paid runs only request the transaction-first format.
 const orderSchema={type:'object',properties:{
  orders:{type:'array',items:{type:'object',properties:{
   orderId:{type:'string'},title:{type:'string'},date:{type:'string'},
@@ -211,14 +228,27 @@ const orderSchema={type:'object',properties:{
  },required:['orderId','title','date','shipmentDate','cents','charged']}},
  signedIn:{type:'boolean'},complete:{type:'boolean'}
 },required:['orders','signedIn','complete']};
+const paymentSchema={type:'object',properties:{
+ payments:{type:'array',items:{type:'object',properties:{
+  transactionDate:{type:'string'},amountCents:{type:'integer',nullable:true},
+  orderId:{type:'string'},kind:{type:'string'},productScope:{type:'string'},
+  titles:{type:'array',items:{type:'string'}}
+ },required:['transactionDate','amountCents','orderId','kind','productScope','titles']}},
+ signedIn:{type:'boolean'},complete:{type:'boolean'}
+},required:['payments','signedIn','complete']};
+function knownGoal(value){
+ const g=String(value||'');
+ return g.includes('Read only Amazon.com Your Orders')||
+  g.includes('Read only Amazon.com Your Payments');
+}
 async function start(apiKey,profileId,fetcher){
  if(!/^prof_[a-zA-Z0-9_-]{6,100}$/.test(String(profileId||'')))
   throw Error('TinyFish saved Amazon profile is not connected. Reconnect in Ledger settings.');
  const result=await request(apiKey,API+'/v1/automation/run-async',{
-  method:'POST',body:JSON.stringify({url:'https://www.amazon.com/your-orders',
+  method:'POST',body:JSON.stringify({url:PAYMENT_URL,
    goal:goal(),use_profile:true,profile_id:profileId,browser_profile:'lite',
    agent_config:{max_duration_seconds:MAX_DURATION},
-   output_schema:orderSchema})
+   output_schema:paymentSchema})
  },fetcher);
  if(typeof result.run_id!=='string'||!/^[a-zA-Z0-9-]{16,90}$/.test(result.run_id))
   throw Error('TinyFish did not provide a valid run ID; check TinyFish before retrying');
@@ -233,6 +263,43 @@ function parseOrders(run){
  const data=typeof run.result==='string'?JSON.parse(run.result):run.result;
  if(data?.signedIn!==true)throw Error('Amazon sign-in is needed in TinyFish');
  if(data.complete!==true)throw Error('Amazon returned an incomplete report. No purchases were changed');
+ // New payment-first reports are charge/settlement records, not orders.
+ // Do NOT reuse the old 'charged' order-total field to represent a payment.
+ if(Array.isArray(data.payments)){
+  if(data.payments.length>100)
+   throw Error('Amazon payment report exceeds the bounded 100-entry scan');
+  const runDay=typeof run.created_at==='string'&&Number.isFinite(Date.parse(run.created_at))?
+   new Date(run.created_at):new Date();
+  const earliest=new Date(runDay.getTime()-45*86400000).toISOString().slice(0,10);
+  const latest=new Date(runDay.getTime()+2*86400000).toISOString().slice(0,10);
+  let ignoredOutsideWindow=0;
+  const payments=[];
+  for(const row of data.payments){
+   if(!row||!isoDate(row.transactionDate)||
+      !(row.amountCents===null||(Number.isSafeInteger(row.amountCents)&&
+       row.amountCents>=0&&row.amountCents<=20000000))||
+      typeof row.orderId!=='string'||
+      !(row.orderId===''||/^\d{3}-\d{7}-\d{7}$/.test(row.orderId))||
+      !['charge','refund','authorization','unknown'].includes(row.kind)||
+      !['payment','order','unknown'].includes(row.productScope)||
+      !Array.isArray(row.titles)||row.titles.length>40||
+      row.titles.some(t=>typeof t!=='string'||!t.trim()||t.length>240))
+    throw Error('Amazon payment report included invalid or unverified transaction fields');
+   if(row.transactionDate<earliest||row.transactionDate>latest){
+    ignoredOutsideWindow++;continue;
+   }
+   // A whole-order product list cannot be promoted to a shipment-level
+   // identity merely because the payment amount is correct.
+   payments.push({...row,titles:row.titles.map(t=>t.trim())});
+  }
+  const result=[];
+  Object.defineProperties(result,{
+   payments:{value:payments},
+   unpricedOrders:{value:[]},
+   ignoredOutsideWindow:{value:ignoredOutsideWindow}
+  });
+  return result;
+ }
  if(!Array.isArray(data.orders)||data.orders.length>MAX_ORDERS)
   throw Error('Amazon order report was not complete or was too large');
  // A source can report complete:true yet omit item-level prices. Preserve
@@ -281,7 +348,69 @@ function parseOrders(run){
  });
  return priced;
 }
+// Match actual Amazon payment transactions to bank settlements; payment
+// amounts are NEVER order totals, and whole-order products are only Possible.
+function preparePayments(state,payments,categories,targets){
+ const before=state.ledgerAdjustments||{},
+  chosen=new Set(Array.isArray(targets)?targets:[]),
+  all=Object.values(state.transactions||{}).filter(Evidence.isAmazon),
+  scoped=all.filter(t=>chosen.has(keyFor(t))),
+  notes=before.predictions?.transactionNotes||{};
+ if(!scoped.length)throw Error('Reserved Amazon charges are no longer posted');
+ const gap=(bank,day)=>Math.round((Date.parse(bank.date+'T12:00:00Z')-
+  Date.parse(day+'T12:00:00Z'))/86400000);
+ const matches=[],suggestions=[];
+ // Match only a unique exact amount from a completed charge in Amazon's
+ // payment list. A repeated payment or another bank debit that could own it
+ // makes the identity ambiguous; never pick by superficial order proximity.
+ for(const tx of scoped){
+  if(String(notes[keyFor(tx)]||'').trim())continue;
+  const amount=Math.round(Number(tx.amount)*100);
+  if(!Number.isSafeInteger(amount)||amount<=0)continue;
+  const found=payments.filter(p=>p.kind==='charge'&&p.amountCents===amount&&
+   gap(tx,p.transactionDate)>=-2&&gap(tx,p.transactionDate)<=10);
+  if(found.length!==1)continue;
+  const payment=found[0];
+  if(!payment.orderId||!payment.titles.length||
+     payment.productScope==='unknown')continue;
+  const competing=all.some(other=>keyFor(other)!==keyFor(tx)&&
+   Math.round(Number(other.amount)*100)===amount&&
+   gap(other,payment.transactionDate)>=-2&&gap(other,payment.transactionDate)<=10);
+  if(competing)continue;
+  const items=payment.titles.map(title=>({title,cents:null}));
+  const shared={transactionId:tx.id,accountId:tx.accountId,amountCents:amount,
+   orderId:payment.orderId,date:tx.date,items,
+   categories:[],lines:[],needsReview:true,alreadyImported:false,
+   notesOnly:true};
+  if(payment.productScope==='payment'){
+   matches.push({...shared,confidence:'exact',
+    source:'payment-transaction-no-item-prices',
+    note:pairing.itemNote(items)});
+  }else{
+   suggestions.push({...shared,confidence:'possible',
+    source:'payment-order-products-not-shipment-verified',
+    note:pairing.itemNote(items,'Possible Amazon: '),
+    choices:[{orderId:payment.orderId,date:payment.transactionDate,items}],
+    suggestedCategory:null});
+  }
+ }
+ const involved=Object.fromEntries([...matches,...suggestions]
+  .map(m=>[m.transactionId,scoped.find(t=>t.id===m.transactionId)])
+  .filter(([,tx])=>!!tx));
+ const proposal=apply.prepare({
+  matches,suggestions,bankCharges:scoped.length,
+  importedItems:payments.length,orderGroups:new Set(payments.map(p=>p.orderId)).size
+ },before,{transactions:involved,categories,automatic:false,replaceOther:false});
+ return {...proposal,
+  matchedKeys:matches.map(m=>keyFor(involved[m.transactionId])),
+  possibleKeys:suggestions.map(m=>keyFor(involved[m.transactionId])),
+  noteOnlyMatches:matches.length,paymentMatches:matches.length,
+  paymentPossible:suggestions.length,paymentRows:payments.length,
+  unpricedOrderCount:0};
+}
 function prepare(state,orders,categories,targets){
+ if(Array.isArray(orders.payments))
+  return preparePayments(state,orders.payments,categories,targets);
  const before=state.ledgerAdjustments||{},
   chosen=new Set(Array.isArray(targets)?targets:[]);
  if(!chosen.size)throw Error('Amazon run did not reserve any bank charges');
@@ -446,4 +575,5 @@ function visited(cloud,run,matchedKeys=[]){
 }
 module.exports={local,due,eligible,safeStatus,ensureKey,validateKey,start,getRun,
  parseOrders,prepare,visited,baseline,limit,runsInWindow,RECOVERY_VERSION,MAX_RUNS_30_DAYS,
- MAX_ESTIMATED_RUN_USD,DEFAULT_AGENT_MAX_STEPS,MAX_DURATION,goal,orderSchema};
+ MAX_ESTIMATED_RUN_USD,DEFAULT_AGENT_MAX_STEPS,MAX_DURATION,goal,orderSchema,
+ paymentSchema,PAYMENT_URL,PAYMENT_VERSION,knownGoal,paymentPilotPassed};

@@ -99,10 +99,11 @@ module.exports=(async()=>{
        category:'Pets',possibleMatch:true}]})});
    });
    let tinyfishConnected=false,tinyfishEnabled=false,tinyfishBlocked=false,
-    manualSaved=false,tinyfishRunLimited=false;
-   const tinyfishRequests=[],manualRequests=[];
+    manualSaved=false,tinyfishRunLimited=false,tinyfishPilotNeeded=false;
+   const tinyfishRequests=[],manualRequests=[],pilotRequests=[];
    const cloudSnapshot=()=>({
     connected:tinyfishConnected,enabled:tinyfishEnabled&&!tinyfishBlocked,
+    paymentPilotRequired:tinyfishPilotNeeded,
     pendingAmazonCharges:2,
     lastOutcome:tinyfishBlocked?'Paused: TinyFish declined the request; no paid run started':'Not yet checked',
     runActive:false,needsAttention:tinyfishBlocked,
@@ -120,6 +121,14 @@ module.exports=(async()=>{
    await page.route('**/api/amazon-cloud',async route=>{
     await route.fulfill({status:200,contentType:'application/json',
      body:JSON.stringify(cloudSnapshot())});
+   });
+   await page.route('**/api/amazon-cloud/run',async route=>{
+    assert.equal(route.request().method(),'POST');
+    assert.deepEqual(route.request().postDataJSON(),{consent:true},
+     'Payment-first pilot requires explicit user-approved paid-run consent');
+    pilotRequests.push('paid-pilot');
+    await route.fulfill({status:202,contentType:'application/json',
+     body:JSON.stringify({...cloudSnapshot(),started:true})});
    });
    await page.route('**/api/amazon-cloud/review',async route=>{
     assert.equal(route.request().method(),'GET');
@@ -230,6 +239,37 @@ module.exports=(async()=>{
     },{action:'enable'}],'Nine-step setup must save key and enable only after the explicit click');
     assert.equal(await page.locator('#cloud-api-key').inputValue(),'',
      'Connection code is cleared from the browser field after success');
+    // The newly designed payment-first workflow is manual-only until an
+    // independently verified charge-to-product result validates its quality.
+    tinyfishPilotNeeded=true;
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#cloud-status')?.textContent
+     .includes('paid checks are held'));
+    assert.match(await page.locator('#cloud-now').innerText(),/test payment matching/);
+    assert.equal(await page.locator('#cloud-now').isEnabled(),true,
+     'Owner can start a single payment-first test even when automatic checks are held');
+    page.once('dialog',async dialog=>{
+     assert.match(dialog.message(),/ONE new paid TinyFish browser check/i);
+     assert.match(dialog.message(),/\$2\.42/);
+     await dialog.dismiss();
+    });
+    await page.locator('#cloud-now').click();
+    assert.equal(pilotRequests.length,0,
+     'Declining the new paid strategy does not launch a browser');
+    page.once('dialog',async dialog=>{
+     assert.match(dialog.message(),/payment transactions and linked products/);
+     await dialog.accept();
+    });
+    const pilotResponse=page.waitForResponse(response=>
+     response.url().endsWith('/api/amazon-cloud/run')&&response.status()===202);
+    await page.locator('#cloud-now').click();
+    await pilotResponse;
+    assert.equal(pilotRequests.length,1,
+     'One owner-approved paid test uses the existing API and no duplicate paid start');
+    tinyfishPilotNeeded=false;
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#cloud-status')?.textContent
+     .includes('Automatic updates ON'));
     assert.equal(await page.evaluate(()=>Boolean(document.querySelector('#amazon-cloud').compareDocumentPosition(document.querySelector('#file')) & Node.DOCUMENT_POSITION_FOLLOWING)),true,
       'TinyFish setup should appear before the manual file-import fallback');
 

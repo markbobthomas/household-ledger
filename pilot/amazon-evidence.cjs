@@ -35,7 +35,9 @@ function category(record,categories=[]){
     record.uncertainty==='date-only'||
     record.uncertainty==='order-total-no-item-price'||
     record.uncertainty==='owner-selected-no-amount-reconciliation'||
-    record.uncertainty==='cloud-unverified-settlement')return null;
+    record.uncertainty==='cloud-unverified-settlement'||
+    record.uncertainty==='payment-transaction-no-item-prices'||
+    record.uncertainty==='payment-order-products-not-shipment-verified')return null;
  let chosen=null;
  for(const choice of record.choices){
   if(!Array.isArray(choice.items)||!choice.items.length)return null;

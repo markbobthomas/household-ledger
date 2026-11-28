@@ -151,7 +151,8 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  <details id="cloud-explanation"><summary>Cost, privacy and what gets matched</summary>
   <p>TinyFish reads Amazon order pages, not your bank account. Ledger privately matches order details to existing posted bank charges; it never creates a second purchase or rewrites bank balances. Exact matches can apply item categories when prices reconcile. A plausible but unverified match can save a clearly marked Possible Amazon Note automatically, without claiming a price or changing a category. You can correct uncertain Notes if needed.</p>
   <p>First setup starts with <strong>new charges going forward</strong>, not a surprise paid import of old history. TinyFish uses its standard default of up to 150 Agent steps and a requested 10-minute timeout. At the published rates, a run reaching both limits models to $2.42, and 13 such runs to $31.46 per 30 days. These are estimates, not hard spending caps; real bills may differ. A maximum of 13 browser starts is permitted in any rolling 30 days, including Check now.</p>
-  <p>Check now stays selectable when TinyFish is connected. When a completed report can help with an Amazon charge missing a product Note, it first rechecks that saved result without another browser charge. An active run, provider problem, or daily/30-day limit blocks a new paid browser check and explains why. Complete signed-in reports without a matching order do not disconnect TinyFish or trigger repeated paid scans for the same charge. Failed or unreadable browser reports still pause updates. A run already started may still finish and incur charges.</p>
+  <p><strong>New payment-first method:</strong> TinyFish now reads Amazon's Your Payments → Transactions list before opening linked order details. This separates actual posted charges from full-order totals. Because this method has not yet been validated against your private posted charges, the paid automatic schedule stays on hold until you approve one <strong>Check now — test payment matching</strong> run and it produces a uniquely supported payment-to-product match. The test uses the existing one-per-day and 13-per-month limits. If it cannot verify a match, automatic checks remain on hold instead of repeatedly spending money.</p>
+  <p>Check now stays selectable when TinyFish is connected. After the new method passes its first test, a saved completed report can be rechecked without another browser charge. An active run, provider problem, or daily/30-day limit blocks a new paid browser check and explains why. Complete signed-in reports without a matching order do not disconnect TinyFish or trigger repeated paid scans for the same charge. Failed or unreadable browser reports still pause updates. A run already started may still finish and incur charges.</p>
   <p>The ZIP/CSV import below remains available for complete order history.</p>
  </details>
 </section>
@@ -222,14 +223,20 @@ function renderCloud(data){
  // explains active runs, limits and pauses instead of leaving a grey button.
  // An eligible completed result gets a free recheck before any new paid run.
  $('cloud-now').disabled=cloudBusy;
- $('cloud-now').textContent=data.replayAvailable?'Check now — saved result':'Check now';
+ $('cloud-now').textContent=data.paymentPilotRequired?'Check now — test payment matching':
+  data.replayAvailable?'Check now — saved result':'Check now';
  $('cloud-replay-help').hidden=!data.replayAvailable;
  $('cloud-replay').disabled=!data.replayAvailable||data.runActive;
  $('cloud-manual-review').hidden=!data.manualReviewAvailable;
  if(data.replayRunId&&!$('cloud-replay-id').value)$('cloud-replay-id').value=data.replayRunId;
  const summary=data.runActive?
   (data.runStatus==='reprocessing'?'Rechecking saved Amazon result without starting a paid browser.':'Amazon check in progress. A second check will not start.'):
-  data.needsAttention?'Amazon updates PAUSED. Read the problem below before turning them on again.':
+  data.needsAttention&&!(data.paymentPilotRequired&&
+   ['no-matches','partial-report'].includes(data.pausedReason))?
+   'Amazon updates PAUSED. Read the problem below before turning them on again.':
+  data.paymentPilotRequired?
+   (data.enabled?'Automatic updates selected, but new paid checks are held until one successful payment-matching test. Use Check now.':
+    'TinyFish connected. The new payment-matching method needs one approved test before automatic updates can run.'):
   data.enabled?'Automatic updates ON. New Amazon charges will be checked on scheduled days.':
   data.connected&&data.amazonSignInConfirmed===false?'TinyFish connected, but its Amazon login was not confirmed. Save the Amazon login in TinyProfiles before turning on updates.':
   data.connected?'TinyFish connected. Automatic updates are OFF. Tap Turn on automatic updates below.':
@@ -244,6 +251,8 @@ function renderCloud(data){
  if(Number(data.possibleAmazonCharges)>0)
   parts.push('Possible Amazon product Notes saved (not confirmed): '+
    Number(data.possibleAmazonCharges)+'. No verification click is required for these Notes.');
+ if(data.paymentPilotRequired)parts.push('The payment-first method reads actual Amazon charges rather than order totals. A paid manual test is required before the automatic schedule resumes.');
+ if(data.lastPaymentCount)parts.push('Payment records observed in last test: '+Number(data.lastPaymentCount)+'. Unique payment-to-product matches: '+Number(data.lastPaymentMatches||0)+'.');
  if(data.runLimitReason)parts.push('Next paid check held: '+data.runLimitReason+'.');
  if(data.connected&&data.amazonSignInConfirmed===false)parts.push('TinyFish did not confirm a saved Amazon login. See setup steps and Save the Amazon session before allowing paid checks.');
  if(data.lastSuccessAt)parts.push('Last completed Amazon report: '+new Date(data.lastSuccessAt).toLocaleString()+'.');
@@ -299,10 +308,11 @@ $('cloud-now').onclick=()=>{
   'An Amazon check is already in progress. A second paid browser run will not start.');
  // Prefer existing, completed data. This remains useful when a bank charge
  // was marked inspected earlier but never received an Amazon product Note.
- if(cloud.replayAvailable&&cloud.replayRunId){
+ if(!cloud.paymentPilotRequired&&cloud.replayAvailable&&cloud.replayRunId){
   cloudAction({action:'reprocess',runId:cloud.replayRunId});return;
  }
- if(cloud.needsAttention){
+ if(cloud.needsAttention&&!(cloud.paymentPilotRequired&&
+  ['no-matches','partial-report'].includes(cloud.pausedReason))){
   cloudMessage('A new paid check is held because Amazon needs attention: '+
    (cloud.lastError||cloud.lastOutcome||'Review the last check')+
    '. No paid browser run started.');
@@ -317,9 +327,9 @@ $('cloud-now').onclick=()=>{
   cloudMessage('Turn on automatic updates once to establish the safe starting point, '+
    'then use Check now. No paid browser run started.');return;
  }
- if(!confirm('Start one NEW paid Amazon browser check now? TinyFish may charge up to '+
-  'an estimated $2.42 at standard maximum usage (not a guaranteed cap). '+
-  'Existing saved results are checked for free when available. Continue?'))return;
+ if(!confirm(cloud.paymentPilotRequired?
+  'TEST NEW AMAZON PAYMENT MATCHING: Start ONE new paid TinyFish browser check? It will read actual Amazon payment transactions and linked products, not just order totals. Estimated maximum $2.42 (not a guaranteed spending cap). Automatic runs stay on hold unless the test safely identifies at least one matching payment. Continue?':
+  'Start one NEW paid Amazon browser check now? TinyFish may charge up to an estimated $2.42 at standard maximum usage (not a guaranteed cap). Saved older results can still be rechecked separately for free. Continue?'))return;
  cloudAction({action:'run'});
 };
 $('cloud-replay').onclick=()=>{
