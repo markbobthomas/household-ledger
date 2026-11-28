@@ -20,6 +20,19 @@ Follow these steps in Ledger:
 
 **If TinyFish only offers the agent prompt and [the saved-profiles link](https://agent.tinyfish.ai/profiles) also fails:** Do not try to force setup by typing instructions into the prompt. Your current TinyFish account or interface may not expose the required saved-session setup. Check the [official visual guide](https://docs.tinyfish.ai/agent/how-to/create-google-form-with-profile), contact TinyFish to clarify access, and use Ledger's **manual Amazon ZIP/CSV import** meanwhile. Leave automatic updates OFF. This is an explicit setup limitation, not something Ledger can safely bypass by repeatedly running a paid browser Agent.
 
+## Why a merged payment-first update may appear to change nothing
+
+**Read-only investigation, 2026-11-28:** The connected TinyFish run history for recent dates contained one completed Amazon run and its goal began at **Your Orders**, not **Your Payments → Transactions**. No new payment-first run appeared in that connected provider history at the time of inspection. Therefore, the newer matcher has not yet received transaction-first payment evidence from that TinyFish account. Source merge and passing fictional tests are not proof that the separate private Render app deployed the new code, or that a fresh paid browser check ran.
+
+The private Amazon page provides a quick distinction:
+- If it shows **Check now — test payment matching**, the page knows the new first-run hold is still in force. Click once, read any daily/30-day cost limit or paused-run message, and only approve a new paid test if desired. Merely toggling Automatic updates ON is intentionally insufficient.
+- If the page lacks that label, first verify the private Render app's **read-only** `/healthz` revision against the merged source. No private live deployment was verified in this investigation; the previously connected Render tools exposed only a sandbox, and no production workspace was selected.
+- A completed old `Your Orders` run can be reprocessed for free, but its report **cannot** supply payment fields it never retrieved. The new transaction-first matcher cannot retroactively improve an earlier order-only report.
+
+Amazon's official [Identify an Amazon Charge](https://digprjsurvey.amazon.com/csad/help/node/GSNBBJP63SM65UDB) page explicitly directs consumers to [Your Transactions](https://www.amazon.com/cpe/yourpayments/transactions) for matching bank charge **amounts and dates** to order numbers and confirms that split shipments can produce separate charges. An order's linked **Order Details / Invoice** may then supply shipment/product detail. This is why an order-list price and a card settlement are not interchangeable. It remains **unverified** whether TinyFish can follow the relevant payment-to-shipment details in this particular private Amazon profile; only an owner-consented first paid test can establish that.
+
+**No extra TinyFish paid run or bank modification was initiated for this diagnosis.** Do not claim that the missing product Note has been fixed from source code changes alone.
+
 ## Current workflow: Amazon payments first (payment-first v1)
 
 **New paid checks begin at Amazon → Your Payments → Transactions**, not the Your Orders list. For each actual completed Amazon charge in the last 45 days, TinyFish reads its payment date and exact charged cents, follows that payment's associated order/shipment details, and returns *only the observed product names*, their order ID and whether Amazon clearly tied those products to the specific charge. Amazon can bill one order in multiple shipments, so **order totals, shipment settlements, and item prices are different values**. Unknown amounts are `null`; refunds, authorizations, incomplete/ambiguous records, and cards with competing identical candidate bank charges never become a confirmed match.
