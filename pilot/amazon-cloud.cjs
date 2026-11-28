@@ -342,7 +342,69 @@ function parseOrders(run){
  });
  return priced;
 }
+// Match actual Amazon payment transactions to bank settlements; payment
+// amounts are NEVER order totals, and whole-order products are only Possible.
+function preparePayments(state,payments,categories,targets){
+ const before=state.ledgerAdjustments||{},
+  chosen=new Set(Array.isArray(targets)?targets:[]),
+  all=Object.values(state.transactions||{}).filter(Evidence.isAmazon),
+  scoped=all.filter(t=>chosen.has(keyFor(t))),
+  notes=before.predictions?.transactionNotes||{};
+ if(!scoped.length)throw Error('Reserved Amazon charges are no longer posted');
+ const gap=(bank,day)=>Math.round((Date.parse(bank.date+'T12:00:00Z')-
+  Date.parse(day+'T12:00:00Z'))/86400000);
+ const matches=[],suggestions=[];
+ // Match only a unique exact amount from a completed charge in Amazon's
+ // payment list. A repeated payment or another bank debit that could own it
+ // makes the identity ambiguous; never pick by superficial order proximity.
+ for(const tx of scoped){
+  if(String(notes[keyFor(tx)]||'').trim())continue;
+  const amount=Math.round(Number(tx.amount)*100);
+  if(!Number.isSafeInteger(amount)||amount<=0)continue;
+  const found=payments.filter(p=>p.kind==='charge'&&p.amountCents===amount&&
+   gap(tx,p.transactionDate)>=-2&&gap(tx,p.transactionDate)<=10);
+  if(found.length!==1)continue;
+  const payment=found[0];
+  if(!payment.orderId||!payment.titles.length||
+     payment.productScope==='unknown')continue;
+  const competing=all.some(other=>keyFor(other)!==keyFor(tx)&&
+   Math.round(Number(other.amount)*100)===amount&&
+   gap(other,payment.transactionDate)>=-2&&gap(other,payment.transactionDate)<=10);
+  if(competing)continue;
+  const items=payment.titles.map(title=>({title,cents:null}));
+  const shared={transactionId:tx.id,accountId:tx.accountId,amountCents:amount,
+   orderId:payment.orderId,date:tx.date,items,
+   categories:[],lines:[],needsReview:true,alreadyImported:false,
+   notesOnly:true};
+  if(payment.productScope==='payment'){
+   matches.push({...shared,confidence:'exact',
+    source:'payment-transaction-no-item-prices',
+    note:pairing.itemNote(items)});
+  }else{
+   suggestions.push({...shared,confidence:'possible',
+    source:'payment-order-products-not-shipment-verified',
+    note:pairing.itemNote(items,'Possible Amazon: '),
+    choices:[{orderId:payment.orderId,date:payment.transactionDate,items}],
+    suggestedCategory:null});
+  }
+ }
+ const involved=Object.fromEntries([...matches,...suggestions]
+  .map(m=>[m.transactionId,scoped.find(t=>t.id===m.transactionId)])
+  .filter(([,tx])=>!!tx));
+ const proposal=apply.prepare({
+  matches,suggestions,bankCharges:scoped.length,
+  importedItems:payments.length,orderGroups:new Set(payments.map(p=>p.orderId)).size
+ },before,{transactions:involved,categories,automatic:false,replaceOther:false});
+ return {...proposal,
+  matchedKeys:matches.map(m=>keyFor(involved[m.transactionId])),
+  possibleKeys:suggestions.map(m=>keyFor(involved[m.transactionId])),
+  noteOnlyMatches:matches.length,paymentMatches:matches.length,
+  paymentPossible:suggestions.length,paymentRows:payments.length,
+  unpricedOrderCount:0};
+}
 function prepare(state,orders,categories,targets){
+ if(Array.isArray(orders.payments))
+  return preparePayments(state,orders.payments,categories,targets);
  const before=state.ledgerAdjustments||{},
   chosen=new Set(Array.isArray(targets)?targets:[]);
  if(!chosen.size)throw Error('Amazon run did not reserve any bank charges');
@@ -507,4 +569,5 @@ function visited(cloud,run,matchedKeys=[]){
 }
 module.exports={local,due,eligible,safeStatus,ensureKey,validateKey,start,getRun,
  parseOrders,prepare,visited,baseline,limit,runsInWindow,RECOVERY_VERSION,MAX_RUNS_30_DAYS,
- MAX_ESTIMATED_RUN_USD,DEFAULT_AGENT_MAX_STEPS,MAX_DURATION,goal,orderSchema};
+ MAX_ESTIMATED_RUN_USD,DEFAULT_AGENT_MAX_STEPS,MAX_DURATION,goal,orderSchema,
+ paymentSchema,PAYMENT_URL,PAYMENT_VERSION,knownGoal};
