@@ -63,10 +63,22 @@ async function verify(label,provider,reason){
   }
   assert(done,label+' was not completed safely');
   const saved=decode(file),cloud=saved.amazonCloud;
-  assert.equal(cloud.enabled,false,label+' must pause future paid browsing');
-  assert.equal(cloud.pausedReason,reason,label+' must identify why it paused');
-  assert.equal(cloud.scanned?.[chargeKey],undefined,label+' must not mark unknown charge checked');
-  assert.equal(cloud.lastSuccessAt,undefined,label+' must never report a false success');
+  if(reason==='no-matches'){
+   // A complete signed-in result is NOT a broken connection. A charge
+   // without a product Note remains visible, but cannot trigger a second
+   // unattended paid Agent run just because Amazon omitted its order.
+   assert.equal(cloud.enabled,true,label+' leaves opted-in updates enabled');
+   assert.equal(cloud.pausedReason,null,label+' is not a provider failure');
+   assert.ok(cloud.scanned?.[chargeKey],label+' avoids repeat paid scans');
+   assert.equal(cloud.lastUnmatched,1,label+' preserves unresolved count');
+   assert.equal(cloud.lastMatched,0);
+   assert.equal(cloud.lastCompletedRunId,root.amazonCloud.run.id);
+  }else{
+   assert.equal(cloud.enabled,false,label+' must pause future paid browsing');
+   assert.equal(cloud.pausedReason,reason,label+' must identify why it paused');
+   assert.equal(cloud.scanned?.[chargeKey],undefined,label+' must not mark unknown charge checked');
+   assert.equal(cloud.lastSuccessAt,undefined,label+' must never report a false success');
+  }
   assert.deepEqual(saved.transactions,root.transactions,label+' must not touch source bank data');
   assert.equal(fs.existsSync(file+'.forecasts'),false,
    label+' must not create product Notes from unverified order data');
@@ -83,7 +95,7 @@ async function verify(label,provider,reason){
    date:day,shipmentDate:day,cents:2199,charged:2199}]}},'invalid-report');
  await verify('empty',{status:'COMPLETED',result:{signedIn:true,
   complete:true,orders:[]}},'empty-report');
- await verify('no-match',{status:'COMPLETED',result:{signedIn:true,
+ await verify('no-match',{status:'COMPLETED',created_at:stamp,result:{signedIn:true,
   complete:true,orders:[{orderId:'123-1234567-1234567',
    title:'Fictional unrelated item',
    date:new Date(Date.now()-20*86400000).toISOString().slice(0,10),

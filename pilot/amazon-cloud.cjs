@@ -82,7 +82,23 @@ function eligible(state,options={}){
 function safeStatus(state){
  const c=state.amazonCloud||{},waiting=eligible(state).length,usage=runsInWindow(c),
   possible=Object.values(state.ledgerAdjustments?.amazonEvidence||{}).filter(e=>
-   e?.match==='possible'&&e?.uncertainty==='cloud-unverified-settlement').length;
+   e?.match==='possible'&&e?.uncertainty==='cloud-unverified-settlement').length,
+  notes=state.ledgerAdjustments?.predictions?.transactionNotes||{},
+  unnoted=eligible(state,{retry:true}).filter(t=>
+   !String(notes[t.key]||'').trim()),
+  missing=unnoted.length,
+  txByKey=new Map(Object.values(state.transactions||{}).map(t=>[keyFor(t),t])),
+  replayId=c.lastCompletedRunId||c.lastFailedRunId||null,
+  lastRead=Date.parse(c.lastCompletedRunAt||''),
+  tried=new Set(c.lastFreeReplayRunId===replayId&&
+   c.lastFreeReplayVersion===RECOVERY_VERSION?
+    c.lastFreeReplayTargets||[]:[]),
+  earlier=unnoted.some(t=>{
+   const tx=txByKey.get(t.key);
+   return tx&&!tried.has(t.key)&&(!Number.isFinite(lastRead)||
+    Date.parse(tx.date+'T12:00:00Z')<=lastRead+86400000);
+  }),
+  replayReady=!!c.apiKey&&!c.run&&!!replayId&&earlier;
  return {enabled:c.enabled===true,connected:!!c.apiKey,
   lastAttemptAt:c.lastAttemptAt||null,lastSuccessAt:c.lastSuccessAt||null,
   lastCheckedAt:c.lastCheckedAt||null,
@@ -93,12 +109,11 @@ function safeStatus(state){
   amazonSignInConfirmed:c.amazonSignInClaimed===true,
   needsAttention:!!c.pausedReason||c.run?.status==='uncertain',
   pausedReason:c.pausedReason||null,
-  replayRunId:c.lastFailedRunId||null,
-  manualReviewAvailable:!!c.apiKey&&!!c.lastFailedRunId&&!c.run&&
-   (waiting>0&&['invalid-report','empty-report','no-matches','partial-report'].includes(c.pausedReason)||
-    possible>0),
-  replayAvailable:!!c.apiKey&&!c.enabled&&!c.run&&
-   ['invalid-report','empty-report','no-matches','partial-report'].includes(c.pausedReason),
+  replayRunId:replayId,
+  manualReviewAvailable:!!c.apiKey&&!!replayId&&!c.run&&
+   (missing>0||possible>0),
+  replayAvailable:replayReady,
+  unnotedAmazonCharges:missing,
   pendingAmazonCharges:waiting,maxCostUsd:MAX_ESTIMATED_RUN_USD,
   runsLast30Days:usage.month,maxRuns30Days:MAX_RUNS_30_DAYS,
   runLimitReason:limit(c),initialSetupReady:!!c.baselineAt,

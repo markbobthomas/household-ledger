@@ -76,8 +76,30 @@ assert.match(cloud.goal(),/cents=null/,'Agent must explicitly mark missing item 
 assert.deepEqual(cloud.orderSchema.properties.orders.items.properties.cents,
  {type:'integer',nullable:true},'Nullable item price must be TinyFish schema compatible');
 assert.equal(cloud.safeStatus({amazonCloud:{apiKey:'fictional',profileId:'prof_test123456',
- enabled:false,pausedReason:'invalid-report'}}).replayAvailable,true,
- 'A paused prior run can be read again without another paid browser start');
+ enabled:false,pausedReason:'invalid-report',lastFailedRunId:'12345678-1234-1234-1234-123456789012'},
+ transactions:{a:{...t('replay-needs-note')}},ledgerAdjustments:{predictions:{}}})
+ .replayAvailable,true,
+ 'A pinned completed run can be re-read for a posted Amazon charge with no product Note');
+assert.equal(cloud.safeStatus({amazonCloud:{apiKey:'fictional',
+ enabled:true,runStarts:[new Date().toISOString()],
+ lastCompletedRunId:'12345678-1234-1234-1234-123456789012',
+ scanned:{[cloud.eligible({transactions:{a:t('replay-needs-note')}})[0].key]:'2026-11-27T00:00:00Z'}},
+ transactions:{a:{...t('replay-needs-note')}},ledgerAdjustments:{predictions:{}}})
+ .replayAvailable,true,
+ 'Being enabled, rate limited or previously scanned cannot block a free check for an unnoted Amazon charge');
+
+const previousAttemptKey=cloud.eligible({transactions:{a:t('replay-needs-note')}})[0].key;
+const alreadyChecked=cloud.safeStatus({amazonCloud:{apiKey:'fictional',enabled:true,
+ lastCompletedRunId:'12345678-1234-1234-1234-123456789012',
+ lastFreeReplayRunId:'12345678-1234-1234-1234-123456789012',
+ lastFreeReplayVersion:cloud.RECOVERY_VERSION,
+ lastFreeReplayTargets:[previousAttemptKey],
+ scanned:{[previousAttemptKey]:'2026-11-27T00:00:00Z'}},
+ transactions:{a:t('replay-needs-note')},ledgerAdjustments:{predictions:{}}});
+assert.equal(alreadyChecked.unnotedAmazonCharges,1,
+ 'An inspected missing-Note charge remains visible');
+assert.equal(alreadyChecked.replayAvailable,false,
+ 'An unchanged saved report is not endlessly offered as a useful recheck');
 
 // Real-world failure mode: Amazon exposes an order total and product titles
 // but no individual prices. An exact unique bank debit may get a Note ONLY.
