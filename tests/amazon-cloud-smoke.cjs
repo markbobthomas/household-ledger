@@ -106,7 +106,9 @@ const fakeFetch=async (url,options)=>{
    'Do not send undocumented session_id to TinyFish Agent endpoint');
   assert.equal(request.agent_config.mode,undefined,
    'Do not send beta-gated mode configuration to ordinary accounts');
-  assert.equal(request.agent_config.max_steps,45);
+  assert.equal(request.agent_config.max_steps,undefined,
+   'Standard TinyFish Agent must not send beta-only custom max_steps');
+  assert.equal(request.agent_config.max_duration_seconds,600);
   assert.deepEqual(request.output_schema.properties.orders.items.properties.charged,
    {type:'integer',nullable:true},
    'TinyFish rejects type arrays (HTTP 400): use nullable:true for optional order totals');
@@ -137,13 +139,6 @@ const fakeFetch=async (url,options)=>{
  const run=await cloud.start('fictional-tinyfish-key-example-1',profile.profileId,fakeFetch);
  assert.equal(run,'12345678-1234-1234-1234-123456789012');
  assert.equal((await cloud.getRun('fictional-tinyfish-key-example-1',run,fakeFetch)).status,'COMPLETED');
- await assert.rejects(
-  cloud.start('fictional-tinyfish-key-example-1','prof_fictional_amazon123',async()=>({
-   ok:false,status:403,text:async()=>JSON.stringify({message:'max_steps beta feature not enabled'})
-  })),
-  /step limits for this account/,
-  'The provider rejecting a step cap must not be retried without that cap'
- );
  await assert.rejects(
   cloud.start('fictional-tinyfish-key-example-1','prof_fictional_amazon123',
    async()=>({ok:false,status:400,
