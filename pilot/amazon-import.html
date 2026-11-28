@@ -34,6 +34,9 @@ input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:7
 #cloud-profile-help p{margin:8px 0 10px}
 #cloud-activity{margin-top:10px;font-size:.9rem}
 #cloud-activity summary{color:#526071;padding:8px 0}
+#cloud-beta-help{margin:12px 0 18px;padding:14px;border:1px solid #b7c3cf;border-radius:7px}
+#cloud-beta-help p{margin:8px 0;font-size:.94rem}
+#cloud-beta-help a{text-decoration:underline}
 @media(max-width:480px){.cloud-key-actions>*{width:100%}.cloud-steps{padding-left:21px}.panel{padding:15px}}
 .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
 .stat{background:#f3f7f3;padding:12px;border-radius:10px;text-align:center}
@@ -71,6 +74,13 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  <p>Set this up once. Then Ledger checks <strong>Monday, Thursday and Saturday</strong> for new, posted Amazon charges. It opens TinyFish only when there is something new to match.</p>
  <p class="muted">Older purchases already in Ledger are left alone. At most one paid Amazon check per Pacific day, and 13 in any 30 days. No new Amazon charges = no TinyFish browser charge.</p>
  <p id="cloud-status" role="status" aria-live="polite">Checking setup…</p>
+ <div id="cloud-beta-help" hidden>
+  <strong>TinyFish needs to enable step limits for your account.</strong>
+  <p>Ledger is connected, but TinyFish rejected its 45-step safety limit. That limit protects you from unexpected browser charges. <strong>Do not remove it to force a run.</strong></p>
+  <p><a href="https://agent.tinyfish.ai/beta" target="_blank" rel="noopener noreferrer">Request TinyFish step-limit beta access</a>. Sign in to TinyFish and ask for <strong>agent_config.max_steps</strong>. If you do not see a request option, contact TinyFish support and ask them to enable it for your API account.</p>
+  <p>When TinyFish confirms access, come back here and tap <strong>Turn on automatic updates</strong>. You can then choose <strong>Check now</strong> to test the pending purchase. Nothing will be retried or billed until you enable it.</p>
+  <p class="muted">For now, <a href="#manual-amazon-import">manual Amazon order import</a> still works. You do not need a new API key, Amazon login, or bank connection.</p>
+ </div>
  <details id="cloud-setup-steps" open>
   <summary><strong>Connect Amazon to TinyFish — step by step</strong></summary>
   <p class="muted">No computer extension or programming required. You only need to set this up once.</p>
@@ -211,6 +221,11 @@ function renderCloud(data){
   data.connected?'TinyFish connected. Automatic updates are OFF. Tap Turn on automatic updates below.':
   'Not connected. Follow the numbered setup steps below.';
  cloudMessage(summary);
+ // Recognize a documented account entitlement error. Do not present a
+ // misleading re-login or key-replacement flow for the max_steps beta gate.
+ const betaBlocked=typeof data.lastError==='string'&&
+  /(?:max_steps|per-run step limits|step limits for this account)/i.test(data.lastError);
+ $('cloud-beta-help').hidden=!betaBlocked;
  const parts=[
   'New Amazon charges not yet checked: '+Number(data.pendingAmazonCharges||0)+'.',
   'Last result: '+(data.lastOutcome||'Not checked yet')+'.',

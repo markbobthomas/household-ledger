@@ -98,12 +98,16 @@ module.exports=(async()=>{
       examples:[{transactionId:'fictional-possible',note:'Possible Amazon: Pet grooming brush',
        category:'Pets',possibleMatch:true}]})});
    });
-   let tinyfishConnected=false,tinyfishEnabled=false;
+   let tinyfishConnected=false,tinyfishEnabled=false,tinyfishBlocked=false;
    const tinyfishRequests=[];
    const cloudSnapshot=()=>({
-    connected:tinyfishConnected,enabled:tinyfishEnabled,
-    pendingAmazonCharges:2,lastOutcome:'Not yet checked',runActive:false,
-    lastError:null,maxCostUsd:1
+    connected:tinyfishConnected,enabled:tinyfishEnabled&&!tinyfishBlocked,
+    pendingAmazonCharges:2,
+    lastOutcome:tinyfishBlocked?'Paused: TinyFish declined the request; no paid run started':'Not yet checked',
+    runActive:false,needsAttention:tinyfishBlocked,
+    lastError:tinyfishBlocked?
+     'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable the max_steps feature; Ledger will not submit an uncapped browser run.':null,
+    maxCostUsd:1
    });
    await page.route('**/api/amazon-cloud',async route=>{
     await route.fulfill({status:200,contentType:'application/json',
@@ -156,8 +160,8 @@ module.exports=(async()=>{
     await page.locator('#cloud-profile-help summary').click();
     assert.match(await page.locator('#cloud-profile-help').innerText(),/stop setup here/,
      'When saved profiles are unavailable, forbid a charged Agent prompt workaround');
-    assert.equal(await page.locator('a[href="#manual-amazon-import"]').count(),1,
-     'Offer functional fallback to local manual import');
+    assert.equal(await page.locator('#cloud-profile-help a[href="#manual-amazon-import"]').count(),1,
+     'Offer functional fallback inside saved-profile troubleshooting');
     assert.equal(await page.locator('#manual-amazon-import').isVisible(),true);
     await page.locator('#cloud-profile-help summary').click();
     assert.match(await page.locator('#cloud-status').innerText(),/Not connected/);
@@ -233,6 +237,23 @@ module.exports=(async()=>{
     const dimensions=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,
      width:document.documentElement.clientWidth}));
     assert(dimensions.scrollWidth<=dimensions.width+2,name+' mobile layout must fit');
+    // Simulate the user's actual beta-only feature gate with no real provider
+    // calls. The app must show the actionable entitlement path, not a key or
+    // Amazon sign-in reset, and must not submit any paid agent action.
+    tinyfishBlocked=true;
+    await page.reload();
+    await page.waitForFunction(()=>document.getElementById('cloud-status')
+     .textContent.includes('PAUSED'));
+    assert.equal(await page.locator('#cloud-beta-help').isVisible(),true,
+     'Beta-step gate must be shown as explicit owner guidance');
+    assert.equal(await page.locator('a[href="https://agent.tinyfish.ai/beta"]').count(),1,
+     'Provide direct official beta access link');
+    assert.match(await page.locator('#cloud-beta-help').innerText(),/agent_config.max_steps/);
+    assert.match(await page.locator('#cloud-beta-help').innerText(),/manual Amazon order import/);
+    assert.equal(await page.locator('#cloud-now').isEnabled(),false,
+     'A paused beta-gated account cannot accidentally incur a paid Agent run');
+    assert.equal(tinyfishRequests.length,2,
+     'Showing beta help must not connect or launch extra provider work');
     assert.deepEqual(errors,[],name+' has no runtime script errors');
    }finally{await ctx.close();await browser.close()}
   }
