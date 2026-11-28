@@ -598,9 +598,11 @@ async function reprocessCloudAmazon(runId){
      !Number.isFinite(at)||at>Date.now()+300000||at<Date.now()-30*86400000)
    throw Object.assign(Error('This is not a recent completed run from the connected Amazon profile'),{httpStatus:409});
   // No new/post-run bank charges may be imported using an earlier result.
+  const keyForAmazon=require('./amazon-pairing.cjs').keyFor;
+  const txByKey=new Map(Object.values(state.transactions||{}).map(tx=>
+   [keyForAmazon(tx),tx]));
   const targets=cloudAmazon.eligible(state).filter(t=>{
-   const tx=Object.values(state.transactions||{}).find(x=>cloudAmazon.eligibleKey?false:
-    require('./amazon-pairing.cjs').keyFor(x)===t.key);
+   const tx=txByKey.get(t.key);
    return tx&&Date.parse(tx.date+'T12:00:00Z')<=at+86400000;
   }).map(t=>t.key);
   if(!targets.length)
