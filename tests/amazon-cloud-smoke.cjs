@@ -107,6 +107,24 @@ const fakeFetch=async (url,options)=>{
   assert.equal(request.agent_config.mode,undefined,
    'Do not send beta-gated mode configuration to ordinary accounts');
   assert.equal(request.agent_config.max_steps,45);
+  assert.deepEqual(request.output_schema.properties.orders.items.properties.charged,
+   {type:'integer',nullable:true},
+   'TinyFish rejects type arrays (HTTP 400): use nullable:true for optional order totals');
+  const allowed=new Set(['type','properties','required','items','nullable','minItems',
+   'maxItems','minimum','maximum','anyOf','enum','format','propertyOrdering']);
+  const validateSchema=(schema,path='#')=>{
+   assert(schema&&typeof schema==='object'&&!Array.isArray(schema),
+    'TinyFish output schema node must be an object at '+path);
+   for(const [key,value] of Object.entries(schema)){
+    assert(allowed.has(key),'TinyFish output schema has unsupported '+key+' at '+path);
+    if(key==='type')assert.equal(typeof value,'string',
+     'TinyFish output schema type arrays return 400 at '+path);
+    if(key==='properties')
+     for(const [name,child] of Object.entries(value))validateSchema(child,path+'/'+name);
+    if(key==='items')validateSchema(value,path+'/items');
+   }
+  };
+  validateSchema(request.output_schema);
   assert(!JSON.stringify(request).includes('fictional-card'),'Do not send bank IDs to TinyFish');
   return {ok:true,json:async()=>({run_id:'12345678-1234-1234-1234-123456789012'})};
  }
@@ -125,6 +143,30 @@ const fakeFetch=async (url,options)=>{
   })),
   /step limits for this account/,
   'The provider rejecting a step cap must not be retried without that cap'
+ );
+ await assert.rejects(
+  cloud.start('fictional-tinyfish-key-example-1','prof_fictional_amazon123',
+   async()=>({ok:false,status:400,
+    headers:{get:()=>null},
+    text:async()=>JSON.stringify({
+     error:{code:'INVALID_INPUT',message:
+      'output_schema type arrays are not supported at #/properties/orders/items/properties/charged.'},
+     request_id:'12345678-1234-1234-1234-123456789012'
+    })})),
+  error=>error.notStarted===true&&
+   /INVALID_INPUT/.test(error.message)&&
+   /output_schema type arrays/.test(error.message)&&
+   /Request ID: 12345678/.test(error.message),
+  '400 must expose sanitized provider validation details, request ID and no-paid-run status'
+ );
+ await assert.rejects(
+  cloud.start('fictional-tinyfish-key-example-1','prof_fictional_amazon123',
+   async()=>({ok:false,status:400,
+    text:async()=>JSON.stringify({error:{code:'INVALID_INPUT',
+     message:'Invalid request, key: fictional-tinyfish-key-example-1'}})})),
+  error=>!error.message.includes('fictional-tinyfish-key-example-1')&&
+    error.message.includes('[redacted]'),
+  'Never leak a TinyFish API key through the displayed provider error'
  );
  await assert.rejects(cloud.validateKey('fictional-key-with-no-amazon',
   async()=>({ok:true,json:async()=>({profiles:[{id:'prof_fictional_other123',

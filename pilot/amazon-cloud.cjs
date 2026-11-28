@@ -105,15 +105,35 @@ async function request(apiKey,url,options={},fetcher=fetch){
  if(!res.ok){
   // TinyFish currently gates the max_steps feature by account. Never retry
   // a rejected step-capped request without its cap, which could bill more.
-  let reason='';
-  try{reason=(await res.text()).slice(0,2000)}catch{}
-  const message=res.status===403&&/max[_ -]?steps|beta|step limit|feature gate/i.test(reason)?
-   'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable this feature; Ledger will not submit an uncapped browser run.':
+  let reason='',provider={};
+  try{reason=(await res.text()).slice(0,3000)}catch{}
+  try{provider=JSON.parse(reason)}catch{}
+  const issue=provider?.error&&typeof provider.error==='object'?provider.error:{};
+  const rawCode=String(issue.code||'');
+  const code=/^[A-Z][A-Z0-9_]{2,50}$/.test(rawCode)?rawCode:null;
+  const requestId=String(provider.request_id||res.headers?.get?.('x-request-id')||'');
+  // Provider error messages are untrusted and can quote input. Never echo
+  // credentials, URLs, order IDs or long opaque identifiers in Ledger status.
+  const safeDetail=String(issue.message||'').replaceAll(apiKey,'[redacted]')
+   .replace(/https?:\/\/\S+/gi,'[website]')
+   .replace(/\S+@\S+\.\S+/g,'[redacted]')
+   .replace(/\b\d{3}-\d{7}-\d{7}\b/g,'[order]')
+   .replace(/\b[A-Za-z0-9_-]{40,}\b/g,'[redacted]')
+   .replace(/[\r\n\t]+/g,' ').slice(0,180);
+  const capped=/max[_ -]?steps|step limit|feature gate|\bbeta\b/i
+   .test([reason,safeDetail].join(' '));
+  const message=(res.status===400||res.status===403)&&capped?
+   'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable the max_steps feature; Ledger will not submit an uncapped browser run.':
    res.status===401||res.status===403?
-   'TinyFish key not accepted, or your account is not permitted to use this feature. Check the TinyFish connection.':
+   'TinyFish key not accepted, or this feature is not permitted for the account.':
    res.status===402?'TinyFish wallet needs funds. Open your TinyFish account.':
+   res.status===400||res.status===422?
+    'TinyFish rejected the Amazon request ('+res.status+
+    (code?', '+code:'')+').'+(safeDetail?' '+safeDetail:''):
    'TinyFish could not complete the request ('+res.status+').';
-  const error=new Error(message);
+  const correlation=/^[A-Za-z0-9_-]{8,85}$/.test(requestId)?
+   ' Request ID: '+requestId+'.':'';
+  const error=new Error(message+correlation);
   // A definitive 4xx rejection means the paid run did not start. A timeout,
   // a 5xx or a malformed successful response may have started billing.
   if([400,401,402,403,422].includes(res.status))error.notStarted=true;
@@ -164,7 +184,7 @@ function goal(){
 const orderSchema={type:'object',properties:{
  orders:{type:'array',items:{type:'object',properties:{
   orderId:{type:'string'},title:{type:'string'},date:{type:'string'},
-  shipmentDate:{type:'string'},cents:{type:'integer'},charged:{type:['integer','null']}
+  shipmentDate:{type:'string'},cents:{type:'integer'},charged:{type:'integer',nullable:true}
  },required:['orderId','title','date','shipmentDate','cents','charged']}},
  signedIn:{type:'boolean'},complete:{type:'boolean'}
 },required:['orders','signedIn','complete']};
