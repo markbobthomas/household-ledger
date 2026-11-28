@@ -46,7 +46,7 @@ The TinyFish API key and pinned saved profile ID are stored in Ledger's encrypte
 
 ## TinyFish step-limit beta access
 
-If Ledger says **“TinyFish has not enabled per-run step limits for this account”**, the API key and saved Amazon sign-in are working, but TinyFish has not enabled the optional `agent_config.max_steps` permission.
+If Ledger says **“TinyFish has not enabled per-run step limits for this account”**, Ledger has validated the API key and found a saved Amazon profile. This does **not** independently verify that Amazon's saved login still works; the browser run was rejected before it could test that. TinyFish has not enabled the optional `agent_config.max_steps` permission.
 
 1. Open [TinyFish beta access](https://agent.tinyfish.ai/beta) and sign in to the same account used by Ledger.
 2. Request access to **`agent_config.max_steps`**. If no request control is available, contact TinyFish support and specify that you need its Agent step-limit beta feature for your API key.
