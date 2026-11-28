@@ -288,4 +288,4 @@ function match(rows,transactions,adjustments,validCategories,allocate){
   possibleBankCharges:suggestedBank.size,
   unmatchedBankCharges:txs.filter(t=>!matchedBank.has(t.id)&&!suggestedBank.has(t.id)).length};
 }
-module.exports={match,itemNote,keyFor};
+module.exports={match,itemNote,choiceNote,keyFor};
