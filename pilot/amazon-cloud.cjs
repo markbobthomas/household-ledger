@@ -115,12 +115,12 @@ async function request(apiKey,url,options={},fetcher=fetch){
   // Provider error messages are untrusted and can quote input. Never echo
   // credentials, URLs, order IDs or long opaque identifiers in Ledger status.
   const safeDetail=String(issue.message||'').replaceAll(apiKey,'[redacted]')
-   .replace(/https?:\\/\\/\\S+/gi,'[website]')
-   .replace(/\\S+@\\S+\\.\\S+/g,'[redacted]')
-   .replace(/\\b\\d{3}-\\d{7}-\\d{7}\\b/g,'[order]')
-   .replace(/\\b[A-Za-z0-9_-]{40,}\\b/g,'[redacted]')
-   .replace(/[\\r\\n\\t]+/g,' ').slice(0,180);
-  const capped=/max[_ -]?steps|step limit|feature gate|\\bbeta\\b/i
+   .replace(/https?:\/\/\S+/gi,'[website]')
+   .replace(/\S+@\S+\.\S+/g,'[redacted]')
+   .replace(/\b\d{3}-\d{7}-\d{7}\b/g,'[order]')
+   .replace(/\b[A-Za-z0-9_-]{40,}\b/g,'[redacted]')
+   .replace(/[\r\n\t]+/g,' ').slice(0,180);
+  const capped=/max[_ -]?steps|step limit|feature gate|\bbeta\b/i
    .test([reason,safeDetail].join(' '));
   const message=(res.status===400||res.status===403)&&capped?
    'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable the max_steps feature; Ledger will not submit an uncapped browser run.':
