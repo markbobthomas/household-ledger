@@ -105,6 +105,9 @@ module.exports=(async()=>{
     pendingAmazonCharges:2,
     lastOutcome:tinyfishBlocked?'Paused: TinyFish declined the request; no paid run started':'Not yet checked',
     runActive:false,needsAttention:tinyfishBlocked,
+    pausedReason:tinyfishBlocked?'invalid-report':null,
+    replayAvailable:tinyfishBlocked,
+    replayRunId:tinyfishBlocked?'12345678-1234-1234-1234-123456789012':null,
     lastError:tinyfishBlocked?
      'TinyFish rejected the Amazon request (400). Review the paused status before restarting.':null,
     maxCostUsd:2.42
@@ -112,6 +115,14 @@ module.exports=(async()=>{
    await page.route('**/api/amazon-cloud',async route=>{
     await route.fulfill({status:200,contentType:'application/json',
      body:JSON.stringify(cloudSnapshot())});
+   });
+   await page.route('**/api/amazon-cloud/reprocess',async route=>{
+    const args=route.request().postDataJSON();
+    assert.deepEqual(args,{consent:true,runId:'12345678-1234-1234-1234-123456789012'},
+     'Recovery only reads an already completed run, with owner consent');
+    tinyfishRequests.push({action:'reprocess'});
+    await route.fulfill({status:202,contentType:'application/json',
+     body:JSON.stringify({...cloudSnapshot(),reprocessing:true})});
    });
    await page.route('**/api/amazon-cloud/settings',async route=>{
     const action=route.request().postDataJSON();
@@ -253,6 +264,16 @@ module.exports=(async()=>{
       'A paused provider rejection cannot accidentally incur a paid Agent run');
      assert.equal(tinyfishRequests.length,2,
       'Showing paused status must not launch extra provider work');
+     assert.equal(await page.locator('#cloud-replay-help').isVisible(),true,
+      'A failed run offers a clearly labeled no-charge recovery path');
+     await page.locator('#cloud-replay-help summary').click();
+     assert.equal(await page.locator('#cloud-replay-id').inputValue(),
+      '12345678-1234-1234-1234-123456789012');
+     await page.locator('#cloud-replay').click();
+     await page.waitForFunction(()=>document.getElementById('cloud-status')
+      .textContent.includes('PAUSED'));
+     assert.equal(tinyfishRequests.length,3,
+      'Reprocessing reads the existing provider result instead of launching a new Agent');
     assert.deepEqual(errors,[],name+' has no runtime script errors');
    }finally{await ctx.close();await browser.close()}
   }
