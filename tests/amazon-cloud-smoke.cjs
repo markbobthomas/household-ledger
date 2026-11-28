@@ -90,8 +90,10 @@ assert.equal(scopedResult.next.predictions.transactionNotes[
 ],undefined,'Unrelated prior purchases never receive a cloud Note');
 
 
-assert.equal(cloud.MAX_STEPS,45,'Cap browser-agent steps per run');
-assert.ok(cloud.MAX_ESTIMATED_RUN_USD<=1,'Configured run estimate ceiling is not more than $1');
+assert.equal(cloud.DEFAULT_AGENT_MAX_STEPS,150,'Use standard TinyFish step default for cost modeling');
+assert.equal(cloud.MAX_ESTIMATED_RUN_USD,2.42,'Model the full default step exposure and ten browser minutes');
+assert.equal(cloud.MAX_RUNS_30_DAYS*cloud.MAX_ESTIMATED_RUN_USD,31.46,
+ 'Expose the rolling 30-day modeled worst case, not a hard provider dollar cap');
 const fakeFetch=async (url,options)=>{
  if(url.endsWith('/v1/profiles'))return {ok:true,json:async()=>({profiles:[{
   id:'prof_fictional_amazon123',name:'Fictional Amazon',is_default:true,
