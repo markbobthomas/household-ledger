@@ -106,8 +106,8 @@ module.exports=(async()=>{
     lastOutcome:tinyfishBlocked?'Paused: TinyFish declined the request; no paid run started':'Not yet checked',
     runActive:false,needsAttention:tinyfishBlocked,
     lastError:tinyfishBlocked?
-     'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable the max_steps feature; Ledger will not submit an uncapped browser run.':null,
-    maxCostUsd:1
+     'TinyFish rejected the Amazon request (400). Review the paused status before restarting.':null,
+    maxCostUsd:2.42
    });
    await page.route('**/api/amazon-cloud',async route=>{
     await route.fulfill({status:200,contentType:'application/json',
@@ -237,23 +237,22 @@ module.exports=(async()=>{
     const dimensions=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,
      width:document.documentElement.clientWidth}));
     assert(dimensions.scrollWidth<=dimensions.width+2,name+' mobile layout must fit');
-    // Simulate the user's actual beta-only feature gate with no real provider
-    // calls. The app must show the actionable entitlement path, not a key or
-    // Amazon sign-in reset, and must not submit any paid agent action.
-    tinyfishBlocked=true;
-    await page.reload();
-    await page.waitForFunction(()=>document.getElementById('cloud-status')
-     .textContent.includes('PAUSED'));
-    assert.equal(await page.locator('#cloud-beta-help').isVisible(),true,
-     'Beta-step gate must be shown as explicit owner guidance');
-    assert.equal(await page.locator('a[href="https://agent.tinyfish.ai/beta"]').count(),1,
-     'Provide direct official beta access link');
-    assert.match(await page.locator('#cloud-beta-help').innerText(),/agent_config.max_steps/);
-    assert.match(await page.locator('#cloud-beta-help').innerText(),/manual Amazon order import/);
-    assert.equal(await page.locator('#cloud-now').isEnabled(),false,
-     'A paused beta-gated account cannot accidentally incur a paid Agent run');
-    assert.equal(tinyfishRequests.length,2,
-     'Showing beta help must not connect or launch extra provider work');
+     // A paused rejection is visible, but the obsolete beta flow is absent.
+     tinyfishBlocked=true;
+     await page.reload();
+     await page.waitForFunction(()=>document.getElementById('cloud-status')
+      .textContent.includes('PAUSED'));
+     assert.equal(await page.locator('#cloud-beta-help').count(),0,
+      'Standard Agent no longer depends on the beta step-limit warning');
+     await page.locator('#cloud-explanation summary').click();
+     assert.match(await page.locator('#cloud-explanation').innerText(),/150 Agent steps/);
+     assert.match(await page.locator('#cloud-explanation').innerText(),/\$2\.42/);
+     assert.match(await page.locator('#cloud-explanation').innerText(),/\$31\.46/);
+     assert.match(await page.locator('#cloud-detail').innerText(),/TinyFish rejected/);
+     assert.equal(await page.locator('#cloud-now').isEnabled(),false,
+      'A paused provider rejection cannot accidentally incur a paid Agent run');
+     assert.equal(tinyfishRequests.length,2,
+      'Showing paused status must not launch extra provider work');
     assert.deepEqual(errors,[],name+' has no runtime script errors');
    }finally{await ctx.close();await browser.close()}
   }

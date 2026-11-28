@@ -6,10 +6,10 @@ const pairing=require('./amazon-pairing.cjs');
 const amazon=require('./amazon-import.cjs');
 const apply=require('./amazon-apply.cjs');
 const API='https://agent.tinyfish.ai';
-const MAX_STEPS=45,MAX_DURATION=600,MAX_ORDERS=250;
+const DEFAULT_AGENT_MAX_STEPS=150,MAX_DURATION=600,MAX_ORDERS=250;
 const MAX_RUNS_30_DAYS=13; // includes deliberate owner-triggered runs
 const MAX_RUNS_PER_PACIFIC_DAY=1;
-const MAX_ESTIMATED_RUN_USD=1.00; // 45*$0.016 + 10 minutes*$0.002 ~= $0.74
+const MAX_ESTIMATED_RUN_USD=2.42; // model: default 150*$0.016 + 10 minutes*$0.002; NOT a provider-enforced dollar cap
 const DAYS=new Set([1,4,6]); // Monday / Thursday / Saturday, Pacific time
 const isoDate=s=>{
  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(s||'')))return false;
@@ -103,8 +103,6 @@ async function request(apiKey,url,options={},fetcher=fetch){
    ...(options.headers||{})},signal:AbortSignal.timeout(12000)
  });
  if(!res.ok){
-  // TinyFish currently gates the max_steps feature by account. Never retry
-  // a rejected step-capped request without its cap, which could bill more.
   let reason='',provider={};
   try{reason=(await res.text()).slice(0,3000)}catch{}
   try{provider=JSON.parse(reason)}catch{}
@@ -120,11 +118,7 @@ async function request(apiKey,url,options={},fetcher=fetch){
    .replace(/\b\d{3}-\d{7}-\d{7}\b/g,'[order]')
    .replace(/\b[A-Za-z0-9_-]{40,}\b/g,'[redacted]')
    .replace(/[\r\n\t]+/g,' ').slice(0,180);
-  const capped=/max[_ -]?steps|step limit|feature gate|\bbeta\b/i
-   .test([reason,safeDetail].join(' '));
-  const message=(res.status===400||res.status===403)&&capped?
-   'TinyFish has not enabled per-run step limits for this account. Ask TinyFish to enable the max_steps feature; Ledger will not submit an uncapped browser run.':
-   res.status===401||res.status===403?
+  const message=res.status===401||res.status===403?
    'TinyFish key not accepted, or this feature is not permitted for the account.':
    res.status===402?'TinyFish wallet needs funds. Open your TinyFish account.':
    res.status===400||res.status===422?
@@ -194,7 +188,7 @@ async function start(apiKey,profileId,fetcher){
  const result=await request(apiKey,API+'/v1/automation/run-async',{
   method:'POST',body:JSON.stringify({url:'https://www.amazon.com/your-orders',
    goal:goal(),use_profile:true,profile_id:profileId,browser_profile:'lite',
-   agent_config:{max_steps:MAX_STEPS,max_duration_seconds:MAX_DURATION},
+   agent_config:{max_duration_seconds:MAX_DURATION},
    output_schema:orderSchema})
  },fetcher);
  if(typeof result.run_id!=='string'||!/^[a-zA-Z0-9-]{16,90}$/.test(result.run_id))
@@ -261,4 +255,4 @@ function visited(cloud,run){
 }
 module.exports={local,due,eligible,safeStatus,ensureKey,validateKey,start,getRun,
  parseOrders,prepare,visited,baseline,limit,runsInWindow,MAX_RUNS_30_DAYS,
- MAX_ESTIMATED_RUN_USD,MAX_STEPS,MAX_DURATION,goal,orderSchema};
+ MAX_ESTIMATED_RUN_USD,DEFAULT_AGENT_MAX_STEPS,MAX_DURATION,goal,orderSchema};
