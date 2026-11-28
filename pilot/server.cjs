@@ -706,6 +706,11 @@ async function finishCloudAmazon(){
    updated.lastCheckedAt=stamp();
    updated.lastSuccessAt=stamp();
    updated.lastRecoveryAttemptVersion=cloudAmazon.RECOVERY_VERSION;
+   if(run.replay){
+    updated.lastFreeReplayRunId=id;
+    updated.lastFreeReplayVersion=cloudAmazon.RECOVERY_VERSION;
+    updated.lastFreeReplayTargets=run.targets;
+   }
    const partial=updated.lastUnmatched>0;
    // Valid source data with missing settlement evidence is NOT an expired
    // Amazon connection. Keep the owner's existing schedule preference;
