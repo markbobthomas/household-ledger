@@ -29,6 +29,9 @@ input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:7
 .cloud-key-actions{margin-top:9px}
 #cloud-api-key{font-size:16px}
 #cloud-setup-steps .button{margin:4px 0 6px}
+#cloud-profile-help{margin:12px 0 0;font-size:.92rem}
+#cloud-profile-help summary{padding:8px 0;font-weight:600;color:#18594c}
+#cloud-profile-help p{margin:8px 0 10px}
 #cloud-activity{margin-top:10px;font-size:.9rem}
 #cloud-activity summary{color:#526071;padding:8px 0}
 @media(max-width:480px){.cloud-key-actions>*{width:100%}.cloud-steps{padding-left:21px}.panel{padding:15px}}
@@ -69,45 +72,49 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  <p class="muted">Older purchases already in Ledger are left alone. At most one paid Amazon check per Pacific day, and 13 in any 30 days. No new Amazon charges = no TinyFish browser charge.</p>
  <p id="cloud-status" role="status" aria-live="polite">Checking setup…</p>
  <details id="cloud-setup-steps" open>
-  <summary><strong>Step-by-step setup — start here</strong></summary>
-  <p class="muted">You only do these steps once. You can do them on your phone or a computer. You do not need to download software or leave a computer on.</p>
+  <summary><strong>Connect Amazon to TinyFish — step by step</strong></summary>
+  <p class="muted">No computer extension or programming required. You only need to set this up once.</p>
   <ol class="cloud-steps">
    <li>
-    <strong>Open TinyFish and sign in.</strong>
-    <p>Tap <strong>Open TinyFish</strong> below. If you do not have an account, choose <strong>Sign up</strong> and create one. Otherwise sign in. Keep this Ledger page open so you can return to it.</p>
-    <a class="button" href="https://agent.tinyfish.ai" target="_blank" rel="noopener noreferrer">Open TinyFish</a>
+    <strong>Recognize the TinyFish home screen.</strong>
+    <p>If TinyFish shows <strong>“What do you want your agent to do?”</strong>, you are in its <strong>Agent Playground</strong>. That is normal, but <strong>do not type an Amazon task or press Run</strong>. A one-time agent task does not save the reusable Amazon login that Ledger needs.</p>
    </li>
    <li>
-    <strong>Find TinyProfiles.</strong>
-    <p>In your TinyFish dashboard, open the menu and choose <strong>TinyProfiles</strong>. A TinyProfile is a saved browser sign-in, so TinyFish can open your Amazon orders without you signing in on every check. Do not choose <strong>Browser Profiles</strong> (Lite/Stealth); that is a different feature.</p>
-    <p class="muted">Can't find it? <a href="https://docs.tinyfish.ai/key-concepts/tinyprofile" target="_blank" rel="noopener noreferrer">See TinyFish's official TinyProfiles instructions</a>.</p>
+    <strong>Open the saved-logins page directly.</strong>
+    <p>Tap <strong>Open TinyFish saved profiles</strong> below. Sign in to TinyFish if asked. This opens the separate saved-browser-sessions page directly, so you do not need to find a TinyProfiles menu inside the Agent screen.</p>
+    <a class="button primary" href="https://agent.tinyfish.ai/profiles" target="_blank" rel="noopener noreferrer">Open TinyFish saved profiles</a>
+    <details id="cloud-profile-help">
+     <summary>That link doesn't show saved profiles?</summary>
+     <p>If it redirects you to the “What do you want your agent to do?” box, gives an error, or does not offer saved profiles, <strong>stop setup here</strong>. Do not pay for an Agent task or assume typing instructions will save your login. Your TinyFish interface may not expose the feature Ledger needs.</p>
+     <p><a href="https://docs.tinyfish.ai/agent/how-to/create-google-form-with-profile" target="_blank" rel="noopener noreferrer">See TinyFish's official illustrated saved-profile setup</a>. If the profile page still is not available, contact TinyFish about access or <a href="#manual-amazon-import">use the manual Amazon ZIP/CSV import below</a>. Leave automatic updates OFF until a saved Amazon session is available.</p>
+    </details>
    </li>
    <li>
-    <strong>Use the default TinyProfile.</strong>
-    <p>If you see a profile marked <strong>Default</strong>, open it and start its sign-in/setup browser. If you have no default profile, select <strong>Create Profile</strong>, name it <strong>Ledger Amazon</strong>, select <strong>Set as default</strong>, and press <strong>Create and set up</strong>.</p>
-    <p class="muted">Important: Ledger uses the <strong>default</strong> TinyProfile. Saving Amazon in a different profile will not connect it to Ledger.</p>
+    <strong>Create or open an Amazon profile.</strong>
+    <p>On the saved profiles page, choose <strong>Create profile</strong> if you do not already have one for Amazon. Name it <strong>Ledger Amazon</strong> and select <strong>Next</strong>. Choose <strong>Open a browser and sign in</strong>. If you already have an Amazon profile, open its setup/sign-in option instead.</p>
+    <p>Mark that profile as <strong>Default</strong> in TinyFish. Ledger checks for a default saved Amazon profile when you connect.</p>
    </li>
    <li>
-    <strong>Sign in to Amazon inside TinyFish.</strong>
-    <p>In the setup browser that TinyFish opens, go to <strong>www.amazon.com/your-orders</strong>. Enter your usual Amazon login there, complete any verification code Amazon requests, and open <strong>Your Orders</strong>.</p>
-    <p>Wait until you can see your actual Amazon orders. Enter your Amazon password <strong>only on Amazon's sign-in page inside TinyFish</strong>, never in Ledger.</p>
+    <strong>Sign in to Amazon in the setup browser.</strong>
+    <p>In the browser TinyFish opens, enter <strong>https://www.amazon.com/your-orders</strong> into its website-address field and select <strong>Open</strong>. Sign in on Amazon's page and enter any verification code Amazon asks for. Make sure you can see <strong>Your Orders</strong>.</p>
+    <p>Only enter your Amazon password on Amazon's sign-in page <strong>inside TinyFish</strong>. Never paste an Amazon password into Ledger or the Agent prompt.</p>
    </li>
    <li>
-    <strong>Save the Amazon sign-in.</strong>
-    <p>Return to the TinyFish setup controls and select <strong>Save</strong> or <strong>Save setup session</strong>. Make sure the setup confirms the profile was saved. <strong>Don't just close the TinyFish window.</strong></p>
+    <strong>Save the Amazon login.</strong>
+    <p>Back in TinyFish, select <strong>Save</strong> when it confirms the session was captured. Check that the saved profile shows <strong>amazon.com — Signed in</strong> (wording may vary) and that the profile is marked <strong>Default</strong>. Do not just close the setup browser.</p>
    </li>
    <li>
-    <strong>Open TinyFish's API Keys page.</strong>
-    <p>Tap the link below. If asked, sign in to the <strong>same TinyFish account</strong> you used for the Amazon profile. Select <strong>Create API Key</strong>. You can name it <strong>Ledger Amazon</strong>.</p>
+    <strong>Open TinyFish API Keys.</strong>
+    <p>Use the direct link below. In the same TinyFish account, select <strong>Create API Key</strong> and, if asked, name it <strong>Ledger Amazon</strong>.</p>
     <a class="button" href="https://agent.tinyfish.ai/api-keys" target="_blank" rel="noopener noreferrer">Open TinyFish API Keys</a>
    </li>
    <li>
     <strong>Copy the new API key.</strong>
-    <p>After you create it, select <strong>Copy</strong>. TinyFish may show the full key only once. This key is a private connection code, <strong>not</strong> your Amazon password. Do not put it in a chat message or public document.</p>
+    <p>Tap <strong>Copy</strong> beside the key TinyFish creates. Keep this private. It is a connection code, not your Amazon password, and TinyFish may show it only once.</p>
    </li>
    <li>
-    <strong>Paste the key here in Ledger.</strong>
-    <p>Return to this Ledger page. Tap the box labeled <strong>Paste TinyFish API key here</strong>, paste the copied code, then tap <strong>Connect TinyFish</strong>. Wait until Ledger says <strong>TinyFish connected</strong>. Ledger saves the key in its encrypted private settings.</p>
+    <strong>Paste the API key here in Ledger.</strong>
+    <p>Return to this Ledger page. Paste the copied key into the box below and tap <strong>Connect TinyFish</strong>. Ledger checks the key and the saved default Amazon profile without starting a paid Agent job. Wait for <strong>TinyFish connected</strong>.</p>
     <label for="cloud-api-key"><strong>Paste TinyFish API key here</strong></label>
     <div class="actions cloud-key-actions">
      <input id="cloud-api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste the key copied from TinyFish" aria-label="Paste TinyFish API key here">
@@ -115,8 +122,8 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
     </div>
    </li>
    <li>
-    <strong>Turn on automatic updates.</strong>
-    <p>Once Ledger shows <strong>TinyFish connected</strong>, tap the <strong>Turn on automatic updates</strong> button just below these instructions. You are finished when Ledger says <strong>Automatic updates ON</strong>. No desktop browser or extension is required.</p>
+    <strong>Turn on updates in Ledger.</strong>
+    <p>Once Ledger says <strong>TinyFish connected</strong>, use <strong>Turn on automatic updates</strong> below. Look for <strong>Automatic updates ON</strong>. Only new posted Amazon charges going forward can start a scheduled check; older purchases are not automatically scanned.</p>
    </li>
   </ol>
  </details>
@@ -133,7 +140,7 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
   <p>The ZIP/CSV import below remains available for complete order history.</p>
  </details>
 </section>
-<section class="panel">
+<section class="panel" id="manual-amazon-import">
  <h2>Import Amazon order history</h2>
  <p class="muted">Upload the Amazon Orders ZIP or item-level CSV (up to 79 MB). Older saved Notes still work without another upload.</p>
  <input id="file" type="file" aria-label="Amazon order CSV or ZIP" accept=".zip,.csv,text/csv,application/zip">
