@@ -244,6 +244,7 @@ module.exports=(async()=>{
       .textContent.includes('PAUSED'));
      assert.equal(await page.locator('#cloud-beta-help').count(),0,
       'Standard Agent no longer depends on the beta step-limit warning');
+     await page.locator('#cloud-explanation summary').click();
      assert.match(await page.locator('#cloud-explanation').innerText(),/150 Agent steps/);
      assert.match(await page.locator('#cloud-explanation').innerText(),/\$2\.42/);
      assert.match(await page.locator('#cloud-explanation').innerText(),/\$31\.46/);
