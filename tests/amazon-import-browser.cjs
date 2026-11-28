@@ -168,7 +168,7 @@ module.exports=(async()=>{
      'Enable button becomes visible after connection');
     assert.equal(await page.locator('#cloud-setup-steps').getAttribute('open'),null,
      'Instructions collapse after success but remain re-openable');
-    await page.locator('#cloud-setup-steps summary').click();
+    await page.locator('#cloud-setup-steps > summary').click();
     assert.equal(await page.locator('#cloud-setup-steps').getAttribute('open'),'',
      'Connected owner can reopen full instructions when a login expires');
     await page.waitForFunction(()=>!document.getElementById('cloud-toggle').disabled);
