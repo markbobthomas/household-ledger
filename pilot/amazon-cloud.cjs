@@ -90,6 +90,8 @@ function safeStatus(state){
   needsAttention:!!c.pausedReason||c.run?.status==='uncertain',
   pausedReason:c.pausedReason||null,
   replayRunId:c.lastFailedRunId||null,
+  manualReviewAvailable:!!c.apiKey&&!!c.lastFailedRunId&&!c.enabled&&!c.run&&waiting>0&&
+   ['invalid-report','empty-report','no-matches','partial-report'].includes(c.pausedReason),
   replayAvailable:!!c.apiKey&&!c.enabled&&!c.run&&
    ['invalid-report','empty-report','no-matches','partial-report'].includes(c.pausedReason),
   pendingAmazonCharges:waiting,maxCostUsd:MAX_ESTIMATED_RUN_USD,
