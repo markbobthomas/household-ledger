@@ -88,6 +88,10 @@ function safeStatus(state){
   runActive:!!c.run,runStatus:c.run?.status||null,
   amazonSignInConfirmed:c.amazonSignInClaimed===true,
   needsAttention:!!c.pausedReason||c.run?.status==='uncertain',
+  pausedReason:c.pausedReason||null,
+  replayRunId:c.lastFailedRunId||null,
+  replayAvailable:!!c.apiKey&&!c.enabled&&!c.run&&
+   ['invalid-report','empty-report','no-matches','partial-report'].includes(c.pausedReason),
   pendingAmazonCharges:waiting,maxCostUsd:MAX_ESTIMATED_RUN_USD,
   runsLast30Days:usage.month,maxRuns30Days:MAX_RUNS_30_DAYS,
   runLimitReason:limit(c),initialSetupReady:!!c.baselineAt,
