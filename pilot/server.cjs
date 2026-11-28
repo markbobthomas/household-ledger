@@ -513,7 +513,8 @@ async function runCloudAmazon(manual=false){
  cloudWorkBusy=true;
  try{return await withHouseholdEdit(async()=>{
   const current=state.amazonCloud||{};
-  if(!current.enabled||!current.apiKey)return {disabled:true,...cloudStatus()};
+  if((!manual&&!current.enabled)||!current.apiKey)
+   return {disabled:true,error:'Connect TinyFish before checking Amazon',...cloudStatus()};
   if(!current.profileId)return {error:'Reconnect TinyFish to verify its saved Amazon profile before running',...cloudStatus()};
   if(current.run)return {busy:true,...cloudStatus()};
   if(accountRemovalBusy||!state.items.length)return {error:'Connect a bank before Amazon can sync'};
@@ -534,7 +535,11 @@ async function runCloudAmazon(manual=false){
     lastError:'Bank refresh needs attention. Use Sync in Ledger.'};
    await save();return cloudStatus();
   }
-  const targets=cloudAmazon.eligible(state);
+  // A manually consented paid check may retry a previously inspected charge
+  // that still has NO product Note; scheduled checks only visit new charges.
+  const savedNotes=state.ledgerAdjustments?.predictions?.transactionNotes||{};
+  const targets=manual?cloudAmazon.eligible(state,{retry:true}).filter(t=>
+   !String(savedNotes[t.key]||'').trim()):cloudAmazon.eligible(state);
   if(!targets.length){
    state.amazonCloud={...state.amazonCloud,lastOutcome:'No new Amazon charges; TinyFish was not started',
     lastCount:0,lastMatched:0,lastUnmatched:0,lastCheckedAt:stamp()};
@@ -544,7 +549,7 @@ async function runCloudAmazon(manual=false){
   // outcome remains blocked and needs manual reconciliation, never auto-retry.
   const startedAt=stamp(),recent=cloudAmazon.runsInWindow(state.amazonCloud).starts;
   state.amazonCloud={...state.amazonCloud,run:{status:'launching',
-   startedAt,targets:targets.map(t=>t.key)},
+   startedAt,manual,targets:targets.map(t=>t.key)},
    runStarts:[...recent,startedAt]}; // durable, shared 30-day limit
   await save();
   let id;
@@ -583,11 +588,12 @@ async function reprocessCloudAmazon(runId,{automatic=false}={}){
  cloudWorkBusy=true;
  try{return await withHouseholdEdit(async()=>{
   const before=state.amazonCloud||{};
-  if(!before.apiKey||!before.profileId||before.enabled||before.run||
-     !['invalid-report','empty-report','no-matches','partial-report'].includes(before.pausedReason))
-   throw Object.assign(Error('Recheck is available only for a paused, connected Amazon check'),{httpStatus:409});
-  if(before.lastFailedRunId&&before.lastFailedRunId!==runId)
-   throw Object.assign(Error('The run ID does not match the paused Amazon check'),{httpStatus:409});
+  const pinned=[before.lastCompletedRunId,before.lastFailedRunId].filter(Boolean);
+  const paused=['invalid-report','empty-report','no-matches','partial-report']
+   .includes(before.pausedReason);
+  if(!before.apiKey||!before.profileId||before.run||
+     !(pinned.includes(runId)||paused&&!pinned.length))
+   throw Object.assign(Error('This completed Amazon check is no longer available for a free recheck'),{httpStatus:409});
   let provider;
   try{provider=await cloudAmazon.getRun(before.apiKey,runId)}
   catch{throw Object.assign(Error('Cannot retrieve that completed TinyFish run'),{httpStatus:409})}
@@ -601,12 +607,17 @@ async function reprocessCloudAmazon(runId,{automatic=false}={}){
   const keyForAmazon=require('./amazon-pairing.cjs').keyFor;
   const txByKey=new Map(Object.values(state.transactions||{}).map(tx=>
    [keyForAmazon(tx),tx]));
-  const targets=cloudAmazon.eligible(state).filter(t=>{
+  // Include *previously inspected* charges if they still lack a product
+  // Note. The paid schedule excludes them to avoid repeated browser bills;
+  // reusing a saved completed result has no new browser charge.
+  const notes=state.ledgerAdjustments?.predictions?.transactionNotes||{};
+  const targets=cloudAmazon.eligible(state,{retry:true}).filter(t=>{
    const tx=txByKey.get(t.key);
-   return tx&&Date.parse(tx.date+'T12:00:00Z')<=at+86400000;
+   return tx&&!String(notes[t.key]||'').trim()&&
+    Date.parse(tx.date+'T12:00:00Z')<=at+86400000;
   }).map(t=>t.key);
   if(!targets.length)
-   throw Object.assign(Error('No eligible original Amazon charges remain for this result'),{httpStatus:409});
+   throw Object.assign(Error('No unnoted Amazon charge from this completed report remains to recheck. No paid browser run started.'),{httpStatus:409});
   state.amazonCloud={...before,
    ...(automatic?{lastRecoveryAttemptVersion:cloudAmazon.RECOVERY_VERSION}:{}),
    run:{id:runId,targets,status:'reprocessing',
@@ -655,7 +666,10 @@ async function finishCloudAmazon(){
      '. You can recheck this completed result without another paid browser run.';
     state.amazonCloud=updated;await save();return;
    }
-   if(!before.enabled&&!run.replay){
+   // A manually authorized paid check also saves observed order information
+   // when scheduled automatic checks are switched OFF. Turning updates OFF
+   // during a previously scheduled run still prevents applying its result.
+   if(!before.enabled&&!run.replay&&!run.manual){
     updated.lastOutcome='Amazon sync paused; no order information saved';
     state.amazonCloud=updated;await save();return;
    }
