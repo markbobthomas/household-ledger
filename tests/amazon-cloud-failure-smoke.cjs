@@ -85,7 +85,10 @@ async function verify(label,provider,reason){
   complete:true,orders:[]}},'empty-report');
  await verify('no-match',{status:'COMPLETED',result:{signedIn:true,
   complete:true,orders:[{orderId:'123-1234567-1234567',
-   title:'Fictional unrelated item',date:day,shipmentDate:day,cents:9999,charged:9999}]}},'no-matches');
+   title:'Fictional unrelated item',
+   date:new Date(Date.now()-20*86400000).toISOString().slice(0,10),
+   shipmentDate:new Date(Date.now()-20*86400000).toISOString().slice(0,10),
+   cents:9999,charged:9999}]}},'no-matches');
  await verify('failed',{status:'FAILED',result:null},'run-failed');
  console.log('PASS Amazon cloud failure isolation: four bad reports paused, no repeat spending or bank mutations');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{
