@@ -72,7 +72,14 @@ const savedKeys=cloud.visited({scanned:{}},
 assert.ok(savedKeys['bank:fictional-matched']);
 assert.equal(savedKeys['bank:fictional-unmatched'],undefined,
  'Unmatched bank charges must remain available for review');
-assert.match(cloud.goal(),/cents=null/,'Agent must explicitly mark missing item prices');
+assert.match(cloud.goal(),/Your Payments > Transactions/,'New runs must read actual payment transactions');
+assert.match(cloud.goal(),/never substitute an order total for a payment amount/i,
+ 'Prompt must distinguish settlements from split-order totals');
+assert.match(cloud.goal(),/productScope="payment"/,
+ 'Agent may confirm shipment products only when visibly linked to that payment');
+assert.match(cloud.goal(),/Do not return card numbers/i,
+ 'Never export card details through structured browser output');
+assert.equal(cloud.PAYMENT_URL,'https://www.amazon.com/cpe/yourpayments/transactions');
 assert.deepEqual(cloud.orderSchema.properties.orders.items.properties.cents,
  {type:'integer',nullable:true},'Nullable item price must be TinyFish schema compatible');
 assert.equal(cloud.safeStatus({amazonCloud:{apiKey:'fictional',profileId:'prof_test123456',
@@ -183,6 +190,75 @@ const ownedEvidence={...pricedOnlyState,ledgerAdjustments:{predictions:{},
 assert.equal(cloud.prepare(ownedEvidence,noteSource,['Shopping'],
  [noteKey]).report.matches,0,
  'A previously verified order cannot be claimed again by another charge');
+
+// Payment-first: actual Amazon charge differs from the complete order total
+// for split shipments. A linked payment is the evidence; order totals never
+// become bank settlement amounts and no item prices are fabricated.
+const paymentState={transactions:{a:{...t('fictional-payment-match'),amount:58.75}},
+ ledgerAdjustments:{predictions:{}}};
+const paymentKey=cloud.eligible(paymentState)[0].key;
+const payment=(date=today,scope='payment',kind='charge')=>({
+ transactionDate:date,amountCents:5875,orderId:'123-9876543-1234567',
+ kind,productScope:scope,titles:['Fictional bamboo organizers','Fictional cupboard mat']});
+const paymentReport=cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,payments:[payment()]}});
+assert.equal(paymentReport.length,0,'Payment records are NOT legacy priced order records');
+assert.equal(paymentReport.payments.length,1);
+const paid=cloud.prepare(paymentState,paymentReport,
+ ['Home & Maintenance','Shopping'],[paymentKey]);
+assert.equal(paid.paymentMatches,1,'Unique exact actual charge and shipment-linked items can save a verified product Note');
+assert.equal(paid.report.matches,1);
+assert.match(paid.next.predictions.transactionNotes[paymentKey],/^Amazon: Fictional bamboo organizers/);
+assert.equal(paid.next.categoryOverrides['fictional-payment-match'],undefined,
+ 'A payment-linked product Note cannot assign categories without real item prices');
+assert.equal(paid.next.amazonAllocations['fictional-payment-match'],undefined,
+ 'Whole bank charge cannot be fabricated as item-priced allocations');
+assert.equal(paid.next.amazonEvidence['fictional-payment-match'].uncertainty,
+ 'payment-transaction-no-item-prices');
+assert.equal(require('../pilot/amazon-evidence.cjs').category(
+ paid.next.amazonEvidence['fictional-payment-match'],['Home & Maintenance']),null,
+ 'Even a unique payment-to-product link cannot infer individual item costs or categories');
+const orderScoped=cloud.prepare(paymentState,cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,payments:[payment(today,'order')]
+ }}),['Shopping'],[paymentKey]);
+assert.equal(orderScoped.paymentMatches,0,
+ 'Whole-order products cannot be attributed to just one payment/shipment');
+assert.match(orderScoped.next.predictions.transactionNotes[paymentKey],/^Possible Amazon:/);
+assert.equal(orderScoped.next.categoryOverrides['fictional-payment-match'],undefined);
+const incompletePayment=cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,payments:[payment(today,'unknown')]}});
+assert.equal(cloud.prepare(paymentState,incompletePayment,['Shopping'],[paymentKey]).hasNotes,false,
+ 'Payment entry without shipment-associated products cannot invent a Note');
+assert.equal(cloud.prepare(paymentState,cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,payments:[payment(today,'payment','refund')]
+ }}),['Shopping'],[paymentKey]).hasNotes,false,'Refund is not a bank purchase');
+assert.equal(cloud.prepare(paymentState,cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,payments:[payment(),payment()]
+ }}),['Shopping'],[paymentKey]).report.matches,0,
+ 'Two indistinguishable Amazon charges are ambiguous and cannot be auto-confirmed');
+const bankCollision={transactions:{
+ a:{...t('first-account-payment'),amount:58.75},
+ b:{...t('second-account-payment'),amount:58.75,accountId:'another-fictional-card'}
+},ledgerAdjustments:{predictions:{}}};
+const collided=cloud.prepare(bankCollision,paymentReport,['Shopping'],
+ [cloud.eligible(bankCollision)[0].key]);
+assert.equal(collided.hasNotes,false,'A payment cannot be assigned to two plausible linked bank accounts');
+const protectedPayment={...paymentState,ledgerAdjustments:{predictions:{
+ transactionNotes:{[paymentKey]:'Owner-written explanation'}}}};
+assert.equal(cloud.prepare(protectedPayment,paymentReport,['Shopping'],[paymentKey])
+ .next.predictions.transactionNotes[paymentKey],'Owner-written explanation',
+ 'A payment match must not overwrite a handwritten Note');
+assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:false,payments:[payment()]
+ }}),/incomplete/,
+ 'Unreadable payment pages cannot be mistaken for a completed 45-day report');
+assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,payments:[{...payment(),amountCents:NaN}]
+ }}),/invalid/,
+ 'Unverified payment amounts are rejected before matching');
+assert.equal(cloud.paymentPilotPassed({paymentPilotVersion:cloud.PAYMENT_VERSION}),true);
+assert.equal(cloud.paymentPilotPassed({enabled:true}),false,
+ 'The existing automatic update toggle alone cannot authorize a new untested browser strategy');
 
 const baseline=cloud.baseline(fixture,{enabled:false,scanned:{}},new Date());
 assert.ok(baseline.baselineAt,'A safe first-enable point must be durable');
@@ -329,9 +405,13 @@ const fakeFetch=async (url,options)=>{
   assert.equal(request.agent_config.max_steps,undefined,
    'Standard TinyFish Agent must not send beta-only custom max_steps');
   assert.equal(request.agent_config.max_duration_seconds,600);
-  assert.deepEqual(request.output_schema.properties.orders.items.properties.charged,
+  assert.equal(request.url,cloud.PAYMENT_URL,
+   'Paid runs start at actual Amazon payment transactions, not the orders grid');
+  assert.deepEqual(request.output_schema.properties.payments.items.properties.amountCents,
    {type:'integer',nullable:true},
-   'TinyFish rejects type arrays (HTTP 400): use nullable:true for optional order totals');
+   'TinyFish rejects type arrays (HTTP 400): use nullable:true for unavailable payment amounts');
+  assert(!JSON.stringify(request).includes('fictional-card'),
+   'Never supply bank account identifiers to TinyFish');
   const allowed=new Set(['type','properties','required','items','nullable','minItems',
    'maxItems','minimum','maximum','anyOf','enum','format','propertyOrdering']);
   const validateSchema=(schema,path='#')=>{
