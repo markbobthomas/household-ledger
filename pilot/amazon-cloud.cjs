@@ -9,6 +9,7 @@ const API='https://agent.tinyfish.ai';
 const DEFAULT_AGENT_MAX_STEPS=150,MAX_DURATION=600,MAX_ORDERS=250;
 const MAX_RUNS_30_DAYS=13; // includes deliberate owner-triggered runs
 const MAX_RUNS_PER_PACIFIC_DAY=1;
+const RECOVERY_VERSION='possible-cloud-matches-v1';
 const MAX_ESTIMATED_RUN_USD=2.42; // model: default 150*$0.016 + 10 minutes*$0.002; NOT a provider-enforced dollar cap
 const DAYS=new Set([1,4,6]); // Monday / Thursday / Saturday, Pacific time
 const isoDate=s=>{
@@ -350,12 +351,67 @@ function prepare(state,orders,categories,targets){
   categories:[],lines:[],needsReview:true,alreadyImported:false
  }));
  const matches=[...exactMatches,...noteOnly];
- const exactTransactions=Object.fromEntries(matches.map(m=>[m.transactionId,
-  scoped[m.transactionId]]).filter(([_,tx])=>!!tx));
- const proposal=apply.prepare({...match,matches,suggestions:[]},before,{
-  transactions:exactTransactions,categories,
+ const confirmed=new Set(matches.map(m=>m.transactionId));
+ const claimed=new Set([
+  ...matches.map(m=>String(m.orderId).split(' · ')[0]),
+  ...Object.values(before.amazonEvidence||{}).filter(e=>e?.match==='exact')
+   .map(e=>String(e.orderId||'').split(' · ')[0])
+ ]);
+ // Amazon often posts settlement amounts different from product or order
+ // totals. Exact reconciliation is still mandatory for confirmation and
+ // categorization, but an observed title can be saved as explicitly POSSIBLE.
+ // Score only actual orders in the completed provider report, never guesses.
+ const allOrders=[
+  ...[...pricedGroups].map(([orderId,items])=>{
+   const known=[...new Set(items.map(i=>i.charged))];
+   return {orderId,items,shipmentDate:items.map(i=>i.shipmentDate||i.date).sort().at(-1),
+    charged:known.length===1&&known[0]>0?known[0]:null};
+  }),...uncertain
+ ].filter(order=>order.items?.length&&!claimed.has(order.orderId));
+ const suggestions=[];
+ for(const tx of Object.values(scoped)){
+  if(confirmed.has(tx.id))continue;
+  const key=keyFor(tx),existing=String(before.predictions?.transactionNotes?.[key]||'').trim();
+  if(existing)continue; // Never replace handwritten or prior imported Notes.
+  const amount=Math.round(Number(tx.amount)*100);
+  if(!Number.isSafeInteger(amount)||amount<=0)continue;
+  const options=allOrders.map(order=>{
+   const days=datedGap(tx,order.shipmentDate||order.date);
+   if(days< -1||days>7)return null;
+   const total=order.charged;
+   const discrepancy=total?Math.abs(total-amount)/Math.max(total,amount):null;
+   // An unknown total is weaker than a genuine measured near-total, but
+   // Amazon split shipments make modest amount differences non-conclusive.
+   if(discrepancy===null&&days>4)return null;
+   if(discrepancy!==null&&discrepancy>.35&&days>3)return null;
+   const score=(discrepancy===null?.55:discrepancy<=.35?discrepancy:.65)+
+    Math.abs(days-2)*.07;
+   return {order,score};
+  }).filter(Boolean).sort((a,b)=>a.score-b.score||
+   a.order.orderId.localeCompare(b.order.orderId));
+  if(!options.length)continue;
+  // Disclose alternatives instead of quietly treating the best-ranked
+  // candidate as verified. The complete private evidence retains up to 3.
+  const selected=options.slice(0,3),unique=selected.length===1||
+   (selected[1].score-selected[0].score>=.28&&selected[0].score<=.22);
+  const choices=unique?selected.slice(0,1):selected;
+  const shown=choices.map(({order})=>({orderId:order.orderId,
+   date:order.shipmentDate||order.date,items:order.items}));
+  const note=unique?pairing.itemNote(shown[0].items,'Possible Amazon: '):
+   pairing.choiceNote(shown);
+  if(!note||note.length>160)continue;
+  suggestions.push({transactionId:tx.id,accountId:tx.accountId,
+   amountCents:amount,date:tx.date,orderId:shown[0].orderId,
+   note,confidence:'possible',source:'cloud-unverified-settlement',
+   choices:shown,suggestedCategory:null});
+ }
+ const proposedTransactions=Object.fromEntries([...matches,...suggestions]
+  .map(m=>[m.transactionId,scoped[m.transactionId]]).filter(([_,tx])=>!!tx));
+ const proposal=apply.prepare({...match,matches,suggestions},before,{
+  transactions:proposedTransactions,categories,
   automatic:before.categoryAutomation?.automatic!==false,replaceOther:false});
  return {...proposal,matchedKeys:matches.map(m=>keyFor(scoped[m.transactionId])),
+  possibleKeys:suggestions.map(m=>keyFor(scoped[m.transactionId])),
   noteOnlyMatches:noteOnly.length,unpricedOrderCount:uncertain.length};
 }
 function visited(cloud,run,matchedKeys=[]){
@@ -370,5 +426,5 @@ function visited(cloud,run,matchedKeys=[]){
  return scanned;
 }
 module.exports={local,due,eligible,safeStatus,ensureKey,validateKey,start,getRun,
- parseOrders,prepare,visited,baseline,limit,runsInWindow,MAX_RUNS_30_DAYS,
+ parseOrders,prepare,visited,baseline,limit,runsInWindow,RECOVERY_VERSION,MAX_RUNS_30_DAYS,
  MAX_ESTIMATED_RUN_USD,DEFAULT_AGENT_MAX_STEPS,MAX_DURATION,goal,orderSchema};
