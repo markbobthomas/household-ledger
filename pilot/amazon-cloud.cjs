@@ -84,10 +84,17 @@ function safeStatus(state){
   possible=Object.values(state.ledgerAdjustments?.amazonEvidence||{}).filter(e=>
    e?.match==='possible'&&e?.uncertainty==='cloud-unverified-settlement').length,
   notes=state.ledgerAdjustments?.predictions?.transactionNotes||{},
-  missing=eligible(state,{retry:true}).filter(t=>
-   !String(notes[t.key]||'').trim()).length,
+  unnoted=eligible(state,{retry:true}).filter(t=>
+   !String(notes[t.key]||'').trim()),
+  missing=unnoted.length,
   replayId=c.lastCompletedRunId||c.lastFailedRunId||null,
-  replayReady=!!c.apiKey&&!c.run&&!!replayId&&missing>0;
+  lastRead=Date.parse(c.lastCompletedRunAt||''),
+  earlier=unnoted.some(t=>{
+   const tx=state.transactions?.[t.id];
+   return tx&&(!Number.isFinite(lastRead)||
+    Date.parse(tx.date+'T12:00:00Z')<=lastRead+86400000);
+  }),
+  replayReady=!!c.apiKey&&!c.run&&!!replayId&&earlier;
  return {enabled:c.enabled===true,connected:!!c.apiKey,
   lastAttemptAt:c.lastAttemptAt||null,lastSuccessAt:c.lastSuccessAt||null,
   lastCheckedAt:c.lastCheckedAt||null,
