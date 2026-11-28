@@ -87,13 +87,14 @@ function safeStatus(state){
   unnoted=eligible(state,{retry:true}).filter(t=>
    !String(notes[t.key]||'').trim()),
   missing=unnoted.length,
+  txByKey=new Map(Object.values(state.transactions||{}).map(t=>[keyFor(t),t])),
   replayId=c.lastCompletedRunId||c.lastFailedRunId||null,
   lastRead=Date.parse(c.lastCompletedRunAt||''),
   tried=new Set(c.lastFreeReplayRunId===replayId&&
    c.lastFreeReplayVersion===RECOVERY_VERSION?
     c.lastFreeReplayTargets||[]:[]),
   earlier=unnoted.some(t=>{
-   const tx=state.transactions?.[t.id];
+   const tx=txByKey.get(t.key);
    return tx&&!tried.has(t.key)&&(!Number.isFinite(lastRead)||
     Date.parse(tx.date+'T12:00:00Z')<=lastRead+86400000);
   }),
