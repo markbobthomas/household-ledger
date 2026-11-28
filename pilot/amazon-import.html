@@ -133,6 +133,14 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
   <button id="cloud-disconnect" type="button">Disconnect</button>
  </div>
  <details id="cloud-activity"><summary>Last check and troubleshooting</summary><p id="cloud-detail" class="muted"></p></details>
+ <details id="cloud-replay-help" hidden>
+  <summary>Recheck a completed TinyFish result — no new browser charge</summary>
+  <p class="muted">This reads the result of a check already completed. It does not start TinyFish again or enable automatic updates. If no ID appears below, copy the Run ID of the completed Amazon check from your TinyFish run history.</p>
+  <div class="actions cloud-key-actions">
+   <input id="cloud-replay-id" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste completed TinyFish Run ID" aria-label="Completed TinyFish run ID">
+   <button id="cloud-replay" type="button">Recheck saved result</button>
+  </div>
+ </details>
  <details id="cloud-explanation"><summary>Cost, privacy and what gets matched</summary>
   <p>TinyFish reads Amazon order pages, not your bank account. Ledger privately matches order details to existing posted bank charges; it never creates a second purchase or rewrites bank balances. Only exact matches can add product Notes/categories automatically. Uncertain purchases stay for review.</p>
   <p>First setup starts with <strong>new charges going forward</strong>, not a surprise paid import of old history. TinyFish uses its standard default of up to 150 Agent steps and a requested 10-minute timeout. At the published rates, a run reaching both limits models to $2.42, and 13 such runs to $31.46 per 30 days. These are estimates, not hard spending caps; real bills may differ. A maximum of 13 browser starts is permitted in any rolling 30 days, including Check now.</p>
@@ -204,7 +212,11 @@ function renderCloud(data){
  $('cloud-toggle').textContent=data.enabled?'Turn off automatic updates':'Turn on automatic updates';
  $('cloud-toggle').classList.toggle('primary',!data.enabled);
  $('cloud-now').disabled=!data.enabled||data.runActive||!!data.runLimitReason||!!data.needsAttention;
- const summary=data.runActive?'Amazon check in progress. A second check will not start.':
+ $('cloud-replay-help').hidden=!data.replayAvailable;
+ $('cloud-replay').disabled=!data.replayAvailable||data.runActive;
+ if(data.replayRunId&&!$('cloud-replay-id').value)$('cloud-replay-id').value=data.replayRunId;
+ const summary=data.runActive?
+  (data.runStatus==='reprocessing'?'Rechecking saved Amazon result without starting a paid browser.':'Amazon check in progress. A second check will not start.'):
   data.needsAttention?'Amazon updates PAUSED. Read the problem below before turning them on again.':
   data.enabled?'Automatic updates ON. New Amazon charges will be checked on scheduled days.':
   data.connected&&data.amazonSignInConfirmed===false?'TinyFish connected, but its Amazon login was not confirmed. Save the Amazon login in TinyProfiles before turning on updates.':
@@ -230,22 +242,26 @@ async function refreshCloud(){
 async function cloudAction(action){
  if(cloudBusy)return;
  cloudBusy=true;
- for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect'])$(id).disabled=true;
+ for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect','cloud-replay'])$(id).disabled=true;
  cloudMessage('Saving Amazon settings…');
  let problem=null;
  try{
-  const data=await cloudApi(action.action==='run'?'/run':'/settings',
-   action.action==='run'?{consent:true}:action);
+  const endpoint=action.action==='run'?'/run':
+   action.action==='reprocess'?'/reprocess':'/settings';
+  const payload=action.action==='run'?{consent:true}:
+   action.action==='reprocess'?{consent:true,runId:action.runId}:action;
+  const data=await cloudApi(endpoint,payload);
   renderCloud(data);
   if(action.action==='connect')$('cloud-api-key').value='';
   if(data.started)cloudMessage('TinyFish started one Amazon check. You can close this page.');
+  if(data.reprocessing)cloudMessage('Reading the completed TinyFish result; no new browser run was started.');
   if(data.skipped)cloudMessage('No new Amazon charges; TinyFish was not started.');
-  if(data.error||data.limitReached||data.needsAttention)
+  if(data.error||data.limitReached||(data.needsAttention&&!data.reprocessing))
    problem=data.error||data.lastError||data.lastOutcome||'Please check the Amazon update details.';
  }catch(error){problem=error.message}
  finally{
   cloudBusy=false;
-  for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect'])$(id).disabled=false;
+  for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect','cloud-replay'])$(id).disabled=false;
   await refreshCloud();
   if(problem){
    cloudMessage('Amazon updates need attention: '+problem);
@@ -260,14 +276,25 @@ $('cloud-connect').onclick=()=>{
 };
 $('cloud-toggle').onclick=()=>cloudAction({action:cloud?.enabled?'disable':'enable'});
 $('cloud-now').onclick=()=>{
- if(!confirm('Check new Amazon purchases now? If any new unmatched posted charges are found and the daily limit allows, TinyFish may charge for one capped browser run. Continue?'))return;
+ if(!confirm('Check new Amazon purchases now? A new TinyFish Agent run may incur charges (modeled up to $2.42 at standard maximum usage; not a guaranteed cap). Continue?'))return;
  cloudAction({action:'run'});
+};
+$('cloud-replay').onclick=()=>{
+ const runId=$('cloud-replay-id').value.trim();
+ if(!/^[A-Za-z0-9-]{16,90}$/.test(runId))return cloudMessage('Paste the Run ID of the completed TinyFish Amazon check.');
+ cloudAction({action:'reprocess',runId});
 };
 $('cloud-disconnect').onclick=()=>{
  if(confirm('Disconnect TinyFish and turn off future Amazon checks?'))
   cloudAction({action:'disconnect'});
 };
 refreshCloud();
+// The provider runs asynchronously. Refresh only its read-only owner status
+// while active and when the owner returns to this page; never start a run.
+setInterval(()=>{if(!document.hidden&&cloud?.runActive&&!cloudBusy)refreshCloud()},30000);
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden&&!cloudBusy)refreshCloud();
+});
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(c||0)/100);

@@ -34,6 +34,51 @@ assert.throws(()=>cloud.parseOrders({status:'COMPLETED',result:{signedIn:true,co
  orders:[{orderId:'123-1234567-1234567',title:'Test item',date:'2026-99-99',
  shipmentDate:'',cents:2325,charged:2325}]}}),/invalid|RangeError/);
 
+const pricedRows=cloud.parseOrders({status:'COMPLETED',
+ created_at:new Date().toISOString(),
+ result:{signedIn:true,complete:true,orders:[
+  {orderId:'123-1111111-1111111',title:'Fictional priced home supply',
+   date:today,shipmentDate:today,cents:2325,charged:2325},
+  {orderId:'123-2222222-2222222',title:'Fictional unpriced book',
+   date:today,shipmentDate:today,cents:0,charged:2325},
+  {orderId:'123-2222222-2222222',title:'Fictional other book',
+   date:today,shipmentDate:today,cents:500,charged:2325},
+  {orderId:'123-3333333-3333333',title:'Fictional old purchase',
+   date:'2020-01-01',shipmentDate:'2020-01-01',cents:2325,charged:2325}
+ ]}});
+assert.equal(pricedRows.length,1,
+ 'Unpriced or partly priced orders are entirely excluded; old history is ignored');
+assert.equal(pricedRows.unpricedOrders.length,1,
+ 'Missing prices are tracked as uncertainty, not made-up zero-dollar purchases');
+assert.equal(pricedRows.ignoredOutsideWindow,1);
+const pricedOnlyState={transactions:{a:t('priced-test')},
+ ledgerAdjustments:{predictions:{}},amazonCloud:{scanned:{}}};
+const ambiguousReport=cloud.prepare(pricedOnlyState,pricedRows,['Shopping','Other'],
+ [cloud.eligible(pricedOnlyState)[0].key]);
+assert.equal(ambiguousReport.report.matches,0,
+ 'A competing partially priced order cannot silently become an exact match');
+const uniqueRows=cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,orders:[
+  {orderId:'123-4444444-4444444',title:'Fictional complete purchase',
+   date:today,shipmentDate:today,cents:2325,charged:2325}
+ ]}});
+const safelyMatched=cloud.prepare(pricedOnlyState,uniqueRows,['Shopping','Other'],
+ [cloud.eligible(pricedOnlyState)[0].key]);
+assert.equal(safelyMatched.report.matches,1,'A fully priced unique order still matches');
+assert.equal(safelyMatched.matchedKeys.length,1);
+const savedKeys=cloud.visited({scanned:{}},
+ {targets:['bank:fictional-matched','bank:fictional-unmatched']},
+ ['bank:fictional-matched']);
+assert.ok(savedKeys['bank:fictional-matched']);
+assert.equal(savedKeys['bank:fictional-unmatched'],undefined,
+ 'Unmatched bank charges must remain available for review');
+assert.match(cloud.goal(),/cents=null/,'Agent must explicitly mark missing item prices');
+assert.deepEqual(cloud.orderSchema.properties.orders.items.properties.cents,
+ {type:'integer',nullable:true},'Nullable item price must be TinyFish schema compatible');
+assert.equal(cloud.safeStatus({amazonCloud:{apiKey:'fictional',profileId:'prof_test123456',
+ enabled:false,pausedReason:'invalid-report'}}).replayAvailable,true,
+ 'A paused prior run can be read again without another paid browser start');
+
 const baseline=cloud.baseline(fixture,{enabled:false,scanned:{}},new Date());
 assert.ok(baseline.baselineAt,'A safe first-enable point must be durable');
 assert.equal(cloud.eligible({...fixture,amazonCloud:{...baseline,enabled:true}}).length,0,

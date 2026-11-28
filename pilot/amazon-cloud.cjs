@@ -88,6 +88,10 @@ function safeStatus(state){
   runActive:!!c.run,runStatus:c.run?.status||null,
   amazonSignInConfirmed:c.amazonSignInClaimed===true,
   needsAttention:!!c.pausedReason||c.run?.status==='uncertain',
+  pausedReason:c.pausedReason||null,
+  replayRunId:c.lastFailedRunId||null,
+  replayAvailable:!!c.apiKey&&!c.enabled&&!c.run&&
+   ['invalid-report','empty-report','no-matches','partial-report'].includes(c.pausedReason),
   pendingAmazonCharges:waiting,maxCostUsd:MAX_ESTIMATED_RUN_USD,
   runsLast30Days:usage.month,maxRuns30Days:MAX_RUNS_30_DAYS,
   runLimitReason:limit(c),initialSetupReady:!!c.baselineAt,
@@ -164,21 +168,24 @@ async function validateKey(apiKey,fetcher){
 function goal(){
  return 'Read only Amazon.com Your Orders for the last 45 days using the already signed-in saved browser profile. '+
  'Do not buy, cancel, change settings, submit forms, contact sellers or open payment details. '+
- 'Read order detail pages as needed to identify individual products, shipment dates, '+
- 'item totals inclusive of tax/discount/shipping, and exact order totals; '+
- 'for multiple items return one row per priced item and do not guess prices. '+
- 'Return an orders array with orderId (Amazon format 123-1234567-1234567), '+
+ 'Do not scan older order-history pages; stop when order dates are older than 45 days. '+
+ 'Open the order details/invoice for EACH in-range order and read each item\'s own final price, '+
+ 'including documented tax, shipping and discounts where available. '+
+ 'An order-level total is NOT an item price and must never be copied onto its items. '+
+ 'If an individual item price is not shown, return cents=null for that item, NEVER zero or a guess. '+
+ 'If the order total cannot be verified, return charged=null, NEVER zero or a guess. '+
+ 'Return an orders array containing orderId (Amazon format 123-1234567-1234567), '+
  'title, date (YYYY-MM-DD order date), shipmentDate (YYYY-MM-DD or empty), '+
- 'cents (integer cents per item), charged (integer order total cents or null). '+
- 'Skip cancelled or unavailable items. Stop if not signed in or challenged and '+
- 'report that clearly rather than inventing purchase details. Limit 250 items. '+
- 'If any order pages cannot be read or any of the last 45 days cannot be covered, set complete=false. ' +
- 'Never claim the order report is complete if blocked or truncated. No bank or Ledger access is needed.';
+ 'cents (positive integer cents per item or null), charged (positive integer full order total cents or null). '+
+ 'Use complete=false whenever pages are blocked, truncated, inaccessible or outside known coverage; '+
+ 'include all actually observed items, even those with null prices. '+
+ 'Stop if not signed in or challenged and report that clearly. Limit 250 items. '+
+ 'Never claim a complete report if any page is unreadable. No bank or Ledger access is needed.';
 }
 const orderSchema={type:'object',properties:{
  orders:{type:'array',items:{type:'object',properties:{
   orderId:{type:'string'},title:{type:'string'},date:{type:'string'},
-  shipmentDate:{type:'string'},cents:{type:'integer'},charged:{type:'integer',nullable:true}
+  shipmentDate:{type:'string'},cents:{type:'integer',nullable:true},charged:{type:'integer',nullable:true}
  },required:['orderId','title','date','shipmentDate','cents','charged']}},
  signedIn:{type:'boolean'},complete:{type:'boolean'}
 },required:['orders','signedIn','complete']};
@@ -206,20 +213,45 @@ function parseOrders(run){
  if(data.complete!==true)throw Error('Amazon returned an incomplete report. No purchases were changed');
  if(!Array.isArray(data.orders)||data.orders.length>MAX_ORDERS)
   throw Error('Amazon order report was not complete or was too large');
- const seen=new Set(),out=[];
+ // A source can report complete:true yet omit item-level prices. Preserve
+ // the entire uncertain order as unavailable; never infer a missing line from
+ // a known total or silently present a partial order as an exact match.
+ const runDay=typeof run.created_at==='string'&&Number.isFinite(Date.parse(run.created_at))?
+  new Date(run.created_at):new Date();
+ const earliest=new Date(runDay.getTime()-45*86400000).toISOString().slice(0,10);
+ const latest=new Date(runDay.getTime()+2*86400000).toISOString().slice(0,10);
+ const groups=new Map(),seen=new Set();let ignoredOutsideWindow=0;
  for(const r of data.orders){
-  if(!r||! /^\d{3}-\d{7}-\d{7}$/.test(String(r.orderId||''))||
+  if(!r||!/^\d{3}-\d{7}-\d{7}$/.test(String(r.orderId||''))||
     !isoDate(r.date)||r.shipmentDate&&!isoDate(r.shipmentDate)||
     typeof r.title!=='string'||r.title.trim().length<4||r.title.length>240||
-    !Number.isSafeInteger(r.cents)||r.cents<1||r.cents>20000000||
-    r.charged!==null&&(!Number.isSafeInteger(r.charged)||r.charged<1||r.charged>20000000))
+    !(r.cents===null||(Number.isSafeInteger(r.cents)&&r.cents>=0&&r.cents<=20000000))||
+    !(r.charged===null||(Number.isSafeInteger(r.charged)&&r.charged>=0&&r.charged<=20000000)))
    throw Error('Amazon report included an invalid or unverified order item');
+  if(r.date<earliest||r.date>latest){ignoredOutsideWindow++;continue}
   const id=[r.orderId,r.title,r.cents,r.shipmentDate].join('|');
   if(seen.has(id))continue;seen.add(id);
-  out.push({orderId:r.orderId,title:r.title.trim(),date:r.date,
-   shipmentDate:r.shipmentDate||'',cents:r.cents,charged:r.charged});
+  if(!groups.has(r.orderId))groups.set(r.orderId,[]);
+  groups.get(r.orderId).push({...r,title:r.title.trim()});
  }
- return out;
+ const priced=[],unpricedOrders=[];
+ for(const [orderId,items] of groups){
+  const amounts=[...new Set(items.map(i=>i.charged))];
+  const charged=amounts.length===1&&amounts[0]>0?amounts[0]:null;
+  if(items.some(i=>!Number.isSafeInteger(i.cents)||i.cents<=0)){
+   unpricedOrders.push({date:items[0].date,
+    shipmentDate:items.map(i=>i.shipmentDate||i.date).sort().at(-1),
+    charged});
+   continue;
+  }
+  // Inconsistent order totals are not trustworthy order-level evidence.
+  for(const i of items)priced.push({...i,charged});
+ }
+ Object.defineProperties(priced,{
+  unpricedOrders:{value:unpricedOrders},
+  ignoredOutsideWindow:{value:ignoredOutsideWindow}
+ });
+ return priced;
 }
 function prepare(state,orders,categories,targets){
  const before=state.ledgerAdjustments||{},
@@ -233,19 +265,36 @@ function prepare(state,orders,categories,targets){
   Evidence.isAmazon(t)&&chosen.has(keyFor(t))).map(t=>[t.id,t]));
  if(!Object.keys(scoped).length)throw Error('Reserved Amazon charges are no longer posted');
  const match=amazon.match(orders,scoped,before,categories);
- const exactMatches=(match.matches||[]).filter(m=>m.confidence==='exact');
+ // A partially unreadable order might be the same posted bank debit.
+ // Do not claim another order's product as verified if that incomplete order
+ // could have settled on the same date/amount, including split shipments.
+ const uncertain=orders.unpricedOrders||[];
+ const exactMatches=(match.matches||[]).filter(m=>{
+  if(m.confidence!=='exact')return false;
+  const tx=scoped[m.transactionId];if(!tx)return false;
+  const amount=Math.round(Number(tx.amount)*100);
+  return !uncertain.some(order=>{
+   const when=order.shipmentDate||order.date;
+   const gap=Math.round((Date.parse(tx.date+'T12:00:00Z')-
+    Date.parse(when+'T12:00:00Z'))/86400000);
+   return gap>=-2&&gap<=21&&(order.charged===null||order.charged>=amount);
+  });
+ });
  // Automatic cloud imports are narrower than manual imports: no speculative
  // Possible notes or inferred broad categories from uncertain identity.
  // The follow-up category pass also sees only those exactly matched charges.
  const exactTransactions=Object.fromEntries(exactMatches.map(m=>[m.transactionId,
   scoped[m.transactionId]]).filter(([_,tx])=>!!tx));
- return apply.prepare({...match,matches:exactMatches,suggestions:[]},before,{
+ const proposal=apply.prepare({...match,matches:exactMatches,suggestions:[]},before,{
   transactions:exactTransactions,categories,
   automatic:before.categoryAutomation?.automatic!==false,replaceOther:false});
+ return {...proposal,matchedKeys:exactMatches.map(m=>keyFor(scoped[m.transactionId])),
+  unpricedOrderCount:uncertain.length};
 }
-function visited(cloud,run){
+function visited(cloud,run,matchedKeys=[]){
  const scanned={...(cloud.scanned||{})},at=new Date().toISOString();
- for(const target of run.targets||[])if(typeof target==='string'&&target.startsWith('bank:'))
+ const verified=new Set(matchedKeys);
+ for(const target of run.targets||[])if(verified.has(target)&&typeof target==='string'&&target.startsWith('bank:'))
   scanned[target]=at;
  // Avoid an unbounded encrypted database, prioritizing recent last-visited IDs.
  const keys=Object.keys(scanned);

@@ -572,6 +572,49 @@ async function runCloudAmazon(manual=false){
  })}
  finally{cloudWorkBusy=false}
 }
+// Re-use a provider's already completed result. Never starts another Agent,
+// changes TinyFish wallet state, overrides a daily launch limit or sends bank
+// identifiers to the browser. Old failed checks may not have a stored run ID,
+// so the owner may supply the ID from their TinyFish run history.
+async function reprocessCloudAmazon(runId){
+ if(cloudWorkBusy)throw Object.assign(Error('Amazon is busy'),{httpStatus:409});
+ if(!/^[A-Za-z0-9-]{16,90}$/.test(String(runId||'')))
+  throw Object.assign(Error('Paste the completed TinyFish run ID'),{httpStatus:400});
+ cloudWorkBusy=true;
+ try{return await withHouseholdEdit(async()=>{
+  const before=state.amazonCloud||{};
+  if(!before.apiKey||!before.profileId||before.enabled||before.run||
+     !['invalid-report','empty-report','no-matches','partial-report'].includes(before.pausedReason))
+   throw Object.assign(Error('Recheck is available only for a paused, connected Amazon check'),{httpStatus:409});
+  if(before.lastFailedRunId&&before.lastFailedRunId!==runId)
+   throw Object.assign(Error('The run ID does not match the paused Amazon check'),{httpStatus:409});
+  let provider;
+  try{provider=await cloudAmazon.getRun(before.apiKey,runId)}
+  catch{throw Object.assign(Error('Cannot retrieve that completed TinyFish run'),{httpStatus:409})}
+  const at=Date.parse(provider.created_at);
+  if(provider.status!=='COMPLETED'||provider.run_id!==runId||
+     provider.profile_attached!==true||provider.profile_id!==before.profileId||
+     !String(provider.goal||'').includes('Read only Amazon.com Your Orders')||
+     !Number.isFinite(at)||at>Date.now()+300000||at<Date.now()-30*86400000)
+   throw Object.assign(Error('This is not a recent completed run from the connected Amazon profile'),{httpStatus:409});
+  // No new/post-run bank charges may be imported using an earlier result.
+  const keyForAmazon=require('./amazon-pairing.cjs').keyFor;
+  const txByKey=new Map(Object.values(state.transactions||{}).map(tx=>
+   [keyForAmazon(tx),tx]));
+  const targets=cloudAmazon.eligible(state).filter(t=>{
+   const tx=txByKey.get(t.key);
+   return tx&&Date.parse(tx.date+'T12:00:00Z')<=at+86400000;
+  }).map(t=>t.key);
+  if(!targets.length)
+   throw Object.assign(Error('No eligible original Amazon charges remain for this result'),{httpStatus:409});
+  state.amazonCloud={...before,run:{id:runId,targets,status:'reprocessing',
+    replay:true,startedAt:stamp()},lastOutcome:'Rechecking an existing completed Amazon result without browser charges',lastError:null};
+  await save();
+  setImmediate(()=>finishCloudAmazon().catch(()=>{}));
+  return {reprocessing:true,...cloudStatus()};
+ })}
+ finally{cloudWorkBusy=false}
+}
 async function finishCloudAmazon(){
  if(cloudWorkBusy||!state.amazonCloud?.run?.id||!state.amazonCloud?.apiKey)return;
  cloudWorkBusy=true;
@@ -602,18 +645,21 @@ async function finishCloudAmazon(){
    try{orders=cloudAmazon.parseOrders(result)}
    catch(error){
     updated.enabled=false;updated.pausedReason='invalid-report';
+    updated.lastFailedRunId=id;
     updated.lastOutcome='Paused: incomplete Amazon report';
-    updated.lastError=String(error.message||error).slice(0,150)+'. Verify TinyFish and re-enable updates to retry.';
+    updated.lastError=String(error.message||error).slice(0,150)+
+     '. You can recheck this completed result without another paid browser run.';
     state.amazonCloud=updated;await save();return;
    }
-   if(!before.enabled){
+   if(!before.enabled&&!run.replay){
     updated.lastOutcome='Amazon sync paused; no order information saved';
     state.amazonCloud=updated;await save();return;
    }
    if(!orders.length){
     updated.enabled=false;updated.pausedReason='empty-report';
-    updated.lastOutcome='Paused: Amazon returned no readable orders';
-    updated.lastError='No purchases were changed. Check your Amazon sign-in in TinyFish, then re-enable updates.';
+    updated.lastFailedRunId=id;
+    updated.lastOutcome='Paused: no fully priced Amazon orders available';
+    updated.lastError='No purchases were changed. Missing item prices cannot be guessed; use the manual import or recheck this completed result after an update.';
     state.amazonCloud=updated;await save();return;
    }
    const categories=savedCategoryChoices(
@@ -623,21 +669,33 @@ async function finishCloudAmazon(){
    const proposal=cloudAmazon.prepare(state,orders,categories,run.targets);
    if(!(proposal.report.matches>0)){
     updated.enabled=false;updated.pausedReason='no-matches';
+    updated.lastFailedRunId=id;
     updated.lastCount=orders.length;updated.lastMatched=0;
-    updated.lastOutcome='Paused: Amazon orders could not be verified against bank charges';
-    updated.lastError='Nothing was changed. Review the unmatched Amazon purchases, then re-enable if you want another check.';
+    updated.lastOutcome='Paused: no unambiguous priced Amazon order matched the new bank charge';
+    updated.lastError=(orders.unpricedOrders?.length||0)+
+     ' orders had missing item prices and were excluded. No purchase was changed; review the charge manually or recheck the saved result without another paid browser run.';
     state.amazonCloud=updated;await save();return;
    }
    // The existing importer writes ONLY category/Note overlays; never Plaid.
    if(proposal.hasNotes)await saveForecast(proposal.nextPredictions);
    const oldAdjustments=state.ledgerAdjustments;
-   updated.scanned=cloudAmazon.visited(before,run);
-   updated.lastOutcome=orders.length?
-    'Amazon orders checked and matched against Ledger':'No readable Amazon orders returned';
+   // Mark only independently verified charges as checked. Unmatched targets
+   // stay eligible; a partial report pauses future paid checks, not bank data.
+   updated.scanned=cloudAmazon.visited(before,run,proposal.matchedKeys);
    updated.lastCount=orders.length;
    updated.lastMatched=proposal.report.matches||0;
    updated.lastUnmatched=Math.max(0,(run.targets||[]).length-updated.lastMatched);
    updated.lastSuccessAt=stamp();
+   const partial=(orders.unpricedOrders?.length||0)>0||updated.lastUnmatched>0;
+   updated.enabled=before.enabled&&!run.replay&&!partial;
+   updated.pausedReason=partial?'partial-report':null;
+   updated.lastFailedRunId=partial?id:null;
+   updated.lastOutcome=partial?
+    'Paused: '+updated.lastMatched+' exact Amazon matches saved; remaining orders require review':
+    'Amazon orders checked and matched against Ledger';
+   updated.lastError=partial?
+    (orders.unpricedOrders?.length||0)+' unpriced orders excluded; '+
+    updated.lastUnmatched+' bank charges still need review. No further paid checks will start automatically.':null;
    state.ledgerAdjustments=proposal.next;
    state.amazonCloud=updated;
    try{await save()}catch(error){
@@ -1191,6 +1249,14 @@ async function start(port=Number(env.PORT||8788)){
     return respond(400,{error:'Confirm this Amazon check before starting a paid run'});
    try{return respond(202,await runCloudAmazon(true))}
    catch(error){return respond(503,{error:'Could not check Amazon. No changes to bank transactions.'})}
+  }
+  if(requestPath==='/api/amazon-cloud/reprocess'){
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).sort().join(',')!=='consent,runId'||body.consent!==true)
+    return respond(400,{error:'Confirm the existing TinyFish result to recheck'});
+   try{return respond(202,await reprocessCloudAmazon(body.runId))}
+   catch(error){return respond(error.httpStatus||503,{error:error.message||
+    'Could not recheck the completed TinyFish result. No browser run started.'})}
   }
   if(requestPath==='/api/ai/settings'){
    // Backward-compatible opt-out: old clients cannot re-enable automatic calls.
