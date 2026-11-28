@@ -336,7 +336,7 @@ function prepare(state,orders,categories,targets){
    datedGap(tx,other.shipmentDate||other.date)>=-1&&
    datedGap(tx,other.shipmentDate||other.date)<=7&&
    (other.charged===null||other.charged>=amount)))continue;
-  tentative.push({tx,order,amount,gap});
+  tentative.push({tx,order,amount});
  }
  const owners=new Map();
  for(const c of tentative)owners.set(c.order.orderId,(owners.get(c.order.orderId)||0)+1);
