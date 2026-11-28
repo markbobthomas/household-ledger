@@ -11,10 +11,12 @@ const isoDay=value=>Date.parse(String(value||'')+'T12:00:00Z');
 const gap=(posted,ordered)=>Math.round((isoDay(posted)-isoDay(ordered))/86400000);
 function checked(state,run){
  const settings=state.amazonCloud||{},id=settings.lastFailedRunId;
- if(!settings.apiKey||!settings.profileId||settings.enabled||settings.run||
-  !['no-matches','partial-report','invalid-report','empty-report'].includes(settings.pausedReason)||
+ const hasPossible=Object.values(state.ledgerAdjustments?.amazonEvidence||{}).some(e=>
+  e?.match==='possible'&&e?.uncertainty==='cloud-unverified-settlement');
+ if(!settings.apiKey||!settings.profileId||settings.run||
+  !(['no-matches','partial-report','invalid-report','empty-report'].includes(settings.pausedReason)||hasPossible)||
   !/^[A-Za-z0-9-]{16,90}$/.test(String(id||'')))
-  reject('There is no paused completed Amazon check to review');
+  reject('There is no completed Amazon check to review');
  if(run?.status!=='COMPLETED'||run.run_id!==id||
     run.profile_attached!==true||run.profile_id!==settings.profileId||
     !String(run.goal||'').includes('Read only Amazon.com Your Orders')||
@@ -48,9 +50,13 @@ function grouped(parsed){
 function view(state,run){
  const parsed=checked(state,run),orders=grouped(parsed),at=Date.parse(run.created_at),
   txByKey=new Map(Object.values(state.transactions||{}).map(t=>[pairing.keyFor(t),t]));
- const charges=cloud.eligible(state).filter(entry=>{
+ // A prior automatically saved Possible Note remains available for a
+ // deliberate owner correction, even though it was already inspected and
+ // cannot trigger a repeat paid browser check.
+ const reserved=new Set(state.amazonCloud?.lastRunTargets||[]);
+ const charges=cloud.eligible(state,{retry:reserved.size>0}).filter(entry=>{
   const tx=txByKey.get(entry.key);
-  return tx&&isoDay(tx.date)<=at+86400000;
+  return (!reserved.size||reserved.has(entry.key))&&tx&&isoDay(tx.date)<=at+86400000;
  }).map(entry=>{
   const tx=txByKey.get(entry.key),amountCents=Math.round(Number(tx.amount)*100);
   const candidates=orders.filter(order=>{
@@ -78,8 +84,13 @@ function choose(state,run,transactionKey,orderId){
  const tx=Object.values(state.transactions||{}).find(t=>pairing.keyFor(t)===transactionKey);
  if(!tx||!Evidence.isAmazon(tx))reject('The bank charge changed or is no longer posted');
  const notes=state.ledgerAdjustments?.predictions?.transactionNotes||{};
- if(String(notes[transactionKey]||'').trim())
-  reject('This charge already has a Note. Nothing was overwritten');
+ const existing=String(notes[transactionKey]||'').trim(),
+  prior=state.ledgerAdjustments?.amazonEvidence?.[tx.id],
+  generated=prior?.match==='possible'&&
+   prior.uncertainty==='cloud-unverified-settlement'&&
+   Evidence.valid(prior,tx)&&existing===Evidence.note(prior);
+ if(existing&&!generated)
+  reject('This charge has a handwritten or independently confirmed Note. Nothing was overwritten');
  const orders=grouped(checked(state,run)),order=orders.find(o=>o.orderId===orderId);
  if(!order||!order.items.length)reject('Amazon did not return readable product details for that order');
  const note=pairing.itemNote(order.items);

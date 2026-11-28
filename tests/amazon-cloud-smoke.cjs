@@ -194,8 +194,76 @@ const uncertainProposal=cloud.prepare(uncertainState,[{
  [cloud.eligible({...uncertainState,amazonCloud:{scanned:{}}})[0].key]);
 assert.equal(uncertainProposal.report.matches,0,
  'Approximate item-to-charge amounts must not be treated as exact');
-assert.equal(uncertainProposal.hasNotes,false,
- 'Automatic TinyFish import never writes speculative Possible Amazon Notes');
+assert.equal(uncertainProposal.hasNotes,true,
+ 'A nearby incomplete settlement gets a clearly marked Possible product Note');
+assert.equal(uncertainProposal.report.matches,0,
+ 'A Possible product Note never masquerades as a verified financial match');
+assert.equal(uncertainProposal.possibleKeys.length,1);
+assert.match(uncertainProposal.next.predictions.transactionNotes[
+ cloud.eligible({...uncertainState,amazonCloud:{scanned:{}}})[0].key],/^Possible Amazon:/);
+assert.equal(uncertainProposal.next.categoryOverrides['fictional-possible'],undefined,
+ 'No categorization from an unverified settlement suggestion');
+
+// Missing prices AND missing order totals must not prevent useful, explicitly
+// uncertain Notes when the provider observed actual nearby product names.
+const dateOnlyOrders=cloud.parseOrders({status:'COMPLETED',
+ created_at:new Date().toISOString(),result:{signedIn:true,complete:true,orders:[
+ {orderId:'123-0100000-0000001',title:'Fictional yellow garden gloves',
+  date:today,shipmentDate:today,cents:0,charged:null}
+ ]}});
+const maybeDate=cloud.prepare(pricedOnlyState,dateOnlyOrders,
+ ['Home & Maintenance','Other'],[noteKey]);
+assert.equal(maybeDate.report.matches,0);
+assert.equal(maybeDate.possibleKeys.length,1);
+assert.match(maybeDate.next.predictions.transactionNotes[noteKey],
+ /^Possible Amazon: Fictional yellow garden gloves/);
+assert.equal(maybeDate.next.amazonEvidence['priced-test'].match,'possible');
+assert.equal(maybeDate.next.amazonEvidence['priced-test'].uncertainty,
+ 'cloud-unverified-settlement');
+assert.equal(require('../pilot/amazon-evidence.cjs').category(
+ maybeDate.next.amazonEvidence['priced-test'],['Home & Maintenance']),null,
+ 'Unverified cloud product names cannot become an automatic category');
+assert.equal(maybeDate.next.categoryOverrides['priced-test'],undefined);
+assert.equal(maybeDate.next.amazonAllocations['priced-test'],undefined);
+assert.ok(cloud.visited({scanned:{}},{targets:[noteKey]},maybeDate.possibleKeys)[noteKey],
+ 'One useful tentative Note is checked for paid-run deduplication');
+const doubleDate=cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,orders:[
+ {orderId:'123-0100000-0000001',title:'Fictional blue mittens',
+  date:today,shipmentDate:today,cents:0,charged:null},
+ {orderId:'123-0100000-0000002',title:'Fictional bath curtain',
+  date:today,shipmentDate:today,cents:0,charged:null}
+ ]}});
+const alternatives=cloud.prepare(pricedOnlyState,doubleDate,
+ ['Shopping','Home & Maintenance'],[noteKey]);
+assert.match(alternatives.next.predictions.transactionNotes[noteKey],
+ /^Possible Amazon \(verify\):.* OR /,
+ 'Overlapping eligible orders must be displayed as alternatives, not a confirmed purchase');
+assert.equal(alternatives.next.amazonEvidence['priced-test'].choices.length,2);
+assert.equal(alternatives.next.categoryOverrides['priced-test'],undefined);
+const handwritten={...pricedOnlyState,ledgerAdjustments:{predictions:{
+ transactionNotes:{[noteKey]:'I wrote this myself'}}}};
+const preserveNote=cloud.prepare(handwritten,dateOnlyOrders,['Shopping'],[noteKey]);
+assert.equal(preserveNote.possibleKeys.length,0);
+assert.equal(preserveNote.next.predictions.transactionNotes[noteKey],'I wrote this myself');
+const oldDate=new Date(Date.now()-20*86400000).toISOString().slice(0,10);
+const oldOrder=cloud.parseOrders({status:'COMPLETED',result:{
+ signedIn:true,complete:true,orders:[{orderId:'123-0100000-0000003',
+ title:'Fictional earlier purchase',date:oldDate,shipmentDate:oldDate,cents:0,charged:null}]
+}});
+const notNearby=cloud.prepare(pricedOnlyState,oldOrder,['Shopping'],[noteKey]);
+assert.equal(notNearby.possibleKeys.length,0,
+ 'Distant unpriced orders cannot be guessed from a merchant name alone');
+assert.equal(notNearby.hasNotes,false);
+const status=cloud.safeStatus({transactions:pricedOnlyState.transactions,
+ ledgerAdjustments:maybeDate.next,amazonCloud:{apiKey:'fictional-key',
+ lastFailedRunId:'12345678-1234-1234-1234-123456789012',enabled:false,
+ pausedReason:null,scanned:{[noteKey]:today}}});
+assert.equal(status.pendingAmazonCharges,0);
+assert.equal(status.possibleAmazonCharges,1);
+assert.equal(status.manualReviewAvailable,true,
+ 'The owner can optionally correct a Possible Note without another paid run');
+assert.equal(typeof cloud.RECOVERY_VERSION,'string');
 
 const exactTx={...t('fictional-exact-match'),amount:21.99};
 const otherTx={...t('fictional-other-historical'),amount:21.99};

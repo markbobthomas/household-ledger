@@ -23,6 +23,7 @@ const state={items:[{id:'fictional-item',token:'fictional-plaidsafe',accountIds:
  amazonCloud:{enabled:false,apiKey:'fictional-tinyfish-key-1234567890',
   profileId:'prof_fictional_amazon123',baselineAt:new Date().toISOString(),
   pausedReason:'no-matches',lastFailedRunId:runId,
+  lastRecoveryAttemptVersion:'possible-cloud-matches-v1',
   runStarts:[new Date().toISOString()],run:null}};
 const seal=data=>{const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',key,iv);
  const encrypted=Buffer.concat([cipher.update(Buffer.from(JSON.stringify(data))),cipher.final()]);

@@ -143,13 +143,13 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  </details>
  <details id="cloud-manual-review" hidden>
   <summary><strong>Review unmatched Amazon charge</strong> — no new paid check</summary>
-  <p class="muted">Ledger couldn't establish a unique match. Compare the bank charge with these product names from the completed Amazon check, and select a purchase only after verifying it in Amazon. No product prices or categories will be invented.</p>
+  <p class="muted">Ledger automatically saves likely product names as a clearly labeled Possible Amazon Note. If it chose the wrong products, you can compare nearby orders from the completed check and correct the Note here. No paid check, invented item prices or category changes.</p>
   <button type="button" id="cloud-manual-load">Show possible Amazon orders</button>
   <p id="cloud-manual-message" class="muted" role="status" aria-live="polite"></p>
   <div id="cloud-manual-list"></div>
  </details>
  <details id="cloud-explanation"><summary>Cost, privacy and what gets matched</summary>
-  <p>TinyFish reads Amazon order pages, not your bank account. Ledger privately matches order details to existing posted bank charges; it never creates a second purchase or rewrites bank balances. Only exact matches can add product Notes/categories automatically. Uncertain purchases stay for review.</p>
+  <p>TinyFish reads Amazon order pages, not your bank account. Ledger privately matches order details to existing posted bank charges; it never creates a second purchase or rewrites bank balances. Exact matches can apply item categories when prices reconcile. A plausible but unverified match can save a clearly marked Possible Amazon Note automatically, without claiming a price or changing a category. You can correct uncertain Notes if needed.</p>
   <p>First setup starts with <strong>new charges going forward</strong>, not a surprise paid import of old history. TinyFish uses its standard default of up to 150 Agent steps and a requested 10-minute timeout. At the published rates, a run reaching both limits models to $2.42, and 13 such runs to $31.46 per 30 days. These are estimates, not hard spending caps; real bills may differ. A maximum of 13 browser starts is permitted in any rolling 30 days, including Check now.</p>
   <p>If Amazon needs a new sign-in, a run fails, no valid orders are returned, or no orders match bank charges, updates turn OFF and show a problem instead of silently retrying. Turn them back on only after checking the problem. A run already started may still finish and incur charges.</p>
   <p>The ZIP/CSV import below remains available for complete order history.</p>
@@ -236,6 +236,9 @@ function renderCloud(data){
   'Last result: '+(data.lastOutcome||'Not checked yet')+'.',
   'Browser starts in the last 30 days: '+Number(data.runsLast30Days||0)+' of '+Number(data.maxRuns30Days||13)+'.'
  ];
+ if(Number(data.possibleAmazonCharges)>0)
+  parts.push('Possible Amazon product Notes saved (not confirmed): '+
+   Number(data.possibleAmazonCharges)+'. No verification click is required for these Notes.');
  if(data.runLimitReason)parts.push('Next paid check held: '+data.runLimitReason+'.');
  if(data.connected&&data.amazonSignInConfirmed===false)parts.push('TinyFish did not confirm a saved Amazon login. See setup steps and Save the Amazon session before allowing paid checks.');
  if(data.lastSuccessAt)parts.push('Last successful order match: '+new Date(data.lastSuccessAt).toLocaleString()+'.');

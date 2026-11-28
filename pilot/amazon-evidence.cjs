@@ -34,7 +34,8 @@ function category(record,categories=[]){
  if(!record||!Array.isArray(record.choices)||!record.choices.length||
     record.uncertainty==='date-only'||
     record.uncertainty==='order-total-no-item-price'||
-    record.uncertainty==='owner-selected-no-amount-reconciliation')return null;
+    record.uncertainty==='owner-selected-no-amount-reconciliation'||
+    record.uncertainty==='cloud-unverified-settlement')return null;
  let chosen=null;
  for(const choice of record.choices){
   if(!Array.isArray(choice.items)||!choice.items.length)return null;
