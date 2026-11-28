@@ -319,7 +319,17 @@ function prepare(state,orders,categories,targets){
    return gap>=-1&&gap<=7;
   });
   if(choices.length!==1)continue;
-  const order=choices[0],gap=datedGap(tx,order.shipmentDate||order.date);
+  const order=choices[0];
+  // Scope writes to reserved transactions, but evaluate uniqueness against
+  // ALL existing posted bank charges. A previously checked/saved debit may
+  // already own the order; never attach its titles to a second debit.
+  const wholeHistory=Object.values(state.transactions||{}).filter(Evidence.isAmazon);
+  if(wholeHistory.some(other=>keyFor(other)!==keyFor(tx)&&
+   Math.round(Number(other.amount)*100)===amount&&
+   datedGap(other,order.shipmentDate||order.date)>=-1&&
+   datedGap(other,order.shipmentDate||order.date)<=7))continue;
+  if(Object.entries(before.amazonEvidence||{}).some(([id,e])=>
+   id!==String(tx.id)&&e?.match==='exact'&&e?.orderId===order.orderId))continue;
   // A second incompletely priced order may settle as the same bank debit,
   // especially when Amazon splits charges. Do not automatically choose.
   if(uncertain.some(other=>other!==order&&
