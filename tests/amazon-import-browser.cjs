@@ -269,9 +269,10 @@ module.exports=(async()=>{
      await page.locator('#cloud-replay-help summary').click();
      assert.equal(await page.locator('#cloud-replay-id').inputValue(),
       '12345678-1234-1234-1234-123456789012');
+     const replayResponse=page.waitForResponse(response=>
+      response.url().endsWith('/api/amazon-cloud/reprocess')&&response.status()===202);
      await page.locator('#cloud-replay').click();
-     await page.waitForFunction(()=>document.getElementById('cloud-status')
-      .textContent.includes('PAUSED'));
+     await replayResponse;
      assert.equal(tinyfishRequests.length,3,
       'Reprocessing reads the existing provider result instead of launching a new Agent');
     assert.deepEqual(errors,[],name+' has no runtime script errors');
