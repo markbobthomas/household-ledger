@@ -10,6 +10,8 @@ const DEFAULT_AGENT_MAX_STEPS=150,MAX_DURATION=600,MAX_ORDERS=250;
 const MAX_RUNS_30_DAYS=13; // includes deliberate owner-triggered runs
 const MAX_RUNS_PER_PACIFIC_DAY=1;
 const RECOVERY_VERSION='possible-cloud-matches-v1';
+const PAYMENT_VERSION='payment-first-v1';
+const PAYMENT_URL='https://www.amazon.com/cpe/yourpayments/transactions';
 const MAX_ESTIMATED_RUN_USD=2.42; // model: default 150*$0.016 + 10 minutes*$0.002; NOT a provider-enforced dollar cap
 const DAYS=new Set([1,4,6]); // Monday / Thursday / Saturday, Pacific time
 const isoDate=s=>{
@@ -188,22 +190,31 @@ async function validateKey(apiKey,fetcher){
  return {profileId:profile.id,amazonSignInClaimed:seen===true};
 }
 function goal(){
- return 'Read only Amazon.com Your Orders for the last 45 days using the already signed-in saved browser profile. '+
- 'Do not buy, cancel, change settings, submit forms, contact sellers or open payment details. '+
- 'Do not scan older order-history pages; stop when order dates are older than 45 days. '+
- 'Open the order details/invoice for EACH in-range order and read each item\'s own final price, '+
- 'including documented tax, shipping and discounts where available. '+
- 'An order-level total is NOT an item price and must never be copied onto its items. '+
- 'If an individual item price is not shown, return cents=null for that item, NEVER zero or a guess. '+
- 'If the order total cannot be verified, return charged=null, NEVER zero or a guess. '+
- 'Return an orders array containing orderId (Amazon format 123-1234567-1234567), '+
- 'title, date (YYYY-MM-DD order date), shipmentDate (YYYY-MM-DD or empty), '+
- 'cents (positive integer cents per item or null), charged (positive integer full order total cents or null). '+
- 'Use complete=false whenever pages are blocked, truncated, inaccessible or outside known coverage; '+
- 'include all actually observed items, even those with null prices. '+
- 'Stop if not signed in or challenged and report that clearly. Limit 250 items. '+
- 'Never claim a complete report if any page is unreadable. No bank or Ledger access is needed.';
+ return 'Read only Amazon.com Your Payments > Transactions for the last 45 days '+
+ 'using the existing signed-in saved browser profile. Start at the Transactions page, '+
+ 'NOT the Your Orders list. Find actual completed CHARGES and their posted payment amounts/dates. '+
+ 'Amazon may charge separate shipments from one order separately; never substitute an order total for a payment amount. '+
+ 'For EACH visible completed charge, follow its transaction details and linked order/shipment, '+
+ 'and read the associated product names if Amazon reveals them. '+
+ 'productScope="payment" ONLY if Amazon specifically links those product names to THAT charge/shipment; '+
+ 'productScope="order" if only all products for the entire order are shown; '+
+ 'productScope="unknown" if the payment cannot be linked to any products. '+
+ 'Never claim all products of a multi-shipment order were paid for by one shipment. '+
+ 'Return a payments array of records with transactionDate (YYYY-MM-DD actual Amazon payment date), '+
+ 'amountCents (positive integer charge amount in cents, null if missing), '+
+ 'orderId (Amazon order number or empty string if missing), kind (charge, refund, authorization, or unknown), '+
+ 'productScope (payment, order, or unknown), and titles (array of observed product names; empty if unknown). '+
+ 'Return only observed information: NEVER zero instead of an unknown charge amount, never invented names/dates or duplicated charges. '+
+ 'Do not return card numbers, card last-four digits, payment methods, addresses, emails or billing details. '+
+ 'Do NOT buy, cancel, submit forms, change settings, contact sellers or open payment-method editing. '+
+ 'Read-only transaction details and order details are permitted; payment-method management is not. '+
+ 'Stop before dates older than 45 days. Include all observed completed charges, even if their linked order cannot be read. '+
+ 'Set complete=false if the date range is not fully covered, transaction pages cannot be read, or the list is truncated. '+
+ 'Stop if signed out or challenged and set signedIn=false. Limit 100 payment entries. '+
+ 'No bank or Ledger access is needed.';
 }
+// The old order format stays readable for no-cost replay of already completed
+// browser runs. NEW paid runs only request the transaction-first format.
 const orderSchema={type:'object',properties:{
  orders:{type:'array',items:{type:'object',properties:{
   orderId:{type:'string'},title:{type:'string'},date:{type:'string'},
@@ -211,14 +222,27 @@ const orderSchema={type:'object',properties:{
  },required:['orderId','title','date','shipmentDate','cents','charged']}},
  signedIn:{type:'boolean'},complete:{type:'boolean'}
 },required:['orders','signedIn','complete']};
+const paymentSchema={type:'object',properties:{
+ payments:{type:'array',items:{type:'object',properties:{
+  transactionDate:{type:'string'},amountCents:{type:'integer',nullable:true},
+  orderId:{type:'string'},kind:{type:'string'},productScope:{type:'string'},
+  titles:{type:'array',items:{type:'string'}}
+ },required:['transactionDate','amountCents','orderId','kind','productScope','titles']}},
+ signedIn:{type:'boolean'},complete:{type:'boolean'}
+},required:['payments','signedIn','complete']};
+function knownGoal(value){
+ const g=String(value||'');
+ return g.includes('Read only Amazon.com Your Orders')||
+  g.includes('Read only Amazon.com Your Payments');
+}
 async function start(apiKey,profileId,fetcher){
  if(!/^prof_[a-zA-Z0-9_-]{6,100}$/.test(String(profileId||'')))
   throw Error('TinyFish saved Amazon profile is not connected. Reconnect in Ledger settings.');
  const result=await request(apiKey,API+'/v1/automation/run-async',{
-  method:'POST',body:JSON.stringify({url:'https://www.amazon.com/your-orders',
+  method:'POST',body:JSON.stringify({url:PAYMENT_URL,
    goal:goal(),use_profile:true,profile_id:profileId,browser_profile:'lite',
    agent_config:{max_duration_seconds:MAX_DURATION},
-   output_schema:orderSchema})
+   output_schema:paymentSchema})
  },fetcher);
  if(typeof result.run_id!=='string'||!/^[a-zA-Z0-9-]{16,90}$/.test(result.run_id))
   throw Error('TinyFish did not provide a valid run ID; check TinyFish before retrying');
