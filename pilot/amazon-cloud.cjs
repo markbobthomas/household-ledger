@@ -81,6 +81,9 @@ function eligible(state,options={}){
  }).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,200)
   .map(t=>({key:keyFor(t),id:String(t.id),accountId:String(t.accountId)}));
 }
+function paymentPilotPassed(cloud){
+ return cloud?.paymentPilotVersion===PAYMENT_VERSION;
+}
 function safeStatus(state){
  const c=state.amazonCloud||{},waiting=eligible(state).length,usage=runsInWindow(c),
   possible=Object.values(state.ledgerAdjustments?.amazonEvidence||{}).filter(e=>
@@ -102,6 +105,9 @@ function safeStatus(state){
   }),
   replayReady=!!c.apiKey&&!c.run&&!!replayId&&earlier;
  return {enabled:c.enabled===true,connected:!!c.apiKey,
+  paymentPilotRequired:!!c.apiKey&&!paymentPilotPassed(c),
+  lastPaymentCount:c.lastPaymentCount||0,
+  lastPaymentMatches:c.lastPaymentMatches||0,
   lastAttemptAt:c.lastAttemptAt||null,lastSuccessAt:c.lastSuccessAt||null,
   lastCheckedAt:c.lastCheckedAt||null,
   lastOutcome:c.lastOutcome||'Not yet checked',lastCount:c.lastCount||0,
@@ -570,4 +576,4 @@ function visited(cloud,run,matchedKeys=[]){
 module.exports={local,due,eligible,safeStatus,ensureKey,validateKey,start,getRun,
  parseOrders,prepare,visited,baseline,limit,runsInWindow,RECOVERY_VERSION,MAX_RUNS_30_DAYS,
  MAX_ESTIMATED_RUN_USD,DEFAULT_AGENT_MAX_STEPS,MAX_DURATION,goal,orderSchema,
- paymentSchema,PAYMENT_URL,PAYMENT_VERSION,knownGoal};
+ paymentSchema,PAYMENT_URL,PAYMENT_VERSION,knownGoal,paymentPilotPassed};
