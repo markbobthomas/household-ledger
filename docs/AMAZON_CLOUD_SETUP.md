@@ -27,7 +27,7 @@ Follow these steps in Ledger:
 - If there is **no new, unmatched posted Amazon charge**, TinyFish is **not called**.
 - If one or more charges are newly eligible, Ledger makes **one** TinyFish browser run, not one run per transaction.
 - A completed, verified match is remembered, so the same charges do not launch another browser job. Pending charges are ignored until they post.
-- **Only exact matches** can save product details or apply automatic categories. Possible and fuzzy matches are left alone. A report that is incomplete, empty, or unable to match any charge pauses automatic updates. It does not claim success or start another paid run silently.
+- **Only exact matches** can save product details or apply automatic categories. Possible and fuzzy matches are left alone. The Agent now requests each item's own verified price, with missing prices represented as `null` rather than invented zeros. Ledger excludes *entire orders* with any unpriced item; orders outside the 45-day window are ignored. If a partially priced order could be the same bank charge, Ledger refuses to call a different order an exact match. Complete priced orders may still be matched, but any incomplete order or unmatched target pauses the automatic schedule and leaves unverified bank charges for review. No additional paid run starts automatically.
 - The **Check now** button allows an expressly confirmed check, but follows the same cost and safety limits: one run per Pacific day and no more than 13 starts in the previous 30 days, including scheduled checks. It still requires a new posted unmatched Amazon charge.
 
 ## Cost and limits
@@ -47,6 +47,14 @@ The TinyFish API key and pinned saved profile ID are stored in Ledger's encrypte
 ## Standard Agent without beta
 
 A custom 45-step maximum previously required TinyFish beta entitlement and prevented standard accounts from starting. Ledger intentionally no longer requests that feature. **Do not assume a $1 ceiling**: the standard Agent may use up to 150 steps, in addition to browser time. Start with one explicitly approved manual **Check now** run, inspect the TinyFish invoice and matching results, then decide whether to enable the optional automatic schedule. Manual ZIP/CSV remains available if the cost or the quality is unsuitable.
+
+## Recover a completed check without starting another Agent
+
+If the last check says **Paused: incomplete Amazon report** or **no unambiguous priced order matched**, stay paused; do not click **Check now** or re-enable automatic updates merely to try again. Open **Last check and troubleshooting → Recheck a completed TinyFish result**. If Ledger saved its run ID, it fills the field; for an older failed check, copy the completed Amazon check's **Run ID** from TinyFish and paste it. Select **Recheck saved result**. This retrieves the previous provider result with a read-only API call, **not** a new paid browser Agent. It works even when the one-start-per-day paid limit has been reached, but only for a recent completed check belonging to the connected saved Amazon profile. It never modifies source bank transactions or automatically enables scheduled checks.
+
+Rechecking does **not** magically recover missing item prices. It can salvage fully priced orders if their amounts and dates uniquely match a still-unchecked posted charge and no incompletely priced order could plausibly claim the same charge. If the result remains ambiguous, Ledger keeps it paused. Use the manual Amazon ZIP/CSV import for purchases requiring item-level detail. A previously rejected run may still need that manual fallback.
+
+Ledger now refreshes the owner-only run status periodically while the Amazon page is open and a check is active; closing the page does not interrupt the server. No paid Agent run is started by a status refresh.
 
 ## Troubleshooting
 
