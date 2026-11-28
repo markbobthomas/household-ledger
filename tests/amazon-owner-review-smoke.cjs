@@ -51,7 +51,7 @@ assert.ok(choice.scanned[key]);
 assert.deepEqual(state,original,'Pure proposal must not write original transactions or state');
 assert.throws(()=>moduleUnderTest.choose(state,run,key,'123-2222222-2222222'),/no longer available/);
 const noted=structuredClone(state);noted.ledgerAdjustments.predictions.transactionNotes={[key]:'Handwritten note'};
-assert.throws(()=>moduleUnderTest.choose(noted,run,key,'123-1234567-1234567'),/already has a Note/);
+assert.throws(()=>moduleUnderTest.choose(noted,run,key,'123-1234567-1234567'),/handwritten or independently confirmed Note/);
 const generated=structuredClone(state);
 generated.amazonCloud.enabled=true;generated.amazonCloud.pausedReason=null;
 generated.amazonCloud.lastRunTargets=[key];
