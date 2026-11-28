@@ -257,6 +257,43 @@ function parseOrders(run){
  const data=typeof run.result==='string'?JSON.parse(run.result):run.result;
  if(data?.signedIn!==true)throw Error('Amazon sign-in is needed in TinyFish');
  if(data.complete!==true)throw Error('Amazon returned an incomplete report. No purchases were changed');
+ // New payment-first reports are charge/settlement records, not orders.
+ // Do NOT reuse the old 'charged' order-total field to represent a payment.
+ if(Array.isArray(data.payments)){
+  if(data.payments.length>100)
+   throw Error('Amazon payment report exceeds the bounded 100-entry scan');
+  const runDay=typeof run.created_at==='string'&&Number.isFinite(Date.parse(run.created_at))?
+   new Date(run.created_at):new Date();
+  const earliest=new Date(runDay.getTime()-45*86400000).toISOString().slice(0,10);
+  const latest=new Date(runDay.getTime()+2*86400000).toISOString().slice(0,10);
+  let ignoredOutsideWindow=0;
+  const payments=[];
+  for(const row of data.payments){
+   if(!row||!isoDate(row.transactionDate)||
+      !(row.amountCents===null||(Number.isSafeInteger(row.amountCents)&&
+       row.amountCents>=0&&row.amountCents<=20000000))||
+      typeof row.orderId!=='string'||
+      !(row.orderId===''||/^\\d{3}-\\d{7}-\\d{7}$/.test(row.orderId))||
+      !['charge','refund','authorization','unknown'].includes(row.kind)||
+      !['payment','order','unknown'].includes(row.productScope)||
+      !Array.isArray(row.titles)||row.titles.length>40||
+      row.titles.some(t=>typeof t!=='string'||!t.trim()||t.length>240))
+    throw Error('Amazon payment report included invalid or unverified transaction fields');
+   if(row.transactionDate<earliest||row.transactionDate>latest){
+    ignoredOutsideWindow++;continue;
+   }
+   // A whole-order product list cannot be promoted to a shipment-level
+   // identity merely because the payment amount is correct.
+   payments.push({...row,titles:row.titles.map(t=>t.trim())});
+  }
+  const result=[];
+  Object.defineProperties(result,{
+   payments:{value:payments},
+   unpricedOrders:{value:[]},
+   ignoredOutsideWindow:{value:ignoredOutsideWindow}
+  });
+  return result;
+ }
  if(!Array.isArray(data.orders)||data.orders.length>MAX_ORDERS)
   throw Error('Amazon order report was not complete or was too large');
  // A source can report complete:true yet omit item-level prices. Preserve
