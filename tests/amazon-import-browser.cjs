@@ -98,15 +98,16 @@ module.exports=(async()=>{
       examples:[{transactionId:'fictional-possible',note:'Possible Amazon: Pet grooming brush',
        category:'Pets',possibleMatch:true}]})});
    });
-   let tinyfishConnected=false,tinyfishEnabled=false,tinyfishBlocked=false;
-   const tinyfishRequests=[];
+   let tinyfishConnected=false,tinyfishEnabled=false,tinyfishBlocked=false,manualSaved=false;
+   const tinyfishRequests=[],manualRequests=[];
    const cloudSnapshot=()=>({
     connected:tinyfishConnected,enabled:tinyfishEnabled&&!tinyfishBlocked,
     pendingAmazonCharges:2,
     lastOutcome:tinyfishBlocked?'Paused: TinyFish declined the request; no paid run started':'Not yet checked',
     runActive:false,needsAttention:tinyfishBlocked,
     pausedReason:tinyfishBlocked?'invalid-report':null,
-    replayAvailable:tinyfishBlocked,
+    manualReviewAvailable:tinyfishBlocked&&!manualSaved,
+    replayAvailable:tinyfishBlocked&&!manualSaved,
     replayRunId:tinyfishBlocked?'12345678-1234-1234-1234-123456789012':null,
     lastError:tinyfishBlocked?
      'TinyFish rejected the Amazon request (400). Review the paused status before restarting.':null,
@@ -115,6 +116,28 @@ module.exports=(async()=>{
    await page.route('**/api/amazon-cloud',async route=>{
     await route.fulfill({status:200,contentType:'application/json',
      body:JSON.stringify(cloudSnapshot())});
+   });
+   await page.route('**/api/amazon-cloud/review',async route=>{
+    assert.equal(route.request().method(),'GET');
+    await route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify({revision:'fictional-review-revision',
+      runId:'12345678-1234-1234-1234-123456789012',
+      charges:[{transactionKey:'bank:fictional-owner-only',postedDate:'2026-11-26',
+       amountCents:3749,candidates:[{orderId:'123-1234567-1234567',
+        orderDate:'2026-11-24',shipmentDate:'2026-11-24',orderTotalCents:null,
+        itemPricesVerified:false,titles:['Fictional kitchen filter'],extraItems:0}]}]})});
+   });
+   await page.route('**/api/amazon-cloud/review/confirm',async route=>{
+    const choice=route.request().postDataJSON();
+    manualRequests.push(choice);
+    assert.deepEqual(choice,{consent:true,
+     runId:'12345678-1234-1234-1234-123456789012',
+     transactionKey:'bank:fictional-owner-only',orderId:'123-1234567-1234567',
+     revision:'fictional-review-revision'},
+     'Owner confirms order identity only, never a price, category or bank mutation');
+    manualSaved=true;
+    await route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify({saved:true,pendingAmazonCharges:0})});
    });
    await page.route('**/api/amazon-cloud/reprocess',async route=>{
     const args=route.request().postDataJSON();
@@ -275,6 +298,23 @@ module.exports=(async()=>{
      await replayResponse;
      assert.equal(tinyfishRequests.length,3,
       'Reprocessing reads the existing provider result instead of launching a new Agent');
+     assert.equal(await page.locator('#cloud-manual-review').isVisible(),true,
+      'Paused unmatched charges offer owner-only review without another Agent');
+     await page.locator('#cloud-manual-review summary').click();
+     await page.locator('#cloud-manual-load').click();
+     await page.locator('.cloud-manual-confirm').waitFor();
+     assert.match(await page.locator('#cloud-manual-list').innerText(),/Fictional kitchen filter/);
+     assert.match(await page.locator('#cloud-manual-list').innerText(),/Order total not available/);
+     page.once('dialog',dialog=>dialog.accept());
+     await page.locator('.cloud-manual-confirm').click();
+     await page.waitForFunction(()=>document.getElementById('cloud-manual-message')
+      .textContent.includes('Saved'));
+     assert.equal(manualRequests.length,1,'One explicit purchase confirmation is saved');
+     assert.equal(tinyfishRequests.length,3,'Manual review cannot start a new paid browser Agent');
+     const mobile=await page.evaluate(()=>({
+      width:document.documentElement.clientWidth,
+      scroll:document.documentElement.scrollWidth}));
+     assert(mobile.scroll<=mobile.width+2,'Manual Amazon review must fit on desktop and mobile');
     assert.deepEqual(errors,[],name+' has no runtime script errors');
    }finally{await ctx.close();await browser.close()}
   }

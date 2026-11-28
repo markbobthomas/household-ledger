@@ -673,7 +673,7 @@ async function finishCloudAmazon(){
     updated.lastCount=orders.length;updated.lastMatched=0;
     updated.lastOutcome='Paused: no safely verified Amazon order matched the posted bank charge';
     updated.lastError=(orders.unpricedOrders?.length||0)+
-     ' orders lacked item prices; verified full-order totals were also checked for Note-only matches. No matching bank purchase was changed. Review manually or recheck the existing result after an update; no paid browser retry is needed.';
+     ' orders lacked item prices; full-order totals were also checked. No matching purchase was changed. Use Review unmatched charge to select the right product after checking Amazon; no paid retry is needed.';
     state.amazonCloud=updated;await save();return;
    }
    // The existing importer writes ONLY category/Note overlays; never Plaid.
@@ -1124,6 +1124,18 @@ async function start(port=Number(env.PORT||8788)){
    // Read-only; never returns TinyFish API key, bank details or order data.
    return respond(200,cloudStatus());
   }
+  if(req.method==='GET'&&requestPath==='/api/amazon-cloud/review'){
+   // Owner-only; fetch a COMPLETED result, never start a paid TinyFish Agent.
+   const cloud=state.amazonCloud||{};
+   if(!cloud.apiKey||!cloud.lastFailedRunId||!state.items.length)
+    return respond(409,{error:'No completed Amazon check is available to review'});
+   try{
+    const result=await cloudAmazon.getRun(cloud.apiKey,cloud.lastFailedRunId);
+    const review=require('./amazon-owner-review.cjs').view(state,result);
+    return respond(200,{...review,revision:settingsRevision()});
+   }catch(error){return respond(error.httpStatus||503,{
+    error:error.httpStatus?error.message:'Could not read the completed Amazon report. No paid browser run was started.'})}
+  }
   if(req.method==='GET'&&requestPath==='/api/ledger/amazon-review'){
    if(!state.items.length)return respond(409,{error:'Connect a bank account first'});
    const before=state.ledgerAdjustments||{};
@@ -1260,6 +1272,48 @@ async function start(port=Number(env.PORT||8788)){
    try{return respond(202,await reprocessCloudAmazon(body.runId))}
    catch(error){return respond(error.httpStatus||503,{error:error.message||
     'Could not recheck the completed TinyFish result. No browser run started.'})}
+  }
+  if(requestPath==='/api/amazon-cloud/review/confirm'){
+   if(!body||typeof body!=='object'||Array.isArray(body)||
+      Object.keys(body).sort().join(',')!=='consent,orderId,revision,runId,transactionKey'||
+      body.consent!==true||typeof body.orderId!=='string'||
+      typeof body.runId!=='string'||typeof body.transactionKey!=='string'||
+      typeof body.revision!=='string')
+    return respond(400,{error:'Choose one Amazon order and confirm the bank purchase'});
+   const prior=state.amazonCloud||{};
+   if(!prior.apiKey||prior.lastFailedRunId!==body.runId)
+    return respond(409,{error:'This Amazon check changed. Reload to review again.'});
+   let provider;
+   try{provider=await cloudAmazon.getRun(prior.apiKey,body.runId)}
+   catch{return respond(503,{error:'Could not re-read the completed Amazon result. No new browser run started.'})}
+   try{
+    const response=await withHouseholdEdit(async()=>{
+     if(accountRemovalBusy||!state.items.length)
+      throw Object.assign(Error('Bank account information is changing'),{httpStatus:409});
+     if(body.revision!==settingsRevision())
+      throw Object.assign(Error('Ledger changed. Reload the Amazon review before confirming.'),{httpStatus:409});
+     const review=require('./amazon-owner-review.cjs');
+     const proposal=review.choose(state,provider,body.transactionKey,body.orderId);
+     // Note metadata is forecast-only; never edit immutable bank transactions,
+     // infer item prices, change categories or change the paid-run allowance.
+     await saveForecast(proposal.predictions,body.revision);
+     const before=state.ledgerAdjustments||{},oldCloud=state.amazonCloud||{};
+     state.ledgerAdjustments={...before,amazonEvidence:proposal.evidence};
+     const next={...oldCloud,enabled:false,scanned:proposal.scanned,
+      lastOutcome:'You confirmed an Amazon purchase Note. Automatic updates remain OFF.',
+      lastError:null};
+     state.amazonCloud=next;
+     const pending=cloudAmazon.eligible(state).length;
+     next.pausedReason=pending?oldCloud.pausedReason:null;
+     next.lastError=pending?
+      pending+' Amazon charges still need review. No paid browser retry will start.':null;
+     try{await save()}
+     catch(error){state.ledgerAdjustments=before;state.amazonCloud=oldCloud;throw error}
+     return {saved:true,pendingAmazonCharges:pending};
+    });
+    return respond(200,response);
+   }catch(error){return respond(error.httpStatus||503,{error:error.httpStatus?
+    error.message:'Could not save the selected product Note. Check Ledger before trying again; no bank transactions were edited.'})}
   }
   if(requestPath==='/api/ai/settings'){
    // Backward-compatible opt-out: old clients cannot re-enable automatic calls.

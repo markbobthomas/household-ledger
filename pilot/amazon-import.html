@@ -141,6 +141,13 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
    <button id="cloud-replay" type="button">Recheck saved result</button>
   </div>
  </details>
+ <details id="cloud-manual-review" hidden>
+  <summary><strong>Review unmatched Amazon charge</strong> — no new paid check</summary>
+  <p class="muted">Ledger couldn't establish a unique match. Compare the bank charge with these product names from the completed Amazon check, and select a purchase only after verifying it in Amazon. No product prices or categories will be invented.</p>
+  <button type="button" id="cloud-manual-load">Show possible Amazon orders</button>
+  <p id="cloud-manual-message" class="muted" role="status" aria-live="polite"></p>
+  <div id="cloud-manual-list"></div>
+ </details>
  <details id="cloud-explanation"><summary>Cost, privacy and what gets matched</summary>
   <p>TinyFish reads Amazon order pages, not your bank account. Ledger privately matches order details to existing posted bank charges; it never creates a second purchase or rewrites bank balances. Only exact matches can add product Notes/categories automatically. Uncertain purchases stay for review.</p>
   <p>First setup starts with <strong>new charges going forward</strong>, not a surprise paid import of old history. TinyFish uses its standard default of up to 150 Agent steps and a requested 10-minute timeout. At the published rates, a run reaching both limits models to $2.42, and 13 such runs to $31.46 per 30 days. These are estimates, not hard spending caps; real bills may differ. A maximum of 13 browser starts is permitted in any rolling 30 days, including Check now.</p>
@@ -214,6 +221,7 @@ function renderCloud(data){
  $('cloud-now').disabled=!data.enabled||data.runActive||!!data.runLimitReason||!!data.needsAttention;
  $('cloud-replay-help').hidden=!data.replayAvailable;
  $('cloud-replay').disabled=!data.replayAvailable||data.runActive;
+ $('cloud-manual-review').hidden=!data.manualReviewAvailable;
  if(data.replayRunId&&!$('cloud-replay-id').value)$('cloud-replay-id').value=data.replayRunId;
  const summary=data.runActive?
   (data.runStatus==='reprocessing'?'Rechecking saved Amazon result without starting a paid browser.':'Amazon check in progress. A second check will not start.'):
@@ -284,6 +292,75 @@ $('cloud-replay').onclick=()=>{
  if(!/^[A-Za-z0-9-]{16,90}$/.test(runId))return cloudMessage('Paste the Run ID of the completed TinyFish Amazon check.');
  cloudAction({action:'reprocess',runId});
 };
+let manualReview=null,manualReviewBusy=false;
+const manualMessage=text=>$('cloud-manual-message').textContent=text;
+async function loadManualReview(){
+ if(manualReviewBusy)return;
+ manualReviewBusy=true;
+ $('cloud-manual-load').disabled=true;
+ manualMessage('Loading order titles from the saved TinyFish result…');
+ try{
+  manualReview=await cloudApi('/review');
+  const charges=manualReview.charges||[];
+  if(!charges.length){
+   $('cloud-manual-list').textContent='';
+   manualMessage('No unmatched Amazon charge is available to review.');
+   return;
+  }
+  manualMessage('Select a purchase only after you check that its products belong to the bank charge.');
+  $('cloud-manual-list').innerHTML=charges.map((charge,ci)=>{
+   const candidates=charge.candidates||[];
+   const heading='<p><strong>Amazon charge '+esc(money(charge.amountCents))+
+    '</strong> · Posted '+esc(charge.postedDate)+'</p>';
+   if(!candidates.length)return '<div class="item">'+heading+
+    '<p class="muted">No Amazon orders in the saved report are close to this date. '+
+    'Use the manual ZIP/CSV import below or edit the transaction Note in Ledger.</p></div>';
+   const items=candidates.map((order,oi)=>{
+    const titles=order.titles.map(title=>'<li>'+esc(title)+'</li>').join('');
+    const total=order.orderTotalCents===null?'Order total not available':
+     'Amazon full order total '+esc(money(order.orderTotalCents));
+    const uncertainty=order.itemPricesVerified?'Item prices shown':'Some item prices missing';
+    return '<div class="item"><div><strong>Order '+esc(order.orderDate)+
+     '</strong><span class="item-meta">'+esc(total)+' · '+esc(uncertainty)+
+     '</span></div><ul>'+titles+'</ul>'+
+     (order.extraItems?'<p class="muted">+'+Number(order.extraItems)+' more products</p>':'')+
+     '<button type="button" class="cloud-manual-confirm" data-charge="'+ci+
+     '" data-order="'+oi+'">I verified these products</button></div>';
+   }).join('');
+   return '<section class="item">'+heading+items+'</section>';
+  }).join('');
+  $('cloud-manual-list').querySelectorAll('.cloud-manual-confirm').forEach(button=>{
+   button.onclick=()=>confirmManualOrder(Number(button.dataset.charge),
+    Number(button.dataset.order));
+  });
+ }catch(error){manualMessage(error.message)}
+ finally{manualReviewBusy=false;$('cloud-manual-load').disabled=false}
+}
+async function confirmManualOrder(chargeIndex,orderIndex){
+ if(manualReviewBusy||!manualReview)return;
+ const charge=manualReview.charges[chargeIndex];
+ const order=charge?.candidates?.[orderIndex];
+ if(!order)return;
+ if(!confirm('Did you verify on Amazon that these products belong to this specific bank charge? '+
+  'Ledger will save the product names as a Note only. It will NOT change item prices, categories or the bank amount.'))return;
+ manualReviewBusy=true;
+ $('cloud-manual-list').querySelectorAll('.cloud-manual-confirm').forEach(b=>b.disabled=true);
+ manualMessage('Saving your confirmed Amazon product Note…');
+ try{
+  await cloudApi('/review/confirm',{consent:true,runId:manualReview.runId,
+   transactionKey:charge.transactionKey,orderId:order.orderId,
+   revision:manualReview.revision});
+  manualReview=null;
+  await refreshCloud();
+  manualMessage('Saved. Only the product Note changed; no paid browser check started.');
+  $('cloud-manual-list').textContent='';
+ }catch(error){
+  manualMessage(error.message);
+  $('cloud-manual-list').querySelectorAll('.cloud-manual-confirm').forEach(b=>b.disabled=false);
+ }finally{manualReviewBusy=false}
+}
+$('cloud-manual-load').onclick=loadManualReview;
+
 $('cloud-disconnect').onclick=()=>{
  if(confirm('Disconnect TinyFish and turn off future Amazon checks?'))
   cloudAction({action:'disconnect'});
