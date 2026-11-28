@@ -98,7 +98,8 @@ module.exports=(async()=>{
       examples:[{transactionId:'fictional-possible',note:'Possible Amazon: Pet grooming brush',
        category:'Pets',possibleMatch:true}]})});
    });
-   let tinyfishConnected=false,tinyfishEnabled=false,tinyfishBlocked=false,manualSaved=false;
+   let tinyfishConnected=false,tinyfishEnabled=false,tinyfishBlocked=false,
+    manualSaved=false,tinyfishRunLimited=false;
    const tinyfishRequests=[],manualRequests=[];
    const cloudSnapshot=()=>({
     connected:tinyfishConnected,enabled:tinyfishEnabled&&!tinyfishBlocked,
@@ -109,6 +110,9 @@ module.exports=(async()=>{
     manualReviewAvailable:tinyfishBlocked&&!manualSaved,
     replayAvailable:tinyfishBlocked&&!manualSaved,
     replayRunId:tinyfishBlocked?'12345678-1234-1234-1234-123456789012':null,
+    unnotedAmazonCharges:tinyfishBlocked&&!manualSaved?1:0,
+    runLimitReason:tinyfishRunLimited?'One Amazon browser check already started today':null,
+    initialSetupReady:tinyfishEnabled,
     lastError:tinyfishBlocked?
      'TinyFish rejected the Amazon request (400). Review the paused status before restarting.':null,
     maxCostUsd:2.42
@@ -212,6 +216,13 @@ module.exports=(async()=>{
     await page.waitForFunction(()=>!document.getElementById('cloud-toggle').disabled);
     assert.equal(await page.locator('#cloud-toggle').isEnabled(),true,
      'After a successful connection, Turn on automatic updates must be usable');
+    assert.equal(await page.locator('#cloud-now').isEnabled(),true,
+     'Check now stays clickable even when automatic updates are OFF');
+    await page.locator('#cloud-now').click();
+    assert.match(await page.locator('#cloud-status').innerText(),
+     /Turn on automatic updates once/,
+     'A connected account without its safe starting point explains the precondition, not a paid launch');
+    assert.equal(tinyfishRequests.length,1,'Check now did not launch TinyFish while setup was incomplete');
     await page.locator('#cloud-toggle').click();
     await page.waitForFunction(()=>document.querySelector('#cloud-status').textContent.includes('Automatic updates ON'));
     assert.deepEqual(tinyfishRequests,[{
@@ -283,8 +294,8 @@ module.exports=(async()=>{
      assert.match(await page.locator('#cloud-explanation').innerText(),/\$2\.42/);
      assert.match(await page.locator('#cloud-explanation').innerText(),/\$31\.46/);
      assert.match(await page.locator('#cloud-detail').innerText(),/TinyFish rejected/);
-     assert.equal(await page.locator('#cloud-now').isEnabled(),false,
-      'A paused provider rejection cannot accidentally incur a paid Agent run');
+     assert.equal(await page.locator('#cloud-now').isEnabled(),true,
+      'Check now remains clickable during a paused provider result and does not silently launch paid work');
      assert.equal(tinyfishRequests.length,2,
       'Showing paused status must not launch extra provider work');
      assert.equal(await page.locator('#cloud-replay-help').isVisible(),true,
@@ -292,12 +303,20 @@ module.exports=(async()=>{
      await page.locator('#cloud-replay-help summary').click();
      assert.equal(await page.locator('#cloud-replay-id').inputValue(),
       '12345678-1234-1234-1234-123456789012');
+     assert.match(await page.locator('#cloud-now').innerText(),/saved result/,
+      'Main Check now prioritizes no-charge provider replay');
+     const freeResponse=page.waitForResponse(response=>
+      response.url().endsWith('/api/amazon-cloud/reprocess')&&response.status()===202);
+     await page.locator('#cloud-now').click();
+     await freeResponse;
+     assert.equal(tinyfishRequests.length,3,
+      'Check now used only saved results despite pause, not a new paid Agent');
      const replayResponse=page.waitForResponse(response=>
       response.url().endsWith('/api/amazon-cloud/reprocess')&&response.status()===202);
      await page.locator('#cloud-replay').click();
      await replayResponse;
-     assert.equal(tinyfishRequests.length,3,
-      'Reprocessing reads the existing provider result instead of launching a new Agent');
+     assert.equal(tinyfishRequests.length,4,
+      'Both free-replay controls only read the existing provider result instead of launching an Agent');
      assert.equal(await page.locator('#cloud-manual-review').isVisible(),true,
       'Paused unmatched charges offer owner-only review without another Agent');
      await page.locator('#cloud-manual-review summary').click();
@@ -310,7 +329,19 @@ module.exports=(async()=>{
      await page.waitForFunction(()=>document.getElementById('cloud-manual-message')
       .textContent.includes('Saved'));
      assert.equal(manualRequests.length,1,'One explicit purchase confirmation is saved');
-     assert.equal(tinyfishRequests.length,3,'Manual review cannot start a new paid browser Agent');
+     assert.equal(tinyfishRequests.length,4,'Manual review cannot start a new paid browser Agent');
+     tinyfishBlocked=false;tinyfishRunLimited=true;
+     await page.reload();
+     await page.waitForFunction(()=>document.querySelector('#cloud-now')&&
+      !document.querySelector('#cloud-now').disabled);
+     assert.equal(await page.locator('#cloud-now').isEnabled(),true,
+      'The daily TinyFish cost cap does not grey out Check now');
+     await page.locator('#cloud-now').click();
+     assert.match(await page.locator('#cloud-status').innerText(),
+      /one-per-day and 30-day safeguards cannot be bypassed/i,
+      'A rate-limited Check now explains the block and starts no paid Agent');
+     assert.equal(tinyfishRequests.length,4,
+      'A connected but rate-limited request cannot start a second paid Agent');
      const mobile=await page.evaluate(()=>({
       width:document.documentElement.clientWidth,
       scroll:document.documentElement.scrollWidth}));
