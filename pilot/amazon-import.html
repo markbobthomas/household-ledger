@@ -151,7 +151,7 @@ input[type=file],select{border:1.5px solid #8d9eaf;border-radius:5px;background:
  <details id="cloud-explanation"><summary>Cost, privacy and what gets matched</summary>
   <p>TinyFish reads Amazon order pages, not your bank account. Ledger privately matches order details to existing posted bank charges; it never creates a second purchase or rewrites bank balances. Exact matches can apply item categories when prices reconcile. A plausible but unverified match can save a clearly marked Possible Amazon Note automatically, without claiming a price or changing a category. You can correct uncertain Notes if needed.</p>
   <p>First setup starts with <strong>new charges going forward</strong>, not a surprise paid import of old history. TinyFish uses its standard default of up to 150 Agent steps and a requested 10-minute timeout. At the published rates, a run reaching both limits models to $2.42, and 13 such runs to $31.46 per 30 days. These are estimates, not hard spending caps; real bills may differ. A maximum of 13 browser starts is permitted in any rolling 30 days, including Check now.</p>
-  <p>If Amazon needs a new sign-in, a run fails, no valid orders are returned, or no orders match bank charges, updates turn OFF and show a problem instead of silently retrying. Turn them back on only after checking the problem. A run already started may still finish and incur charges.</p>
+  <p>Check now stays selectable when TinyFish is connected. When a completed report can help with an Amazon charge missing a product Note, it first rechecks that saved result without another browser charge. An active run, provider problem, or daily/30-day limit blocks a new paid browser check and explains why. Complete signed-in reports without a matching order do not disconnect TinyFish or trigger repeated paid scans for the same charge. Failed or unreadable browser reports still pause updates. A run already started may still finish and incur charges.</p>
   <p>The ZIP/CSV import below remains available for complete order history.</p>
  </details>
 </section>
@@ -218,7 +218,11 @@ function renderCloud(data){
  $('cloud-actions').hidden=!data.connected;
  $('cloud-toggle').textContent=data.enabled?'Turn off automatic updates':'Turn on automatic updates';
  $('cloud-toggle').classList.toggle('primary',!data.enabled);
- $('cloud-now').disabled=!data.enabled||data.runActive||!!data.runLimitReason||!!data.needsAttention;
+ // Check now is always an actionable control once connected. Clicking it
+ // explains active runs, limits and pauses instead of leaving a grey button.
+ // An eligible completed result gets a free recheck before any new paid run.
+ $('cloud-now').disabled=cloudBusy;
+ $('cloud-now').textContent=data.replayAvailable?'Check now — saved result':'Check now';
  $('cloud-replay-help').hidden=!data.replayAvailable;
  $('cloud-replay').disabled=!data.replayAvailable||data.runActive;
  $('cloud-manual-review').hidden=!data.manualReviewAvailable;
@@ -233,6 +237,7 @@ function renderCloud(data){
  cloudMessage(summary);
  const parts=[
   'New Amazon charges not yet checked: '+Number(data.pendingAmazonCharges||0)+'.',
+  'Amazon charges without product Notes (last 45 days): '+Number(data.unnotedAmazonCharges||0)+'.',
   'Last result: '+(data.lastOutcome||'Not checked yet')+'.',
   'Browser starts in the last 30 days: '+Number(data.runsLast30Days||0)+' of '+Number(data.maxRuns30Days||13)+'.'
  ];
@@ -241,7 +246,7 @@ function renderCloud(data){
    Number(data.possibleAmazonCharges)+'. No verification click is required for these Notes.');
  if(data.runLimitReason)parts.push('Next paid check held: '+data.runLimitReason+'.');
  if(data.connected&&data.amazonSignInConfirmed===false)parts.push('TinyFish did not confirm a saved Amazon login. See setup steps and Save the Amazon session before allowing paid checks.');
- if(data.lastSuccessAt)parts.push('Last successful order match: '+new Date(data.lastSuccessAt).toLocaleString()+'.');
+ if(data.lastSuccessAt)parts.push('Last completed Amazon report: '+new Date(data.lastSuccessAt).toLocaleString()+'.');
  if(data.lastError)parts.push('Action needed: '+data.lastError);
  $('cloud-detail').textContent=parts.join(' ');
  if(data.needsAttention||data.lastError)$('cloud-activity').open=true;
@@ -254,7 +259,9 @@ async function cloudAction(action){
  if(cloudBusy)return;
  cloudBusy=true;
  for(const id of ['cloud-connect','cloud-toggle','cloud-now','cloud-disconnect','cloud-replay'])$(id).disabled=true;
- cloudMessage('Saving Amazon settings…');
+ cloudMessage(action.action==='reprocess'?
+  'Rechecking saved Amazon orders — no paid browser run…':
+  action.action==='run'?'Checking for posted Amazon purchases…':'Saving Amazon settings…');
  let problem=null;
  try{
   const endpoint=action.action==='run'?'/run':
@@ -287,7 +294,32 @@ $('cloud-connect').onclick=()=>{
 };
 $('cloud-toggle').onclick=()=>cloudAction({action:cloud?.enabled?'disable':'enable'});
 $('cloud-now').onclick=()=>{
- if(!confirm('Check new Amazon purchases now? A new TinyFish Agent run may incur charges (modeled up to $2.42 at standard maximum usage; not a guaranteed cap). Continue?'))return;
+ if(!cloud?.connected)return cloudMessage('Connect TinyFish first.');
+ if(cloud.runActive)return cloudMessage(
+  'An Amazon check is already in progress. A second paid browser run will not start.');
+ // Prefer existing, completed data. This remains useful when a bank charge
+ // was marked inspected earlier but never received an Amazon product Note.
+ if(cloud.replayAvailable&&cloud.replayRunId){
+  cloudAction({action:'reprocess',runId:cloud.replayRunId});return;
+ }
+ if(cloud.needsAttention){
+  cloudMessage('A new paid check is held because Amazon needs attention: '+
+   (cloud.lastError||cloud.lastOutcome||'Review the last check')+
+   '. No paid browser run started.');
+  $('cloud-activity').open=true;return;
+ }
+ if(cloud.runLimitReason){
+  cloudMessage('A new paid check is not available yet: '+cloud.runLimitReason+
+   '. The one-per-day and 30-day safeguards cannot be bypassed. No browser run started.');
+  $('cloud-activity').open=true;return;
+ }
+ if(!cloud.initialSetupReady){
+  cloudMessage('Turn on automatic updates once to establish the safe starting point, '+
+   'then use Check now. No paid browser run started.');return;
+ }
+ if(!confirm('Start one NEW paid Amazon browser check now? TinyFish may charge up to '+
+  'an estimated $2.42 at standard maximum usage (not a guaranteed cap). '+
+  'Existing saved results are checked for free when available. Continue?'))return;
  cloudAction({action:'run'});
 };
 $('cloud-replay').onclick=()=>{
