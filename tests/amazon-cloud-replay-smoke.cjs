@@ -38,7 +38,9 @@ fs.writeFileSync(resultFile,JSON.stringify({run_id:runId,status:'COMPLETED',
  created_at:new Date().toISOString(),goal:'Navigate to Amazon.com: Read only Amazon.com Your Orders for the last 45 days',
  result:{signedIn:true,complete:true,orders:[
   {orderId:'123-1234567-1234567',title:'Fictional household storage bin',
-   date:orderDate,shipmentDate:orderDate,cents:2199,charged:2199},
+   date:orderDate,shipmentDate:orderDate,cents:0,charged:2199},
+  {orderId:'123-1234567-1234567',title:'Fictional household cleaning spray',
+   date:orderDate,shipmentDate:orderDate,cents:0,charged:2199},
   {orderId:'123-9999999-9999999',title:'Fictional unpriced older toy',
    date:olderDate,shipmentDate:olderDate,cents:0,charged:0}
  ]}}));
@@ -94,13 +96,20 @@ const request=(route,method='GET',body,headers={})=>new Promise((resolve,reject)
    'Reprocessing does not use another paid Agent start');
   assert.equal(saved.amazonCloud.scanned[chargeKey]!==undefined,true,
    'Only the exactly verified bank charge becomes checked');
+  assert.equal(saved.ledgerAdjustments.amazonEvidence[charge.id].uncertainty,
+   'order-total-no-item-price',
+   'Match must preserve that individual prices were not verified');
+  assert.equal(saved.ledgerAdjustments.amazonAllocations?.[charge.id],undefined,
+   'No invented item allocations after a verified whole-order match');
+  assert.equal(saved.ledgerAdjustments.categoryOverrides?.[charge.id],undefined,
+   'No automatic category from item titles with missing prices');
   assert.deepEqual(saved.transactions,state.transactions,'Original Plaid facts remain untouched');
   assert.match(unseal(file+'.forecasts').transactionNotes[chargeKey],
    /Fictional household storage bin/);
   const calls=fs.readFileSync(log,'utf8').trim().split('\n');
   assert(calls.length>=2&&calls.every(x=>x.includes('/v1/runs/')),
    'Only existing-run GET requests are made; no new paid Agent request');
-  console.log('PASS private owner-only TinyFish replay, partial valid order, no paid launch, immutable bank data');
+  console.log('PASS private owner-only TinyFish replay, verified order-total Note, no category or paid launch, immutable bank data');
  }finally{
   child.kill('SIGTERM');
   fs.rmSync(folder,{recursive:true,force:true});
