@@ -576,7 +576,7 @@ async function runCloudAmazon(manual=false){
 // changes TinyFish wallet state, overrides a daily launch limit or sends bank
 // identifiers to the browser. Old failed checks may not have a stored run ID,
 // so the owner may supply the ID from their TinyFish run history.
-async function reprocessCloudAmazon(runId){
+async function reprocessCloudAmazon(runId,{automatic=false}={}){
  if(cloudWorkBusy)throw Object.assign(Error('Amazon is busy'),{httpStatus:409});
  if(!/^[A-Za-z0-9-]{16,90}$/.test(String(runId||'')))
   throw Object.assign(Error('Paste the completed TinyFish run ID'),{httpStatus:400});
@@ -607,8 +607,12 @@ async function reprocessCloudAmazon(runId){
   }).map(t=>t.key);
   if(!targets.length)
    throw Object.assign(Error('No eligible original Amazon charges remain for this result'),{httpStatus:409});
-  state.amazonCloud={...before,run:{id:runId,targets,status:'reprocessing',
-    replay:true,startedAt:stamp()},lastOutcome:'Rechecking an existing completed Amazon result without browser charges',lastError:null};
+  state.amazonCloud={...before,
+   ...(automatic?{lastRecoveryAttemptVersion:cloudAmazon.RECOVERY_VERSION}:{}),
+   run:{id:runId,targets,status:'reprocessing',
+    replay:true,startedAt:stamp()},
+   lastOutcome:'Reading the saved Amazon result again without another paid browser run',
+   lastError:null};
   await save();
   setImmediate(()=>finishCloudAmazon().catch(()=>{}));
   return {reprocessing:true,...cloudStatus()};
@@ -667,11 +671,12 @@ async function finishCloudAmazon(){
     state.ledgerAdjustments?.customCategories,
     state.ledgerAdjustments?.categoryOverrides);
    const proposal=cloudAmazon.prepare(state,orders,categories,run.targets);
-   if(!(proposal.report.matches>0)){
+   if(!(proposal.report.matches>0)&&!(proposal.possibleKeys?.length)){
     updated.enabled=false;updated.pausedReason='no-matches';
     updated.lastFailedRunId=id;
     updated.lastCount=orders.length;updated.lastMatched=0;
-    updated.lastOutcome='Paused: no safely verified Amazon order matched the posted bank charge';
+    updated.lastPossible=0;updated.lastRecoveryAttemptVersion=cloudAmazon.RECOVERY_VERSION;
+    updated.lastOutcome='Paused: no Amazon order was sufficiently close to the posted bank charge';
     updated.lastError=(orders.unpricedOrders?.length||0)+
      ' orders lacked item prices; full-order totals were also checked. No matching purchase was changed. Use Review unmatched charge to select the right product after checking Amazon; no paid retry is needed.';
     state.amazonCloud=updated;await save();return;
@@ -679,26 +684,34 @@ async function finishCloudAmazon(){
    // The existing importer writes ONLY category/Note overlays; never Plaid.
    if(proposal.hasNotes)await saveForecast(proposal.nextPredictions);
    const oldAdjustments=state.ledgerAdjustments;
-   // Mark only independently verified charges as checked. Unmatched targets
-   // stay eligible; a partial report pauses future paid checks, not bank data.
-   updated.scanned=cloudAmazon.visited(before,run,proposal.matchedKeys);
+   // A clearly marked Possible Note is a successful, NON-VERIFIED
+   // inspection. It must not trigger a second paid check for the same bank
+   // charge; it can still be reviewed or corrected by the owner.
+   const possible=proposal.possibleKeys?.length||0;
+   updated.scanned=cloudAmazon.visited(before,run,[
+    ...proposal.matchedKeys,...(proposal.possibleKeys||[])]);
    updated.lastCount=orders.length;
    updated.lastMatched=proposal.report.matches||0;
-   updated.lastUnmatched=Math.max(0,(run.targets||[]).length-updated.lastMatched);
+   updated.lastPossible=possible;
+   updated.lastUnmatched=Math.max(0,(run.targets||[]).length-updated.lastMatched-possible);
    updated.lastSuccessAt=stamp();
-   const partial=(orders.unpricedOrders?.length||0)>0||updated.lastUnmatched>0;
+   updated.lastRunTargets=run.targets;
+   updated.lastRecoveryAttemptVersion=cloudAmazon.RECOVERY_VERSION;
+   const partial=updated.lastUnmatched>0;
+   // Missing individual prices are normal evidence limitations, not an
+   // authentication or browser connection failure. Once each charge has
+   // an honest Note, let future scheduled checks cover NEW posted charges.
    updated.enabled=before.enabled&&!run.replay&&!partial;
    updated.pausedReason=partial?'partial-report':null;
-   updated.lastFailedRunId=partial?id:null;
-   updated.lastOutcome=partial?
-    'Paused: '+updated.lastMatched+' verified Amazon matches saved'+
-    (proposal.noteOnlyMatches?' ('+proposal.noteOnlyMatches+' order-total Notes only)':'')+
-    '; remaining orders require review':
-    'Amazon orders checked and matched against Ledger';
+   updated.lastFailedRunId=partial||possible?id:null;
+   updated.lastOutcome=(partial?'Paused: ':'')+
+    updated.lastMatched+' confirmed Amazon match'+(updated.lastMatched===1?'':'es')+
+    ', '+possible+' Possible Amazon Note'+(possible===1?'':'s')+' saved'+
+    (partial?'; '+updated.lastUnmatched+' charge(s) still lack useful order evidence':
+     '; new charges can be checked on the normal schedule');
    updated.lastError=partial?
-    (orders.unpricedOrders?.length||0)+' orders lacked item prices; '+
-    (proposal.noteOnlyMatches||0)+' matched using verified order totals (Notes only, no inferred item categories). '+
-    updated.lastUnmatched+' bank charges still need review. No further paid checks will start automatically.':null;
+    'Some Amazon charges had no useful nearby order in the saved report. '+
+    'Review those separately; no paid browser retry will start automatically.':null;
    state.ledgerAdjustments=proposal.next;
    state.amazonCloud=updated;
    try{await save()}catch(error){
@@ -712,6 +725,25 @@ async function finishCloudAmazon(){
 }
 async function cloudTick(){
  if(state.amazonCloud?.run?.id)return finishCloudAmazon();
+ const existing=state.amazonCloud||{};
+ // One-time FREE recovery for the previously completed but unusable run
+ // after this matcher version deploys. The persisted version stops loops
+ // across restarts. Only GET /v1/runs/:id; never run-async or Plaid.
+ if(!cloudWorkBusy&&!existing.enabled&&existing.apiKey&&existing.profileId&&
+    existing.lastFailedRunId&&
+    ['no-matches','partial-report'].includes(existing.pausedReason)&&
+    existing.lastRecoveryAttemptVersion!==cloudAmazon.RECOVERY_VERSION){
+  try{return await reprocessCloudAmazon(existing.lastFailedRunId,{automatic:true})}
+  catch(error){
+   await withHouseholdEdit(async()=>{
+    if(state.amazonCloud?.lastFailedRunId!==existing.lastFailedRunId)return;
+    state.amazonCloud={...state.amazonCloud,
+     lastRecoveryAttemptVersion:cloudAmazon.RECOVERY_VERSION};
+    await save();
+   });
+   return;
+  }
+ }
  if(cloudAmazon.due(state.amazonCloud))return runCloudAmazon(false);
 }
 
