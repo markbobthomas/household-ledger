@@ -273,7 +273,7 @@ function parseOrders(run){
       !(row.amountCents===null||(Number.isSafeInteger(row.amountCents)&&
        row.amountCents>=0&&row.amountCents<=20000000))||
       typeof row.orderId!=='string'||
-      !(row.orderId===''||/^\\d{3}-\\d{7}-\\d{7}$/.test(row.orderId))||
+      !(row.orderId===''||/^\d{3}-\d{7}-\d{7}$/.test(row.orderId))||
       !['charge','refund','authorization','unknown'].includes(row.kind)||
       !['payment','order','unknown'].includes(row.productScope)||
       !Array.isArray(row.titles)||row.titles.length>40||
