@@ -1331,8 +1331,8 @@ async function start(port=Number(env.PORT||8788)){
      await saveForecast(proposal.predictions,body.revision);
      const before=state.ledgerAdjustments||{},oldCloud=state.amazonCloud||{};
      state.ledgerAdjustments={...before,amazonEvidence:proposal.evidence};
-     const next={...oldCloud,enabled:false,scanned:proposal.scanned,
-      lastOutcome:'You confirmed an Amazon purchase Note. Automatic updates remain OFF.',
+     const next={...oldCloud,scanned:proposal.scanned,
+      lastOutcome:'Your Amazon purchase confirmation was saved. Automatic update settings were unchanged.',
       lastError:null};
      state.amazonCloud=next;
      const pending=cloudAmazon.eligible(state).length;
