@@ -90,8 +90,9 @@ const request=(route,method='GET',body,headers={})=>new Promise((resolve,reject)
    'Complete priced order is accepted despite unrelated unpriced order');
   assert.equal(saved.amazonCloud.enabled,false,
    'Replaying an existing result cannot enable recurring paid checks');
-  assert.equal(saved.amazonCloud.pausedReason,'partial-report',
-   'Excluded unpriced orders leave future paid runs paused');
+  assert.equal(saved.amazonCloud.pausedReason,null,
+   'Unrelated unpriced orders do not block a verified matched charge');
+  assert.equal(saved.amazonCloud.lastPossible,0);
   assert.equal(saved.amazonCloud.runStarts.length,1,
    'Reprocessing does not use another paid Agent start');
   assert.equal(saved.amazonCloud.scanned[chargeKey]!==undefined,true,
