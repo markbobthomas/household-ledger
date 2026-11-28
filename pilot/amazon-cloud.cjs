@@ -222,7 +222,7 @@ function parseOrders(run){
  const latest=new Date(runDay.getTime()+2*86400000).toISOString().slice(0,10);
  const groups=new Map(),seen=new Set();let ignoredOutsideWindow=0;
  for(const r of data.orders){
-  if(!r||!/^\\d{3}-\\d{7}-\\d{7}$/.test(String(r.orderId||''))||
+  if(!r||!/^\d{3}-\d{7}-\d{7}$/.test(String(r.orderId||''))||
     !isoDate(r.date)||r.shipmentDate&&!isoDate(r.shipmentDate)||
     typeof r.title!=='string'||r.title.trim().length<4||r.title.length>240||
     !(r.cents===null||(Number.isSafeInteger(r.cents)&&r.cents>=0&&r.cents<=20000000))||
