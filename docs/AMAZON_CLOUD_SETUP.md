@@ -44,6 +44,16 @@ Ledger applies its existing conservative Amazon matcher. Verified prices and dat
 
 The TinyFish API key and pinned saved profile ID are stored in Ledger's encrypted private state, not in GitHub, the shared Lite page or app GET responses. Use **Turn off automatic updates** to stop new browser runs; already-started jobs may still incur charges. Use **Disconnect** to clear the stored key.
 
+## TinyFish step-limit beta access
+
+If Ledger says **“TinyFish has not enabled per-run step limits for this account”**, the API key and saved Amazon sign-in are working, but TinyFish has not enabled the optional `agent_config.max_steps` permission.
+
+1. Open [TinyFish beta access](https://agent.tinyfish.ai/beta) and sign in to the same account used by Ledger.
+2. Request access to **`agent_config.max_steps`**. If no request control is available, contact TinyFish support and specify that you need its Agent step-limit beta feature for your API key.
+3. After TinyFish confirms this is enabled, return to Ledger and select **Turn on automatic updates**. Select **Check now** only if you want to initiate a possibly billable test for a new unmatched Amazon charge.
+
+**Do not remove the 45-step limit to force a run.** TinyFish documents a non-beta default of up to 150 steps. At the user's current observed rates of $0.016 per Agent step and $0.002 per Browser minute, 150 steps alone would cost about $2.40, well above the intended ~$1 cost estimate for a single Ledger run. The generally available `max_duration_seconds` limit constrains elapsed time, **not agent-step spending**. Ledger therefore remains OFF until beta access is available. No new API key or Amazon sign-in is needed; manual ZIP/CSV import still works.
+
 ## Troubleshooting
 
 **TinyFish says the API was accessed, but Ledger says HTTP 400:** An API access is not an accepted browser run. Ledger previously sent a TinyFish `output_schema` containing an unsupported `type: ["integer", "null"]` for an order total. TinyFish's documented validator returns HTTP 400 before a browser run for that structure; Ledger now uses `type: "integer", nullable: true`. This was fixed in source after the reported incident. The same API key and saved Amazon sign-in can be reused; do not reenter your Amazon password. Once the corrected private Ledger deployment is verified, review the paused status and explicitly re-enable updates if desired. No automatic charged retry will be started. If a new 400 appears, Ledger now surfaces TinyFish's sanitized error code, reason and request ID for diagnosis rather than just the HTTP status. TinyFish's separate beta-only 45-step limit can still block a run; that limit is never silently disabled.
