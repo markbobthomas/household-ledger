@@ -239,8 +239,14 @@ function parseOrders(run){
   const amounts=[...new Set(items.map(i=>i.charged))];
   const charged=amounts.length===1&&amounts[0]>0?amounts[0]:null;
   if(items.some(i=>!Number.isSafeInteger(i.cents)||i.cents<=0)){
-   unpricedOrders.push({date:items[0].date,
-    shipmentDate:items.map(i=>i.shipmentDate||i.date).sort().at(-1),
+   const shipmentDays=[...new Set(items.map(i=>i.shipmentDate||i.date))];
+   // Preserve observed titles only in transient memory. The bank matcher
+   // still requires a unique exact full-order charge before saving a Note.
+   unpricedOrders.push({orderId,date:items[0].date,
+    shipmentDate:shipmentDays.sort().at(-1),
+    multiShipment:shipmentDays.length!==1,
+    items:items.map(i=>({title:i.title,cents:i.cents>0?i.cents:null,
+     date:i.date,shipmentDate:i.shipmentDate||''})),
     charged});
    continue;
   }
@@ -283,13 +289,62 @@ function prepare(state,orders,categories,targets){
  // Automatic cloud imports are narrower than manual imports: no speculative
  // Possible notes or inferred broad categories from uncertain identity.
  // The follow-up category pass also sees only those exactly matched charges.
- const exactTransactions=Object.fromEntries(exactMatches.map(m=>[m.transactionId,
+ // An item price is required for item-level allocation, but not for a
+ // product Note if a fully observed single-shipment ORDER total exactly
+ // equals a unique posted bank charge. Never infer individual item prices
+ // or categorize this note-only match.
+ const datedGap=(tx,when)=>Math.round((Date.parse(tx.date+'T12:00:00Z')-
+  Date.parse(when+'T12:00:00Z'))/86400000);
+ const pricedGroups=new Map();
+ for(const row of orders){
+  if(!pricedGroups.has(row.orderId))pricedGroups.set(row.orderId,[]);
+  pricedGroups.get(row.orderId).push(row);
+ }
+ const nearbyPriced=(tx,amount)=>[...pricedGroups.values()].some(items=>{
+  const day=items.map(i=>i.shipmentDate||i.date).sort().at(-1);
+  const gap=datedGap(tx,day);
+  return gap>=-2&&gap<=7&&
+   (items.some(i=>i.cents===amount)||items.reduce((n,i)=>n+i.cents,0)===amount||
+    items.some(i=>i.charged===amount));
+ });
+ const alreadyExact=new Set(exactMatches.map(m=>m.transactionId));
+ const tentative=[];
+ for(const tx of Object.values(scoped)){
+  if(alreadyExact.has(tx.id))continue;
+  const amount=Math.round(Number(tx.amount)*100);
+  if(!Number.isSafeInteger(amount)||amount<=0||nearbyPriced(tx,amount))continue;
+  const choices=uncertain.filter(order=>{
+   if(order.multiShipment||order.charged!==amount||!order.items?.length)return false;
+   const gap=datedGap(tx,order.shipmentDate||order.date);
+   return gap>=-1&&gap<=7;
+  });
+  if(choices.length!==1)continue;
+  const order=choices[0],gap=datedGap(tx,order.shipmentDate||order.date);
+  // A second incompletely priced order may settle as the same bank debit,
+  // especially when Amazon splits charges. Do not automatically choose.
+  if(uncertain.some(other=>other!==order&&
+   datedGap(tx,other.shipmentDate||other.date)>=-1&&
+   datedGap(tx,other.shipmentDate||other.date)<=7&&
+   (other.charged===null||other.charged>=amount)))continue;
+  tentative.push({tx,order,amount,gap});
+ }
+ const owners=new Map();
+ for(const c of tentative)owners.set(c.order.orderId,(owners.get(c.order.orderId)||0)+1);
+ const noteOnly=tentative.filter(c=>owners.get(c.order.orderId)===1).map(({tx,order,amount})=>({
+  transactionId:tx.id,accountId:tx.accountId,amountCents:amount,
+  orderId:order.orderId,date:tx.date,
+  note:pairing.itemNote(order.items),items:order.items,
+  confidence:'exact',source:'order-total-no-item-price',notesOnly:true,
+  categories:[],lines:[],needsReview:true,alreadyImported:false
+ }));
+ const matches=[...exactMatches,...noteOnly];
+ const exactTransactions=Object.fromEntries(matches.map(m=>[m.transactionId,
   scoped[m.transactionId]]).filter(([_,tx])=>!!tx));
- const proposal=apply.prepare({...match,matches:exactMatches,suggestions:[]},before,{
+ const proposal=apply.prepare({...match,matches,suggestions:[]},before,{
   transactions:exactTransactions,categories,
   automatic:before.categoryAutomation?.automatic!==false,replaceOther:false});
- return {...proposal,matchedKeys:exactMatches.map(m=>keyFor(scoped[m.transactionId])),
-  unpricedOrderCount:uncertain.length};
+ return {...proposal,matchedKeys:matches.map(m=>keyFor(scoped[m.transactionId])),
+  noteOnlyMatches:noteOnly.length,unpricedOrderCount:uncertain.length};
 }
 function visited(cloud,run,matchedKeys=[]){
  const scanned={...(cloud.scanned||{})},at=new Date().toISOString();
