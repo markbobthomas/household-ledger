@@ -85,5 +85,5 @@ assert.throws(()=>moduleUnderTest.view(state,wrong),/not a recent completed chec
 assert.throws(()=>moduleUnderTest.view(state,{...run,run_id:'12345678-0000-0000-0000-000000000000'}),/not a recent completed check/);
 assert.throws(()=>moduleUnderTest.view(state,{...run,status:'RUNNING'}),/not a recent completed check/);
 const unpaused=structuredClone(state);unpaused.amazonCloud.pausedReason=null;
-assert.throws(()=>moduleUnderTest.view(unpaused,run),/no paused completed/);
+assert.throws(()=>moduleUnderTest.view(unpaused,run),/no completed Amazon check to review/);
 console.log('PASS owner-selected Amazon Notes: real order titles, no fabricated cents/categories, private run and bank-scoping guards');
