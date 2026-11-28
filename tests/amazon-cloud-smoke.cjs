@@ -151,7 +151,7 @@ assert.equal(cloud.prepare(twoChargeState,noteSource,['Shopping'],
  cloud.eligible(twoChargeState).map(t=>t.key)).report.matches,0,
  'One unpriced order cannot be claimed by two bank charges');
 const separatelyScanned={...twoChargeState,amazonCloud:{scanned:{
- [cloud.eligible(twoChargeState).find(x=>x.id==='b').key]:'2026-11-01T00:00:00Z'
+ [cloud.eligible(twoChargeState).find(x=>x.id==='second-same-amount').key]:'2026-11-01T00:00:00Z'
 }}};
 assert.equal(cloud.prepare(separatelyScanned,noteSource,['Shopping'],
  [cloud.eligible(separatelyScanned)[0].key]).report.matches,0,
