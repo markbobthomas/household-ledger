@@ -44,7 +44,7 @@ fs.writeFileSync(report,JSON.stringify({run_id:runId,status:'COMPLETED',
   date:ordered,shipmentDate:ordered,cents:0,charged:0}
  ]}}));
 const env={...process.env,PORT:String(port),PILOT_ENCRYPTION_KEY:secret,
- PILOT_PASSWORD:'fictional-password',PILOT_STATE_PATH:file,
+ PILOT_PASSWORD:'fictional-test-password-strong',PILOT_STATE_PATH:file,
  PLAID_ENV:'sandbox',PLAID_CLIENT_ID:'fictional-id',PLAID_SECRET:'fictional-secret',
  TINYFISH_MOCK_RESULT:report,TINYFISH_MOCK_LOG:log,
  NODE_OPTIONS:'--require '+path.resolve(__dirname,'amazon-cloud-fetch-mock.cjs')};
