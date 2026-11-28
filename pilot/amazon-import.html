@@ -256,7 +256,7 @@ async function cloudAction(action){
   if(data.started)cloudMessage('TinyFish started one Amazon check. You can close this page.');
   if(data.reprocessing)cloudMessage('Reading the completed TinyFish result; no new browser run was started.');
   if(data.skipped)cloudMessage('No new Amazon charges; TinyFish was not started.');
-  if(data.error||data.limitReached||data.needsAttention)
+  if(data.error||data.limitReached||(data.needsAttention&&!data.reprocessing))
    problem=data.error||data.lastError||data.lastOutcome||'Please check the Amazon update details.';
  }catch(error){problem=error.message}
  finally{
