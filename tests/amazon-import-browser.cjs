@@ -160,8 +160,8 @@ module.exports=(async()=>{
     await page.locator('#cloud-profile-help summary').click();
     assert.match(await page.locator('#cloud-profile-help').innerText(),/stop setup here/,
      'When saved profiles are unavailable, forbid a charged Agent prompt workaround');
-    assert.equal(await page.locator('a[href="#manual-amazon-import"]').count(),1,
-     'Offer functional fallback to local manual import');
+    assert.equal(await page.locator('#cloud-profile-help a[href="#manual-amazon-import"]').count(),1,
+     'Offer functional fallback inside saved-profile troubleshooting');
     assert.equal(await page.locator('#manual-amazon-import').isVisible(),true);
     await page.locator('#cloud-profile-help summary').click();
     assert.match(await page.locator('#cloud-status').innerText(),/Not connected/);
